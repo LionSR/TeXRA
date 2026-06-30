@@ -1,22 +1,49 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from 'vitest';
 
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
 
-const usageEntry = (model: string) => ({
-  model,
-  provider: 'openai' as const,
-  agentName: 'agent',
-  agentCategory: AgentCategory.ToolUse,
-  inputTokens: 1,
-  outputTokens: 1,
-  cost: 0.001,
-});
+function usageEntry(model: string) {
+  return {
+    model,
+    provider: 'openai' as const,
+    agentName: 'agent',
+    agentCategory: AgentCategory.ToolUse,
+    inputTokens: 1,
+    outputTokens: 1,
+    cost: 0.001,
+  };
+}
 
 function batchModels(batch: unknown): string[] {
   const entries = (batch as { entries: Array<{ model: string }> }).entries;
   return entries.map((entry) => entry.model);
+}
+
+// ky passes a Request object; read each batch body from it. `beforeRespond`
+// lets a test stall or fail a specific call before the success response.
+function stubFetch(
+  batches: unknown[],
+  beforeRespond: (callCount: number) => void | Promise<void> = () => {},
+): Mock {
+  const fetchMock = vi.fn(async (request: Request) => {
+    batches.push(await request.json());
+    await beforeRespond(fetchMock.mock.calls.length);
+    return new Response(JSON.stringify({ success: true, accepted: 1 }), {
+      status: 200,
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
 }
 
 describe('UsageLogService', () => {
@@ -42,17 +69,11 @@ describe('UsageLogService', () => {
       releaseFirstFetch = resolve;
     });
     const batches: unknown[] = [];
-    // ky passes a Request object; read the body from it
-    const fetchMock = vi.fn(async (request: Request) => {
-      batches.push(await request.json());
-      if (fetchMock.mock.calls.length === 1) {
+    const fetchMock = stubFetch(batches, async (callCount) => {
+      if (callCount === 1) {
         await firstFetchReleased;
       }
-      return new Response(JSON.stringify({ success: true, accepted: 1 }), {
-        status: 200,
-      });
     });
-    vi.stubGlobal('fetch', fetchMock);
 
     UsageLogService.log(usageEntry('first'));
     const firstFlush = UsageLogService.flush();
@@ -78,13 +99,7 @@ describe('UsageLogService', () => {
       .mockResolvedValue('token');
 
     const batches: unknown[] = [];
-    const fetchMock = vi.fn(async (request: Request) => {
-      batches.push(await request.json());
-      return new Response(JSON.stringify({ success: true, accepted: 1 }), {
-        status: 200,
-      });
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = stubFetch(batches);
 
     UsageLogService.log(usageEntry('first'));
     await expect(UsageLogService.flush()).resolves.toBe(false);
@@ -101,16 +116,11 @@ describe('UsageLogService', () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
     const batches: unknown[] = [];
-    const fetchMock = vi.fn(async (request: Request) => {
-      batches.push(await request.json());
-      if (fetchMock.mock.calls.length === 1) {
+    const fetchMock = stubFetch(batches, (callCount) => {
+      if (callCount === 1) {
         throw new Error('network unavailable');
       }
-      return new Response(JSON.stringify({ success: true, accepted: 1 }), {
-        status: 200,
-      });
     });
-    vi.stubGlobal('fetch', fetchMock);
 
     UsageLogService.log(usageEntry('first'));
     await expect(UsageLogService.flush()).resolves.toBe(false);

@@ -1,8 +1,5 @@
-// Standard library imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-// Local imports
 import {
   parseClaudeAgentModel,
   parseCodexApprovalPolicy,
@@ -10,23 +7,23 @@ import {
 
 describe('parseCodexApprovalPolicy', () => {
   it('accepts SDK approval policies', () => {
-    assert.equal(parseCodexApprovalPolicy('never'), 'never');
-    assert.equal(parseCodexApprovalPolicy('on-request'), 'on-request');
-    assert.equal(parseCodexApprovalPolicy('on-failure'), 'on-failure');
-    assert.equal(parseCodexApprovalPolicy('untrusted'), 'untrusted');
+    expect(parseCodexApprovalPolicy('never')).toBe('never');
+    expect(parseCodexApprovalPolicy('on-request')).toBe('on-request');
+    expect(parseCodexApprovalPolicy('on-failure')).toBe('on-failure');
+    expect(parseCodexApprovalPolicy('untrusted')).toBe('untrusted');
   });
 
   it('defaults to automatic approval for invalid persisted values', () => {
-    assert.equal(parseCodexApprovalPolicy('ask'), 'never');
+    expect(parseCodexApprovalPolicy('ask')).toBe('never');
   });
 });
 
 describe('parseClaudeAgentModel', () => {
   it('maps retired Opus selections to the current Opus model', () => {
-    assert.equal(parseClaudeAgentModel('claude-opus-4-7'), 'claude-opus-4-8');
+    expect(parseClaudeAgentModel('claude-opus-4-7')).toBe('claude-opus-4-8');
   });
 
   it('defaults invalid persisted selections to Sonnet', () => {
-    assert.equal(parseClaudeAgentModel('claude-opus-3'), 'claude-sonnet-4-6');
+    expect(parseClaudeAgentModel('claude-opus-3')).toBe('claude-sonnet-4-6');
   });
 });

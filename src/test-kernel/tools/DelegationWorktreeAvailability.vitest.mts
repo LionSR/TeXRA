@@ -121,31 +121,32 @@ describe('resolveAgentTools worktree annotation', () => {
     ]);
   });
 
-  it('resolves the worktree line at the resolveAgentTools boundary', async () => {
-    mocks.isWorktreeSupportEnabled.mockReturnValue(true);
-
-    const registry = new MapToolRegistry({
-      delegate_agent: {
-        definition: { name: 'delegate_agent' },
-        call: async () => ({ summary: '', output: '' }),
-      },
-    });
-
+  async function resolveDelegateAgentDescription(): Promise<
+    string | undefined
+  > {
     const { tools } = await resolveAgentTools({
       tools: [
         { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
       ],
-      registry,
+      registry: new MapToolRegistry({
+        delegate_agent: {
+          definition: { name: 'delegate_agent' },
+          call: async () => ({ summary: '', output: '' }),
+        },
+      }),
       logger: { warn: () => {} },
       delegationBlocked: false,
       toolInjections: new ToolInjectionRegistry(),
     });
+    return tools.find((t) => t.name === 'delegate_agent')?.description;
+  }
 
-    const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
-    expect(delegateAgent?.description).toContain(
-      'Git worktree support: ENABLED.',
-    );
-    expect(delegateAgent?.description).not.toContain(
+  it('resolves the worktree line at the resolveAgentTools boundary', async () => {
+    mocks.isWorktreeSupportEnabled.mockReturnValue(true);
+
+    const description = await resolveDelegateAgentDescription();
+    expect(description).toContain('Git worktree support: ENABLED.');
+    expect(description).not.toContain(
       'resolved from the active workspace at runtime',
     );
   });
@@ -153,28 +154,11 @@ describe('resolveAgentTools worktree annotation', () => {
   it('resolves the DISABLED worktree line at the resolveAgentTools boundary', async () => {
     mocks.isWorktreeSupportEnabled.mockReturnValue(false);
 
-    const registry = new MapToolRegistry({
-      delegate_agent: {
-        definition: { name: 'delegate_agent' },
-        call: async () => ({ summary: '', output: '' }),
-      },
-    });
-
-    const { tools } = await resolveAgentTools({
-      tools: [
-        { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
-      ],
-      registry,
-      logger: { warn: () => {} },
-      delegationBlocked: false,
-      toolInjections: new ToolInjectionRegistry(),
-    });
-
-    const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
-    expect(delegateAgent?.description).toContain(
+    const description = await resolveDelegateAgentDescription();
+    expect(description).toContain(
       'Git worktree support: DISABLED in this workspace.',
     );
-    expect(delegateAgent?.description).not.toContain(
+    expect(description).not.toContain(
       'resolved from the active workspace at runtime',
     );
   });

@@ -41,6 +41,28 @@ async function mountPanel(
   return element;
 }
 
+type DiffView = HTMLElement & { originalText?: string; proposedText?: string };
+type ApproveSplit = HTMLElement & { canBypass?: boolean };
+
+function queryDiffView(element: ToolEditRequestPanel): DiffView | null {
+  return element.shadowRoot?.querySelector<DiffView>('texra-diff-view') ?? null;
+}
+
+function querySplitButton(element: ToolEditRequestPanel): ApproveSplit | null {
+  return (
+    element.shadowRoot?.querySelector<ApproveSplit>('approve-split-button') ??
+    null
+  );
+}
+
+function recordPermissionActions(element: ToolEditRequestPanel): string[] {
+  const actions: string[] = [];
+  element.addEventListener('permission-action', (event) => {
+    actions.push((event as CustomEvent<{ action: string }>).detail.action);
+  });
+  return actions;
+}
+
 describe('tool-edit-request-panel', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/ToolEditRequestPanel'),
@@ -56,16 +78,10 @@ describe('tool-edit-request-panel', () => {
     element.handleKeyboardShortcut('d');
     await element.updateComplete;
 
-    const diffView = element.shadowRoot?.querySelector('texra-diff-view') as
-      | HTMLElement
-      | undefined;
+    const diffView = queryDiffView(element);
     expect(diffView).toBeTruthy();
-    expect(
-      (diffView as HTMLElement & { originalText?: string }).originalText,
-    ).toBe('');
-    expect(
-      (diffView as HTMLElement & { proposedText?: string }).proposedText,
-    ).toBe('new content\n');
+    expect(diffView?.originalText).toBe('');
+    expect(diffView?.proposedText).toBe('new content\n');
   });
 
   it('renders inline diff when only original content is available', async () => {
@@ -78,28 +94,17 @@ describe('tool-edit-request-panel', () => {
     element.handleKeyboardShortcut('d');
     await element.updateComplete;
 
-    const diffView = element.shadowRoot?.querySelector('texra-diff-view') as
-      | HTMLElement
-      | undefined;
+    const diffView = queryDiffView(element);
     expect(diffView).toBeTruthy();
-    expect(
-      (diffView as HTMLElement & { originalText?: string }).originalText,
-    ).toBe('deleted content\n');
-    expect(
-      (diffView as HTMLElement & { proposedText?: string }).proposedText,
-    ).toBe('');
+    expect(diffView?.originalText).toBe('deleted content\n');
+    expect(diffView?.proposedText).toBe('');
   });
 
   it('renders a non-bypass Approve and ignores "a" when bypass is not allowed', async () => {
     const element = await mountPanel(createPermission({ allowBypass: false }));
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
-    });
+    const actions = recordPermissionActions(element);
 
-    const split = element.shadowRoot?.querySelector('approve-split-button') as
-      | (HTMLElement & { canBypass?: boolean })
-      | undefined;
+    const split = querySplitButton(element);
     expect(split).toBeTruthy();
     expect(split?.canBypass).toBe(false);
     expect(element.handleKeyboardShortcut('a')).toBe(false);
@@ -111,9 +116,7 @@ describe('tool-edit-request-panel', () => {
       createPermission({ allowBypass: true, streamId: '' }),
     );
 
-    const split = element.shadowRoot?.querySelector('approve-split-button') as
-      | (HTMLElement & { canBypass?: boolean })
-      | undefined;
+    const split = querySplitButton(element);
     expect(split?.canBypass).toBe(false);
     expect(element.handleKeyboardShortcut('a')).toBe(false);
   });
@@ -122,14 +125,9 @@ describe('tool-edit-request-panel', () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, streamId: 'stream-1' }),
     );
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
-    });
+    const actions = recordPermissionActions(element);
 
-    const split = element.shadowRoot?.querySelector('approve-split-button') as
-      | (HTMLElement & { canBypass?: boolean })
-      | undefined;
+    const split = querySplitButton(element);
     expect(split?.canBypass).toBe(true);
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);
@@ -140,10 +138,7 @@ describe('tool-edit-request-panel', () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, streamId: 'stream-1' }),
     );
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
-    });
+    const actions = recordPermissionActions(element);
 
     // First 'n' opens the feedback textarea (does not submit yet).
     expect(element.handleKeyboardShortcut('n')).toBe(true);

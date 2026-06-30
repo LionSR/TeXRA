@@ -28,16 +28,7 @@ function createCoordinator() {
     clearSession: vi.fn(async () => {
       storedSession.current = null;
     }),
-    createSessionFromCallback: vi.fn(async () => ({
-      success: true as const,
-      session: {
-        id: 'user-1',
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        account: { id: 'user-1', label: 'user@example.com' },
-        expiresAt: Date.now() + 60_000,
-      },
-    })),
+    createSessionFromCallback: vi.fn(async () => callbackSessionResult()),
     whenReady: vi.fn(async () => {}),
     ensureFreshToken: vi.fn(
       async () => storedSession.current?.accessToken ?? null,
@@ -58,6 +49,28 @@ function createSecrets() {
     get: vi.fn(async () => undefined),
     set: vi.fn(async () => {}),
     delete: vi.fn(async () => {}),
+  };
+}
+
+function createLog() {
+  return {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
+}
+
+function callbackSessionResult() {
+  return {
+    success: true as const,
+    session: {
+      id: 'user-1',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      account: { id: 'user-1', label: 'user@example.com' },
+      expiresAt: Date.now() + 60_000,
+    },
   };
 }
 
@@ -266,12 +279,7 @@ describe('desktop Supabase auth', () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const oauthClient = createOAuthClient();
-    const log = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    const log = createLog();
     const auth = createDesktopSupabaseAuth({
       router,
       coordinator,
@@ -329,12 +337,7 @@ describe('desktop Supabase auth', () => {
   it('ignores routed callbacks until desktop sign-in starts', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
-    const log = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    const log = createLog();
     const auth = createDesktopSupabaseAuth({
       router,
       coordinator,
@@ -476,12 +479,7 @@ describe('desktop Supabase auth', () => {
     const coordinator = createCoordinator();
     const callbackState = createDesktopAuthCallbackState();
     const oauthClient = createOAuthClient();
-    const log = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    const log = createLog();
     const auth = createDesktopSupabaseAuth({
       router,
       coordinator,
@@ -515,12 +513,7 @@ describe('desktop Supabase auth', () => {
   it('claims only the first matching callback for an OAuth attempt', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
-    const log = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    const log = createLog();
     const oauthClient = createOAuthClient();
     const auth = createDesktopSupabaseAuth({
       router,
@@ -561,16 +554,7 @@ describe('desktop Supabase auth', () => {
     const callbackProcessing = createDeferred<void>();
     coordinator.createSessionFromCallback.mockImplementationOnce(async () => {
       await callbackProcessing.promise;
-      return {
-        success: true as const,
-        session: {
-          id: 'user-1',
-          accessToken: 'access-token',
-          refreshToken: 'refresh-token',
-          account: { id: 'user-1', label: 'user@example.com' },
-          expiresAt: Date.now() + 60_000,
-        },
-      };
+      return callbackSessionResult();
     });
     const auth = createDesktopSupabaseAuth({
       router,
@@ -610,12 +594,7 @@ describe('desktop Supabase auth', () => {
       new Error('network down'),
     );
     const showErrorMessage = vi.fn(async () => {});
-    const log = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    const log = createLog();
     const oauthClient = createOAuthClient();
     const auth = createDesktopSupabaseAuth({
       router,

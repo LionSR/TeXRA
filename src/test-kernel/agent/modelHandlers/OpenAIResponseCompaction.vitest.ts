@@ -45,12 +45,17 @@ function createConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
   };
 }
 
-function createHandler(): ModelHandlerOpenAIResponse {
-  const handler = new ModelHandlerOpenAIResponse(createConfig());
+function configureHandler(
+  handler: ModelHandlerOpenAIResponse,
+): ModelHandlerOpenAIResponse {
   handler.setLogger(createLoggerStub() as unknown as AgentTrace);
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     false;
   return handler;
+}
+
+function createHandler(): ModelHandlerOpenAIResponse {
+  return configureHandler(new ModelHandlerOpenAIResponse(createConfig()));
 }
 
 class UnsupportedCompactionHandler extends ModelHandlerOpenAIResponse {
@@ -60,11 +65,7 @@ class UnsupportedCompactionHandler extends ModelHandlerOpenAIResponse {
 }
 
 function createUnsupportedCompactionHandler(): ModelHandlerOpenAIResponse {
-  const handler = new UnsupportedCompactionHandler(createConfig());
-  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
-  (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
-    false;
-  return handler;
+  return configureHandler(new UnsupportedCompactionHandler(createConfig()));
 }
 
 function createResponse(id: string, inputTokens: number) {

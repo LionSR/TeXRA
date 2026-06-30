@@ -208,6 +208,10 @@ function createDeferred(): {
   return { promise, resolve };
 }
 
+function commandOf(message: unknown): string | undefined {
+  return (message as { command?: string }).command;
+}
+
 function inactiveLatexSettingsStatus(): unknown {
   return {
     outDir: true,
@@ -649,8 +653,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.findLast(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       ),
     ).toMatchObject({
       providerKeyStatuses: expect.arrayContaining([
@@ -719,8 +722,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.some(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       ),
     ).toBe(false);
   });
@@ -767,7 +769,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.findLast(
         (message) =>
-          (message as { command?: string }).command ===
+          commandOf(message) ===
           SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
       ),
     ).toMatchObject({
@@ -790,7 +792,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.findLast(
         (message) =>
-          (message as { command?: string }).command ===
+          commandOf(message) ===
           SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
       ),
     ).toMatchObject({
@@ -803,15 +805,13 @@ describe('desktop settings IPC', () => {
     expect(
       posted.some(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       ),
     ).toBe(true);
     expect(
       posted.some(
         (message) =>
-          (message as { command?: string }).command ===
-          MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+          commandOf(message) === MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       ),
     ).toBe(true);
   });
@@ -941,8 +941,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.findLast(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       ),
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
@@ -1021,7 +1020,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.find(
         (message) =>
-          (message as { command?: string }).command ===
+          commandOf(message) ===
           SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
       ),
     ).toMatchObject({
@@ -1032,8 +1031,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.find(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       ),
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
@@ -1071,14 +1069,13 @@ describe('desktop settings IPC', () => {
     expect(
       posted.some(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       ),
     ).toBe(false);
     expect(
       posted.find(
         (message) =>
-          (message as { command?: string }).command ===
+          commandOf(message) ===
           SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
       ),
     ).toMatchObject({
@@ -1091,8 +1088,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.find(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       ),
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
@@ -1206,15 +1202,13 @@ describe('desktop settings IPC', () => {
     expect(
       posted.some(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       ),
     ).toBe(true);
     expect(
       posted.some(
         (message) =>
-          (message as { command?: string }).command ===
-          MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       ),
     ).toBe(true);
   });
@@ -1361,8 +1355,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.find(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       ),
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
@@ -1378,8 +1371,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.find(
         (message) =>
-          (message as { command?: string }).command ===
-          MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       ),
     ).toMatchObject({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
@@ -1595,15 +1587,13 @@ describe('desktop settings IPC', () => {
     expect(
       posted.some(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       ),
     ).toBe(true);
     expect(
       posted.some(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       ),
     ).toBe(true);
   });
@@ -1680,9 +1670,7 @@ describe('desktop settings IPC', () => {
     expect(
       invalidateModelOptionsCache.mock.invocationCallOrder[0],
     ).toBeLessThan(computeModelOptionsData.mock.invocationCallOrder[0]);
-    expect(
-      posted.map((message) => (message as { command?: string }).command),
-    ).toEqual(
+    expect(posted.map((message) => commandOf(message))).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
         SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
@@ -1840,8 +1828,7 @@ describe('desktop settings IPC', () => {
     expect(
       posted.filter(
         (message) =>
-          (message as { command?: string }).command ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       ),
     ).toEqual([]);
   });

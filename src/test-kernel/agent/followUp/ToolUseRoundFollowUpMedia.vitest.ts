@@ -67,20 +67,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       workspace: AgentWorkspaceState.create(),
     } as unknown as ToolUseRoundServices;
 
-    const shared: ToolUseRoundShared = {
-      messages: [],
-      shouldStop: false,
-      endTurn: false,
-      response: undefined,
-      responseTimeMs: undefined,
-      stopReason: undefined,
-      lastError: undefined,
-      toolCalls: undefined,
-      text: undefined,
-      roundIndex: 0,
-      roundResponseTimeMs: 0,
-      roundNormalizedUsage: undefined,
-    };
+    const shared = createShared([]);
 
     await createToolUseRoundFlow().setServices(services).run(shared);
 

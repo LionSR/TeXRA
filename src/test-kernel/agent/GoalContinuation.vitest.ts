@@ -20,12 +20,7 @@ const STREAM_ID = 'stream:goal-cont' as StreamTabId;
 const LEGACY_GOAL_FEATURE_FLAG_KEY = LEGACY_GOAL_FEATURE_FLAG_KEYS[0];
 
 async function installPlatform(flagOn: boolean): Promise<Platform> {
-  const { initPlatform } = await import('@platform/platform');
-  const platform = createFakePlatform({
-    config: { [GOAL_FEATURE_FLAG_KEY]: flagOn },
-  });
-  initPlatform(platform);
-  return platform;
+  return installPlatformWithConfig({ [GOAL_FEATURE_FLAG_KEY]: flagOn });
 }
 
 async function installPlatformWithConfig(

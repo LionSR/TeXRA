@@ -20,17 +20,25 @@ beforeAll(async () => {
   initPlatform(createFakePlatform());
 });
 
+type LogEntry = { message: string; error: unknown };
+
+type RecordingHost = ProgressWorkflowFileActionsControllerDeps['host'] & {
+  infos: string[];
+  errors: string[];
+  logs: LogEntry[];
+};
+
+type RecordingDeps = ProgressWorkflowFileActionsControllerDeps & {
+  host: RecordingHost;
+};
+
 function createDeps(
   overrides: Partial<ProgressWorkflowFileActionsControllerDeps['host']>,
-): ProgressWorkflowFileActionsControllerDeps {
+): RecordingDeps {
   const infos: string[] = [];
   const errors: string[] = [];
-  const logs: { message: string; error: unknown }[] = [];
-  const host: ProgressWorkflowFileActionsControllerDeps['host'] & {
-    infos: string[];
-    errors: string[];
-    logs: { message: string; error: unknown }[];
-  } = {
+  const logs: LogEntry[] = [];
+  const host: RecordingHost = {
     infos,
     errors,
     logs,
@@ -74,14 +82,7 @@ describe('ProgressWorkflowFileActionsController', () => {
 
     await controller.openLabel('missing-label');
 
-    assert.deepEqual(
-      (
-        deps.host as ProgressWorkflowFileActionsControllerDeps['host'] & {
-          infos: string[];
-        }
-      ).infos,
-      ['Label "missing-label" not found.'],
-    );
+    assert.deepEqual(deps.host.infos, ['Label "missing-label" not found.']);
   });
 
   it('reports task storage open failures', async () => {
@@ -96,15 +97,10 @@ describe('ProgressWorkflowFileActionsController', () => {
 
     await controller.openTaskStorage('toolUse');
 
-    const host =
-      deps.host as ProgressWorkflowFileActionsControllerDeps['host'] & {
-        errors: string[];
-        logs: { message: string; error: unknown }[];
-      };
-    assert.deepEqual(host.errors, [
+    assert.deepEqual(deps.host.errors, [
       'Failed to open task storage folder: cannot reveal folder',
     ]);
-    assert.deepEqual(host.logs, [
+    assert.deepEqual(deps.host.logs, [
       { message: 'Failed to open task storage folder', error: failure },
     ]);
   });
