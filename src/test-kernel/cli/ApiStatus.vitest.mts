@@ -75,6 +75,15 @@ describe('CLI API status text', () => {
       'actions: `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
     );
     expect(
+      formatCliApiStatusActionHint(
+        'included',
+        { authenticated: false },
+        { hasPersonalKey: true },
+      ),
+    ).toBe(
+      'actions: `--api-mode personal` uses provider keys; `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
+    );
+    expect(
       formatCliApiStatusActionHint('included', { authenticated: true }),
     ).toBe(
       'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys',
@@ -88,6 +97,15 @@ describe('CLI API status text', () => {
       formatCliApiStatusActionHint('personal', { authenticated: false }),
     ).toBe(
       'actions: use ChatGPT, add a provider key, or sign in with Researcher Access',
+    );
+    expect(
+      formatCliApiStatusActionHint(
+        'personal',
+        { authenticated: false },
+        { hasPersonalKey: true },
+      ),
+    ).toBe(
+      'actions: provider keys are configured; use ChatGPT or sign in with Researcher Access',
     );
   });
 });
