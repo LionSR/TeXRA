@@ -104,9 +104,7 @@ async function promptForApiKey(
     ib.buttons = [getKeyButton];
     ib.onDidTriggerButton((button) => {
       if (button === getKeyButton) {
-        void vscode.env.openExternal(
-          vscode.Uri.parse(PROVIDER_URLS[provider]),
-        );
+        void vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
       }
     });
   }
