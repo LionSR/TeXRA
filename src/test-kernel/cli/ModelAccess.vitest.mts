@@ -837,6 +837,72 @@ describe('CLI model access resolution', () => {
     expect(text).not.toContain('`--api-mode included`');
   });
 
+  it('shows terminal recovery text for retired models in model details', () => {
+    const text = formatCliModelDetails(
+      model('haiku3', {
+        available: false,
+        status: 'retired',
+        model: modelOption('haiku3', {
+          label: 'Haiku 3',
+          availability: 'retired',
+          availabilityLabel: 'Retired',
+          disabled: true,
+        }),
+      }),
+      'included',
+    );
+
+    expect(text).toContain('status: retired');
+    expect(text).toContain('availability: Retired');
+    expect(text).toContain('recovery: Choose an active model.');
+    expect(text).not.toContain('texra setup');
+  });
+
+  it('rejects explicit retired hidden models before fallback', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('haiku3', {
+        label: 'Haiku 3',
+        availability: 'retired',
+        availabilityLabel: 'Retired',
+        disabled: true,
+        requiresKey: false,
+      }),
+    ]);
+
+    await expect(
+      resolveCliRunnableModel('haiku3', {
+        fallbackSource: 'override',
+        apiMode: 'included',
+        accessList: [],
+      }),
+    ).rejects.toThrow(
+      'Model "haiku3" is not available in the active API mode (retired).',
+    );
+  });
+
+  it('does not mask explicit retired models behind included login', async () => {
+    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('haiku3', {
+        label: 'Haiku 3',
+        availability: 'retired',
+        availabilityLabel: 'Retired',
+        disabled: true,
+        requiresKey: false,
+      }),
+    ]);
+
+    await expect(
+      resolveCliRunnableModel('haiku3', {
+        fallbackSource: 'override',
+        apiMode: 'included',
+        accessList: [],
+      }),
+    ).rejects.toThrow(
+      'Model "haiku3" is not available in the active API mode (retired).',
+    );
+  });
+
   it('shows a recovery hint for missing provider-key models in model details', () => {
     const text = formatCliModelDetails(
       model('glm52', {

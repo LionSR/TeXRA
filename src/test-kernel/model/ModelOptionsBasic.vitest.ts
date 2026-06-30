@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - model
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { DEFAULT_MODELS, isRetiredModel } from '@model/modelOptionsBasic';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 describe('default helper model', () => {
@@ -50,5 +50,9 @@ describe('default model list', () => {
 
   it('only contains model ids known by llm-zoo', () => {
     expect(DEFAULT_MODELS.filter((model) => !MODEL_CONFIGS[model])).toEqual([]);
+  });
+
+  it('does not include retired models', () => {
+    expect(DEFAULT_MODELS.filter(isRetiredModel)).toEqual([]);
   });
 });
