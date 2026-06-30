@@ -45,8 +45,7 @@ import {
   type StreamBranchActivity,
   type StreamTreeExpansionOverride,
 } from '../streamTree';
-import type { StreamState } from '../store';
-import type { StreamFilter } from '../store';
+import type { StreamFilter, StreamState } from '../store';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
@@ -289,7 +288,7 @@ export class StreamTabs extends LitElement {
   private branchActivityByStream: Map<StreamTabId, StreamBranchActivity> =
     new Map();
 
-  protected override willUpdate(changed: import('lit').PropertyValues): void {
+  protected override willUpdate(changed: PropertyValues): void {
     if (!changed.has('childStreamsByParent') && !changed.has('streamStates'))
       return;
 

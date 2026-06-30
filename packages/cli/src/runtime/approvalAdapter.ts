@@ -15,6 +15,7 @@ import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 
 import {
+  type ApprovalDecision,
   type CliApprovalPromptHooks,
   askApproval,
   immediateDecision,
@@ -53,26 +54,29 @@ export {
   formatToolEditApprovalSummary,
 } from './approval/approvalSummaries';
 
+function toToolEditResult(
+  decision: ApprovalDecision,
+  proposedContent: string,
+): ToolEditApprovalResult {
+  return decision.accepted
+    ? { accepted: true, appliedContent: proposedContent }
+    : { accepted: false, userMessage: decision.userMessage };
+}
+
 async function decideToolEdit(
   request: ToolEditApprovalRequest,
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ): Promise<ToolEditApprovalResult> {
   const immediate = immediateDecision(context);
-  if (immediate) {
-    return immediate.accepted
-      ? { accepted: true, appliedContent: request.proposedContent }
-      : { accepted: false, userMessage: immediate.userMessage };
-  }
+  if (immediate) return toToolEditResult(immediate, request.proposedContent);
 
   const decision = await askApproval(
     context,
     formatToolEditApprovalSummary(request),
     hooks,
   );
-  return decision.accepted
-    ? { accepted: true, appliedContent: request.proposedContent }
-    : { accepted: false, userMessage: decision.userMessage };
+  return toToolEditResult(decision, request.proposedContent);
 }
 
 export function installCliApprovalHandlers(

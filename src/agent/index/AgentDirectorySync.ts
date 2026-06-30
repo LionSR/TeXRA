@@ -1,12 +1,9 @@
-// Standard library imports
 import * as path from 'node:path';
 
-// Local imports
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
-// Local imports - agent index
 import {
   BUNDLED_AGENT_DIRECTORY_NAMES,
   type BundledAgentDirectoryName,

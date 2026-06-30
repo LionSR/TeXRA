@@ -16,12 +16,6 @@ function isVSCodeGitHubEnabled(): boolean {
   return getConfig('auth.enableVSCodeGitHub', false);
 }
 
-async function getExistingSession(): Promise<
-  vscode.AuthenticationSession | undefined
->;
-async function getExistingSession(
-  authReady: boolean,
-): Promise<vscode.AuthenticationSession | undefined>;
 async function getExistingSession(
   authReady?: boolean,
 ): Promise<vscode.AuthenticationSession | undefined> {

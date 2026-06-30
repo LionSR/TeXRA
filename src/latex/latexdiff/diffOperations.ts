@@ -34,6 +34,10 @@ import type {
   DiffRunResult,
 } from './types';
 
+function getFileLabel(info: OutputFileInfo): string {
+  return info.source ?? path.basename(getComparablePath(info.location));
+}
+
 export async function executeDiffOperations(
   operations: DiffOperation[],
   mathMarkup: MathMarkupOption | undefined,
@@ -102,9 +106,7 @@ export async function runLatexdiffFromMetadata(params: {
 }): Promise<DiffRunOutcome> {
   const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
 
-  const getFileLabel = (info: OutputFileInfo): string =>
-    info.source ?? path.basename(getComparablePath(info.location));
-
+  const workspaceCwd = WorkspaceFS.getPath();
   const immediateResults: DiffRunResult[] = [];
   const operations: DiffOperation[] = [];
   const groupedByRelative = new Map<
@@ -134,15 +136,14 @@ export async function runLatexdiffFromMetadata(params: {
         base,
         revised: info.location,
         description,
-        cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
+        cwd: workspaceCwd ?? path.dirname(base.absolutePath),
         round,
       });
 
       const key = getComparablePath(info.location);
-      if (!groupedByRelative.has(key)) {
-        groupedByRelative.set(key, []);
-      }
-      groupedByRelative.get(key)!.push({ round, info });
+      const group = groupedByRelative.get(key) ?? [];
+      group.push({ round, info });
+      groupedByRelative.set(key, group);
     }
   }
 
@@ -161,7 +162,7 @@ export async function runLatexdiffFromMetadata(params: {
           base,
           revised,
           description,
-          cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
+          cwd: workspaceCwd ?? path.dirname(base.absolutePath),
           fromRound: previous.round,
           toRound: current.round,
         });
@@ -201,6 +202,10 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     throw new Error('No workspace path found');
   }
 
+  const fs = platform().fs;
+  const toAbsolute = (file: string): string =>
+    path.isAbsolute(file) ? file : path.join(workspacePath, file);
+
   const configuredInputFiles =
     outputFiles && outputFiles.length > 0 ? outputFiles : [inputFile];
 
@@ -216,7 +221,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     );
 
     const absoluteDir = path.join(workspacePath, outputDirPath);
-    const dirEntries = await platform().fs.readDirectory(absoluteDir);
+    const dirEntries = await fs.readDirectory(absoluteDir);
 
     const roundOutputsMap = new Map<number, string>();
 
@@ -263,7 +268,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       const roundAbsoluteDir = path.join(absoluteDir, entryName);
       let roundEntries: [string, number][];
       try {
-        roundEntries = await platform().fs.readDirectory(roundAbsoluteDir);
+        roundEntries = await fs.readDirectory(roundAbsoluteDir);
       } catch (error) {
         // Skip unreadable round dirs but record which one so a missing
         // round output isn't silently invisible during diagnosis.
@@ -313,17 +318,11 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     const rounds = [...roundOutputs.keys()].sort((a, b) => a - b);
 
     for (const round of rounds) {
-      const outputFile = roundOutputs.get(round)!;
-      const resolvedBase = path.isAbsolute(baseFile)
-        ? baseFile
-        : path.join(workspacePath, baseFile);
-      const resolvedOutput = path.isAbsolute(outputFile)
-        ? outputFile
-        : path.join(workspacePath, outputFile);
+      const resolvedOutput = toAbsolute(roundOutputs.get(round)!);
 
       operations.push({
         type: 'round',
-        base: pathToLocation(resolvedBase),
+        base: pathToLocation(toAbsolute(baseFile)),
         revised: pathToLocation(resolvedOutput),
         description: `${path.basename(baseFile)} (r${round})`,
         cwd: path.dirname(resolvedOutput),
@@ -337,18 +336,12 @@ export async function runLatexdiffViaWorkspaceScan(params: {
         const nextRound = rounds[index + 1];
         const currentFile = roundOutputs.get(currentRound)!;
         const nextFile = roundOutputs.get(nextRound)!;
-
-        const resolvedCurrent = path.isAbsolute(currentFile)
-          ? currentFile
-          : path.join(workspacePath, currentFile);
-        const resolvedNext = path.isAbsolute(nextFile)
-          ? nextFile
-          : path.join(workspacePath, nextFile);
+        const resolvedCurrent = toAbsolute(currentFile);
 
         operations.push({
           type: 'between-rounds',
           base: pathToLocation(resolvedCurrent),
-          revised: pathToLocation(resolvedNext),
+          revised: pathToLocation(toAbsolute(nextFile)),
           description: `${path.basename(currentFile)} (r${currentRound}→r${nextRound})`,
           cwd: path.dirname(resolvedCurrent),
           fromRound: currentRound,

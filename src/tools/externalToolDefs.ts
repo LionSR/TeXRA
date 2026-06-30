@@ -197,6 +197,23 @@ function resolveBooleanProbe(probeResult: unknown): boolean | undefined {
   return typeof probeResult === 'boolean' ? probeResult : undefined;
 }
 
+/**
+ * Availability check shared by the SDK-backed CLI integrations (Codex, Claude
+ * Code): the dependency is present when its SDK imports and the native binary
+ * resolves. Any import or resolution failure counts as unavailable.
+ */
+async function probeSdkBinaryAvailable(
+  importSdk: () => Promise<unknown>,
+  findBinary: () => Promise<string | undefined>,
+): Promise<boolean> {
+  try {
+    await importSdk();
+    return (await findBinary()) != null;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================
 // Definitions
 // ============================================================
@@ -488,14 +505,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
     authNote: 'Uses ChatGPT subscription (free with Plus/Pro)',
     toggleable: true,
-    check: async () => {
-      try {
-        await importCodexClass();
-        return (await findCodexBinaryPath()) != null;
-      } catch {
-        return false;
-      }
-    },
+    check: () => probeSdkBinaryAvailable(importCodexClass, findCodexBinaryPath),
     detailCheck: async () => {
       // Step 1: Can we import the SDK?
       try {
@@ -559,14 +569,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Requires the native `claude` binary. Supports OAuth (`claude login`), long-lived tokens (`claude setup-token` → CLAUDE_CODE_OAUTH_TOKEN), or ANTHROPIC_API_KEY (resolved from TeXRA Settings → API Keys or the environment).',
     authNote: 'OAuth, OAuth token, or API key',
     toggleable: true,
-    check: async () => {
-      try {
-        await importClaudeAgentSdk();
-        return (await findClaudeBinaryPath()) != null;
-      } catch {
-        return false;
-      }
-    },
+    check: () =>
+      probeSdkBinaryAvailable(importClaudeAgentSdk, findClaudeBinaryPath),
     detailCheck: async () => {
       try {
         await importClaudeAgentSdk();

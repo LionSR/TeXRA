@@ -6,6 +6,7 @@ import {
   completionFlagVariants,
   type CompletionCommand,
   type CompletionFlag,
+  type CompletionFlagVariant,
 } from './completionCommandTree';
 
 const DYNAMIC_FLAG_VALUE_SOURCES: ReadonlyMap<string, string> = new Map([
@@ -13,21 +14,24 @@ const DYNAMIC_FLAG_VALUE_SOURCES: ReadonlyMap<string, string> = new Map([
   ['model', '_texra_models'],
 ]);
 
+function zshFlagValueSuffix(
+  flag: CompletionFlag,
+  variant: CompletionFlagVariant,
+): string {
+  if (variant.values.length > 0) return `: :(${variant.values.join(' ')})`;
+  if (!variant.takesValue) return '';
+  const dynamicSource = DYNAMIC_FLAG_VALUE_SOURCES.get(flag.name);
+  if (dynamicSource) return `:${flag.name}:($(${dynamicSource}))`;
+  return `:${variant.valueKind ?? 'value'}:`;
+}
+
 function zshFlagSpec(flag: CompletionFlag): string[] {
   return completionFlagVariants(flag).flatMap((variant) => {
     const names = [
       `--${variant.name}`,
       ...variant.aliases.map((alias) => `-${alias}`),
     ];
-    const dynamicSource = DYNAMIC_FLAG_VALUE_SOURCES.get(flag.name);
-    const suffix =
-      variant.values.length > 0
-        ? `: :(${variant.values.join(' ')})`
-        : variant.takesValue && dynamicSource
-          ? `:${flag.name}:($(${dynamicSource}))`
-          : variant.takesValue
-            ? `:${variant.valueKind ?? 'value'}:`
-            : '';
+    const suffix = zshFlagValueSuffix(flag, variant);
     return names.map((name) => `${name}[${variant.description}]${suffix}`);
   });
 }

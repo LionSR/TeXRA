@@ -141,18 +141,16 @@ const desktopCommandEntriesById = new Map(
   ]),
 );
 
-function commandTitle(commandId: DesktopCommandId, label: string): string {
-  const entry = desktopCommandEntriesById.get(commandId);
-  const shortcut = formatDesktopAccelerator(
-    entry?.accelerator,
-    rendererPlatform,
-  );
+function shortcutTitle(label: string, accelerator: string | undefined): string {
+  const shortcut = formatDesktopAccelerator(accelerator, rendererPlatform);
   return shortcut ? `${label} - ${shortcut}` : label;
 }
 
-function shortcutTitle(label: string, accelerator: string): string {
-  const shortcut = formatDesktopAccelerator(accelerator, rendererPlatform);
-  return shortcut ? `${label} - ${shortcut}` : label;
+function commandTitle(commandId: DesktopCommandId, label: string): string {
+  return shortcutTitle(
+    label,
+    desktopCommandEntriesById.get(commandId)?.accelerator,
+  );
 }
 
 function setRouteState(route: DesktopRoute): void {
@@ -461,29 +459,7 @@ function renderBootstrapFallback(error: unknown): void {
             </wa-button>
             <wa-button
               appearance="outlined"
-              @click=${() => {
-                try {
-                  logsDrawer.rerenderViewer();
-                  rerenderShell();
-                  // Recovery must wire rail tabs / conversation events and
-                  // install the signal watcher — without these the recovered
-                  // shell renders but stays inert (rail clicks ignored,
-                  // signal changes don't trigger rerenders).
-                  wireRailTabs();
-                  wireConversation();
-                  installShellSignalWatcher();
-                  bootstrapFailed = false;
-                  postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
-                  postWebviewReady();
-                } catch (recoveryError) {
-                  console.error(
-                    'TeXRA desktop renderer recovery failed',
-                    recoveryError,
-                  );
-                  bootstrapFailed = true;
-                  renderBootstrapFallback(recoveryError);
-                }
-              }}
+              @click=${recoverFromBootstrapFallback}
             >
               Continue without saved secrets
             </wa-button>
@@ -493,6 +469,26 @@ function renderBootstrapFallback(error: unknown): void {
     `,
     appRoot,
   );
+}
+
+function recoverFromBootstrapFallback(): void {
+  try {
+    logsDrawer.rerenderViewer();
+    rerenderShell();
+    // Recovery must wire rail tabs / conversation events and install the
+    // signal watcher. Without these the recovered shell renders but stays
+    // inert (rail clicks ignored, signal changes don't trigger rerenders).
+    wireRailTabs();
+    wireConversation();
+    installShellSignalWatcher();
+    bootstrapFailed = false;
+    postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
+    postWebviewReady();
+  } catch (recoveryError) {
+    console.error('TeXRA desktop renderer recovery failed', recoveryError);
+    bootstrapFailed = true;
+    renderBootstrapFallback(recoveryError);
+  }
 }
 
 // =============================================================================
@@ -808,7 +804,7 @@ function wireRailTabs(): void {
 }
 
 function wireConversation(): void {
-  const ctx = () => getEventHandlerContext();
+  const ctx = getEventHandlerContext;
   conversationView.addEventListener('stream-switch', ((e: CustomEvent) => {
     handleStreamSwitch(e, ctx());
   }) as EventListener);

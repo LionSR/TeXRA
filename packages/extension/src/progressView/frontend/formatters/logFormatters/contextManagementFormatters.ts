@@ -19,8 +19,6 @@ import { formatCompactTokenCount } from '@utils/core';
 // Local imports - Lit template utilities
 import { html, type FormatResult } from '../litTemplates';
 
-// Local imports - component types
-
 /**
  * Minimum reduced token threshold below which the "Max Tokens Reduced" event
  * is surfaced in the UI. When the adjusted max_tokens is still at or above
@@ -75,7 +73,7 @@ function buildContextManagementItems(data: ContextManagementData): {
 } {
   const { action } = data;
 
-  const config: ActionConfig = ACTION_CONFIG[action] || {
+  const config: ActionConfig = ACTION_CONFIG[action] ?? {
     icon: 'history',
     label: action || 'Context Management',
     color: 'var(--wa-color-text-normal)',

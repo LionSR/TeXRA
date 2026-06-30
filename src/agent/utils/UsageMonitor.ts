@@ -285,12 +285,7 @@ export class UsageMonitor {
       const usedRelay =
         usage.usageRoute != null
           ? usage.usageRoute === 'relay'
-          : !usage.viaChatGptSubscription &&
-            !shouldUseOpenRouter(config) &&
-            getServerSideKeyService().shouldUseServerSideKeysSync(
-              config.provider,
-              config.name,
-            );
+          : !usage.viaChatGptSubscription && this.usesRelayRoute();
 
       UsageLogService.log({
         model: config.fullName,

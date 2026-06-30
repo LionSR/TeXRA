@@ -7,10 +7,10 @@ import { isInFlightStatus } from '@common/constants/streamStatus';
 import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
 import { cleanupAllApprovals, releaseStreamResources } from '@tools/approval';
 
+import type { StreamTabId } from '@shared/schemas';
 import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';
 import type { ProgressViewProvider } from '../ProgressViewProvider';
 
-type StreamTabId = import('@shared/schemas').StreamTabId;
 type ProgressRetryCoordinator = Pick<RunCoordinatorBridge, 'clearRetryRequest'>;
 
 interface ModelOutputBackupCleaner {

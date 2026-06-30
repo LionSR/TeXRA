@@ -69,6 +69,5 @@ export function isTransientHttpError(error: unknown): boolean {
   // property of `undefined`) and silently retries them. `is-network-error`
   // matches only the known fetch/undici network-failure messages, so genuine
   // bugs in the wrapped call surface instead of being masked as transient.
-  if (isNetworkError(error)) return true;
-  return false;
+  return isNetworkError(error);
 }

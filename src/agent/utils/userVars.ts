@@ -142,21 +142,25 @@ function getBasicVars(
   workspacePath?: string,
 ): UserVars {
   // Build agent lists for template use
-  const formatAgentList = (agents: { name: string; description?: string }[]) =>
-    agents
+  function formatAgentList(
+    agents: { name: string; description?: string }[],
+  ): string {
+    return agents
       .map((a) => `- ${a.name}: ${a.description || 'No description'}`)
       .join('\n');
+  }
 
   // Format tool-use agents with their available tools
-  const formatToolUseAgentList = (
+  function formatToolUseAgentList(
     agents: Pick<AgentEntry, 'name' | 'description' | 'tools'>[],
-  ) =>
-    agents
+  ): string {
+    return agents
       .map((a) => {
         const toolsStr = a.tools?.length ? ` [${a.tools.join(', ')}]` : '';
         return `- ${a.name}: ${a.description || 'No description'}${toolsStr}`;
       })
       .join('\n');
+  }
 
   // Filter out the current agent so it doesn't see itself as a delegation target
   const selfName = agentConfig.agent;
@@ -495,12 +499,11 @@ export function resolveOutputFiles(
   const explicitFilesAreSubsetOfInputs =
     explicitOutputFiles.length > 0 &&
     explicitOutputFiles.every((file) => inputFiles.includes(file));
-  const outputFiles =
-    !explicitFilesAreSubsetOfInputs && explicitOutputFiles.length > 0
-      ? explicitOutputFiles
-      : defaultOutputFiles.length > 0
-        ? defaultOutputFiles
-        : [];
+  // An empty defaultOutputFiles is already `[]`, so this single ternary covers
+  // the "no usable outputs" case without a nested fallback branch.
+  const useExplicit =
+    explicitOutputFiles.length > 0 && !explicitFilesAreSubsetOfInputs;
+  const outputFiles = useExplicit ? explicitOutputFiles : defaultOutputFiles;
 
   agentConfig.outputFiles = outputFiles;
   if (outputFiles.length > 0) {

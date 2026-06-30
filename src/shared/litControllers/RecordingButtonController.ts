@@ -1,9 +1,6 @@
-// Third-party imports
 import { postMessage } from '@shared/hostBridge';
 import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
-
-// Local imports
 
 export interface RecordingButtonConfig {
   startCommand: string;
@@ -19,7 +16,7 @@ export interface RecordingButtonConfig {
  * Computed state for recording button (used in templates).
  */
 export interface RecordingButtonState {
-  /** Current icon name (without codicon- prefix) */
+  /** Current icon name */
   icon: TeXRAIconName;
   /** Current title/tooltip text */
   title: string;
@@ -59,10 +56,8 @@ export class RecordingButtonController implements ReactiveController {
     this.host.addController(this);
   }
 
-  // Required by ReactiveController interface - no initialization needed
-  hostConnected(): void {
-    // No-op: controller state managed via setRecording()
-  }
+  // Required by the Lit ReactiveController interface; state is managed via setRecording().
+  hostConnected(): void {}
 
   /**
    * Get computed state for use in templates (Lit-native approach).

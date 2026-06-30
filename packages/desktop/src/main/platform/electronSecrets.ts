@@ -47,10 +47,12 @@ function warnKeychainDisabledOnce(): void {
 
 function isStoredSecret(value: unknown): value is StoredSecret {
   return (
-    value != null &&
     typeof value === 'object' &&
-    typeof (value as StoredSecret).value === 'string' &&
-    (value as StoredSecret).encrypted === true
+    value !== null &&
+    'encrypted' in value &&
+    value.encrypted === true &&
+    'value' in value &&
+    typeof value.value === 'string'
   );
 }
 

@@ -10,6 +10,7 @@
 import {
   CODEX_AUTHORIZE_URL,
   CODEX_CLIENT_ID,
+  CODEX_DEVICE_REDIRECT_URI,
   CODEX_ORIGINATOR,
   CODEX_SCOPE,
   CODEX_TOKEN_REFRESH_BUFFER_MS,
@@ -17,7 +18,6 @@ import {
 } from './codexConstants';
 import { extractCodexClaims } from './codexJwt';
 import {
-  codexDeviceRedirectUri,
   exchangeAuthorizationCode as defaultExchange,
   refreshTokens as defaultRefresh,
 } from './codexOAuthClient';
@@ -199,7 +199,7 @@ export class CodexSessionCoordinator {
     return this.completeLoginWithCode({
       code: params.authorizationCode,
       verifier: params.codeVerifier,
-      redirectUri: codexDeviceRedirectUri,
+      redirectUri: CODEX_DEVICE_REDIRECT_URI,
     });
   }
 

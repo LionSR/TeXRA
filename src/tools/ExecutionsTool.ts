@@ -371,27 +371,17 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     const candidateIds = ids?.length
       ? unique(ids)
       : currentSession().executions.getActiveIds();
-    if (candidateIds.length === 0) return;
-
     // Exclude executions that are already effectively done
     // (completed, inactive, or tool-use subagent WAITING with result delivered).
     const pendingIds = candidateIds.filter((id) => !shouldSkipWait(id));
     if (pendingIds.length === 0) return;
 
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), timeout * 1000);
-    // Abort early if a follow-up is sent to this stream (user wants to break the wait)
-    const cleanupFollowUp = listenForFollowUp(ac);
-    // Register callback before re-checking to close the race window
-    const waitPromise = currentSession().executions.waitForAnyChange(
-      pendingIds,
-      ac.signal,
+    await this.waitWithTimeout(
+      timeout,
+      (signal) =>
+        currentSession().executions.waitForAnyChange(pendingIds, signal),
+      () => pendingIds.every(shouldSkipWait),
     );
-    // Re-check after registration: if all resolved in the gap, abort.
-    if (pendingIds.every(shouldSkipWait)) ac.abort();
-    await waitPromise;
-    clearTimeout(timer);
-    cleanupFollowUp();
   }
 
   /** Wait for a specific execution to change status, with timeout. */
@@ -400,18 +390,30 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     timeout: number,
   ): Promise<void> {
     if (shouldSkipWait(executionId)) return;
+    await this.waitWithTimeout(
+      timeout,
+      (signal) =>
+        currentSession().executions.waitForChange(executionId, signal),
+      () => shouldSkipWait(executionId),
+    );
+  }
 
+  /**
+   * Shared wait choreography: arm a timeout and a follow-up listener that both
+   * abort the wait, register the change callback, then re-check `settled` to
+   * close the race window between the initial pre-check and registration.
+   */
+  private async waitWithTimeout(
+    timeout: number,
+    register: (signal: AbortSignal) => Promise<unknown>,
+    settled: () => boolean,
+  ): Promise<void> {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
-    // Abort early if a follow-up is sent to this stream (user wants to break the wait)
+    // Abort early if a follow-up is sent to this stream (user wants to break the wait).
     const cleanupFollowUp = listenForFollowUp(ac);
-    // Register callback before re-checking to close the race window
-    const waitPromise = currentSession().executions.waitForChange(
-      executionId,
-      ac.signal,
-    );
-    // Re-check after registration: if state changed in the gap, abort.
-    if (shouldSkipWait(executionId)) ac.abort();
+    const waitPromise = register(ac.signal);
+    if (settled()) ac.abort();
     await waitPromise;
     clearTimeout(timer);
     cleanupFollowUp();

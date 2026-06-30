@@ -1,10 +1,7 @@
-// Third-party imports
-import { css } from 'lit';
+import { css, type CSSResult } from 'lit';
 
-/**
- * Markdown content styles for rendered markdown in log entries.
- */
-export const markdownStyles = css`
+/** Markdown content styles for rendered markdown in log entries. */
+export const markdownStyles: CSSResult = css`
   .katex-mathml {
     display: none;
   }

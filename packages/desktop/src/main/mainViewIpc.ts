@@ -101,12 +101,12 @@ export function installDesktopMainViewIpc(
     execution,
   ].filter(filterNotNullish);
 
-  const dispose = () => {
+  function dispose(): void {
     if (disposed) return;
     disposed = true;
     viewState.dispose();
     bridge.dispose();
-  };
+  }
   window.once('closed', dispose);
 
   return {

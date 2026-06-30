@@ -46,10 +46,6 @@ export { createKey };
 const LEGACY_BUILTIN_PREFIX = 'builtIn:';
 const NEW_BUILTIN_PREFIX = 'builtInWorkflow:';
 
-/**
- * Migrate persisted `builtIn:*` keys to `builtInWorkflow:*`.
- * Idempotent — skips if no legacy keys found.
- */
 function isLegacyBuiltInKey(k: string): boolean {
   return (
     k.startsWith(LEGACY_BUILTIN_PREFIX) && !k.startsWith('builtInToolUse:')
@@ -66,6 +62,10 @@ const ENABLED_AGENTS_STATE_KEY: Record<AgentCategory, WorkspaceStateKey> = {
   [AgentCategory.ToolUse]: WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
 };
 
+/**
+ * Migrate persisted `builtIn:*` keys to `builtInWorkflow:*`.
+ * Idempotent: skips a state key when it holds no legacy keys.
+ */
 function migrateLegacySourceKeys(): void {
   for (const stateKey of Object.values(ENABLED_AGENTS_STATE_KEY)) {
     const stored = platform().workspaceState.get<string[]>(stateKey, []);
@@ -122,7 +122,7 @@ export async function loadAgents(
 
   const previousInitialized = initialized;
   const previousCacheIncludesRemote = cacheIncludesRemote;
-  initPromise = doLoad({ includeRemote })
+  initPromise = doLoad(includeRemote)
     .then(() => {
       initialized = true;
       cacheIncludesRemote = includeRemote;
@@ -139,7 +139,7 @@ export async function loadAgents(
   return initPromise;
 }
 
-async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
+async function doLoad(includeRemote: boolean): Promise<void> {
   const startTime = Date.now();
 
   // Migrate legacy builtIn:* → builtInWorkflow:* in persisted state
@@ -153,7 +153,6 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
     dirs.builtInToolUse(),
   ]);
 
-  const includeRemote = options.includeRemote ?? true;
   const [customEntries, builtInEntries, toolUseEntries, remoteEntries] =
     await Promise.all([
       scanDirectory(customDir, 'custom'),
@@ -180,18 +179,13 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
     ),
   );
 
-  const nextCache = new Map<string, AgentEntry>();
+  cache.clear();
   for (const entry of allEntries) {
     if (toolUseOverrides.has(entry.name)) {
       entry.category = AgentCategory.ToolUse;
       entry.rounds = undefined;
     }
-    nextCache.set(agentKeyOf(entry), entry);
-  }
-
-  cache.clear();
-  for (const [key, entry] of nextCache) {
-    cache.set(key, entry);
+    cache.set(agentKeyOf(entry), entry);
   }
 
   // Migrate legacy agent names (chat → assistant) in persisted visibility
@@ -219,35 +213,53 @@ function migrateLegacyAgentNameKeys(): void {
     AgentCategory.Workflow,
     AgentCategory.ToolUse,
   ] as const) {
-    const stateKey = ENABLED_AGENTS_STATE_KEY[category];
-    const stored = platform().workspaceState.get<string[]>(stateKey, []);
-    if (!stored?.length) continue;
-
-    const migrated = stored.map((key) => {
-      const name = agentName(key);
-      const alias = LEGACY_AGENT_ALIASES[name];
-      if (!alias) return key;
-      if (key === name ? getAgent(name)?.name === name : cache.has(key)) {
-        return key;
-      }
-      // Rewrite the name part to the alias target, preserving the original
-      // key's shape (bare vs source-qualified) when it resolves to an agent IN
-      // THIS LIST'S CATEGORY. Otherwise resolve the alias within the category,
-      // so the rewrite can never persist a wrong-category key — e.g. a custom
-      // workflow `assistant` shadowing the built-in tool-use one must not land
-      // in tool-use visibility state (the settings UI matches keys literally,
-      // so a cross-category key would orphan the toggle). Keep the original key
-      // when no agent of this category matches, rather than inventing one.
-      const rewritten = key.slice(0, key.length - name.length) + alias;
-      if (getAgent(rewritten)?.category === category) return rewritten;
-      const canonical = getCategoryAgent(category, alias);
-      return canonical ? agentKeyOf(canonical) : key;
-    });
-    if (migrated.every((key, i) => key === stored[i])) continue;
-
-    void platform().workspaceState.update(stateKey, unique(migrated));
-    logger.info(CHANNEL, `Migrated legacy agent names in ${stateKey}`);
+    rewriteEnabledAgentKeys(
+      ENABLED_AGENTS_STATE_KEY[category],
+      'Migrated legacy agent names',
+      (key) => {
+        const name = agentName(key);
+        const alias = LEGACY_AGENT_ALIASES[name];
+        if (!alias) return key;
+        if (key === name ? getAgent(name)?.name === name : cache.has(key)) {
+          return key;
+        }
+        // Rewrite the name part to the alias target, preserving the original
+        // key's shape (bare vs source-qualified) when it resolves to an agent
+        // IN THIS LIST'S CATEGORY. Otherwise resolve the alias within the
+        // category, so the rewrite can never persist a wrong-category key, e.g.
+        // a custom workflow `assistant` shadowing the built-in tool-use one
+        // must not land in tool-use visibility state (the settings UI matches
+        // keys literally, so a cross-category key would orphan the toggle).
+        // Keep the original key when no agent of this category matches, rather
+        // than inventing one.
+        const rewritten = key.slice(0, key.length - name.length) + alias;
+        if (getAgent(rewritten)?.category === category) return rewritten;
+        const canonical = getCategoryAgent(category, alias);
+        return canonical ? agentKeyOf(canonical) : key;
+      },
+    );
   }
+}
+
+/**
+ * Apply `rewrite` to every persisted enabled-agent key in `stateKey` and persist
+ * the deduplicated result when anything changed. Shared by the legacy-name and
+ * filename-based migrations so the load/compare/persist/log boilerplate lives in
+ * one place.
+ */
+function rewriteEnabledAgentKeys(
+  stateKey: WorkspaceStateKey,
+  description: string,
+  rewrite: (key: string) => string,
+): void {
+  const stored = platform().workspaceState.get<string[]>(stateKey, []);
+  if (!stored?.length) return;
+
+  const migrated = stored.map(rewrite);
+  if (migrated.every((key, i) => key === stored[i])) return;
+
+  void platform().workspaceState.update(stateKey, unique(migrated));
+  logger.info(CHANNEL, `${description} in ${stateKey}`);
 }
 
 /**
@@ -288,19 +300,16 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
   if (qualified.size === 0 && bare.size === 0) return;
 
   for (const stateKey of Object.values(ENABLED_AGENTS_STATE_KEY)) {
-    const stored = platform().workspaceState.get<string[]>(stateKey, []);
-    if (!stored?.length) continue;
-
-    const migrated = stored.map((key) => {
-      const name = agentName(key);
-      const prefix = key.slice(0, key.length - name.length);
-      if (prefix) return qualified.get(key) ?? key;
-      return bare.get(name) ?? key;
-    });
-    if (migrated.every((key, i) => key === stored[i])) continue;
-
-    void platform().workspaceState.update(stateKey, unique(migrated));
-    logger.info(CHANNEL, `Migrated filename-based agent names in ${stateKey}`);
+    rewriteEnabledAgentKeys(
+      stateKey,
+      'Migrated filename-based agent names',
+      (key) => {
+        const name = agentName(key);
+        const prefix = key.slice(0, key.length - name.length);
+        if (prefix) return qualified.get(key) ?? key;
+        return bare.get(name) ?? key;
+      },
+    );
   }
 }
 
@@ -410,7 +419,10 @@ export function updateAgentMeta(
  */
 export function resolveAgent(identifier: string): ResolvedAgent | undefined {
   const entry = getAgent(identifier);
-  if (!entry) return undefined;
+  return entry ? toResolvedAgent(entry) : undefined;
+}
+
+function toResolvedAgent(entry: AgentEntry): ResolvedAgent {
   return { entry, definitionPath: entry.path, resolvedName: entry.name };
 }
 
@@ -613,8 +625,7 @@ export function resolveAgentForLaunch(
     (source ? getAgent(createKey(source, agentName(identifier))) : undefined) ??
     getVisibleAgent(category, identifier) ??
     getCategoryAgent(category, identifier);
-  if (!entry) return undefined;
-  return { entry, definitionPath: entry.path, resolvedName: entry.name };
+  return entry ? toResolvedAgent(entry) : undefined;
 }
 
 /**

@@ -34,8 +34,6 @@ import {
 import { generateInlineDiff } from './wordDiff';
 import { registerCopyContent } from './copyContentStore';
 
-// Local imports - shared schemas (types)
-
 /** Build a tool-use section template. Empty label omits the label element. */
 export function buildToolUseSection(
   label: string,

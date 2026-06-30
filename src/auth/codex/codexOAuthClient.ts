@@ -5,10 +5,11 @@
  * these and persists the result. Kept separate so the state machine
  * (refresh thresholds, single-flight) is unit-testable without the network.
  */
+import { z } from 'zod';
+
 import { toErrorMessage } from '@common/errors';
 import {
   CODEX_CLIENT_ID,
-  CODEX_DEVICE_REDIRECT_URI,
   CODEX_DEVICE_TOKEN_URL,
   CODEX_DEVICE_USERCODE_URL,
   CODEX_TOKEN_URL,
@@ -58,27 +59,43 @@ async function postForm(url: string, body: URLSearchParams): Promise<Response> {
   }
 }
 
+/** Throw a CodexAuthError for a non-ok HTTP response, appending any body text. */
+async function throwHttpError(
+  response: Response,
+  label: string,
+): Promise<never> {
+  const detail = await response.text().catch(() => '');
+  throw new CodexAuthError(
+    `${label} failed (HTTP ${response.status})${detail ? `: ${detail}` : ''}`,
+    tokenErrorKind(response.status),
+    response.status,
+  );
+}
+
+/** Parse a successful JSON response through a schema, or throw 'transient'. */
+async function parseJson<T>(
+  response: Response,
+  schema: z.ZodType<T>,
+  unexpectedMessage: string,
+): Promise<T> {
+  const raw: unknown = await response.json().catch(() => null);
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    throw new CodexAuthError(unexpectedMessage, 'transient');
+  }
+  return parsed.data;
+}
+
 async function parseTokenResponse(
   response: Response,
   context: string,
 ): Promise<CodexTokenResponse> {
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new CodexAuthError(
-      `${context} failed (HTTP ${response.status})${detail ? `: ${detail}` : ''}`,
-      tokenErrorKind(response.status),
-      response.status,
-    );
-  }
-  const raw: unknown = await response.json().catch(() => null);
-  const parsed = CodexTokenResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new CodexAuthError(
-      `${context} returned an unexpected token response`,
-      'transient',
-    );
-  }
-  return parsed.data;
+  if (!response.ok) await throwHttpError(response, context);
+  return parseJson(
+    response,
+    CodexTokenResponseSchema,
+    `${context} returned an unexpected token response`,
+  );
 }
 
 /** Exchange an authorization code (loopback or device) for tokens. */
@@ -138,23 +155,12 @@ export async function requestDeviceUserCode(): Promise<CodexDeviceUserCode> {
       404,
     );
   }
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new CodexAuthError(
-      `Device code request failed (HTTP ${response.status})${detail ? `: ${detail}` : ''}`,
-      tokenErrorKind(response.status),
-      response.status,
-    );
-  }
-  const raw: unknown = await response.json().catch(() => null);
-  const parsed = CodexDeviceUserCodeSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new CodexAuthError(
-      'Device code request returned an unexpected response',
-      'transient',
-    );
-  }
-  return parsed.data;
+  if (!response.ok) await throwHttpError(response, 'Device code request');
+  return parseJson(
+    response,
+    CodexDeviceUserCodeSchema,
+    'Device code request returned an unexpected response',
+  );
 }
 
 /** The display user code from a device-code response (field name varies). */
@@ -196,24 +202,10 @@ export async function pollDeviceToken(params: {
       response.status,
     );
   }
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new CodexAuthError(
-      `Device authorization failed (HTTP ${response.status})${detail ? `: ${detail}` : ''}`,
-      tokenErrorKind(response.status),
-      response.status,
-    );
-  }
-  const raw: unknown = await response.json().catch(() => null);
-  const parsed = CodexDeviceTokenSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new CodexAuthError(
-      'Device authorization returned an unexpected response',
-      'transient',
-    );
-  }
-  return parsed.data;
+  if (!response.ok) await throwHttpError(response, 'Device authorization');
+  return parseJson(
+    response,
+    CodexDeviceTokenSchema,
+    'Device authorization returned an unexpected response',
+  );
 }
-
-/** Redirect URI used for the device-code authorization-code exchange. */
-export const codexDeviceRedirectUri = CODEX_DEVICE_REDIRECT_URI;

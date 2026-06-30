@@ -39,15 +39,26 @@ function isToolResultMessage(message: ProviderMessage | undefined): boolean {
   if (!isRecord(message)) return false;
   const record: Record<string, unknown> = message;
 
-  if (record['type'] === 'function_call_output') return true;
-  if (record['type'] === 'function_result') return true;
-  if (record['role'] === 'tool') return true;
+  if (
+    record['type'] === 'function_call_output' ||
+    record['type'] === 'function_result' ||
+    record['role'] === 'tool'
+  ) {
+    return true;
+  }
 
   return (
     record['role'] === 'user' &&
     (hasToolResultContent(record['content']) ||
       hasToolResultContent(record['parts']))
   );
+}
+
+/** Advance to the next round, resetting the per-round accumulators. */
+function advanceRound(shared: ToolUseRoundShared): void {
+  shared.roundIndex += 1;
+  shared.roundResponseTimeMs = 0;
+  shared.roundNormalizedUsage = undefined;
 }
 
 /** Result of exec() containing extracted data needed for post() side effects. */
@@ -206,9 +217,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
         shared.blankToolResultContinuationMessageIndex = lastMessageIndex;
         workspace.resetServerToolContent();
         workspace.resetReasoning();
-        shared.roundIndex += 1;
-        shared.roundResponseTimeMs = 0;
-        shared.roundNormalizedUsage = undefined;
+        advanceRound(shared);
         return FlowTransition.CONTINUE;
       }
 
@@ -231,9 +240,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
 
     shared.toolCalls = execRes.toolCalls;
     shared.text = execRes.text;
-    shared.roundIndex += 1;
-    shared.roundResponseTimeMs = 0;
-    shared.roundNormalizedUsage = undefined;
+    advanceRound(shared);
     return FlowTransition.DEFAULT;
   }
 }

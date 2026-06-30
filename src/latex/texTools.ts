@@ -9,8 +9,6 @@ import {
 } from '@common/schemas';
 import * as logger from '@logger/logUtils';
 
-// Local imports - log
-
 // Local imports - utils
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
@@ -19,8 +17,6 @@ import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
-
-// Tool configurations have been moved to utils/toolUtils.ts for centralized management
 
 export function buildKpathseaSearchPath(
   prependPaths: readonly string[],
@@ -147,19 +143,11 @@ export async function compileLatex2Pdf(
     // Build kpathsea search-path overrides, prepending workspace/TikZ dirs onto
     // any inherited values. `path.delimiter` keeps it cross-platform.
     const env = buildLatexInputEnv(texInputParts, bibSearchParts);
-    const {
-      TEXINPUTS: texInputs,
-      BIBINPUTS: bibInputs,
-      BSTINPUTS: bstInputs,
-    } = env;
-    if (texInputs) {
-      logger.debug(channel, `Setting TEXINPUTS to: ${texInputs}`);
-    }
-    if (bibInputs) {
-      logger.debug(channel, `Setting BIBINPUTS to: ${bibInputs}`);
-    }
-    if (bstInputs) {
-      logger.debug(channel, `Setting BSTINPUTS to: ${bstInputs}`);
+    for (const key of ['TEXINPUTS', 'BIBINPUTS', 'BSTINPUTS'] as const) {
+      const value = env[key];
+      if (value) {
+        logger.debug(channel, `Setting ${key} to: ${value}`);
+      }
     }
 
     const latexmkArgs = [

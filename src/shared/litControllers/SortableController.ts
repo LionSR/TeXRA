@@ -86,8 +86,7 @@ export class SortableController implements ReactiveController {
 
     this.sortable = new Sortable(element, {
       animation: this.config.animation,
-      onEnd: (event) =>
-        this.handleSortEnd(event as { oldIndex?: number; newIndex?: number }),
+      onEnd: (event) => this.handleSortEnd(event),
     });
   }
 
@@ -96,8 +95,11 @@ export class SortableController implements ReactiveController {
     this.sortable = null;
   }
 
-  private handleSortEnd(event: { oldIndex?: number; newIndex?: number }): void {
-    const { oldIndex, newIndex } = event;
+  private handleSortEnd(event: unknown): void {
+    const { oldIndex, newIndex } = event as {
+      oldIndex?: number;
+      newIndex?: number;
+    };
     if (oldIndex === undefined || newIndex === undefined) {
       return;
     }

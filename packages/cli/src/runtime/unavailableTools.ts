@@ -31,12 +31,7 @@ type CliUnavailableTool =
  */
 export const CLI_UNAVAILABLE_TOOLS: readonly CliUnavailableTool[] = [
   'inquiry',
-  // list_api_keys reads VS Code's SecretStorage.keys() via the setup platform,
-  // which is only wired in the extension host. The CLI has no SecretStorage
-  // equivalent, so hide the tool rather than crash at runtime.
   'list_api_keys',
-  // inline_comment is backed by the VS Code CommentController (extension host
-  // only); the CLI cannot render comment threads.
   'inline_comment',
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
 ];

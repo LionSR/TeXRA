@@ -58,10 +58,9 @@ function normalizeEnv(
 ): Record<string, string> | undefined {
   if (!env) return undefined;
   return Object.fromEntries(
-    Object.entries(env).filter((entry): entry is [string, string] => {
-      const [, value] = entry;
-      return value !== undefined;
-    }),
+    Object.entries(env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
   );
 }
 

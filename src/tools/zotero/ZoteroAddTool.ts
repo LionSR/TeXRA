@@ -335,15 +335,11 @@ export class ZoteroAddTool extends defineTool({
     // Check if Zotero is running (throws ToolError if not)
     await checkZoteroRunning(port);
 
-    const results: Array<{
-      item: string;
-      status: 'success' | 'error';
-      message?: string;
-    }> = [];
+    const results: Array<ConnectorResult & { item: string }> = [];
+    const collectionBody = collection ? { targetID: collection } : {};
 
     for (const item of items) {
       const itemLabel = item.doi || item.url || item.title || 'Unknown item';
-      const collectionBody = collection ? { targetID: collection } : {};
 
       let result: ConnectorResult;
 

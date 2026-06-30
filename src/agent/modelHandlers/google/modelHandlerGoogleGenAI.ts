@@ -74,7 +74,6 @@ import type {
   Content,
   Candidate,
   GenerateContentResponse,
-  FunctionCall,
   FunctionResponsePart,
   Tool as GeminiTool,
   GenerateContentConfig,
@@ -231,10 +230,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           continue;
         }
 
-        const resolvedMimeType = this.resolveUploadMimeType(
-          entry,
-          uploadResult,
-        );
+        const resolvedMimeType =
+          uploadResult.mimeType ||
+          entry.media_type ||
+          DEFAULT_ATTACHMENT_MIME_TYPE;
         const part = createPartFromUri(
           fileUri,
           resolvedMimeType,
@@ -255,12 +254,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       );
     }
     return uploadedParts;
-  }
-
-  private resolveUploadMimeType(entry: MediaEntry, uploaded: File): string {
-    return (
-      uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE
-    );
   }
 
   async getClient(): Promise<GoogleGenAI> {

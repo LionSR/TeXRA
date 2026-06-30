@@ -46,7 +46,11 @@ export function transcriptViewportChange({
   readonly nextViewportKey: string;
   readonly previousViewportKey: string | undefined;
 }): TranscriptViewportChange | undefined {
-  if (previousViewportKey === undefined) return undefined;
-  if (previousViewportKey === nextViewportKey) return undefined;
+  if (
+    previousViewportKey === undefined ||
+    previousViewportKey === nextViewportKey
+  ) {
+    return undefined;
+  }
   return { previousViewportKey, nextViewportKey };
 }

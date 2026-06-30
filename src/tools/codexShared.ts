@@ -180,6 +180,18 @@ export function buildCodexTodoToolLog(
   };
 }
 
+/** Human-readable label for a Codex turn state. */
+function codexTurnSummary(state: CodexTurnState): string {
+  switch (state) {
+    case 'running':
+      return 'Running';
+    case 'failed':
+      return 'Failed';
+    case 'completed':
+      return 'Completed';
+  }
+}
+
 export function buildCodexTurnToolLog(options?: {
   wallTimeMs?: number | null;
   state?: CodexTurnState;
@@ -199,12 +211,7 @@ export function buildCodexTurnToolLog(options?: {
 
   return {
     toolName: CODEX_TURN_TOOL,
-    summary:
-      state === 'running'
-        ? 'Running'
-        : state === 'failed'
-          ? 'Failed'
-          : 'Completed',
+    summary: codexTurnSummary(state),
     input,
     ...(state === 'failed' &&
       options?.error && {

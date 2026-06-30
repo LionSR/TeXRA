@@ -24,28 +24,28 @@ function resolveAgainstCwd(candidate: string, cwd: string): string {
     : path.resolve(cwd, candidate);
 }
 
+// A relative path stays inside cwd when it is non-empty, does not climb out
+// with `..`, and did not fall back to an absolute path (different drive/root).
+function isContainedRelativePath(relativePath: string): boolean {
+  return (
+    !!relativePath &&
+    !relativePath.startsWith('..') &&
+    !path.isAbsolute(relativePath)
+  );
+}
+
 function normalizeCliInputPath(candidate: string, cwd: string): string {
   const absolutePath = resolveAgainstCwd(candidate, cwd);
   const relativePath = path.relative(cwd, absolutePath);
-  if (
-    relativePath &&
-    !relativePath.startsWith('..') &&
-    !path.isAbsolute(relativePath)
-  ) {
-    return relativePath.replaceAll(path.sep, '/');
-  }
-  return absolutePath;
+  return isContainedRelativePath(relativePath)
+    ? relativePath.replaceAll(path.sep, '/')
+    : absolutePath;
 }
 
 function isPathInsideCwd(candidate: string, cwd: string): boolean {
   const absolutePath = resolveAgainstCwd(candidate, cwd);
   const relativePath = path.relative(cwd, absolutePath);
-  return (
-    relativePath === '' ||
-    (!!relativePath &&
-      !relativePath.startsWith('..') &&
-      !path.isAbsolute(relativePath))
-  );
+  return relativePath === '' || isContainedRelativePath(relativePath);
 }
 
 function normalizeCliInputPathForRun(
