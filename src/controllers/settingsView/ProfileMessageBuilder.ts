@@ -47,22 +47,25 @@ export async function buildProfileMessage(
   const providerKeyStatuses = await deps.getProviderKeyStatuses();
   const globalStreamingDefault = getGlobalStreaming();
   const tierConstants = { ultra: ULTRA_TIER, max: MAX_TIER };
+  const base = {
+    command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
+    tierConstants,
+    providerKeyStatuses,
+    globalStreamingDefault,
+  };
 
   if (!authenticated) {
     return {
-      command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
+      ...base,
       authenticated: false,
       user: null,
       tier: FREE_TIER,
       permissions: [],
       remoteAgents: [],
       apiAccessMode: 'personal',
-      tierConstants,
       accessExpiresAt: null,
       spendingStatus: null,
       quotaAutoSwitched: false,
-      providerKeyStatuses,
-      globalStreamingDefault,
     };
   }
 
@@ -114,18 +117,15 @@ export async function buildProfileMessage(
   }
 
   return {
-    command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
+    ...base,
     authenticated: true,
     user: { email: user?.email ?? 'N/A', id: user?.id ?? '' },
     tier,
     permissions,
     remoteAgents,
     apiAccessMode,
-    tierConstants,
     accessExpiresAt,
     spendingStatus,
     quotaAutoSwitched,
-    providerKeyStatuses,
-    globalStreamingDefault,
   };
 }

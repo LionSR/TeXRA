@@ -21,6 +21,7 @@ import {
   writeApprovedContent,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { assertNever } from '@utils/core';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
@@ -56,7 +57,6 @@ const API_TYPE_TO_NAME = {
 } as const;
 
 type TextEditorApiType = keyof typeof API_TYPE_TO_NAME;
-type TextEditorName = (typeof API_TYPE_TO_NAME)[TextEditorApiType];
 
 export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
@@ -86,9 +86,8 @@ export class TextEditorTool extends defineTool({
   description: 'Edit files using search and replace or insertion operations',
   schema: TextEditorInputSchema,
 }) {
-  // Tool type and name
+  // Tool API type
   private apiType: TextEditorApiType;
-  private name: TextEditorName;
 
   // File history for undo operations
   private fileHistory: Map<string, string[]> = new Map();
@@ -97,13 +96,6 @@ export class TextEditorTool extends defineTool({
     const name = API_TYPE_TO_NAME[apiType];
     super({ name });
     this.apiType = apiType;
-    this.name = name;
-  }
-
-  private getAllowedCommands(): string {
-    return this.apiType === 'text_editor_20250429'
-      ? 'view, create, str_replace, insert'
-      : 'view, create, str_replace, insert, undo_edit';
   }
 
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
@@ -162,9 +154,7 @@ export class TextEditorTool extends defineTool({
         logger.info(CHANNEL, `undo_edit: ${displayPath}`);
         return this.undoEdit(filePath, displayPath);
       default:
-        throw new ToolError(
-          `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: ${this.getAllowedCommands()}`,
-        );
+        return assertNever(command, 'Unrecognized TextEditor command');
     }
   }
 

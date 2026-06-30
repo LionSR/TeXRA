@@ -13,10 +13,7 @@ export const AgentCategory = {
 } as const;
 export type AgentCategory = (typeof AgentCategory)[keyof typeof AgentCategory];
 
-export const AgentCategorySchema = z.enum([
-  AgentCategory.Workflow,
-  AgentCategory.ToolUse,
-]);
+export const AgentCategorySchema = z.enum(AgentCategory);
 
 export const AGENT_SOURCE = {
   CUSTOM: 'custom',
@@ -26,12 +23,7 @@ export const AGENT_SOURCE = {
 } as const;
 
 /** Single source of truth for agent source identifiers. */
-export const AgentSourceSchema = z.enum([
-  AGENT_SOURCE.CUSTOM,
-  AGENT_SOURCE.BUILT_IN_WORKFLOW,
-  AGENT_SOURCE.BUILT_IN_TOOL_USE,
-  AGENT_SOURCE.REMOTE,
-]);
+export const AgentSourceSchema = z.enum(AGENT_SOURCE);
 
 export type AgentSourceType = z.infer<typeof AgentSourceSchema>;
 

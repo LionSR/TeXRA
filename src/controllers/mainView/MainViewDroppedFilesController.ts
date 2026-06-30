@@ -34,11 +34,12 @@ export interface MainViewDroppedFileAttachmentInput {
 export function planMainViewDroppedFileAttachments(
   input: MainViewDroppedFileAttachmentInput,
 ): MainViewDroppedFileAttachmentPlan {
-  const grouped: Record<MainViewAttachableDropCategory, Set<string>> = {
-    input: new Set(),
-    context: new Set(),
-    media: new Set(),
-  };
+  const grouped = Object.fromEntries(
+    MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES.map((category) => [
+      category,
+      new Set<string>(),
+    ]),
+  ) as Record<MainViewAttachableDropCategory, Set<string>>;
   let rejectedCount = 0;
 
   for (const filePath of input.paths) {
@@ -56,11 +57,12 @@ export function planMainViewDroppedFileAttachments(
     grouped[category].add(filePath);
   }
 
-  const filesByCategory = {
-    input: [...grouped.input],
-    context: [...grouped.context],
-    media: [...grouped.media],
-  };
+  const filesByCategory = Object.fromEntries(
+    MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES.map((category) => [
+      category,
+      [...grouped[category]],
+    ]),
+  ) as Record<MainViewAttachableDropCategory, string[]>;
 
   return {
     filesByCategory,

@@ -16,7 +16,10 @@ import {
   repoPollingSource,
   type RepoKey,
 } from './RepoPollingSource';
-import { StreamSubscriptionRegistry } from './StreamSubscriptionRegistry';
+import {
+  StreamSubscriptionRegistry,
+  type SubscriptionBinding,
+} from './StreamSubscriptionRegistry';
 
 const prSubscriptions = new StreamSubscriptionRegistry<
   string,
@@ -28,10 +31,7 @@ const prSubscriptions = new StreamSubscriptionRegistry<
   bindingsChangedEvent: 'prSubscriptionBindingsChanged',
 });
 
-export interface PRSubscriptionBinding {
-  key: string;
-  streamIds: readonly StreamTabId[];
-}
+export type PRSubscriptionBinding = SubscriptionBinding<string>;
 
 export function listPRSubscriptionBindings(
   keys: readonly string[] = prPollingSource.activeKeys(),
@@ -94,10 +94,7 @@ const repoSubscriptions = new StreamSubscriptionRegistry<
   bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
 });
 
-export interface RepoSubscriptionBinding {
-  key: RepoKey;
-  streamIds: readonly StreamTabId[];
-}
+export type RepoSubscriptionBinding = SubscriptionBinding<RepoKey>;
 
 export function listRepoSubscriptionBindings(
   keys: readonly RepoKey[] = repoPollingSource.activeKeys(),
@@ -147,10 +144,7 @@ const issueSubscriptions = new StreamSubscriptionRegistry<string, IssueKey>({
   bindingsChangedEvent: 'issueSubscriptionBindingsChanged',
 });
 
-export interface IssueSubscriptionBinding {
-  key: string;
-  streamIds: readonly StreamTabId[];
-}
+export type IssueSubscriptionBinding = SubscriptionBinding<string>;
 
 export function listIssueSubscriptionBindings(
   keys: readonly string[] = issuePollingSource.activeKeys(),
