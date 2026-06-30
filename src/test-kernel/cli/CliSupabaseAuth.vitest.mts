@@ -1,12 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  createHostAuthCoordinator: vi.fn((init: { secrets: unknown }) => ({
-    secrets: init.secrets,
-  })),
-  getCliSecrets: vi.fn(),
-  tryPlatform: vi.fn(),
-}));
+import { GlobalStateKey } from '@shared/state/stateKeys';
+
+const mocks = vi.hoisted(() => {
+  const authCoordinator = {
+    clearSession: vi.fn(),
+    storeSession: vi.fn(),
+  };
+  return {
+    authCoordinator,
+    createHostAuthCoordinator: vi.fn((init: { secrets: unknown }) => ({
+      ...authCoordinator,
+      secrets: init.secrets,
+    })),
+    clearServerKeyCaches: vi.fn(),
+    getCliSecrets: vi.fn(),
+    pollForDeviceSession: vi.fn(),
+    requestDeviceAuthorization: vi.fn(),
+    setUseIncludedModelAccess: vi.fn(),
+    signInWithOAuth: vi.fn(),
+    startLoopbackCallbackServer: vi.fn(),
+    toStorableSupabaseSession: vi.fn((session) => session),
+    tryPlatform: vi.fn(),
+    updateGlobalState: vi.fn(),
+  };
+});
 
 vi.mock('@auth/config', () => ({
   DEFAULT_OAUTH_PROVIDER: 'github',
@@ -19,6 +37,11 @@ vi.mock('@auth/SupabaseAuthCoordinator', () => ({
 
 vi.mock('@auth/SupabaseClient', () => ({
   SupabaseClient: {
+    getClient: () => ({
+      auth: {
+        signInWithOAuth: mocks.signInWithOAuth,
+      },
+    }),
     getRelayAccessToken: vi.fn(),
     getUserTier: vi.fn(),
     isAuthenticated: vi.fn(),
@@ -26,7 +49,7 @@ vi.mock('@auth/SupabaseClient', () => ({
 }));
 
 vi.mock('@auth/SupabaseSession', () => ({
-  toStorableSupabaseSession: vi.fn((session) => session),
+  toStorableSupabaseSession: mocks.toStorableSupabaseSession,
 }));
 
 vi.mock('@auth/relayToken', () => ({
@@ -37,12 +60,17 @@ vi.mock('@auth/relayToken', () => ({
 
 vi.mock('@auth/serverKeys', () => ({
   getServerSideKeyService: () => ({
-    clearAllCaches: vi.fn(),
-    setUseIncludedModelAccess: vi.fn(),
+    clearAllCaches: mocks.clearServerKeyCaches,
+    setUseIncludedModelAccess: mocks.setUseIncludedModelAccess,
   }),
 }));
 
 vi.mock('@platform/platform', () => ({
+  platform: () => ({
+    globalState: {
+      update: mocks.updateGlobalState,
+    },
+  }),
   tryPlatform: mocks.tryPlatform,
 }));
 
@@ -59,12 +87,12 @@ vi.mock('@cli/runtime/browser', () => ({
 }));
 
 vi.mock('@cli/runtime/supabaseAuthCallbackServer', () => ({
-  startLoopbackCallbackServer: vi.fn(),
+  startLoopbackCallbackServer: mocks.startLoopbackCallbackServer,
 }));
 
 vi.mock('@cli/runtime/supabaseAuthDeviceCode', () => ({
-  pollForDeviceSession: vi.fn(),
-  requestDeviceAuthorization: vi.fn(),
+  pollForDeviceSession: mocks.pollForDeviceSession,
+  requestDeviceAuthorization: mocks.requestDeviceAuthorization,
 }));
 
 async function loadSupabaseAuth() {
@@ -77,6 +105,8 @@ describe('CLI Supabase auth', () => {
     vi.clearAllMocks();
     mocks.tryPlatform.mockReturnValue(null);
     mocks.getCliSecrets.mockReturnValue({ kind: 'cli-secrets' });
+    mocks.setUseIncludedModelAccess.mockResolvedValue(undefined);
+    mocks.updateGlobalState.mockResolvedValue(undefined);
   });
 
   it('uses platform-owned secrets after CLI platform init', async () => {
@@ -106,6 +136,50 @@ describe('CLI Supabase auth', () => {
     expect(mocks.getCliSecrets).toHaveBeenCalledWith('/tmp/sandbox-storage');
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledWith(
       expect.objectContaining({ secrets: cliSecrets }),
+    );
+  });
+
+  it('clears OpenRouter routing after browser sign-in enables included access', async () => {
+    const session = { access_token: 'token' };
+    const callbackServer = {
+      close: vi.fn().mockResolvedValue(undefined),
+      redirectTo: 'http://127.0.0.1:0/callback',
+      waitForSession: vi.fn().mockResolvedValue(session),
+    };
+    mocks.startLoopbackCallbackServer.mockResolvedValue(callbackServer);
+    mocks.signInWithOAuth.mockResolvedValue({
+      data: { url: 'https://auth.example/login' },
+      error: null,
+    });
+    const { signInCliSupabase } = await loadSupabaseAuth();
+
+    await expect(signInCliSupabase({ openBrowser: false })).resolves.toBe(
+      session,
+    );
+
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      GlobalStateKey.USE_OPENROUTER,
+      false,
+    );
+  });
+
+  it('clears OpenRouter routing after device-code sign-in enables included access', async () => {
+    const session = { access_token: 'device-token' };
+    mocks.requestDeviceAuthorization.mockResolvedValue({
+      device_code: 'device-code',
+      expires_in: 600,
+      interval: 5,
+      user_code: 'ABCD-EFGH',
+      verification_uri: 'https://auth.example/device',
+    });
+    mocks.pollForDeviceSession.mockResolvedValue(session);
+    const { signInCliSupabaseDeviceCode } = await loadSupabaseAuth();
+
+    await expect(signInCliSupabaseDeviceCode()).resolves.toBe(session);
+
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      GlobalStateKey.USE_OPENROUTER,
+      false,
     );
   });
 });

@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   defaultSkillSources: vi.fn<() => SkillSource[]>(() => []),
   setRuntimeSkillSources: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
+  invalidateModelOptionsCache: vi.fn(),
   tryPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
@@ -43,9 +44,14 @@ vi.mock('@logger/logUtils', () => ({
   setOutputChannelFactory: vi.fn(),
 }));
 
+vi.mock('@model/computeModelOptions', () => ({
+  invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
+}));
+
 vi.mock('@platform/platform', () => ({
   initPlatform: vi.fn(),
   tryPlatform: mocks.tryPlatform,
+  tryGlobalState: () => mocks.tryPlatform()?.globalState,
 }));
 
 vi.mock('@skills/index', () => ({
@@ -121,7 +127,7 @@ describe('CLI platform init', () => {
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({
       globalState: {
-        get: vi.fn(),
+        get: vi.fn((_key: string, defaultValue: unknown) => defaultValue),
         update: vi.fn(),
       },
     });
@@ -152,7 +158,7 @@ describe('CLI platform init', () => {
   it('wires usage logging on first platform init', async () => {
     // tryPlatform() === undefined drives the once-per-process first-init block.
     const globalState = {
-      get: vi.fn(),
+      get: vi.fn((_key: string, defaultValue: unknown) => defaultValue),
       update: vi.fn(),
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
@@ -177,7 +183,11 @@ describe('CLI platform init', () => {
 
   it('bootstraps bundled agents with the CLI version store', async () => {
     const globalState = {
-      get: vi.fn().mockReturnValue('1.2.2'),
+      get: vi.fn((key: string, defaultValue: unknown) =>
+        key === GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION
+          ? '1.2.2'
+          : defaultValue,
+      ),
       update: vi.fn().mockResolvedValue(undefined),
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
@@ -246,6 +256,47 @@ describe('CLI platform init', () => {
     expect(
       mocks.serverSideKeyService.setUseIncludedModelAccess,
     ).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps included access off when OpenRouter routing is enabled', async () => {
+    const globalState = {
+      get: vi.fn((key: string, defaultValue: unknown) =>
+        key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
+      ),
+      update: vi.fn(),
+    };
+    mocks.tryPlatform.mockReturnValue({ globalState });
+    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(true);
+
+    await initCliPlatform(cliContext());
+
+    expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
+    expect(
+      mocks.serverSideKeyService.setUseIncludedModelAccess,
+    ).toHaveBeenCalledWith(false);
+  });
+
+  it('clears OpenRouter when startup explicitly selects included access', async () => {
+    const globalState = {
+      get: vi.fn((key: string, defaultValue: unknown) =>
+        key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
+      ),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
+    mocks.tryPlatform.mockReturnValue({ globalState });
+    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(true);
+
+    await initCliPlatform(cliContext({ apiMode: 'included' }));
+
+    expect(globalState.update).toHaveBeenCalledWith(
+      GlobalStateKey.USE_OPENROUTER,
+      false,
+    );
+    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
+    expect(mocks.authProvider.isAuthenticated).toHaveBeenCalledOnce();
+    expect(
+      mocks.serverSideKeyService.setUseIncludedModelAccess,
+    ).toHaveBeenCalledWith(true);
   });
 
   it('registers CLI runtime skill sources from context options', async () => {

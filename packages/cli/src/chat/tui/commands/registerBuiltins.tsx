@@ -4,6 +4,7 @@ import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import {
   readSetting,
@@ -11,7 +12,11 @@ import {
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
+import {
+  CLI_STATE_SETTINGS,
+  type StateSettingEntry,
+} from '@shared/schemas/stateSettings';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { ApiModeForm } from '../forms/ApiModeForm';
 import { AgentListForm } from '../forms/AgentListForm';
@@ -39,6 +44,25 @@ type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
 type SkillSelectHandler = (value: SkillActivation) => void | Promise<void>;
 type ErrorHandler = (error: unknown) => void | Promise<void>;
 type SelectionCompletion = 'afterAction' | 'beforeAction';
+
+async function applyCliConfigSettingSideEffects(
+  entry: StateSettingEntry,
+  stores: SettingsStores,
+  value?: unknown,
+  onApiModeSelect?: ApiModeSelectHandler,
+): Promise<void> {
+  if (entry.category === 'git') {
+    applyCliGitAuthorConfig(stores.config);
+  }
+  if (entry.key === GlobalStateKey.USE_OPENROUTER) {
+    if (value === true) {
+      invalidateModelOptionsCache();
+      await onApiModeSelect?.('personal');
+      return;
+    }
+    invalidateModelOptionsCache();
+  }
+}
 
 /** Run a form selection handler with consistent completion and error routing. */
 function runFormSelection<T>({
@@ -406,18 +430,21 @@ export function registerBuiltinSlashCommands(options?: {
           readValue={(entry) => readSetting(entry, stores, 'cli')}
           writeValue={async (entry, value) => {
             await writeSetting(entry, value, stores, 'cli');
-            // Git-author settings are applied to process env / worktree state
-            // at startup; re-apply so a /config change takes effect this session
-            // instead of only after a restart.
-            if (entry.category === 'git') {
-              applyCliGitAuthorConfig(stores.config);
-            }
+            await applyCliConfigSettingSideEffects(
+              entry,
+              stores,
+              value,
+              onApiModeSelect,
+            );
           }}
           resetValue={async (entry) => {
             await resetSetting(entry, stores, 'cli');
-            if (entry.category === 'git') {
-              applyCliGitAuthorConfig(stores.config);
-            }
+            await applyCliConfigSettingSideEffects(
+              entry,
+              stores,
+              undefined,
+              onApiModeSelect,
+            );
           }}
           onClose={() => props.onDone(undefined)}
           onError={options?.onError}

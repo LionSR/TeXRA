@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import {
@@ -30,8 +30,18 @@ import {
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
 import { DEFAULT_GIT_AUTHOR_NAME } from '@shared/constants/git';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
+
+const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
+
+vi.mock('@model/computeModelOptions', () => ({
+  invalidateModelOptionsCache,
+}));
+
+beforeEach(() => {
+  invalidateModelOptionsCache.mockClear();
+});
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -305,5 +315,55 @@ describe('/config slash command wiring', () => {
     // The key is deleted, so reads fall back to the default identity.
     expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(false);
     expect(props.readValue?.(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
+  });
+
+  it('switches to personal API mode when OpenRouter routing is enabled', async () => {
+    resetCliState({
+      agent: 'chat',
+      model: 'deepseekT',
+      modelSource: 'builtin',
+      cwd: '/tmp/workspace',
+      apiMode: 'included',
+      approvalPolicy: 'ask',
+      canDelegate: false,
+      version: 'test',
+    });
+    const { stores } = makeFakeSettingsStores();
+    const selectedApiModes: string[] = [];
+    registerBuiltinSlashCommands({
+      getConfigStores: () => stores,
+      onApiModeSelect: (apiMode) => {
+        selectedApiModes.push(apiMode);
+        cliState.sessionMeta.set({
+          ...cliState.sessionMeta.get(),
+          apiMode,
+        });
+      },
+    });
+    openCliSlashCommandForm('config', '');
+
+    const props = renderConfigFormProps();
+    const openRouter = entryByKey(GlobalStateKey.USE_OPENROUTER);
+
+    await props.writeValue?.(openRouter, true);
+
+    expect(selectedApiModes).toEqual(['personal']);
+    expect(cliState.sessionMeta.get().apiMode).toBe('personal');
+    expect(invalidateModelOptionsCache).toHaveBeenCalledOnce();
+  });
+
+  it('invalidates model options when OpenRouter routing is disabled or reset', async () => {
+    const { stores } = makeFakeSettingsStores();
+    registerBuiltinSlashCommands({ getConfigStores: () => stores });
+    openCliSlashCommandForm('config', '');
+
+    const props = renderConfigFormProps();
+    const openRouter = entryByKey(GlobalStateKey.USE_OPENROUTER);
+
+    await props.writeValue?.(openRouter, false);
+    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
+
+    await props.resetValue?.(openRouter);
+    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(2);
   });
 });
