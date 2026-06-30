@@ -75,6 +75,24 @@ async function readDirOrEmpty(path: string): Promise<[string, number][]> {
   }
 }
 
+/**
+ * Select execution-id directories (hex UUID-like) from a scanned listing,
+ * optionally excluding ids (e.g. active runs). A missing exclude set keeps all.
+ */
+function listExecutionDirs(
+  entries: [string, number][],
+  exclude?: ReadonlySet<string>,
+): ExecutionId[] {
+  return entries
+    .filter(
+      ([name, type]) =>
+        isDirectory(type) &&
+        EXECUTION_ID_PATTERN.test(name) &&
+        !exclude?.has(name),
+    )
+    .map(([name]) => name as ExecutionId);
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -100,13 +118,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   }
 
   const entries = await readDirOrEmpty(TASK_RUNS_DIR);
-
-  // Filter for directories matching execution ID pattern (hex UUID-like)
-  const executionDirs = entries
-    .filter(
-      ([name, type]) => isDirectory(type) && EXECUTION_ID_PATTERN.test(name),
-    )
-    .map(([name]) => name as ExecutionId);
+  const executionDirs = listExecutionDirs(entries);
 
   // Read meta + config with bounded concurrency. Large histories should not
   // enqueue one storage read pair per execution all at once.
@@ -185,15 +197,7 @@ export async function deleteAllExecutions(
   exclude?: ReadonlySet<string>,
 ): Promise<ExecutionId[]> {
   const entries = await readDirOrEmpty(TASK_RUNS_DIR);
-
-  const executionDirs = entries
-    .filter(
-      ([name, type]) =>
-        isDirectory(type) &&
-        EXECUTION_ID_PATTERN.test(name) &&
-        !exclude?.has(name),
-    )
-    .map(([name]) => name as ExecutionId);
+  const executionDirs = listExecutionDirs(entries, exclude);
 
   try {
     await pMap(executionDirs, (id) => getExecutionStore(id).clear(), {

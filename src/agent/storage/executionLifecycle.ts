@@ -132,48 +132,45 @@ export async function registerExecution(
 }
 
 /**
- * Persist a terminal status on an existing execution's metadata.
+ * Persist supplementary metadata fields on an existing execution.
  * Serialized with other meta updates for the same execution to prevent
- * read-modify-write races (e.g. with writeSessionDescription).
- * Never throws — storage failures are swallowed so callers' lifecycle
- * logic (registry untrack, follow-up delivery) always runs.
+ * read-modify-write races (e.g. between terminal status and description).
+ * Never throws — these are non-critical bookkeeping writes, so storage
+ * failures are swallowed and callers' lifecycle logic (registry untrack,
+ * follow-up delivery) always runs.
  */
-export async function writeTerminalStatus(
+async function persistMetaField(
   executionId: ExecutionId,
-  status: string,
+  fields: Partial<ExecutionMeta>,
+  what: string,
 ): Promise<void> {
   try {
-    await enqueueMetaUpdate(executionId, () => ({ terminalStatus: status }));
+    await enqueueMetaUpdate(executionId, () => fields);
   } catch (err) {
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
     logger.debug(
       'ExecutionLifecycle',
-      `Failed to persist terminal status for ${executionId}: ${toErrorMessage(
-        err,
-      )}`,
+      `Failed to persist ${what} for ${executionId}: ${toErrorMessage(err)}`,
     );
   }
 }
 
-/**
- * Persist an AI-generated session description on an existing execution's metadata.
- * Serialized with other meta updates for the same execution to prevent
- * read-modify-write races (e.g. with writeTerminalStatus).
- * Never throws — description is supplementary data.
- */
+/** Persist a terminal status on an existing execution's metadata. */
+export async function writeTerminalStatus(
+  executionId: ExecutionId,
+  status: string,
+): Promise<void> {
+  await persistMetaField(
+    executionId,
+    { terminalStatus: status },
+    'terminal status',
+  );
+}
+
+/** Persist an AI-generated session description on an existing execution's metadata. */
 export async function writeSessionDescription(
   executionId: ExecutionId,
   description: string,
 ): Promise<void> {
-  try {
-    await enqueueMetaUpdate(executionId, () => ({ description }));
-  } catch (err) {
-    // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
-    logger.debug(
-      'ExecutionLifecycle',
-      `Failed to persist session description for ${executionId}: ${toErrorMessage(
-        err,
-      )}`,
-    );
-  }
+  await persistMetaField(executionId, { description }, 'session description');
 }

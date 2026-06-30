@@ -119,7 +119,6 @@ export class UsageMonitor {
       const roundOutputTokens = latestUsage?.outputTokens ?? 0;
       const roundCacheReadTokens = latestUsage?.cachedInputTokens ?? 0;
       const roundCacheMissTokens = latestUsage?.cacheMissInputTokens;
-      const roundCacheMissTokensForDisplay = roundCacheMissTokens ?? 0;
       const roundCacheCreationTokens = latestUsage?.cacheCreationTokens ?? 0;
       const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
       const roundCost = latestUsage?.cost ?? 0;
@@ -148,8 +147,8 @@ export class UsageMonitor {
         ...(roundCacheReadTokens > 0 && {
           cacheReadInputTokens: roundCacheReadTokens,
         }),
-        ...(roundCacheMissTokensForDisplay > 0 && {
-          cacheMissInputTokens: roundCacheMissTokensForDisplay,
+        ...((roundCacheMissTokens ?? 0) > 0 && {
+          cacheMissInputTokens: roundCacheMissTokens ?? 0,
         }),
         ...(roundCacheCreationTokens > 0 && {
           cacheCreationInputTokens: roundCacheCreationTokens,
@@ -175,10 +174,9 @@ export class UsageMonitor {
         usage: payload,
       });
       if (agentCategory === AgentCategory.Workflow) {
-        const transcriptPayload: Record<string, number> = {};
-        for (const [key, value] of Object.entries(payload)) {
-          if (typeof value === 'number') transcriptPayload[key] = value;
-        }
+        const transcriptPayload = Object.fromEntries(
+          Object.entries(payload).filter(([, v]) => typeof v === 'number'),
+        ) as Record<string, number>;
         // The round stage's AsyncLocalStorage scope already stamps the active
         // round id (r0/r1...) onto emitted events; fall back to storageKey for
         // any usage logged outside a round stage.
