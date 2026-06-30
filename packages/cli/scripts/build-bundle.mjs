@@ -10,7 +10,8 @@ const internalValidationModelStub = fileURLToPath(
   new URL('./internal-validation-model-stub.mjs', import.meta.url),
 );
 
-const outfile = 'dist/bin/texra.js';
+const outfile =
+  process.env.TEXRA_CLI_BUNDLE_OUTFILE?.trim() || 'dist/bin/texra.js';
 const includeInternalValidationModel =
   process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
 

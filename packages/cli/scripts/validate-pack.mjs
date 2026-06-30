@@ -16,6 +16,8 @@ function run(command, args, options = {}) {
     encoding: 'utf8',
     env: {
       ...process.env,
+      TEXRA_CLI_BUNDLE_OUTFILE: '',
+      TEXRA_CLI_RESOURCES_OUTDIR: '',
       TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '',
       ...options.env,
     },
