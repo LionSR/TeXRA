@@ -20,6 +20,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -290,15 +291,21 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     if (answeredTurns.length === 0) return nothing;
 
     return html`
-      <details class="external-inquiry-request__transcript">
-        <summary class="external-inquiry-request__transcript-summary">
+      <wa-details
+        class="external-inquiry-request__transcript"
+        appearance="plain"
+      >
+        <span
+          slot="summary"
+          class="external-inquiry-request__transcript-summary"
+        >
           <wa-icon
             library=${TEXRA_ICON_LIBRARY}
             name="history"
             aria-hidden="true"
           ></wa-icon>
           Conversation transcript (${answeredTurns.length})
-        </summary>
+        </span>
         <div class="external-inquiry-request__transcript-turns">
           ${repeat(
             answeredTurns,
@@ -306,7 +313,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
             (turn) => this.renderTranscriptTurn(turn),
           )}
         </div>
-      </details>
+      </wa-details>
     `;
   }
 
