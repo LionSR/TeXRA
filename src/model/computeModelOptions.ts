@@ -116,7 +116,7 @@ async function getPersonalAccessKindForModel(
 ): Promise<PersonalModelAccessKind | null> {
   const { provider } = config;
   if (!isApiProvider(provider)) {
-    return 'provider-key';
+    return null;
   }
 
   try {
