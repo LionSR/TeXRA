@@ -29,6 +29,7 @@ import { FormFrame } from './_shared/FormFrame';
 import { computeSelectWindowSize } from './_shared/selectWindow';
 
 export type SettingEditKind =
+  | 'form'
   | 'boolean'
   | 'enum'
   | 'string'
@@ -42,9 +43,11 @@ export type SettingInputResult =
 /**
  * How a setting is edited in `/config`, derived from its schema: enums drill
  * into a value picker, booleans toggle inline, strings/numbers open a text
- * editor; anything else (e.g. a record) is read-only.
+ * editor, form-backed settings delegate to an existing list form; anything
+ * else (e.g. a record) is read-only.
  */
 export function settingEditKind(entry: StateSettingEntry): SettingEditKind {
+  if (entry.openForm) return 'form';
   if (settingEnumOptions(entry)) return 'enum';
   if (settingIsBoolean(entry)) return 'boolean';
   if (settingIsNumber(entry)) return 'number';
@@ -118,8 +121,11 @@ export function buildConfigListItems(
 ): Array<SelectItem<string>> {
   return entries.map((entry) => {
     const kind = settingEditKind(entry);
-    const valueText = formatSettingValue(readValue(entry));
     const store = settingStoreLabel(entry);
+    const valueText =
+      kind === 'form'
+        ? `open /${entry.openForm}`
+        : formatSettingValue(readValue(entry));
     const suffix = kind === 'readonly' ? ' · read-only' : '';
     return {
       value: entry.key,
@@ -151,6 +157,7 @@ export interface ConfigFormProps {
   ) => void | Promise<void>;
   /** Reset a setting to its default (delete the key). */
   readonly resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
+  readonly openForm?: (formName: string) => void;
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
@@ -374,6 +381,9 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     const kind = settingEditKind(entry);
     if (kind === 'boolean') {
       commit(entry, !(effective(entry) as boolean));
+    } else if (kind === 'form') {
+      const formName = entry.openForm;
+      if (formName) props.openForm?.(formName);
     } else if (kind === 'enum') {
       setMode({ kind: 'enum', entry });
     } else if (kind === 'string') {
@@ -397,7 +407,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         <KeyHints
           hints={[
             { key: '↑/↓', action: 'navigate' },
-            { key: 'Enter', action: 'toggle / edit' },
+            { key: 'Enter', action: 'toggle / edit / open' },
             { key: 'Esc', action: 'close' },
           ]}
           confirmCancel={false}

@@ -187,6 +187,12 @@ const CLAUDE_AGENT_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/claudeAgent.ts -> src/tools/claudeAgentConfig.ts',
 } satisfies CliRuntimeReachability;
+const TOOL_AVAILABILITY_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "use an external tool"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/agentToolResolution.ts -> src/tools/toolAvailability.ts',
+} satisfies CliRuntimeReachability;
 
 const PROVIDER_ENDPOINT_CONSUMER =
   'src/agent/modelHandlers/support/ProxyConfigResolver.ts';
@@ -523,6 +529,24 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['cli'],
     cliConsumer: 'src/utils/config/providerConfig.ts',
     cliRuntimeReachability: OPENROUTER_ROUTING_RUNTIME_REACHABILITY,
+  },
+
+  // --- External tool integrations ------------------------------------------
+  // This is a list-backed global-state domain. `/config` delegates editing to
+  // the existing `/tools` form so the catalog owns discoverability while the
+  // tool dashboard remains the single editor for per-integration toggles.
+  {
+    key: GlobalStateKey.DISABLED_TOOLS,
+    schema: z.array(z.string()).prefault([]),
+    title: 'Tool integrations',
+    description:
+      'Enable or disable external tool integration groups used by agent tool resolution.',
+    category: 'tools',
+    store: 'globalState',
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/tools/toolAvailability.ts',
+    cliRuntimeReachability: TOOL_AVAILABILITY_RUNTIME_REACHABILITY,
+    openForm: 'tools',
   },
 ] as const;
 
