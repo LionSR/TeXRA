@@ -14,6 +14,8 @@ import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
+import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -111,6 +113,7 @@ export async function runReflectionFlow<C = unknown>(
   let services: ReflectionServices<C> | undefined;
 
   const fileService = new TaskRunFileService(executionId);
+  const compatibilityKey = activeModelHandlerCompatibilityKey(modelHandler);
 
   const baseFiles: WorkspaceFileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
@@ -213,6 +216,13 @@ export async function runReflectionFlow<C = unknown>(
 
     if (validated?.success) {
       shared = validated.data as ReflectionFlowShared;
+      shared.modelHandlerCompatibilityKey =
+        shared.modelHandlerCompatibilityKey ??
+        inferPersistedModelHandlerCompatibilityKey(
+          config.model,
+          shared.conversation,
+        ) ??
+        compatibilityKey;
       // Always sync totalRounds from the current agent config so that changes
       // to the YAML (e.g. rounds: 2 → 1) take effect on resume.
       shared.totalRounds = totalRounds;
@@ -229,6 +239,7 @@ export async function runReflectionFlow<C = unknown>(
         context: null,
         outputLocation: null,
         conversation: [],
+        modelHandlerCompatibilityKey: compatibilityKey,
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
         roundStateSnapshots: [],
         roundOutputs: [],

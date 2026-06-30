@@ -146,28 +146,68 @@ function clampRecordField(
 
 function clampGoogleGenerationConfig(
   body: JsonRecord,
+  apiPath: string,
   limit: number,
 ): MaxOutputTokenClampResult {
-  const currentConfig = isJsonRecord(body.generationConfig)
-    ? body.generationConfig
-    : {};
-  const clamped = clampRecordField(currentConfig, 'maxOutputTokens', limit);
-  if (!clamped.changed) {
-    return {
-      body,
-      changed: false,
-      limit,
-      fieldPath: 'generationConfig.maxOutputTokens',
-      originalValue: clamped.originalValue,
-    };
+  type GoogleGenerationConfigField = {
+    config: 'generationConfig' | 'generation_config';
+    maxOutput: 'maxOutputTokens' | 'max_output_tokens';
+  };
+  const endpointNativeField: GoogleGenerationConfigField = apiPath.includes(
+    '/interactions',
+  )
+    ? {
+        config: 'generation_config',
+        maxOutput: 'max_output_tokens',
+      }
+    : {
+        config: 'generationConfig',
+        maxOutput: 'maxOutputTokens',
+      };
+  const configFields: GoogleGenerationConfigField[] = [];
+  if (isJsonRecord(body.generationConfig)) {
+    configFields.push({
+      config: 'generationConfig',
+      maxOutput: 'maxOutputTokens',
+    });
+  }
+  if (isJsonRecord(body.generation_config)) {
+    configFields.push({
+      config: 'generation_config',
+      maxOutput: 'max_output_tokens',
+    });
+  }
+  if (configFields.length === 0) {
+    configFields.push(endpointNativeField);
+  }
+
+  let nextBody = body;
+  let changed = false;
+  let firstOriginalValue: number | null = null;
+  const changedFields: string[] = [];
+  const fieldPaths = configFields.map(
+    ({ config, maxOutput }) => `${config}.${maxOutput}`,
+  );
+
+  for (const { config, maxOutput } of configFields) {
+    const currentConfig = isJsonRecord(nextBody[config])
+      ? nextBody[config]
+      : {};
+    const clamped = clampRecordField(currentConfig, maxOutput, limit);
+    if (clamped.changed) {
+      nextBody = { ...nextBody, [config]: clamped.record };
+      changed = true;
+      changedFields.push(`${config}.${maxOutput}`);
+      firstOriginalValue ??= clamped.originalValue;
+    }
   }
 
   return {
-    body: { ...body, generationConfig: clamped.record },
-    changed: true,
+    body: nextBody,
+    changed,
     limit,
-    fieldPath: 'generationConfig.maxOutputTokens',
-    originalValue: clamped.originalValue,
+    fieldPath: (changed ? changedFields : fieldPaths).join(', '),
+    originalValue: firstOriginalValue,
   };
 }
 
@@ -231,7 +271,7 @@ export function clampFreeTierMaxOutputTokens(
   }
 
   if (provider === 'google') {
-    return clampGoogleGenerationConfig(body, limit);
+    return clampGoogleGenerationConfig(body, apiPath, limit);
   }
 
   const fields = maxOutputFieldsForProvider(provider, apiPath, body);

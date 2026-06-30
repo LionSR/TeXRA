@@ -88,6 +88,7 @@ import {
   capOpenAIReasoningEffortForTier,
   type ReasoningEffortCap,
 } from './reasoning.ts';
+import { isModelFreeRelayPath } from './paths.ts';
 import {
   clampFreeTierMaxOutputTokens,
   FREE_TIER_MAX_OUTPUT_TOKENS,
@@ -624,14 +625,8 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   }
 
   // 6. Apply retired-model and tier constraints for model endpoints.
-  // Skip model validation for endpoints that don't require a model (e.g., file uploads)
-  // - OpenAI: /v1/files
-  // - Anthropic: /v1/files (same as OpenAI)
-  // - Google: /upload/*, /v1beta/files
-  const MODEL_FREE_PATHS = ['/v1/files', '/files', '/upload', '/v1beta/files'];
-  const isModelFreePath = MODEL_FREE_PATHS.some(
-    (prefix) => apiPath === prefix || apiPath.startsWith(prefix + '/'),
-  );
+  // Skip model validation for endpoints that don't require a model.
+  const isModelFreePath = isModelFreeRelayPath(apiPath);
 
   let requestBody: string | Uint8Array | null = null;
   let requestBodyJson: unknown = null;

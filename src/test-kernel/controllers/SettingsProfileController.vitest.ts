@@ -14,6 +14,15 @@ const providerVscodeSettings = {
       key: 'texra.model.useOpenAIResponsesAPI',
       label: 'Responses API',
       description: 'Use Responses API',
+      defaultValue: true,
+    },
+  ],
+  google: [
+    {
+      key: 'texra.model.useGoogleInteractionsAPI',
+      label: 'Use Interactions API',
+      description: 'Use Google Interactions API',
+      defaultValue: true,
     },
   ],
   openrouter: [
@@ -60,15 +69,21 @@ function createController(
   return {
     controller: new SettingsProfileController({
       globalState: state,
-      providerIds: ['openai', 'openrouter'],
+      providerIds: ['openai', 'google', 'openrouter'],
       providerVscodeSettings,
-      providerDisplayNames: { openai: 'OpenAI', openrouter: 'OpenRouter' },
+      providerDisplayNames: {
+        openai: 'OpenAI',
+        google: 'Google',
+        openrouter: 'OpenRouter',
+      },
       providerKeyUrls: {
         openai: 'https://platform.openai.com/api-keys',
+        google: 'https://aistudio.google.com/app/apikey',
         openrouter: 'https://openrouter.ai/keys',
       },
       loadProviderKeyStatuses: async () => ({
         openai: 'set',
+        google: 'not-set',
         openrouter: 'not-set',
       }),
       getProviderDisplayName: (_provider, defaultName) => defaultName,
@@ -150,6 +165,22 @@ describe('SettingsProfileController', () => {
     });
     expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
     expect(invalidations.count).toBe(1);
+  });
+
+  it('renders declared provider setting defaults when config is unset', async () => {
+    const { controller } = createController();
+
+    const message = await controller.buildProfileMessage();
+    const google = message.providerKeyStatuses.find(
+      (status) => status.provider === 'google',
+    );
+
+    expect(google?.vscodeSettings).toContainEqual(
+      expect.objectContaining({
+        key: 'texra.model.useGoogleInteractionsAPI',
+        value: true,
+      }),
+    );
   });
 
   it('keeps reliability settings in config-backed model policy', async () => {
