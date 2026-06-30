@@ -141,13 +141,13 @@ function silentLogger(): AgentTrace {
 }
 
 /** Workflow-mode handler so isBackgroundModeEligible() is true. */
-function createHandler(category: AgentCategory = AgentCategory.Workflow): {
-  handler: ModelHandlerGoogleInteractions;
-} {
+function createHandler(
+  category: AgentCategory = AgentCategory.Workflow,
+): ModelHandlerGoogleInteractions {
   const handler = new ModelHandlerGoogleInteractions(createConfig());
   handler.setLogger(silentLogger());
   handler.setAgentCategory(category);
-  return { handler };
+  return handler;
 }
 
 function userStep(text: string): Step {
@@ -212,7 +212,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   it('B1: background submit sets background:true + store:true + stream:false', async () => {
     mockConfig();
     vi.useFakeTimers();
-    const { handler } = createHandler();
+    const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
       getSequence: [completedInteraction('int_1')],
@@ -234,7 +234,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   it('B2: polls get() until completed', async () => {
     mockConfig();
     vi.useFakeTimers();
-    const { handler } = createHandler();
+    const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
       getSequence: [
@@ -259,7 +259,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   it('B3: captures the chain id from the polled completion (not the submit)', async () => {
     mockConfig();
     vi.useFakeTimers();
-    const { handler } = createHandler();
+    const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_submit', status: 'in_progress' }),
       getSequence: [completedInteraction('int_done')],
@@ -298,7 +298,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   it('B4: cancel on abort calls interactions.cancel and leaves no leak', async () => {
     mockConfig();
     vi.useFakeTimers();
-    const { handler } = createHandler();
+    const handler = createHandler();
     const controller = new AbortController();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
@@ -348,7 +348,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   it('B5: background + stateless takes the non-background path', async () => {
     mockConfig({ serverState: false, background: true });
     vi.useFakeTimers();
-    const { handler } = createHandler();
+    const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => completedInteraction('int_1'),
       getSequence: [completedInteraction('int_1')],
@@ -371,7 +371,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   it('B6: toggle off => no background', async () => {
     mockConfig({ serverState: true, background: false });
     vi.useFakeTimers();
-    const { handler } = createHandler();
+    const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => completedInteraction('int_1'),
       getSequence: [completedInteraction('int_1')],
@@ -394,7 +394,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   it('B7: terminal non-completed (failed) throws and does not chain', async () => {
     mockConfig();
     vi.useFakeTimers();
-    const { handler } = createHandler();
+    const handler = createHandler();
     const { client } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
       getSequence: [{ id: 'int_1', status: 'failed' }],
@@ -429,7 +429,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   it('B8: requires_action is a serviceable terminal — returned (not thrown) so tool calls reach the cycle', async () => {
     mockConfig();
     vi.useFakeTimers();
-    const { handler } = createHandler();
+    const handler = createHandler();
     const callStep: Step = {
       type: 'function_call',
       id: 'c1',
@@ -462,7 +462,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   it('B9: timeout guard throws after the max polling duration', async () => {
     mockConfig();
     vi.useFakeTimers();
-    const { handler } = createHandler();
+    const handler = createHandler();
     const { client } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
       getSequence: [{ id: 'int_1', status: 'in_progress' }], // never completes
@@ -499,7 +499,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     // surfaces updatedMessages.
     mockConfig();
     vi.useFakeTimers();
-    const { handler } = createHandler(AgentCategory.ToolUse);
+    const handler = createHandler(AgentCategory.ToolUse);
     handler.requestCompaction();
 
     expect(handler.isBackgroundModeActive()).toBe(false);
@@ -539,7 +539,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     // background interactions". The handler must disable background for the
     // instance and retry without it (no allowlist needed).
     mockConfig();
-    const { handler } = createHandler();
+    const handler = createHandler();
 
     const createParams: Array<{ background?: boolean }> = [];
     let getCalls = 0;

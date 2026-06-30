@@ -48,6 +48,21 @@ function modelConfig(
   };
 }
 
+// initPlatform is restricted to composition roots, so import it dynamically.
+// The dynamic import also re-resolves @platform/platform after this file's
+// vi.resetModules() calls, keeping it on the instance the factory reads.
+async function initFakePlatform(
+  options?: Parameters<
+    typeof import('@test/support/FakePlatform').createFakePlatform
+  >[0],
+): Promise<void> {
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  initPlatform(createFakePlatform(options));
+}
+
 describe('OpenAI model handler routing', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -132,11 +147,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('tags created handlers with a minifier-safe compatibility key', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(createFakePlatform());
+    await initFakePlatform();
 
     const handler = await createModelHandler(MODEL_CONFIGS.gpt54);
     try {
@@ -159,15 +170,9 @@ describe('OpenAI model handler routing', () => {
   };
 
   it('keeps Codex-eligible subscription models on the Responses compatibility key', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(
-      createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
-      }),
-    );
+    await initFakePlatform({
+      config: { 'texra.chatgptCodex.preferSubscription': true },
+    });
 
     expect(
       modelHandlerCompatibilityKey(codexEligibleConfig, false, false),
@@ -177,12 +182,8 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('keeps Codex-eligible models on the API-key Responses path when the switch is off', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
     // No switch set → defaults off.
-    initPlatform(createFakePlatform());
+    await initFakePlatform();
 
     expect(
       modelHandlerCompatibilityKey(codexEligibleConfig, false, false),
@@ -190,15 +191,9 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('falls back to the API-key Responses handler when the subscription switch is on but signed out', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(
-      createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
-      }),
-    );
+    await initFakePlatform({
+      config: { 'texra.chatgptCodex.preferSubscription': true },
+    });
 
     const handler = await createModelHandler(codexEligibleConfig);
     try {
@@ -211,24 +206,18 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('preserves the API fullName on Codex handler config even when shortName is absent', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
     const codexSession: CodexSession = {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       expiresAtMs: Date.now() + 60_000,
       accountId: 'account-id',
     };
-    initPlatform(
-      createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
-        secrets: {
-          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
-        },
-      }),
-    );
+    await initFakePlatform({
+      config: { 'texra.chatgptCodex.preferSubscription': true },
+      secrets: {
+        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
+      },
+    });
 
     const handler = await createModelHandler({
       ...codexEligibleConfig,
@@ -305,17 +294,11 @@ describe('Google Interactions API routing', () => {
     useInteractions: boolean,
     useOpenRouter = false,
   ): Promise<typeof import('@agent/runtime/ModelFactory')> {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(
-      createFakePlatform({
-        config: { 'texra.model.useGoogleInteractionsAPI': useInteractions },
-        // getUseOpenRouter() reads USE_OPENROUTER from global state first.
-        globalState: { 'texra.useOpenRouter': useOpenRouter },
-      }),
-    );
+    await initFakePlatform({
+      config: { 'texra.model.useGoogleInteractionsAPI': useInteractions },
+      // getUseOpenRouter() reads USE_OPENROUTER from global state first.
+      globalState: { 'texra.useOpenRouter': useOpenRouter },
+    });
     return import('@agent/runtime/ModelFactory');
   }
 
@@ -533,11 +516,7 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
     // desync the statically-imported factory from the platform it reads; this
     // also makes the block robust to isolated `--grep` runs rather than
     // free-riding on a prior test's initPlatform.
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(createFakePlatform());
+    await initFakePlatform();
     const {
       modelHandlerCompatibilityKey: compatKey,
       createModelHandler: create,

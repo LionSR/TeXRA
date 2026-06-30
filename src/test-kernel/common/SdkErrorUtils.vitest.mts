@@ -53,6 +53,13 @@ class APIUserAbortError extends APIError {}
 
 class UnknownSdkApiError extends APIError {}
 
+function withHeaders<T extends Error>(
+  error: T,
+  headers: Record<string, string>,
+): T & { headers: Headers } {
+  return Object.assign(error, { headers: new Headers(headers) });
+}
+
 describe('formatProviderHttpError', () => {
   it('matches generic SDK API errors through the prototype chain', () => {
     const formatted = formatProviderHttpError(
@@ -164,10 +171,7 @@ describe('formatProviderHttpError', () => {
   });
 
   it('prefers Anthropic request-id when response headers include both request id styles', () => {
-    const err = new UnknownSdkApiError('upstream auth failed') as APIError & {
-      headers: Headers;
-    };
-    err.headers = new Headers({
+    const err = withHeaders(new UnknownSdkApiError('upstream auth failed'), {
       'request-id': 'req-anthropic',
       'x-request-id': 'req-openai-compatible',
     });
@@ -179,12 +183,10 @@ describe('formatProviderHttpError', () => {
   });
 
   it('does not infer OpenAI from generic x-request-id headers', () => {
-    const err = new UnknownSdkApiError(
-      'openai-compatible gateway failed',
-    ) as APIError & {
-      headers: Headers;
-    };
-    err.headers = new Headers({ 'x-request-id': 'req-compatible' });
+    const err = withHeaders(
+      new UnknownSdkApiError('openai-compatible gateway failed'),
+      { 'x-request-id': 'req-compatible' },
+    );
 
     const formatted = formatProviderHttpError(err);
 
@@ -193,10 +195,9 @@ describe('formatProviderHttpError', () => {
   });
 
   it('prefers SDK class provider hints over OpenAI-compatible request headers', () => {
-    const err = new KimiAPIError('moonshot auth failed') as APIError & {
-      headers: Headers;
-    };
-    err.headers = new Headers({ 'x-request-id': 'req-kimi' });
+    const err = withHeaders(new KimiAPIError('moonshot auth failed'), {
+      'x-request-id': 'req-kimi',
+    });
 
     const formatted = formatProviderHttpError(err);
 

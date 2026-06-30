@@ -12,7 +12,10 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { setAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import {
+  type AgentDirectories,
+  setAgentDirectories,
+} from '@agent/index/agentDirectoriesRegistry';
 import {
   getAgent,
   getVisibleAgent,
@@ -27,34 +30,46 @@ const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../..',
 );
+const BUILTIN_AGENTS_DIR = resolve(
+  REPO_ROOT,
+  'packages/extension/resources/agents',
+);
+const BUILTIN_TOOL_USE_AGENTS_DIR = resolve(
+  REPO_ROOT,
+  'packages/extension/resources/tool_use_agents',
+);
+
+/** Point the registry at the real bundled agent YAMLs, overriding any dir. */
+function useAgentDirectories(overrides: Partial<AgentDirectories> = {}): void {
+  setAgentDirectories({
+    custom: async () => '',
+    builtIn: async () => BUILTIN_AGENTS_DIR,
+    builtInToolUse: async () => BUILTIN_TOOL_USE_AGENTS_DIR,
+    ...overrides,
+  });
+}
+
+/** Install a fresh fake platform seeded with the given workspace state. */
+async function initPlatformWithState(
+  workspaceState: Record<string, unknown>,
+): Promise<void> {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({ workspaceState }, { fs: nodeFilesystem }));
+}
 
 describe('agent registry legacy aliases', () => {
   beforeAll(async () => {
     // Real bundled agent YAMLs on disk, so the test exercises the actual
     // rename (chat → assistant) rather than synthetic fixtures.
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {
-          // Pre-seed legacy keys to exercise the load-time state migration.
-          workspaceState: {
-            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-              'chat',
-              'builtInToolUse:chat',
-              'review',
-            ],
-          },
-        },
-        { fs: nodeFilesystem },
-      ),
-    );
-    setAgentDirectories({
-      custom: async () => '',
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-      builtInToolUse: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    // Pre-seed legacy keys to exercise the load-time state migration.
+    await initPlatformWithState({
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
+        'chat',
+        'builtInToolUse:chat',
+        'review',
+      ],
     });
+    useAgentDirectories();
     await refresh({ includeRemote: false });
   });
 
@@ -94,16 +109,10 @@ describe('agent registry legacy aliases', () => {
     const waitForBuiltInToolUseDir = new Promise<void>((resolveWait) => {
       releaseBuiltInToolUseDir = resolveWait;
     });
-    setAgentDirectories({
-      custom: async () => '',
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+    useAgentDirectories({
       builtInToolUse: async () => {
         await waitForBuiltInToolUseDir;
-        return resolve(
-          REPO_ROOT,
-          'packages/extension/resources/tool_use_agents',
-        );
+        return BUILTIN_TOOL_USE_AGENTS_DIR;
       },
     });
 
@@ -120,10 +129,7 @@ describe('agent registry legacy aliases', () => {
     expect(isAgentRegistryReady()).toBe(true);
     expect(getAgent('assistant')?.name).toBe('assistant');
 
-    setAgentDirectories({
-      custom: async () => '',
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+    useAgentDirectories({
       builtInToolUse: async () => {
         throw new Error('refresh failed');
       },
@@ -134,13 +140,7 @@ describe('agent registry legacy aliases', () => {
     expect(isAgentRegistryReady()).toBe(true);
     expect(getAgent('assistant')?.name).toBe('assistant');
 
-    setAgentDirectories({
-      custom: async () => '',
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-      builtInToolUse: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
-    });
+    useAgentDirectories();
   });
 
   it('migrates persisted legacy keys at load time', () => {
@@ -191,27 +191,13 @@ describe('agent registry legacy aliases', () => {
       ].join('\n'),
     );
 
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {
-          workspaceState: {
-            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-              'chat',
-              'builtInToolUse:chat',
-            ],
-          },
-        },
-        { fs: nodeFilesystem },
-      ),
-    );
-    setAgentDirectories({
-      custom: async () => customDir,
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-      builtInToolUse: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    await initPlatformWithState({
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
+        'chat',
+        'builtInToolUse:chat',
+      ],
     });
+    useAgentDirectories({ custom: async () => customDir });
 
     await refresh({ includeRemote: false });
 
@@ -237,26 +223,10 @@ describe('agent registry legacy aliases', () => {
     // only the name part would yield `builtInWorkflow:assistant`, a dangling
     // key; the migration resolves the alias within the list's category and
     // persists the canonical `builtInToolUse:assistant` instead.
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {
-          workspaceState: {
-            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-              'builtInWorkflow:chat',
-            ],
-          },
-        },
-        { fs: nodeFilesystem },
-      ),
-    );
-    setAgentDirectories({
-      custom: async () => '',
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-      builtInToolUse: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    await initPlatformWithState({
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['builtInWorkflow:chat'],
     });
+    useAgentDirectories();
 
     await refresh({ includeRemote: false });
 
@@ -287,27 +257,11 @@ describe('agent registry legacy aliases', () => {
       ].join('\n'),
     );
 
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {
-          workspaceState: {
-            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-              'builtInWorkflow:chat',
-            ],
-            [WorkspaceStateKey.ENABLED_AGENTS]: ['remote:chat'],
-          },
-        },
-        { fs: nodeFilesystem },
-      ),
-    );
-    setAgentDirectories({
-      custom: async () => customDir,
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-      builtInToolUse: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    await initPlatformWithState({
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['builtInWorkflow:chat'],
+      [WorkspaceStateKey.ENABLED_AGENTS]: ['remote:chat'],
     });
+    useAgentDirectories({ custom: async () => customDir });
 
     await refresh({ includeRemote: false });
 
@@ -339,28 +293,14 @@ describe('agent registry legacy aliases', () => {
       ].join('\n'),
     );
 
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {
-          workspaceState: {
-            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-              'custom:Readable Helper',
-              'Readable Helper',
-              'review',
-            ],
-          },
-        },
-        { fs: nodeFilesystem },
-      ),
-    );
-    setAgentDirectories({
-      custom: async () => customDir,
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-      builtInToolUse: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    await initPlatformWithState({
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
+        'custom:Readable Helper',
+        'Readable Helper',
+        'review',
+      ],
     });
+    useAgentDirectories({ custom: async () => customDir });
 
     await refresh({ includeRemote: false });
 
@@ -410,28 +350,14 @@ describe('agent registry legacy aliases', () => {
       ].join('\n'),
     );
 
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {
-          workspaceState: {
-            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-              'custom:Readable Helper',
-              'Readable Helper',
-              'review',
-            ],
-          },
-        },
-        { fs: nodeFilesystem },
-      ),
-    );
-    setAgentDirectories({
-      custom: async () => customDir,
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-      builtInToolUse: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    await initPlatformWithState({
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
+        'custom:Readable Helper',
+        'Readable Helper',
+        'review',
+      ],
     });
+    useAgentDirectories({ custom: async () => customDir });
 
     await refresh({ includeRemote: false });
 

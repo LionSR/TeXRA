@@ -4,18 +4,16 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
 
-const mocks = vi.hoisted(() => {
-  return {
-    executeCliConfig: vi.fn(),
-    withExpandedRunInputs: vi.fn(),
-    initLocalCliPlatform: vi.fn(),
-    isAuthenticated: vi.fn(),
-    resolveCliLaunchAgent: vi.fn(),
-    resolveCliRunModel: vi.fn(),
-    writeErrorStderr: vi.fn(),
-    writeTextStderr: vi.fn(),
-  };
-});
+const mocks = vi.hoisted(() => ({
+  executeCliConfig: vi.fn(),
+  withExpandedRunInputs: vi.fn(),
+  initLocalCliPlatform: vi.fn(),
+  isAuthenticated: vi.fn(),
+  resolveCliLaunchAgent: vi.fn(),
+  resolveCliRunModel: vi.fn(),
+  writeErrorStderr: vi.fn(),
+  writeTextStderr: vi.fn(),
+}));
 
 vi.mock('@agent/index', () => ({
   getAgent: vi.fn(),

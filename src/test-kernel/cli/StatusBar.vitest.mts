@@ -6,6 +6,7 @@ import {
   queuedFollowUpsSummary,
   statusBarSegmentText,
   statusBarStreamTarget,
+  type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/StatusBar';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
@@ -17,6 +18,30 @@ const COMPLETED_REVIEW_FOLLOWUP =
   '<orchestrator-followup><subagent-result id="child-q" agent="review" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>';
 const PROGRESS_REVIEW_FOLLOWUP =
   '<orchestrator-followup><subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/></orchestrator-followup>';
+
+// Idle single-stream baseline; each test overrides only the fields it exercises.
+function statusInput(
+  overrides: Partial<StatusBarDisplayInput> = {},
+): StatusBarDisplayInput {
+  return {
+    status: STREAM_STATUS.WAITING,
+    pendingExitHint: false,
+    pendingExitResumeId: undefined,
+    bypass: NO_BYPASS,
+    queuedFollowUpMessages: [],
+    usage: undefined,
+    conversation: undefined,
+    activeSubagents: 0,
+    activeProcesses: 0,
+    approvalDepth: 0,
+    subagentControlsAvailable: false,
+    hasMultipleStreams: false,
+    model: 'deepseekT',
+    apiMode: PERSONAL_API_MODE_LABEL,
+    shortcutModifierLabel: 'Alt',
+    ...overrides,
+  };
+}
 
 describe('CLI StatusBar display model', () => {
   it('previews queued follow-up messages without duplicating the count', () => {
@@ -82,24 +107,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('surfaces non-default approval policies in the durable status row', () => {
-    const input = {
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      approvalPolicy: 'ask',
-      shortcutModifierLabel: 'Alt',
-    } as const;
+    const input = statusInput({ approvalPolicy: 'ask' });
     const ask = buildStatusBarDisplay(input);
 
     expect(ask.left.map(statusBarSegmentText)).toEqual([
@@ -134,23 +142,12 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps queued follow-up counts in the durable left status segments', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: ['Keep the proof under one page.'],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        queuedFollowUpMessages: ['Keep the proof under one page.'],
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -163,23 +160,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps idle state compact and omits static agent/model names', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-    });
+    const display = buildStatusBarDisplay(statusInput());
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -204,25 +185,14 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('advertises the transcript viewer when the focused stream has history', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      transcriptAvailable: true,
-      width: 80,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        transcriptAvailable: true,
+        width: 80,
+      }),
+    );
 
     expect(display.bindings).toContain('[Tab]streams');
     expect(display.bindings).toContain('[Ctrl-T]transcript');
@@ -230,76 +200,40 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps the transcript shortcut in narrow stream views', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      taskControlsAvailable: false,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      transcriptAvailable: true,
-      width: 60,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        taskControlsAvailable: false,
+        hasMultipleStreams: true,
+        transcriptAvailable: true,
+        width: 60,
+      }),
+    );
 
     expect(display.bindings).toContain('[Ctrl-T]transcript');
     expect(display.bindings).toContain('[Ctrl-C]exit');
   });
 
   it('prefers transcript over stream cycling when the bar is very narrow', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      taskControlsAvailable: false,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      transcriptAvailable: true,
-      width: 42,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        taskControlsAvailable: false,
+        hasMultipleStreams: true,
+        transcriptAvailable: true,
+        width: 42,
+      }),
+    );
 
     expect(display.bindings).toBe('[Ctrl-T]transcript  [Ctrl-C]exit');
   });
 
   it('advertises root agent selection while setup can still change it', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      agentSelectionAvailable: true,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'gpt54',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      width: 80,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        agentSelectionAvailable: true,
+        model: 'gpt54',
+        width: 80,
+      }),
+    );
 
     expect(display.bindings).toBe(
       '[/agent]agents  [/model]models  [/api]api  [Ctrl-J]newline  [Ctrl-C]exit',
@@ -307,51 +241,27 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('does not let setup bindings hide the transcript viewer', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      agentSelectionAvailable: true,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'gpt54',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      transcriptAvailable: true,
-      width: 80,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        agentSelectionAvailable: true,
+        model: 'gpt54',
+        transcriptAvailable: true,
+        width: 80,
+      }),
+    );
 
     expect(display.bindings).toContain('[Ctrl-T]transcript');
     expect(display.bindings).toContain('[/agent]agents');
   });
 
   it('keeps root agent selection visible when setup bindings get narrow', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      agentSelectionAvailable: true,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'gpt54',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      width: 50,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        agentSelectionAvailable: true,
+        model: 'gpt54',
+        width: 50,
+      }),
+    );
 
     expect(display.bindings).toContain('[/agent]agents');
     expect(display.bindings).toContain('[Ctrl-C]exit');
@@ -360,26 +270,16 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('hides task shortcuts when no task rows exist', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      elapsedMs: 12_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      taskControlsAvailable: false,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: 'relay',
-      shortcutModifierLabel: 'Option',
-      ctrlCAction: 'stop',
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        elapsedMs: 12_000,
+        taskControlsAvailable: false,
+        apiMode: 'relay',
+        shortcutModifierLabel: 'Option',
+        ctrlCAction: 'stop',
+      }),
+    );
 
     expect(display.bindings).toContain('[/status]details');
     expect(display.bindings).toContain('[Ctrl-C]stop');
@@ -387,26 +287,19 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps subagent shortcuts grouped when task shortcuts are hidden', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      elapsedMs: 12_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 1,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      taskControlsAvailable: false,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: 'relay',
-      shortcutModifierLabel: 'Option',
-      ctrlCAction: 'stop',
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        elapsedMs: 12_000,
+        activeSubagents: 1,
+        taskControlsAvailable: false,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        apiMode: 'relay',
+        shortcutModifierLabel: 'Option',
+        ctrlCAction: 'stop',
+      }),
+    );
 
     expect(display.bindings).not.toContain('[Option-p]tasks');
     expect(display.bindings).toContain('[Option-s]subagents');
@@ -419,26 +312,19 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('does not advertise in-pane paging for focused child streams', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 1,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      taskControlsAvailable: false,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: 'relay',
-      shortcutModifierLabel: 'Option',
-      ctrlCAction: 'stop root',
-      width: 100,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        activeSubagents: 1,
+        taskControlsAvailable: false,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        apiMode: 'relay',
+        shortcutModifierLabel: 'Option',
+        ctrlCAction: 'stop root',
+        width: 100,
+      }),
+    );
 
     expect(display.bindings).not.toContain('PgUp');
     expect(display.bindings).not.toContain('scroll');
@@ -447,51 +333,33 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      shiftEnterNewline: true,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({ shiftEnterNewline: true }),
+    );
 
     expect(display.bindings).toContain('[Shift-Enter]newline');
     expect(display.bindings).not.toContain('[Ctrl-J]newline');
   });
 
   it('shows live running signals and approval depth', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [
-        'Keep the proof under one page.',
-        'Also mention the finite monoid argument.',
-      ],
-      usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
-      conversation: { conversationTurns: 2, toolCallCount: 7 },
-      activeSubagents: 2,
-      activeProcesses: 1,
-      approvalDepth: 3,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: 'relay',
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        queuedFollowUpMessages: [
+          'Keep the proof under one page.',
+          'Also mention the finite monoid argument.',
+        ],
+        usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
+        conversation: { conversationTurns: 2, toolCallCount: 7 },
+        activeSubagents: 2,
+        activeProcesses: 1,
+        approvalDepth: 3,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        apiMode: 'relay',
+        ctrlCAction: 'stop',
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -515,27 +383,19 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps critical controls visible in narrow subagent sessions', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      elapsedMs: 88_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 3,
-      activeProcesses: 1,
-      approvalDepth: 0,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-      transcriptAvailable: true,
-      width: 60,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        elapsedMs: 88_000,
+        activeSubagents: 3,
+        activeProcesses: 1,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        ctrlCAction: 'stop',
+        transcriptAvailable: true,
+        width: 60,
+      }),
+    );
 
     expect(display.bindings).toBe(
       '[Tab]streams  [Alt-p]tasks  [Alt-s]subagents  [Ctrl-C]stop',
@@ -544,54 +404,39 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('prefers the task picker when one child-control shortcut fits', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      elapsedMs: 88_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 3,
-      activeProcesses: 1,
-      approvalDepth: 0,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Option',
-      ctrlCAction: 'stop',
-      transcriptAvailable: true,
-      width: 44,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        elapsedMs: 88_000,
+        activeSubagents: 3,
+        activeProcesses: 1,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        shortcutModifierLabel: 'Option',
+        ctrlCAction: 'stop',
+        transcriptAvailable: true,
+        width: 44,
+      }),
+    );
 
     expect(display.bindings).toBe('[Option-p]tasks  [Ctrl-C]stop');
     expect(display.bindings).not.toContain('[Option-s]subagents');
   });
 
   it('drops low-priority status details before narrow footers lose separators', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      elapsedMs: 75_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 3,
-      activeProcesses: 1,
-      approvalDepth: 0,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-      width: 30,
-      shortcutsActive: false,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        elapsedMs: 75_000,
+        activeSubagents: 3,
+        activeProcesses: 1,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        ctrlCAction: 'stop',
+        width: 30,
+        shortcutsActive: false,
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -606,26 +451,15 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('drops approval depth before returning an over-wide narrow status', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      elapsedMs: 75_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 3,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-      width: 30,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        elapsedMs: 75_000,
+        approvalDepth: 3,
+        ctrlCAction: 'stop',
+        width: 30,
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -636,26 +470,14 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('drops elapsed before returning an over-wide critical-only status', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      elapsedMs: 75_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-      width: 16,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        elapsedMs: 75_000,
+        ctrlCAction: 'stop',
+        width: 16,
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -665,26 +487,16 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps queued follow-up previews aligned with visible queued counts', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      elapsedMs: 75_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: ['Keep the proof under one page.'],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 3,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-      width: 30,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        elapsedMs: 75_000,
+        queuedFollowUpMessages: ['Keep the proof under one page.'],
+        approvalDepth: 3,
+        ctrlCAction: 'stop',
+        width: 30,
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -696,26 +508,15 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('can hide queued follow-up previews while keeping the durable count', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: ['Keep the proof under one page.'],
-      queuedFollowUpPreview: false,
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-      width: 80,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        queuedFollowUpMessages: ['Keep the proof under one page.'],
+        queuedFollowUpPreview: false,
+        ctrlCAction: 'stop',
+        width: 80,
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toContain('queued 1');
     expect(display.right).toBeUndefined();
@@ -746,24 +547,12 @@ describe('CLI StatusBar display model', () => {
       }),
     ).toBe('exit');
 
-    const baseDisplayInput = {
+    const baseDisplayInput = statusInput({
       status: STREAM_STATUS.STOPPED,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop root',
-    } as const;
+    });
     const display = buildStatusBarDisplay(baseDisplayInput);
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
@@ -1046,24 +835,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps status discoverable in narrow single-stream sessions', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      width: 50,
-    });
+    const display = buildStatusBarDisplay(statusInput({ width: 50 }));
 
     expect(display.bindings).toBe(
       '[Alt-p]tasks  [/status]details  [Ctrl-C]exit',
@@ -1071,25 +843,18 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('hides inactive global bindings while a foreground panel owns input', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 2,
-      activeProcesses: 1,
-      approvalDepth: 1,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-      shortcutsActive: false,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        activeSubagents: 2,
+        activeProcesses: 1,
+        approvalDepth: 1,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        ctrlCAction: 'stop',
+        shortcutsActive: false,
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toContain('1 approval');
     expect(display.bindings).toBe(
@@ -1101,26 +866,15 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('labels foreground user questions as questions instead of approvals', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 1,
-      approvalKind: 'question',
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      foregroundEscapeAction: 'skip',
-      shortcutsActive: false,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        approvalDepth: 1,
+        approvalKind: 'question',
+        foregroundEscapeAction: 'skip',
+        shortcutsActive: false,
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toContain('1 question');
     expect(display.left.map(statusBarSegmentText)).not.toContain('1 approval');
@@ -1128,98 +882,57 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('shows cancel for non-question approval foregrounds', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 1,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      foregroundEscapeAction: 'cancel',
-      shortcutsActive: false,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        approvalDepth: 1,
+        foregroundEscapeAction: 'cancel',
+        shortcutsActive: false,
+      }),
+    );
 
     expect(display.bindings).toContain('[Esc]cancel');
   });
 
   it('keeps escape and Ctrl-C actions visible in narrow foreground panels', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 3,
-      activeProcesses: 1,
-      approvalDepth: 0,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-      shortcutsActive: false,
-      width: 40,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        activeSubagents: 3,
+        activeProcesses: 1,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        ctrlCAction: 'stop',
+        shortcutsActive: false,
+        width: 40,
+      }),
+    );
 
     expect(display.bindings).toBe('[Esc]close  [Ctrl-C]stop');
   });
 
   it('falls back to the bare Ctrl-C action in tiny foreground panels', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 3,
-      activeProcesses: 1,
-      approvalDepth: 0,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      ctrlCAction: 'stop',
-      shortcutsActive: false,
-      width: 15,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        activeSubagents: 3,
+        activeProcesses: 1,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        ctrlCAction: 'stop',
+        shortcutsActive: false,
+        width: 15,
+      }),
+    );
 
     expect(display.bindings).toBe('[Ctrl-C]stop');
   });
 
   it('shows a live elapsed segment only while running', () => {
-    const runningInput = {
+    const runningInput = statusInput({
       status: STREAM_STATUS.RUNNING,
       elapsedMs: 110_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-    };
+    });
     const running = buildStatusBarDisplay(runningInput);
 
     expect(running.left.map(statusBarSegmentText)).toEqual([
@@ -1253,25 +966,9 @@ describe('CLI StatusBar display model', () => {
     ]);
 
     // The same elapsed reading is suppressed once the turn is no longer running.
-    const idle = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      elapsedMs: 110_000,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      thinkingActive: true,
-    });
+    const idle = buildStatusBarDisplay(
+      statusInput({ elapsedMs: 110_000, thinkingActive: true }),
+    );
 
     expect(idle.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -1281,23 +978,12 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('preserves distinct YOLO, bash, and edit bypass badges', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: { bash: true, superYolo: true, toolEdit: true },
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        bypass: { bash: true, superYolo: true, toolEdit: true },
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -1322,47 +1008,27 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('budgets queued follow-up previews with rendered badge padding', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: { bash: false, superYolo: true, toolEdit: true },
-      queuedFollowUpMessages: ['Keep the proof under one page.'],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      width: 61,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        bypass: { bash: false, superYolo: true, toolEdit: true },
+        queuedFollowUpMessages: ['Keep the proof under one page.'],
+        width: 61,
+      }),
+    );
 
     expect(display.right).toBe('Keep the proof…');
     expect(display.bindings).toContain('[Ctrl-C]exit');
   });
 
   it('shows the resume command while exit confirmation is armed', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: true,
-      pendingExitResumeId: 'abc123',
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        pendingExitHint: true,
+        pendingExitResumeId: 'abc123',
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -1375,24 +1041,14 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('uses the provided command name in the armed-exit resume command', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: true,
-      pendingExitResumeId: 'abc123',
-      commandName: 'texra-local',
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        pendingExitHint: true,
+        pendingExitResumeId: 'abc123',
+        commandName: 'texra-local',
+      }),
+    );
 
     expect(display.bindings).toBe(
       'Resume this session with: texra-local resume abc123',
@@ -1400,26 +1056,17 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('warns that queued follow-ups are discarded while exit is armed', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: true,
-      pendingExitResumeId: 'abc123',
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [
-        'Keep the proof under one page.',
-        'Also mention the finite monoid argument.',
-      ],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        pendingExitHint: true,
+        pendingExitResumeId: 'abc123',
+        queuedFollowUpMessages: [
+          'Keep the proof under one page.',
+          'Also mention the finite monoid argument.',
+        ],
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toContain(
       '2 queued follow-ups will be discarded',
@@ -1434,23 +1081,10 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('compacts token usage to a percentage before dropping it on narrow widths', () => {
-    const input = {
+    const input = statusInput({
       status: STREAM_STATUS.RUNNING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
       usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-    } as const;
+    });
 
     // Wide: the full usage segment fits.
     expect(
@@ -1469,24 +1103,14 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps the exit confirmation visible in very narrow footers', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.RUNNING,
-      pendingExitHint: true,
-      pendingExitResumeId: 'abc123',
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: false,
-      hasMultipleStreams: false,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: 'Alt',
-      width: 29,
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.RUNNING,
+        pendingExitHint: true,
+        pendingExitResumeId: 'abc123',
+        width: 29,
+      }),
+    );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
@@ -1498,23 +1122,13 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('uses portable Esc labels for meta shortcuts on macOS', () => {
-    const display = buildStatusBarDisplay({
-      status: STREAM_STATUS.WAITING,
-      pendingExitHint: false,
-      pendingExitResumeId: undefined,
-      bypass: NO_BYPASS,
-      queuedFollowUpMessages: [],
-      usage: undefined,
-      conversation: undefined,
-      activeSubagents: 0,
-      activeProcesses: 0,
-      approvalDepth: 0,
-      subagentControlsAvailable: true,
-      hasMultipleStreams: true,
-      model: 'deepseekT',
-      apiMode: PERSONAL_API_MODE_LABEL,
-      shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
-    });
+    const display = buildStatusBarDisplay(
+      statusInput({
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
+      }),
+    );
 
     expect(display.bindings).toContain('[Esc 1..9]focus');
     expect(display.bindings).toContain('[Esc p]tasks');

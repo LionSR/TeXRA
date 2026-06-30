@@ -56,24 +56,26 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   };
 }
 
-describe('executeCliRequest', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.close.mockResolvedValue(undefined);
-    mocks.installCliApprovalHandlers.mockReturnValue(vi.fn());
-    mocks.createCliRuntimeHost.mockReturnValue({
-      emit: vi.fn(),
-      prepareInteractivePrompt: mocks.prepareInteractivePrompt,
-      close: mocks.close,
-    });
-    mocks.readCliTerminalStatus.mockResolvedValue('completed');
-    mocks.runAgent.mockResolvedValue({
-      category: 'toolUse',
-      executionId: 'exec-1',
-      status: 'completed',
-      streamId: 'stream-1',
-    });
+function stubRunExecutionDeps(): void {
+  vi.clearAllMocks();
+  mocks.close.mockResolvedValue(undefined);
+  mocks.installCliApprovalHandlers.mockReturnValue(vi.fn());
+  mocks.createCliRuntimeHost.mockReturnValue({
+    emit: vi.fn(),
+    prepareInteractivePrompt: mocks.prepareInteractivePrompt,
+    close: mocks.close,
   });
+  mocks.readCliTerminalStatus.mockResolvedValue('completed');
+  mocks.runAgent.mockResolvedValue({
+    category: 'toolUse',
+    executionId: 'exec-1',
+    status: 'completed',
+    streamId: 'stream-1',
+  });
+}
+
+describe('executeCliRequest', () => {
+  beforeEach(stubRunExecutionDeps);
 
   it('marks headless never runs as approval-unavailable for agent execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
@@ -281,23 +283,7 @@ describe('executeCliRequest', () => {
 });
 
 describe('executeCliConfig', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.close.mockResolvedValue(undefined);
-    mocks.installCliApprovalHandlers.mockReturnValue(vi.fn());
-    mocks.createCliRuntimeHost.mockReturnValue({
-      emit: vi.fn(),
-      prepareInteractivePrompt: mocks.prepareInteractivePrompt,
-      close: mocks.close,
-    });
-    mocks.readCliTerminalStatus.mockResolvedValue('completed');
-    mocks.runAgent.mockResolvedValue({
-      category: 'toolUse',
-      executionId: 'exec-1',
-      status: 'completed',
-      streamId: 'stream-1',
-    });
-  });
+  beforeEach(stubRunExecutionDeps);
 
   it('reports invalid configs without starting the runtime host', async () => {
     const { executeCliConfig } = await import('@cli/runtime/runExecution');

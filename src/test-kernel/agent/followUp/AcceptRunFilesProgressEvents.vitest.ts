@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -17,6 +18,20 @@ const executionId = 'abcdef' as ExecutionId;
 const streamId = 'stream:accept-run-files' as StreamTabId;
 const workspacePath = '/workspace';
 const storagePath = '/storage';
+
+function runAccept(
+  tool: AcceptRunFilesTool,
+  host: AgentRuntimeHost,
+  files: { path: string; original: string }[],
+) {
+  return withRunContext(
+    createRunContext({ runtimeHost: host, streamId, executionId }),
+    () =>
+      withToolFileInteractionContext({ tracker: {} as never }, () =>
+        tool.call({ execution_id: executionId, files }),
+      ),
+  );
+}
 
 describe('accept_run_files progress events', () => {
   let originalStorageExists: typeof StorageFS.exists;
@@ -84,20 +99,9 @@ describe('accept_run_files progress events', () => {
 
     setToolEditApprovalHandler(async () => ({ accepted: true }));
 
-    const result = await withRunContext(
-      createRunContext({
-        runtimeHost: explicit.host,
-        streamId,
-        executionId,
-      }),
-      () =>
-        withToolFileInteractionContext({ tracker: {} as never }, () =>
-          tool.call({
-            execution_id: executionId,
-            files: [{ path: 'output.tex', original: 'paper.tex' }],
-          }),
-        ),
-    );
+    const result = await runAccept(tool, explicit.host, [
+      { path: 'output.tex', original: 'paper.tex' },
+    ]);
 
     expect(result.isError).toBeUndefined();
     expect(explicit.events).toContainEqual({
@@ -154,20 +158,9 @@ describe('accept_run_files progress events', () => {
       return { accepted: true };
     });
 
-    const result = await withRunContext(
-      createRunContext({
-        runtimeHost: explicit.host,
-        streamId,
-        executionId,
-      }),
-      () =>
-        withToolFileInteractionContext({ tracker: {} as never }, () =>
-          tool.call({
-            execution_id: executionId,
-            files: [{ path: 'draft.tex', original: 'draft.tex' }],
-          }),
-        ),
-    );
+    const result = await runAccept(tool, explicit.host, [
+      { path: 'draft.tex', original: 'draft.tex' },
+    ]);
 
     expect(result.isError).toBeUndefined();
     expect(approvalOriginal).toBe('old content');
@@ -205,20 +198,9 @@ describe('accept_run_files progress events', () => {
       return { accepted: true };
     });
 
-    const result = await withRunContext(
-      createRunContext({
-        runtimeHost: explicit.host,
-        streamId,
-        executionId,
-      }),
-      () =>
-        withToolFileInteractionContext({ tracker: {} as never }, () =>
-          tool.call({
-            execution_id: executionId,
-            files: [{ path: 'draft.tex', original: 'draft.tex' }],
-          }),
-        ),
-    );
+    const result = await runAccept(tool, explicit.host, [
+      { path: 'draft.tex', original: 'draft.tex' },
+    ]);
 
     expect(result.isError).toBeUndefined();
     expect(result.output).toContain('No changes to accept');
@@ -257,25 +239,9 @@ describe('accept_run_files progress events', () => {
       return { accepted: true };
     });
 
-    const result = await withRunContext(
-      createRunContext({
-        runtimeHost: explicit.host,
-        streamId,
-        executionId,
-      }),
-      () =>
-        withToolFileInteractionContext({ tracker: {} as never }, () =>
-          tool.call({
-            execution_id: executionId,
-            files: [
-              {
-                path: 'r1/Draft/appendices.tex',
-                original: 'Draft/appendices.tex',
-              },
-            ],
-          }),
-        ),
-    );
+    const result = await runAccept(tool, explicit.host, [
+      { path: 'r1/Draft/appendices.tex', original: 'Draft/appendices.tex' },
+    ]);
 
     expect(result.isError).toBe(true);
     expect(result.error).toContain('symlink');

@@ -72,6 +72,18 @@ describe('loadAgentSettingAndPrompts', () => {
     return path.normalize(filePath);
   }
 
+  function customResolution(
+    name: string,
+    category: AgentCategory,
+  ): ResolvedAgent {
+    const definitionPath = path.join('/', 'tmp', 'agents', `${name}.yaml`);
+    return {
+      entry: { source: 'custom', name, path: definitionPath, category },
+      definitionPath,
+      resolvedName: name,
+    };
+  }
+
   beforeEach(() => {
     fileContents.clear();
 
@@ -94,21 +106,10 @@ describe('loadAgentSettingAndPrompts', () => {
   });
 
   it('loads settings and prompts from the given definition path', async () => {
-    const agentPath = path.join('/', 'tmp', 'agents');
-    const definitionPath = path.join(agentPath, 'polish.yaml');
-    const resolution: ResolvedAgent = {
-      entry: {
-        source: 'custom',
-        name: 'polish',
-        path: definitionPath,
-        category: AgentCategory.Workflow,
-      },
-      definitionPath,
-      resolvedName: 'polish',
-    };
+    const resolution = customResolution('polish', AgentCategory.Workflow);
 
     fileContents.set(
-      normalize(definitionPath),
+      normalize(resolution.definitionPath),
       [
         'name: polish',
         'settings:',
@@ -128,21 +129,10 @@ describe('loadAgentSettingAndPrompts', () => {
   });
 
   it('accepts the internal registry-metadata field in agent settings', async () => {
-    const agentPath = path.join('/', 'tmp', 'agents');
-    const definitionPath = path.join(agentPath, 'latexFixer.yaml');
-    const resolution: ResolvedAgent = {
-      entry: {
-        source: 'custom',
-        name: 'latexFixer',
-        path: definitionPath,
-        category: AgentCategory.ToolUse,
-      },
-      definitionPath,
-      resolvedName: 'latexFixer',
-    };
+    const resolution = customResolution('latexFixer', AgentCategory.ToolUse);
 
     fileContents.set(
-      normalize(definitionPath),
+      normalize(resolution.definitionPath),
       [
         'name: latexFixer',
         'settings:',
@@ -163,21 +153,10 @@ describe('loadAgentSettingAndPrompts', () => {
   });
 
   it('loads legacy workflow settings that still declare outputExt', async () => {
-    const agentPath = path.join('/', 'tmp', 'agents');
-    const definitionPath = path.join(agentPath, 'legacy.yaml');
-    const resolution: ResolvedAgent = {
-      entry: {
-        source: 'custom',
-        name: 'legacy',
-        path: definitionPath,
-        category: AgentCategory.Workflow,
-      },
-      definitionPath,
-      resolvedName: 'legacy',
-    };
+    const resolution = customResolution('legacy', AgentCategory.Workflow);
 
     fileContents.set(
-      normalize(definitionPath),
+      normalize(resolution.definitionPath),
       [
         'name: legacy',
         'settings:',

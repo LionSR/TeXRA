@@ -55,6 +55,12 @@ function matchingExecution(id: string) {
 describe('discoverLatestExecutionOutputs', () => {
   const tempDirs: string[] = [];
 
+  async function makeTempDir(): Promise<string> {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'texra-latexdiff-'));
+    tempDirs.push(dir);
+    return dir;
+  }
+
   beforeEach(async () => {
     vi.clearAllMocks();
     const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
@@ -77,8 +83,7 @@ describe('discoverLatestExecutionOutputs', () => {
   });
 
   it('falls back to an on-disk run-dir scan when the stream-tab snapshot is empty', async () => {
-    const runDir = await mkdtemp(path.join(os.tmpdir(), 'texra-latexdiff-'));
-    tempDirs.push(runDir);
+    const runDir = await makeTempDir();
     for (const round of ['r0', 'r1']) {
       await mkdir(path.join(runDir, round), { recursive: true });
       await writeFile(
@@ -106,8 +111,7 @@ describe('discoverLatestExecutionOutputs', () => {
   });
 
   it('returns null when neither the snapshot nor the run directory has outputs', async () => {
-    const emptyDir = await mkdtemp(path.join(os.tmpdir(), 'texra-latexdiff-'));
-    tempDirs.push(emptyDir);
+    const emptyDir = await makeTempDir();
 
     mocks.listExecutions.mockResolvedValue([matchingExecution('exec-empty')]);
     mocks.resolveRunDir.mockResolvedValue(emptyDir);
