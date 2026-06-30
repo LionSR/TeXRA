@@ -156,6 +156,22 @@ async function loadDesktopViewStateIpc(nativeTheme: {
   ) as Promise<DesktopViewStateIpcModule>;
 }
 
+// Backing store the onboarding adapter reads and writes; `update` is a spy so
+// tests can assert persisted keys, `values` exposes the raw map for seeding.
+function createMemoryState() {
+  const values = new Map<string, unknown>();
+  const update = vi.fn(async (key: string, value: unknown) => {
+    values.set(key, value);
+  });
+  const state = {
+    get<T>(key: string, defaultValue?: T): T {
+      return (values.has(key) ? values.get(key) : defaultValue) as T;
+    },
+    update,
+  };
+  return { values, update, state };
+}
+
 describe('desktop IPC adapters', () => {
   afterEach(() => {
     vi.doUnmock('electron');
@@ -425,16 +441,7 @@ describe('desktop IPC adapters', () => {
       DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
       createDesktopOnboardingIpc,
     } = await loadDesktopOnboardingIpc();
-    const values = new Map<string, unknown>();
-    const update = vi.fn(async (key: string, value: unknown) => {
-      values.set(key, value);
-    });
-    const state = {
-      get<T>(key: string, defaultValue?: T): T {
-        return (values.has(key) ? values.get(key) : defaultValue) as T;
-      },
-      update,
-    };
+    const { update, state } = createMemoryState();
     const postToRenderer = vi.fn();
     const onboarding = createDesktopOnboardingIpc(
       { postToRenderer },
@@ -509,16 +516,7 @@ describe('desktop IPC adapters', () => {
 
   it('derives State 1 (setup) when hasCredential is true on fresh install', async () => {
     const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const values = new Map<string, unknown>();
-    const update = vi.fn(async (key: string, value: unknown) => {
-      values.set(key, value);
-    });
-    const state = {
-      get<T>(key: string, defaultValue?: T): T {
-        return (values.has(key) ? values.get(key) : defaultValue) as T;
-      },
-      update,
-    };
+    const { state } = createMemoryState();
     const postToRenderer = vi.fn();
     const selectSetupAgent = vi.fn(async () => {});
     const onboarding = createDesktopOnboardingIpc(
@@ -548,17 +546,8 @@ describe('desktop IPC adapters', () => {
 
   it('derives State 2 (done) for backfilled veterans with firstRunDone set', async () => {
     const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const values = new Map<string, unknown>();
+    const { values, state } = createMemoryState();
     values.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
-    const update = vi.fn(async (key: string, value: unknown) => {
-      values.set(key, value);
-    });
-    const state = {
-      get<T>(key: string, defaultValue?: T): T {
-        return (values.has(key) ? values.get(key) : defaultValue) as T;
-      },
-      update,
-    };
     const postToRenderer = vi.fn();
     const onboarding = createDesktopOnboardingIpc(
       { postToRenderer },
@@ -584,16 +573,7 @@ describe('desktop IPC adapters', () => {
 
   it('handles ONBOARDING_SKIP_SETUP by setting firstRunDone and pushing done', async () => {
     const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const values = new Map<string, unknown>();
-    const update = vi.fn(async (key: string, value: unknown) => {
-      values.set(key, value);
-    });
-    const state = {
-      get<T>(key: string, defaultValue?: T): T {
-        return (values.has(key) ? values.get(key) : defaultValue) as T;
-      },
-      update,
-    };
+    const { update, state } = createMemoryState();
     const postToRenderer = vi.fn();
     const onboarding = createDesktopOnboardingIpc(
       { postToRenderer },
@@ -635,16 +615,7 @@ describe('desktop IPC adapters', () => {
 
   it('calls onboarding run-setup / sign-in-chatgpt callbacks', async () => {
     const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const values = new Map<string, unknown>();
-    const update = vi.fn(async (key: string, value: unknown) => {
-      values.set(key, value);
-    });
-    const state = {
-      get<T>(key: string, defaultValue?: T): T {
-        return (values.has(key) ? values.get(key) : defaultValue) as T;
-      },
-      update,
-    };
+    const { state } = createMemoryState();
     const postToRenderer = vi.fn();
     const runSetupCalled = vi.fn(async () => {});
     const signInCalled = vi.fn(async () => {});
@@ -684,16 +655,7 @@ describe('desktop IPC adapters', () => {
 
   it('runs the real kickoff path on ONBOARDING_RUN_SETUP and refreshes after', async () => {
     const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const values = new Map<string, unknown>();
-    const update = vi.fn(async (key: string, value: unknown) => {
-      values.set(key, value);
-    });
-    const state = {
-      get<T>(key: string, defaultValue?: T): T {
-        return (values.has(key) ? values.get(key) : defaultValue) as T;
-      },
-      update,
-    };
+    const { state } = createMemoryState();
     const postToRenderer = vi.fn();
     const callOrder: string[] = [];
     const selectSetupAgent = vi.fn(async () => {
@@ -734,15 +696,7 @@ describe('desktop IPC adapters', () => {
 
   it('opens the getting-started docs on ONBOARDING_OPEN_GETTING_STARTED', async () => {
     const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const values = new Map<string, unknown>();
-    const state = {
-      get<T>(key: string, defaultValue?: T): T {
-        return (values.has(key) ? values.get(key) : defaultValue) as T;
-      },
-      update: vi.fn(async (key: string, value: unknown) => {
-        values.set(key, value);
-      }),
-    };
+    const { state } = createMemoryState();
     const postToRenderer = vi.fn();
     const openGettingStarted = vi.fn(async () => {});
     const onboarding = createDesktopOnboardingIpc(
@@ -768,15 +722,7 @@ describe('desktop IPC adapters', () => {
 
   it('serializes overlapping funnel refreshes to one consistent terminal state', async () => {
     const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const values = new Map<string, unknown>();
-    const state = {
-      get<T>(key: string, defaultValue?: T): T {
-        return (values.has(key) ? values.get(key) : defaultValue) as T;
-      },
-      update: vi.fn(async (key: string, value: unknown) => {
-        values.set(key, value);
-      }),
-    };
+    const { state } = createMemoryState();
     const postToRenderer = vi.fn();
     // A credential probe that resolves on the next macrotask, so two refreshes
     // started back-to-back genuinely overlap in flight. `selectSetupAgent`
@@ -822,15 +768,7 @@ describe('desktop IPC adapters', () => {
 
   it('defers the first funnel derivation until the readyGate resolves', async () => {
     const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const values = new Map<string, unknown>();
-    const state = {
-      get<T>(key: string, defaultValue?: T): T {
-        return (values.has(key) ? values.get(key) : defaultValue) as T;
-      },
-      update: vi.fn(async (key: string, value: unknown) => {
-        values.set(key, value);
-      }),
-    };
+    const { values, state } = createMemoryState();
     const postToRenderer = vi.fn();
     let openGate: () => void = () => {};
     const readyGate = new Promise<void>((resolve) => {

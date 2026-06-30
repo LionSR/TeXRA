@@ -32,17 +32,6 @@ const modelInfo = {
   },
 };
 
-function createMonitor(): UsageMonitor {
-  const { host } = createRecordingHost();
-  const storageKey = 'usage-last-totals' as StorageKey;
-  const streamId = 'stream:usage-last-totals' as StreamTabId;
-  return new UsageMonitor(
-    modelInfo,
-    { logger: noopTrace, runtimeHost: host, storageKey, streamId },
-    { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
-  );
-}
-
 function createMonitorWithEvents() {
   const { host, events } = createRecordingHost();
   const storageKey = 'usage-last-totals' as StorageKey;
@@ -53,6 +42,10 @@ function createMonitorWithEvents() {
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
   return { monitor, events };
+}
+
+function createMonitor(): UsageMonitor {
+  return createMonitorWithEvents().monitor;
 }
 
 describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {

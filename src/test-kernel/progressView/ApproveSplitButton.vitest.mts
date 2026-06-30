@@ -39,9 +39,9 @@ describe('approve-split-button', () => {
     expect(element.shadowRoot?.querySelector('.approve-split')).toBeFalsy();
     expect(element.shadowRoot?.querySelector('wa-dropdown-item')).toBeFalsy();
 
-    const approve = element.shadowRoot?.querySelector(
+    const approve = element.shadowRoot?.querySelector<HTMLElement>(
       'wa-button[data-action="approve"]',
-    ) as HTMLElement | undefined;
+    );
     expect(approve).toBeTruthy();
     approve?.dispatchEvent(new CustomEvent('click', { bubbles: true }));
     expect(events).toEqual(['approve']);
@@ -51,9 +51,9 @@ describe('approve-split-button', () => {
     const element = await mount(true);
 
     expect(element.shadowRoot?.querySelector('.approve-split')).toBeTruthy();
-    const item = element.shadowRoot?.querySelector(
+    const item = element.shadowRoot?.querySelector<HTMLElement>(
       'wa-dropdown-item[value="approve-session"]',
-    ) as HTMLElement | undefined;
+    );
     expect(item).toBeTruthy();
     expect(item?.textContent).toContain('Yolo (this session)');
   });
@@ -62,9 +62,9 @@ describe('approve-split-button', () => {
     const element = await mount(true);
     const events = recordEvents(element);
 
-    const approve = element.shadowRoot?.querySelector(
+    const approve = element.shadowRoot?.querySelector<HTMLElement>(
       'wa-button[data-action="approve"]',
-    ) as HTMLElement | undefined;
+    );
     approve?.dispatchEvent(new CustomEvent('click', { bubbles: true }));
     expect(events).toEqual(['approve']);
   });

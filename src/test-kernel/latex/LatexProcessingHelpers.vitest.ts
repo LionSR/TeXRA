@@ -52,8 +52,8 @@ const logger = {
 
 const tempDirs: string[] = [];
 
-async function makeTempDir(prefix: string): Promise<string> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), prefix));
+async function makeTempDir(): Promise<string> {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-latex-media-'));
   tempDirs.push(tempDir);
   return tempDir;
 }
@@ -122,7 +122,7 @@ describe('LatexMediaManager PDF compilation', () => {
   });
 
   it('filters nullish compile results before adding media files', async () => {
-    const workspaceDir = await makeTempDir('texra-latex-media-');
+    const workspaceDir = await makeTempDir();
     await installPlatform(workspaceDir);
 
     const inputPaths = [

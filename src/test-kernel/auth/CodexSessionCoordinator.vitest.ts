@@ -50,31 +50,43 @@ function tokenResponse(
   };
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function makeCoordinator(
   storage: CodexSessionStorage,
   client: Partial<CodexOAuthClient> = {},
-) {
-  const fullClient: CodexOAuthClient = {
-    exchangeAuthorizationCode: vi.fn(),
-    refreshTokens: vi.fn(),
-    ...client,
-  };
-  const coordinator = new CodexSessionCoordinator({
+): CodexSessionCoordinator {
+  return new CodexSessionCoordinator({
     storage,
-    client: fullClient,
+    client: {
+      exchangeAuthorizationCode: vi.fn(),
+      refreshTokens: vi.fn(),
+      ...client,
+    },
     now: () => NOW,
   });
-  return { coordinator, client: fullClient };
 }
 
 describe('CodexSessionCoordinator', () => {
   it('reports signed-out with no stored session', async () => {
-    const { coordinator } = makeCoordinator(memoryStorage());
+    const coordinator = makeCoordinator(memoryStorage());
     expect(await coordinator.getStatus()).toEqual({ signedIn: false });
   });
 
   it('reports signed-in with email/account from the stored session', async () => {
-    const { coordinator } = makeCoordinator(memoryStorage(session()));
+    const coordinator = makeCoordinator(memoryStorage(session()));
     expect(await coordinator.getStatus()).toEqual({
       signedIn: true,
       email: 'user@example.com',
@@ -87,7 +99,7 @@ describe('CodexSessionCoordinator', () => {
       session({ expiresAtMs: NOW + FIVE_MIN + 60_000 }),
     );
     const refreshTokens = vi.fn();
-    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+    const coordinator = makeCoordinator(storage, { refreshTokens });
     expect(await coordinator.getFreshAccessToken()).toBe('access-0');
     expect(refreshTokens).not.toHaveBeenCalled();
   });
@@ -95,7 +107,7 @@ describe('CodexSessionCoordinator', () => {
   it('refreshes proactively within the 5-minute buffer', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW + 60_000 }));
     const refreshTokens = vi.fn(async () => tokenResponse());
-    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+    const coordinator = makeCoordinator(storage, { refreshTokens });
     expect(await coordinator.getFreshAccessToken()).toBe('access-1');
     expect(refreshTokens).toHaveBeenCalledOnce();
     expect(storage.peek()?.accessToken).toBe('access-1');
@@ -103,12 +115,9 @@ describe('CodexSessionCoordinator', () => {
 
   it('single-flights concurrent refreshes', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
-    let resolve!: (r: CodexTokenResponse) => void;
-    const pending = new Promise<CodexTokenResponse>((r) => {
-      resolve = r;
-    });
+    const { promise: pending, resolve } = deferred<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
-    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+    const coordinator = makeCoordinator(storage, { refreshTokens });
 
     const a = coordinator.getFreshAccessToken();
     const b = coordinator.getFreshAccessToken();
@@ -126,12 +135,9 @@ describe('CodexSessionCoordinator', () => {
 
   it('does not restore a session when sign-out races with refresh', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
-    let resolve!: (r: CodexTokenResponse) => void;
-    const pending = new Promise<CodexTokenResponse>((r) => {
-      resolve = r;
-    });
+    const { promise: pending, resolve } = deferred<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
-    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+    const coordinator = makeCoordinator(storage, { refreshTokens });
 
     const token = coordinator.getFreshAccessToken();
     await new Promise((r) => setTimeout(r, 0));
@@ -174,7 +180,7 @@ describe('CodexSessionCoordinator', () => {
       peek: () => (value ? (JSON.parse(value) as CodexSession) : undefined),
     };
     const refreshTokens = vi.fn(async () => tokenResponse());
-    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+    const coordinator = makeCoordinator(storage, { refreshTokens });
 
     const token = coordinator.getFreshAccessToken();
     await storeStartedPromise;
@@ -191,10 +197,7 @@ describe('CodexSessionCoordinator', () => {
 
   it('does not clear a newer login when a stale refresh is rejected', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
-    let reject!: (error: unknown) => void;
-    const pending = new Promise<CodexTokenResponse>((_, r) => {
-      reject = r;
-    });
+    const { promise: pending, reject } = deferred<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
     const exchangeAuthorizationCode = vi.fn(async () =>
       tokenResponse({
@@ -202,7 +205,7 @@ describe('CodexSessionCoordinator', () => {
         refresh_token: 'refresh-new',
       }),
     );
-    const { coordinator } = makeCoordinator(storage, {
+    const coordinator = makeCoordinator(storage, {
       exchangeAuthorizationCode,
       refreshTokens,
     });
@@ -231,7 +234,7 @@ describe('CodexSessionCoordinator', () => {
     const refreshTokens = vi.fn(async () =>
       tokenResponse({ refresh_token: undefined }),
     );
-    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+    const coordinator = makeCoordinator(storage, { refreshTokens });
     await coordinator.getFreshAccessToken();
     expect(storage.peek()?.refreshToken).toBe('refresh-0');
   });
@@ -241,7 +244,7 @@ describe('CodexSessionCoordinator', () => {
     const refreshTokens = vi.fn(async () => {
       throw new CodexAuthError('revoked', 'fatal', 401);
     });
-    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+    const coordinator = makeCoordinator(storage, { refreshTokens });
 
     await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({
       kind: 'fatal',
@@ -255,7 +258,7 @@ describe('CodexSessionCoordinator', () => {
     const refreshTokens = vi.fn(async () => {
       throw new CodexAuthError('upstream 502', 'transient', 502);
     });
-    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+    const coordinator = makeCoordinator(storage, { refreshTokens });
 
     await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({
       kind: 'transient',
@@ -264,7 +267,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('throws expired when not signed in', async () => {
-    const { coordinator } = makeCoordinator(memoryStorage());
+    const coordinator = makeCoordinator(memoryStorage());
     await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({
       kind: 'expired',
       needsReauth: true,
@@ -272,7 +275,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('builds an authorize request with the required PKCE + Codex params', () => {
-    const { coordinator } = makeCoordinator(memoryStorage());
+    const coordinator = makeCoordinator(memoryStorage());
     const req = coordinator.buildAuthorizeRequest(1455);
     const url = new URL(req.url);
     expect(url.origin + url.pathname).toBe(
@@ -292,7 +295,7 @@ describe('CodexSessionCoordinator', () => {
 
   it('signs out by deleting the stored session', async () => {
     const storage = memoryStorage(session());
-    const { coordinator } = makeCoordinator(storage);
+    const coordinator = makeCoordinator(storage);
     await coordinator.signOut();
     expect(storage.peek()).toBeUndefined();
   });

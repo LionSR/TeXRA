@@ -22,11 +22,13 @@ function normalize(messages: unknown[]): ExportNode[] {
   return normalizeConversationForExport(messages);
 }
 
-function nodesOfKind(
+function nodesOfKind<K extends ExportNode['kind']>(
   nodes: ExportNode[],
-  kind: ExportNode['kind'],
-): ExportNode[] {
-  return nodes.filter((n) => n.kind === kind);
+  kind: K,
+): Extract<ExportNode, { kind: K }>[] {
+  return nodes.filter(
+    (node): node is Extract<ExportNode, { kind: K }> => node.kind === kind,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -70,10 +72,7 @@ describe('OpenAI Responses API', () => {
       name: 'run',
     });
     // Object arguments should be serialised.
-    expect(JSON.parse((calls[0] as { input: string }).input)).toEqual({
-      x: 1,
-      y: 2,
-    });
+    expect(JSON.parse(calls[0].input)).toEqual({ x: 1, y: 2 });
   });
 
   it('handles function_call with missing name (falls back to "unknown")', () => {
@@ -156,8 +155,7 @@ describe('OpenAI Responses API', () => {
     const results = nodesOfKind(nodes, 'tool-result');
     expect(results).toHaveLength(1);
     // Object output should be JSON-stringified.
-    const text = (results[0] as { text: string }).text;
-    expect(() => JSON.parse(text)).not.toThrow();
+    expect(() => JSON.parse(results[0].text)).not.toThrow();
   });
 
   it('correctly resets lastAssistantHadToolUse after function_call_output', () => {

@@ -156,6 +156,15 @@ export function installAttachInternalsFallback(window: TestDomWindow): void {
   });
 }
 
+function defineGetterIfMissing(
+  prototype: object,
+  name: string,
+  get: (this: object) => unknown,
+): void {
+  if (name in prototype) return;
+  Object.defineProperty(prototype, name, { configurable: true, get });
+}
+
 function installElementInternalsPolyfill(window: TestDomWindow): void {
   installAttachInternalsFallback(window);
   const ElementInternalsCtor = window.ElementInternals;
@@ -166,41 +175,12 @@ function installElementInternalsPolyfill(window: TestDomWindow): void {
   const validityByInternals = new WeakMap<object, ValidityState>();
   const prototype = ElementInternalsCtor.prototype;
 
-  if (!('validity' in prototype)) {
-    Object.defineProperty(prototype, 'validity', {
-      configurable: true,
-      get() {
-        return validityByInternals.get(this) ?? DEFAULT_VALIDITY;
-      },
-    });
-  }
-
-  if (!('validationMessage' in prototype)) {
-    Object.defineProperty(prototype, 'validationMessage', {
-      configurable: true,
-      get() {
-        return '';
-      },
-    });
-  }
-
-  if (!('willValidate' in prototype)) {
-    Object.defineProperty(prototype, 'willValidate', {
-      configurable: true,
-      get() {
-        return true;
-      },
-    });
-  }
-
-  if (!('form' in prototype)) {
-    Object.defineProperty(prototype, 'form', {
-      configurable: true,
-      get() {
-        return null;
-      },
-    });
-  }
+  defineGetterIfMissing(prototype, 'validity', function () {
+    return validityByInternals.get(this) ?? DEFAULT_VALIDITY;
+  });
+  defineGetterIfMissing(prototype, 'validationMessage', () => '');
+  defineGetterIfMissing(prototype, 'willValidate', () => true);
+  defineGetterIfMissing(prototype, 'form', () => null);
 
   if (!prototype.setValidity) {
     prototype.setValidity = function setValidity(

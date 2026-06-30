@@ -7,26 +7,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
 
-const mocks = vi.hoisted(() => {
-  return {
-    executeCliConfig: vi.fn(),
-    withExpandedRunInputs: vi.fn(),
-    cliMultiAgentPlanHasGaps: vi.fn(),
-    cliMultiAgentPresetCanLaunchTeam: vi.fn(),
-    formatCliMultiAgentPresetRunWarnings: vi.fn(),
-    formatCliMultiAgentTeamLaunchBlockMessage: vi.fn(),
-    getAgent: vi.fn(),
-    getAgentsByCategory: vi.fn(),
-    getVisibleAgents: vi.fn(),
-    initCliPlatform: vi.fn(),
-    isAuthenticated: vi.fn(),
-    loadAgents: vi.fn(),
-    planCliMultiAgentPresets: vi.fn(),
-    planCliMultiAgentPresetRun: vi.fn(),
-    writeTextStderr: vi.fn(),
-    writeTextStdout: vi.fn(),
-  };
-});
+const mocks = vi.hoisted(() => ({
+  executeCliConfig: vi.fn(),
+  withExpandedRunInputs: vi.fn(),
+  cliMultiAgentPlanHasGaps: vi.fn(),
+  cliMultiAgentPresetCanLaunchTeam: vi.fn(),
+  formatCliMultiAgentPresetRunWarnings: vi.fn(),
+  formatCliMultiAgentTeamLaunchBlockMessage: vi.fn(),
+  getAgent: vi.fn(),
+  getAgentsByCategory: vi.fn(),
+  getVisibleAgents: vi.fn(),
+  initCliPlatform: vi.fn(),
+  isAuthenticated: vi.fn(),
+  loadAgents: vi.fn(),
+  planCliMultiAgentPresets: vi.fn(),
+  planCliMultiAgentPresetRun: vi.fn(),
+  writeTextStderr: vi.fn(),
+  writeTextStdout: vi.fn(),
+}));
 
 vi.mock('@agent/index', () => ({
   getAgent: mocks.getAgent,

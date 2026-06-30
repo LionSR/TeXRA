@@ -9,16 +9,6 @@ const REPO_ROOT = resolve(
   '../../..',
 );
 
-function readGitHubSubscriptionHandlers(): string {
-  return readFileSync(
-    resolve(
-      REPO_ROOT,
-      'packages/extension/src/settingsView/handlers/githubSubscriptionHandlers.ts',
-    ),
-    'utf8',
-  );
-}
-
 function importSources(source: string): string[] {
   return [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(
     (match) => match[1] ?? '',
@@ -27,7 +17,14 @@ function importSources(source: string): string[] {
 
 describe('GitHubSubscriptionHandlers layering', () => {
   it('uses the progress navigation facade instead of progress view state', () => {
-    const imports = importSources(readGitHubSubscriptionHandlers());
+    const source = readFileSync(
+      resolve(
+        REPO_ROOT,
+        'packages/extension/src/settingsView/handlers/githubSubscriptionHandlers.ts',
+      ),
+      'utf8',
+    );
+    const imports = importSources(source);
 
     expect(imports).not.toContain('@progressView/ProgressViewProvider');
     expect(imports).not.toContain(
