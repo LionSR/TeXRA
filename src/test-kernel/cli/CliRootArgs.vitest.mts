@@ -1479,6 +1479,73 @@ describe('runCli usage output stream routing', () => {
     }
   });
 
+  it('honors structured output for the version command', async () => {
+    const jsonResult = await runCli(['version', '--output-format', 'json']);
+    expect(jsonResult.exitCode).toBe(0);
+    expect(JSON.parse(stdout)).toMatchObject({
+      version: expect.stringMatching(/^\d+\.\d+\.\d+/),
+    });
+    expect(stderr).toBe('');
+
+    stdout = '';
+    stderr = '';
+
+    const ndjsonResult = await runCli([
+      '--version',
+      '--output-format',
+      'ndjson',
+    ]);
+    expect(ndjsonResult.exitCode).toBe(0);
+    expect(JSON.parse(stdout.trim())).toMatchObject({
+      kind: 'version',
+      version: expect.stringMatching(/^\d+\.\d+\.\d+/),
+      ts: expect.any(String),
+    });
+    expect(stderr).toBe('');
+  });
+
+  it('prints version output without resolving workspace context', async () => {
+    const result = await runCli([
+      '--cwd',
+      '/definitely/missing/texra-version-test',
+      '--version',
+      '--output-format',
+      'json',
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(stdout)).toMatchObject({
+      version: expect.stringMatching(/^\d+\.\d+\.\d+/),
+    });
+    expect(stderr).toBe('');
+  });
+
+  it('honors TEXRA_OUTPUT_FORMAT for version output without workspace context', async () => {
+    const previousOutputFormat = process.env.TEXRA_OUTPUT_FORMAT;
+    process.env.TEXRA_OUTPUT_FORMAT = 'ndjson';
+    try {
+      const result = await runCli([
+        '--cwd',
+        '/definitely/missing/texra-version-test',
+        '--version',
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(stdout.trim())).toMatchObject({
+        kind: 'version',
+        version: expect.stringMatching(/^\d+\.\d+\.\d+/),
+        ts: expect.any(String),
+      });
+      expect(stderr).toBe('');
+    } finally {
+      if (previousOutputFormat === undefined) {
+        delete process.env.TEXRA_OUTPUT_FORMAT;
+      } else {
+        process.env.TEXRA_OUTPUT_FORMAT = previousOutputFormat;
+      }
+    }
+  });
+
   it('shows EXAMPLES and a docs link for bare `help`', async () => {
     const result = await runCli(['help']);
     expect(result.exitCode).toBe(0);
