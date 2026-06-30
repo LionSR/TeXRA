@@ -138,6 +138,19 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.disabled).toBe(false);
   });
 
+  it('does not treat non-API providers as personal API-key access', async () => {
+    const access = createModelOptionsAccess({
+      useIncludedAccess: false,
+      relayQuotaExceeded: false,
+      quotaAutoSwitched: false,
+    });
+
+    const [model] = await computeModelOptionsData(['copilot4o'], access);
+
+    expect(model.availability).toBe('missing-key');
+    expect(model.disabled).toBe(true);
+  });
+
   it('does not disable API-key access when ChatGPT subscription is preferred but signed out', async () => {
     const { initPlatform } = await import('@platform/platform');
     initPlatform(
