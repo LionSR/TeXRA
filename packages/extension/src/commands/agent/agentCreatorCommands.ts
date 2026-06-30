@@ -83,15 +83,12 @@ async function pickToolGroups(
   const initiallySelected = items.filter((item) => item.picked);
   qp.selectedItems = initiallySelected;
   if ('prompt' in qp) {
-    (
-      qp as vscode.QuickPick<vscode.QuickPickItem> & { prompt: string }
-    ).prompt =
+    (qp as vscode.QuickPick<vscode.QuickPickItem> & { prompt: string }).prompt =
       'Space / click to toggle. Pre-selected groups match your description.';
   }
 
   let allSelected =
-    initiallySelected.length > 0 &&
-    initiallySelected.length === items.length;
+    initiallySelected.length > 0 && initiallySelected.length === items.length;
   const selectAllButton: vscode.QuickInputButton = {
     iconPath: new vscode.ThemeIcon('check-all'),
     tooltip: 'Select all / clear',
@@ -109,8 +106,7 @@ async function pickToolGroups(
   };
   refreshSelectAllButton();
   qp.onDidChangeSelection((selected) => {
-    allSelected =
-      selected.length > 0 && selected.length === qp.items.length;
+    allSelected = selected.length > 0 && selected.length === qp.items.length;
     refreshSelectAllButton();
   });
   qp.onDidTriggerButton((button) => {
