@@ -261,6 +261,72 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     ]);
   });
 
+  it('counts typed media content instead of only text labels', async () => {
+    const handler = createHandler();
+    const countCalls: unknown[] = [];
+    const total = await handler.estimateTokenCount(
+      [
+        {
+          type: 'user_input',
+          content: [
+            { type: 'text', text: 'caption' },
+            {
+              type: 'image',
+              data: Buffer.from('image').toString('base64'),
+              mime_type: 'image/png',
+              resolution: 'high',
+            },
+            {
+              type: 'document',
+              uri: 'files/paper',
+              mime_type: 'application/pdf',
+            },
+          ],
+        },
+      ],
+      {
+        client: {
+          models: {
+            countTokens: async (params: unknown) => {
+              countCalls.push(params);
+              return { totalTokens: 123 };
+            },
+          },
+        } as never,
+      },
+    );
+
+    expect(total).toBe(123);
+    expect(countCalls).toHaveLength(1);
+    const request = countCalls[0] as {
+      contents: Array<{ parts: unknown[] }>;
+    };
+    const parts = request.contents[0]?.parts as Array<
+      | { text: string }
+      | {
+          inlineData?: { data: string; mimeType: string };
+          fileData?: { fileUri: string; mimeType: string };
+          mediaResolution?: { level: string };
+        }
+    >;
+    expect(parts).toEqual([
+      { text: 'caption' },
+      {
+        inlineData: {
+          data: Buffer.from('image').toString('base64'),
+          mimeType: 'image/png',
+        },
+        mediaResolution: { level: 'MEDIA_RESOLUTION_HIGH' },
+      },
+      {
+        fileData: {
+          fileUri: 'files/paper',
+          mimeType: 'application/pdf',
+        },
+      },
+    ]);
+  });
+
   it('extractResponse walks model_output steps and appends endTag on completion', () => {
     const handler = createHandler();
     const response = {

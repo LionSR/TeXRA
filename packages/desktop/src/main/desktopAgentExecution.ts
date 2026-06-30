@@ -17,6 +17,7 @@ import type { AgentTrace } from '@agent/trace';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
@@ -139,6 +140,10 @@ type PersistedResumeMeta = {
   description?: string;
   parentStreamId?: StreamTabId;
 };
+
+interface DesktopRunExecutionOptions {
+  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+}
 
 export interface DesktopProgressBridgeOptions {
   openPath?: (filePath: string, line?: number) => Promise<void>;
@@ -927,10 +932,15 @@ export class DesktopProgressBridge {
       StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
         runtimeHost: this.runtimeHost,
       });
-      await this.runExecution({
-        config: resume.agentConfig,
-        executionId: resume.executionId,
-      });
+      await this.runExecution(
+        {
+          config: resume.agentConfig,
+          executionId: resume.executionId,
+        },
+        {
+          modelHandlerCompatibilityKey: resume.modelHandlerCompatibilityKey,
+        },
+      );
       return true;
     } catch (error) {
       this.logger.error(`Failed to resume desktop stream ${streamId}`, {
@@ -1115,12 +1125,16 @@ export class DesktopProgressBridge {
     await this.fileActions.openFileCompile(filePath);
   }
 
-  async runExecution(request: ValidatedExecutionRequest): Promise<void> {
+  async runExecution(
+    request: ValidatedExecutionRequest,
+    options: DesktopRunExecutionOptions = {},
+  ): Promise<void> {
     const { runAgent } = await import('@agent/runtime/runAgent');
     await runAgent(request, {
       runtimeHost: this.runtimeHost,
       session: this.session,
       runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
+      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       openWorkflowOutput: async (result) => {
         // Match the extension's auto-open contract: only a completed workflow
         // opens its final output — cancelled runs may carry partial outputs

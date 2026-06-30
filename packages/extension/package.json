@@ -270,8 +270,8 @@
           },
           "texra.model.useGoogleInteractionsAPI": {
             "type": "boolean",
-            "default": false,
-            "description": "Use Google's Interactions API instead of Generate Content when available. Experimental; disabled by default. OpenRouter-proxied Google models always use Generate Content.",
+            "default": true,
+            "description": "Use Google's Interactions API instead of Generate Content when available. Enabled by default. OpenRouter-proxied Google models always use Generate Content.",
             "scope": "resource"
           },
           "texra.model.useGoogleInteractionsServerState": {

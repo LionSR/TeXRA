@@ -13,6 +13,9 @@ import {
   TEXRA_SETTING_KEYS,
   TexraSettingsSchema,
 } from '@extensionSchemas/texraSettings';
+import { PROVIDER_VSCODE_SETTINGS } from '@shared/constants/providers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { getGLMUseChina } from '@utils/config/providerConfig';
 
 interface PackageConfigurationProperty {
   default?: unknown;
@@ -86,6 +89,37 @@ describe('TexraSettingsSchema', () => {
       } else if (property.type === 'null') {
         assert.equal(defaults[key as keyof typeof defaults], null, key);
       }
+    }
+  });
+
+  it('keeps provider dashboard defaults aligned with behavioral defaults', () => {
+    const settingsDefaults = flattenTexraSettings();
+    const globalStateDefaults: Record<string, boolean> = {
+      [GlobalStateKey.GLM_USE_CHINA]: getGLMUseChina(),
+    };
+
+    for (const setting of Object.values(PROVIDER_VSCODE_SETTINGS).flat()) {
+      if (setting.defaultValue === undefined) continue;
+
+      if (Object.hasOwn(settingsDefaults, setting.key)) {
+        assert.equal(
+          settingsDefaults[setting.key as keyof typeof settingsDefaults],
+          setting.defaultValue,
+          setting.key,
+        );
+        continue;
+      }
+
+      if (Object.hasOwn(globalStateDefaults, setting.key)) {
+        assert.equal(
+          globalStateDefaults[setting.key],
+          setting.defaultValue,
+          setting.key,
+        );
+        continue;
+      }
+
+      assert.fail(`No behavioral default assertion for ${setting.key}`);
     }
   });
 

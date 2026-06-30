@@ -5,10 +5,14 @@ import { Buffer } from 'node:buffer';
 import { nanoid } from 'nanoid';
 import {
   GoogleGenAI,
+  PartMediaResolutionLevel,
+  createPartFromBase64,
   createPartFromText,
+  createPartFromUri,
   createUserContent,
   type File,
   type Interactions,
+  type Part,
   type Stream,
 } from '@google/genai';
 
@@ -247,7 +251,7 @@ interface PendingStep {
  * Handler for Google models using the @google/genai Interactions API.
  *
  * Additive sibling to {@link ModelHandlerGoogleGenAI} (chat / generateContent),
- * shipped behind the `texra.model.useGoogleInteractionsAPI` flag (default off).
+ * shipped behind the `texra.model.useGoogleInteractionsAPI` flag (default on).
  *
  * STATEFUL by default (`store: true`): server-side conversation state via
  * `previous_interaction_id` chaining — each round sends only the Steps appended
@@ -586,9 +590,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   ): Promise<number> {
     const client = options?.client ?? (await this.getClient());
 
-    // Token counting stays on the chat `countTokens` endpoint, which takes a
-    // `Content[]`. Flatten the step transcript into countable text Content so
-    // the pre-flight count is independent of the Interactions wire format.
+    // Token counting stays on the chat `countTokens` endpoint. Convert
+    // Interactions content blocks back to countable chat parts so media-heavy
+    // runs are budgeted against their actual attachments, not only labels.
     const countContents = [];
     if (options?.systemPrompt) {
       countContents.push({
@@ -596,10 +600,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         parts: [createPartFromText(options.systemPrompt)],
       });
     }
-    const transcriptText = this.stepsToCountableText(messages);
-    if (transcriptText) {
-      countContents.push(createUserContent(transcriptText));
-    }
+    countContents.push(...this.stepsToCountableContents(messages));
 
     // Include tool definitions in the count (parity with the chat handler) so
     // the preflight doesn't under-count when tools are present. countTokens is
@@ -629,8 +630,83 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return totalTokens;
   }
 
-  /** Flatten the step transcript to plain text for the countTokens estimate. */
-  private stepsToCountableText(steps: Step[]): string {
+  private toCountableMediaResolution(
+    resolution: MediaResolution | undefined,
+  ): PartMediaResolutionLevel | undefined {
+    switch (resolution) {
+      case 'low':
+        return PartMediaResolutionLevel.MEDIA_RESOLUTION_LOW;
+      case 'medium':
+        return PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM;
+      case 'high':
+        return PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH;
+      default:
+        return undefined;
+    }
+  }
+
+  private contentToCountablePart(content: Content): Part | null {
+    if (isTextContent(content)) return createPartFromText(content.text);
+
+    const mimeType =
+      'mime_type' in content
+        ? (content.mime_type ?? DEFAULT_ATTACHMENT_MIME_TYPE)
+        : DEFAULT_ATTACHMENT_MIME_TYPE;
+    const resolution =
+      content.type === 'image'
+        ? this.toCountableMediaResolution(content.resolution)
+        : undefined;
+
+    if ('data' in content && isNonEmptyString(content.data)) {
+      return createPartFromBase64(content.data, mimeType, resolution);
+    }
+    if ('uri' in content && isNonEmptyString(content.uri)) {
+      return createPartFromUri(content.uri, mimeType, resolution);
+    }
+    return null;
+  }
+
+  /** Convert the step transcript to chat Content for the countTokens estimate. */
+  private stepsToCountableContents(steps: Step[]) {
+    const contents = [];
+    for (const step of steps) {
+      if (step.type === 'user_input' || step.type === 'model_output') {
+        const parts = (step.content ?? [])
+          .map((content) => this.contentToCountablePart(content))
+          .filter((part): part is Part => part !== null);
+        if (parts.length > 0) {
+          contents.push({
+            role: step.type === 'model_output' ? 'model' : 'user',
+            parts,
+          });
+        }
+      } else if (step.type === 'function_call') {
+        contents.push(
+          createUserContent(`${step.name}(${JSON.stringify(step.arguments)})`),
+        );
+      } else if (step.type === 'function_result') {
+        const parts = Array.isArray(step.result)
+          ? step.result
+              .map((content) => this.contentToCountablePart(content))
+              .filter((part): part is Part => part !== null)
+          : [createPartFromText(this.functionResultToText(step.result))];
+        if (parts.length > 0) {
+          contents.push(createUserContent(parts));
+        }
+      } else if (step.type === 'thought') {
+        const parts = (step.summary ?? [])
+          .filter(isTextContent)
+          .map((content) => createPartFromText(content.text));
+        if (parts.length > 0) {
+          contents.push(createUserContent(parts));
+        }
+      }
+    }
+    return contents;
+  }
+
+  /** Flatten the step transcript to plain text for client-side summarization. */
+  private stepsToTextTranscript(steps: Step[]): string {
     const chunks: string[] = [];
     for (const step of steps) {
       if (step.type === 'user_input' || step.type === 'model_output') {
@@ -1879,7 +1955,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       messages,
       tokensBefore,
       async (conversationMessages) => {
-        const transcript = this.stepsToCountableText(conversationMessages);
+        const transcript = this.stepsToTextTranscript(conversationMessages);
         const contents = [
           createUserContent(`${COMPACTION_SYSTEM_PROMPT}\n\n${transcript}`),
         ];
