@@ -552,12 +552,10 @@ export class TaskGroupList extends LitElement {
 
   private renderTerminalOutput(): TemplateResult {
     const tailText = processTerminalText(this.terminalBuffer.tail);
-    const committed = html`<pre
-      class="terminal-pre terminal-pre--committed"
-    ></pre>`;
-    const tail = html`<pre class="terminal-pre terminal-pre--tail">
-${tailText}</pre
-    >`;
+    const committedClass = 'terminal-pre terminal-pre--committed';
+    const tailClass = 'terminal-pre terminal-pre--tail';
+    const committed = html`<pre class=${committedClass}></pre>`;
+    const tail = html`<pre class=${tailClass}>${tailText}</pre>`;
     return html`<div class="terminal-container">${[committed, tail]}</div>`;
   }
 
