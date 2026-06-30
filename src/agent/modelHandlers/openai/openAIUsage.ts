@@ -78,6 +78,33 @@ export function computeOpenAIResponsePrice(
   );
 }
 
+/**
+ * Normalizes OpenAI Responses API usage into the unified format. Mirrors
+ * {@link normalizeOpenAIUsage} but reads the Responses token fields
+ * (`input_tokens`/`output_tokens` and their `*_details`) and is fixed to the
+ * `openai-response` usage provider.
+ */
+export function normalizeOpenAIResponseUsage(
+  rawUsage: ResponseUsage,
+  responseTimeMs: number,
+  computePrice: (usage: ResponseUsage) => number,
+): NormalizedUsage {
+  return normalizeUsage(
+    {
+      provider: 'openai-response',
+      computePrice,
+      extract: (usage) => ({
+        inputTokens: usage.input_tokens ?? 0,
+        outputTokens: usage.output_tokens ?? 0,
+        cachedTokens: usage.input_tokens_details?.cached_tokens ?? 0,
+        reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
+      }),
+    },
+    rawUsage,
+    responseTimeMs,
+  );
+}
+
 /** Normalizes OpenAI usage data into a unified format. */
 export function normalizeOpenAIUsage(
   rawUsage: ExtendedCompletionUsage | null,

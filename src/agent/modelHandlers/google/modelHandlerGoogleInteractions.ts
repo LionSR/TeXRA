@@ -1,6 +1,3 @@
-// Standard library imports
-import { Buffer } from 'node:buffer';
-
 // Third-party imports
 import { nanoid } from 'nanoid';
 import {
@@ -10,7 +7,6 @@ import {
   createPartFromText,
   createPartFromUri,
   createUserContent,
-  type File,
   type Interactions,
   type Part,
   type Stream,
@@ -43,13 +39,15 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
 import { isNonEmptyString, isObject } from '@utils/core';
-import { flexibleFS, getShortDisplayPath } from '@utils/files';
+import { getShortDisplayPath } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import {
+  initializeGooglePseudoPrefillOutputAndPrefill,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
+  uploadGoogleMediaEntries,
 } from './googleHandlerShared';
 
 // Local file imports
@@ -65,7 +63,6 @@ import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
 } from '../contextManagementConstants';
-import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagGoogleSdkError } from './googleSdkError';
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
@@ -78,7 +75,6 @@ import { convertToolSchema, toGoogleTools } from '../toolConversion';
 import { GOOGLE_FINISH } from '../types/StopReasonTypes';
 
 // Type imports
-import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
   CreateResponseOptions,
@@ -131,6 +127,19 @@ type InteractionGetParamsNonStreaming =
 // non-streaming response and the SSE `interaction.completed` event expose.
 type GoogleGenAIInteraction = Omit<Interactions.Interaction, 'steps'> & {
   steps?: Step[];
+};
+
+/**
+ * Maps an Interactions media `resolution` literal to the chat
+ * `PartMediaResolutionLevel` used by the countTokens estimate. Unknown values
+ * (including the SDK's open `(string & {})` member) fall through to `undefined`.
+ */
+const COUNTABLE_MEDIA_RESOLUTION_BY_LEVEL: Partial<
+  Record<string, PartMediaResolutionLevel>
+> = {
+  low: PartMediaResolutionLevel.MEDIA_RESOLUTION_LOW,
+  medium: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
+  high: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH,
 };
 
 /**
@@ -633,16 +642,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private toCountableMediaResolution(
     resolution: MediaResolution | undefined,
   ): PartMediaResolutionLevel | undefined {
-    switch (resolution) {
-      case 'low':
-        return PartMediaResolutionLevel.MEDIA_RESOLUTION_LOW;
-      case 'medium':
-        return PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM;
-      case 'high':
-        return PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH;
-      default:
-        return undefined;
-    }
+    return resolution
+      ? COUNTABLE_MEDIA_RESOLUTION_BY_LEVEL[resolution]
+      : undefined;
   }
 
   private contentToCountablePart(content: Content): Part | null {
@@ -861,80 +863,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   /** Build typed Content for media entries (inline ≤20 MB; uploaded uri otherwise). */
   private async uploadMediaEntries(entries: MediaEntry[]): Promise<Content[]> {
-    if (entries.length === 0) return [];
-
-    const client = await this.getClient();
-    const out: Content[] = [];
-    const summaries: MediaFileResult[] = [];
-    const failures: string[] = [];
-    const inlineLimit = this.getInlineUploadLimitBytes();
-
-    for (const entry of entries) {
-      const fileName = entry.file_name ?? 'unnamed-file';
-      const mimeType = entry.media_type ?? DEFAULT_ATTACHMENT_MIME_TYPE;
-      const inlinePayload = isNonEmptyString(entry.data) ? entry.data : null;
-
-      if (inlinePayload) {
-        const payloadBytes = Buffer.byteLength(inlinePayload, 'base64');
-        if (payloadBytes <= inlineLimit) {
-          this.logger.debug(
-            `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
-          );
-          out.push(this.buildMediaContent({ data: inlinePayload }, mimeType));
-          summaries.push({ path: fileName, ok: true });
-          continue;
-        }
-        this.logger.debug(
-          `Media entry ${fileName} is ${payloadBytes} bytes which exceeds inline limit of ${inlineLimit}. Falling back to upload.`,
-        );
-      }
-
-      const canUseSourcePath =
-        entry.source_path &&
-        entry.source_path.length > 0 &&
-        entry.bytes_match_source !== false;
-      if (!canUseSourcePath) {
-        this.logger.error(
-          `Skipping media entry ${fileName} due to missing upload source`,
-        );
-        summaries.push({ path: fileName, ok: false });
-        continue;
-      }
-
-      try {
-        const uploadPath = entry.source_path as string;
-        this.logger.debug(
-          `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
-        );
-        const uploaded: File = await client.files.upload({
-          file: uploadPath,
-          config: { mimeType, displayName: fileName },
-        });
-        const fileUri = uploaded.uri;
-        if (!fileUri) {
-          this.logger.error(
-            `Upload result for ${fileName} is missing a URI. Skipping entry.`,
-          );
-          summaries.push({ path: fileName, ok: false });
-          continue;
-        }
-        const resolvedMimeType =
-          uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
-        out.push(this.buildMediaContent({ uri: fileUri }, resolvedMimeType));
-        summaries.push({ path: fileName, ok: true });
-      } catch (error) {
-        summaries.push({ path: fileName, ok: false });
-        failures.push(`${fileName}: ${getSdkErrorMessage(error)}`);
-      }
-    }
-
-    if (summaries.some((s) => !s.ok)) {
-      this.logger.warn(
-        'Some media files failed to upload via Google GenAI SDK' +
-          (failures.length > 0 ? `: ${failures.join('; ')}` : ''),
-      );
-    }
-    return out;
+    return uploadGoogleMediaEntries<Content>(entries, {
+      getClient: () => this.getClient(),
+      inlineLimit: this.getInlineUploadLimitBytes(),
+      logger: this.logger,
+      buildInline: (data, mimeType) =>
+        this.buildMediaContent({ data }, mimeType),
+      buildUploaded: (uri, mimeType) =>
+        this.buildMediaContent({ uri }, mimeType),
+    });
   }
 
   private textContent(text: string): TextContent {
@@ -1205,68 +1142,37 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, Step[]]> {
-    this.logger.debug(
-      `Initializing output and prefill for ${outputLocation.absolutePath}. Prefill content: "${prefill.slice(0, 100)}..."`,
-    );
-
-    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
-      this.logger.debug(
-        `Output file ${outputLocation.absolutePath} does not exist or is empty.`,
-      );
-      workspaceState.assembly.accumulatedOutput = prefill;
-
-      if (prefill.length === 0) {
-        this.logger.debug(
-          'No prefill provided; skipping pseudo-prefill instruction',
-        );
-        return [false, messages];
-      }
-
-      // Pseudo-prefill: Interactions has no assistant-prefill, so carry the
-      // intended start as a user_input step (mirrors the chat handler).
-      const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
-      const last = messages.at(-1);
-      if (last?.type === 'user_input') {
-        (last.content ??= []).push(this.textContent(pseudoPrefillMsg));
-      } else {
-        messages.push({
-          type: 'user_input',
-          content: [this.textContent(pseudoPrefillMsg)],
-        } satisfies UserInputStep);
-      }
-      this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
-      return [false, messages];
-    }
-
-    this.logger.debug(
-      `Output file ${outputLocation.absolutePath} exists and is non-trivial. Reading content.`,
-    );
-
-    const { fileContent } = await prepareExistingOutputContent(
-      outputLocation,
-      workspaceState,
-      this.logger,
-    );
-
-    messages.push(this.createAssistantMessage(fileContent));
-    this.logger.debug(`Added existing file content as a model_output step.`);
-
-    if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug(
-        'End tag detected in existing file content - skipping generation.',
-      );
-      return [true, messages];
-    }
-
-    this.logger.debug(
-      'Existing file content found without end tag - continuing generation.',
-    );
-    this.addContinueMessageWithoutPrefill(
+    return initializeGooglePseudoPrefillOutputAndPrefill<Step>(
+      {
+        logger: this.logger,
+        // Interactions has no assistant-prefill, so carry the intended start as
+        // a user_input step (mirrors the chat handler).
+        appendPseudoPrefillToUserStep: (msgs, pseudoPrefillMsg) => {
+          const last = msgs.at(-1);
+          if (last?.type === 'user_input') {
+            (last.content ??= []).push(this.textContent(pseudoPrefillMsg));
+          } else {
+            msgs.push({
+              type: 'user_input',
+              content: [this.textContent(pseudoPrefillMsg)],
+            } satisfies UserInputStep);
+          }
+        },
+        pushModelText: (msgs, text) => {
+          msgs.push(this.createAssistantMessage(text));
+          this.logger.debug(
+            `Added existing file content as a model_output step.`,
+          );
+        },
+        addContinue: (msgs, ws, setting) =>
+          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
+      },
+      agentSetting,
       messages,
       workspaceState,
-      agentSetting,
+      outputLocation,
+      prefill,
     );
-    return [false, messages];
   }
 
   // ===========================================================================
