@@ -719,6 +719,21 @@ export const requestPanelStyles: CSSResult = css`
     background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.05));
   }
 
+  .external-inquiry-request__transcript::part(base) {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .external-inquiry-request__transcript::part(header),
+  .external-inquiry-request__transcript::part(content) {
+    padding: 0;
+  }
+
+  .external-inquiry-request__transcript::part(icon) {
+    padding-inline-end: ${sp.medium};
+  }
+
   .external-inquiry-request__transcript-summary {
     display: flex;
     align-items: center;

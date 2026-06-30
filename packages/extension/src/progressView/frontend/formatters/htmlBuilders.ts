@@ -126,6 +126,8 @@ export interface DetailsSummaryOptions {
   iconName: string;
   label: string;
   labelClass?: string;
+  /** Render as Web Awesome summary-slot content instead of a native summary. */
+  summarySlot?: boolean;
   timestamp?: { display: string; tooltip: string };
   copyButton?: {
     title: string;
@@ -145,6 +147,7 @@ export function buildDetailsSummary(
     iconName,
     label,
     labelClass = 'label',
+    summarySlot = false,
     timestamp,
     copyButton,
     extraContent,
@@ -161,7 +164,11 @@ export function buildDetailsSummary(
     ? buildCopyButton(copyButton.title, copyButton)
     : nothing;
   const extraTemplate = extraContent ?? nothing;
-  // Toggle icon uses CSS rotation via details[open] selector - always start with chevron-right
+  if (summarySlot) {
+    // prettier-ignore
+    return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+  }
+  // Native details toggle icon uses CSS rotation via details[open].
   // prettier-ignore
   return html`<summary class="details-summary"><wa-icon library=${TEXRA_ICON_LIBRARY} name="chevron-right" class="toggle-icon" aria-hidden="true"></wa-icon> ${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</summary>`;
 }
