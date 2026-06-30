@@ -1,98 +1,28 @@
 /**
  * Provider-specific streaming, endpoint, and region configuration.
  *
- * Each entry in PROVIDERS bundles a provider's globalSM keys and any
- * region-toggle metadata that drives display name / key URL overrides.
- * Static provider constants (default URLs, descriptions, etc.) live in
- * @shared/constants/providers.
+ * The shared provider registry owns provider state keys and region metadata.
+ * This module only reads/writes those keys through the active platform state.
  */
 
 import { tryGlobalState } from '@platform/platform';
+import {
+  PROVIDER_STATE_ENTRIES,
+  type ProviderStateEntry,
+} from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config';
 import { readPlatformSetting } from './platformSettings';
 
-/**
- * When `key` is set in globalSM (treated as boolean), the provider is in its
- * alternate region. `displayName` overrides the default name; `keyUrlWhenSet`
- * and `keyUrlWhenUnset` override the default key URL passed to
- * `getProviderKeyUrl`. Each is optional — only the dimensions that actually
- * differ across regions are populated.
- */
-type RegionOverride = {
-  key: GlobalStateKey;
-  default: boolean;
-  displayName?: string;
-  keyUrlWhenSet?: string;
-  keyUrlWhenUnset?: string;
-};
+const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
+  PROVIDER_STATE_ENTRIES.map((provider) => [
+    provider.id.toLowerCase(),
+    provider,
+  ]),
+);
 
-type ProviderEntry = {
-  streaming?: GlobalStateKey;
-  endpoint?: GlobalStateKey;
-  region?: RegionOverride;
-};
-
-const PROVIDERS: Record<string, ProviderEntry> = {
-  openai: {
-    streaming: GlobalStateKey.STREAMING_OPENAI,
-    endpoint: GlobalStateKey.ENDPOINT_OPENAI,
-  },
-  anthropic: {
-    streaming: GlobalStateKey.STREAMING_ANTHROPIC,
-    endpoint: GlobalStateKey.ENDPOINT_ANTHROPIC,
-  },
-  openrouter: { streaming: GlobalStateKey.STREAMING_OPENROUTER },
-  google: {
-    streaming: GlobalStateKey.STREAMING_GOOGLE,
-    endpoint: GlobalStateKey.ENDPOINT_GOOGLE,
-  },
-  xai: {
-    streaming: GlobalStateKey.STREAMING_XAI,
-    endpoint: GlobalStateKey.ENDPOINT_XAI,
-  },
-  deepseek: {
-    streaming: GlobalStateKey.STREAMING_DEEPSEEK,
-    endpoint: GlobalStateKey.ENDPOINT_DEEPSEEK,
-  },
-  moonshot: {
-    streaming: GlobalStateKey.STREAMING_MOONSHOT,
-    endpoint: GlobalStateKey.ENDPOINT_MOONSHOT,
-  },
-  dashscope: {
-    streaming: GlobalStateKey.STREAMING_DASHSCOPE,
-    endpoint: GlobalStateKey.ENDPOINT_DASHSCOPE,
-    region: {
-      key: GlobalStateKey.DASHSCOPE_USE_CHINA,
-      default: false,
-      displayName: 'Bailian',
-      keyUrlWhenSet: 'https://bailian.console.aliyun.com/',
-    },
-  },
-  minimax: {
-    streaming: GlobalStateKey.STREAMING_MINIMAX,
-    endpoint: GlobalStateKey.ENDPOINT_MINIMAX,
-    region: {
-      key: GlobalStateKey.MINIMAX_USE_CHINA,
-      default: false,
-      keyUrlWhenSet: 'https://platform.minimaxi.com/',
-    },
-  },
-  glm: {
-    streaming: GlobalStateKey.STREAMING_GLM,
-    endpoint: GlobalStateKey.ENDPOINT_GLM,
-    // China=true is the default since bigmodel.cn is the primary platform;
-    // when toggled off (international), the key URL is z.ai.
-    region: {
-      key: GlobalStateKey.GLM_USE_CHINA,
-      default: true,
-      keyUrlWhenUnset: 'https://z.ai/',
-    },
-  },
-};
-
-function entry(provider: string): ProviderEntry | undefined {
-  return PROVIDERS[provider.toLowerCase()];
+function entry(provider: string): ProviderStateEntry | undefined {
+  return PROVIDERS.get(provider.toLowerCase());
 }
 
 function read<T>(key: GlobalStateKey, defaultValue: T): T {
@@ -118,7 +48,7 @@ export async function setGlobalStreaming(enabled: boolean): Promise<void> {
 
 export function getProviderStreaming(provider: string): boolean {
   const fallback = getGlobalStreaming();
-  const key = entry(provider)?.streaming;
+  const key = entry(provider)?.streamingKey;
   return key ? read(key, fallback) : fallback;
 }
 
@@ -126,7 +56,7 @@ export async function setProviderStreaming(
   provider: string,
   enabled: boolean,
 ): Promise<void> {
-  const key = entry(provider)?.streaming;
+  const key = entry(provider)?.streamingKey;
   if (key) await tryGlobalState()?.update(key, enabled);
 }
 
@@ -135,7 +65,7 @@ export async function setProviderStreaming(
 // ---------------------------------------------------------------------------
 
 export function getProviderEndpoint(provider: string): string {
-  const key = entry(provider)?.endpoint;
+  const key = entry(provider)?.endpointKey;
   return key ? read(key, '') : '';
 }
 
@@ -143,12 +73,12 @@ export async function setProviderEndpoint(
   provider: string,
   endpoint: string,
 ): Promise<void> {
-  const key = entry(provider)?.endpoint;
+  const key = entry(provider)?.endpointKey;
   if (key) await tryGlobalState()?.update(key, endpoint);
 }
 
 export function supportsCustomEndpoint(provider: string): boolean {
-  return entry(provider)?.endpoint !== undefined;
+  return entry(provider)?.endpointKey !== undefined;
 }
 
 // ---------------------------------------------------------------------------
