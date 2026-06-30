@@ -1,29 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ManualCompactionRequestResult } from '@agent/runtime/executionRegistry';
 import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
-
-function compactableFlow() {
-  return {
-    modelHandler: { supportsManualCompaction: true },
-    runtimeHost: undefined,
-    requestImmediateCompaction: vi.fn(),
-  };
-}
 
 describe('requestCliCompaction', () => {
   it('reports a missing active stream without touching follow-up state', () => {
     const appendTranscript = vi.fn();
-    const getFlowContext = vi.fn();
+    const requestManualCompaction = vi.fn(
+      (): ManualCompactionRequestResult => ({ kind: 'no_active_tool_use' }),
+    );
     const notifyFollowUpSent = vi.fn();
 
     requestCliCompaction({
       streamId: undefined,
-      getFlowContext,
+      requestManualCompaction,
       notifyFollowUpSent,
       appendTranscript,
     });
 
-    expect(getFlowContext).not.toHaveBeenCalled();
+    expect(requestManualCompaction).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(notifyFollowUpSent).not.toHaveBeenCalled();
     expect(appendTranscript).toHaveBeenCalledWith(
       'No active tool-use session found for context compaction.',
@@ -33,17 +28,22 @@ describe('requestCliCompaction', () => {
 
   it('reports a stale active stream when no flow context is registered', () => {
     const appendTranscript = vi.fn();
-    const getFlowContext = vi.fn().mockReturnValue(undefined);
+    const requestManualCompaction = vi.fn(
+      (): ManualCompactionRequestResult => ({
+        kind: 'no_active_tool_use',
+        streamId: 'stream-1',
+      }),
+    );
     const notifyFollowUpSent = vi.fn();
 
     requestCliCompaction({
       streamId: 'stream-1',
-      getFlowContext,
+      requestManualCompaction,
       notifyFollowUpSent,
       appendTranscript,
     });
 
-    expect(getFlowContext).toHaveBeenCalledExactlyOnceWith('stream-1');
+    expect(requestManualCompaction).toHaveBeenCalledExactlyOnceWith('stream-1');
     expect(notifyFollowUpSent).not.toHaveBeenCalled();
     expect(appendTranscript).toHaveBeenCalledWith(
       'No active tool-use session found for context compaction.',
@@ -53,21 +53,22 @@ describe('requestCliCompaction', () => {
 
   it('reports models that cannot compact manually', () => {
     const appendTranscript = vi.fn();
-    const flowContext = {
-      modelHandler: { supportsManualCompaction: false },
-      runtimeHost: undefined,
-      requestImmediateCompaction: vi.fn(),
-    };
+    const requestManualCompaction = vi.fn(
+      (): ManualCompactionRequestResult => ({
+        kind: 'unsupported',
+        streamId: 'stream-1',
+      }),
+    );
     const notifyFollowUpSent = vi.fn();
 
     requestCliCompaction({
       streamId: 'stream-1',
-      getFlowContext: vi.fn().mockReturnValue(flowContext),
+      requestManualCompaction,
       notifyFollowUpSent,
       appendTranscript,
     });
 
-    expect(flowContext.requestImmediateCompaction).not.toHaveBeenCalled();
+    expect(requestManualCompaction).toHaveBeenCalledExactlyOnceWith('stream-1');
     expect(notifyFollowUpSent).not.toHaveBeenCalled();
     expect(appendTranscript).toHaveBeenCalledWith(
       'Manual context compaction is not available for the current model.',
@@ -77,17 +78,22 @@ describe('requestCliCompaction', () => {
 
   it('requests compaction and wakes the active tool-use flow', () => {
     const appendTranscript = vi.fn();
-    const flowContext = compactableFlow();
+    const requestManualCompaction = vi.fn(
+      (): ManualCompactionRequestResult => ({
+        kind: 'requested',
+        streamId: 'stream-1',
+      }),
+    );
     const notifyFollowUpSent = vi.fn();
 
     requestCliCompaction({
       streamId: 'stream-1',
-      getFlowContext: vi.fn().mockReturnValue(flowContext),
+      requestManualCompaction,
       notifyFollowUpSent,
       appendTranscript,
     });
 
-    expect(flowContext.requestImmediateCompaction).toHaveBeenCalledOnce();
+    expect(requestManualCompaction).toHaveBeenCalledExactlyOnceWith('stream-1');
     expect(notifyFollowUpSent).toHaveBeenCalledExactlyOnceWith(
       'stream-1',
       undefined,
