@@ -78,7 +78,7 @@ test-kernel, `texra`, `@texra-ai/cli`); `npx vitest run src/test-kernel/agent`
 
 1. **Dead `nodeWorkspace` singleton export removed.**
    (`src/platform/defaults/nodeWorkspace.ts`). `export const nodeWorkspace:
-   WorkspaceProvider = createNodeWorkspace();` had **zero** importers anywhere in
+WorkspaceProvider = createNodeWorkspace();` had **zero** importers anywhere in
    `src`/`packages` — every consumer (desktop `index.ts`, CLI `initPlatform.ts`,
    three test-kernel suites) calls `createNodeWorkspace(() => root)` with an
    explicit root. The bare `cwd`-defaulted singleton was pure surface bloat.
@@ -87,7 +87,7 @@ test-kernel, `texra`, `@texra-ai/cli`); `npx vitest run src/test-kernel/agent`
 
 2. **Single-use `getDebugContext` two-layer factory inlined.**
    (`src/agent/core/flows/CommonCycleTypes.ts`). `getDebugContext(services,
-   params)` was a pure field-projection called from exactly one place
+params)` was a pure field-projection called from exactly one place
    (`saveCycleDebug`) — the repo's explicit "two-layer factory called once"
    anti-pattern. Inlined the `{ logger, executionId, modelName, isRemote }`
    literal into the `maybeSaveDebugObject({ context: {…} })` call and dropped the
@@ -153,16 +153,16 @@ deletion).
 The uninformed passes re-surfaced these; the standing rulings hold at HEAD. See
 the canonical doc's "Rejected findings" table and the delta-2026-06-24 citations.
 
-| Re-surfaced candidate                                                       | Ruling                                                                                                                       |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                   | **Trap (7th refutation)** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing; removal breaks `tsc`. |
-| Collapse OpenAI-compatible subclasses to a config/data table                | **Trap** — DeepSeek/Kimi/MiniMax/GLM each carry ~12 real per-provider override points (reasoning channels, temperature policy, token-count API); not URL/id shims. |
-| Inline the `createResponse → withCreateResponseGuard → sdkErrorTagger` chain | **Keep** — each layer is a real override seam used by `modelHandlerOpenAIResponse` / `modelHandlerGoogleInteractions`.        |
-| Collapse `runAgent` / `executeAgent` (`runAgentStream`) dual entry          | **Trap** — the Step-6 deliberate "make the surface say which entry is which" naming; the facade merge hits a real type wall (`registerExecution` needs parsed `AgentConfig`; callers hold `AgentConfigPayload`; 6-arg lineage register). |
-| Add a `src/agent/runtime/index.ts` public barrel                            | **Trap** — Step 4 rejected standalone runtime/toolUse barrels as "pure churn" without a lint gate; `@texra/core` **is** the curated barrel. |
-| Split `assembleAgentLaunchContext` / `buildAgentLaunchContext`              | **Keep** — a genuine commit-point + saga-compensation high/low split, not a forwarder (verified first-hand in the standing audit). |
-| Inline the cycle-wrapper nodes / `createXCycleFlow` factories               | **Keep** — this _is_ the mandated `Node.exec → createFlow → flow.run` shape.                                                 |
-| `@logger` not routed through `platform()`                                   | **Intentional, documented** — logging is its own host-injected subsystem.                                                    |
+| Re-surfaced candidate                                                        | Ruling                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                    | **Trap (7th refutation)** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing; removal breaks `tsc`.                                                                                   |
+| Collapse OpenAI-compatible subclasses to a config/data table                 | **Trap** — DeepSeek/Kimi/MiniMax/GLM each carry ~12 real per-provider override points (reasoning channels, temperature policy, token-count API); not URL/id shims.                                                                       |
+| Inline the `createResponse → withCreateResponseGuard → sdkErrorTagger` chain | **Keep** — each layer is a real override seam used by `modelHandlerOpenAIResponse` / `modelHandlerGoogleInteractions`.                                                                                                                   |
+| Collapse `runAgent` / `executeAgent` (`runAgentStream`) dual entry           | **Trap** — the Step-6 deliberate "make the surface say which entry is which" naming; the facade merge hits a real type wall (`registerExecution` needs parsed `AgentConfig`; callers hold `AgentConfigPayload`; 6-arg lineage register). |
+| Add a `src/agent/runtime/index.ts` public barrel                             | **Trap** — Step 4 rejected standalone runtime/toolUse barrels as "pure churn" without a lint gate; `@texra/core` **is** the curated barrel.                                                                                              |
+| Split `assembleAgentLaunchContext` / `buildAgentLaunchContext`               | **Keep** — a genuine commit-point + saga-compensation high/low split, not a forwarder (verified first-hand in the standing audit).                                                                                                       |
+| Inline the cycle-wrapper nodes / `createXCycleFlow` factories                | **Keep** — this _is_ the mandated `Node.exec → createFlow → flow.run` shape.                                                                                                                                                             |
+| `@logger` not routed through `platform()`                                    | **Intentional, documented** — logging is its own host-injected subsystem.                                                                                                                                                                |
 
 ## Subagent split points — re-confirmed and sharpened
 
@@ -222,5 +222,3 @@ delegation). Do not re-open the adjudicated traps.
 - Grep-confirmed the 2026-06-26 backlog landings in-tree: `interface RetryState`
   (absent), the four trimmed port members (absent from `IModelHandler`, present
   `protected` on the base), and the three tightened base-method visibilities.
-</content>
-</invoke>
