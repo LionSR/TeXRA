@@ -8,7 +8,6 @@ import {
 } from '@commands/files';
 import {
   registerLatexdiffCommands,
-  registerLatexCommands,
   registerImageCommands,
   registerFigureCommands,
   registerLinterCommands,
@@ -40,7 +39,6 @@ import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
 } from '@commands/extensionCommandSurface';
-import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerAgentReviewCommands } from '@commands/review/agentReviewCommands';
 // Local file imports
@@ -61,12 +59,10 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerCleanCommands(context);
   registerMergeCommands(context);
   registerExecuteCommand(context);
-  registerLatexCommands(context);
   registerImageCommands(context);
   registerFigureCommands(context);
   registerXmlCommands(context);
   registerYamlCommands(context);
-  registerApiKeyCommands(context);
   registerAuthCommands(context);
   registerStateRestoreCommand(context);
   registerTextEditorCommands(context);

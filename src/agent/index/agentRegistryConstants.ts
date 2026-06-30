@@ -2,10 +2,8 @@
 
 import type { AgentSource } from '@shared/schemas/agent';
 export {
-  BUNDLED_ORCHESTRATOR_AGENT_NAMES,
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
   PREFERRED_TOOL_USE_AGENTS,
-  REMOTE_ORCHESTRATOR_AGENT_NAMES,
 } from '@shared/constants/agents';
 
 /** Source priority for lookups (higher priority first). */

@@ -44,17 +44,6 @@ async function runGuardedLatexCommand(
   }
 }
 
-/**
- * All LaTeX entry-point commands (`indentTeX`, `indentCurrentTeX`,
- * `getTeXCount`, `applyReplacements`, `fixCompilation`) are now
- * registered through the shared command registry in
- * `extensionCommandSurface.ts` (#3771, #3775). This stub is kept for
- * the existing `registerLatexCommands(context)` call site.
- */
-export function registerLatexCommands(_context: vscode.ExtensionContext): void {
-  /* registration handled by extensionCommandSurface */
-}
-
 export async function handleIndentTeX(): Promise<void> {
   try {
     const notification = getIndentTeXNotification(

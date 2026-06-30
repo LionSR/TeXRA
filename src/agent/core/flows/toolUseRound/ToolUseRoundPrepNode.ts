@@ -5,6 +5,7 @@ import {
   resetCycleState,
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
+import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
@@ -13,7 +14,7 @@ import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';
-import type { CycleParams, ToolUseRoundServices } from '../CycleServices';
+import type { ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
 
 /** Prep result for ToolUseRoundPrepNode - drained queued follow-up plus interrupt flag. */
@@ -38,7 +39,7 @@ interface ToolUseRoundPrepResult {
  */
 export class ToolUseRoundPrepNode<C> extends BaseNode<
   ToolUseRoundShared,
-  CycleParams,
+  FlowParams,
   ToolUseRoundServices<C>
 > {
   async prep(_shared: ToolUseRoundShared): Promise<ToolUseRoundPrepResult> {

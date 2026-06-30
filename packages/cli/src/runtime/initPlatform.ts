@@ -2,14 +2,14 @@
 import * as nodePath from 'node:path';
 
 // Local imports - platform
-import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import {
+  initNodeAgentRuntime,
+  initNodePlatform,
+} from '@platform/defaults/nodeHost';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
-import { initPlatform, tryPlatform } from '@platform/platform';
+import { platform, tryPlatform } from '@platform/platform';
 
 // Local imports - telemetry
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -20,7 +20,6 @@ import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
-import { initializeGoalPrompts } from '@agent/goal';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 
@@ -41,9 +40,6 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 // Local imports - shared state
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-// Local imports - tool integrations
-import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 // Local imports - config
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -193,22 +189,16 @@ export async function initCliPlatform(
         );
       },
     });
-    const config = new JsonConfigProvider({
-      workspace: configStore,
-      global: globalConfigStore,
-    });
-    initPlatform({
-      config,
+    initNodePlatform({
+      configStores: { workspace: configStore, global: globalConfigStore },
       globalState: stateStores.globalState,
       workspaceState: stateStores.workspaceState,
-      fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => cliWorkspaceCwd),
       storage: stateStores.storage,
       secrets: getCliSecrets(context.storageRoot),
       lifecycle,
       agentResume: { tryResumeStream: async () => false },
+      getWorkspacePath: () => cliWorkspaceCwd,
       toolAvailability: {
-        ...NO_TOOL_AVAILABILITY_HOST,
         isTexraCliEntrypoint: () =>
           isTexraCliEntrypointPath(readCliEntrypointPath()),
       },
@@ -216,13 +206,15 @@ export async function initCliPlatform(
     if (context.installSignalHandlers !== false) {
       installCliShutdownSignalHandlers(lifecycle);
     }
-    // Direct LSP adapter for Lean tools. Errors are surfaced via the Tools
-    // dashboard if `lake` isn't on PATH.
-    registerDirectLeanLanguageServices(lifecycle);
+    // Register the shared Node-host agent runtime: memory + goal tool
+    // injections, the direct Lean language services (errors surface via the
+    // Tools dashboard if `lake` isn't on PATH), and the packaged Goal prompt
+    // path.
+    initNodeAgentRuntime(lifecycle, context.resourcesPath);
 
     // Attribute agent-authored commits to the TeXRA identity by default;
     // configurable via `.texra/config.json` `texra.git.markCommits`.
-    applyCliGitAuthorConfig(config);
+    applyCliGitAuthorConfig(platform().config);
 
     // Route CLI model traffic to the same Supabase usage log the extension
     // writes to, tagged with editorType 'cli' and the CLI version so relay
@@ -272,9 +264,6 @@ export async function initCliPlatform(
   }
   await getServerSideKeyService().setUseIncludedModelAccess(authed);
   await setCliHelperModel(context.helperModel);
-  initializeGoalPrompts(
-    nodePath.join(context.resourcesPath, 'goal', 'goal.yaml'),
-  );
 
   if (bootstrappedResourcesPath !== context.resourcesPath) {
     const globalState = tryPlatform()?.globalState;

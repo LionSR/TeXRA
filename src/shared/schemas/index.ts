@@ -54,9 +54,10 @@ export * from './progressView';
 // Layer 6: Other view message schemas
 export * as commonViewMessages from './commonViewMessages';
 export { ThemeSchema, type Theme } from './commonViewMessages';
-export * from './memoryViewMessages';
-export * from './historyViewMessages';
-export * from './profileViewMessages';
+// Memory/History/Profile view-message schemas have a single public home in
+// settingsViewMessages (the canonical settings entry point), which re-exports
+// the symbols consumers need. They are not re-exported directly here, so each
+// family is published through exactly one barrel path.
 export * from './settingsViewMessages';
 
 // Layer 7: Composite schemas (depend on multiple layers)

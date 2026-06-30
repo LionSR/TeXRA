@@ -55,9 +55,6 @@ export type NativeUsagePayload =
  */
 export type ProviderUsage = NativeUsagePayload | null | undefined;
 
-// Re-export the Google usage type consumed by modelHandlerGoogleGenAI.
-export type { GenerateContentResponseUsageMetadata };
-
 /** Base interface for common response usage metrics. Internal only. */
 interface ResponseUsageBase {
   totalInputTokens: number;

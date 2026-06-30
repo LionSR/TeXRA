@@ -30,14 +30,4 @@ export { InstallVscodeExtensionTool } from './InstallVscodeExtensionTool';
 export { ReadConfigTool, UpdateConfigTool } from './ConfigTools';
 export { SendToTerminalTool } from './SendToTerminalTool';
 export { ApplyTeamTool } from './ApplyTeamTool';
-export {
-  setSetupPlatform,
-  type SetupPlatform,
-  type SetupSecretsAdapter,
-  type SetupCommandAdapter,
-  type SetupExtensionAdapter,
-  type SetupAuthAdapter,
-  type SetupConfigAdapter,
-  type SetupTerminalAdapter,
-  type TerminalRunResult,
-} from './platform';
+export { setSetupPlatform } from './platform';
