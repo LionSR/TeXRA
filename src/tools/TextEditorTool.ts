@@ -21,6 +21,7 @@ import {
   writeApprovedContent,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { assertNever } from '@utils/core';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
@@ -152,6 +153,8 @@ export class TextEditorTool extends defineTool({
         }
         logger.info(CHANNEL, `undo_edit: ${displayPath}`);
         return this.undoEdit(filePath, displayPath);
+      default:
+        return assertNever(command, 'Unrecognized TextEditor command');
     }
   }
 
