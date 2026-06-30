@@ -13,7 +13,7 @@ import {
   seedCliRosterFromDefaultTeam,
 } from '../runtime/defaultTeamRoster';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import {
   getCliModelAccessList,
@@ -24,10 +24,13 @@ import {
   configFileExists,
   ensureTexraGitignored,
   writeInitConfig,
+  type GitignoreOutcome,
   type InitAnswers,
+  type InitConfigShape,
 } from '../runtime/initConfig';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
+import { emitCliResult } from './_helpers/output';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
 
@@ -76,31 +79,87 @@ export function defaultInitAnswers(
   };
 }
 
-function printSummary(
-  filePath: string,
+interface InitSummary {
+  readonly path: string;
+  readonly agent: string;
+  readonly model: string;
+  readonly approvalPolicy: InitAnswers['approvalPolicy'];
+  readonly outputFormat: InitAnswers['outputFormat'];
+  readonly config: InitConfigShape;
+  readonly gitignore?: GitignoreOutcome;
+  readonly warning?: {
+    readonly model: string;
+    readonly message: string;
+    readonly recovery: string;
+  };
+  readonly next: readonly string[];
+}
+
+function initWarning(
   answers: InitAnswers,
   models: readonly CliModelAccess[],
-): void {
-  const lines = [
-    `Wrote ${filePath}`,
-    `  agent: ${answers.agent}`,
-    `  model: ${answers.model}`,
-    `  approval: ${answers.approvalPolicy}`,
-    `  output: ${answers.outputFormat}`,
-  ];
+): InitSummary['warning'] {
   const chosen = models.find((model) => model.model.value === answers.model);
-  if (chosen && !chosen.available) {
+  if (!chosen || chosen.available) return undefined;
+  return {
+    model: answers.model,
+    message: `"${answers.model}" is not usable in the current access mode.`,
+    recovery:
+      'Run `texra login` for included relay access, set the provider API key, or run `texra models list` to pick another.',
+  };
+}
+
+function initGitignoreText(outcome: GitignoreOutcome | undefined): string[] {
+  if (outcome == null || outcome === 'present') return [];
+  return [
+    `${outcome === 'created' ? 'Created' : 'Updated'} .gitignore (.texra/ ignored).`,
+  ];
+}
+
+function initTextSummary(summary: InitSummary): string {
+  const lines = [
+    ...initGitignoreText(summary.gitignore),
+    `Wrote ${summary.path}`,
+    `  agent: ${summary.agent}`,
+    `  model: ${summary.model}`,
+    `  approval: ${summary.approvalPolicy}`,
+    `  output: ${summary.outputFormat}`,
+  ];
+  if (summary.warning) {
     lines.push(
       '',
-      `Note: "${answers.model}" is not usable in the current access mode.`,
-      'Run `texra login` for included relay access, set the provider API key, or run `texra models list` to pick another.',
+      `Note: ${summary.warning.message}`,
+      summary.warning.recovery,
     );
   }
-  lines.push(
-    '',
-    'Next: run `texra` for the launcher, or `texra chat` to start.',
-  );
-  writeTextStdout(lines.join('\n'));
+  lines.push('', ...summary.next);
+  return lines.join('\n');
+}
+
+function emitInitSummary(
+  context: CliContext,
+  filePath: string,
+  answers: InitAnswers,
+  config: InitConfigShape,
+  models: readonly CliModelAccess[],
+  gitignore: GitignoreOutcome | undefined,
+): void {
+  const summary: InitSummary = {
+    path: filePath,
+    agent: answers.agent,
+    model: answers.model,
+    approvalPolicy: answers.approvalPolicy,
+    outputFormat: answers.outputFormat,
+    config,
+    gitignore,
+    warning: initWarning(answers, models),
+    next: ['Next: run `texra` for the launcher, or `texra chat` to start.'],
+  };
+  emitCliResult(context, {
+    json: summary,
+    ndjson: { kind: 'init-config', init: summary },
+    text: initTextSummary(summary),
+  });
 }
 
 async function runInit(
@@ -156,23 +215,20 @@ async function runInit(
     gitignore = opts.gitignore ?? false;
   }
 
+  const config = buildInitConfig(answers);
   try {
-    await writeInitConfig(filePath, buildInitConfig(answers));
+    await writeInitConfig(filePath, config);
   } catch (error: unknown) {
     if (seededRoster) await clearCliSeededRoster();
     throw error;
   }
 
+  let gitignoreOutcome: GitignoreOutcome | undefined;
   if (gitignore) {
-    const outcome = await ensureTexraGitignored(context.cwd);
-    if (outcome !== 'present') {
-      writeTextStdout(
-        `${outcome === 'created' ? 'Created' : 'Updated'} .gitignore (.texra/ ignored).`,
-      );
-    }
+    gitignoreOutcome = await ensureTexraGitignored(context.cwd);
   }
 
-  printSummary(filePath, answers, models);
+  emitInitSummary(context, filePath, answers, config, models, gitignoreOutcome);
   return CliExitCode.Success;
 }
 
