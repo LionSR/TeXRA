@@ -20,6 +20,18 @@ import type { ResponseUsage } from 'openai/resources/responses/responses';
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
 export type OpenAIPricingConfig = StandardPricingConfig;
 
+/**
+ * Cached prompt tokens. OpenAI reports them under
+ * `prompt_tokens_details.cached_tokens`; DeepSeek uses `prompt_cache_hit_tokens`.
+ */
+function getCachedTokens(usage: ExtendedCompletionUsage): number {
+  return (
+    usage.prompt_tokens_details?.cached_tokens ??
+    usage.prompt_cache_hit_tokens ??
+    0
+  );
+}
+
 /** Computes cost based on token usage and model pricing. */
 export function computeOpenAIPrice(
   responseUsage: ExtendedCompletionUsage | null,
@@ -27,10 +39,7 @@ export function computeOpenAIPrice(
 ): number {
   if (!responseUsage) return 0;
 
-  const cachedTokens =
-    responseUsage.prompt_tokens_details?.cached_tokens ??
-    responseUsage.prompt_cache_hit_tokens ??
-    0;
+  const cachedTokens = getCachedTokens(responseUsage);
   const promptTokens =
     responseUsage.prompt_tokens ??
     cachedTokens + (responseUsage.prompt_cache_miss_tokens ?? 0);
@@ -81,11 +90,7 @@ export function normalizeOpenAIUsage(
       provider,
       computePrice: (usage) => computeOpenAIPrice(usage, config),
       extract: (usage) => {
-        // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek: prompt_cache_hit_tokens
-        const cachedTokens =
-          usage.prompt_tokens_details?.cached_tokens ??
-          usage.prompt_cache_hit_tokens ??
-          0;
+        const cachedTokens = getCachedTokens(usage);
         const cacheMissTokens = usage.prompt_cache_miss_tokens ?? 0;
 
         // OpenAI's prompt_tokens is the TOTAL (includes cached tokens). DeepSeek

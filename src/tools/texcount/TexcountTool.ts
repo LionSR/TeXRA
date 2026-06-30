@@ -25,17 +25,6 @@ const TexcountInputSchema = z.strictObject({
 
 type TexcountInput = z.infer<typeof TexcountInputSchema>;
 
-function toFileArray(files: TexcountInput['files']): string[] {
-  return ensureArray(files);
-}
-
-function formatOutput(output: string, format: TexcountInput['format']): string {
-  if (format === 'stats') {
-    return `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`;
-  }
-  return output;
-}
-
 export class TexcountTool extends defineTool({
   name: 'texcount',
   description:
@@ -43,7 +32,7 @@ export class TexcountTool extends defineTool({
   schema: TexcountInputSchema,
 }) {
   protected async execute(input: TexcountInput): Promise<ToolResult> {
-    const files = toFileArray(input.files)
+    const files = ensureArray(input.files)
       .map((file) => file.trim())
       .filter((file) => file.length > 0);
     if (files.length === 0) {
@@ -62,11 +51,12 @@ export class TexcountTool extends defineTool({
       };
     }
 
-    const summary = `Analyzed: ${formatResultCount(files.length, 'file')}`;
-
     return {
-      summary,
-      output: formatOutput(output, input.format),
+      summary: `Analyzed: ${formatResultCount(files.length, 'file')}`,
+      output:
+        input.format === 'stats'
+          ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
+          : output,
     };
   }
 }

@@ -101,13 +101,18 @@ export const GhCheckAnnotationSchema = z.looseObject({
 });
 export type GhCheckAnnotation = z.infer<typeof GhCheckAnnotationSchema>;
 
+/**
+ * Permissive PR/issue `state`: a novel GitHub value must coerce to a known
+ * value, never throw. A throw on the 200 path would strand lastSuccessAt and
+ * risk the pollers' 24h detach. Anything that isn't exactly 'closed' is
+ * treated as open.
+ */
+const OpenClosedStateSchema = z
+  .string()
+  .transform((s): 'open' | 'closed' => (s === 'closed' ? 'closed' : 'open'));
+
 export const GhPullRequestSchema = z.looseObject({
-  // Permissive transform: a novel GitHub state must coerce to a known value,
-  // never throw (a throw on the 200 path would strand lastSuccessAt and risk
-  // the 24h detach). Anything that isn't exactly 'closed' is treated as open.
-  state: z
-    .string()
-    .transform((s): 'open' | 'closed' => (s === 'closed' ? 'closed' : 'open')),
+  state: OpenClosedStateSchema,
   merged: z.boolean(),
   mergeable_state: z.string().nullish(),
   head: z.looseObject({ sha: z.string() }),
@@ -135,10 +140,7 @@ export function isDefiniteMergeableState(
  */
 export const GhIssueSchema = z.looseObject({
   number: z.number(),
-  // Permissive transform (see GhPullRequest): coerce, never throw.
-  state: z
-    .string()
-    .transform((s): 'open' | 'closed' => (s === 'closed' ? 'closed' : 'open')),
+  state: OpenClosedStateSchema,
   /** GitHub: `completed | not_planned | reopened | null`. */
   state_reason: z.string().nullish(),
   title: z.string(),
@@ -156,10 +158,7 @@ export type GhIssue = z.infer<typeof GhIssueSchema>;
  */
 export const GhPullsListEntrySchema = z.looseObject({
   number: z.number(),
-  // Permissive transform (see GhPullRequest): coerce, never throw.
-  state: z
-    .string()
-    .transform((s): 'open' | 'closed' => (s === 'closed' ? 'closed' : 'open')),
+  state: OpenClosedStateSchema,
   title: z.string(),
   html_url: z.string(),
   user: GhUserSchema.nullable(),

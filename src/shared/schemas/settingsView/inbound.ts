@@ -57,6 +57,11 @@ import { ReasoningLevelSchema } from './data';
 
 const CMD = SETTINGS_VIEW_CMD;
 
+/** Inbound message carrying a single boolean `enabled` toggle. */
+function enabledFlag<T extends string>(command: T) {
+  return z.object({ command: z.literal(command), enabled: z.boolean() });
+}
+
 // Provider key inbound messages (settings-only)
 // Keep the outer optional: callers may omit apiKey so the host can prompt.
 const SubmittedApiKeySchema = z
@@ -93,10 +98,7 @@ const SetProviderEndpointMessageSchema = z.object({
   endpoint: z.string(),
 });
 
-const SetGlobalStreamingMessageSchema = z.object({
-  command: z.literal(CMD.SET_GLOBAL_STREAMING),
-  enabled: z.boolean(),
-});
+const SetGlobalStreamingMessageSchema = enabledFlag(CMD.SET_GLOBAL_STREAMING);
 
 const SetProviderVscodeSettingMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_VSCODE_SETTING),
@@ -130,10 +132,9 @@ const SetModelReasoningLevelMessageSchema = z.object({
   level: ReasoningLevelSchema.nullable(),
 });
 
-const SetPreferShortModelNamesMessageSchema = z.object({
-  command: z.literal(CMD.SET_PREFER_SHORT_MODEL_NAMES),
-  enabled: z.boolean(),
-});
+const SetPreferShortModelNamesMessageSchema = enabledFlag(
+  CMD.SET_PREFER_SHORT_MODEL_NAMES,
+);
 
 // Agent selection inbound messages
 const GetAgentSelectionMessageSchema = commandOnly(CMD.GET_AGENT_SELECTION);
@@ -204,21 +205,18 @@ const GetSuperYoloEnabledMessageSchema = commandOnly(
   CMD.GET_SUPER_YOLO_ENABLED,
 );
 
-const SetSuperYoloEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_SUPER_YOLO_ENABLED),
-  enabled: z.boolean(),
-});
+const SetSuperYoloEnabledMessageSchema = enabledFlag(
+  CMD.SET_SUPER_YOLO_ENABLED,
+);
 
 // Allow orchestrator kill inbound message
-const SetAllowOrchestratorKillMessageSchema = z.object({
-  command: z.literal(CMD.SET_ALLOW_ORCHESTRATOR_KILL),
-  enabled: z.boolean(),
-});
+const SetAllowOrchestratorKillMessageSchema = enabledFlag(
+  CMD.SET_ALLOW_ORCHESTRATOR_KILL,
+);
 
-const SetDetachSubagentsOnStopMessageSchema = z.object({
-  command: z.literal(CMD.SET_DETACH_SUBAGENTS_ON_STOP),
-  enabled: z.boolean(),
-});
+const SetDetachSubagentsOnStopMessageSchema = enabledFlag(
+  CMD.SET_DETACH_SUBAGENTS_ON_STOP,
+);
 
 const SetNestedDelegationMaxDepthMessageSchema = z.object({
   command: z.literal(CMD.SET_NESTED_DELEGATION_MAX_DEPTH),
@@ -284,10 +282,7 @@ const GetGitAuthorSettingsMessageSchema = commandOnly(
   CMD.GET_GIT_AUTHOR_SETTINGS,
 );
 
-const SetGitMarkCommitsMessageSchema = z.object({
-  command: z.literal(CMD.SET_GIT_MARK_COMMITS),
-  enabled: z.boolean(),
-});
+const SetGitMarkCommitsMessageSchema = enabledFlag(CMD.SET_GIT_MARK_COMMITS);
 
 const SetGitAuthorNameMessageSchema = z.object({
   command: z.literal(CMD.SET_GIT_AUTHOR_NAME),
@@ -299,10 +294,9 @@ const SetGitAuthorEmailMessageSchema = z.object({
   email: z.string(),
 });
 
-const SetGitWorktreeSupportMessageSchema = z.object({
-  command: z.literal(CMD.SET_GIT_WORKTREE_SUPPORT),
-  enabled: z.boolean(),
-});
+const SetGitWorktreeSupportMessageSchema = enabledFlag(
+  CMD.SET_GIT_WORKTREE_SUPPORT,
+);
 
 // GitHub token messages (for PR subscription tool)
 const GetGitHubTokenStatusMessageSchema = commandOnly(
@@ -321,22 +315,19 @@ const GetChatGptAuthStatusMessageSchema = commandOnly(
 );
 const SignInChatGptMessageSchema = commandOnly(CMD.SIGN_IN_CHATGPT);
 const SignOutChatGptMessageSchema = commandOnly(CMD.SIGN_OUT_CHATGPT);
-const SetChatGptPreferSubscriptionMessageSchema = z.object({
-  command: z.literal(CMD.SET_CHATGPT_PREFER_SUBSCRIPTION),
-  enabled: z.boolean(),
-});
-const SetChatGptSubscriptionToolUseOnlyMessageSchema = z.object({
-  command: z.literal(CMD.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY),
-  enabled: z.boolean(),
-});
+const SetChatGptPreferSubscriptionMessageSchema = enabledFlag(
+  CMD.SET_CHATGPT_PREFER_SUBSCRIPTION,
+);
+const SetChatGptSubscriptionToolUseOnlyMessageSchema = enabledFlag(
+  CMD.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY,
+);
 
 const GetDesktopCrashReportingMessageSchema = commandOnly(
   CMD.GET_DESKTOP_CRASH_REPORTING,
 );
-const SetDesktopCrashReportingEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_DESKTOP_CRASH_REPORTING_ENABLED),
-  enabled: z.boolean(),
-});
+const SetDesktopCrashReportingEnabledMessageSchema = enabledFlag(
+  CMD.SET_DESKTOP_CRASH_REPORTING_ENABLED,
+);
 const SetDesktopCrashReportingDsnMessageSchema = commandOnly(
   CMD.SET_DESKTOP_CRASH_REPORTING_DSN,
 );
@@ -403,17 +394,15 @@ const SetLatexConfigValueMessageSchema = z.object({
 const GetInlineCriticismEnabledMessageSchema = commandOnly(
   CMD.GET_INLINE_CRITICISM_ENABLED,
 );
-const SetInlineCriticismEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_INLINE_CRITICISM_ENABLED),
-  enabled: z.boolean(),
-});
+const SetInlineCriticismEnabledMessageSchema = enabledFlag(
+  CMD.SET_INLINE_CRITICISM_ENABLED,
+);
 
 // Approval settings inbound messages
 const GetApprovalSettingsMessageSchema = commandOnly(CMD.GET_APPROVAL_SETTINGS);
-const SetBashApprovalEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_BASH_APPROVAL_ENABLED),
-  enabled: z.boolean(),
-});
+const SetBashApprovalEnabledMessageSchema = enabledFlag(
+  CMD.SET_BASH_APPROVAL_ENABLED,
+);
 const SetCodexSandboxModeMessageSchema = z.object({
   command: z.literal(CMD.SET_CODEX_SANDBOX_MODE),
   mode: CodexSandboxModeSchema,

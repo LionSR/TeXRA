@@ -49,6 +49,9 @@ import {
   resolveWorkflowOutput,
 } from '../runtime/workflowOutput';
 
+const MULTI_INPUT_OUTPUT_MESSAGE =
+  'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.';
+
 interface WorkflowRunInit {
   readonly agent: string;
   readonly inputFiles: string[];
@@ -81,9 +84,7 @@ export async function runWorkflowAgent(
   // or the runtime host starts.
   const agent = await resolveCliLaunchAgent(init.agent, 'run');
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
-    throw new CliUsageError(
-      'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
-    );
+    throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
   }
 
   return withExpandedRunInputs(
@@ -93,9 +94,7 @@ export async function runWorkflowAgent(
     { readStdinText: readCliStdinText },
     async ({ inputFiles, contextFiles }) => {
       if (init.output && inputFiles.length > 1) {
-        throw new CliUsageError(
-          'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
-        );
+        throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
       }
 
       const model = await resolveCliRunModel(context, init.model, 'run');

@@ -1,9 +1,11 @@
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
+import type {
+  BaseFlowContextInit,
+  RoundFinalizedCallback,
+} from '@agent/core/flows/BaseFlowServices';
 import type { OutputState } from '@agent/output/outputState';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { LatexMediaManager } from '@latex/LatexMediaManager';
 import type { AgentFileLocation, WorkspaceFileLocation } from '@shared/schemas';
 import type { PromptBuilder } from '@utils/prompt';

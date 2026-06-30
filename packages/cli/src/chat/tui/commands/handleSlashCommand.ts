@@ -43,6 +43,17 @@ import {
   suggestSlashCommand,
 } from './slashRegistry';
 
+/** Run an async command body, surfacing any failure as a transcript message. */
+async function runGuardedSlashCommand(
+  action: () => void | Promise<void>,
+): Promise<void> {
+  try {
+    await action();
+  } catch (error: unknown) {
+    appendLocalAssistantTranscript(toErrorMessage(error));
+  }
+}
+
 export async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
@@ -100,25 +111,15 @@ export async function handleTuiSlashCommand(
         openCanonicalSlashForm('api', registered, rest);
         return true;
       }
-      try {
-        await applyCliApiModeSelection(rest, context);
-      } catch (error: unknown) {
-        appendLocalAssistantTranscript(toErrorMessage(error));
-      }
+      await runGuardedSlashCommand(() =>
+        applyCliApiModeSelection(rest, context),
+      );
       return true;
     case 'subscription':
-      try {
-        await applyCliSubscriptionToggle(rest);
-      } catch (error: unknown) {
-        appendLocalAssistantTranscript(toErrorMessage(error));
-      }
+      await runGuardedSlashCommand(() => applyCliSubscriptionToggle(rest));
       return true;
     case 'auth':
-      try {
-        await showCliAuthStatus();
-      } catch (error: unknown) {
-        appendLocalAssistantTranscript(toErrorMessage(error));
-      }
+      await runGuardedSlashCommand(showCliAuthStatus);
       return true;
     case 'login':
       if (!rest) {
@@ -196,8 +197,8 @@ export async function handleTuiSlashCommand(
       await context.resumeExecution(id);
       return true;
     }
-    case 'memory': {
-      try {
+    case 'memory':
+      await runGuardedSlashCommand(async () => {
         if (!rest) {
           openCanonicalSlashForm('memory', registered, rest);
         } else if (rest.toLowerCase() === 'list') {
@@ -205,11 +206,8 @@ export async function handleTuiSlashCommand(
         } else {
           await showCliMemoryPreview(rest);
         }
-      } catch (error: unknown) {
-        appendLocalAssistantTranscript(toErrorMessage(error));
-      }
+      });
       return true;
-    }
     case 'compact':
       requestCliCompaction({
         streamId: cliState.activeStreamId.get(),

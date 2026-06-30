@@ -147,12 +147,6 @@ function requirePath(input: GitHubSubscriptionInput): ParsedPath {
   return parsePath(input.path);
 }
 
-function getMinAnnotationLevel(
-  input: GitHubSubscriptionInput,
-): GitHubCheckAnnotationLevel {
-  return input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
-}
-
 const ANNOTATION_LEVEL_DESCRIPTIONS: Record<
   GitHubCheckAnnotationLevel,
   string
@@ -179,7 +173,8 @@ async function execSubscribe(
   await requireToken();
   const { streamId, runtimeHost } = requireSubscriptionContext();
   const target = requirePath(input);
-  const minAnnotationLevel = getMinAnnotationLevel(input);
+  const minAnnotationLevel =
+    input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
   if (target.kind === 'repo') {
     const created = bindRepoSubscription(streamId, target, runtimeHost);
     const slug = `${target.owner}/${target.repo}`;

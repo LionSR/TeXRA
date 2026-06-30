@@ -197,11 +197,7 @@ export class DesktopProgressFileActions {
     }
 
     const diffFilePath = path.join(path.dirname(baseFile), result.diffFileName);
-    if (this.options.openBuildDisplay) {
-      await this.options.openBuildDisplay(createExternalLocation(diffFilePath));
-      return;
-    }
-    await this.options.openPath?.(diffFilePath);
+    await this.openDiffOutput(diffFilePath);
   }
 
   async findAndOpenLabel(label: string): Promise<boolean> {
@@ -269,15 +265,18 @@ export class DesktopProgressFileActions {
         path.dirname(result.basePath),
         result.diffFileName,
       );
-      if (this.options.openBuildDisplay) {
-        await this.options.openBuildDisplay(
-          createExternalLocation(diffFilePath),
-        );
-      } else {
-        await this.options.openPath?.(diffFilePath);
-      }
+      await this.openDiffOutput(diffFilePath);
     }
 
     return successes.length > 0;
+  }
+
+  /** Open a generated diff file via the LaTeX build display, falling back to the plain opener. */
+  private async openDiffOutput(diffFilePath: string): Promise<void> {
+    if (this.options.openBuildDisplay) {
+      await this.options.openBuildDisplay(createExternalLocation(diffFilePath));
+      return;
+    }
+    await this.options.openPath?.(diffFilePath);
   }
 }

@@ -23,6 +23,7 @@ import {
   TokenUsageStatsSchema,
   UsageRouteSchema,
   emptyUsageStats,
+  isEmptyUsage,
   type TokenUsageStats,
 } from './usage';
 
@@ -286,18 +287,6 @@ export const TokenUsageStatsParsingSchema =
 void (null as unknown as z.infer<
   typeof TokenUsageStatsParsingSchema
 > satisfies TokenUsageStats);
-
-/** Checks if usage stats are all zeros (effectively empty) */
-export function isEmptyUsage(usage: TokenUsageStats): boolean {
-  return (
-    usage.inputTokens === 0 &&
-    usage.outputTokens === 0 &&
-    usage.cost === 0 &&
-    (usage.cacheReadInputTokens ?? 0) === 0 &&
-    (usage.cacheMissInputTokens ?? 0) === 0 &&
-    (usage.cacheCreationInputTokens ?? 0) === 0
-  );
-}
 
 /**
  * Per-run usage map: { runId: TokenUsageStats } → Map<runId, stats>.

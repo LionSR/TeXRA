@@ -278,11 +278,14 @@ function renderCodexTodoContent(
 }
 
 function getCodexTurnStateIcon(state: string): string {
-  return state === 'failed'
-    ? 'error'
-    : state === 'running'
-      ? SPINNER_ICON_NAME
-      : 'check';
+  switch (state) {
+    case 'failed':
+      return 'error';
+    case 'running':
+      return SPINNER_ICON_NAME;
+    default:
+      return 'check';
+  }
 }
 
 function renderCodexTurnStateSection(state: string): RenderableSection {

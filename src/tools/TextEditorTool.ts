@@ -18,6 +18,7 @@ import {
   formatUnifiedApprovalUserDiff,
   requestApprovedEditContent,
   writeApprovedContent,
+  type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -54,6 +55,9 @@ const API_TYPE_TO_NAME = {
   text_editor_20241022: 'str_replace_editor',
 } as const;
 
+type TextEditorApiType = keyof typeof API_TYPE_TO_NAME;
+type TextEditorName = (typeof API_TYPE_TO_NAME)[TextEditorApiType];
+
 export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
@@ -83,21 +87,13 @@ export class TextEditorTool extends defineTool({
   schema: TextEditorInputSchema,
 }) {
   // Tool type and name
-  private apiType:
-    | 'text_editor_20250124'
-    | 'text_editor_20241022'
-    | 'text_editor_20250429';
-  private name: 'str_replace_editor' | 'str_replace_based_edit_tool';
+  private apiType: TextEditorApiType;
+  private name: TextEditorName;
 
   // File history for undo operations
   private fileHistory: Map<string, string[]> = new Map();
 
-  constructor(
-    apiType:
-      | 'text_editor_20250124'
-      | 'text_editor_20241022'
-      | 'text_editor_20250429' = 'text_editor_20250124',
-  ) {
+  constructor(apiType: TextEditorApiType = 'text_editor_20250124') {
     const name = API_TYPE_TO_NAME[apiType];
     super({ name });
     this.apiType = apiType;
@@ -378,6 +374,48 @@ export class TextEditorTool extends defineTool({
     return { fileContent, expandedFileContent };
   }
 
+  /**
+   * Shared write tail for strReplace/insert: request approval for the proposed
+   * content, write it, push the prior content onto the undo stack when it
+   * actually changed, and mark the file as read. Returns the rejection
+   * ToolResult when the user declines, otherwise the approval plus the content
+   * landed on disk.
+   */
+  private async approveAndWriteEdit(
+    filePath: string,
+    displayPath: string,
+    fileContent: string,
+    newFileContent: string,
+    sourceTool: 'text_editor:str_replace' | 'text_editor:insert',
+  ): Promise<
+    | { rejected: ToolResult }
+    | { approval: ToolEditApprovalResult; appliedContent: string }
+  > {
+    const outcome = await requestApprovedEditContent({
+      path: filePath,
+      displayPath,
+      originalContent: fileContent,
+      proposedContent: newFileContent,
+      sourceTool,
+    });
+    if ('rejected' in outcome) {
+      return { rejected: outcome.rejected };
+    }
+
+    const { appliedContent, baseContent } = await writeApprovedContent(
+      filePath,
+      fileContent,
+      outcome.finalContent,
+    );
+    if (appliedContent !== baseContent) {
+      this.addToHistory(filePath, baseContent);
+    }
+
+    recordToolFileRead(filePath);
+
+    return { approval: outcome.approval, appliedContent };
+  }
+
   private async strReplace(
     filePath: string,
     displayPath: string,
@@ -420,28 +458,17 @@ export class TextEditorTool extends defineTool({
         expandedNewStr,
       );
 
-      const outcome = await requestApprovedEditContent({
-        path: filePath,
-        displayPath,
-        originalContent: fileContent,
-        proposedContent: newFileContent,
-        sourceTool: 'text_editor:str_replace',
-      });
-      if ('rejected' in outcome) {
-        return outcome.rejected;
-      }
-      const { approval, finalContent } = outcome;
-
-      const { appliedContent, baseContent } = await writeApprovedContent(
+      const edit = await this.approveAndWriteEdit(
         filePath,
+        displayPath,
         fileContent,
-        finalContent,
+        newFileContent,
+        'text_editor:str_replace',
       );
-      if (appliedContent !== baseContent) {
-        this.addToHistory(filePath, baseContent);
+      if ('rejected' in edit) {
+        return edit.rejected;
       }
-
-      recordToolFileRead(filePath);
+      const { approval, appliedContent } = edit;
 
       const textBeforeReplacement =
         expandedFileContent.split(expandedOldStr)[0];
@@ -506,28 +533,17 @@ export class TextEditorTool extends defineTool({
       ];
       const newFileContent = newFileLines.join('\n');
 
-      const outcome = await requestApprovedEditContent({
-        path: filePath,
-        displayPath,
-        originalContent: fileContent,
-        proposedContent: newFileContent,
-        sourceTool: 'text_editor:insert',
-      });
-      if ('rejected' in outcome) {
-        return outcome.rejected;
-      }
-      const { approval, finalContent } = outcome;
-
-      const { appliedContent, baseContent } = await writeApprovedContent(
+      const edit = await this.approveAndWriteEdit(
         filePath,
+        displayPath,
         fileContent,
-        finalContent,
+        newFileContent,
+        'text_editor:insert',
       );
-      if (appliedContent !== baseContent) {
-        this.addToHistory(filePath, baseContent);
+      if ('rejected' in edit) {
+        return edit.rejected;
       }
-
-      recordToolFileRead(filePath);
+      const { approval, appliedContent } = edit;
 
       const previewLines = appliedContent.split('\n');
       const insertIndex = insertLine - 1;

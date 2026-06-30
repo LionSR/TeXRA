@@ -516,5 +516,3 @@ export function dispatchToolSections(
   }
   return buildDefaultSections(ctx);
 }
-
-export { SPECIALIZED_TOOL_SECTION_RENDERERS };

@@ -247,19 +247,6 @@ export function computeUserPatch(
 // Approval queue and request handling
 // ============================================================================
 
-async function enqueueApproval(
-  request: ToolEditApprovalRequest,
-): Promise<ToolEditApprovalResult> {
-  return toolEditApprovalController.enqueue(async () => {
-    if (!customHandler) {
-      throw new Error(
-        'No approval handler registered. Call initializeNativeToolEditApproval first.',
-      );
-    }
-    return customHandler(request);
-  });
-}
-
 export async function requestToolEditApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
@@ -281,7 +268,14 @@ export async function requestToolEditApproval(
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
-  const result = await enqueueApproval(preparedRequest);
+  const result = await toolEditApprovalController.enqueue(async () => {
+    if (!customHandler) {
+      throw new Error(
+        'No approval handler registered. Call initializeNativeToolEditApproval first.',
+      );
+    }
+    return customHandler(preparedRequest);
+  });
   return finalizeApprovalResult(result, preparedRequest);
 }
 
@@ -298,9 +292,9 @@ function finalizeApprovalResult(
     result.userPatch ??
     computeUserPatch(request.proposedContent, appliedContent);
 
-  // Compute startLine once here (convert 0-based to 1-based)
-  const changedLine = firstChangedLine(request.originalContent, appliedContent);
-  const startLine = changedLine !== null ? changedLine + 1 : 1;
+  // Compute startLine once here (convert 0-based to 1-based; null → line 1).
+  const startLine =
+    (firstChangedLine(request.originalContent, appliedContent) ?? 0) + 1;
 
   return {
     ...result,

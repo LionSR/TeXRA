@@ -10,30 +10,23 @@
 
 // SETTINGS_VIEW_CMD is defined in commands.ts to avoid a circular dependency;
 // re-exported here for consumers that expect it from the schema module.
-import { SETTINGS_VIEW_CMD } from '@shared/ipc';
-export { SETTINGS_VIEW_CMD };
+export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 
 // Re-export the canonical LaTeX config field type so existing consumers that
 // import `LatexConfigField` from this module continue to compile.
 export type { LatexConfigField } from '@shared/constants/latex';
 
-// Import Goal metadata from its shared leaf module so this file (consumed by
+// Re-export Goal metadata from its shared leaf module so this file (consumed by
 // webview frontends) does not pull in GoalTool/GoalStore runtime modules.
-import {
-  GoalSchema,
-  formatGoalTime,
-  isGoalInFlight,
-  goalDurationMs,
-  goalElapsedMs,
-} from './goal';
-export type { Goal, GoalStatus } from './goal';
 export {
   GoalSchema,
   formatGoalTime,
   isGoalInFlight,
   goalDurationMs,
   goalElapsedMs,
-};
+  type Goal,
+  type GoalStatus,
+} from './goal';
 
 // Re-export data schemas from the individual view-message modules so the
 // historical settings surface (single import site) stays intact.

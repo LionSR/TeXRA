@@ -254,7 +254,7 @@ class BatchNode<
 > extends Node<S, P, Svc> {
   async _exec(items: unknown[]): Promise<unknown[]> {
     if (!Array.isArray(items)) return [];
-    const results = [];
+    const results: unknown[] = [];
     for (const item of items) {
       // Check abort signal before each batch item for responsive cancellation
       if (this.signal?.aborted) break;
@@ -273,11 +273,10 @@ class Flow<
     super();
     this.start = start;
   }
-  protected async _orchestrate(shared: S, params?: P): Promise<void> {
+  protected async _orchestrate(shared: S): Promise<void> {
     let current: BaseNode | undefined = this.start.clone();
-    const p = params ?? this._params;
     while (current) {
-      current.setParams(p);
+      current.setParams(this._params);
       // Propagate services to each node (immutable, same instance)
       current.setServices(this._services);
       const action = await current._run(shared);
@@ -290,7 +289,7 @@ class Flow<
     await this._orchestrate(shared);
     return await this.post(shared, pr, undefined);
   }
-  async exec(prepRes: unknown): Promise<unknown> {
+  async exec(_prepRes: unknown): Promise<unknown> {
     throw new Error("Flow can't exec.");
   }
 }

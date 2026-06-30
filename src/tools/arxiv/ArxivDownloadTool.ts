@@ -16,7 +16,9 @@ const NO_ENTRIES_MESSAGE = '(no entries)';
 const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);
 
 function formatDirEntry(name: string, type: number): string {
-  const label = isDirectory(type) ? 'dir' : isFile(type) ? 'file' : 'other';
+  let label = 'other';
+  if (isDirectory(type)) label = 'dir';
+  else if (isFile(type)) label = 'file';
   const suffix = isDirectory(type) ? '/' : '';
   return `${label.padEnd(4)} ${name}${suffix}`;
 }

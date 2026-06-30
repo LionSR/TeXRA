@@ -71,25 +71,20 @@ function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
  * mask the legacy customization with the new defaults.
  */
 export function getIncludedExtensions(category: ExtensionCategory): string[] {
-  const defaults = getDefaultIncludedExtensions(category);
   if (
     category === 'context' &&
     !isConfigExplicitlySet(INCLUDED_EXTENSION_KEYS.context)
   ) {
-    const legacyRef = readUserSetting<string[]>(
-      LEGACY_REFERENCE_EXTENSIONS_KEY,
-    );
-    const legacyAux = readUserSetting<string[]>(
-      LEGACY_AUXILIARY_EXTENSIONS_KEY,
-    );
-    if (
-      (legacyRef && legacyRef.length > 0) ||
-      (legacyAux && legacyAux.length > 0)
-    ) {
-      return unique([...(legacyRef ?? []), ...(legacyAux ?? [])]);
-    }
+    const legacy = unique([
+      ...(readUserSetting<string[]>(LEGACY_REFERENCE_EXTENSIONS_KEY) ?? []),
+      ...(readUserSetting<string[]>(LEGACY_AUXILIARY_EXTENSIONS_KEY) ?? []),
+    ]);
+    if (legacy.length > 0) return legacy;
   }
-  return getConfig<string[]>(INCLUDED_EXTENSION_KEYS[category], defaults);
+  return getConfig<string[]>(
+    INCLUDED_EXTENSION_KEYS[category],
+    getDefaultIncludedExtensions(category),
+  );
 }
 
 function readUserSetting<T>(key: string): T | undefined {

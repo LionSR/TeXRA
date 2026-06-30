@@ -90,29 +90,30 @@ export class GitHubSubscriptionHandlers {
   }
 
   async sendPRSubscriptions(webview: vscode.Webview): Promise<void> {
-    const toEntry = (
-      key: string,
-      streamIds: readonly string[],
-    ): { key: string; owners: { streamId: string; label: string }[] } => ({
-      key,
-      owners: streamIds.map((streamId) => ({
+    const toEntry = (binding: {
+      key: string;
+      streamIds: readonly string[];
+    }): { key: string; owners: { streamId: string; label: string }[] } => ({
+      key: binding.key,
+      owners: binding.streamIds.map((streamId) => ({
         streamId,
         label: getProgressStreamLabel(streamId) ?? streamId,
       })),
     });
-    const prEntries = listPRSubscriptionBindings(
-      prPollingSource.activeKeys(),
-    ).map(({ key, streamIds }) => toEntry(key, streamIds));
-    const repoEntries = listRepoSubscriptionBindings(
-      repoPollingSource.activeKeys(),
-    ).map(({ key, streamIds }) => toEntry(key, streamIds));
-    const issueEntries = listIssueSubscriptionBindings(
-      issuePollingSource.activeKeys(),
-    ).map(({ key, streamIds }) => toEntry(key, streamIds));
 
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: [...prEntries, ...repoEntries, ...issueEntries],
+      subscriptions: [
+        ...listPRSubscriptionBindings(prPollingSource.activeKeys()).map(
+          toEntry,
+        ),
+        ...listRepoSubscriptionBindings(repoPollingSource.activeKeys()).map(
+          toEntry,
+        ),
+        ...listIssueSubscriptionBindings(issuePollingSource.activeKeys()).map(
+          toEntry,
+        ),
+      ],
     });
   }
 

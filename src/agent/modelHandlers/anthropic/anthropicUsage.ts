@@ -36,51 +36,39 @@ interface AnthropicUsageTokenTotals {
 
 /**
  * Gets Anthropic input/output/cache token totals.
- * Uses per-iteration usage when available so compaction requests are fully billed.
+ * Uses per-iteration usage when available so compaction requests are fully billed,
+ * otherwise falls back to the top-level usage as a single source.
  */
 function getAnthropicUsageTokenTotals(
   responseUsage: BetaUsage,
 ): AnthropicUsageTokenTotals {
   const iterations = responseUsage.iterations;
-  if (Array.isArray(iterations) && iterations.length > 0) {
-    let baseInputTokens = 0;
-    let outputTokens = 0;
-    let cacheReadTokens = 0;
-    let cacheCreationTokens = 0;
-    let cacheCreation5mTokens = 0;
-    let cacheCreation1hTokens = 0;
+  const sources =
+    Array.isArray(iterations) && iterations.length > 0
+      ? iterations
+      : [responseUsage];
 
-    for (const iteration of iterations) {
-      baseInputTokens += iteration.input_tokens;
-      outputTokens += iteration.output_tokens;
-      cacheReadTokens += iteration.cache_read_input_tokens;
-      cacheCreationTokens += iteration.cache_creation_input_tokens;
-      cacheCreation5mTokens +=
-        iteration.cache_creation?.ephemeral_5m_input_tokens ?? 0;
-      cacheCreation1hTokens +=
-        iteration.cache_creation?.ephemeral_1h_input_tokens ?? 0;
-    }
+  const totals: AnthropicUsageTokenTotals = {
+    baseInputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    cacheCreation5mTokens: 0,
+    cacheCreation1hTokens: 0,
+  };
 
-    return {
-      baseInputTokens,
-      outputTokens,
-      cacheReadTokens,
-      cacheCreationTokens,
-      cacheCreation5mTokens,
-      cacheCreation1hTokens,
-    };
+  for (const source of sources) {
+    totals.baseInputTokens += source.input_tokens ?? 0;
+    totals.outputTokens += source.output_tokens ?? 0;
+    totals.cacheReadTokens += source.cache_read_input_tokens ?? 0;
+    totals.cacheCreationTokens += source.cache_creation_input_tokens ?? 0;
+    totals.cacheCreation5mTokens +=
+      source.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+    totals.cacheCreation1hTokens +=
+      source.cache_creation?.ephemeral_1h_input_tokens ?? 0;
   }
 
-  return {
-    baseInputTokens: responseUsage.input_tokens ?? 0,
-    outputTokens: responseUsage.output_tokens ?? 0,
-    cacheReadTokens: responseUsage.cache_read_input_tokens ?? 0,
-    cacheCreationTokens: responseUsage.cache_creation_input_tokens ?? 0,
-    cacheCreation5mTokens:
-      responseUsage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
-    cacheCreation1hTokens:
-      responseUsage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
-  };
+  return totals;
 }
 
 /** Calculates API usage cost based on input/output tokens and cache usage if supported. */

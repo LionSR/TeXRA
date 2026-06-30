@@ -26,9 +26,20 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type { ConfigProvider, ConfigTarget } from '@platform/interfaces/config';
+import type { StateStore } from '@platform/interfaces/state';
 
 export interface ApprovalHandlerPorts extends SettingsStatePorts {
   readonly config: ConfigProvider;
+}
+
+/** Read a workspace-state string (with default) and parse it to its enum. */
+function readParsedSetting<T>(
+  workspaceState: StateStore,
+  key: WorkspaceStateKey,
+  fallback: string,
+  parse: (raw: string) => T,
+): T {
+  return parse(workspaceState.get<string>(key, fallback));
 }
 
 export function buildApprovalSettingsMessage(
@@ -38,41 +49,41 @@ export function buildApprovalSettingsMessage(
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
     bashApprovalEnabled: config.get<boolean>(BASH_APPROVAL_CONFIG_KEY, true),
-    codexSandboxMode: parseCodexSandboxMode(
-      workspaceState.get<string>(
-        WorkspaceStateKey.CODEX_SANDBOX_MODE,
-        CODEX_SANDBOX_MODE_DEFAULT,
-      ),
+    codexSandboxMode: readParsedSetting(
+      workspaceState,
+      WorkspaceStateKey.CODEX_SANDBOX_MODE,
+      CODEX_SANDBOX_MODE_DEFAULT,
+      parseCodexSandboxMode,
     ),
-    codexReasoningEffort: parseCodexReasoningEffort(
-      workspaceState.get<string>(
-        WorkspaceStateKey.CODEX_REASONING_EFFORT,
-        CODEX_REASONING_EFFORT_DEFAULT,
-      ),
+    codexReasoningEffort: readParsedSetting(
+      workspaceState,
+      WorkspaceStateKey.CODEX_REASONING_EFFORT,
+      CODEX_REASONING_EFFORT_DEFAULT,
+      parseCodexReasoningEffort,
     ),
-    codexApprovalPolicy: parseCodexApprovalPolicy(
-      workspaceState.get<string>(
-        WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-        CODEX_APPROVAL_POLICY_DEFAULT,
-      ),
+    codexApprovalPolicy: readParsedSetting(
+      workspaceState,
+      WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+      CODEX_APPROVAL_POLICY_DEFAULT,
+      parseCodexApprovalPolicy,
     ),
-    claudeAgentModel: parseClaudeAgentModel(
-      workspaceState.get<string>(
-        WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-        CLAUDE_AGENT_DEFAULT_MODEL,
-      ),
+    claudeAgentModel: readParsedSetting(
+      workspaceState,
+      WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+      CLAUDE_AGENT_DEFAULT_MODEL,
+      parseClaudeAgentModel,
     ),
-    claudeAgentPermissionMode: parseClaudeAgentPermissionMode(
-      workspaceState.get<string>(
-        WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-        CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-      ),
+    claudeAgentPermissionMode: readParsedSetting(
+      workspaceState,
+      WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+      CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+      parseClaudeAgentPermissionMode,
     ),
-    claudeAgentEffort: parseClaudeAgentEffort(
-      workspaceState.get<string>(
-        WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-        CLAUDE_AGENT_DEFAULT_EFFORT,
-      ),
+    claudeAgentEffort: readParsedSetting(
+      workspaceState,
+      WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+      CLAUDE_AGENT_DEFAULT_EFFORT,
+      parseClaudeAgentEffort,
     ),
   };
 }

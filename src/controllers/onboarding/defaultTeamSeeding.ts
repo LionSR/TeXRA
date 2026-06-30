@@ -82,10 +82,7 @@ export async function seedRosterFromDefaultTeam(
   ) {
     return false;
   }
-  const fallbackTeamId =
-    options.fallbackTeamId === undefined
-      ? DEFAULT_STARTUP_TEAM_ID
-      : options.fallbackTeamId;
+  const { fallbackTeamId = DEFAULT_STARTUP_TEAM_ID } = options;
   const teamId = getDefaultTeamId(globalState) ?? fallbackTeamId;
   if (!teamId) return false;
   const preset =

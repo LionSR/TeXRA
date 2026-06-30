@@ -38,6 +38,14 @@ interface StreamLoadResult {
   summary: StreamLogSummary;
 }
 
+function summaryOf(logInstance: StreamLog): StreamLogSummary {
+  return {
+    firstTimestamp: logInstance.firstTimestamp,
+    lastTimestamp: logInstance.lastTimestamp,
+    hasRunningGroup: logInstance.hasRunningGroup,
+  };
+}
+
 export class StreamLogStore {
   private readonly logs = new Map<StreamTabId, StreamLog>();
   private readonly listeners = new Set<StreamLogListener>();
@@ -295,7 +303,7 @@ export class StreamLogStore {
 
   async delete(streamId: StreamTabId): Promise<void> {
     this.writeTombstones.add(streamId);
-    this.cancelPendingSaveTimer();
+    this.debouncedSave.cancel();
     this.forgetStreamState(streamId);
 
     try {
@@ -501,11 +509,7 @@ export class StreamLogStore {
       existing.lastTimestamp = logInstance.lastTimestamp;
       existing.hasRunningGroup = logInstance.hasRunningGroup;
     } else {
-      this.summaries.set(streamId, {
-        firstTimestamp: logInstance.firstTimestamp,
-        lastTimestamp: logInstance.lastTimestamp,
-        hasRunningGroup: logInstance.hasRunningGroup,
-      });
+      this.summaries.set(streamId, summaryOf(logInstance));
     }
   }
 
@@ -595,7 +599,7 @@ export class StreamLogStore {
       return;
     }
 
-    await this.writeSummaryFromLog(streamId, logInstance).catch(() => {
+    await this.writeSummary(streamId, summaryOf(logInstance)).catch(() => {
       log.warn(LOG_TAG, `Failed to write stream summary: ${streamId}`);
     });
     if (this.shouldSkipWrite(streamId, expectedGeneration)) {
@@ -638,17 +642,6 @@ export class StreamLogStore {
     this.pendingLoads.clear();
   }
 
-  private async writeSummaryFromLog(
-    streamId: StreamTabId,
-    logInstance: StreamLog,
-  ): Promise<void> {
-    await this.writeSummary(streamId, {
-      firstTimestamp: logInstance.firstTimestamp,
-      lastTimestamp: logInstance.lastTimestamp,
-      hasRunningGroup: logInstance.hasRunningGroup,
-    });
-  }
-
   private async writeSummary(
     streamId: StreamTabId,
     summary: StreamLogSummary,
@@ -667,14 +660,10 @@ export class StreamLogStore {
   }
 
   private cancelPendingSave(): void {
-    this.cancelPendingSaveTimer();
+    this.debouncedSave.cancel();
     // `clear()` discards all streams, so there is nothing left for pending
     // save() callers to wait on.
     this.settlePendingSaveAwaiters();
-  }
-
-  private cancelPendingSaveTimer(): void {
-    this.debouncedSave.cancel();
   }
 
   private settlePendingSaveAwaiters(): void {

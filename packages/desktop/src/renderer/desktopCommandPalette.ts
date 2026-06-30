@@ -7,14 +7,13 @@ import {
   type CommandPaletteEntry,
 } from '@shared/wa/commandPalette';
 
-import { filterNotNullish } from '@utils/core';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
   type DesktopCommandMenuEntry,
 } from '../desktopCommandSurface';
-import { getDefaultPlatform, getRendererPlatform } from './rendererPlatform';
+import { getRendererPlatform } from './rendererPlatform';
 
 export interface DesktopCommandPaletteOptions {
   document: Document;
@@ -37,11 +36,15 @@ export function createDesktopCommandPalette({
 }: DesktopCommandPaletteOptions): DesktopCommandPaletteController {
   return createCommandPalette({
     document,
-    entries: () =>
-      getDesktopCommandPaletteEntries({
-        streams: actions.showStream == null ? [] : (getStreams?.() ?? []),
-        platform,
-      }),
+    entries: () => {
+      const streams = actions.showStream == null ? [] : (getStreams?.() ?? []);
+      return [
+        ...getDesktopCommandMenuEntries(undefined, platform).map(
+          toPaletteEntry,
+        ),
+        ...streams.map(toStreamPaletteEntry),
+      ];
+    },
     canOpen,
     onExecute: (id) => dispatchDesktopPaletteCommand(id, actions),
     classes: {
@@ -54,19 +57,6 @@ export function createDesktopCommandPalette({
       empty: 'desktop-command-palette-empty',
     },
   });
-}
-
-function getDesktopCommandPaletteEntries({
-  streams = [],
-  platform = getDefaultPlatform(),
-}: {
-  streams?: readonly StreamTabInfo[];
-  platform?: NodeJS.Platform;
-} = {}): CommandPaletteEntry[] {
-  const desktopEntries = getDesktopCommandMenuEntries(undefined, platform)
-    .map(toPaletteEntry)
-    .filter(filterNotNullish);
-  return [...desktopEntries, ...streams.map(toStreamPaletteEntry)];
 }
 
 function dispatchDesktopPaletteCommand(
@@ -102,21 +92,16 @@ function parseSwitchStreamCommandId(id: string): StreamTabId | undefined {
   return streamId || undefined;
 }
 
-function toPaletteEntry(
-  entry: DesktopCommandMenuEntry | undefined,
-): CommandPaletteEntry | undefined {
-  if (!entry) return undefined;
-  // Match the original meta-column precedence: unavailableReason > accelerator
-  // > category. Disabled entries surface their reason; enabled entries show
-  // the keybinding when present, falling back to the catalog category.
-  const meta = entry.unavailableReason ?? entry.accelerator ?? entry.category;
+function toPaletteEntry(entry: DesktopCommandMenuEntry): CommandPaletteEntry {
+  // Meta-column precedence: unavailableReason > accelerator > category.
+  // Disabled entries surface their reason; enabled entries show the
+  // keybinding when present, falling back to the catalog category.
+  // `category` is always carried separately so the palette filter can match
+  // it even when `meta` holds an accelerator or unavailable reason.
   return {
     id: entry.id,
     label: entry.label,
-    meta,
-    // Always include `category` so the palette filter can match it even when
-    // `meta` is occupied by an accelerator or unavailable-reason — restoring
-    // the original imperative haystack which always carried `category`.
+    meta: entry.unavailableReason ?? entry.accelerator ?? entry.category,
     category: entry.category,
     enabled: entry.enabled,
   };

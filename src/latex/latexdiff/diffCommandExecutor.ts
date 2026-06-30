@@ -76,6 +76,8 @@ interface DiffExecutionOptions {
   cwd?: string;
 }
 
+type CommandExecOptions = { channel: string; timeout: number; cwd?: string };
+
 export class DiffCommandExecutor {
   /**
    * `getTimeoutMs` is read fresh on every diff invocation so user updates to
@@ -190,7 +192,11 @@ export class DiffCommandExecutor {
     // across the --flatten attempt and any retry, while still picking up any
     // updates the user has made between successive diff runs.
     const timeoutMs = this.getTimeoutMs();
-    const execOptions = { channel: this.channel, timeout: timeoutMs, cwd };
+    const execOptions: CommandExecOptions = {
+      channel: this.channel,
+      timeout: timeoutMs,
+      cwd,
+    };
 
     logger.debug(this.channel, `Attempting ${commandType} with --flatten flag`);
     const result = await executeCommand(commandBuilder(true), execOptions);
@@ -213,19 +219,13 @@ export class DiffCommandExecutor {
       );
     }
 
-    return this.retryWithoutFlatten(
-      commandBuilder,
-      commandType,
-      execOptions,
-      timeoutMs,
-    );
+    return this.retryWithoutFlatten(commandBuilder, commandType, execOptions);
   }
 
   private async retryWithoutFlatten(
     commandBuilder: (useFlatten: boolean) => string[],
     commandType: string,
-    execOptions: { channel: string; timeout: number; cwd?: string },
-    timeoutMs: number,
+    execOptions: CommandExecOptions,
   ): Promise<ExecResult> {
     logger.warn(
       this.channel,
@@ -239,7 +239,9 @@ export class DiffCommandExecutor {
     const result = await executeCommand(commandBuilder(false), execOptions);
 
     if (result.timedOut) {
-      throw new Error(ERROR_MESSAGES.TIMEOUT_RETRY(commandType, timeoutMs));
+      throw new Error(
+        ERROR_MESSAGES.TIMEOUT_RETRY(commandType, execOptions.timeout),
+      );
     }
 
     if (!result.success) {

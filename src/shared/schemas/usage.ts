@@ -55,6 +55,11 @@ function hasUsageActivity(usage: TokenUsageStats): boolean {
   );
 }
 
+/** Whether usage stats are all zeros (effectively empty). */
+export function isEmptyUsage(usage: TokenUsageStats): boolean {
+  return !hasUsageActivity(usage);
+}
+
 export function resolveUsageRoute(
   usage: UsageRouteInput | null | undefined,
 ): UsageRoute | undefined {

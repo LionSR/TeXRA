@@ -141,6 +141,17 @@ type StorableSessionInput = {
   };
 };
 
+/** Resolve a session expiry (ms epoch) from native `expires_at`/`expires_in`. */
+function resolveExpiresAt(
+  expiresAtSeconds: number | undefined,
+  expiresInSeconds: number | undefined,
+  defaultExpiryMs: number,
+): number {
+  if (expiresAtSeconds) return expiresAtSeconds * 1000;
+  if (expiresInSeconds) return Date.now() + expiresInSeconds * 1000;
+  return Date.now() + defaultExpiryMs;
+}
+
 /**
  * Convert Supabase's native session-shaped responses to our storage format.
  * Handles the snake_case to camelCase and seconds to milliseconds conversions.
@@ -165,12 +176,11 @@ export function toStorableSupabaseSession(
         nativeSession.user.id,
       ),
     },
-    expiresAt: nativeSession.expires_at
-      ? nativeSession.expires_at * 1000
-      : nativeSession.expires_in
-        ? Date.now() + nativeSession.expires_in * 1000
-        : Date.now() +
-          (options?.defaultExpiryMs ?? DEFAULT_SUPABASE_SESSION_EXPIRY_MS),
+    expiresAt: resolveExpiresAt(
+      nativeSession.expires_at,
+      nativeSession.expires_in,
+      options?.defaultExpiryMs ?? DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+    ),
     ...(options?.useCustomRefresh === undefined
       ? {}
       : { useCustomRefresh: options.useCustomRefresh }),

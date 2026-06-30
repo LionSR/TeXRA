@@ -30,6 +30,7 @@ import {
   type NormalizedToolUse,
   type PlanApprovalPermission,
   type RetryPermission,
+  type StreamStatus,
   type StreamTabId,
   type UserQuestionPermission,
 } from '@shared/schemas';
@@ -930,6 +931,28 @@ async function appendHarnessPlanDecision(
   );
 }
 
+// Queued follow-ups or active (non-idle) todos simulate an in-flight run;
+// idle todos instead park the stream in a waiting state.
+const HARNESS_RUN_ACTIVE =
+  QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS);
+const HARNESS_RUN_IDLE = SHOW_TODOS && SHOW_IDLE_TODOS;
+
+function harnessInitialStreamStatus(
+  current: StreamStatus | undefined,
+): StreamStatus | undefined {
+  if (HARNESS_RUN_ACTIVE) return STREAM_STATUS.RUNNING;
+  if (HARNESS_RUN_IDLE) return STREAM_STATUS.WAITING;
+  return current;
+}
+
+function harnessInitialEntries(): ConversationEntry[] {
+  if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
+  if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
+  if (SHOW_ASSISTANT_TOOL_PREAMBLE) return makeAssistantToolPreambleEntries();
+  if (SHOW_LIVE_TOOL_ONLY) return [];
+  return makeEntries(ENTRY_COUNT);
+}
+
 cliState.sessionMeta.set({
   agent: 'chat',
   model: 'harness-model',
@@ -943,25 +966,9 @@ cliState.sessionMeta.set({
 cliState.activeStreamId.set(STREAM_ID);
 patchStream(STREAM_ID, (slice) => ({
   ...slice,
-  status:
-    QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS)
-      ? STREAM_STATUS.RUNNING
-      : SHOW_TODOS && SHOW_IDLE_TODOS
-        ? STREAM_STATUS.WAITING
-        : slice.status,
-  runStartedAt:
-    QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS)
-      ? Date.now() - 42_000
-      : slice.runStartedAt,
-  entries: SHOW_REJECTED_BASH_TOOL
-    ? makeRejectedBashToolEntries()
-    : SHOW_LONG_TOOL_OUTPUT
-      ? makeLongToolOutputEntries()
-      : SHOW_ASSISTANT_TOOL_PREAMBLE
-        ? makeAssistantToolPreambleEntries()
-        : SHOW_LIVE_TOOL_ONLY
-          ? []
-          : makeEntries(ENTRY_COUNT),
+  status: harnessInitialStreamStatus(slice.status),
+  runStartedAt: HARNESS_RUN_ACTIVE ? Date.now() - 42_000 : slice.runStartedAt,
+  entries: harnessInitialEntries(),
   queuedFollowUps: QUEUED_FOLLOW_UPS.length,
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));

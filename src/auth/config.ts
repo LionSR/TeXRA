@@ -32,14 +32,6 @@ export {
 } from './sharedConfig';
 
 /**
- * Official TeXRA Supabase configuration.
- *
- * These are the production credentials for TeXRA's official Supabase backend.
- * The public key (anon or publishable) is safe to include in client code.
- * Row Level Security (RLS) policies protect data access, not the key.
- */
-
-/**
  * Check if Supabase is configured.
  * Returns false if using placeholder values.
  */
@@ -187,7 +179,7 @@ export const AUTH_CALLBACK_TIMEOUT_MS = 2 * 60 * 1000;
 export const TOKEN_REFRESH_THRESHOLD_MS = 30 * 60 * 1000;
 
 /** Default session expiry time (1 hour). */
-export { DEFAULT_SUPABASE_SESSION_EXPIRY_MS as DEFAULT_SESSION_EXPIRY_MS } from './SupabaseSession';
+export { DEFAULT_SUPABASE_SESSION_EXPIRY_MS as DEFAULT_SESSION_EXPIRY_MS } from './supabaseSessionTypes';
 
 /** Storage key for Supabase session in VS Code SecretStorage. */
 export const SUPABASE_SESSION_KEY = 'texra.supabase.session';

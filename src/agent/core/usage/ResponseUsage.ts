@@ -55,15 +55,8 @@ export type NativeUsagePayload =
  */
 export type ProviderUsage = NativeUsagePayload | null | undefined;
 
-// Re-export SDK types for use in model handlers
-export type {
-  CompletionUsage,
-  AnthropicUsage,
-  CacheCreation,
-  ServerToolUsage,
-  GenerateContentResponseUsageMetadata,
-  OpenAIResponseUsage,
-};
+// Re-export the Google usage type consumed by modelHandlerGoogleGenAI.
+export type { GenerateContentResponseUsageMetadata };
 
 /** Base interface for common response usage metrics. Internal only. */
 interface ResponseUsageBase {

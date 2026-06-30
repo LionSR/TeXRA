@@ -2,7 +2,6 @@
 import {
   SortOrder,
   type QueryWorksParams,
-  type Work,
   type WorkSortOptions,
 } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
@@ -78,14 +77,12 @@ export class CrossrefSearchTool extends defineTool({
       return crossrefClient.works(options);
     }, 'Crossref search failed');
 
-    if (!response.ok || !response.content || !response.content.message) {
+    if (!response.ok || !response.content?.message) {
       throw new ToolError('Crossref search did not return any items.');
     }
 
-    const message = response.content.message;
-    const items: Work[] = message.items;
-
-    const results = items.map((work) => ({
+    const { message } = response.content;
+    const results = message.items.map((work) => ({
       title: work.title?.[0] ?? null,
       doi: work.DOI,
       publisher: work.publisher,

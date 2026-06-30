@@ -36,7 +36,6 @@ function buildAgentTooltip(opt: AgentOptionData): string {
 function renderAgentOption(opt: AgentOptionData): TemplateResult {
   const tooltip = buildAgentTooltip(opt);
 
-  const isOrch = opt.isOrchestrator;
   return html`
     <wa-option
       value=${opt.value}
@@ -46,7 +45,7 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
       data-remote=${opt.isRemote ? 'true' : nothing}
       data-custom=${opt.isCustom ? 'true' : nothing}
     >
-      ${isOrch
+      ${opt.isOrchestrator
         ? html`<span class="agent-icon">${waIcon('bullseye')} </span>`
         : nothing}${opt.label}
       ${opt.isRemote
@@ -82,17 +81,24 @@ export function renderAgentOptions(
   `;
 }
 
+function defaultAvailability(opt: ModelOptionData): {
+  value: string;
+  label: string;
+} {
+  if (opt.requiresKey)
+    return { value: 'missing-key', label: 'Missing API key' };
+  if (opt.disabled) return { value: 'not-included', label: 'Not included' };
+  return { value: '', label: '' };
+}
+
 function renderModelOption(opt: ModelOptionData): TemplateResult {
   const decorator = getModelProviderDecorator(opt.provider ?? '');
   const display = decorator.unicode
     ? `${decorator.unicode} ${opt.label}`
     : opt.label;
-  const availability =
-    opt.availability ??
-    (opt.requiresKey ? 'missing-key' : opt.disabled ? 'not-included' : '');
-  const availabilityLabel =
-    opt.availabilityLabel ??
-    (opt.requiresKey ? 'Missing API key' : opt.disabled ? 'Not included' : '');
+  const fallback = defaultAvailability(opt);
+  const availability = opt.availability ?? fallback.value;
+  const availabilityLabel = opt.availabilityLabel ?? fallback.label;
 
   const hints: string[] = [];
   if (decorator.label) hints.push(decorator.label);

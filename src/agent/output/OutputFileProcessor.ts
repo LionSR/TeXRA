@@ -5,7 +5,6 @@ import {
   type FileLocation,
   type OutputFileInfo,
   type RoundOutput,
-  type StorageKey,
 } from '@shared/schemas';
 import { flexibleFS, replaceInputCommands } from '@utils/files';
 import {
@@ -51,35 +50,39 @@ export class OutputFileProcessor {
             currRound,
           );
 
-        if (processedPairs.length > 0) {
-          const locations = processedPairs.map(
-            (p: OutputFileInfo) => p.location,
+        if (processedPairs.length === 0) {
+          logger.debug(
+            `No processed files were generated from ${outputLocation.absolutePath}`,
           );
-
-          if (this.ctx.baseFiles.length > 0) {
-            await replaceInputCommands(this.ctx.baseFiles, locations, logger);
-          }
-          this.ctx.setRoundOutputs(currRound, processedPairs);
-          await this.captureXmlSummary(currRound, rawLocation, processedPairs);
+          await this.handleNoOutputs(currRound, outputLocation, rawLocation);
           return;
         }
 
-        logger.debug(
-          `No processed files were generated from ${outputLocation.absolutePath}`,
-        );
-        await this.emitMissingOutputs(currRound, outputLocation);
-        await this.handleEmptyOutput(currRound, rawLocation);
+        const locations = processedPairs.map((p) => p.location);
+        if (this.ctx.baseFiles.length > 0) {
+          await replaceInputCommands(this.ctx.baseFiles, locations, logger);
+        }
+        this.ctx.setRoundOutputs(currRound, processedPairs);
+        await this.captureXmlSummary(currRound, rawLocation, processedPairs);
       },
       {
         logger,
         level: 'debug',
         label: 'Error processing output file',
-        recover: async () => {
-          await this.emitMissingOutputs(currRound, outputLocation);
-          await this.handleEmptyOutput(currRound, rawLocation);
-        },
+        recover: () =>
+          this.handleNoOutputs(currRound, outputLocation, rawLocation),
       },
     );
+  }
+
+  /** Signal a missing/empty round, then persist the empty round summary. */
+  private async handleNoOutputs(
+    currRound: number,
+    outputLocation: FileLocation,
+    rawLocation: FileLocation,
+  ): Promise<void> {
+    await this.emitMissingOutputs(currRound, outputLocation);
+    await this.handleEmptyOutput(currRound, rawLocation);
   }
 
   /** Logs and signals the UI that a round produced no extractable output files. */

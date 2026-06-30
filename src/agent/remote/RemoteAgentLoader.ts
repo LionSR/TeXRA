@@ -8,11 +8,7 @@ import {
   AgentSettingSchema,
   AgentDefinitionSchema,
 } from '@agent/core/definition/AgentDataclass';
-import {
-  getAgent,
-  extractToolNames,
-  updateAgentMeta,
-} from '@agent/index/agentRegistry';
+import { extractToolNames, updateAgentMeta } from '@agent/index/agentRegistry';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
@@ -57,6 +53,11 @@ const RemoteAgentListQueryErrorSchema = z.object({
 type RemoteAgentListQueryError = z.infer<
   typeof RemoteAgentListQueryErrorSchema
 >;
+
+type RemoteAgentListQueryResult = {
+  data: RemoteAgentListRow[] | null;
+  error: RemoteAgentListQueryError | null;
+};
 
 /**
  * True only for the pre-migration database shape where `remote_agents.tools`
@@ -164,24 +165,16 @@ export class RemoteAgentLoader {
   }
 }
 
-async function queryRemoteAgentListRows(accessToken: string): Promise<{
-  data: RemoteAgentListRow[] | null;
-  error: RemoteAgentListQueryError | null;
-}> {
+async function queryRemoteAgentListRows(
+  accessToken: string,
+): Promise<RemoteAgentListQueryResult> {
   const current = await fetchRemoteAgentListRows(
     accessToken,
     REMOTE_AGENT_LIST_COLUMNS,
   );
 
-  if (!current.error) {
-    return {
-      data: current.data as RemoteAgentListRow[] | null,
-      error: null,
-    };
-  }
-
-  if (!isMissingRemoteAgentToolsColumnError(current.error)) {
-    return { data: null, error: current.error };
+  if (!current.error || !isMissingRemoteAgentToolsColumnError(current.error)) {
+    return current;
   }
 
   logger.debug(
@@ -189,24 +182,16 @@ async function queryRemoteAgentListRows(accessToken: string): Promise<{
     `Remote agent tools column unavailable; using legacy list query: ${current.error.message}`,
   );
 
-  const legacy = await fetchRemoteAgentListRows(
+  return fetchRemoteAgentListRows(
     accessToken,
     LEGACY_REMOTE_AGENT_LIST_COLUMNS,
   );
-
-  return {
-    data: legacy.data as RemoteAgentListRow[] | null,
-    error: legacy.error,
-  };
 }
 
 async function fetchRemoteAgentListRows(
   accessToken: string,
   columns: string,
-): Promise<{
-  data: RemoteAgentListRow[] | null;
-  error: RemoteAgentListQueryError | null;
-}> {
+): Promise<RemoteAgentListQueryResult> {
   const url = new URL('/rest/v1/remote_agents', SUPABASE_CONFIG.url);
   url.searchParams.set('select', columns);
   url.searchParams.set('order', 'name.asc');
@@ -231,34 +216,29 @@ async function fetchRemoteAgentListRows(
       .json<RemoteAgentListRow[]>();
     return { data, error: null };
   } catch (error) {
-    if (error instanceof HTTPError) {
-      // ky v2 auto-consumes the response body into error.data;
-      // error.response body methods are not usable after that.
-      const fallbackMessage =
-        `${error.response.status} ${error.response.statusText}`.trim();
-      const rawBody = errorDataToString(error.data);
-      const parsedError = parseRemoteAgentListErrorBody(rawBody ?? '');
-      return {
-        data: null,
-        error: {
-          ...parsedError,
-          message:
-            parsedError.message ||
-            fallbackMessage ||
-            'remote list request failed',
-        },
-      };
-    }
-    throw error;
-  }
-}
+    if (!(error instanceof HTTPError)) throw error;
 
-function parseRemoteAgentListErrorBody(
-  rawBody: string,
-): RemoteAgentListQueryError {
-  if (!rawBody) return {};
-  const result = parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema);
-  return result.unwrapOr({ message: rawBody });
+    // ky v2 auto-consumes the response body into error.data;
+    // error.response body methods are not usable after that.
+    const rawBody = errorDataToString(error.data);
+    const parsedError = rawBody
+      ? parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema).unwrapOr({
+          message: rawBody,
+        })
+      : {};
+    const fallbackMessage =
+      `${error.response.status} ${error.response.statusText}`.trim();
+    return {
+      data: null,
+      error: {
+        ...parsedError,
+        message:
+          parsedError.message ||
+          fallbackMessage ||
+          'remote list request failed',
+      },
+    };
+  }
 }
 
 /** Fetch and parse agent config from edge function. */
@@ -281,8 +261,7 @@ async function fetchAgentConfig(agentName: string): Promise<{
 
   // Extract metadata before resolving tools to full definitions (for registry cache)
   const settings: AgentSettingInput = validated.settings;
-  const rawTools = settings.tools;
-  const toolNames = extractToolNames(rawTools);
+  const toolNames = extractToolNames(settings.tools);
   const defaultOutputFiles = settings.defaultOutputFiles;
 
   // Process tool definitions (remote agents are self-contained)
