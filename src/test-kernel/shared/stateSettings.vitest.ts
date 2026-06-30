@@ -50,8 +50,6 @@ import {
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
-// Local imports - shared store fakes
-
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',
   'workspaceState',
@@ -429,7 +427,7 @@ describe('knownKeys derivation', () => {
 function entryByKey(key: string): StateSettingEntry {
   const entry = STATE_SETTINGS.find((e) => e.key === key);
   assert.ok(entry, `missing catalog entry ${key}`);
-  return entry as StateSettingEntry;
+  return entry;
 }
 
 describe('settingsAccess', () => {

@@ -134,6 +134,18 @@ type ProgressMessage = {
   streamStates?: Record<string, unknown>;
 };
 
+function mockLoggerModule(): void {
+  vi.doMock('@logger', () => ({
+    createChannelTrace: () => ({
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }),
+    setDefaultStreamLogStore: () => {},
+  }));
+}
+
 async function createBridge(
   messages: unknown[],
   options: CreateBridgeOptions = {},
@@ -177,15 +189,7 @@ async function createBridge(
   vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: vi.fn(),
   }));
-  vi.doMock('@logger', () => ({
-    createChannelTrace: () => ({
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-    }),
-    setDefaultStreamLogStore: () => {},
-  }));
+  mockLoggerModule();
   vi.doMock('vscode', () => ({
     commands: {
       executeCommand: vi.fn(),
@@ -315,15 +319,7 @@ async function createExecution(options: {
   vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: options.prepareMainViewExecutionRequest,
   }));
-  vi.doMock('@logger', () => ({
-    createChannelTrace: () => ({
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-    }),
-    setDefaultStreamLogStore: () => {},
-  }));
+  mockLoggerModule();
   const { createDesktopAgentExecution } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
@@ -345,6 +341,20 @@ function progressMessages(
       message !== null &&
       (message as ProgressMessage).command === command,
   );
+}
+
+function restoredSnapshot(
+  overrides: Partial<RestoredStreamSnapshot> &
+    Pick<RestoredStreamSnapshot, 'streamId'>,
+): RestoredStreamSnapshot {
+  return {
+    label: overrides.streamId,
+    agentCategory: AgentCategory.Workflow,
+    lastKnownStatus: STREAM_STATUS.STOPPED,
+    creationTimestamp: 1_000,
+    persistedAt: 2_000,
+    ...overrides,
+  };
 }
 
 function createStreamSnapshotStore(
@@ -638,14 +648,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages, {
       kvRead: (key) => sidecars[key],
       streamSnapshotStore: createStreamSnapshotStore([
-        {
-          streamId: 'ghost-stream',
-          label: 'ghost-stream',
-          agentCategory: AgentCategory.Workflow,
-          lastKnownStatus: STREAM_STATUS.STOPPED,
-          creationTimestamp: 1_000,
-          persistedAt: 2_000,
-        },
+        restoredSnapshot({ streamId: 'ghost-stream' }),
       ]),
     });
 
@@ -711,14 +714,7 @@ describe('DesktopProgressBridge', () => {
         ]);
       },
       streamSnapshotStore: createStreamSnapshotStore([
-        {
-          streamId: 'ghost-stream',
-          label: 'ghost-stream',
-          agentCategory: AgentCategory.Workflow,
-          lastKnownStatus: STREAM_STATUS.STOPPED,
-          creationTimestamp: 1_000,
-          persistedAt: 2_000,
-        },
+        restoredSnapshot({ streamId: 'ghost-stream' }),
       ]),
     });
 
@@ -768,14 +764,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages, {
       kvRead,
       streamSnapshotStore: createStreamSnapshotStore([
-        {
-          streamId: 'ghost-stream',
-          label: 'ghost-stream',
-          agentCategory: AgentCategory.Workflow,
-          lastKnownStatus: STREAM_STATUS.STOPPED,
-          creationTimestamp: 1_000,
-          persistedAt: 2_000,
-        },
+        restoredSnapshot({ streamId: 'ghost-stream' }),
       ]),
     });
 
@@ -836,14 +825,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages, {
       kvRead,
       streamSnapshotStore: createStreamSnapshotStore([
-        {
-          streamId: 'ghost-stream',
-          label: 'ghost-stream',
-          agentCategory: AgentCategory.Workflow,
-          lastKnownStatus: STREAM_STATUS.STOPPED,
-          creationTimestamp: 1_000,
-          persistedAt: 2_000,
-        },
+        restoredSnapshot({ streamId: 'ghost-stream' }),
       ]),
     });
 
@@ -909,22 +891,12 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages, {
       kvRead,
       streamSnapshotStore: createStreamSnapshotStore([
-        {
-          streamId: 'ghost-one',
-          label: 'ghost-one',
-          agentCategory: AgentCategory.Workflow,
-          lastKnownStatus: STREAM_STATUS.STOPPED,
-          creationTimestamp: 1_000,
-          persistedAt: 2_000,
-        },
-        {
+        restoredSnapshot({ streamId: 'ghost-one' }),
+        restoredSnapshot({
           streamId: 'ghost-two',
-          label: 'ghost-two',
-          agentCategory: AgentCategory.Workflow,
-          lastKnownStatus: STREAM_STATUS.STOPPED,
           creationTimestamp: 1_100,
           persistedAt: 2_100,
-        },
+        }),
       ]),
     });
 
@@ -1561,16 +1533,12 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       runAgent,
       streamSnapshotStore: createStreamSnapshotStore([
-        {
+        restoredSnapshot({
           streamId: 'stream-1',
           label: 'proofreader',
           agent: 'proofreader',
-          agentCategory: AgentCategory.Workflow,
-          lastKnownStatus: STREAM_STATUS.STOPPED,
           executionId,
-          creationTimestamp: 1_000,
-          persistedAt: 2_000,
-        },
+        }),
       ]),
     });
     const { StreamStatusService } =

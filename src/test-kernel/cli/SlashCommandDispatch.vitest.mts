@@ -87,6 +87,12 @@ function createContext(
   };
 }
 
+function lastEntryText(
+  streamId: StreamTabId = CLI_LOCAL_STREAM_ID,
+): string | undefined {
+  return cliState.streams.get().get(streamId)?.entries.at(-1)?.text;
+}
+
 describe('handleTuiSlashCommand', () => {
   it('opens alias-addressed structured forms through the canonical command', async () => {
     registerBuiltinSlashCommands();
@@ -160,10 +166,7 @@ describe('handleTuiSlashCommand', () => {
     expect(handled).toBe(true);
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt).toHaveBeenCalledOnce();
-    const entry = cliState.streams
-      .get()
-      .get(CLI_LOCAL_STREAM_ID)
-      ?.entries.at(-1)?.text;
+    const entry = lastEntryText();
     expect(entry).toContain('Signed out.');
     expect(entry).toContain('ChatGPT subscription disabled for Codex models.');
   });
@@ -184,10 +187,7 @@ describe('handleTuiSlashCommand', () => {
     );
 
     expect(handled).toBe(true);
-    const entry = cliState.streams
-      .get()
-      .get(CLI_LOCAL_STREAM_ID)
-      ?.entries.at(-1)?.text;
+    const entry = lastEntryText();
     expect(entry).toContain('Signed out.');
     expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
   });
@@ -208,10 +208,7 @@ describe('handleTuiSlashCommand', () => {
     );
 
     expect(handled).toBe(true);
-    const entry = cliState.streams
-      .get()
-      .get(CLI_LOCAL_STREAM_ID)
-      ?.entries.at(-1)?.text;
+    const entry = lastEntryText();
     expect(entry).toContain('Signed out.');
     expect(entry).toContain(
       'ChatGPT subscription preference could not be disabled: Config write failed',
@@ -258,10 +255,7 @@ describe('handleTuiSlashCommand', () => {
     );
 
     expect(handled).toBe(true);
-    const statusText = cliState.streams
-      .get()
-      .get(streamId)
-      ?.entries.at(-1)?.text;
+    const statusText = lastEntryText(streamId);
     expect(statusText).toContain('resume later with: texra resume exec-1');
     expect(statusText).not.toContain('--cwd');
   });

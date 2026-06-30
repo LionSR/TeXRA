@@ -2,8 +2,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-// Third-party imports
-
 // Local imports - utils
 import {
   checkToolResultTextLimit,

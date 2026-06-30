@@ -7,17 +7,10 @@ import * as path from 'node:path';
 import { describe, it } from 'vitest';
 
 async function collectTypeScriptFiles(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    const entryPath = path.join(root, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await collectTypeScriptFiles(entryPath)));
-    } else if (entry.name.endsWith('.ts')) {
-      files.push(entryPath);
-    }
-  }
-  return files;
+  const entries = await readdir(root, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => !entry.isDirectory() && entry.name.endsWith('.ts'))
+    .map((entry) => path.join(entry.parentPath, entry.name));
 }
 
 describe('shared settings-view import boundaries', () => {

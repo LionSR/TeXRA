@@ -30,6 +30,22 @@ vi.mock('@cli/runtime/chatgptLogin', async (importOriginal) => {
 
 const { runCli } = await import('@cli/commands/root');
 
+function spyOnStreamWrite(
+  stream: NodeJS.WriteStream,
+  append: (text: string) => void,
+): ReturnType<typeof vi.spyOn> {
+  return vi
+    .spyOn(stream, 'write')
+    .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
+      append(String(chunk));
+      const cb = rest.find((arg) => typeof arg === 'function') as
+        | ((err?: Error | null) => void)
+        | undefined;
+      cb?.(null);
+      return true;
+    }) as unknown as ReturnType<typeof vi.spyOn>;
+}
+
 describe('CLI auth command', () => {
   let stdout = '';
   let stderr = '';
@@ -46,26 +62,12 @@ describe('CLI auth command', () => {
     mocks.signOutCliChatGpt.mockReset().mockResolvedValue({
       preferenceUpdate: { effective: false, target: 'global' },
     });
-    stdoutSpy = vi
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-        stdout += String(chunk);
-        const cb = rest.find((arg) => typeof arg === 'function') as
-          | ((err?: Error | null) => void)
-          | undefined;
-        cb?.(null);
-        return true;
-      }) as unknown as ReturnType<typeof vi.spyOn>;
-    stderrSpy = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-        stderr += String(chunk);
-        const cb = rest.find((arg) => typeof arg === 'function') as
-          | ((err?: Error | null) => void)
-          | undefined;
-        cb?.(null);
-        return true;
-      }) as unknown as ReturnType<typeof vi.spyOn>;
+    stdoutSpy = spyOnStreamWrite(process.stdout, (text) => {
+      stdout += text;
+    });
+    stderrSpy = spyOnStreamWrite(process.stderr, (text) => {
+      stderr += text;
+    });
   });
 
   afterEach(() => {

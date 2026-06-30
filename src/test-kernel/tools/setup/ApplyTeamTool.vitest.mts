@@ -24,6 +24,17 @@ const REPO_ROOT = resolve(
   '../../../..',
 );
 
+// Expected workflow rosters (sorted) for the seeded teams under test.
+const STARTER_WORKFLOW = ['builtInWorkflow:correct', 'builtInWorkflow:polish'];
+const PHYSICIST_WORKFLOW = [
+  'apply',
+  'builtInWorkflow:correct',
+  'builtInWorkflow:polish',
+  'criticize',
+  'devise',
+  'generic',
+];
+
 function workspaceRoster(): {
   workflow: string[] | undefined;
   toolUse: string[] | undefined;
@@ -77,10 +88,7 @@ describe('apply_team', () => {
 
     expect(result.isError).toBeFalsy();
     const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual([
-      'builtInWorkflow:correct',
-      'builtInWorkflow:polish',
-    ]);
+    expect(roster.workflow?.toSorted()).toEqual(STARTER_WORKFLOW);
     // `orchestrator` is remote-only and unresolved while signed out: it is
     // kept as a bare name so it joins the roster on sign-in (visibility
     // filtering matches by name).
@@ -135,10 +143,7 @@ describe('seedRosterFromDefaultTeam', () => {
 
     expect(seeded).toBe(true);
     const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual([
-      'builtInWorkflow:correct',
-      'builtInWorkflow:polish',
-    ]);
+    expect(roster.workflow?.toSorted()).toEqual(STARTER_WORKFLOW);
     expect(roster.toolUse).toContain('builtInToolUse:setup');
   });
 
@@ -150,14 +155,7 @@ describe('seedRosterFromDefaultTeam', () => {
 
     expect(seeded).toBe(true);
     const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual([
-      'apply',
-      'builtInWorkflow:correct',
-      'builtInWorkflow:polish',
-      'criticize',
-      'devise',
-      'generic',
-    ]);
+    expect(roster.workflow?.toSorted()).toEqual(PHYSICIST_WORKFLOW);
     expect(roster.toolUse).toContain('builtInToolUse:review');
     expect(roster.toolUse).toContain('builtInToolUse:research');
     expect(roster.toolUse).toContain('orchestrator');
@@ -173,14 +171,7 @@ describe('seedRosterFromDefaultTeam', () => {
 
     expect(seeded).toBe(true);
     const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual([
-      'apply',
-      'builtInWorkflow:correct',
-      'builtInWorkflow:polish',
-      'criticize',
-      'devise',
-      'generic',
-    ]);
+    expect(roster.workflow?.toSorted()).toEqual(PHYSICIST_WORKFLOW);
     expect(roster.toolUse).toContain('builtInToolUse:review');
     expect(roster.toolUse).toContain('builtInToolUse:research');
     expect(roster.toolUse).toContain('orchestrator');
@@ -232,10 +223,7 @@ describe('seedRosterFromDefaultTeam', () => {
 
     expect(seeded).toBe(true);
     const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual([
-      'builtInWorkflow:correct',
-      'builtInWorkflow:polish',
-    ]);
+    expect(roster.workflow?.toSorted()).toEqual(STARTER_WORKFLOW);
     expect(roster.toolUse).toContain('builtInToolUse:setup');
   });
 });
