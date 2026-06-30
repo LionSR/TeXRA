@@ -1,6 +1,7 @@
-// Local imports - auth
+import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 export type CliApiMode = 'included' | 'personal';
 
@@ -49,9 +50,17 @@ export function parseCliApiMode(input: string): CliApiMode | undefined {
     : undefined;
 }
 
+export async function enableCliIncludedModelAccess(): Promise<void> {
+  await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+  await getServerSideKeyService().setUseIncludedModelAccess(true);
+  invalidateModelOptionsCache();
+}
+
 export async function setCliApiMode(mode: CliApiMode): Promise<void> {
-  await getServerSideKeyService().setUseIncludedModelAccess(
-    mode === 'included',
-  );
+  if (mode === 'included') {
+    await enableCliIncludedModelAccess();
+    return;
+  }
+  await getServerSideKeyService().setUseIncludedModelAccess(false);
   invalidateModelOptionsCache();
 }

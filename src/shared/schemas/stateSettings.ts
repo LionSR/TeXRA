@@ -14,6 +14,7 @@ import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latex';
+import { USE_OPENROUTER_PROVIDER_SETTING } from '@shared/constants/providers';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
@@ -156,6 +157,12 @@ const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
     'texra run <workflow-agent> --model <openai-model> --input paper.tex --instruction "summarize the paper"',
   through:
     'packages/cli/src/commands/workflow.ts -> src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
+} satisfies CliRuntimeReachability;
+const OPENROUTER_ROUTING_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --model <openrouter-routable-model> --instruction "answer a short question"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/utils/config/providerConfig.ts',
 } satisfies CliRuntimeReachability;
 const CODEX_AGENT_RUNTIME_REACHABILITY = {
   command:
@@ -463,6 +470,23 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['cli'],
     cliConsumer: 'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
     cliRuntimeReachability: OPENAI_WEBSOCKET_RUNTIME_REACHABILITY,
+  },
+
+  // --- OpenRouter routing ----------------------------------------------------
+  // Read by `getUseOpenRouter()` during model-handler routing. The extension
+  // and desktop already surface the same setting through provider settings; the
+  // catalog row is CLI-only so later settings-view catalog rendering does not
+  // duplicate that existing control.
+  {
+    key: GlobalStateKey.USE_OPENROUTER,
+    schema: z.boolean().prefault(false),
+    title: USE_OPENROUTER_PROVIDER_SETTING.label,
+    description: USE_OPENROUTER_PROVIDER_SETTING.description,
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: 'src/utils/config/providerConfig.ts',
+    cliRuntimeReachability: OPENROUTER_ROUTING_RUNTIME_REACHABILITY,
   },
 ] as const;
 
