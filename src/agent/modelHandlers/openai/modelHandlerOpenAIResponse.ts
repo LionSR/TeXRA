@@ -2649,6 +2649,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   // Message modification methods (for post-build enrichment)
   // =========================================================================
 
+  /** Find the last user message in the conversation, if any. */
+  private findLastUserMessage(
+    messages: ResponseInputItem[],
+  ): EasyInputMessage | ResponseInputItem.Message | undefined {
+    return messages.findLast(
+      (m): m is EasyInputMessage | ResponseInputItem.Message =>
+        isMessageItem(m) && m.role === 'user',
+    );
+  }
+
   /**
    * Prepend text to the last user message in the conversation.
    * Finds the last user message and prepends text to its content.
@@ -2656,10 +2666,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   prependTextToUserMessage(messages: ResponseInputItem[], text: string): void {
     if (!text.trim()) return;
 
-    const lastUserMsg = messages.findLast(
-      (m): m is EasyInputMessage | ResponseInputItem.Message =>
-        isMessageItem(m) && m.role === 'user',
-    );
+    const lastUserMsg = this.findLastUserMessage(messages);
     if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
 
     const content = lastUserMsg.content;
@@ -2681,10 +2688,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<void> {
     if (!mediaFiles.length || !this.capabilities.supportsVision) return;
 
-    const lastUserMsg = messages.findLast(
-      (m): m is EasyInputMessage | ResponseInputItem.Message =>
-        isMessageItem(m) && m.role === 'user',
-    );
+    const lastUserMsg = this.findLastUserMessage(messages);
     if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
 
     try {

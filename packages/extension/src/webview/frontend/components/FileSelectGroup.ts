@@ -14,6 +14,7 @@ import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import { capitalize } from '@utils/text/stringUtils';
 import { MainViewEvents } from '../events';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { SESSION_TYPES } from '../constants';
@@ -295,8 +296,7 @@ export class FileSelectGroup extends LitElement {
 
   override render(): TemplateResult {
     const { config } = this;
-    const typeLabel =
-      config.type.charAt(0).toUpperCase() + config.type.slice(1);
+    const typeLabel = capitalize(config.type);
 
     return html`
       <div

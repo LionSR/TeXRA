@@ -178,7 +178,6 @@ class ArxivSourceProcessor {
     timeout: number,
   ): Promise<string> {
     let destPath = destBasePath;
-    let usedDispositionFilename = false;
     let shouldCleanup = true;
     try {
       // AbortSignal.timeout covers both connection establishment and body streaming.
@@ -203,12 +202,12 @@ class ArxivSourceProcessor {
       // which handles both `filename=` and `filename*=UTF-8''...` (percent-encoded
       // Unicode names that the old regex silently dropped).
       const disposition = response.headers.get('content-disposition');
+      let filename: string | undefined;
       if (disposition) {
-        let filename: string | undefined;
         try {
           filename = parseContentDisposition(disposition).parameters.filename;
         } catch (error) {
-          // Malformed header — fall through to content-type fallback below.
+          // Malformed header; the content-type fallback below handles it.
           logger.debug(
             this.channel,
             'Ignoring malformed Content-Disposition header from arXiv source download',
@@ -220,16 +219,14 @@ class ArxivSourceProcessor {
             },
           );
         }
-        if (filename) {
-          // basename prevents path traversal from a crafted header value.
-          destPath = path.join(
-            path.dirname(destBasePath),
-            path.basename(filename),
-          );
-          usedDispositionFilename = true;
-        }
       }
-      if (!usedDispositionFilename) {
+      if (filename) {
+        // basename prevents path traversal from a crafted header value.
+        destPath = path.join(
+          path.dirname(destBasePath),
+          path.basename(filename),
+        );
+      } else {
         const contentType = response.headers.get('content-type') ?? '';
         const extension = this.getExtensionFromContentType(contentType);
         destPath = destBasePath + extension;

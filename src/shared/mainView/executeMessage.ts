@@ -83,7 +83,7 @@ function buildMainViewMultipleFileSelections(
     const listId = `${type}Files` as keyof MultiFiles;
     const files = type === 'output' ? [] : (multiFiles[listId] ?? []);
     selections[listId] = files;
-    selections[`${listId}Active`] = type !== 'output' && files.length > 0;
+    selections[`${listId}Active`] = files.length > 0;
   }
   return selections;
 }
