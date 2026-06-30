@@ -2063,6 +2063,25 @@ describe('CLI transcript state', () => {
     });
   });
 
+  it('keeps distinct synthetic fallback responses from the same stream anchor', () => {
+    appendAssistantTranscriptIfMissing(
+      root,
+      'The condition is x < y.',
+      'first',
+    );
+    appendAssistantTranscriptIfMissing(
+      root,
+      'The condition is x > y.',
+      'second',
+    );
+
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'The condition is x < y.',
+      'The condition is x > y.',
+    ]);
+  });
+
   it('keeps repeated final responses from distinct turns visible', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
@@ -2142,7 +2161,7 @@ describe('CLI transcript state', () => {
     }
   });
 
-  it('dedupes fallback text against stream-log assistant text before trailing tools', () => {
+  it('lets the stream-log assistant own current-turn text before trailing tools', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
     setDefaultStreamLogStore(store);
@@ -2179,7 +2198,7 @@ describe('CLI transcript state', () => {
     }
   });
 
-  it('does not dedupe fallback text against a matching prior-turn assistant', () => {
+  it('does not let a prior-turn stream assistant suppress fallback text', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
     setDefaultStreamLogStore(store);

@@ -32,18 +32,6 @@ function normalizeTranscriptText(text: string): string {
   return text.trim();
 }
 
-function transcriptDedupeText(text: string): string {
-  return normalizeTranscriptText(text)
-    .replaceAll(/\\\\\[[^\]]*\]/g, '')
-    .replaceAll('\\checkmark', '✓')
-    .normalize('NFKC')
-    .replaceAll(/[`#\\{}$]/g, '')
-    .replaceAll(/[^\p{L}\p{N}\p{S}\p{P}]+/gu, ' ')
-    .replaceAll(/\s*([\p{S}\p{P}]+)\s*/gu, '$1')
-    .trim()
-    .toLowerCase();
-}
-
 function currentTurnStartIndex(entries: readonly ConversationEntry[]): number {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     if (entries[index]?.role === 'user') return index;
@@ -58,7 +46,6 @@ export function appendAssistantTranscriptIfMissing(
 ): void {
   const normalized = normalizeTranscriptText(text ?? '');
   if (!normalized) return;
-  const dedupeText = transcriptDedupeText(normalized);
   const syntheticAfterSeq = getDefaultStreamLogStore().get(streamId)?.head ?? 0;
 
   patchStream(streamId, (slice) => {
@@ -69,8 +56,7 @@ export function appendAssistantTranscriptIfMissing(
       if (
         !entry.synthetic &&
         index >= turnStartIndex &&
-        entry.role === 'assistant' &&
-        transcriptDedupeText(entry.text) === dedupeText
+        entry.role === 'assistant'
       ) {
         return true;
       }
@@ -79,7 +65,7 @@ export function appendAssistantTranscriptIfMissing(
         entry.syntheticKind === 'final' &&
         entry.syntheticAfterSeq === syntheticAfterSeq &&
         entry.role === 'assistant' &&
-        transcriptDedupeText(entry.text) === dedupeText
+        normalizeTranscriptText(entry.text) === normalized
       );
     });
     if (alreadyRendered) return slice;
