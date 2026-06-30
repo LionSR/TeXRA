@@ -221,22 +221,27 @@ export class LatexDiffsSection extends LitElement {
     this.dispatchEvent(MainViewEvents.latexDiffsToggle({ visible }));
   }
 
-  private handleBaseSelectChange(event: Event): void {
+  private selectValue(event: Event): string {
     const select = event.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
-    this.dispatchEvent(MainViewEvents.baseFileChange({ value }));
+    return typeof select?.value === 'string' ? select.value : '';
+  }
+
+  private handleBaseSelectChange(event: Event): void {
+    this.dispatchEvent(
+      MainViewEvents.baseFileChange({ value: this.selectValue(event) }),
+    );
   }
 
   private handleEditedSelectChange(event: Event): void {
-    const select = event.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
-    this.dispatchEvent(MainViewEvents.editedFileChange({ value }));
+    this.dispatchEvent(
+      MainViewEvents.editedFileChange({ value: this.selectValue(event) }),
+    );
   }
 
   private handleCommitSelectChange(event: Event): void {
-    const select = event.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
-    this.dispatchEvent(MainViewEvents.commitChange({ value }));
+    this.dispatchEvent(
+      MainViewEvents.commitChange({ value: this.selectValue(event) }),
+    );
   }
 
   private handleRefreshEditedFiles(): void {

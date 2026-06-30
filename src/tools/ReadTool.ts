@@ -69,7 +69,6 @@ const ReadInputSchema = z.strictObject({
 export type ReadInput = z.infer<typeof ReadInputSchema>;
 
 type AttachmentKind = 'pdf' | 'image' | 'document';
-type AttachmentConfig = { kind: AttachmentKind; label: string };
 
 export class ReadFileTool extends defineTool({
   name: 'read_file',
@@ -85,11 +84,11 @@ export class ReadFileTool extends defineTool({
     );
     const filePath = resolved.fsPath;
 
-    const attachmentConfig = this.getAttachmentConfig(resolved.absolute);
-    if (attachmentConfig) {
+    const attachmentKind = this.getAttachmentConfig(resolved.absolute);
+    if (attachmentKind) {
       const result = await this.returnBinaryAttachment(
         input,
-        attachmentConfig,
+        attachmentKind,
         resolved,
       );
       recordToolFileRead(filePath);
@@ -180,14 +179,14 @@ export class ReadFileTool extends defineTool({
     return totalLines;
   }
 
-  private getAttachmentConfig(filePath: string): AttachmentConfig | null {
+  private getAttachmentConfig(filePath: string): AttachmentKind | null {
     const mimeType = getMimeType(filePath)?.toLowerCase();
     // Keep extension detection case-insensitive so users can reference files regardless of casing.
     const extension = getExtensionLowercase(filePath);
 
     const isPdf = mimeType === 'application/pdf' || extension === '.pdf';
     if (isPdf) {
-      return { kind: 'pdf', label: 'PDF' };
+      return 'pdf';
     }
 
     // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
@@ -195,7 +194,7 @@ export class ReadFileTool extends defineTool({
     const isImage =
       mimeType?.startsWith('image/') || IMAGE_EXTENSIONS.has(extension);
     if (isImage) {
-      return { kind: 'image', label: 'Image' };
+      return 'image';
     }
 
     // Office documents are binary formats that cannot be read as text.
@@ -203,7 +202,7 @@ export class ReadFileTool extends defineTool({
     const isDocument =
       OFFICE_EXTENSIONS.has(extension) || OFFICE_MIME_TYPES.has(mimeType ?? '');
     if (isDocument) {
-      return { kind: 'document', label: 'Document' };
+      return 'document';
     }
 
     return null;
@@ -211,17 +210,17 @@ export class ReadFileTool extends defineTool({
 
   private async returnBinaryAttachment(
     input: ReadInput,
-    config: AttachmentConfig,
+    kind: AttachmentKind,
     resolved: WorkspacePathResolution,
   ): Promise<ToolResult> {
-    const copy = ATTACHMENT_COPY[config.kind];
+    const copy = ATTACHMENT_COPY[kind];
     const attachment = await buildFileAttachment({
       filePath: resolved.fsPath,
-      description: `${config.label} returned by read_file tool.`,
+      description: `${copy.label} returned by read_file tool.`,
       resolved,
     });
 
-    const baseSummary = `Attached ${config.label} ${attachment.path}.`;
+    const baseSummary = `Attached ${copy.label} ${attachment.path}.`;
     const summary = input.range
       ? `${baseSummary} ${copy.rangeSummary}`
       : baseSummary;
@@ -251,24 +250,28 @@ const IMAGE_EXTENSIONS = new Set([
 const ATTACHMENT_COPY: Record<
   AttachmentKind,
   {
+    label: string;
     rangeSummary: string;
     rangeOutput: string;
     coreOutput: string;
   }
 > = {
   pdf: {
+    label: 'PDF',
     rangeSummary: 'Ignored requested line range because PDFs are binary.',
     rangeOutput: 'Line ranges are not supported when reading PDFs.',
     coreOutput:
       'Returned the PDF as a file attachment. Vision-capable models can analyze each page with text and visual context.',
   },
   image: {
+    label: 'Image',
     rangeSummary: 'Ignored requested line range because images are binary.',
     rangeOutput: 'Line ranges are not supported when reading images.',
     coreOutput:
       'Returned the image as a file attachment. Vision-capable models can analyze the visual content directly.',
   },
   document: {
+    label: 'Document',
     rangeSummary:
       'Ignored requested line range because office documents are binary.',
     rangeOutput: 'Line ranges are not supported when reading office documents.',

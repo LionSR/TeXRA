@@ -2,12 +2,9 @@
  * Manages toggle/collapse states with optional persistence callback.
  */
 export class ToggleStateStore {
-  private states: Map<string, boolean> = new Map();
-  private saveCallback?: () => void;
+  private states = new Map<string, boolean>();
 
-  constructor(saveCallback?: () => void) {
-    this.saveCallback = saveCallback;
-  }
+  constructor(private readonly saveCallback?: () => void) {}
 
   set(id: string, value: boolean): void {
     if (!id) return;

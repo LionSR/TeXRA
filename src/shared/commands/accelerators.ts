@@ -40,54 +40,46 @@ export function formatDesktopAccelerator(
   return parts.join(isMac ? '' : '+');
 }
 
+const ELECTRON_ACCELERATOR_PARTS: Record<string, string> = {
+  cmd: 'Command',
+  ctrl: 'Control',
+  option: 'Option',
+  alt: 'Alt',
+  shift: 'Shift',
+  enter: 'Enter',
+  escape: 'Escape',
+  space: 'Space',
+  tab: 'Tab',
+};
+
 function toElectronAcceleratorPart(part: string): string {
   const normalized = part.trim().toLowerCase();
-  switch (normalized) {
-    case 'cmd':
-      return 'Command';
-    case 'ctrl':
-      return 'Control';
-    case 'option':
-      return 'Option';
-    case 'alt':
-      return 'Alt';
-    case 'shift':
-      return 'Shift';
-    case 'enter':
-      return 'Enter';
-    case 'escape':
-      return 'Escape';
-    case 'space':
-      return 'Space';
-    case 'tab':
-      return 'Tab';
-    default:
-      if (/^f\d{1,2}$/.test(normalized)) return normalized.toUpperCase();
-      return normalized.length === 1 ? normalized.toUpperCase() : normalized;
-  }
+  const mapped = ELECTRON_ACCELERATOR_PARTS[normalized];
+  if (mapped) return mapped;
+  if (/^f\d{1,2}$/.test(normalized)) return normalized.toUpperCase();
+  return normalized.length === 1 ? normalized.toUpperCase() : normalized;
 }
+
+// Each entry maps a token to its [mac symbol, non-mac label] display forms.
+const DISPLAY_ACCELERATOR_PARTS: Record<
+  string,
+  readonly [mac: string, nonMac: string]
+> = {
+  cmd: ['⌘', 'Cmd'],
+  command: ['⌘', 'Cmd'],
+  ctrl: ['⌃', 'Ctrl'],
+  control: ['⌃', 'Ctrl'],
+  alt: ['⌥', 'Alt'],
+  option: ['⌥', 'Alt'],
+  shift: ['⇧', 'Shift'],
+};
 
 function toDisplayAcceleratorPart(
   part: string,
   platform: NodeJS.Platform,
 ): string {
-  const normalized = part.trim().toLowerCase();
-  const isMac = platform === 'darwin';
-  switch (normalized) {
-    case 'cmd':
-    case 'command':
-      return isMac ? '⌘' : 'Cmd';
-    case 'ctrl':
-    case 'control':
-      return isMac ? '⌃' : 'Ctrl';
-    case 'alt':
-    case 'option':
-      return isMac ? '⌥' : 'Alt';
-    case 'shift':
-      return isMac ? '⇧' : 'Shift';
-    default: {
-      const trimmed = part.trim();
-      return trimmed.length === 1 ? trimmed.toUpperCase() : trimmed;
-    }
-  }
+  const mapped = DISPLAY_ACCELERATOR_PARTS[part.trim().toLowerCase()];
+  if (mapped) return platform === 'darwin' ? mapped[0] : mapped[1];
+  const trimmed = part.trim();
+  return trimmed.length === 1 ? trimmed.toUpperCase() : trimmed;
 }

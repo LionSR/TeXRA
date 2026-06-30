@@ -209,9 +209,6 @@ export function formatCIStarted(
   const uniqueNames = unique(runs.map((r) => r.name)).sort();
   const shownNames = uniqueNames.slice(0, MAX_CI_STARTED_CHECK_NAMES);
   const remainingNames = uniqueNames.length - shownNames.length;
-  const totalCheckLabel = totalCount === 1 ? 'check' : 'checks';
-  const observedCheckLabel = runs.length === 1 ? 'check' : 'checks';
-  const nameLabel = uniqueNames.length === 1 ? 'check name' : 'check names';
   const body = [
     ...shownNames.map((name) => `- ${name}`),
     ...(remainingNames > 0
@@ -221,7 +218,7 @@ export function formatCIStarted(
 
   return wrap(
     sections(
-      `CI triggered on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}): GitHub reports ${totalCount} ${totalCheckLabel} registered; this poll observed ${runs.length} ${observedCheckLabel} across ${uniqueNames.length} distinct ${nameLabel}.`,
+      `CI triggered on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}): GitHub reports ${formatResultCount(totalCount, 'check')} registered; this poll observed ${formatResultCount(runs.length, 'check')} across ${formatResultCount(uniqueNames.length, 'distinct check name')}.`,
       body,
     ),
   );

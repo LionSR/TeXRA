@@ -56,11 +56,10 @@ export function goalElapsedMs(goal: { createdAt: string }): number {
 
 /**
  * Duration of a goal. With only the live `active`/`paused` states, any
- * persisted record is in flight, so this is wall-clock time since start.
+ * persisted record is in flight, so this is wall-clock time since start
+ * (identical to `goalElapsedMs`).
  */
-export function goalDurationMs(goal: { createdAt: string }): number {
-  return goalElapsedMs(goal);
-}
+export const goalDurationMs = goalElapsedMs;
 
 /** Hour-aware duration formatter for Goal timings. */
 export const formatGoalTime = formatCompactDuration;

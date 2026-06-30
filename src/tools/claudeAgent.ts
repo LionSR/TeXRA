@@ -364,13 +364,9 @@ function extractToolErrorMessage(content: unknown): string | undefined {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return undefined;
   for (const block of content) {
-    if (
-      block != null &&
-      typeof block === 'object' &&
-      'text' in block &&
-      typeof (block as { text?: unknown }).text === 'string'
-    ) {
-      return (block as { text: string }).text;
+    if (block != null && typeof block === 'object' && 'text' in block) {
+      const text = (block as { text: unknown }).text;
+      if (typeof text === 'string') return text;
     }
   }
   return undefined;

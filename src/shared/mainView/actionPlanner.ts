@@ -231,12 +231,7 @@ export function planLatexdiffVC(
 // LatexdiffVC Pack/Clean
 // ============================================================
 
-export interface LatexdiffVCPackState {
-  readonly inputFile: string;
-  readonly baseFile: string;
-  readonly commitHash: string;
-}
-
+// Shares LatexdiffVCState's fields (inputFile, baseFile, commitHash).
 export type LatexdiffVCPackPayload = {
   inputFile: string;
   baseFile: string;
@@ -245,7 +240,7 @@ export type LatexdiffVCPackPayload = {
 };
 
 export function planLatexdiffVCPack(
-  state: LatexdiffVCPackState,
+  state: LatexdiffVCState,
   action: 'pack' | 'clean',
 ): ActionSuccess<LatexdiffVCPackPayload> {
   const command =
