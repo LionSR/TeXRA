@@ -51,10 +51,7 @@ import { postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
 import { Signal } from '@shared/signals';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
-import {
-  SetThemeMessageSchema,
-  type SetThemeMessage,
-} from '@shared/schemas/commonViewMessages';
+import { SetThemeMessageSchema } from '@shared/schemas/commonViewMessages';
 import {
   ProgressViewOutboundMessageSchema,
   type ProgressViewOutboundMessage,
@@ -64,17 +61,13 @@ import {
   applyHostBodyTheme,
   getWindowTargetOrigin,
 } from '@shared/wa/hostTheme';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import {
   DesktopSetRouteMessageSchema,
   type DesktopRoute,
-  type DesktopSetRouteMessage,
 } from '../desktopShellMessages';
-import {
-  DesktopSetLogMessageSchema,
-  type DesktopSetLogMessage,
-} from '../desktopLogMessages';
+import { DesktopSetLogMessageSchema } from '../desktopLogMessages';
 import {
   buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
@@ -88,17 +81,14 @@ import {
 import {
   DESKTOP_ONBOARDING_COMMANDS,
   DesktopOnboardingSetStateMessageSchema,
-  type DesktopOnboardingSetStateMessage,
 } from '../desktopOnboardingMessages';
 import {
   DesktopShowDiffMessageSchema,
   DesktopCloseDiffMessageSchema,
-  type DesktopCloseDiffMessage,
 } from '../desktopDiffMessages';
 import {
   DesktopShowPdfMessageSchema,
   DesktopClosePdfMessageSchema,
-  type DesktopClosePdfMessage,
 } from '../desktopPdfMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
@@ -280,17 +270,6 @@ function isProgressOutboundMessage(
 // Shell template
 // =============================================================================
 
-interface ChromeIconButtonSpec {
-  readonly key: 'logs';
-  readonly icon: TeXRAIconName;
-  readonly label: string;
-  readonly onClick: () => void;
-}
-
-const CHROME_ICON_BUTTONS: ReadonlyArray<ChromeIconButtonSpec> = [
-  { key: 'logs', icon: 'file-lines', label: 'Logs', onClick: openLogsDrawer },
-] as const;
-
 function getWorkspaceDirectoryLabel(workspacePath: string | undefined): string {
   if (!workspacePath) return 'No folder';
 
@@ -333,24 +312,17 @@ function shellTemplate(): TemplateResult {
         >
           Commands
         </wa-button>
-        ${CHROME_ICON_BUTTONS.map(
-          (spec) => html`
-            <wa-button
-              class="desktop-icon-button"
-              appearance="plain"
-              size="small"
-              data-route-button=${spec.key}
-              aria-label=${spec.label}
-              title=${commandTitle(
-                DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-                spec.label,
-              )}
-              @click=${spec.onClick}
-            >
-              ${waIcon(spec.icon, { label: spec.label })}
-            </wa-button>
-          `,
-        )}
+        <wa-button
+          class="desktop-icon-button"
+          appearance="plain"
+          size="small"
+          data-route-button="logs"
+          aria-label="Logs"
+          title=${commandTitle(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS, 'Logs')}
+          @click=${openLogsDrawer}
+        >
+          ${waIcon('file-lines', { label: 'Logs' })}
+        </wa-button>
       </nav>
       <div class="desktop-three-pane">
         <aside class="desktop-rail" aria-label="Sessions">
@@ -679,40 +651,6 @@ function returnToLauncher(): void {
   setRouteState('main');
 }
 
-function isDesktopSetRouteMessage(
-  message: unknown,
-): message is DesktopSetRouteMessage {
-  return DesktopSetRouteMessageSchema.safeParse(message).success;
-}
-
-function isDesktopOnboardingSetStateMessage(
-  message: unknown,
-): message is DesktopOnboardingSetStateMessage {
-  return DesktopOnboardingSetStateMessageSchema.safeParse(message).success;
-}
-
-function isDesktopSetLogMessage(
-  message: unknown,
-): message is DesktopSetLogMessage {
-  return DesktopSetLogMessageSchema.safeParse(message).success;
-}
-
-function isThemeMessage(message: unknown): message is SetThemeMessage {
-  return SetThemeMessageSchema.safeParse(message).success;
-}
-
-function isDesktopCloseDiffMessage(
-  message: unknown,
-): message is DesktopCloseDiffMessage {
-  return DesktopCloseDiffMessageSchema.safeParse(message).success;
-}
-
-function isDesktopClosePdfMessage(
-  message: unknown,
-): message is DesktopClosePdfMessage {
-  return DesktopClosePdfMessageSchema.safeParse(message).success;
-}
-
 // Bridge for legacy `desktop:setRoute` IPC. The shell no longer has four
 // routes, so map the old route names onto the new surfaces:
 //   - 'main' / 'progress' → center pane (clear active stream for 'main')
@@ -740,24 +678,30 @@ function setRoute(route: DesktopRoute): void {
 }
 
 window.addEventListener('message', (event) => {
-  if (isDesktopSetRouteMessage(event.data)) {
-    setRoute(event.data.route);
+  const routeParsed = DesktopSetRouteMessageSchema.safeParse(event.data);
+  if (routeParsed.success) {
+    setRoute(routeParsed.data.route);
     return;
   }
-  if (isDesktopOnboardingSetStateMessage(event.data)) {
-    if (event.data.shouldShow) {
+  const onboardingParsed = DesktopOnboardingSetStateMessageSchema.safeParse(
+    event.data,
+  );
+  if (onboardingParsed.success) {
+    if (onboardingParsed.data.shouldShow) {
       firstRunWalkthrough?.show();
     } else {
       firstRunWalkthrough?.hide();
     }
     return;
   }
-  if (isThemeMessage(event.data)) {
-    applyDesktopTheme(event.data.theme);
+  const themeParsed = SetThemeMessageSchema.safeParse(event.data);
+  if (themeParsed.success) {
+    applyDesktopTheme(themeParsed.data.theme);
     return;
   }
-  if (isDesktopSetLogMessage(event.data)) {
-    logsDrawer.applySnapshot(event.data);
+  const logParsed = DesktopSetLogMessageSchema.safeParse(event.data);
+  if (logParsed.success) {
+    logsDrawer.applySnapshot(logParsed.data);
     return;
   }
   const diffParsed = DesktopShowDiffMessageSchema.safeParse(event.data);
@@ -765,7 +709,7 @@ window.addEventListener('message', (event) => {
     diffOverlay.open(diffParsed.data);
     return;
   }
-  if (isDesktopCloseDiffMessage(event.data)) {
+  if (DesktopCloseDiffMessageSchema.safeParse(event.data).success) {
     diffOverlay.close();
     return;
   }
@@ -774,7 +718,7 @@ window.addEventListener('message', (event) => {
     pdfOverlay.open(pdfParsed.data);
     return;
   }
-  if (isDesktopClosePdfMessage(event.data)) {
+  if (DesktopClosePdfMessageSchema.safeParse(event.data).success) {
     pdfOverlay.close();
     return;
   }

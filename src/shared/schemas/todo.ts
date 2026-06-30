@@ -2,16 +2,14 @@ import { z } from 'zod';
 
 import { StreamTabIdSchema } from './identifiers';
 
-const todoStatusValues = ['pending', 'in_progress', 'completed'] as const;
-
 export const TODO_STATUS = {
   PENDING: 'pending',
   IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
-} as const satisfies Record<string, (typeof todoStatusValues)[number]>;
+} as const;
 
 export const TodoStatusSchema = z
-  .enum(todoStatusValues)
+  .enum(TODO_STATUS)
   .describe('Current status of the task');
 export type TodoStatus = z.infer<typeof TodoStatusSchema>;
 

@@ -167,37 +167,22 @@ export function setOutputChannelFactory(
   mainOutputChannel = null;
 }
 
-export function debug(
+type LogFn = (
   channel: string,
   message: string,
-  options: LogUtilsOptions = {},
-): void {
-  logAt('debug', channel, message, options);
+  options?: LogUtilsOptions,
+) => void;
+
+/** Build a level-bound forwarder onto {@link logAt}. */
+function makeLogFn(level: LogLevel): LogFn {
+  return (channel, message, options = {}) =>
+    logAt(level, channel, message, options);
 }
 
-export function info(
-  channel: string,
-  message: string,
-  options: LogUtilsOptions = {},
-): void {
-  logAt('info', channel, message, options);
-}
-
-export function warn(
-  channel: string,
-  message: string,
-  options: LogUtilsOptions = {},
-): void {
-  logAt('warn', channel, message, options);
-}
-
-export function error(
-  channel: string,
-  message: string,
-  options: LogUtilsOptions = {},
-): void {
-  logAt('error', channel, message, options);
-}
+export const debug = makeLogFn(LOG_LEVELS.DEBUG);
+export const info = makeLogFn(LOG_LEVELS.INFO);
+export const warn = makeLogFn(LOG_LEVELS.WARN);
+export const error = makeLogFn(LOG_LEVELS.ERROR);
 
 // ─── Trace subscriber ────────────────────────────────────────────────────
 

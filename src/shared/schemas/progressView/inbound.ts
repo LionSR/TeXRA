@@ -12,6 +12,7 @@ import {
 } from '@shared/utils/dispatcher';
 
 import { SwitchViewMessageSchema } from '../commonViewMessages';
+import { commandOnly } from '../messageFactories';
 import {
   ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
@@ -33,37 +34,10 @@ const TrimmedStringSchema = z
   .transform((s) => s.trim())
   .pipe(z.string().min(1));
 
-const WebviewReadyMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.WEBVIEW_READY),
-});
-
-const InboundDeleteAllMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
-});
-
-const OpenProfileMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_PROFILE),
-});
-
-const OpenMemoryViewMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW),
-});
-
-const StartRecordingMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.START_RECORDING),
-});
-
-const StopRecordingMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.STOP_RECORDING),
-});
-
-const PopOutMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.POP_OUT),
-});
-
-const PopBackMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.POP_BACK),
-});
+/** StreamScopedBaseSchema plus a `command` literal, with no extra fields. */
+function streamScopedCommand<T extends string>(command: T) {
+  return StreamScopedBaseSchema.extend({ command: z.literal(command) });
+}
 
 const ThemeSetMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
@@ -73,58 +47,6 @@ const ThemeSetMessageSchema = z.object({
 const DebugModeSetMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET),
   debugMode: z.boolean(),
-});
-
-const SwitchStreamMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
-});
-
-const InboundDeleteStreamMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
-});
-
-const StopStreamMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.STOP_STREAM),
-});
-
-const CompactResponseMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE),
-});
-
-const ResumeMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESUME),
-});
-
-const RunNewMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_NEW),
-});
-
-const DiffStreamMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.DIFF_STREAM),
-});
-
-const PackStreamMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.PACK_STREAM),
-});
-
-const CleanStreamMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.CLEAN_STREAM),
-});
-
-const RestoreStateMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_STATE),
-});
-
-const OpenTaskStorageMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE),
-});
-
-const RunCompileFixerMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER),
-});
-
-const GetFollowupOptionsMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS),
 });
 
 const FollowupConfigSchema = StreamScopedBaseSchema.extend({
@@ -139,10 +61,6 @@ const SetupFollowupMessageSchema = FollowupConfigSchema.extend({
 
 const RunFollowupMessageSchema = FollowupConfigSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP),
-});
-
-const CancelRetryRequestMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST),
 });
 
 const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
@@ -162,30 +80,6 @@ const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
    *  (Codex) and hit its usage limit. The handler turns off the "prefer
    *  ChatGPT subscription" preference so the retry uses the OpenAI key. */
   chatgptSubscription: z.boolean().optional(),
-});
-
-const ToggleToolEditApprovalBypassMessageSchema = StreamScopedBaseSchema.extend(
-  {
-    command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS),
-  },
-);
-
-const ToggleSuperYoloBypassMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),
-});
-
-// Set-on (idempotent) super-yolo enable, the proposal counterpart to
-// ENABLE_APPROVAL_BYPASS: the inline "Super Yolo (this session)" prompt button
-// means "enable", never "flip", so it can't invert an already-on bypass that
-// was turned on from the stream header while the prompt was still visible.
-const EnableSuperYoloBypassMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS),
-});
-
-// Set-on (idempotent) bypass enable, distinct from the shield's toggle: the
-// inline "Yolo (this session)" prompt button means "enable", never "flip".
-const EnableApprovalBypassMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS),
 });
 
 const SendFollowUpMessageSchema = StreamScopedBaseSchema.extend({
@@ -351,38 +245,47 @@ const GettingStartedActionMessageSchema = z.object({
 export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
   'command',
   [
-    WebviewReadyMessageSchema,
+    commandOnly(PROGRESS_VIEW_COMMANDS.WEBVIEW_READY),
     SwitchViewMessageSchema,
     ThemeSetMessageSchema,
     DebugModeSetMessageSchema,
-    SwitchStreamMessageSchema,
-    InboundDeleteStreamMessageSchema,
-    InboundDeleteAllMessageSchema,
-    StopStreamMessageSchema,
-    CompactResponseMessageSchema,
-    ResumeMessageSchema,
-    RunNewMessageSchema,
-    DiffStreamMessageSchema,
-    PackStreamMessageSchema,
-    CleanStreamMessageSchema,
-    RestoreStateMessageSchema,
-    OpenTaskStorageMessageSchema,
-    RunCompileFixerMessageSchema,
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
+    commandOnly(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.STOP_STREAM),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.RESUME),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.RUN_NEW),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.DIFF_STREAM),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.PACK_STREAM),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.CLEAN_STREAM),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.RESTORE_STATE),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER),
     FilterStreamsMessageSchema,
     SendFollowUpMessageSchema,
     PolishFollowUpMessageSchema,
     RetryStreamRequestMessageSchema,
-    CancelRetryRequestMessageSchema,
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST),
     UseOwnApiKeyMessageSchema,
-    StartRecordingMessageSchema,
-    StopRecordingMessageSchema,
-    PopOutMessageSchema,
-    PopBackMessageSchema,
+    commandOnly(PROGRESS_VIEW_COMMANDS.START_RECORDING),
+    commandOnly(PROGRESS_VIEW_COMMANDS.STOP_RECORDING),
+    commandOnly(PROGRESS_VIEW_COMMANDS.POP_OUT),
+    commandOnly(PROGRESS_VIEW_COMMANDS.POP_BACK),
     ToolEditApprovalActionMessageSchema,
-    ToggleToolEditApprovalBypassMessageSchema,
-    ToggleSuperYoloBypassMessageSchema,
-    EnableSuperYoloBypassMessageSchema,
-    EnableApprovalBypassMessageSchema,
+    streamScopedCommand(
+      PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+    ),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),
+    // Set-on (idempotent) super-yolo enable, the proposal counterpart to
+    // ENABLE_APPROVAL_BYPASS: the inline "Super Yolo (this session)" prompt
+    // button means "enable", never "flip", so it can't invert an already-on
+    // bypass that was turned on from the stream header while the prompt was
+    // still visible.
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS),
+    // Set-on (idempotent) bypass enable, distinct from the shield's toggle: the
+    // inline "Yolo (this session)" prompt button means "enable", never "flip".
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS),
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     PlanApprovalActionMessageSchema,
@@ -390,8 +293,8 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     UserQuestionActionMessageSchema,
     RestoreProposalConfigMessageSchema,
     ShowInformationMessageSchema,
-    OpenProfileMessageSchema,
-    OpenMemoryViewMessageSchema,
+    commandOnly(PROGRESS_VIEW_COMMANDS.OPEN_PROFILE),
+    commandOnly(PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW),
     OpenFileMessageSchema,
     OpenFileCompileMessageSchema,
     CompareOriginalMessageSchema,
@@ -400,7 +303,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     MergeFileMessageSchema,
     LatexdiffFileMessageSchema,
     OpenLabelMessageSchema,
-    GetFollowupOptionsMessageSchema,
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS),
     SetupFollowupMessageSchema,
     RunFollowupMessageSchema,
     GettingStartedActionMessageSchema,

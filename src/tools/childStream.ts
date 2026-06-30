@@ -14,6 +14,9 @@ import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 // Local imports - errors
 import { classifyAgentError, toErrorMessage } from '@common/errors';
 
+// Local imports - constants
+import { deriveRunOutcome } from '@common/constants/streamStatus';
+
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
 import { STREAM_STATUS } from '@shared/schemas';
@@ -187,12 +190,10 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
       : hasError
         ? STREAM_STATUS.ERROR
         : requestedStatus;
-  const outcome =
-    finalStatus === STREAM_STATUS.ERROR
-      ? 'failed'
-      : finalStatus === STREAM_STATUS.STOPPED
-        ? 'cancelled'
-        : 'completed';
+  const outcome = deriveRunOutcome({
+    failed: finalStatus === STREAM_STATUS.ERROR,
+    cancelled: finalStatus === STREAM_STATUS.STOPPED,
+  });
   const error =
     outcome === 'failed'
       ? {

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import {
   closeTexraApp,
+  dismissOnboarding,
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
@@ -37,25 +38,7 @@ let launched: LaunchedApp;
 test.beforeAll(async () => {
   launched = await launchTexraApp();
   // Dismiss the first-run walkthrough so it doesn't intercept clicks.
-  await launched.page.waitForFunction(
-    () => {
-      const btn = Array.from(document.querySelectorAll('wa-button')).find(
-        (b) => b.textContent?.trim() === 'Got it',
-      );
-      return btn instanceof HTMLElement;
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
-  await launched.page.evaluate(() => {
-    const btn = Array.from(document.querySelectorAll('wa-button')).find(
-      (b) => b.textContent?.trim() === 'Got it',
-    );
-    if (btn instanceof HTMLElement) btn.click();
-  });
-  await launched.page
-    .locator('wa-dialog.desktop-onboarding')
-    .waitFor({ state: 'hidden', timeout: 5000 });
+  await dismissOnboarding(launched.page);
 });
 
 test.afterAll(async () => {
@@ -101,6 +84,27 @@ async function setSettingsTab(tabIndex: number): Promise<void> {
 }
 
 /**
+ * Wait until the named settings panel (or its tab) reports `active`. Without
+ * this confirmation a test can catch the previous tab's render and report a
+ * false positive.
+ */
+async function waitForActiveSettingsPanel(panel: string): Promise<void> {
+  await launched.page.waitForFunction(
+    (name) => {
+      const settingsApp = document.querySelector('settings-app');
+      const root = settingsApp?.shadowRoot;
+      const activePanel = root?.querySelector(
+        `wa-tab-panel[name="${name}"][active]`,
+      );
+      const activeTab = root?.querySelector(`wa-tab[panel="${name}"][active]`);
+      return activeTab != null || activePanel != null;
+    },
+    panel,
+    { timeout: 10_000 },
+  );
+}
+
+/**
  * Trajectory 1 — first launch on an empty workspace.
  * The launcher (main route) must mount without crashing the renderer.
  */
@@ -136,19 +140,7 @@ test('settings → models tab mounts and the auth surface is reachable', async (
   await setSettingsTab(SETTINGS_TAB_INDEX.MODELS);
   // Confirm the Models panel actually activated; without this we may catch
   // the previous tab's render and report a false positive.
-  await launched.page.waitForFunction(
-    () => {
-      const settingsApp = document.querySelector('settings-app');
-      const root = settingsApp?.shadowRoot;
-      const activePanel = root?.querySelector(
-        'wa-tab-panel[name="models"][active]',
-      );
-      const activeTab = root?.querySelector('wa-tab[panel="models"][active]');
-      return activeTab != null || activePanel != null;
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
+  await waitForActiveSettingsPanel('models');
   // Sanity: the panel mounted a child custom element (the profile/models
   // surface). The actual auth banner text and provider list live one or
   // two shadow roots deep, so we only assert structural presence here.
@@ -169,19 +161,7 @@ test('settings → models tab mounts and the auth surface is reachable', async (
  */
 test('settings → memory tab mounts', async () => {
   await setSettingsTab(SETTINGS_TAB_INDEX.MEMORY);
-  await launched.page.waitForFunction(
-    () => {
-      const settingsApp = document.querySelector('settings-app');
-      const root = settingsApp?.shadowRoot;
-      const activePanel = root?.querySelector(
-        'wa-tab-panel[name="memory"][active]',
-      );
-      const activeTab = root?.querySelector('wa-tab[panel="memory"][active]');
-      return activeTab != null || activePanel != null;
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
+  await waitForActiveSettingsPanel('memory');
 });
 
 /**
@@ -208,19 +188,7 @@ test('logs route renders the desktop log viewer', async () => {
  */
 test('settings → tools tab mounts', async () => {
   await setSettingsTab(SETTINGS_TAB_INDEX.TOOLS);
-  await launched.page.waitForFunction(
-    () => {
-      const settingsApp = document.querySelector('settings-app');
-      const root = settingsApp?.shadowRoot;
-      const activePanel = root?.querySelector(
-        'wa-tab-panel[name="tools"][active]',
-      );
-      const activeTab = root?.querySelector('wa-tab[panel="tools"][active]');
-      return activeTab != null || activePanel != null;
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
+  await waitForActiveSettingsPanel('tools');
 });
 
 /**

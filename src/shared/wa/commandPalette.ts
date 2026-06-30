@@ -138,12 +138,6 @@ export function isCommandPaletteShortcut(event: KeyboardEvent): boolean {
   );
 }
 
-function resolveCommandPaletteEntries(
-  entries: CommandPaletteEntrySource,
-): CommandPaletteEntry[] {
-  return [...(typeof entries === 'function' ? entries() : entries)];
-}
-
 export function createCommandPalette({
   document,
   entries,
@@ -185,25 +179,18 @@ export function createCommandPalette({
   const handleFilterKeydown = (event: KeyboardEvent): void => {
     switch (event.key) {
       case 'ArrowDown':
+      case 'ArrowUp': {
         event.preventDefault();
+        const delta = event.key === 'ArrowDown' ? 1 : -1;
         activeIndex = getNextCommandPaletteIndex(
           activeIndex,
           visibleEntries.length,
-          1,
+          delta,
         );
         renderTemplate();
         scrollActiveItemIntoView();
         break;
-      case 'ArrowUp':
-        event.preventDefault();
-        activeIndex = getNextCommandPaletteIndex(
-          activeIndex,
-          visibleEntries.length,
-          -1,
-        );
-        renderTemplate();
-        scrollActiveItemIntoView();
-        break;
+      }
       case 'Enter':
         event.preventDefault();
         executeActiveCommand();
@@ -223,11 +210,7 @@ export function createCommandPalette({
   };
 
   const inputClass = classes?.input;
-  const listClass = classes?.list;
   const itemClass = classes?.item;
-  const labelClass = classes?.label;
-  const metaClass = classes?.meta;
-  const emptyClass = classes?.empty;
 
   const renderTemplate = (): void => {
     render(
@@ -243,9 +226,9 @@ export function createCommandPalette({
           @input=${handleFilterInput}
           @keydown=${handleFilterKeydown}
         ></wa-input>
-        <div class=${listClass ?? ''} role="listbox">
+        <div class=${classes?.list ?? ''} role="listbox">
           ${visibleEntries.length === 0
-            ? html`<div class=${emptyClass ?? ''} role="status">
+            ? html`<div class=${classes?.empty ?? ''} role="status">
                 No matching commands
               </div>`
             : nothing}
@@ -263,8 +246,8 @@ export function createCommandPalette({
                 @mouseenter=${handleItemMouseEnter(index)}
                 @click=${handleItemClick(entry)}
               >
-                <span class=${labelClass ?? ''}>${entry.label}</span>
-                <span class=${metaClass ?? ''}>${entry.meta ?? ''}</span>
+                <span class=${classes?.label ?? ''}>${entry.label}</span>
+                <span class=${classes?.meta ?? ''}>${entry.meta ?? ''}</span>
               </button>
             `,
           )}
@@ -286,7 +269,7 @@ export function createCommandPalette({
   const open = (): void => {
     if (canOpen?.() === false) return;
     if (dialog.open) return;
-    allEntries = resolveCommandPaletteEntries(entries);
+    allEntries = [...(typeof entries === 'function' ? entries() : entries)];
     query = '';
     visibleEntries = [...allEntries];
     activeIndex = visibleEntries.length > 0 ? 0 : -1;
@@ -312,7 +295,7 @@ export function createCommandPalette({
   // no palette descendant is focused. canOpen guards against modal dialogs
   // (e.g. the onboarding walkthrough) stealing the shortcut while visible.
   if (isShortcut) {
-    document.defaultView?.addEventListener('keydown', (event) => {
+    view?.addEventListener('keydown', (event) => {
       if (!isShortcut(event)) return;
       if (isTextEntryShortcutTarget(view, document, event)) return;
       event.preventDefault();

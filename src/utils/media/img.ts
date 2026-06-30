@@ -18,14 +18,6 @@ import { executeCommand } from '@utils/system/execUtils';
 const CHANNEL = 'ImgUtils';
 logger.initialize(CHANNEL);
 
-/**
- * Get the maximum image dimension from VS Code configuration
- * @returns Maximum image dimension (defaults to 2000)
- */
-function getMaxImageDimension(): number {
-  return getConfig<number>('texra.maxImageDimension', 2000);
-}
-
 // Define the temporary directory path
 const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
 
@@ -130,7 +122,7 @@ const API_MAX_IMAGE_DIMENSION = 8000;
 async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   const tool = await selectImageTool();
   const maxDimension = Math.min(
-    getMaxImageDimension(),
+    getConfig<number>('texra.maxImageDimension', 2000),
     API_MAX_IMAGE_DIMENSION,
   );
   const { width, height } = await getImageDimensions(imagePath, tool);

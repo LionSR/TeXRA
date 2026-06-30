@@ -25,6 +25,25 @@ export function registerTextEditorCommands(
   /* registration handled by extensionCommandSurface */
 }
 
+// Prompt for a line number, rejecting non-numeric input and (when `min` is
+// given) values below the floor. Shared by the start/end/insert prompts.
+async function promptLineNumber(
+  prompt: string,
+  errorMessage: string,
+  min?: number,
+): Promise<string | undefined> {
+  return vscode.window.showInputBox({
+    prompt,
+    validateInput: (value) => {
+      const num = Number.parseInt(value, 10);
+      if (Number.isNaN(num) || (min !== undefined && num < min)) {
+        return errorMessage;
+      }
+      return '';
+    },
+  });
+}
+
 /**
  * Handle the test text editor command
  * This command allows testing the TextEditorTool with different commands
@@ -78,23 +97,16 @@ export async function handleTestTextEditor(): Promise<void> {
         });
 
         if (useRange === 'Yes') {
-          const startLine = await vscode.window.showInputBox({
-            prompt: 'Enter start line number',
-            validateInput: (value) => {
-              const num = Number.parseInt(value, 10);
-              return isNaN(num) || num < 1
-                ? 'Please enter a valid line number'
-                : '';
-            },
-          });
+          const startLine = await promptLineNumber(
+            'Enter start line number',
+            'Please enter a valid line number',
+            1,
+          );
 
-          const endLine = await vscode.window.showInputBox({
-            prompt: 'Enter end line number (or -1 for end of file)',
-            validateInput: (value) => {
-              const num = Number.parseInt(value, 10);
-              return isNaN(num) ? 'Please enter a valid line number' : '';
-            },
-          });
+          const endLine = await promptLineNumber(
+            'Enter end line number (or -1 for end of file)',
+            'Please enter a valid line number',
+          );
 
           if (startLine && endLine) {
             input.view_range = [
@@ -126,15 +138,11 @@ export async function handleTestTextEditor(): Promise<void> {
 
       case 'insert':
         // Get line number and text to insert
-        const insertLine = await vscode.window.showInputBox({
-          prompt: 'Enter line number to insert at',
-          validateInput: (value) => {
-            const num = Number.parseInt(value, 10);
-            return isNaN(num) || num < 0
-              ? 'Please enter a valid line number (0 or greater)'
-              : '';
-          },
-        });
+        const insertLine = await promptLineNumber(
+          'Enter line number to insert at',
+          'Please enter a valid line number (0 or greater)',
+          0,
+        );
 
         if (!insertLine) {
           return;

@@ -46,14 +46,6 @@ export const VscodeSettingsExtensionShape = {
     .prefault(DEFAULT_VSCODE_SETTINGS_EXTENSION.apiKeys),
 };
 
-export const VscodeSettingsExtensionSchema = z
-  .strictObject(VscodeSettingsExtensionShape)
-  .prefault(DEFAULT_VSCODE_SETTINGS_EXTENSION);
-
-export type VscodeSettingsExtension = z.infer<
-  typeof VscodeSettingsExtensionSchema
->;
-
 /**
  * Dotted leaf paths for every VS Code-only setting.
  */

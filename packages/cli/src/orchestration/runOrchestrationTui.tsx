@@ -105,6 +105,10 @@ const ORCHESTRATION_SELECT_MARGIN_ROWS = 1;
 const ORCHESTRATION_KEY_HINT_ROWS = 2;
 const ORCHESTRATION_TARGET_VISIBLE_ITEMS = 4;
 
+// Shared between the wrapped-row layout measurement (`headerLines`) and the
+// rendered launcher header so the measured and displayed subtitle can't drift.
+const ORCHESTRATION_LAUNCHER_SUBTITLE = 'Choose how to start this CLI session.';
+
 function orchestrationLinesRowCost(
   lines: readonly string[],
   columns: number,
@@ -220,7 +224,7 @@ export function OrchestrationApp(
         `${modelStepTitle} · ${formatCliApiMode(props.apiMode)}`,
         modelStepSubtitle,
       ]
-    : [`TeXRA v${props.version}`, 'Choose how to start this CLI session.'];
+    : [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
   const layout = orchestrationLauncherLayout({
     rows,
     columns,
@@ -286,7 +290,7 @@ export function OrchestrationApp(
         </Text>
         <Text dimColor>v{props.version}</Text>
       </Box>
-      <Text dimColor>Choose how to start this CLI session.</Text>
+      <Text dimColor>{ORCHESTRATION_LAUNCHER_SUBTITLE}</Text>
       {layout.statusLines.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
           {layout.statusLines.map((line, index) => (
