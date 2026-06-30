@@ -8,13 +8,13 @@ import { z } from 'zod';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { debug } from '@logger/logUtils';
 import { formatRelativeTime } from '@shared/utils/string';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local imports - tool core
 import { defineTool } from '../core/define';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   recordToolFileRead,
   requireFileReadForEdit,
@@ -98,6 +98,14 @@ export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
 
 /** Canonical pair of display path (`/memories/...`) and storage path. */
 type MemoryLocation = { display: string; storage: string };
+
+/** One row gathered while walking a memory directory for listing. */
+type ListingEntry = {
+  path: string;
+  size: number;
+  mtime: number;
+  isDir: boolean;
+};
 
 /**
  * Memory tool for managing persistent context files under /memories.
@@ -498,12 +506,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   }
 
   private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {
-    const entries: Array<{
-      path: string;
-      size: number;
-      mtime: number;
-      isDir: boolean;
-    }> = [];
+    const entries: ListingEntry[] = [];
     const rootStats = await StorageFS.stat(resolvedPath);
     entries.push({
       path: resolvedPath,
@@ -543,12 +546,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private async walkDirectory(
     currentPath: string,
     depth: number,
-    entries: Array<{
-      path: string;
-      size: number;
-      mtime: number;
-      isDir: boolean;
-    }>,
+    entries: ListingEntry[],
   ): Promise<void> {
     if (depth >= DIRECTORY_LISTING_DEPTH) return;
 

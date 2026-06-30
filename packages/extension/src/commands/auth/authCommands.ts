@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
 import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from '@auth/constants';
-import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { showSettingsView } from '@commands/settings';
+import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { toErrorMessage } from '@common/errors';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { getConfig } from '@utils/config';
@@ -16,12 +16,6 @@ function isVSCodeGitHubEnabled(): boolean {
   return getConfig('auth.enableVSCodeGitHub', false);
 }
 
-async function getExistingSession(): Promise<
-  vscode.AuthenticationSession | undefined
->;
-async function getExistingSession(
-  authReady: boolean,
-): Promise<vscode.AuthenticationSession | undefined>;
 async function getExistingSession(
   authReady?: boolean,
 ): Promise<vscode.AuthenticationSession | undefined> {

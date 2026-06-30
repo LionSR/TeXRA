@@ -1,4 +1,4 @@
-/** String validation, formatting, duration, and token count utilities. */
+/** String validation, formatting, duration, token count, and error serialization utilities. */
 
 import prettyMilliseconds from 'pretty-ms';
 import { serializeError, type ErrorObject } from 'serialize-error';
@@ -27,6 +27,11 @@ export function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+/** Floor a millisecond duration down to whole-second granularity. */
+function floorToWholeSeconds(durationMs: number): number {
+  return Math.floor(durationMs / 1000) * 1000;
+}
+
 /**
  * Format a duration in milliseconds to a compact human-readable string
  * (e.g. `3m 42s`, `1h 5m`, `2d 4h`).
@@ -41,8 +46,9 @@ export function isString(value: unknown): value is string {
 export function formatDuration(durationMs: number): string {
   if (durationMs < 0) return '0s';
   if (durationMs < 1000) return '1s';
-  const wholeSeconds = Math.floor(durationMs / 1000) * 1000;
-  return prettyMilliseconds(wholeSeconds, { secondsDecimalDigits: 0 });
+  return prettyMilliseconds(floorToWholeSeconds(durationMs), {
+    secondsDecimalDigits: 0,
+  });
 }
 
 /**
@@ -53,7 +59,7 @@ export function formatDuration(durationMs: number): string {
  * displays that start from zero, e.g. Goal timings and Lean server uptime).
  */
 export function formatCompactDuration(durationMs: number): string {
-  const wholeSeconds = Math.floor(Math.max(0, durationMs) / 1000) * 1000;
+  const wholeSeconds = floorToWholeSeconds(Math.max(0, durationMs));
   if (wholeSeconds === 0) return '0s';
   return prettyMilliseconds(wholeSeconds, {
     secondsDecimalDigits: 0,

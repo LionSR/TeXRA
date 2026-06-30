@@ -315,12 +315,7 @@ export class LaTeXdiffService {
     options?: { cwd?: string; outputDirectory?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const [baseExists, outputExists] = await Promise.all([
-        flexibleFS.exists(baseLocation),
-        flexibleFS.exists(outputLocation),
-      ]);
-
-      if (!baseExists || !outputExists) {
+      if (!(await this.bothFilesExist(baseLocation, outputLocation))) {
         const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseLocation.absolutePath} or ${outputLocation.absolutePath}`;
         logger.warn(this.channel, message);
         return { success: false, message };
@@ -346,12 +341,7 @@ export class LaTeXdiffService {
     options?: { cwd?: string; outputDirectory?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const [firstExists, secondExists] = await Promise.all([
-        flexibleFS.exists(firstLocation),
-        flexibleFS.exists(secondLocation),
-      ]);
-
-      if (!firstExists || !secondExists) {
+      if (!(await this.bothFilesExist(firstLocation, secondLocation))) {
         const message = `Could not generate latexdiff between rounds. Files not found: ${firstLocation.absolutePath} or ${secondLocation.absolutePath}`;
         logger.warn(this.channel, message);
         return { success: false, message };
@@ -389,6 +379,17 @@ export class LaTeXdiffService {
       files.map((file) => flexibleFS.read(file)),
     );
     return contents.every(hasDocumentEnvironment);
+  }
+
+  private async bothFilesExist(
+    first: FileLocation,
+    second: FileLocation,
+  ): Promise<boolean> {
+    const [firstExists, secondExists] = await Promise.all([
+      flexibleFS.exists(first),
+      flexibleFS.exists(second),
+    ]);
+    return firstExists && secondExists;
   }
 
   private async getGitRoot(cwd: string): Promise<string | null> {

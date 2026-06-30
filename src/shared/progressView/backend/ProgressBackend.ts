@@ -1,7 +1,5 @@
-// Local imports - shared progress backend
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
-import type { ProgressViewOutboundMessage } from '@shared/schemas';
 import {
   WebviewBridge,
   type ProgressViewMessageSender,
@@ -17,8 +15,6 @@ import type { MementoStorage } from '@shared/progressView/backend/persistence/Pe
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import type { StreamSnapshotStore } from '@transcript';
 
-export type ProgressBackendMessageSender = ProgressViewMessageSender;
-
 export interface ProgressBackendServices {
   state: ProgressViewState;
   webviewUpdater: WebviewUpdater;
@@ -33,22 +29,12 @@ export interface ProgressBackendUiConfig {
 export interface ProgressBackendOptions {
   storage: MementoStorage;
   snapshots?: StreamSnapshotStore;
-  sendMessage: ProgressBackendMessageSender;
+  sendMessage: ProgressViewMessageSender;
   hasTarget(): boolean;
   configureUi(services: ProgressBackendServices): ProgressBackendUiConfig;
   getStreamControls?: GetProgressStreamControls;
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
-}
-
-function sendUpdaterMessage(
-  sendMessage: ProgressBackendMessageSender,
-  message: ProgressViewOutboundMessage,
-): void {
-  // View refreshes are best-effort; a closed transport must not take down the
-  // backend. The async wrapper funnels sync throws and rejections into one
-  // swallowed path.
-  void (async () => sendMessage(message))().catch(() => undefined);
 }
 
 /**
@@ -71,7 +57,10 @@ export class ProgressBackend {
       options.session,
     );
     this.webviewUpdater = new WebviewUpdater((message) => {
-      sendUpdaterMessage(options.sendMessage, message);
+      // View refreshes are best-effort; a closed transport must not take down
+      // the backend. The async wrapper funnels sync throws and rejections into
+      // one swallowed path.
+      void (async () => options.sendMessage(message))().catch(() => undefined);
     }, options.hasTarget);
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,

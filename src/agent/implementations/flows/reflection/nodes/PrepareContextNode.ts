@@ -78,7 +78,7 @@ export class PrepareContextNode<C = unknown> extends Node<
 
     return {
       messages,
-      prefill: prefill ?? '',
+      prefill,
       stateRoundSnapshot: stateRound,
     };
   }

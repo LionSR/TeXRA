@@ -206,6 +206,19 @@ function errorTextForDisplay(toolUse: NormalizedToolUse): string {
   return toolUse.isError ? toolUse.errorText || '(error)' : '';
 }
 
+/** Single corner line with the collapsed, truncated error text, or none when
+ *  the tool did not error. */
+function errorCornerLines(toolUse: NormalizedToolUse): readonly string[] {
+  const errorText = errorTextForDisplay(toolUse);
+  if (!errorText) return [];
+  return [
+    `${TOOL_OUTPUT_CORNER} ${truncateWithEllipsis(
+      collapseWhitespace(errorText),
+      MAX_ERROR_PREVIEW,
+    )}`,
+  ];
+}
+
 function errorPreviewWouldTruncate(toolUse: NormalizedToolUse): boolean {
   return (
     collapseWhitespace(errorTextForDisplay(toolUse)).length > MAX_ERROR_PREVIEW
@@ -292,7 +305,6 @@ function universalToolUseDisplayLines(
   } = {},
 ): readonly string[] {
   const patchLines = toolUsePatchDisplayLines(toolUse);
-  const errorText = errorTextForDisplay(toolUse);
   const outputLines =
     options.showOutput === true
       ? outputDisplayLines(toolUse, options.elide ?? true)
@@ -308,14 +320,7 @@ function universalToolUseDisplayLines(
     formatHeader(toolUse, options.displayName),
     ...outputLines,
     ...patchLines,
-    ...(toolUse.isError
-      ? [
-          `${TOOL_OUTPUT_CORNER} ${truncateWithEllipsis(
-            collapseWhitespace(errorText),
-            MAX_ERROR_PREVIEW,
-          )}`,
-        ]
-      : []),
+    ...errorCornerLines(toolUse),
     ...(showNoOutput ? [`${TOOL_OUTPUT_CORNER} (no output)`] : []),
   ];
 }
@@ -326,21 +331,13 @@ function bashToolUseDisplayLines(
 ): readonly string[] {
   const exitCode = extractExitCode(toolUse);
   const outputLines = outputDisplayLines(toolUse, options.elide ?? true);
-  const errorText = errorTextForDisplay(toolUse);
   return [
     formatHeader(toolUse),
     ...outputLines,
     ...(toolUse.isError && exitCode !== undefined
       ? [`${TOOL_OUTPUT_CORNER} exit ${exitCode}`]
       : []),
-    ...(toolUse.isError
-      ? [
-          `${TOOL_OUTPUT_CORNER} ${truncateWithEllipsis(
-            collapseWhitespace(errorText),
-            MAX_ERROR_PREVIEW,
-          )}`,
-        ]
-      : []),
+    ...errorCornerLines(toolUse),
     ...(toolUse.status === TOOL_USE_STATUS.COMPLETED &&
     !toolUse.isError &&
     outputLines.length === 0
@@ -348,6 +345,9 @@ function bashToolUseDisplayLines(
       : []),
   ];
 }
+
+/** Combined left padding of the two nested boxes wrapping the patch diff. */
+const PATCH_PREVIEW_INDENT = 4;
 
 function PatchPreview({
   groups,
@@ -373,9 +373,6 @@ function PatchPreview({
     </Box>
   );
 }
-
-/** Combined left padding of the two nested boxes wrapping the patch diff. */
-const PATCH_PREVIEW_INDENT = 4;
 
 function OutputBlock({
   lines,

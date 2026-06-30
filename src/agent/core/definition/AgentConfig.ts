@@ -53,17 +53,14 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
 export const AgentConfigSchema = z.preprocess(
   migrateLegacyContextFileFields,
   AgentConfigFieldsSchema.superRefine((config, ctx) => {
-    // Validate that output files count doesn't exceed input files count
-    if (config.outputFiles.length > 0) {
-      const inputCount = config.inputFiles.length;
-      if (config.outputFiles.length > inputCount) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['outputFiles'],
-          message:
-            'Number of output files must not be greater than the number of input files.',
-        });
-      }
+    // Output files must not outnumber input files.
+    if (config.outputFiles.length > config.inputFiles.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['outputFiles'],
+        message:
+          'Number of output files must not be greater than the number of input files.',
+      });
     }
   }),
 );

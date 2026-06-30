@@ -148,65 +148,68 @@ export class FileSelectGroup extends LitElement {
     this.handleCheckboxChange(id, Boolean(item?.checked));
   };
 
-  private renderToolConfigMenu(): TemplateResult {
-    const values = this.currentCheckboxValues;
-    const hasChecked = values.attachTeXCount;
-    const disabled = this.isFileInputDisabled;
-
+  /** Shared wa-dropdown chrome (trigger button + tooltip) for the checkbox menus. */
+  private renderConfigDropdown(opts: {
+    id: string;
+    icon: TeXRAIconName;
+    label: string;
+    hasOptions: boolean;
+    items: TemplateResult;
+  }): TemplateResult {
     return html`
       <wa-dropdown placement="bottom-start" @wa-select=${this.handleMenuSelect}>
         <wa-button
           slot="trigger"
-          id="toggleToolConfig"
+          id=${opts.id}
           class=${classMap({
             'action-icon-button': true,
-            'has-options': hasChecked,
+            'has-options': opts.hasOptions,
           })}
           appearance="plain"
           variant="neutral"
           size="small"
           type="button"
-          aria-label="Tool configuration options"
+          aria-label=${opts.label}
         >
-          ${waIcon('tools')}
+          ${waIcon(opts.icon)}
         </wa-button>
+        ${opts.items}
+      </wa-dropdown>
+      <wa-tooltip for=${opts.id}>${opts.label}</wa-tooltip>
+    `;
+  }
+
+  private renderToolConfigMenu(): TemplateResult {
+    const values = this.currentCheckboxValues;
+    return this.renderConfigDropdown({
+      id: 'toggleToolConfig',
+      icon: 'tools',
+      label: 'Tool configuration options',
+      hasOptions: Boolean(values.attachTeXCount),
+      items: html`
         <wa-dropdown-item
           type="checkbox"
           value="attachTeXCount"
           ?checked=${values.attachTeXCount}
-          ?disabled=${disabled}
+          ?disabled=${this.isFileInputDisabled}
         >
           Attach TeX Count
         </wa-dropdown-item>
-      </wa-dropdown>
-      <wa-tooltip for="toggleToolConfig">Tool configuration options</wa-tooltip>
-    `;
+      `,
+    });
   }
 
   private renderAutoExtractMenu(): TemplateResult {
     const values = this.currentCheckboxValues;
-    const hasChecked =
-      values.autoExtractFigure ||
-      values.autoExtractTikzFigure ||
-      values.autoCompileInputPdf;
-
-    return html`
-      <wa-dropdown placement="bottom-start" @wa-select=${this.handleMenuSelect}>
-        <wa-button
-          slot="trigger"
-          id="toggleAutoExtract"
-          class=${classMap({
-            'action-icon-button': true,
-            'has-options': hasChecked,
-          })}
-          appearance="plain"
-          variant="neutral"
-          size="small"
-          type="button"
-          aria-label="Auto-extract options"
-        >
-          ${waIcon('wand')}
-        </wa-button>
+    return this.renderConfigDropdown({
+      id: 'toggleAutoExtract',
+      icon: 'wand',
+      label: 'Auto-extract options',
+      hasOptions:
+        values.autoExtractFigure ||
+        values.autoExtractTikzFigure ||
+        values.autoCompileInputPdf,
+      items: html`
         <wa-dropdown-item
           type="checkbox"
           value="autoExtractFigure"
@@ -228,9 +231,8 @@ export class FileSelectGroup extends LitElement {
         >
           Compile Input PDF
         </wa-dropdown-item>
-      </wa-dropdown>
-      <wa-tooltip for="toggleAutoExtract">Auto-extract options</wa-tooltip>
-    `;
+      `,
+    });
   }
 
   private renderFileList(): TemplateResult {
@@ -293,6 +295,8 @@ export class FileSelectGroup extends LitElement {
 
   override render(): TemplateResult {
     const { config } = this;
+    const typeLabel =
+      config.type.charAt(0).toUpperCase() + config.type.slice(1);
 
     return html`
       <div
@@ -326,27 +330,21 @@ export class FileSelectGroup extends LitElement {
           </div>
           <div class="file-select-actions">
             ${renderIconActionButton({
-              id: `addOpened${config.type.at(0)!.toUpperCase()}${config.type.slice(
-                1,
-              )}FilesButton`,
+              id: `addOpened${typeLabel}FilesButton`,
               icon: 'folder-opened',
               label: config.addOpenedLabel,
               tooltip: config.addOpenedLabel,
               onClick: this.handleAddOpenedFiles,
             })}
             ${renderIconActionButton({
-              id: `empty${config.type.at(0)!.toUpperCase()}${config.type.slice(
-                1,
-              )}FilesButton`,
+              id: `empty${typeLabel}FilesButton`,
               icon: 'trash',
               label: config.emptyListLabel,
               tooltip: config.emptyListLabel,
               onClick: this.handleEmptyFiles,
             })}
             ${renderIconActionButton({
-              id: `select${config.type.at(0)!.toUpperCase()}${config.type.slice(
-                1,
-              )}FilesButton`,
+              id: `select${typeLabel}FilesButton`,
               icon: 'add',
               label: config.selectListLabel,
               tooltip: config.selectListLabel,

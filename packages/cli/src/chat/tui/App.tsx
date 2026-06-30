@@ -500,6 +500,28 @@ export function approvalForegroundMaxRows(
   }
 }
 
+function foregroundMaxRowsForKind({
+  childControlHasItems,
+  kind,
+  pending,
+}: {
+  readonly childControlHasItems: boolean;
+  readonly kind: ForegroundSurfaceKind | undefined;
+  readonly pending: PendingApproval | undefined;
+}): number | undefined {
+  switch (kind) {
+    case 'childControls':
+      return childControlForegroundMaxRows({ hasItems: childControlHasItems });
+    case 'form':
+      return FORM_FOREGROUND_MAX_ROWS;
+    case 'approval':
+      return approvalForegroundMaxRows(pending);
+    case 'transcript':
+    case undefined:
+      return undefined;
+  }
+}
+
 export interface AppProps {
   readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
   readonly onKillExecution: (executionId: string) => void;
@@ -708,14 +730,11 @@ export function App(props: AppProps): React.JSX.Element {
   }, [childControlMode]);
   const childControlHasItems = childControlTarget?.hasItems ?? false;
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
-    foregroundMaxRows:
-      foregroundKind === 'childControls'
-        ? childControlForegroundMaxRows({ hasItems: childControlHasItems })
-        : foregroundKind === 'form'
-          ? FORM_FOREGROUND_MAX_ROWS
-          : foregroundKind === 'approval'
-            ? approvalForegroundMaxRows(pending)
-            : undefined,
+    foregroundMaxRows: foregroundMaxRowsForKind({
+      childControlHasItems,
+      kind: foregroundKind,
+      pending,
+    }),
     foregroundOpen,
     inputVisible: inputBarVisible,
     queuedFollowUpPanelRows,

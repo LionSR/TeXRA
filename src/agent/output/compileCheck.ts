@@ -40,6 +40,10 @@ const LOG_TAIL_LINES = 200;
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
+// Generic raw-wrapper stems are run-storage internals, not the meaningful
+// document name, so they must never leak into a compile display name.
+const GENERIC_OUTPUT_STEMS = new Set(['output', 'output.xml', 'output.tex']);
+
 export interface CompileCheckResult {
   failures: CompileFailure[];
   artifacts: CompiledPdfArtifact[];
@@ -55,12 +59,8 @@ function getCompileDisplayName(file: OutputFileInfo): string {
   const rawBase = path.basename(file.location.absolutePath);
   const src = file.source;
   if (!src || src === rawBase) return rawBase;
-  // Avoid leaking the generic raw-wrapper stem (`output`, `output.xml`, or the
-  // pre-refactor `output.tex`) as a display name — those are run-storage
-  // internals, not the meaningful document name.
   const srcBase = path.basename(src);
-  const GENERIC_STEMS = new Set(['output', 'output.xml', 'output.tex']);
-  return srcBase && !GENERIC_STEMS.has(srcBase) ? srcBase : rawBase;
+  return srcBase && !GENERIC_OUTPUT_STEMS.has(srcBase) ? srcBase : rawBase;
 }
 
 function resolveWorkspaceSourceDir(

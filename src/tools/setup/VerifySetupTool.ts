@@ -29,7 +29,7 @@ export class VerifySetupTool extends defineTool({
   protected async execute(input: VerifySetupInput): Promise<ToolResult> {
     const platform = getSetupPlatform();
 
-    if (input.tool !== undefined && input.tool !== null) {
+    if (input.tool != null) {
       const name = input.tool.trim();
       if (!name) {
         throw new ToolError(
@@ -102,20 +102,31 @@ export class VerifySetupTool extends defineTool({
     // subscription, or Researcher Access with Included Access on. A bare
     // auth.authenticated without usable server-side keys is NOT a working
     // credential, so we don't let it count toward "ready".
-    const credSummary = hasUsableCredential
-      ? 'usable model credential available'
-      : auth.authenticated
-        ? 'signed in but Included Access is OFF — need an API key or re-enable it'
-        : 'NONE — need an API key or sign-in';
+    let credSummary: string;
+    if (hasUsableCredential) {
+      credSummary = 'usable model credential available';
+    } else if (auth.authenticated) {
+      credSummary =
+        'signed in but Included Access is OFF — need an API key or re-enable it';
+    } else {
+      credSummary = 'NONE — need an API key or sign-in';
+    }
     lines.push(`Credentials: ${credSummary}.`);
 
     const ready =
       missingCore.length === 0 && latexWorkshopInstalled && hasUsableCredential;
 
+    let verificationSummary: string;
+    if (ready) {
+      verificationSummary = 'Setup verification: ready to go';
+    } else if (missingCore.length > 0) {
+      verificationSummary = `Setup verification: ${missingCore.length} missing tools`;
+    } else {
+      verificationSummary = 'Setup verification: gaps remain';
+    }
+
     return {
-      summary: ready
-        ? 'Setup verification: ready to go'
-        : `Setup verification: ${missingCore.length > 0 ? missingCore.length + ' missing tools' : 'gaps remain'}`,
+      summary: verificationSummary,
       output: lines.join('\n'),
     };
   }

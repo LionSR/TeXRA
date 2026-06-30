@@ -49,8 +49,6 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
   ]);
 }
 
-export { cloneOverleafProject };
-
 /**
  * Check if the workspace (or a given path) is inside a git repository.
  *
@@ -292,7 +290,7 @@ async function checkClonePreconditions(
   return true;
 }
 
-async function cloneOverleafProject(
+export async function cloneOverleafProject(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   const input = await promptInput(

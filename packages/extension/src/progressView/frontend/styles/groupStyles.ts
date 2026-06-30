@@ -14,9 +14,7 @@ export const groupStyles = css`
     align-items: center;
     background-color: transparent;
     border-left: var(--border-medium) solid var(--color-border);
-  }
 
-  .log-group-header {
     &.is-running {
       border-left-color: var(--wa-color-status-warning-bg);
     }

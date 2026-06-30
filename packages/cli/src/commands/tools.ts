@@ -126,13 +126,14 @@ async function installTool(
     return CliExitCode.Usage;
   }
 
-  if (run && !guide.command && context.outputFormat !== 'text') {
-    writeTextStderr(formatCliToolMissingInstallCommandMessage(id));
-    return CliExitCode.Usage;
-  }
+  // --run launches an external command in the terminal, so it only makes sense
+  // in text mode; surface the more specific "no command" guidance when there is
+  // nothing to run.
   if (run && context.outputFormat !== 'text') {
     writeTextStderr(
-      'Cannot combine --output-format json|ndjson with tools install --run running an external command; use text output to run it, or omit the run request to inspect the guide.',
+      guide.command
+        ? 'Cannot combine --output-format json|ndjson with tools install --run running an external command; use text output to run it, or omit the run request to inspect the guide.'
+        : formatCliToolMissingInstallCommandMessage(id),
     );
     return CliExitCode.Usage;
   }

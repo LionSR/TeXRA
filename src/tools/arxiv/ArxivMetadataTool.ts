@@ -58,7 +58,7 @@ export class ArxivMetadataTool extends defineTool({
       );
     }
 
-    if (!entries || entries.length === 0) {
+    if (!entries?.length) {
       throw new ToolError(`No metadata found for arXiv ID ${requestId}`);
     }
 

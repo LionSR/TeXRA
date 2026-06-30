@@ -158,6 +158,13 @@ function joinTextContent(content: readonly Content[]): string {
     .join('');
 }
 
+/** Best-effort extraction of an SDK error's human-readable message. */
+function errorMessageOf(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  const message = (error as { message?: unknown })?.message;
+  return typeof message === 'string' ? message : '';
+}
+
 /**
  * Best-effort predicate for "the `previous_interaction_id` we chained onto is
  * gone (expired / unknown / rejected)". On a match the handler drops the chain
@@ -171,15 +178,6 @@ function joinTextContent(content: readonly Content[]): string {
  * InteractionStatus has no `expired` member). Tune to the observed shape after a
  * real-key run (spec §6 S2). The full-resend retry is idempotent regardless.
  */
-/** Best-effort extraction of an SDK error's human-readable message. */
-function errorMessageOf(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : typeof (error as { message?: unknown })?.message === 'string'
-      ? (error as { message: string }).message
-      : '';
-}
-
 function isStaleInteractionChainError(error: unknown): boolean {
   const status = detectStatusCode(error);
   const message = errorMessageOf(error);
@@ -941,12 +939,18 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // already-generated output discarded. Non-terminal statuses (e.g.
     // 'requires_action' for tool-call rounds) pass through unchanged.
     const status = responseObject.status ?? 'completed';
-    const stopReason: ProviderStopReason =
-      status === 'completed'
-        ? GOOGLE_FINISH.STOP
-        : status === 'incomplete'
-          ? GOOGLE_FINISH.MAX_TOKENS
-          : status;
+    let stopReason: ProviderStopReason;
+    switch (status) {
+      case 'completed':
+        stopReason = GOOGLE_FINISH.STOP;
+        break;
+      case 'incomplete':
+        stopReason = GOOGLE_FINISH.MAX_TOKENS;
+        break;
+      default:
+        // Non-terminal statuses (e.g. 'requires_action') pass through unchanged.
+        stopReason = status;
+    }
 
     // If the model completed naturally without the end tag, append it (mirrors
     // the chat handler's STOP behavior, keyed on the terminal completion).

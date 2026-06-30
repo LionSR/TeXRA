@@ -249,9 +249,8 @@ export class ExecutionSubscriptionBinder {
    * (stream, execution) pair.
    */
   unbind(streamId: StreamTabId, executionId: string): boolean {
-    const bound = this.perStream.get(streamId);
-    const d = bound?.get(executionId);
-    if (!bound || !d) return false;
+    const d = this.perStream.get(streamId)?.get(executionId);
+    if (!d) return false;
     try {
       d.dispose();
     } catch (err) {

@@ -1,10 +1,6 @@
 import { css, unsafeCSS, type CSSResult } from 'lit';
 
-/**
- * Shared selector groups for :is() consolidation.
- * To add a new request panel type, add an entry to the PANEL_TYPES table below
- * and the shared layout, accent, and icon rules all follow automatically.
- */
+/** Shared selector groups that drive the :is() consolidation below. */
 
 /**
  * Single source of truth for request panel types. Each entry pairs the outer
@@ -58,10 +54,7 @@ const CONTAINER_NAMES = PANEL_TYPES.map((p) => p.container);
 const ITEM_NAMES = PANEL_TYPES.map((p) => p.item);
 
 /** Build a :is()-ready selector group from class names with an optional BEM suffix. */
-function selectorGroup(
-  names: readonly string[],
-  suffix = '',
-): ReturnType<typeof unsafeCSS> {
+function selectorGroup(names: readonly string[], suffix = ''): CSSResult {
   return unsafeCSS(names.map((n) => `.${n}${suffix}`).join(', '));
 }
 

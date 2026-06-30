@@ -33,14 +33,9 @@ export async function seedCliRosterFromDefaultTeam(): Promise<boolean> {
 }
 
 export async function clearCliSeededRoster(): Promise<void> {
+  const { workspaceState } = platform();
   await Promise.all([
-    platform().workspaceState.update(
-      WorkspaceStateKey.ENABLED_AGENTS,
-      undefined,
-    ),
-    platform().workspaceState.update(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      undefined,
-    ),
+    workspaceState.update(WorkspaceStateKey.ENABLED_AGENTS, undefined),
+    workspaceState.update(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, undefined),
   ]);
 }

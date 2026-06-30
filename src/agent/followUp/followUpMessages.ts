@@ -41,13 +41,13 @@ export async function appendFollowUpAsUserMessage<C>(
 
   if (!followUp.mediaFiles?.length) return nextMessages;
 
-  const visionMediaCount = countMediaFilesNeedingVision(followUp.mediaFiles);
   if (
     shouldWarnMediaNeedsVision(
       followUp.mediaFiles,
       services.modelHandler.capabilities,
     )
   ) {
+    const visionMediaCount = countMediaFilesNeedingVision(followUp.mediaFiles);
     services.logger.warn(
       formatMediaNeedsVisionWarning(visionMediaCount, 'pasted'),
     );

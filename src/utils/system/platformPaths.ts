@@ -11,8 +11,8 @@ import which from 'which';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
-import { hasExtension } from '@utils/core/pathCore';
 import { unique } from '@utils/core';
+import { hasExtension } from '@utils/core/pathCore';
 
 /** Whether the current platform is Windows (cached at module load). */
 export const IS_WINDOWS = process.platform === 'win32';
@@ -42,13 +42,21 @@ export function safeHomedir(): string | null {
   }
 }
 
+/** Glob matches sorted in descending order, ignoring glob errors. */
+function globDescending(pattern: string): string[] {
+  try {
+    return globSync(pattern).sort().reverse();
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Return common tool directories based on the current platform.
  * Results are cached for the session to improve performance.
  * Internal helper used by extendEnvPath and findToolInCommonPaths.
  */
 function getExtraDirs(): string[] {
-  // Return cached value if available
   if (cachedExtraDirs !== null) {
     return cachedExtraDirs;
   }
@@ -119,14 +127,7 @@ function getExtraDirs(): string[] {
         : null);
     if (scoopDir && AbsoluteFS.existsSync(scoopDir)) {
       dirs.push(path.join(scoopDir, 'shims'));
-      try {
-        const matches = globSync(path.join(scoopDir, 'apps', '*', 'current'))
-          .sort()
-          .reverse();
-        dirs.push(...matches);
-      } catch (_err) {
-        // ignore glob errors
-      }
+      dirs.push(...globDescending(path.join(scoopDir, 'apps', '*', 'current')));
     }
 
     const msysRoots = new Set<string>(DEFAULT_MSYS_ROOTS);
@@ -197,15 +198,9 @@ function getExtraDirs(): string[] {
 
   // Collect matches from all TeX-related patterns
   for (const pattern of [...texDistPatterns, ...texScriptPatterns]) {
-    try {
-      const matches = globSync(pattern).sort().reverse();
-      dirs.push(...matches);
-    } catch (_err) {
-      // ignore glob errors
-    }
+    dirs.push(...globDescending(pattern));
   }
 
-  // Cache and return the unique directories
   cachedExtraDirs = unique(dirs);
   return cachedExtraDirs;
 }
@@ -222,7 +217,6 @@ const cachedExtendedPaths = new LRUCache<string, string>({ max: 16 });
 export function extendEnvPath(
   basePath: string = process.env.PATH || '',
 ): string {
-  // Check cache first
   const cached = cachedExtendedPaths.get(basePath);
   if (cached !== undefined) {
     return cached;
@@ -234,10 +228,7 @@ export function extendEnvPath(
     }
   }
   const result = segments.join(path.delimiter);
-
-  // Cache the result
   cachedExtendedPaths.set(basePath, result);
-
   return result;
 }
 
@@ -327,8 +318,7 @@ function findToolInCommonPathsUncached(tool: string): string | null {
   if (IS_WINDOWS) {
     // Special handling for Ghostscript on Windows
     if (tool === 'gs') {
-      candidates.push('gswin64c', 'gswin32c');
-      candidates.push('gswin64c.exe', 'gswin32c.exe');
+      candidates.push('gswin64c', 'gswin32c', 'gswin64c.exe', 'gswin32c.exe');
     } else if (!hasExtension(tool, '.exe')) {
       candidates.unshift(`${tool}.exe`);
     }

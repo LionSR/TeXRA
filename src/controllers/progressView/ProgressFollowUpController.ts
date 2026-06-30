@@ -18,6 +18,7 @@ import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameM
 // Local imports - shared
 import type {
   CompileFailure,
+  FileLocation,
   OutputFileInfo,
   StreamTabId,
 } from '@shared/schemas';
@@ -303,12 +304,10 @@ export class ProgressFollowUpController {
     const editableHint = `Editable workspace ${pluralize(editableFiles.length, 'target')}: ${editableFiles.join(', ')}`;
     const latexdiffContext = this.formatLatexdiffTargetContext(targets);
     const failureLines = compileFailures.map((failure) => {
-      const outputPath =
-        executionId && failure.output.kind === 'runStorage'
-          ? `/executions/${executionId}/files/${failure.output.relativePath}`
-          : failure.output.kind === 'external'
-            ? failure.output.absolutePath
-            : failure.output.relativePath;
+      const outputPath = this.formatCompileFailureOutputPath(
+        failure.output,
+        executionId,
+      );
       const logPath = executionId
         ? `/executions/${executionId}/files/${failure.logRelativePath}`
         : failure.log.absolutePath;
@@ -459,6 +458,19 @@ export class ProgressFollowUpController {
     const originalInputRecovery = originalConfig.inputFiles.filter(Boolean);
 
     return [...generatedOutputSources, ...originalInputRecovery];
+  }
+
+  private formatCompileFailureOutputPath(
+    output: FileLocation,
+    executionId: string | undefined,
+  ): string {
+    if (executionId && output.kind === 'runStorage') {
+      return `/executions/${executionId}/files/${output.relativePath}`;
+    }
+    if (output.kind === 'external') {
+      return output.absolutePath;
+    }
+    return output.relativePath;
   }
 
   private formatOutputReferencePath(

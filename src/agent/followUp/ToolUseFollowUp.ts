@@ -198,14 +198,10 @@ export async function sendFollowUp(
   if (target.kind === 'queue') {
     // children_running reopens a queue sealed by session disposal; callers
     // must auto-resume the parent or release again to avoid stale delivery.
-    const force = target.reason === 'children_running';
-    ToolUseFollowUpQueue.enqueue(
-      streamId,
-      item,
-      force
-        ? { createIfMissing: true, force: true }
-        : { createIfMissing: true },
-    );
+    ToolUseFollowUpQueue.enqueue(streamId, item, {
+      createIfMissing: true,
+      force: target.reason === 'children_running',
+    });
     return { status: 'queued', reason: target.reason };
   }
 

@@ -29,7 +29,6 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type LogLevel,
   type MessageType,
-  type StreamLogEntry,
   type StreamTabId,
   type ToolUseLog,
 } from '@shared/schemas';
@@ -153,20 +152,40 @@ export function attachTranscriptRecorder(
     for (const [id, state] of streams) flushStream(state, id);
   };
 
-  const handleLog = (event: LogEvent): void => {
-    const messageType = asMessageType(event.messageType);
-    if (!shouldEmit(event.level, messageType)) return;
-
+  // Append a generic text LOG row. Centralizes the boilerplate shared by the
+  // log / usage / context.state / domain arms (nanoid id, LOG type, timestamp,
+  // info level, debug-gated verbosity).
+  const appendLog = (params: {
+    level?: LogLevel;
+    groupId: string | undefined;
+    messageType: MessageType;
+    text: string;
+    data?: unknown;
+    verbose?: boolean;
+  }): void => {
     store.append(streamId, {
       id: nanoid(),
       type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: event.level,
+      level: params.level ?? 'info',
       timestamp: Date.now(),
+      groupId: params.groupId,
+      messageType: params.messageType,
+      text: params.text,
+      data: params.data,
+      verbose: params.verbose ?? isDebugModeEnabled(),
+    });
+  };
+
+  const handleLog = (event: LogEvent): void => {
+    const messageType = asMessageType(event.messageType);
+    if (!shouldEmit(event.level, messageType)) return;
+    appendLog({
+      level: event.level,
       groupId: event.stageId,
       messageType,
       text: event.message,
       data: event.data,
-      verbose: event.verbose ?? isDebugModeEnabled(),
+      verbose: event.verbose,
     });
   };
 
@@ -243,27 +262,18 @@ export function attachTranscriptRecorder(
       }
 
       case 'usage':
-        store.append(streamId, {
-          id: nanoid(),
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: 'info',
-          timestamp: Date.now(),
+        appendLog({
           groupId: event.stageId,
           messageType: MESSAGE_TYPES.STATISTICS,
           text: `Usage - input: ${event.stats.inputTokens ?? 0}, output: ${event.stats.outputTokens ?? 0}`,
           data: event.stats,
-          verbose: isDebugModeEnabled(),
         });
         return;
 
       case 'context.state': {
         const utilizationPercent =
           (event.inputTokens / event.contextWindow) * 100;
-        store.append(streamId, {
-          id: nanoid(),
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: 'info',
-          timestamp: Date.now(),
+        appendLog({
           groupId: event.stageId,
           messageType: MESSAGE_TYPES.CONTEXT_STATE,
           text: `Context: ${event.inputTokens}/${event.contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
@@ -272,7 +282,6 @@ export function attachTranscriptRecorder(
             contextWindow: event.contextWindow,
             utilizationPercent,
           },
-          verbose: isDebugModeEnabled(),
         });
         return;
       }
@@ -338,29 +347,19 @@ export function attachTranscriptRecorder(
             | undefined;
           const entries = payload?.entries ?? [];
           const okCount = entries.filter((e) => e?.ok).length;
-          store.append(streamId, {
-            id: nanoid(),
-            type: STREAM_LOG_ENTRY_TYPES.LOG,
-            level: 'info',
-            timestamp: Date.now(),
+          appendLog({
             groupId: event.stageId,
             messageType: MESSAGE_TYPES.FILE_LIST,
             text: `Loading ${payload?.category ?? ''} (${okCount}/${entries.length})`,
             data: entries,
-            verbose: isDebugModeEnabled(),
           });
           return;
         }
-        store.append(streamId, {
-          id: nanoid(),
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: 'info',
-          timestamp: Date.now(),
+        appendLog({
           groupId: event.stageId,
-          messageType: domainMessageType(event.key),
+          messageType: DOMAIN_MESSAGE_TYPE[event.key] ?? MESSAGE_TYPES.DEFAULT,
           text: event.text ?? event.key,
           data: event.data,
-          verbose: isDebugModeEnabled(),
         });
         return;
       }
@@ -390,9 +389,9 @@ export function attachTranscriptRecorder(
 }
 
 /**
- * Map a domain key onto a known MessageType when applicable; otherwise use
- * the DEFAULT bucket. Renderers that key on messageType (latexdiff,
- * scratchpad, missingOutputs) keep working without subscriber changes.
+ * Maps a domain key onto a known MessageType; keys not listed fall back to the
+ * DEFAULT bucket. Renderers that key on messageType (latexdiff, scratchpad,
+ * missingOutputs) keep working without subscriber changes.
  */
 const DOMAIN_MESSAGE_TYPE: Record<string, MessageType> = {
   latexdiff: MESSAGE_TYPES.LATEXDIFF,
@@ -402,10 +401,3 @@ const DOMAIN_MESSAGE_TYPE: Record<string, MessageType> = {
   webFetch: MESSAGE_TYPES.WEB_FETCH,
   contextManagement: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
 };
-
-function domainMessageType(key: string): MessageType {
-  return DOMAIN_MESSAGE_TYPE[key] ?? MESSAGE_TYPES.DEFAULT;
-}
-
-/** Re-exported so SDK consumers can introspect the persisted shape. */
-export type { StreamLogEntry };

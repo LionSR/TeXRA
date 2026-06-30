@@ -42,9 +42,10 @@ export async function collectTexFiles(
   dir: string,
   prefix = '',
 ): Promise<string[]> {
+  const fs = platform().fs;
   let entries: [string, number][];
   try {
-    entries = await platform().fs.readDirectory(dir);
+    entries = await fs.readDirectory(dir);
   } catch (error) {
     // This is a recovery scan: a missing/unreadable subtree means this subtree
     // contributes no outputs, but other rounds/subtrees may still be useful.
@@ -57,12 +58,7 @@ export async function collectTexFiles(
     const absPath = path.join(dir, name);
     // Skip symlinks — they are mirrored dependency copies placed by
     // ensureMirroredInRoundDir, not revised outputs.
-    if (
-      await platform()
-        .fs.isSymlink(absPath)
-        .catch(() => false)
-    )
-      continue;
+    if (await fs.isSymlink(absPath).catch(() => false)) continue;
     if (isFile(type)) {
       if (hasExtension(name, '.tex')) {
         results.push(prefix ? `${prefix}/${name}` : name);
@@ -97,11 +93,16 @@ export async function scanRunDirForOutputs(
     const runDirAbsolute = await resolveRunDir(executionId);
     if (!runDirAbsolute) return null;
 
-    const dirEntries = await platform().fs.readDirectory(runDirAbsolute);
+    const fs = platform().fs;
+    const dirEntries = await fs.readDirectory(runDirAbsolute);
 
     const workspacePath = WorkspaceFS.getPath() ?? '';
     const toAbs = (f: string): string =>
       path.isAbsolute(f) ? f : path.join(workspacePath, f);
+    // Normalize to a forward-slash, extension-less relative key so base files
+    // and recovered round outputs can be matched regardless of path format.
+    const toRelKey = (p: string): string =>
+      p.replaceAll('\\', '/').replace(/\.tex$/i, '');
 
     // Build a relative-path (no extension) → workspace location map so
     // multi-output runs with duplicate basenames (e.g. chapters/main.tex and
@@ -110,10 +111,8 @@ export async function scanRunDirForOutputs(
     const baseLocationByRelPath = new Map<string, FileLocation>();
     for (const bf of [inputFile, ...(extraBaseFiles ?? [])]) {
       const abs = toAbs(bf);
-      const rel = (workspacePath ? path.relative(workspacePath, abs) : bf)
-        .replaceAll('\\', '/')
-        .replace(/\.tex$/i, '');
-      baseLocationByRelPath.set(rel, pathToLocation(abs));
+      const relSource = workspacePath ? path.relative(workspacePath, abs) : bf;
+      baseLocationByRelPath.set(toRelKey(relSource), pathToLocation(abs));
     }
     const defaultBaseLocation = pathToLocation(toAbs(inputFile));
 
@@ -127,12 +126,7 @@ export async function scanRunDirForOutputs(
       const roundDirAbsolute = path.join(runDirAbsolute, entryName);
       // Skip symlinked round dirs. Use lstat through the platform because
       // readDirectory FileType values do not reliably include SymbolicLink.
-      if (
-        await platform()
-          .fs.isSymlink(roundDirAbsolute)
-          .catch(() => false)
-      )
-        continue;
+      if (await fs.isSymlink(roundDirAbsolute).catch(() => false)) continue;
 
       const outputs: OutputFileInfo[] = [];
       // Collect .tex files recursively — extracted docs may live in subdirs
@@ -173,9 +167,7 @@ export async function scanRunDirForOutputs(
         // single configured base only when there's no ambiguity (one candidate);
         // in multi-file runs an unmatched file gets null so it surfaces as a
         // "missing base" error rather than silently diffing against the wrong doc.
-        const fileKey = fileRelToRound
-          .replaceAll('\\', '/')
-          .replace(/\.tex$/i, '');
+        const fileKey = toRelKey(fileRelToRound);
         const originalLocation =
           baseLocationByRelPath.get(fileKey) ??
           (baseLocationByRelPath.size === 1 ? defaultBaseLocation : null);

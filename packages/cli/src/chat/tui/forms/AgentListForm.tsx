@@ -209,7 +209,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         ) : null}
         <Text bold>{primarySectionTitle}</Text>
         <Select
-          items={items.map(({ value, label }) => ({ value, label }))}
+          items={items}
           activeValue={activeValue}
           maxVisibleItems={1}
           showOverflow={false}

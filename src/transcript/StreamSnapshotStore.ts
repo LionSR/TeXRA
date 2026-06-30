@@ -671,10 +671,6 @@ export class StreamSnapshotStore {
     this.write(stream, STREAM_DATA_KEYS.META, file);
   }
 
-  private patchMeta(stream: StreamTabId, patch: Partial<StreamTabMeta>): void {
-    this.writeMeta(stream, this.patchMetaMemory(stream, patch));
-  }
-
   private queueMetaPatch(
     stream: StreamTabId,
     patch: Partial<StreamTabMeta>,
@@ -682,7 +678,7 @@ export class StreamSnapshotStore {
     this.patchMetaMemory(stream, patch);
     this.metaOverlays.add(stream);
     const applied = this.mutate(stream, () => {
-      this.patchMeta(stream, patch);
+      this.writeMeta(stream, this.patchMetaMemory(stream, patch));
       return true;
     });
     if (applied) this.metaOverlays.delete(stream);

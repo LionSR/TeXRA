@@ -3,6 +3,12 @@ import { z } from 'zod';
 import { AgentCategory } from './agent';
 import { ProviderErrorPartialSchema } from './errors';
 import { StreamTabIdSchema } from './identifiers';
+import {
+  InquiryDraftSchema,
+  InquiryTranscriptTurnSchema,
+  ExternalInquirySessionLinksSchema,
+  ExternalInquiryThreadIdSchema,
+} from './inquiry';
 import { PlanSchema } from './plan';
 import {
   BaseProposalFieldsSchema,
@@ -98,13 +104,6 @@ export type AgentProposalPermission = z.infer<
 // ============================================================================
 // External Inquiry — see also `./inquiry.ts` for thread / session-link / action schemas
 // ============================================================================
-
-import {
-  InquiryDraftSchema,
-  InquiryTranscriptTurnSchema,
-  ExternalInquirySessionLinksSchema,
-  ExternalInquiryThreadIdSchema,
-} from './inquiry';
 
 // Shared inquiry fields present in both new and follow-up permissions.
 const CommonExternalInquiryFieldsSchema = z.object({

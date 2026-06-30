@@ -18,7 +18,7 @@ const LATEX_ESCAPE_MAP: Record<string, string> = {
   '^': '\\textasciicircum{}',
 };
 
-const LATEX_ESCAPE_RE = /[\\#$%&_{}\~\^]/g;
+const LATEX_ESCAPE_RE = /[\\#$%&_{}~^]/g;
 
 export function escapeLatex(text: string): string {
   return text.replaceAll(LATEX_ESCAPE_RE, (ch) => LATEX_ESCAPE_MAP[ch]);

@@ -32,23 +32,19 @@ function emitLogin(
   session: CodexSession,
   preferenceEffective: boolean,
 ): void {
+  const payload = {
+    authenticated: true,
+    email: session.email ?? null,
+    accountId: session.accountId ?? null,
+    preferSubscription: preferenceEffective,
+  };
+  const signedIn = `Signed in with ChatGPT as ${chatGptAccountLabel(session)}.`;
   emitCliResult(context, {
-    json: {
-      authenticated: true,
-      email: session.email ?? null,
-      accountId: session.accountId ?? null,
-      preferSubscription: preferenceEffective,
-    },
-    ndjson: {
-      kind: 'chatgpt-auth',
-      authenticated: true,
-      email: session.email ?? null,
-      accountId: session.accountId ?? null,
-      preferSubscription: preferenceEffective,
-    },
+    json: payload,
+    ndjson: { kind: 'chatgpt-auth', ...payload },
     text: preferenceEffective
-      ? `Signed in with ChatGPT as ${chatGptAccountLabel(session)}.\nChatGPT subscription enabled for Codex models.`
-      : `Signed in with ChatGPT as ${chatGptAccountLabel(session)}.\nChatGPT subscription preference could not be enabled because a more specific setting overrides the config.`,
+      ? `${signedIn}\nChatGPT subscription enabled for Codex models.`
+      : `${signedIn}\nChatGPT subscription preference could not be enabled because a more specific setting overrides the config.`,
   });
 }
 
@@ -124,22 +120,16 @@ const chatgptLogoutCommand = defineCliCommand({
       return CliExitCode.ModelOrNetworkError;
     }
     invalidateModelOptionsCache();
+    const payload = {
+      authenticated: false,
+      preferSubscription: update.preferenceUpdate?.effective ?? null,
+      ...(update.preferenceError
+        ? { preferenceError: update.preferenceError }
+        : {}),
+    };
     emitCliResult(context, {
-      json: {
-        authenticated: false,
-        preferSubscription: update.preferenceUpdate?.effective ?? null,
-        ...(update.preferenceError
-          ? { preferenceError: update.preferenceError }
-          : {}),
-      },
-      ndjson: {
-        kind: 'chatgpt-auth',
-        authenticated: false,
-        preferSubscription: update.preferenceUpdate?.effective ?? null,
-        ...(update.preferenceError
-          ? { preferenceError: update.preferenceError }
-          : {}),
-      },
+      json: payload,
+      ndjson: { kind: 'chatgpt-auth', ...payload },
       text: `Signed out of ChatGPT.\n${chatGptSignOutPreferenceMessage(update)}`,
     });
     return CliExitCode.Success;

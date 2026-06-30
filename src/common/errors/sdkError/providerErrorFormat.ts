@@ -169,10 +169,12 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     isUpstreamCreditDepleted ||
     isChatGptSubscriptionLimited;
 
-  // Handle DOMException AbortError (from AbortController.abort())
-  if (err instanceof DOMException && err.name === 'AbortError') {
+  // Terminal failures (user abort, local disk-full): never retryable and never
+  // a relay/credential affordance. Carries diagnostics but deliberately opts
+  // out of the credential classification computed below.
+  function terminalError(message: string): ProviderError {
     return {
-      message: 'Request aborted',
+      message,
       userRetryable: false,
       isRelayError: false,
       rawErrorBody,
@@ -181,16 +183,16 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
+  // Handle DOMException AbortError (from AbortController.abort())
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return terminalError('Request aborted');
+  }
+
   // Disk full — local I/O error, no retry will help
   if (isDiskFullError(err)) {
-    return {
-      message: 'No space left on device. Free up disk space and try again.',
-      userRetryable: false,
-      isRelayError: false,
-      rawErrorBody,
-      streamDiagnostics,
-      partialText,
-    };
+    return terminalError(
+      'No space left on device. Free up disk space and try again.',
+    );
   }
 
   // Classification flags + diagnostics carried by BOTH the SDK-matched and the

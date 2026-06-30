@@ -691,7 +691,6 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   if (userTier !== ULTRA_TIER && isModelRequest) {
     if (!isModelAllowedForTier(userTier, modelName)) {
-      const tierName = userTier === FREE_TIER ? 'free' : userTier;
       // Point users at a model their tier can actually use, not just an upsell.
       const tierModelAccess =
         TIER_CONFIG.tiers[userTier as keyof typeof TIER_CONFIG.tiers];
@@ -704,8 +703,8 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
       return jsonError(
         modelName
-          ? `Model '${modelName}' is not available for the ${tierName} tier. ${hint}`
-          : `Could not determine model from request. The ${tierName} tier requires explicit model specification.`,
+          ? `Model '${modelName}' is not available for the ${userTier} tier. ${hint}`
+          : `Could not determine model from request. The ${userTier} tier requires explicit model specification.`,
         403,
       );
     }
@@ -849,11 +848,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   let upstreamResponse: Response;
   try {
     const bodyToSend =
-      c.req.method !== 'GET'
-        ? requestBody !== null
-          ? requestBody
-          : c.req.raw.body
-        : undefined;
+      c.req.method === 'GET' ? undefined : (requestBody ?? c.req.raw.body);
 
     upstreamResponse = await fetch(targetUrl, {
       method: c.req.method,

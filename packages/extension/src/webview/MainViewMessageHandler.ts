@@ -282,10 +282,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         );
       },
       [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) => this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () =>
-        this.postToActiveView({
-          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-        }),
+      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: (m) => this.postToActiveView(m),
       [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
         try {
           const authenticated = await vscode.commands.executeCommand<boolean>(
@@ -295,11 +292,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
             this.postToActiveView({
               command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
             });
-            await Promise.all([
-              vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
-              vscode.commands.executeCommand('texra.refreshAllOptions'),
-              this.onboarding?.refreshOnboardingFunnel(),
-            ]);
+            await this.refreshAfterCredentialChange();
           }
         } catch (error) {
           this.logger.debug(
@@ -369,11 +362,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
       [MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT]: async () => {
         await signInWithChatGptSubscription(this.channel);
-        await Promise.all([
-          vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
-          vscode.commands.executeCommand('texra.refreshAllOptions'),
-          this.onboarding?.refreshOnboardingFunnel(),
-        ]);
+        await this.refreshAfterCredentialChange();
       },
       [MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP]: async () => {
         await safeExecuteCommand('texra.runSetupAssistant', [], this.viewName);
@@ -448,6 +437,19 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     value: boolean;
   }): Promise<void> {
     await updateConfig(configUpdate.key, configUpdate.value);
+  }
+
+  /**
+   * Re-pull API-key status, picker options, and the onboarding funnel after a
+   * credential change (sign-in or ChatGPT subscription) so State 0 -> 1
+   * transitions land without a manual refresh.
+   */
+  private async refreshAfterCredentialChange(): Promise<void> {
+    await Promise.all([
+      vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
+      vscode.commands.executeCommand('texra.refreshAllOptions'),
+      this.onboarding?.refreshOnboardingFunnel(),
+    ]);
   }
 
   protected async handleWebviewReady(): Promise<void> {

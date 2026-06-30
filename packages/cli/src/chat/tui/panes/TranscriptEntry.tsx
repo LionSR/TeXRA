@@ -29,6 +29,13 @@ export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 export const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
 export const PROCESS_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 
+// Terminal columns available to an entry's text. Padded boxes (paddingX={1})
+// inset one column on each side, so those rows pass `inset = 2`; full-width
+// rows pass no inset. A missing width defaults to 80 columns.
+function entryCols(width: number | undefined, inset = 0): number {
+  return Math.max(1, Math.floor(width ?? 80) - inset);
+}
+
 function prefixedWrappedLines(
   text: string,
   cols: number,
@@ -112,7 +119,7 @@ function UserEntryRow({
   // appended, while later rows render at the latest width. The `› ` chevron
   // is 2 cols; row estimators add the exported margin constants alongside
   // their wrapped-line count.
-  const cols = Math.max(1, Math.floor(width ?? 80) - 2);
+  const cols = entryCols(width, 2);
   return (
     <Box marginTop={marginTopRows} marginBottom={marginBottomRows} paddingX={1}>
       <Text inverse={colorEnabled !== false}>
@@ -141,7 +148,7 @@ function InquiryContinuationRow({
   readonly width?: number;
 }): React.JSX.Element {
   // Same one-column gutter as the user band so both `› ` chevrons align.
-  const cols = Math.max(1, Math.floor(width ?? 80) - 2);
+  const cols = entryCols(width, 2);
   const wrappedLines = prefixedWrappedLines(entry.text, cols);
   const lines =
     maxRows === undefined ? wrappedLines : boundedLines(wrappedLines, maxRows);
@@ -172,7 +179,7 @@ function ProcessEntryRow({
   readonly width?: number;
 }): React.JSX.Element {
   if (fillWidth === true) {
-    const cols = Math.max(1, Math.floor(width ?? 80) - 2);
+    const cols = entryCols(width, 2);
     return (
       <Box
         marginBottom={PROCESS_ENTRY_MARGIN_BOTTOM_ROWS}
@@ -258,7 +265,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
         />
       );
     case 'error': {
-      const cols = Math.max(1, Math.floor(width ?? 80) - 2);
+      const cols = entryCols(width, 2);
       return (
         <Box paddingX={1}>
           <Text color="red">
@@ -332,7 +339,7 @@ export function liveAssistantDisplayLines({
   readonly text: string;
   readonly width?: number;
 }): readonly string[] {
-  const cols = Math.max(1, Math.floor(width ?? 80));
+  const cols = entryCols(width);
   return wrapAnsiToWidth(tailWindow(text, cols, rows), cols)
     .split('\n')
     .slice(-Math.max(1, rows));
@@ -351,7 +358,7 @@ export function boundedAssistantDisplayLines({
   readonly text: string;
   readonly width?: number;
 }): readonly string[] {
-  const cols = Math.max(1, Math.floor(width ?? 80));
+  const cols = entryCols(width);
   if (!finalized) {
     return liveAssistantDisplayLines({ rows, text, width: cols });
   }
@@ -374,7 +381,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
 }): React.JSX.Element {
   const rows = Math.max(1, maxRows);
   if (entry.role === 'assistant') {
-    const cols = Math.max(1, Math.floor(width ?? 80));
+    const cols = entryCols(width);
     // Streaming overflow stays plain for speed. Finalized overflow renders
     // cached Markdown first and then takes the visible tail.
     return (
@@ -424,7 +431,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
     );
   }
   if (entry.role === 'tool' && entry.toolUse) {
-    const cols = Math.max(1, Math.floor(width ?? 80) - 2);
+    const cols = entryCols(width, 2);
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text>
@@ -438,7 +445,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
     );
   }
   if (entry.role === 'process' && entry.process) {
-    const cols = Math.max(1, Math.floor(width ?? 80) - 2);
+    const cols = entryCols(width, 2);
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text>
@@ -455,7 +462,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
   const prefix =
     entry.role === 'error' ? ERROR_ENTRY_PREFIX : USER_ENTRY_PREFIX;
   const color = entry.role === 'error' ? 'red' : undefined;
-  const cols = Math.max(1, Math.floor(width ?? 80) - 2);
+  const cols = entryCols(width, 2);
   return (
     <Box paddingX={1}>
       <Text color={color}>
@@ -483,7 +490,7 @@ export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
   readonly entry: ConversationEntry;
   readonly width?: number;
 }): React.JSX.Element {
-  const cols = Math.max(1, Math.floor(width ?? 80));
+  const cols = entryCols(width);
   const rows = liveAssistantDisplayLines({
     rows: LIVE_TAIL_ROWS,
     text: entry.text,

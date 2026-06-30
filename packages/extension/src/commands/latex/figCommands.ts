@@ -91,13 +91,11 @@ export async function handleExtractTikzFigures(): Promise<void> {
       );
 
       if (labeledTikzPictures.length > 0) {
-        const items = labeledTikzPictures.map(
-          ([label, tikzpicturess]: [string, string[]]) => ({
-            label: `${label} (${tikzpicturess.length} TikZ ${pluralize(tikzpicturess.length, 'picture')})`,
-            description: `Figure with label: ${label}`,
-            detail: `${tikzpicturess[0].slice(0, 100)}...`,
-          }),
-        );
+        const items = labeledTikzPictures.map(([label, pictures]) => ({
+          label: `${label} (${pictures.length} TikZ ${pluralize(pictures.length, 'picture')})`,
+          description: `Figure with label: ${label}`,
+          detail: `${pictures[0].slice(0, 100)}...`,
+        }));
 
         const selected = await vscode.window.showQuickPick(items, {
           placeHolder: 'Found TikZ figures (select to copy label)',

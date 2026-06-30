@@ -327,13 +327,8 @@ export class ProgressViewState {
     ]);
 
     // Update active stream *after* deletion so keys() no longer includes it.
-    // `streamLogs.keys()` is ascending by creation time (load() sorts by
-    // `firstTimestamp` ASC, and session additions are appended), but the
-    // sidebar sorts newest-first — `.at(-1)` picks the topmost visible tab.
     if (this._prefs.get('activeStream') === stream) {
-      this._prefs.update({
-        activeStream: this.streamLogs.keys().at(-1) ?? '',
-      });
+      this._prefs.update({ activeStream: this.topmostStreamTab() });
     }
 
     this.pruneInterruptHandles();
@@ -459,15 +454,23 @@ export class ProgressViewState {
     return restoredCount;
   }
 
+  /**
+   * The topmost (newest) visible stream tab, or '' when none exist.
+   *
+   * `streamLogs.keys()` is ascending by creation time (load() sorts by
+   * `firstTimestamp` ASC, session additions are appended), but the sidebar
+   * renders newest-first, so `.at(-1)` matches the topmost visible tab rather
+   * than the oldest one at the bottom.
+   */
+  private topmostStreamTab(): ActiveStreamId {
+    return this.streamLogs.keys().at(-1) ?? '';
+  }
+
   /** Validate activeStream against available streams after load */
   private validateActiveStream(): void {
     const savedActiveStream = this._prefs.get('activeStream');
     if (!savedActiveStream || !this.streamLogs.has(savedActiveStream)) {
-      // `streamLogs.keys()` is ascending by creation time (load() sorts by
-      // `firstTimestamp` ASC), but the sidebar renders newest-first — pick
-      // the last key so the fallback matches the topmost visible tab
-      // instead of the oldest one at the bottom.
-      const fallback = this.streamLogs.keys().at(-1) ?? '';
+      const fallback = this.topmostStreamTab();
       if (fallback !== savedActiveStream) {
         this._prefs.update({ activeStream: fallback });
       }

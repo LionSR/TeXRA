@@ -103,9 +103,9 @@ export class ProbeEnvironmentTool extends defineTool({
     const missingCore = coreTools
       .filter((t) => !t.installed && t.name !== 'gm' && t.name !== 'magick')
       .map((t) => t.name);
-    const hasImageTool =
-      coreTools.find((t) => t.name === 'gm')?.installed ||
-      coreTools.find((t) => t.name === 'magick')?.installed;
+    const hasImageTool = coreTools.some(
+      (t) => (t.name === 'gm' || t.name === 'magick') && t.installed,
+    );
     if (!hasImageTool) missingCore.push('gm/magick');
 
     const latexWorkshopInstalled = platform.extensions.isInstalled(
@@ -176,17 +176,14 @@ function buildHeadline(summary: {
     researcherAccess: { authenticated: boolean };
   };
 }): string {
-  const parts: string[] = [];
-  parts.push(`OS: ${summary.os.platform}`);
-  parts.push(`package manager: ${summary.packageManager ?? 'none detected'}`);
-  if (summary.missingCore.length === 0) {
-    parts.push('all core LaTeX tools installed');
-  } else {
-    parts.push(`missing: ${summary.missingCore.join(', ')}`);
-  }
-  parts.push(
+  const parts: string[] = [
+    `OS: ${summary.os.platform}`,
+    `package manager: ${summary.packageManager ?? 'none detected'}`,
+    summary.missingCore.length === 0
+      ? 'all core LaTeX tools installed'
+      : `missing: ${summary.missingCore.join(', ')}`,
     `LaTeX Workshop: ${summary.latexWorkshop.installed ? 'installed' : 'not installed'}`,
-  );
+  ];
   const creds: string[] = [];
   if (summary.credentials.anyApiKeySet) creds.push('API key set');
   if (summary.credentials.researcherAccess.authenticated)
