@@ -11,7 +11,7 @@ const VALIDATOR = path.join(
 const BINARY = path.join(process.cwd(), 'packages/cli/dist/bin/texra.js');
 const VALIDATION_BINARY = path.join(
   process.cwd(),
-  'packages/cli/.texra-validate-run/texra.js',
+  'packages/cli/.texra-validate-run/bin/texra.js',
 );
 
 function fileMtime(filePath: string) {

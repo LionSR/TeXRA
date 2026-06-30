@@ -7,6 +7,9 @@ releases/
 node_modules/
 pnpm-lock.yaml
 
+# CLI validation-only bundle and copied resources
+packages/cli/.texra-validate-run/
+
 # YAML templates with {{ }} placeholders - Prettier rewrites these as { { } }
 resources/templates/
 packages/extension/resources/templates/

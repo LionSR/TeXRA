@@ -19,14 +19,17 @@ import { createRequire } from 'node:module';
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
 const require = createRequire(import.meta.url);
-const validationBinaryPath = path.join(
-  cliRoot,
-  '.texra-validate-run',
+const defaultValidationRoot = path.join(cliRoot, '.texra-validate-run');
+const defaultValidationBinaryPath = path.join(
+  defaultValidationRoot,
+  'bin',
   'texra.js',
 );
 const binaryPath = process.env.TEXRA_CLI_RUN_VALIDATOR_BINARY?.trim()
   ? path.resolve(process.env.TEXRA_CLI_RUN_VALIDATOR_BINARY)
-  : validationBinaryPath;
+  : defaultValidationBinaryPath;
+const validationRoot = path.dirname(path.dirname(binaryPath));
+const validationResourcesPath = path.join(validationRoot, 'resources');
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
@@ -170,6 +173,16 @@ function preflightExistingValidationBundle() {
     );
     console.error(
       '[validate-run] omit --no-build once so the validator can build its private bundle.',
+    );
+    process.exit(1);
+  }
+
+  if (!existsSync(validationResourcesPath)) {
+    console.error(
+      `[validate-run] --no-build requires validator resources: ${validationResourcesPath}`,
+    );
+    console.error(
+      '[validate-run] omit --no-build once so the validator can copy its private resources.',
     );
     process.exit(1);
   }
@@ -1024,14 +1037,7 @@ async function validateCliRunArtifacts(options = {}) {
   if (options.noBuild) {
     preflightExistingValidationBundle();
   } else {
-    const buildResult = run('pnpm', ['run', 'build'], {
-      cwd: cliRoot,
-      env: {
-        TEXRA_CLI_BUNDLE_OUTFILE: binaryPath,
-        TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-      },
-    });
-    assertSuccess(buildResult, 'pnpm run build');
+    buildValidationBundle();
   }
   validateBinarySmoke();
   validateMultiAgentListAvailability();
@@ -1043,6 +1049,29 @@ async function validateCliRunArtifacts(options = {}) {
   validateToolUseAgentRunCommand();
   validateMultiAgentRunCommand();
   console.log('CLI run validation passed');
+}
+
+function runCliPackageScript(script, options = {}) {
+  const result = run('pnpm', ['run', script], {
+    cwd: cliRoot,
+    env: options.env,
+  });
+  assertSuccess(result, `pnpm run ${script}`);
+}
+
+function buildValidationBundle() {
+  runCliPackageScript('typecheck');
+  runCliPackageScript('check:architecture');
+  runCliPackageScript('smoke:react-compiler');
+  runCliPackageScript('bundle', {
+    env: {
+      TEXRA_CLI_BUNDLE_OUTFILE: binaryPath,
+      TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
+    },
+  });
+  runCliPackageScript('copy:resources', {
+    env: { TEXRA_CLI_RESOURCES_OUTDIR: validationResourcesPath },
+  });
 }
 
 const args = parseArgs(process.argv.slice(2));
