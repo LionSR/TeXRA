@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { FileLocationSchema, OutputFileInfoSchema } from './output';
+import {
+  type FileLocation,
+  FileLocationSchema,
+  type OutputFileInfo,
+  OutputFileInfoSchema,
+} from './output';
 import { getBasename } from '../utils/path';
 
 export const DiffStatusSchema = z.enum(['success', 'error']);
@@ -35,15 +40,13 @@ export const DiffResultDisplaySchema = DiffMetadataSchema.extend({
 
 export type DiffResultDisplay = z.infer<typeof DiffResultDisplaySchema>;
 
-function getAbsolutePath(
-  location: z.infer<typeof FileLocationSchema> | null,
-): string {
+function getAbsolutePath(location: FileLocation | null): string {
   return location?.absolutePath ?? '';
 }
 
 function getDisplayName(
-  revised: z.infer<typeof OutputFileInfoSchema>,
-  baseLocation: z.infer<typeof FileLocationSchema> | null,
+  revised: OutputFileInfo,
+  baseLocation: FileLocation | null,
 ): string {
   // Prefer original path from lineage
   const original = revised.lineage?.original;
@@ -159,39 +162,25 @@ export const LegacyDiffResultSchema = z
     };
   });
 
-/** Parse a diff result entry from either new or legacy format */
-function parseDiffResultEntry(
-  data: unknown,
-):
-  | { success: true; data: DiffResultDisplay }
-  | { success: false; error: string } {
+/** Parse a diff result entry from either new or legacy format, or null if neither matches. */
+function parseDiffResultEntry(data: unknown): DiffResultDisplay | null {
   // Try new format first (canonical)
   const newResult = DiffResultSchema.safeParse(data);
   if (newResult.success) {
-    return {
-      success: true,
-      data: transformDiffResultToDisplay(newResult.data),
-    };
+    return transformDiffResultToDisplay(newResult.data);
   }
 
   // Try legacy format (transforms to display)
   const legacyResult = LegacyDiffResultSchema.safeParse(data);
-  if (legacyResult.success) {
-    return { success: true, data: legacyResult.data };
-  }
-
-  return { success: false, error: 'Invalid diff result format' };
+  return legacyResult.success ? legacyResult.data : null;
 }
 
 /** Parse an array of diff result entries, skipping invalid ones */
 export function parseDiffResultEntries(data: unknown): DiffResultDisplay[] {
   if (!Array.isArray(data)) return [];
 
-  return data
-    .map((entry) => parseDiffResultEntry(entry))
-    .filter(
-      (result): result is { success: true; data: DiffResultDisplay } =>
-        result.success,
-    )
-    .map((result) => result.data);
+  return data.flatMap((entry) => {
+    const parsed = parseDiffResultEntry(entry);
+    return parsed ? [parsed] : [];
+  });
 }

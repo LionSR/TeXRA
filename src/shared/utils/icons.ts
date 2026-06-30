@@ -93,9 +93,8 @@ export function getAgentCategoryDecorator(
   agentCategory: string | undefined,
 ): (typeof AGENT_DECORATORS.agentCategories)[AgentCategory] {
   const categories = AGENT_DECORATORS.agentCategories;
-  const isValidCategory =
-    agentCategory !== undefined && agentCategory in categories;
-  return isValidCategory
-    ? categories[agentCategory as AgentCategory]
-    : categories.workflow;
+  return (
+    (agentCategory && categories[agentCategory as AgentCategory]) ||
+    categories.workflow
+  );
 }

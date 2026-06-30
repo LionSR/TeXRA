@@ -24,6 +24,7 @@ import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,
+  type GettingStartedAction,
 } from '@shared/schemas';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import { PROVIDER_URLS } from '@shared/constants/providers';
@@ -44,6 +45,14 @@ export interface MainViewOnboardingHooks {
    */
   refreshOnboardingFunnel(): Promise<void>;
 }
+
+const GETTING_STARTED_COMMANDS = {
+  runSetup: 'texra.runSetupAssistant',
+  createSampleProject: 'texra.createSampleProject',
+  cloneOverleaf: 'texra.cloneOverleafProject',
+  downloadArxiv: 'texra.downloadArXivSource',
+  openWalkthrough: 'texra.openGettingStarted',
+} satisfies Record<GettingStartedAction, string>;
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
@@ -310,47 +319,15 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           this.interactionController.getDismissConfigUpdate(m),
         ),
       [MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (m) => {
-        switch (m.action) {
-          case 'runSetup':
-            await safeExecuteCommand(
-              'texra.runSetupAssistant',
-              [],
-              this.viewName,
-            );
-            await this.onboarding?.refreshOnboardingFunnel();
-            break;
-          case 'createSampleProject':
-            await safeExecuteCommand(
-              'texra.createSampleProject',
-              [],
-              this.viewName,
-            );
-            break;
-          case 'cloneOverleaf':
-            await safeExecuteCommand(
-              'texra.cloneOverleafProject',
-              [],
-              this.viewName,
-            );
-            break;
-          case 'downloadArxiv':
-            await safeExecuteCommand(
-              'texra.downloadArXivSource',
-              [],
-              this.viewName,
-            );
-            break;
-          case 'openWalkthrough':
-            await safeExecuteCommand(
-              'texra.openGettingStarted',
-              [],
-              this.viewName,
-            );
-            break;
-          default: {
-            const exhaustive: never = m.action;
-            throw new Error(`Unhandled getting started action: ${exhaustive}`);
-          }
+        await safeExecuteCommand(
+          GETTING_STARTED_COMMANDS[m.action],
+          [],
+          this.viewName,
+        );
+        // runSetup changes the onboarding funnel inputs, so re-derive the
+        // card state once the setup assistant returns.
+        if (m.action === 'runSetup') {
+          await this.onboarding?.refreshOnboardingFunnel();
         }
       },
       [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: async () => {

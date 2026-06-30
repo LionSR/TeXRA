@@ -4,6 +4,7 @@ import { SETTINGS_VIEW_CMD } from '../../../../src/common/webview/settingsViewCo
 import { SETTINGS_TAB } from '../../../../src/shared/schemas/settingsViewMessages.js';
 import {
   closeTexraApp,
+  dismissOnboarding,
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
@@ -12,25 +13,7 @@ let launched: LaunchedApp;
 
 test.beforeAll(async () => {
   launched = await launchTexraApp();
-  await launched.page.waitForFunction(
-    () => {
-      const btn = Array.from(document.querySelectorAll('wa-button')).find(
-        (b) => b.textContent?.trim() === 'Got it',
-      );
-      return btn instanceof HTMLElement;
-    },
-    undefined,
-    { timeout: 10000 },
-  );
-  await launched.page.evaluate(() => {
-    const btn = Array.from(document.querySelectorAll('wa-button')).find(
-      (b) => b.textContent?.trim() === 'Got it',
-    );
-    if (btn instanceof HTMLElement) btn.click();
-  });
-  await launched.page
-    .locator('wa-dialog.desktop-onboarding')
-    .waitFor({ state: 'hidden', timeout: 5000 });
+  await dismissOnboarding(launched.page);
 });
 
 test.afterAll(async () => {
@@ -57,6 +40,31 @@ async function setRoute(route: 'main' | 'settings'): Promise<void> {
     route,
     { timeout: 5000 },
   );
+}
+
+/**
+ * Read the scroll metrics of the Tools settings panel (the scrollable element
+ * under the flex-body fix). Returns null when the panel has not mounted.
+ */
+async function readToolsPanelMetrics(): Promise<{
+  scrollHeight: number;
+  clientHeight: number;
+  scrollTop: number;
+} | null> {
+  return launched.page.evaluate(() => {
+    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
+    const settingsApp = dialog?.querySelector('settings-app');
+    const root = settingsApp?.shadowRoot;
+    const panel = root?.querySelector<HTMLElement>(
+      'wa-tab-panel[name="tools"]',
+    );
+    if (!panel) return null;
+    return {
+      scrollHeight: panel.scrollHeight,
+      clientHeight: panel.clientHeight,
+      scrollTop: panel.scrollTop,
+    };
+  });
 }
 
 test('main view no longer renders inner Launcher/Progress toolbar', async ({}, testInfo) => {
@@ -112,20 +120,7 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
 
   // Find the wa-tab-panel for tools — that's the scrollable element under
   // the new flex-body fix.
-  const probeBefore = await launched.page.evaluate(() => {
-    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
-    const settingsApp = dialog?.querySelector('settings-app');
-    const root = settingsApp?.shadowRoot;
-    const panel = root?.querySelector<HTMLElement>(
-      'wa-tab-panel[name="tools"]',
-    );
-    if (!panel) return null;
-    return {
-      scrollHeight: panel.scrollHeight,
-      clientHeight: panel.clientHeight,
-      scrollTop: panel.scrollTop,
-    };
-  });
+  const probeBefore = await readToolsPanelMetrics();
   console.log('tools panel before scroll:', probeBefore);
 
   await launched.page.screenshot({
@@ -145,20 +140,7 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
   });
   await launched.page.waitForTimeout(150);
 
-  const probeAfter = await launched.page.evaluate(() => {
-    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
-    const settingsApp = dialog?.querySelector('settings-app');
-    const root = settingsApp?.shadowRoot;
-    const panel = root?.querySelector<HTMLElement>(
-      'wa-tab-panel[name="tools"]',
-    );
-    if (!panel) return null;
-    return {
-      scrollHeight: panel.scrollHeight,
-      clientHeight: panel.clientHeight,
-      scrollTop: panel.scrollTop,
-    };
-  });
+  const probeAfter = await readToolsPanelMetrics();
   console.log('tools panel after scroll:', probeAfter);
 
   await launched.page.screenshot({

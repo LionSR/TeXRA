@@ -144,7 +144,7 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     expect(rendererMain).toMatch(
       /waIcon\('arrow-left',\s*\{\s*label:\s*'Back to launcher'\s*\}\)/,
     );
-    expect(rendererMain).toContain('waIcon(spec.icon, { label: spec.label })');
+    expect(rendererMain).toContain("waIcon('file-lines', { label: 'Logs' })");
     expect(rendererMain).not.toContain('TEXRA_ICON_LIBRARY');
     expect(rendererMain).not.toContain('desktop-back-button');
     expect(rendererMain).not.toContain(
