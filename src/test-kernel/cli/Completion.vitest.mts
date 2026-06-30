@@ -205,6 +205,13 @@ printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
     );
   });
 
+  it('does not emit fish completions for the removed agents inspect command', async () => {
+    const fish = await generateCompletionScript(rootCommand, 'fish');
+
+    expect(fish).not.toContain('__fish_seen_subcommand_from inspect');
+    expect(fish).not.toContain('agents inspect');
+  });
+
   it('keeps spaced bash file completions as one candidate', async () => {
     const bash = await generateCompletionScript(rootCommand, 'bash');
     const root = mkdtempSync(path.join(tmpdir(), 'texra-completion-'));
