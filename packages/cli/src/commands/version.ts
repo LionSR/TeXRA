@@ -1,19 +1,45 @@
 import { defineCommand } from 'citty';
 
-import { readCliVersion } from '../runtime/cliContext';
+import { cliEnvValue, readCliVersion } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeTextStdout } from '../runtime/logSinks';
 
+import { emitCliResult } from './_helpers/output';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import {
+  CLI_OUTPUT_FORMATS,
+  type CliOutputFormat,
+} from '../schemas/cliSettings';
+
+function isCliOutputFormat(value: unknown): value is CliOutputFormat {
+  return (
+    typeof value === 'string' &&
+    CLI_OUTPUT_FORMATS.includes(value as CliOutputFormat)
+  );
+}
+
+function parseVersionOutputFormat(flagValue: unknown): CliOutputFormat {
+  if (isCliOutputFormat(flagValue)) return flagValue;
+  const envValue = cliEnvValue('TEXRA_OUTPUT_FORMAT')?.trim();
+  return isCliOutputFormat(envValue) ? envValue : 'text';
+}
 
 export const versionCommand = defineCommand({
   meta: { name: 'version', description: 'Print the CLI version' },
   args: {
     ...GLOBAL_ARGS,
   },
-  async run() {
-    writeTextStdout(await readCliVersion());
+  async run(ctx) {
+    const version = await readCliVersion();
+    const result = { version };
+    emitCliResult(
+      { outputFormat: parseVersionOutputFormat(ctx.args['output-format']) },
+      {
+        json: result,
+        ndjson: { kind: 'version', ...result },
+        text: version,
+      },
+    );
     setExitCode(CliExitCode.Success);
   },
 });

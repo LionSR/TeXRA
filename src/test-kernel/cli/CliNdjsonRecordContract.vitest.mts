@@ -17,6 +17,7 @@ const REPRESENTATIVE_RECORDS: CliNdjsonRecord[] = [
   { kind: 'tool-status', tool: { name: 'bash', available: true } },
   { kind: 'tool-toggle', tool: { id: 'codex', enabled: false } },
   { kind: 'tool-guide', guide: { id: 'codex', operation: 'install' } },
+  { kind: 'version', version: '0.39.1' },
   { kind: 'model', model: { value: 'sonnet45', label: 'Sonnet 4.5' } },
   { kind: 'memory', memory: { id: 'm1', text: 'remember' } },
   { kind: 'memory-detail', id: 'm1', text: 'remember', scope: 'workspace' },
