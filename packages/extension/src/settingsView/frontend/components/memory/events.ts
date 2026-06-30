@@ -1,4 +1,4 @@
-import type { MemoryItemActionDetail } from '@shared/schemas';
+import type { MemoryItemActionDetail } from '@shared/schemas/settingsViewMessages';
 import { createEvent } from '@shared/utils/events';
 
 export const MemoryViewEvents = {

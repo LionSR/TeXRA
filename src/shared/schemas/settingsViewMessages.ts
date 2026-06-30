@@ -35,6 +35,7 @@ export {
   MemoryPreviewSchema,
   type MemoryViewItem,
   type MemoryPreview,
+  type MemoryItemActionDetail,
   type MemoryPathMessage,
   type MemoryDeleteMessage,
   type MemoryEnabledMessage,

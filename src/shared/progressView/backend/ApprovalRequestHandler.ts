@@ -1,6 +1,8 @@
 /**
  * Generic handler for approval/prompt requests with pending state management.
- * Eliminates duplication across tool edit, bash approval, retry, and proposal handlers.
+ * Eliminates duplication across tool edit, bash approval, retry, and proposal
+ * handlers, and is shared by both the VS Code extension and the desktop host so
+ * neither re-implements the pending-approval bookkeeping.
  *
  * The `delivered` set tracks IDs sent to the current webview target so that
  * show() won't duplicate an item that replay() already sent.  replay() always
@@ -63,5 +65,28 @@ export class ApprovalRequestHandler<
       if (!item.streamId || item.streamId === streamId) return true;
     }
     return false;
+  }
+
+  /**
+   * Silently drop every pending item tied to `streamId` (exact match, so
+   * streamless prompts survive). Unlike resolve(), this does NOT notify the
+   * webview — it only keeps the pending-permissions guard consistent when a
+   * stream is deleted and its prompts were already settled (or are durable,
+   * like external inquiries, and never receive a resolve event).
+   */
+  releaseForStream(streamId: string): void {
+    for (const [id, item] of this.pending) {
+      if (item.streamId === streamId) {
+        this.pending.delete(id);
+        this.delivered.delete(id);
+      }
+    }
+  }
+
+  /** Silently drop all pending items (and delivery tracking) without notifying
+   *  the webview. Used on a "delete all"/teardown sweep. */
+  clear(): void {
+    this.pending.clear();
+    this.delivered.clear();
   }
 }

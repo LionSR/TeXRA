@@ -12,11 +12,11 @@
 
 // Third-party imports
 import * as vscode from 'vscode';
-import stripAnsi from 'strip-ansi';
 
 // Local imports - hosts
 import {
   TERMINAL_OUTPUT_MAX_CHARS,
+  truncateTerminalOutput,
   type TerminalRunRequest,
   type TerminalRunResult,
 } from '@hosts/uiHosts';
@@ -94,9 +94,10 @@ async function captureExecution(
   // Drain the stream into a sliding-window tail. `.catch` swallows
   // late stream errors (terminal closed after we stopped awaiting)
   // so they cannot bubble up as unhandled rejections.
-  const reader = tail(execution.read(), TERMINAL_OUTPUT_MAX_CHARS).catch(
-    () => '',
-  );
+  const reader = drainStreamTail(
+    execution.read(),
+    TERMINAL_OUTPUT_MAX_CHARS,
+  ).catch(() => '');
 
   const result = await raced;
 
@@ -111,7 +112,7 @@ async function captureExecution(
 
   return {
     exitCode: result.timedOut ? undefined : result.value,
-    output: stripAnsi(output),
+    output: truncateTerminalOutput(output),
     timedOut: result.timedOut,
   };
 }
@@ -154,11 +155,13 @@ function raceWithTimeout<T>(
 }
 
 /**
- * Drain an async iterable into a length-capped sliding-window tail.
- * Caller may abandon the returned promise; chunk errors are surfaced
- * to the caller for them to decide whether to swallow.
+ * Drain an async iterable into a length-capped sliding-window tail,
+ * bounding in-flight memory while streaming. The final ANSI strip and cap
+ * happen via {@link truncateTerminalOutput}. Caller may abandon the
+ * returned promise; chunk errors are surfaced to the caller for them to
+ * decide whether to swallow.
  */
-async function tail(
+async function drainStreamTail(
   stream: AsyncIterable<string>,
   maxChars: number,
 ): Promise<string> {

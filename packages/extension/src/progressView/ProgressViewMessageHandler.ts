@@ -44,11 +44,9 @@ import {
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
-import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleProgressViewBashApprovalAction } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
-import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import {
   createExternalLocation,
   flexibleFS,
@@ -272,6 +270,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           handleAgentProposalAction: (message) =>
             this.agentProposalController.handleAction(message),
         },
+        externalInquiry: {
+          logWarn: (message, context) =>
+            this.logger.warn(this.channel, message, { data: context }),
+        },
       }),
       [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: async (data) => {
         await safeExecuteCommand(
@@ -338,38 +340,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           );
         }
       },
-      [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: async (data) => {
-        if (data.action === 'draft') {
-          await persistOpenTurnDraft({
-            threadId: data.threadId,
-            draft: data.draft ?? null,
-          });
-          return;
-        }
-        if (data.action === 'submit') {
-          if (data.answer == null || data.answer.length === 0) {
-            this.logger.warn(
-              this.channel,
-              'Ignoring external inquiry submit without an answer',
-              { data: { threadId: data.threadId } },
-            );
-            return;
-          }
-          await handleExternalInquiryAction({
-            action: 'submit',
-            threadId: data.threadId,
-            answer: data.answer,
-            sessionLinks: data.sessionLinks,
-          });
-          return;
-        }
-        await handleExternalInquiryAction({
-          action: 'drop',
-          threadId: data.threadId,
-          feedback: data.feedback,
-        });
-      },
-
       // Profile & Memory - direct command execution
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: runCommand(
         'texra.auth.viewProfile',

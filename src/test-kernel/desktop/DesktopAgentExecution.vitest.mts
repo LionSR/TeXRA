@@ -1270,7 +1270,7 @@ describe('DesktopProgressBridge', () => {
     const runAgent = vi.fn(async (_request, options) => {
       await options.openWorkflowOutput({
         outcome: RUN_OUTCOME.COMPLETED,
-        outputs: [{ absolutePath: '/tmp/result.pdf' }],
+        outputs: [{ absolutePath: '/tmp/result.pdf', round: 0 }],
       });
     });
     const execution = await createExecution({
