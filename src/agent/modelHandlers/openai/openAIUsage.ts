@@ -87,9 +87,7 @@ export function computeOpenAIResponsePrice(
 export function normalizeOpenAIResponseUsage(
   rawUsage: ResponseUsage,
   responseTimeMs: number,
-  config: OpenAIPricingConfig,
-  computePrice: (usage: ResponseUsage) => number = (usage) =>
-    computeOpenAIResponsePrice(usage, config),
+  computePrice: (usage: ResponseUsage) => number,
 ): NormalizedUsage {
   return normalizeUsage(
     {

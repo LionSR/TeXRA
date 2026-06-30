@@ -2021,11 +2021,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     rawUsage: ResponseUsage,
     responseTimeMs: number,
   ): NormalizedUsage {
-    return normalizeOpenAIResponseUsage(
-      rawUsage,
-      responseTimeMs,
-      this.standardPricingConfig(),
-      (usage) => this.computePrice(usage),
+    return normalizeOpenAIResponseUsage(rawUsage, responseTimeMs, (usage) =>
+      this.computePrice(usage),
     );
   }
 
