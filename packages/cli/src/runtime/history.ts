@@ -256,10 +256,18 @@ export function formatCliHistoryText(
         entry.timestamp,
         formatCliHistoryAgentLabel(entry),
         entry.status,
-        entry.inputBasename,
+        historyListSubject(entry),
       ].join('\t'),
     )
     .join('\n');
+}
+
+function historyListSubject(
+  entry: Pick<CliHistoryEntry, 'description' | 'inputBasename'>,
+): string {
+  if (entry.inputBasename !== '-') return entry.inputBasename;
+  const description = entry.description?.replaceAll(/\s+/g, ' ').trim();
+  return description || '-';
 }
 
 export function formatCliHistoryNotFoundText(
