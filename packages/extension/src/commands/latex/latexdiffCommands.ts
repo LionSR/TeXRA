@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { settleQuickInput } from '@commands/_shared/quickInputUtils';
+import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import {
@@ -91,33 +91,18 @@ async function promptForLatexdiffMathMarkup(): Promise<
   ];
 
   type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
-  const qp = vscode.window.createQuickPick<MarkupItem>();
-  qp.title = 'Latexdiff math markup';
-  qp.placeholder = 'Select math markup granularity for this diff run';
-  qp.ignoreFocusOut = true;
-  qp.items = prioritizedItems;
-  const defaultItem = prioritizedItems.at(0);
-  if (defaultItem) {
-    qp.activeItems = [defaultItem];
-  }
-  // VS Code 1.108+: show the saved default as a persistent hint below the
-  // input box so users know why one item is listed first. Older hosts
-  // (incl. Cursor 1.105) silently ignore the property.
-  if ('prompt' in qp) {
-    (qp as MarkupQuickPick).prompt =
-      `Saved default: ${configuredMode} — press Enter to accept, or pick another`;
-  }
-  return settleQuickInput(qp, (accept) => {
-    qp.onDidAccept(() => {
-      const picked = qp.activeItems[0] ?? qp.selectedItems[0];
-      accept(picked?.value);
-    });
+  const pick = await showQuickPick<MarkupItem>({
+    title: 'Latexdiff math markup',
+    placeholder: 'Select math markup granularity for this diff run',
+    ignoreFocusOut: true,
+    // VS Code 1.108+: show the saved default as a persistent hint below the
+    // input box so users know why one item is listed first. Older hosts
+    // (incl. Cursor 1.105) silently ignore the property.
+    prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
+    items: prioritizedItems,
   });
+  return pick?.value;
 }
-
-type MarkupQuickPick = vscode.QuickPick<
-  vscode.QuickPickItem & { value: MathMarkupOption }
-> & { prompt: string };
 
 async function openLatexdiffResult(
   base: FileLocation,

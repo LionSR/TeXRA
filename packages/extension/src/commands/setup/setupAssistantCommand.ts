@@ -11,7 +11,7 @@ import { isCodexSubscriptionActive } from '@auth/codex';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
-import { settleQuickInput } from '@commands/_shared/quickInputUtils';
+import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
@@ -229,25 +229,13 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   ];
 
   type CredentialPick = (typeof picks)[number];
-  const qp = vscode.window.createQuickPick<CredentialPick>();
-  qp.title = 'TeXRA Setup';
-  qp.placeholder =
-    'TeXRA needs a credential before the setup assistant can run models.';
-  qp.items = picks;
-  const defaultPick = picks[0];
-  if (defaultPick) {
-    qp.activeItems = [defaultPick];
-  }
-  // VS Code 1.108+: the four choices are not self-explanatory in isolation,
-  // and the placeholder vanishes on first keystroke. The prompt persists.
-  if ('prompt' in qp) {
-    (qp as vscode.QuickPick<CredentialPick> & { prompt: string }).prompt =
-      'ChatGPT uses your Plus/Pro subscription; Researcher Access uses your TeXRA account; API Key requires a provider key.';
-  }
-  const picked = await settleQuickInput(qp, (accept) => {
-    qp.onDidAccept(() => {
-      accept(qp.activeItems[0] ?? qp.selectedItems[0]);
-    });
+  const picked = await showQuickPick<CredentialPick>({
+    title: 'TeXRA Setup',
+    placeholder: 'TeXRA needs a credential before the setup assistant can run models.',
+    // VS Code 1.108+: the four choices are not self-explanatory in isolation,
+    // and the placeholder vanishes on first keystroke. The prompt persists.
+    prompt: 'ChatGPT uses your Plus/Pro subscription; Researcher Access uses your TeXRA account; API Key requires a provider key.',
+    items: picks,
   });
 
   if (!picked) return false;

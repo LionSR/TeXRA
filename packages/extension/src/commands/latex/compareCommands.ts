@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { legacyWorkflowOutputStem } from '@agent/output/workflowOutputLayout';
-import { settleQuickInput } from '@commands/_shared/quickInputUtils';
+import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
@@ -224,25 +224,14 @@ async function resolveAcceptTarget(
     },
   ];
 
-  const qp = vscode.window.createQuickPick<AcceptItem>();
-  qp.title = 'Accept edits';
-  qp.placeholder = `Accept '${path.basename(editedPath)}' into the workspace`;
-  qp.ignoreFocusOut = true;
-  qp.items = acceptItems;
-  const defaultItem = acceptItems[0];
-  if (defaultItem) {
-    qp.activeItems = [defaultItem];
-  }
-  // VS Code 1.108+: keep the edited filename visible after the placeholder
-  // is cleared by typing — this is a destructive replace-vs-copy choice.
-  if ('prompt' in qp) {
-    (qp as vscode.QuickPick<AcceptItem> & { prompt: string }).prompt =
-      `Edited file: ${path.basename(editedPath)}`;
-  }
-  const pick = await settleQuickInput(qp, (accept) => {
-    qp.onDidAccept(() => {
-      accept(qp.activeItems[0] ?? qp.selectedItems[0]);
-    });
+  const pick = await showQuickPick<AcceptItem>({
+    title: 'Accept edits',
+    placeholder: `Accept '${path.basename(editedPath)}' into the workspace`,
+    ignoreFocusOut: true,
+    // VS Code 1.108+: keep the edited filename visible after the placeholder
+    // is cleared by typing — this is a destructive replace-vs-copy choice.
+    prompt: `Edited file: ${path.basename(editedPath)}`,
+    items: acceptItems,
   });
   return pick?.target;
 }
