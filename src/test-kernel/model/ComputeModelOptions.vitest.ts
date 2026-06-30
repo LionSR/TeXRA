@@ -214,6 +214,33 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.disabled).toBe(false);
   });
 
+  it('shows subscription access before relay state when ChatGPT subscription is preferred and signed in', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform({
+        config: {
+          'texra.chatgptCodex.preferSubscription': true,
+        },
+        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+        secrets: {
+          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
+        },
+      }),
+    );
+    const access = createModelOptionsAccess({
+      useIncludedAccess: true,
+      canUseServerSideKeys: true,
+      canUseModelSync: true,
+      relayQuotaExceeded: true,
+      quotaAutoSwitched: false,
+    });
+
+    const [model] = await computeModelOptionsData(['gpt55'], access);
+
+    expect(model.availability).toBe('subscription-access');
+    expect(model.disabled).toBe(false);
+  });
+
   it('shows subscription access only for tool-use availability when the scoped switch is on', async () => {
     const { initPlatform } = await import('@platform/platform');
     initPlatform(

@@ -8,6 +8,7 @@ import {
 } from '@agent/core/state/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/state/AgentWorkspaceState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
+import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import {
   AgentFileLocationSchema,
   CompileResultSchema,
@@ -42,6 +43,9 @@ export const ReflectionFlowStateSchema = z.object({
 
   /** Distinguishes failure from cancellation during resume. */
   lastError: RetryErrorInfoSchema.optional(),
+
+  /** Provider-message format used by the persisted conversation. */
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
 
   /** Final LaTeX compile status for the last completed round, when checked. */
   lastCompileResult: CompileResultSchema.optional(),
