@@ -326,7 +326,7 @@ export async function runToolUseFlow<C = unknown>(
     activePersistedFlow = pf;
     pf.setServices(services);
     pf.setProjection(async (s, store) => {
-      const todos = s.stateSlices?.workspaceSnapshot.workPlan.todos;
+      const todos = s.stateSlices?.workspaceSnapshot?.workPlan?.todos;
       if (Array.isArray(todos) && todos.length) await store.writeTodos(todos);
       if (s.messages.length) await store.writeConversation(s.messages);
       const currentTouchedFiles = extractTouchedFiles(s.stateSlices);
