@@ -55,12 +55,10 @@ async function applyCliConfigSettingSideEffects(
     applyCliGitAuthorConfig(stores.config);
   }
   if (entry.key === GlobalStateKey.USE_OPENROUTER) {
-    if (value === true) {
-      invalidateModelOptionsCache();
-      await onApiModeSelect?.('personal');
-      return;
-    }
     invalidateModelOptionsCache();
+    if (value === true) {
+      await onApiModeSelect?.('personal');
+    }
   }
 }
 

@@ -68,7 +68,7 @@ export class ProgressApiKeyRetryController {
     } else {
       // Relay/subscription exhaustion does not break the stored direct key, so
       // if a usable one already exists, switch to it and retry without
-      // re-prompting — the user has already provided a key. Only prompt when
+      // re-prompting, since the user has already provided a key. Only prompt when
       // none exists yet, and only re-check the keys after that prompt (so the
       // common already-set path reads the secret store once, not twice).
       shouldProceed = await this.hasAnyUsableKey(providersToCheck);
@@ -87,8 +87,8 @@ export class ProgressApiKeyRetryController {
       };
     }
 
-    // Disable relay (included access) so the retry uses the user's own key —
-    // not the relay JWT — whenever the switch promises "your own API key".
+    // Disable relay (included access) so the retry uses the user's own key,
+    // not the relay JWT, whenever the switch promises "your own API key".
     // Both relay exhaustion (viaRelay) and subscription exhaustion
     // (chatgptSubscription) fall through to `super.getApiKey()`, which otherwise
     // still prefers relay when included access is on, so the retry would never

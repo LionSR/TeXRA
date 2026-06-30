@@ -29,8 +29,7 @@ export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
  * and task-flavored fallbacks for users without sign-in.
  */
 export const PREFERRED_TOOL_USE_AGENTS = [
-  ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
-  ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,
+  ...BUILTIN_TEAM_ROOT_AGENT_NAMES,
   'assistant',
   'research',
   'review',

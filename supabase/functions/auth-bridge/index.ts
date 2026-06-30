@@ -292,13 +292,8 @@ function bridgePageHtml(ext: string, id: string): string {
       // so the editor sees the same error it would have on the raw redirect.
       heading.textContent = 'Sign-in did not complete';
       lede.className = 'error';
-      var message;
-      if (errorDescription) {
-        message = errorDescription;
-      } else {
-        message = 'Authorization failed (' + oauthError + ').';
-      }
-      lede.textContent = message;
+      lede.textContent =
+        errorDescription || 'Authorization failed (' + oauthError + ').';
     }
 
     var tail = '';

@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import escapeRegExp from 'escape-string-regexp';
 import { XMLParser } from 'fast-xml-parser';
 
 import {
@@ -195,10 +196,6 @@ function shouldKeepPercentHeaderAsLatexComment(
 
 function hasLikelyLatexContent(lines: readonly string[]): boolean {
   return lines.some((line) => LIKELY_LATEX_CONTENT_REGEX.test(line.trim()));
-}
-
-function escapeRegExp(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function stripXmlTagBlocks(content: string, tagName: string): string {

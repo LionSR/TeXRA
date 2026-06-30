@@ -5,8 +5,8 @@ import * as fs from 'node:fs';
  * in the VS Code host: `vscode.workspace.fs` offers no chunked read and does
  * not reliably report the symbolic-link bit across platforms. Both
  * `FileSystemProvider` implementations (Node and VS Code) delegate here, so the
- * Node-fs fallback surface — and the reason it bypasses the host FS — lives in
- * one place. The extension host is always Node, so this is safe there too.
+ * Node-fs fallback surface and the reason it bypasses the host FS live in one
+ * place. The extension host is always Node, so this is safe there too.
  */
 
 export async function isSymlink(target: string): Promise<boolean> {

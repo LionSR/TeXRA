@@ -59,6 +59,28 @@ async function postForm(url: string, body: URLSearchParams): Promise<Response> {
   }
 }
 
+/** POST a JSON body, mapping a network failure to a CodexAuthError. */
+async function postJson(
+  url: string,
+  body: unknown,
+  networkErrorMessage: string,
+  networkErrorKind: CodexAuthError['kind'],
+): Promise<Response> {
+  try {
+    return await fetch(url, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (cause) {
+    throw new CodexAuthError(
+      `${networkErrorMessage}: ${toErrorMessage(cause)}`,
+      networkErrorKind,
+    );
+  }
+}
+
 /** Throw a CodexAuthError for a non-ok HTTP response, appending any body text. */
 async function throwHttpError(
   response: Response,
@@ -134,20 +156,12 @@ export async function refreshTokens(
 
 /** Begin the device-code flow: request a user code to display. */
 export async function requestDeviceUserCode(): Promise<CodexDeviceUserCode> {
-  let response: Response;
-  try {
-    response = await fetch(CODEX_DEVICE_USERCODE_URL, {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ client_id: CODEX_CLIENT_ID }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (cause) {
-    throw new CodexAuthError(
-      `Network error requesting device code: ${toErrorMessage(cause)}`,
-      'transient',
-    );
-  }
+  const response = await postJson(
+    CODEX_DEVICE_USERCODE_URL,
+    { client_id: CODEX_CLIENT_ID },
+    'Network error requesting device code',
+    'transient',
+  );
   if (response.status === 404) {
     throw new CodexAuthError(
       'Device-code login is not enabled for this account. Enable it under ChatGPT settings → Security (chatgpt.com/settings/security), then try again.',
@@ -177,24 +191,13 @@ export async function pollDeviceToken(params: {
   deviceAuthId: string;
   userCode: string;
 }): Promise<CodexDeviceToken> {
-  let response: Response;
-  try {
-    response = await fetch(CODEX_DEVICE_TOKEN_URL, {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({
-        device_auth_id: params.deviceAuthId,
-        user_code: params.userCode,
-      }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (cause) {
-    // Network blip mid-poll: treat as pending so the loop keeps trying.
-    throw new CodexAuthError(
-      `Network error polling device authorization: ${toErrorMessage(cause)}`,
-      'pending',
-    );
-  }
+  // A network blip mid-poll is reported as 'pending' so the loop keeps trying.
+  const response = await postJson(
+    CODEX_DEVICE_TOKEN_URL,
+    { device_auth_id: params.deviceAuthId, user_code: params.userCode },
+    'Network error polling device authorization',
+    'pending',
+  );
   if (response.status === 403 || response.status === 404) {
     throw new CodexAuthError(
       'Authorization pending',

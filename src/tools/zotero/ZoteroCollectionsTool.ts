@@ -165,7 +165,7 @@ export class ZoteroCollectionsTool extends defineTool({
       z.array(BbtLibrarySchema),
     );
 
-    if (!Array.isArray(libraries) || libraries.length === 0) {
+    if (libraries.length === 0) {
       return {
         summary: 'No libraries found in Zotero.',
         output:
