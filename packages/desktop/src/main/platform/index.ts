@@ -42,7 +42,7 @@ export interface ElectronPlatformInitResult {
    * Whether TeXRA had run on this machine before this session, captured from
    * `LAST_KNOWN_VERSION` BEFORE the bundled-agent directory sync writes that
    * key during this same init. Threaded out so the onboarding backfill can
-   * tell a returning user (veteran) from a fresh install — reading the key
+   * tell a returning user (veteran) from a fresh install; reading the key
    * after init would always see the just-written version and misclassify a
    * brand-new credentialed user as a veteran (→ State 2 'done', so the setup
    * card never shows). Mirrors the extension's read-before-write ordering
