@@ -85,6 +85,21 @@ export type ToolUseFollowUpTarget =
       readonly streamStatus: StreamStatus | undefined;
     };
 
+export type ManualCompactionRequestResult =
+  | {
+      readonly kind: 'requested';
+      readonly streamId: StreamTabId;
+      readonly runtimeHost?: AgentRuntimeHost;
+    }
+  | {
+      readonly kind: 'unsupported';
+      readonly streamId: StreamTabId;
+    }
+  | {
+      readonly kind: 'no_active_tool_use';
+      readonly streamId?: StreamTabId;
+    };
+
 /**
  * Process-wide owner for active executions and their change listeners.
  *
@@ -327,6 +342,35 @@ export class ExecutionRegistry {
     streamId: StreamTabId,
   ): LiveToolUseFlowContext | undefined {
     return this.getAgentHandleByStream(streamId)?.getToolUseFlow();
+  }
+
+  /**
+   * Request manual compaction from the active tool-use flow, if one exists.
+   *
+   * Hosts own the user-facing message, but the registry owns the live-flow
+   * lookup and model capability test so CLI and extension do not rederive the
+   * same runtime facts.
+   */
+  requestManualCompaction(
+    streamId: StreamTabId | undefined,
+  ): ManualCompactionRequestResult {
+    const context = streamId ? this.getToolUseFlowContext(streamId) : undefined;
+    if (!streamId || !context) {
+      return {
+        kind: 'no_active_tool_use',
+        ...(streamId && { streamId }),
+      };
+    }
+    if (!context.modelHandler.supportsManualCompaction) {
+      return { kind: 'unsupported', streamId };
+    }
+
+    context.requestImmediateCompaction();
+    return {
+      kind: 'requested',
+      streamId,
+      ...(context.runtimeHost && { runtimeHost: context.runtimeHost }),
+    };
   }
 
   /**

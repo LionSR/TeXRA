@@ -19,24 +19,23 @@ export function stopAgent(streamId: StreamTabId): void {
 }
 
 export async function compactResponse(streamId: StreamTabId): Promise<void> {
-  const flowContext = executionRegistry.getToolUseFlowContext(streamId);
-  if (!flowContext) {
-    await vscode.window.showInformationMessage(
-      'No active tool-use session found for this stream.',
-    );
-    return;
+  const result = executionRegistry.requestManualCompaction(streamId);
+  switch (result.kind) {
+    case 'no_active_tool_use':
+      await vscode.window.showInformationMessage(
+        'No active tool-use session found for this stream.',
+      );
+      return;
+    case 'unsupported':
+      await vscode.window.showInformationMessage(
+        'Manual context compaction is not yet available for this model. Stay tuned!',
+      );
+      return;
+    case 'requested':
+      notifyFollowUpSent(result.streamId, result.runtimeHost);
+      await vscode.window.showInformationMessage(
+        'Context compaction requested. The agent will process it on the next model call.',
+      );
+      return;
   }
-
-  if (!flowContext.modelHandler.supportsManualCompaction) {
-    await vscode.window.showInformationMessage(
-      'Manual context compaction is not yet available for this model. Stay tuned!',
-    );
-    return;
-  }
-
-  flowContext.requestImmediateCompaction();
-  notifyFollowUpSent(streamId, flowContext.runtimeHost);
-  await vscode.window.showInformationMessage(
-    'Context compaction requested. The agent will process it on the next model call.',
-  );
 }
