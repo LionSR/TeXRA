@@ -61,16 +61,7 @@ function parentPath(target: string): string {
   return path.posix.dirname(normalizePath(target));
 }
 
-function hasChildPath(parent: string, candidate: string): boolean {
-  const relative = path.posix.relative(parent, candidate);
-  return (
-    relative !== '' &&
-    !relative.startsWith('..') &&
-    !path.posix.isAbsolute(relative)
-  );
-}
-
-function directChildName(
+function relativeChildPath(
   parent: string,
   candidate: string,
 ): string | undefined {
@@ -82,7 +73,18 @@ function directChildName(
   ) {
     return undefined;
   }
-  return relative.split(path.posix.sep).at(0);
+  return relative;
+}
+
+function hasChildPath(parent: string, candidate: string): boolean {
+  return relativeChildPath(parent, candidate) !== undefined;
+}
+
+function directChildName(
+  parent: string,
+  candidate: string,
+): string | undefined {
+  return relativeChildPath(parent, candidate)?.split(path.posix.sep).at(0);
 }
 
 function fileSize(record: FakeFileRecord): number {

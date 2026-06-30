@@ -75,13 +75,20 @@ function createPlatform(
   return { platform, runs };
 }
 
+function setupTool(result?: TerminalRunResult): {
+  tool: SendToTerminalTool;
+  runs: RunRecord[];
+} {
+  const { platform, runs } = createPlatform(result);
+  setSetupPlatform(platform);
+  return { tool: new SendToTerminalTool(), runs };
+}
+
 describe('SendToTerminalTool', () => {
   beforeAll(() => installApprovalSkippingPlatform());
 
   it('runs the command and returns exit code + captured output', async () => {
-    const { platform, runs } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new SendToTerminalTool();
+    const { tool, runs } = setupTool();
 
     const result = await tool.call({
       command: 'sudo apt-get install -y perl',
@@ -96,9 +103,7 @@ describe('SendToTerminalTool', () => {
   });
 
   it('always prepends TeXRA: to a caller-supplied label', async () => {
-    const { platform, runs } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new SendToTerminalTool();
+    const { tool, runs } = setupTool();
 
     await tool.call({
       command: 'sudo apt-get install -y perl',
@@ -109,14 +114,13 @@ describe('SendToTerminalTool', () => {
   });
 
   it('reports a non-zero exit code clearly to the agent', async () => {
-    const { platform } = createPlatform({
+    const { tool } = setupTool({
       exitCode: 100,
       output: 'E: Unable to locate package fakepkg\n',
       timedOut: false,
     });
-    setSetupPlatform(platform);
 
-    const result = await new SendToTerminalTool().call({
+    const result = await tool.call({
       command: 'sudo apt-get install -y fakepkg',
     });
 
@@ -126,14 +130,13 @@ describe('SendToTerminalTool', () => {
   });
 
   it('reports a timeout without throwing', async () => {
-    const { platform } = createPlatform({
+    const { tool } = setupTool({
       exitCode: undefined,
       output: 'fetching...\n',
       timedOut: true,
     });
-    setSetupPlatform(platform);
 
-    const result = await new SendToTerminalTool().call({
+    const result = await tool.call({
       command: 'sudo apt-get install -y perl',
       timeout: 1000,
     });
@@ -143,9 +146,7 @@ describe('SendToTerminalTool', () => {
   });
 
   it('rejects commands containing newlines', async () => {
-    const { platform, runs } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new SendToTerminalTool();
+    const { tool, runs } = setupTool();
 
     for (const command of [
       'sudo apt-get install -y perl\nrm -rf /tmp/leak',
@@ -163,14 +164,13 @@ describe('SendToTerminalTool', () => {
     // and end so we can see which side survived truncation.
     const head = 'BEGIN_MARKER\n' + 'x'.repeat(8_000);
     const end = 'Setting up perl ... done\nEND_MARKER';
-    const { platform } = createPlatform({
+    const { tool } = setupTool({
       exitCode: 0,
       output: head + '\n' + end,
       timedOut: false,
     });
-    setSetupPlatform(platform);
 
-    const result = await new SendToTerminalTool().call({
+    const result = await tool.call({
       command: 'sudo apt-get install -y perl',
     });
 

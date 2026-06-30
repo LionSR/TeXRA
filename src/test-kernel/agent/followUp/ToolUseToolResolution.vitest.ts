@@ -38,7 +38,7 @@ describe('tool-use tool resolution', () => {
   });
 
   it('filters approval-gated tools when approval prompts are unavailable', async () => {
-    const registry = registryFor([
+    const names = [
       'apply_path',
       'ask_user_question',
       'bash',
@@ -50,22 +50,11 @@ describe('tool-use tool resolution', () => {
       'update_config',
       'wolfram',
       'write_file',
-    ]);
+    ];
+    const registry = registryFor(names);
 
     const { tools, delegationTrimmed } = await resolveAgentTools({
-      tools: toolDefs([
-        'apply_path',
-        'ask_user_question',
-        'bash',
-        'delegate_agent',
-        'grep',
-        'inquiry',
-        'plan',
-        'send_to_terminal',
-        'update_config',
-        'wolfram',
-        'write_file',
-      ]),
+      tools: toolDefs(names),
       registry,
       logger,
       toolInjections,
@@ -78,7 +67,7 @@ describe('tool-use tool resolution', () => {
   });
 
   it('keeps approval-gated tools when approval prompts are available', async () => {
-    const registry = registryFor([
+    const names = [
       'apply_path',
       'ask_user_question',
       'bash',
@@ -87,19 +76,11 @@ describe('tool-use tool resolution', () => {
       'inquiry',
       'plan',
       'update_config',
-    ]);
+    ];
+    const registry = registryFor(names);
 
     const { tools } = await resolveAgentTools({
-      tools: toolDefs([
-        'apply_path',
-        'ask_user_question',
-        'bash',
-        'delegate_agent',
-        'grep',
-        'inquiry',
-        'plan',
-        'update_config',
-      ]),
+      tools: toolDefs(names),
       registry,
       logger,
       toolInjections,
@@ -120,22 +101,17 @@ describe('tool-use tool resolution', () => {
   });
 
   it('filters runtime-unavailable tools without hiding other approval-gated tools', async () => {
-    const registry = registryFor([
+    const names = [
       'ask_user_question',
       'bash',
       'grep',
       'inquiry',
       'write_file',
-    ]);
+    ];
+    const registry = registryFor(names);
 
     const { tools } = await resolveAgentTools({
-      tools: toolDefs([
-        'ask_user_question',
-        'bash',
-        'grep',
-        'inquiry',
-        'write_file',
-      ]),
+      tools: toolDefs(names),
       registry,
       logger,
       toolInjections,

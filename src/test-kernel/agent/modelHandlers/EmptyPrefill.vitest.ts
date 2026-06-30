@@ -25,35 +25,21 @@ import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandle
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 
-// Local imports - logger
-
-// Local imports - utils
+// Local imports - shared
 import type { FileLocation } from '@shared/schemas';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Type imports
 import type { ChatMessages } from '@openrouter/sdk/models';
 
-type LoggerStub = Partial<AgentTrace> & {
-  streamId: string;
-};
-
-function createLoggerStub(): LoggerStub {
+function createLoggerStub(): AgentTrace {
   return {
     streamId: 'test-channel',
-    debug: () => {
-      /* no-op for tests */
-    },
-    info: () => {
-      /* no-op for tests */
-    },
-    warn: () => {
-      /* no-op for tests */
-    },
-    error: () => {
-      /* no-op for tests */
-    },
-  };
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+  } as unknown as AgentTrace;
 }
 
 function buildConfig(
@@ -107,7 +93,7 @@ describe('model handler empty prefill behavior', () => {
   it('OpenAI chat preserves user content when prefill is empty', async () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
-      handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+      handler.setLogger(createLoggerStub());
       const messages: ChatCompletionMessageParam[] = [
         {
           role: 'user',
@@ -140,7 +126,7 @@ describe('model handler empty prefill behavior', () => {
       const handler = new ModelHandlerGoogleGenAI(
         buildConfig(ModelProvider.GOOGLE),
       );
-      handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+      handler.setLogger(createLoggerStub());
       const messages: Content[] = [
         {
           role: 'user',
@@ -177,7 +163,7 @@ describe('model handler empty prefill behavior', () => {
           openrouterFullName: 'openai/test-model',
         }),
       );
-      handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+      handler.setLogger(createLoggerStub());
       const messages: ChatMessages[] = [
         {
           role: 'user',

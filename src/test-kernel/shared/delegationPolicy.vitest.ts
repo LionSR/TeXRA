@@ -1,8 +1,5 @@
-// Third-party imports
 import * as assert from 'node:assert';
 import { describe, it } from 'vitest';
-
-// Node.js built-in imports
 
 // Local imports - shared constants
 import {

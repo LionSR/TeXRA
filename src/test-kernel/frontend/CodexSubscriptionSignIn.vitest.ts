@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   loginWithLoopback: vi.fn(),
@@ -42,13 +42,25 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
 const { signInWithChatGptSubscription } =
   await import('@frontend/auth/codexSubscriptionSignIn');
 
+function loopbackSession() {
+  return {
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    expiresAtMs: Date.now() + 60_000,
+    email: 'person@example.com',
+  };
+}
+
 describe('signInWithChatGptSubscription', () => {
+  beforeEach(() => {
+    mocks.withProgress.mockImplementation((_options, task) => task());
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
 
   it('reports OAuth failures as sign-in failures', async () => {
-    mocks.withProgress.mockImplementation((_options, task) => task());
     mocks.loginWithLoopback.mockRejectedValue(new Error('oauth failed'));
 
     const signedIn = await signInWithChatGptSubscription('TestChannel');
@@ -63,13 +75,7 @@ describe('signInWithChatGptSubscription', () => {
   });
 
   it('does not treat a completed OAuth sign-in as a sign-in failure when preference update fails', async () => {
-    mocks.withProgress.mockImplementation((_options, task) => task());
-    mocks.loginWithLoopback.mockResolvedValue({
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      expiresAtMs: Date.now() + 60_000,
-      email: 'person@example.com',
-    });
+    mocks.loginWithLoopback.mockResolvedValue(loopbackSession());
     mocks.setPreferCodexSubscription.mockRejectedValue(
       new Error('config write failed'),
     );
@@ -90,13 +96,7 @@ describe('signInWithChatGptSubscription', () => {
   });
 
   it('warns when a more specific setting keeps subscription preference disabled', async () => {
-    mocks.withProgress.mockImplementation((_options, task) => task());
-    mocks.loginWithLoopback.mockResolvedValue({
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      expiresAtMs: Date.now() + 60_000,
-      email: 'person@example.com',
-    });
+    mocks.loginWithLoopback.mockResolvedValue(loopbackSession());
     mocks.setPreferCodexSubscription.mockResolvedValue({
       effective: false,
       target: 'global',
@@ -111,7 +111,6 @@ describe('signInWithChatGptSubscription', () => {
   });
 
   it('opens the default browser and offers the link for a non-default browser', async () => {
-    mocks.withProgress.mockImplementation((_options, task) => task());
     mocks.openExternal.mockResolvedValue(true);
     mocks.showInformationMessage.mockResolvedValue('Copy Sign-in Link');
     mocks.setPreferCodexSubscription.mockResolvedValue({
@@ -120,12 +119,7 @@ describe('signInWithChatGptSubscription', () => {
     });
     mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
       await openBrowser('https://auth.openai.com/authorize?x=1');
-      return {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        expiresAtMs: Date.now() + 60_000,
-        email: 'person@example.com',
-      };
+      return loopbackSession();
     });
 
     await signInWithChatGptSubscription('TestChannel');
@@ -144,13 +138,7 @@ describe('signInWithChatGptSubscription', () => {
   });
 
   it('returns true when OAuth and preference enablement both succeed', async () => {
-    mocks.withProgress.mockImplementation((_options, task) => task());
-    mocks.loginWithLoopback.mockResolvedValue({
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      expiresAtMs: Date.now() + 60_000,
-      email: 'person@example.com',
-    });
+    mocks.loginWithLoopback.mockResolvedValue(loopbackSession());
     mocks.setPreferCodexSubscription.mockResolvedValue({
       effective: true,
       target: 'global',

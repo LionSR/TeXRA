@@ -39,21 +39,21 @@ function createSnapshot(
   };
 }
 
-interface TestSnapshotStore {
-  hydrated: readonly RestoredStreamSnapshot[];
-  upsertCalls: RestoredStreamSnapshot[];
-  removeCalls: StreamTabId[];
-  replaceAllCalls: RestoredStreamSnapshot[][];
-}
+type BridgeOptions = Parameters<
+  typeof import('@desktop/main/desktopProgressEventBridge').createDesktopProgressEventBridge
+>[0];
+type SnapshotStore = NonNullable<BridgeOptions['streamSnapshotStore']>;
 
-function createTestSnapshotStore(
-  hydrated: RestoredStreamSnapshot[] = [],
-): TestSnapshotStore {
+function createSnapshotStore(
+  overrides: Partial<SnapshotStore> = {},
+): SnapshotStore {
   return {
-    hydrated,
-    upsertCalls: [],
-    removeCalls: [],
-    replaceAllCalls: [],
+    hydrated: [],
+    upsert: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
+    replaceAll: vi.fn(async () => {}),
+    getAll: vi.fn(() => []),
+    ...overrides,
   };
 }
 
@@ -161,36 +161,34 @@ describe('DesktopProgressEventBridge', () => {
     vi.resetModules();
   });
 
+  function createBridge(overrides: Partial<BridgeOptions> = {}) {
+    return module.createDesktopProgressEventBridge({
+      state: makeMockState(),
+      streamSnapshotStore: undefined,
+      sendMessage: () => {},
+      logger: makeLogger(),
+      getActiveStream: () => '',
+      routeToProgress: () => {},
+      onGoalStateChanged: () => {},
+      onShowError: () => {},
+      ...overrides,
+    });
+  }
+
   // ── Ghost hydration ────────────────────────────────────────────────────
 
   describe('ghost-stream hydration', () => {
     it('hydrates ghost streams from the snapshot store on construction', () => {
-      const store = createTestSnapshotStore([
-        createSnapshot({ streamId: 'ghost-1', description: 'First ghost' }),
-        createSnapshot({ streamId: 'ghost-2', description: 'Second ghost' }),
-      ]);
-
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: {
-          hydrated: store.hydrated,
-          upsert: vi.fn(async (snapshot) => {
-            store.upsertCalls.push(snapshot);
-          }),
-          remove: vi.fn(async (streamId) => {
-            store.removeCalls.push(streamId);
-          }),
-          replaceAll: vi.fn(async (snapshots) => {
-            store.replaceAllCalls.push(snapshots);
-          }),
-          getAll: vi.fn(() => []),
-        },
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
+      const bridge = createBridge({
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [
+            createSnapshot({ streamId: 'ghost-1', description: 'First ghost' }),
+            createSnapshot({
+              streamId: 'ghost-2',
+              description: 'Second ghost',
+            }),
+          ],
+        }),
       });
 
       try {
@@ -204,16 +202,7 @@ describe('DesktopProgressEventBridge', () => {
     });
 
     it('handles missing snapshot store gracefully', () => {
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: undefined,
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
-      });
+      const bridge = createBridge({ streamSnapshotStore: undefined });
 
       try {
         expect(bridge.hasRestoredStream('any')).toBe(false);
@@ -224,23 +213,8 @@ describe('DesktopProgressEventBridge', () => {
     });
 
     it('handles empty hydrated array gracefully', () => {
-      const store = createTestSnapshotStore([]);
-
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: {
-          hydrated: store.hydrated,
-          upsert: vi.fn(async () => {}),
-          remove: vi.fn(async () => {}),
-          replaceAll: vi.fn(async () => {}),
-          getAll: vi.fn(() => []),
-        },
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
+      const bridge = createBridge({
+        streamSnapshotStore: createSnapshotStore({ hydrated: [] }),
       });
 
       try {
@@ -255,7 +229,7 @@ describe('DesktopProgressEventBridge', () => {
       const ensureStream = vi.fn();
       const updateStreamHints = vi.fn();
 
-      const bridge = module.createDesktopProgressEventBridge({
+      const bridge = createBridge({
         state: makeMockState({
           streamLogs: {
             ensureStream,
@@ -266,7 +240,7 @@ describe('DesktopProgressEventBridge', () => {
           },
           updateStreamHints,
         }),
-        streamSnapshotStore: {
+        streamSnapshotStore: createSnapshotStore({
           hydrated: [
             createSnapshot({
               streamId: 'ghost-seeded',
@@ -278,17 +252,7 @@ describe('DesktopProgressEventBridge', () => {
               description: 'A seeded ghost',
             }),
           ],
-          upsert: vi.fn(async () => {}),
-          remove: vi.fn(async () => {}),
-          replaceAll: vi.fn(async () => {}),
-          getAll: vi.fn(() => []),
-        },
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
+        }),
       });
 
       try {
@@ -313,11 +277,8 @@ describe('DesktopProgressEventBridge', () => {
   describe('onProgressEvent', () => {
     it('removes ghost and persists snapshot on setTaskState', async () => {
       const upsert = vi.fn(async () => {});
-      const store = createTestSnapshotStore([
-        createSnapshot({ streamId: 'task-stream' }),
-      ]);
 
-      const bridge = module.createDesktopProgressEventBridge({
+      const bridge = createBridge({
         state: makeMockState({
           streamLogs: {
             ensureStream: vi.fn(),
@@ -328,19 +289,10 @@ describe('DesktopProgressEventBridge', () => {
             ensureLoaded: vi.fn(async () => {}),
           },
         }),
-        streamSnapshotStore: {
-          hydrated: store.hydrated,
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [createSnapshot({ streamId: 'task-stream' })],
           upsert,
-          remove: vi.fn(async () => {}),
-          replaceAll: vi.fn(async () => {}),
-          getAll: vi.fn(() => []),
-        },
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
+        }),
       });
 
       try {
@@ -361,11 +313,8 @@ describe('DesktopProgressEventBridge', () => {
 
     it('removes ghost and persists snapshot on updateStreamStatus', async () => {
       const upsert = vi.fn(async () => {});
-      const store = createTestSnapshotStore([
-        createSnapshot({ streamId: 'status-stream' }),
-      ]);
 
-      const bridge = module.createDesktopProgressEventBridge({
+      const bridge = createBridge({
         state: makeMockState({
           streamLogs: {
             ensureStream: vi.fn(),
@@ -376,19 +325,10 @@ describe('DesktopProgressEventBridge', () => {
             ensureLoaded: vi.fn(async () => {}),
           },
         }),
-        streamSnapshotStore: {
-          hydrated: store.hydrated,
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [createSnapshot({ streamId: 'status-stream' })],
           upsert,
-          remove: vi.fn(async () => {}),
-          replaceAll: vi.fn(async () => {}),
-          getAll: vi.fn(() => []),
-        },
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
+        }),
       });
 
       try {
@@ -407,16 +347,7 @@ describe('DesktopProgressEventBridge', () => {
     });
 
     it('does not throw for unknown event types', () => {
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: undefined,
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
-      });
+      const bridge = createBridge();
 
       try {
         expect(() =>
@@ -434,15 +365,10 @@ describe('DesktopProgressEventBridge', () => {
       const mockState = makeMockState();
       mockState.activeStream = 'previous-stream';
 
-      const bridge = module.createDesktopProgressEventBridge({
+      const bridge = createBridge({
         state: mockState,
-        streamSnapshotStore: undefined,
         sendMessage: (msg) => messages.push(msg),
-        logger: makeLogger(),
         getActiveStream: () => mockState.activeStream,
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
       });
 
       try {
@@ -467,25 +393,12 @@ describe('DesktopProgressEventBridge', () => {
   describe('stream lifecycle', () => {
     it('onStreamDeleted removes ghost and calls store.remove', async () => {
       const remove = vi.fn(async () => {});
-      const store = createTestSnapshotStore([
-        createSnapshot({ streamId: 'delete-me' }),
-      ]);
 
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: {
-          hydrated: store.hydrated,
-          upsert: vi.fn(async () => {}),
+      const bridge = createBridge({
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [createSnapshot({ streamId: 'delete-me' })],
           remove,
-          replaceAll: vi.fn(async () => {}),
-          getAll: vi.fn(() => []),
-        },
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
+        }),
       });
 
       try {
@@ -501,26 +414,15 @@ describe('DesktopProgressEventBridge', () => {
 
     it('onAllStreamsDeleted clears all ghosts', async () => {
       const replaceAll = vi.fn(async () => {});
-      const store = createTestSnapshotStore([
-        createSnapshot({ streamId: 'ghost-a' }),
-        createSnapshot({ streamId: 'ghost-b' }),
-      ]);
 
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: {
-          hydrated: store.hydrated,
-          upsert: vi.fn(async () => {}),
-          remove: vi.fn(async () => {}),
+      const bridge = createBridge({
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [
+            createSnapshot({ streamId: 'ghost-a' }),
+            createSnapshot({ streamId: 'ghost-b' }),
+          ],
           replaceAll,
-          getAll: vi.fn(() => []),
-        },
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
+        }),
       });
 
       try {
@@ -534,16 +436,7 @@ describe('DesktopProgressEventBridge', () => {
     });
 
     it('onAllStreamsDeleted is safe with no snapshot store', async () => {
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: undefined,
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
-      });
+      const bridge = createBridge();
 
       try {
         await expect(bridge.onAllStreamsDeleted()).resolves.toBeUndefined();
@@ -574,21 +467,13 @@ describe('DesktopProgressEventBridge', () => {
         compileFailuresByRound: {},
       });
 
-      const bridge = module.createDesktopProgressEventBridge({
+      const bridge = createBridge({
         state: mockState,
-        streamSnapshotStore: {
+        streamSnapshotStore: createSnapshotStore({
           hydrated: [createSnapshot({ streamId: 'ghost-display' })],
-          upsert: vi.fn(async () => {}),
-          remove: vi.fn(async () => {}),
-          replaceAll: vi.fn(async () => {}),
-          getAll: vi.fn(() => []),
-        },
+        }),
         sendMessage: (msg) => messages.push(msg),
-        logger: makeLogger(),
         getActiveStream: () => 'ghost-display',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
       });
 
       try {
@@ -625,15 +510,8 @@ describe('DesktopProgressEventBridge', () => {
     it('is a no-op for unknown stream ids', () => {
       const messages: unknown[] = [];
 
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: undefined,
+      const bridge = createBridge({
         sendMessage: (msg) => messages.push(msg),
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
       });
 
       try {
@@ -659,21 +537,13 @@ describe('DesktopProgressEventBridge', () => {
         compileFailuresByRound: {},
       });
 
-      const bridge = module.createDesktopProgressEventBridge({
+      const bridge = createBridge({
         state: mockState,
-        streamSnapshotStore: {
+        streamSnapshotStore: createSnapshotStore({
           hydrated: [createSnapshot({ streamId: 'ghost-once' })],
-          upsert: vi.fn(async () => {}),
-          remove: vi.fn(async () => {}),
-          replaceAll: vi.fn(async () => {}),
-          getAll: vi.fn(() => []),
-        },
+        }),
         sendMessage: (msg) => messages.push(msg),
-        logger: makeLogger(),
         getActiveStream: () => 'ghost-once',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
       });
 
       try {
@@ -698,32 +568,14 @@ describe('DesktopProgressEventBridge', () => {
 
   describe('dispose', () => {
     it('does not throw on double dispose', () => {
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: undefined,
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
-      });
+      const bridge = createBridge();
 
       bridge.dispose();
       expect(() => bridge.dispose()).not.toThrow();
     });
 
     it('is safe to call methods after dispose', () => {
-      const bridge = module.createDesktopProgressEventBridge({
-        state: makeMockState(),
-        streamSnapshotStore: undefined,
-        sendMessage: () => {},
-        logger: makeLogger(),
-        getActiveStream: () => '',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
-      });
+      const bridge = createBridge();
 
       bridge.dispose();
 
@@ -748,21 +600,13 @@ describe('DesktopProgressEventBridge', () => {
           }),
       );
 
-      const bridge = module.createDesktopProgressEventBridge({
+      const bridge = createBridge({
         state: mockState,
-        streamSnapshotStore: {
+        streamSnapshotStore: createSnapshotStore({
           hydrated: [createSnapshot({ streamId: 'ghost-pending' })],
-          upsert: vi.fn(async () => {}),
-          remove: vi.fn(async () => {}),
-          replaceAll: vi.fn(async () => {}),
-          getAll: vi.fn(() => []),
-        },
+        }),
         sendMessage: (msg) => messages.push(msg),
-        logger: makeLogger(),
         getActiveStream: () => 'ghost-pending',
-        routeToProgress: () => {},
-        onGoalStateChanged: () => {},
-        onShowError: () => {},
       });
 
       bridge.sendRestoredDisplay('ghost-pending');

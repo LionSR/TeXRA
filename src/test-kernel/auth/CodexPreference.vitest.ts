@@ -11,6 +11,9 @@ import {
   setPreferCodexSubscription,
 } from '@auth/codex';
 
+// Local imports - platform
+import { initPlatform } from '@platform/platform';
+
 // Local imports - platform types
 import type {
   ConfigInspection,
@@ -72,7 +75,6 @@ describe('Codex subscription preference', () => {
     const platform = createFakePlatform({
       config: { [CODEX_PREFER_SUBSCRIPTION_KEY]: false },
     });
-    const { initPlatform } = await import('@platform/platform');
     initPlatform(platform);
 
     const update = await setPreferCodexSubscription(true);
@@ -89,7 +91,6 @@ describe('Codex subscription preference', () => {
 
   it('does not treat folder overrides as writable workspace config', async () => {
     const config = new FolderOverrideConfigProvider(false);
-    const { initPlatform } = await import('@platform/platform');
     initPlatform(createFakePlatform({}, { config }));
 
     const update = await setPreferCodexSubscription(true);

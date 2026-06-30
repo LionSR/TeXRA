@@ -23,6 +23,14 @@ vi.mock('@utils/files', async () => {
 
 import { getXmlFormatFromReadableFiles } from '@utils/prompt';
 
+// Reads return the file body, except 'missing.tex' which rejects with ENOENT.
+async function readBodyExceptMissing(file: string): Promise<string> {
+  if (file === 'missing.tex') {
+    throw new Error("ENOENT: no such file or directory, open 'missing.tex'");
+  }
+  return `body of ${file}`;
+}
+
 beforeEach(() => {
   mocks.read.mockReset();
 });
@@ -44,14 +52,7 @@ describe('getXmlFormatFromReadableFiles', () => {
   });
 
   it('skips a file that cannot be read instead of rejecting the batch', async () => {
-    mocks.read.mockImplementation(async (file: string) => {
-      if (file === 'missing.tex') {
-        throw new Error(
-          "ENOENT: no such file or directory, open 'missing.tex'",
-        );
-      }
-      return `body of ${file}`;
-    });
+    mocks.read.mockImplementation(readBodyExceptMissing);
 
     const { xml } = await getXmlFormatFromReadableFiles([
       'missing.tex',
@@ -64,14 +65,7 @@ describe('getXmlFormatFromReadableFiles', () => {
   });
 
   it('reports the same readable file set used to build XML', async () => {
-    mocks.read.mockImplementation(async (file: string) => {
-      if (file === 'missing.tex') {
-        throw new Error(
-          "ENOENT: no such file or directory, open 'missing.tex'",
-        );
-      }
-      return `body of ${file}`;
-    });
+    mocks.read.mockImplementation(readBodyExceptMissing);
 
     const result = await getXmlFormatFromReadableFiles([
       'missing.tex',

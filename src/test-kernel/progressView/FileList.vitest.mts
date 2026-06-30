@@ -115,11 +115,7 @@ function restoreDom(): void {
     'cancelAnimationFrame',
     originalGlobals.cancelAnimationFrame,
   );
-  if (originalGlobals.Node === undefined) {
-    delete (globalThis as { Node?: unknown }).Node;
-  } else {
-    (globalThis as { Node: unknown }).Node = originalGlobals.Node;
-  }
+  restoreOptionalGlobal('Node', originalGlobals.Node);
 }
 
 function restoreOptionalGlobal(key: string, value: unknown): void {

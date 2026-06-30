@@ -7,7 +7,7 @@ import { describe, it } from 'vitest';
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';
 import { InvokeCommandTool } from '@tools/setup/InvokeCommandTool';
-import { setSetupPlatform, type SetupPlatform } from '@tools/setup/platform';
+import { setSetupPlatform } from '@tools/setup/platform';
 
 import { createFakeSetupPlatform } from './fixtures';
 
@@ -16,26 +16,23 @@ interface InvokeRecord {
   args: unknown[];
 }
 
-function createPlatform(): {
-  platform: SetupPlatform;
-  invocations: InvokeRecord[];
-} {
+function setupTool(): { tool: InvokeCommandTool; invocations: InvokeRecord[] } {
   const invocations: InvokeRecord[] = [];
-  const platform = createFakeSetupPlatform({
-    commands: {
-      async invoke(command, ...args) {
-        invocations.push({ command, args });
+  setSetupPlatform(
+    createFakeSetupPlatform({
+      commands: {
+        async invoke(command, ...args) {
+          invocations.push({ command, args });
+        },
       },
-    },
-  });
-  return { platform, invocations };
+    }),
+  );
+  return { tool: new InvokeCommandTool(), invocations };
 }
 
 describe('InvokeCommandTool allowlist', () => {
   it('redacts raw args in summary/output so secrets cannot leak to transcripts', async () => {
-    const { platform, invocations } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new InvokeCommandTool();
+    const { tool, invocations } = setupTool();
 
     const fakeSecret = 'sk-fake-secret-1234567890abcdef';
     const result = await tool.call({
@@ -59,9 +56,7 @@ describe('InvokeCommandTool allowlist', () => {
   });
 
   it('allows texra.setApiKey and forwards args', async () => {
-    const { platform, invocations } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new InvokeCommandTool();
+    const { tool, invocations } = setupTool();
 
     const result = await tool.call({
       command: 'texra.setApiKey',
@@ -75,9 +70,7 @@ describe('InvokeCommandTool allowlist', () => {
   });
 
   it('allows the Researcher Access sign-in command', async () => {
-    const { platform, invocations } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new InvokeCommandTool();
+    const { tool, invocations } = setupTool();
 
     await tool.call({ command: AUTH_COMMANDS.SIGN_IN, args: [] });
 
@@ -86,9 +79,7 @@ describe('InvokeCommandTool allowlist', () => {
   });
 
   it('rejects workbench.extensions.installExtension (bypass for install_vscode_extension allowlist)', async () => {
-    const { platform, invocations } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new InvokeCommandTool();
+    const { tool, invocations } = setupTool();
 
     const result = await tool.call({
       command: 'workbench.extensions.installExtension',
@@ -105,9 +96,7 @@ describe('InvokeCommandTool allowlist', () => {
   });
 
   it('rejects arbitrary VS Code commands outside the allowlist', async () => {
-    const { platform, invocations } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new InvokeCommandTool();
+    const { tool, invocations } = setupTool();
 
     for (const cmd of [
       'workbench.action.files.save',
@@ -124,9 +113,7 @@ describe('InvokeCommandTool allowlist', () => {
   });
 
   it('rejects empty/whitespace command names', async () => {
-    const { platform, invocations } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new InvokeCommandTool();
+    const { tool, invocations } = setupTool();
 
     const empty = await tool.call({ command: '', args: [] });
     assert.ok(empty.isError);
@@ -136,9 +123,7 @@ describe('InvokeCommandTool allowlist', () => {
   });
 
   it('trims surrounding whitespace before allowlist check', async () => {
-    const { platform, invocations } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new InvokeCommandTool();
+    const { tool, invocations } = setupTool();
 
     await tool.call({ command: '  texra.setApiKey  ', args: [] });
 

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
@@ -35,6 +36,22 @@ const config = {
   model: 'test-model',
   agent: 'test-agent',
 } as unknown as AgentConfig;
+
+function startCodexChild(
+  executionId: ExecutionId,
+  host: AgentRuntimeHost,
+  description: string,
+) {
+  return createChildStream(executionId, parentStreamId, {
+    runtimeHost: host,
+    streamPrefix: 'codex',
+    streamCategory: AgentCategory.ToolUse,
+    agentName: 'codex',
+    description,
+    config,
+    toolName: 'codex',
+  });
+}
 
 describe('child stream progress events', () => {
   afterEach(() => {
@@ -141,15 +158,11 @@ describe('child stream progress events', () => {
   it('publishes child loop status changes through the child stream owner', async () => {
     const active = createRecordingHost();
 
-    const childStream = createChildStream(loopExecutionId, parentStreamId, {
-      runtimeHost: active.host,
-      streamPrefix: 'codex',
-      streamCategory: AgentCategory.ToolUse,
-      agentName: 'codex',
-      description: 'Run a long-lived Codex child loop',
-      config,
-      toolName: 'codex',
-    });
+    const childStream = startCodexChild(
+      loopExecutionId,
+      active.host,
+      'Run a long-lived Codex child loop',
+    );
     const handle =
       defaultSession().executions.getAgentHandleByStream(loopChildStreamId);
     expect(handle).toBeDefined();
@@ -191,15 +204,11 @@ describe('child stream progress events', () => {
   it('preserves explicit user stops during child loop status changes', async () => {
     const active = createRecordingHost();
 
-    const childStream = createChildStream(stoppedExecutionId, parentStreamId, {
-      runtimeHost: active.host,
-      streamPrefix: 'codex',
-      streamCategory: AgentCategory.ToolUse,
-      agentName: 'codex',
-      description: 'Run a stopped Codex child loop',
-      config,
-      toolName: 'codex',
-    });
+    const childStream = startCodexChild(
+      stoppedExecutionId,
+      active.host,
+      'Run a stopped Codex child loop',
+    );
     const handle =
       defaultSession().executions.getAgentHandleByStream(stoppedChildStreamId);
     expect(handle).toBeDefined();
@@ -230,18 +239,10 @@ describe('child stream progress events', () => {
   it('settles child handle results as cancelled for stopped finalization', async () => {
     const active = createRecordingHost();
 
-    const childStream = createChildStream(
+    const childStream = startCodexChild(
       cancelledExecutionId,
-      parentStreamId,
-      {
-        runtimeHost: active.host,
-        streamPrefix: 'codex',
-        streamCategory: AgentCategory.ToolUse,
-        agentName: 'codex',
-        description: 'Run an interrupted Codex child loop',
-        config,
-        toolName: 'codex',
-      },
+      active.host,
+      'Run an interrupted Codex child loop',
     );
     const handle = defaultSession().executions.getAgentHandleByStream(
       cancelledChildStreamId,
@@ -261,15 +262,11 @@ describe('child stream progress events', () => {
   it('settles failed child handle results with error details', async () => {
     const active = createRecordingHost();
 
-    const childStream = createChildStream(failedExecutionId, parentStreamId, {
-      runtimeHost: active.host,
-      streamPrefix: 'codex',
-      streamCategory: AgentCategory.ToolUse,
-      agentName: 'codex',
-      description: 'Run a failing Codex child loop',
-      config,
-      toolName: 'codex',
-    });
+    const childStream = startCodexChild(
+      failedExecutionId,
+      active.host,
+      'Run a failing Codex child loop',
+    );
     const handle =
       defaultSession().executions.getAgentHandleByStream(failedChildStreamId);
     expect(handle).toBeDefined();
@@ -291,18 +288,10 @@ describe('child stream progress events', () => {
   it('normalizes explicit non-error status when child finalization has an error', async () => {
     const active = createRecordingHost();
 
-    const childStream = createChildStream(
+    const childStream = startCodexChild(
       normalizedErrorExecutionId,
-      parentStreamId,
-      {
-        runtimeHost: active.host,
-        streamPrefix: 'codex',
-        streamCategory: AgentCategory.ToolUse,
-        agentName: 'codex',
-        description: 'Run a child loop with mismatched finalization inputs',
-        config,
-        toolName: 'codex',
-      },
+      active.host,
+      'Run a child loop with mismatched finalization inputs',
     );
     const handle = defaultSession().executions.getAgentHandleByStream(
       normalizedErrorChildStreamId,

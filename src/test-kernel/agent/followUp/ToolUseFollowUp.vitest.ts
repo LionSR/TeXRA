@@ -26,6 +26,31 @@ import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
+type ResumeHost = NonNullable<
+  NonNullable<Parameters<typeof createFakePlatform>[1]>['agentResume']
+>;
+
+async function initResumePlatform(agentResume: ResumeHost): Promise<void> {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({}, { agentResume }));
+}
+
+function trackChildHandle(
+  executionId: string,
+  parentStreamId: StreamTabId,
+  childStreamId: StreamTabId,
+): void {
+  const handle = new AgentExecutionHandle(
+    executionId,
+    parentStreamId,
+    childStreamId,
+    'test-subagent',
+    'toolUse',
+    noopAgentRuntimeHost,
+  );
+  executionRegistry.track(handle);
+}
+
 describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
 
@@ -133,15 +158,7 @@ describe('ToolUseFollowUp', () => {
     const childStreamId = 'child-stream-children' as StreamTabId;
     const executionId = 'exec-children-running';
 
-    const handle = new AgentExecutionHandle(
-      executionId,
-      parentStreamId,
-      childStreamId,
-      'test-subagent',
-      'toolUse',
-      noopAgentRuntimeHost,
-    );
-    executionRegistry.track(handle);
+    trackChildHandle(executionId, parentStreamId, childStreamId);
 
     try {
       const result = await sendFollowUp(parentStreamId, 'hello while running');
@@ -166,15 +183,7 @@ describe('ToolUseFollowUp', () => {
     const childStreamId = 'child-stream-released' as StreamTabId;
     const executionId = 'exec-released';
 
-    const handle = new AgentExecutionHandle(
-      executionId,
-      parentStreamId,
-      childStreamId,
-      'test-subagent',
-      'toolUse',
-      noopAgentRuntimeHost,
-    );
-    executionRegistry.track(handle);
+    trackChildHandle(executionId, parentStreamId, childStreamId);
     ToolUseFollowUpQueue.release(parentStreamId);
 
     try {
@@ -198,15 +207,7 @@ describe('ToolUseFollowUp', () => {
     const childStreamId = 'child-stream-subagent-result' as StreamTabId;
     const executionId = 'exec-subagent-result';
 
-    const handle = new AgentExecutionHandle(
-      executionId,
-      parentStreamId,
-      childStreamId,
-      'test-subagent',
-      'toolUse',
-      noopAgentRuntimeHost,
-    );
-    executionRegistry.track(handle);
+    trackChildHandle(executionId, parentStreamId, childStreamId);
     ToolUseFollowUpQueue.release(parentStreamId);
 
     try {
@@ -244,32 +245,16 @@ describe('ToolUseFollowUp', () => {
 
     let resumeCalls = 0;
     let resolveResume!: (resumed: boolean) => void;
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {},
-        {
-          agentResume: {
-            tryResumeStream: () => {
-              resumeCalls++;
-              return new Promise<boolean>((resolve) => {
-                resolveResume = resolve;
-              });
-            },
-          },
-        },
-      ),
-    );
+    await initResumePlatform({
+      tryResumeStream: () => {
+        resumeCalls++;
+        return new Promise<boolean>((resolve) => {
+          resolveResume = resolve;
+        });
+      },
+    });
 
-    const handle = new AgentExecutionHandle(
-      executionId,
-      parentStreamId,
-      childStreamId,
-      'test-subagent',
-      'toolUse',
-      noopAgentRuntimeHost,
-    );
-    executionRegistry.track(handle);
+    trackChildHandle(executionId, parentStreamId, childStreamId);
 
     try {
       const first = await sendFollowUp(parentStreamId, 'result one');
@@ -303,23 +288,9 @@ describe('ToolUseFollowUp', () => {
     const childStreamId = 'child-stream-wake-dead' as StreamTabId;
     const executionId = 'exec-wake-dead';
 
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {},
-        { agentResume: { tryResumeStream: async () => false } },
-      ),
-    );
+    await initResumePlatform({ tryResumeStream: async () => false });
 
-    const handle = new AgentExecutionHandle(
-      executionId,
-      parentStreamId,
-      childStreamId,
-      'test-subagent',
-      'toolUse',
-      noopAgentRuntimeHost,
-    );
-    executionRegistry.track(handle);
+    trackChildHandle(executionId, parentStreamId, childStreamId);
 
     try {
       const result = await sendFollowUp(parentStreamId, 'late result');
@@ -341,13 +312,7 @@ describe('ToolUseFollowUp', () => {
   it('reports failed waiting-stream wakes without dropping the queue', async () => {
     const waitingStreamId = 'parent-stream-wake-waiting' as StreamTabId;
 
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {},
-        { agentResume: { tryResumeStream: async () => false } },
-      ),
-    );
+    await initResumePlatform({ tryResumeStream: async () => false });
     StreamStatusService.set(waitingStreamId, STREAM_STATUS.WAITING, {
       emit: false,
     });
@@ -380,28 +345,12 @@ describe('ToolUseFollowUp', () => {
     const childStreamId = 'child-stream-wake-in-flight' as StreamTabId;
     const executionId = 'exec-wake-in-flight';
 
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {},
-        {
-          agentResume: {
-            tryResumeStream: async () => false,
-            isResumeInFlight: (stream) => stream === parentStreamId,
-          },
-        },
-      ),
-    );
+    await initResumePlatform({
+      tryResumeStream: async () => false,
+      isResumeInFlight: (stream) => stream === parentStreamId,
+    });
 
-    const handle = new AgentExecutionHandle(
-      executionId,
-      parentStreamId,
-      childStreamId,
-      'test-subagent',
-      'toolUse',
-      noopAgentRuntimeHost,
-    );
-    executionRegistry.track(handle);
+    trackChildHandle(executionId, parentStreamId, childStreamId);
 
     try {
       const result = await sendFollowUp(parentStreamId, 'late result');

@@ -46,6 +46,16 @@ vi.mock('@utils/files/storageFS', () => ({
 
 const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
 
+async function workspaceWithConfig(config: unknown): Promise<string> {
+  const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
+  await mkdir(join(workspace, '.texra'), { recursive: true });
+  await writeFile(
+    join(workspace, '.texra', 'config.json'),
+    JSON.stringify(config),
+  );
+  return workspace;
+}
+
 describe('CLI chat defaults', () => {
   it('uses assistant and DeepSeek as the built-in chat defaults', async () => {
     expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
@@ -78,12 +88,10 @@ describe('CLI chat defaults', () => {
   });
 
   it('ignores non-llm-zoo model ids in workspace defaults', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
-    await mkdir(join(workspace, '.texra'), { recursive: true });
-    await writeFile(
-      join(workspace, '.texra', 'config.json'),
-      JSON.stringify({ agent: 'assistant', model: 'claude-opus-4-7' }),
-    );
+    const workspace = await workspaceWithConfig({
+      agent: 'assistant',
+      model: 'claude-opus-4-7',
+    });
 
     await expect(
       resolveChatDefaults({ cwd: workspace }),
@@ -97,16 +105,11 @@ describe('CLI chat defaults', () => {
   });
 
   it('uses command-specific workspace defaults below environment overrides', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
-    await mkdir(join(workspace, '.texra'), { recursive: true });
-    await writeFile(
-      join(workspace, '.texra', 'config.json'),
-      JSON.stringify({
-        agent: 'generic',
-        model: 'gpt55',
-        chat: { agent: 'assistant', model: 'deepseekT' },
-      }),
-    );
+    const workspace = await workspaceWithConfig({
+      agent: 'generic',
+      model: 'gpt55',
+      chat: { agent: 'assistant', model: 'deepseekT' },
+    });
 
     await expect(
       resolveChatDefaults({ cwd: workspace, envModel: 'sonnet46T' }),
@@ -212,12 +215,9 @@ describe('CLI chat defaults', () => {
   });
 
   it('ignores simplifier from configured chat default tiers', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
-    await mkdir(join(workspace, '.texra'), { recursive: true });
-    await writeFile(
-      join(workspace, '.texra', 'config.json'),
-      JSON.stringify({ chat: { agent: 'simplifier', model: 'sonnet46T' } }),
-    );
+    const workspace = await workspaceWithConfig({
+      chat: { agent: 'simplifier', model: 'sonnet46T' },
+    });
 
     await expect(
       resolveChatDefaults({ cwd: workspace }),
@@ -270,16 +270,11 @@ describe('CLI chat defaults', () => {
   });
 
   it('uses prefixed command-specific workspace defaults', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
-    await mkdir(join(workspace, '.texra'), { recursive: true });
-    await writeFile(
-      join(workspace, '.texra', 'config.json'),
-      JSON.stringify({
-        'texra.agent': 'generic',
-        'texra.model': 'gpt55',
-        'texra.chat': { agent: 'assistant', model: 'deepseekT' },
-      }),
-    );
+    const workspace = await workspaceWithConfig({
+      'texra.agent': 'generic',
+      'texra.model': 'gpt55',
+      'texra.chat': { agent: 'assistant', model: 'deepseekT' },
+    });
 
     await expect(
       resolveChatDefaults({ cwd: workspace }),

@@ -3,7 +3,7 @@
  * dropped path, follow-up turn semantics, legacy manifest migration,
  * and listing filters.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import {
@@ -24,24 +24,13 @@ import {
   recordOpenQuestion,
 } from '@tools/inquiry/externalInquiryStorage';
 
-import type { Platform } from '@platform/platform';
-
 const STREAM_A = 'stream:a' as StreamTabId;
 const STREAM_B = 'stream:b' as StreamTabId;
 
-async function freshPlatform(): Promise<Platform> {
-  const { initPlatform } = await import('@platform/platform');
-  const p = createFakePlatform();
-  initPlatform(p);
-  return p;
-}
-
 describe('InquiryStorage', () => {
   beforeEach(async () => {
-    await freshPlatform();
-  });
-  afterEach(() => {
-    // Tests don't share state beyond the in-memory FakePlatform fs.
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform());
   });
 
   it('opens, answers, and resolves a thread end-to-end', async () => {
@@ -250,7 +239,7 @@ describe('InquiryStorage', () => {
 
   it('parses a legacy manifest (no status/parentStreamId) as answered with null parent', async () => {
     const platform = (await import('@platform/platform')).platform();
-    const path = `ei_threads/ei_aabbccdd0011/manifest.json`;
+    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0011`;
     // Legacy manifest shape — pre-async storage.
     const legacy = {
       threadId: 'ei_aabbccdd0011',
@@ -266,18 +255,14 @@ describe('InquiryStorage', () => {
         },
       ],
     };
-    await platform.fs.createDirectory(
-      `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0011`,
-    );
-    await platform.fs.createDirectory(
-      `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0011/t1`,
-    );
+    await platform.fs.createDirectory(threadDir);
+    await platform.fs.createDirectory(`${threadDir}/t1`);
     await platform.fs.writeFile(
-      `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0011/t1/answer.txt`,
+      `${threadDir}/t1/answer.txt`,
       Buffer.from('Legacy A', 'utf8'),
     );
     await platform.fs.writeFile(
-      `${platform.storage.getGlobalStoragePath()}/${path}`,
+      `${threadDir}/manifest.json`,
       Buffer.from(JSON.stringify(legacy), 'utf8'),
     );
 

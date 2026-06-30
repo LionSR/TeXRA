@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports - agent runtime
 import { noopTrace, type AgentTrace } from '@agent/trace';
@@ -46,6 +46,26 @@ class ExposedRetryNode extends RetryableInvocationNode<
   }
 }
 
+interface RetryNodeKit {
+  node: ExposedRetryNode;
+  streamStatus: StreamStatusRegistry;
+  waitForRetry: Mock<TestRetryServices['waitForRetry']>;
+}
+
+function createRetryNode(streamId: StreamTabId): RetryNodeKit {
+  const streamStatus = new StreamStatusRegistry();
+  const waitForRetry = vi.fn<TestRetryServices['waitForRetry']>();
+  const node = new ExposedRetryNode().setServices({
+    streamId,
+    runtimeHost: noopAgentRuntimeHost,
+    streamStatus,
+    logger: noopTrace,
+    setAbortController: vi.fn(),
+    waitForRetry,
+  });
+  return { node, streamStatus, waitForRetry };
+}
+
 describe('RetryState', () => {
   it('treats user aborts as cancellations instead of failed invocations', () => {
     const node = new ExposedRetryNode();
@@ -57,16 +77,7 @@ describe('RetryState', () => {
 
   it('updates the injected stream status owner during manual retry', async () => {
     const streamId = 'retry-state-owner' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
-    const waitForRetry = vi.fn<TestRetryServices['waitForRetry']>();
-    const node = new ExposedRetryNode().setServices({
-      streamId,
-      runtimeHost: noopAgentRuntimeHost,
-      streamStatus,
-      logger: noopTrace,
-      setAbortController: vi.fn(),
-      waitForRetry,
-    });
+    const { node, streamStatus, waitForRetry } = createRetryNode(streamId);
 
     waitForRetry.mockResolvedValueOnce({ action: 'retry' });
 
@@ -96,16 +107,7 @@ describe('RetryState', () => {
     'stops the stream after manual retry %s',
     async (action) => {
       const streamId = `retry-state-${action}` as StreamTabId;
-      const streamStatus = new StreamStatusRegistry();
-      const waitForRetry = vi.fn<TestRetryServices['waitForRetry']>();
-      const node = new ExposedRetryNode().setServices({
-        streamId,
-        runtimeHost: noopAgentRuntimeHost,
-        streamStatus,
-        logger: noopTrace,
-        setAbortController: vi.fn(),
-        waitForRetry,
-      });
+      const { node, streamStatus, waitForRetry } = createRetryNode(streamId);
 
       waitForRetry.mockResolvedValueOnce({ action });
 
