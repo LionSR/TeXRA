@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
 import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from '@auth/constants';
+import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { showSettingsView } from '@commands/settings';
 import { toErrorMessage } from '@common/errors';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
@@ -103,35 +104,24 @@ export async function signIn(): Promise<boolean> {
       return true;
     }
 
-    const selected = await new Promise<SignInOption | undefined>((resolve) => {
-      const qp = vscode.window.createQuickPick<SignInOption>();
-      let settled = false;
-      const finish = (value: SignInOption | undefined): void => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-        qp.dispose();
-      };
-      qp.title = 'TeXRA Sign In';
-      qp.placeholder = 'Choose a sign-in method';
-      const options = getSignInOptions();
-      qp.items = options;
-      const defaultOption = options[0];
-      if (defaultOption) {
-        qp.activeItems = [defaultOption];
-      }
-      // VS Code 1.108+: explain what signing in grants. Ignored on older hosts.
-      if ('prompt' in qp) {
-        (qp as vscode.QuickPick<SignInOption> & { prompt: string }).prompt =
-          'Sign in to access AI models, remote agents, and TeXRA Researcher features';
-      }
+    const qp = vscode.window.createQuickPick<SignInOption>();
+    qp.title = 'TeXRA Sign In';
+    qp.placeholder = 'Choose a sign-in method';
+    const options = getSignInOptions();
+    qp.items = options;
+    const defaultOption = options[0];
+    if (defaultOption) {
+      qp.activeItems = [defaultOption];
+    }
+    // VS Code 1.108+: explain what signing in grants. Ignored on older hosts.
+    if ('prompt' in qp) {
+      (qp as vscode.QuickPick<SignInOption> & { prompt: string }).prompt =
+        'Sign in to access AI models, remote agents, and TeXRA Researcher features';
+    }
+    const selected = await settleQuickInput(qp, (accept) => {
       qp.onDidAccept(() => {
-        finish(qp.activeItems[0] ?? qp.selectedItems[0]);
+        accept(qp.activeItems[0] ?? qp.selectedItems[0]);
       });
-      qp.onDidHide(() => {
-        finish(undefined);
-      });
-      qp.show();
     });
     if (!selected) return false;
 

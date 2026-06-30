@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
@@ -91,39 +92,28 @@ async function promptForApiKey(
     }
   }
 
-  return await new Promise<string | undefined>((resolve) => {
-    let settled = false;
-    const finish = (value: string | undefined): void => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-      ib.dispose();
-    };
-    ib.title = `Set ${provider} API key`;
-    ib.prompt = `Enter ${provider} API key`;
-    ib.password = true;
-    ib.placeholder = '************************************';
-    const getKeyButton: vscode.QuickInputButton = {
-      iconPath: new vscode.ThemeIcon('link-external'),
-      tooltip: `Get ${provider} API key`,
-    };
-    if (supportsTitleButtons) {
-      ib.buttons = [getKeyButton];
-      ib.onDidTriggerButton((button) => {
-        if (button === getKeyButton) {
-          void vscode.env.openExternal(
-            vscode.Uri.parse(PROVIDER_URLS[provider]),
-          );
-        }
-      });
-    }
+  ib.title = `Set ${provider} API key`;
+  ib.prompt = `Enter ${provider} API key`;
+  ib.password = true;
+  ib.placeholder = '************************************';
+  const getKeyButton: vscode.QuickInputButton = {
+    iconPath: new vscode.ThemeIcon('link-external'),
+    tooltip: `Get ${provider} API key`,
+  };
+  if (supportsTitleButtons) {
+    ib.buttons = [getKeyButton];
+    ib.onDidTriggerButton((button) => {
+      if (button === getKeyButton) {
+        void vscode.env.openExternal(
+          vscode.Uri.parse(PROVIDER_URLS[provider]),
+        );
+      }
+    });
+  }
+  return settleQuickInput(ib, (accept) => {
     ib.onDidAccept(() => {
-      finish(ib.value);
+      accept(ib.value);
     });
-    ib.onDidHide(() => {
-      finish(undefined);
-    });
-    ib.show();
   });
 }
 
@@ -160,33 +150,22 @@ async function pickProvider(
   placeholder: string,
   promptHint: string,
 ): Promise<ProviderQuickPickItem | undefined> {
-  return await new Promise<ProviderQuickPickItem | undefined>((resolve) => {
-    const qp = vscode.window.createQuickPick<ProviderQuickPickItem>();
-    let settled = false;
-    const finish = (value: ProviderQuickPickItem | undefined): void => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-      qp.dispose();
-    };
-    qp.placeholder = placeholder;
-    qp.items = items;
-    const defaultItem = items[0];
-    if (defaultItem) {
-      qp.activeItems = [defaultItem];
-    }
-    if ('prompt' in qp) {
-      (
-        qp as vscode.QuickPick<ProviderQuickPickItem> & { prompt: string }
-      ).prompt = promptHint;
-    }
+  const qp = vscode.window.createQuickPick<ProviderQuickPickItem>();
+  qp.placeholder = placeholder;
+  qp.items = items;
+  const defaultItem = items[0];
+  if (defaultItem) {
+    qp.activeItems = [defaultItem];
+  }
+  if ('prompt' in qp) {
+    (
+      qp as vscode.QuickPick<ProviderQuickPickItem> & { prompt: string }
+    ).prompt = promptHint;
+  }
+  return settleQuickInput(qp, (accept) => {
     qp.onDidAccept(() => {
-      finish(qp.activeItems[0] ?? qp.selectedItems[0]);
+      accept(qp.activeItems[0] ?? qp.selectedItems[0]);
     });
-    qp.onDidHide(() => {
-      finish(undefined);
-    });
-    qp.show();
   });
 }
 
