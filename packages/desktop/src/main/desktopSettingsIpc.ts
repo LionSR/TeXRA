@@ -63,7 +63,6 @@ import {
   type LatexSettingsStatus,
   type ProviderKeyStatus,
   type ReasoningLevel,
-  type SettingsViewInboundHandlerRegistry,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
 import {

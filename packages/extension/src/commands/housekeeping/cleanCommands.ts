@@ -17,9 +17,7 @@ import { emitClearMissingOutputs } from './streamEventUtils';
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
 
-const CleanConfigSchema = FileOpParamsSchema.extend({
-  ...fileOpConfigFields,
-});
+const CleanConfigSchema = FileOpParamsSchema.extend(fileOpConfigFields);
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
