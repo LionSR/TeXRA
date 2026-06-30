@@ -92,15 +92,23 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
+   * Record the active webview reference when tracking is enabled. No-op
+   * otherwise, mirroring {@link clearActiveView}.
+   */
+  private setActiveView(webviewView: T): void {
+    if (this._options.trackActiveView) {
+      this._activeView = webviewView;
+    }
+  }
+
+  /**
    * Track the active webview reference for custom handlers.
    */
   protected async withActiveView(
     webviewView: T,
     handler: () => Promise<void> | void,
   ): Promise<void> {
-    if (this._options.trackActiveView) {
-      this._activeView = webviewView;
-    }
+    this.setActiveView(webviewView);
     await handler();
   }
 
@@ -135,16 +143,8 @@ export abstract class BaseViewMessageHandler<
         });
       });
 
-      if (
-        !handled &&
-        message &&
-        typeof message === 'object' &&
-        'command' in message
-      ) {
-        this.logger.warn(
-          this.channel,
-          `Unhandled command: ${(message as { command: string }).command}`,
-        );
+      if (!handled && isCommandMessage(message)) {
+        this.logger.warn(this.channel, `Unhandled command: ${message.command}`);
       }
     });
   }
@@ -157,9 +157,7 @@ export abstract class BaseViewMessageHandler<
    */
   public async handleMessage(message: unknown, webviewView: T): Promise<void> {
     // Track active view when option is enabled
-    if (this._options.trackActiveView) {
-      this._activeView = webviewView;
-    }
+    this.setActiveView(webviewView);
 
     if (!isCommandMessage(message)) {
       this.logger.warn(

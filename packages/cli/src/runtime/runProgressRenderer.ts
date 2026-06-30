@@ -116,18 +116,17 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         }
         return true;
       case 'updateActiveProcesses':
-        if (this.rootStreamTerminal) return true;
-        this.applyActiveProcesses(
-          payload as ProgressEventPayloads['updateActiveProcesses'],
-        );
-        this.updateHeartbeat();
-        this.render(true);
-        return true;
       case 'updateActiveSubagents':
         if (this.rootStreamTerminal) return true;
-        this.applyActiveSubagents(
-          payload as ProgressEventPayloads['updateActiveSubagents'],
-        );
+        if (event === 'updateActiveProcesses') {
+          this.applyActiveProcesses(
+            payload as ProgressEventPayloads['updateActiveProcesses'],
+          );
+        } else {
+          this.applyActiveSubagents(
+            payload as ProgressEventPayloads['updateActiveSubagents'],
+          );
+        }
         this.updateHeartbeat();
         this.render(true);
         return true;
@@ -292,7 +291,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     parts.push(subject || phase || 'running');
     if (subject && phase && phase !== 'running') parts.push(phase);
     if (this.state.round == null && isMultiRound(this.state.plannedRounds)) {
-      parts.push(formatPlannedRounds(this.state.plannedRounds));
+      parts.push(`${this.state.plannedRounds} rounds`);
     }
 
     if (this.state.activeSubagents) parts.push(this.state.activeSubagents);
@@ -354,10 +353,6 @@ function formatRoundProgress(
     return `[r${round}/${plannedRounds}]`;
   }
   return `[r${round}]`;
-}
-
-function formatPlannedRounds(rounds: number): string {
-  return `${rounds} rounds`;
 }
 
 function isMultiRound(rounds: number | undefined): rounds is number {

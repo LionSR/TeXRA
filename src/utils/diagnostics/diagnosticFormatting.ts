@@ -81,13 +81,12 @@ export function countBySeverity(
  * Example: "3 errors, 2 warnings, 1 hint"
  */
 export function formatCounts(counts: SeverityCounts): string {
-  const parts: string[] = [];
-  for (const { key, label, plural } of COUNT_FORMAT_ORDER) {
-    const count = counts[key];
-    if (count > 0) {
-      parts.push(`${count} ${count === 1 ? label : plural}`);
-    }
-  }
+  const parts = COUNT_FORMAT_ORDER.filter(({ key }) => counts[key] > 0).map(
+    ({ key, label, plural }) => {
+      const count = counts[key];
+      return `${count} ${count === 1 ? label : plural}`;
+    },
+  );
   return parts.length > 0 ? parts.join(', ') : 'No issues';
 }
 
@@ -118,12 +117,6 @@ export function formatMessageList(diagnostics: GenericDiagnostic[]): string {
 export function formatGroupedSections(
   diagnostics: GenericDiagnostic[],
 ): string {
-  const errors = diagnostics.filter((d) => d.severity === SEVERITY_ERROR);
-  const warnings = diagnostics.filter((d) => d.severity === SEVERITY_WARNING);
-  const hints = diagnostics.filter(
-    (d) => d.severity === SEVERITY_INFO || d.severity === SEVERITY_HINT,
-  );
-
   const formatSection = (title: string, items: GenericDiagnostic[]): string => {
     if (items.length === 0) return '';
     const lines = items
@@ -132,11 +125,25 @@ export function formatGroupedSections(
     return `## ${title} (${items.length})\n\n${lines}`;
   };
 
-  return [
-    formatSection('Errors', errors),
-    formatSection('Warnings', warnings),
-    formatSection('Info/Hints', hints),
-  ]
+  const sections: Array<{
+    title: string;
+    match: (severity: number) => boolean;
+  }> = [
+    { title: 'Errors', match: (s) => s === SEVERITY_ERROR },
+    { title: 'Warnings', match: (s) => s === SEVERITY_WARNING },
+    {
+      title: 'Info/Hints',
+      match: (s) => s === SEVERITY_INFO || s === SEVERITY_HINT,
+    },
+  ];
+
+  return sections
+    .map(({ title, match }) =>
+      formatSection(
+        title,
+        diagnostics.filter((d) => match(d.severity)),
+      ),
+    )
     .filter(Boolean)
     .join('\n\n');
 }

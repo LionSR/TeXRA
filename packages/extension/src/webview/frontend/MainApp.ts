@@ -71,6 +71,7 @@ import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { agentName } from '@shared/schemas/agent';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 import '@shared/wa/tabs';
+import { unique } from '@utils/core';
 
 import './components/FileSelectGroup';
 import './components/BannerGroup';
@@ -79,7 +80,6 @@ import './components/InstructionPanel';
 import './components/OnboardingWelcomeCard';
 import './components/OnboardingSetupCard';
 import {
-  ELEMENT_IDS,
   DOCUMENT_FILE_TYPES,
   MULTIPLE_DOCUMENT_FILE_TYPES,
   SESSION_TYPES,
@@ -949,7 +949,7 @@ export class MainApp extends MainAppBase {
     if (!listId) return;
 
     this.multiFiles.set({ ...this.multiFiles.get(), [listId]: files });
-    if (listId === ELEMENT_IDS.OUTPUT_FILES) {
+    if (listId === 'outputFiles') {
       this.outputFilesActive.set(false);
     }
     this.saveState();
@@ -1054,7 +1054,7 @@ export class MainApp extends MainAppBase {
 
     const filesToAdd = message.files ?? [];
     const existing = mf[listId] ?? [];
-    const merged = this.mergeUnique(existing, filesToAdd);
+    const merged = unique([...existing, ...filesToAdd]);
     this.multiFiles.set({ ...mf, [listId]: merged });
     this.saveState();
   }
@@ -1204,7 +1204,7 @@ export class MainApp extends MainAppBase {
       (f: string) => f !== file,
     );
     if (files.length === 0) {
-      if (listId === ELEMENT_IDS.OUTPUT_FILES) {
+      if (listId === 'outputFiles') {
         this.outputFilesActive.set(false);
       }
     }
@@ -1651,17 +1651,6 @@ export class MainApp extends MainAppBase {
       const [hash] = commit.split(': ');
       return hash === value;
     });
-  }
-
-  /** Merge arrays, appending only items not already present */
-  private mergeUnique(existing: string[], additions: string[]): string[] {
-    const merged = [...existing];
-    for (const item of additions) {
-      if (!merged.includes(item)) {
-        merged.push(item);
-      }
-    }
-    return merged;
   }
 
   /** Launcher/Progress tabs plus header actions (hidden on the desktop host). */

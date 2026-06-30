@@ -152,11 +152,13 @@ export function extractContentFromXMLbyTagMultiple(
     if (isObject(container) && 'document' in container) {
       const documents = container.document;
       if (Array.isArray(documents)) {
-        return documents.map((doc) => ({
-          content:
-            (doc as Record<string, unknown>).content?.toString().trim() ?? '',
-          name: (doc as Record<string, unknown>).name as string,
-        }));
+        return documents.map((doc) => {
+          const entry = doc as Record<string, unknown>;
+          return {
+            content: entry.content?.toString().trim() ?? '',
+            name: entry.name as string,
+          };
+        });
       }
       logger.error(
         CHANNEL,
@@ -192,7 +194,7 @@ export async function extractScratchpad(
 
 export interface ExtractionResult {
   content: string | null;
-  method: 'named' | 'simple' | 'markdown' | 'latex' | 'none';
+  method: 'simple' | 'markdown' | 'latex' | 'none';
 }
 
 export interface MultipleExtractionResult {
@@ -202,30 +204,16 @@ export interface MultipleExtractionResult {
 
 /**
  * Extract document content using a consolidated cascade of fallback methods.
- * Tries in order: named document -> simple tag -> markdown block -> latex document
+ * Tries in order: simple tag -> markdown block -> latex document
  *
  * @param outputContent The raw output content to extract from
  * @param documentTag The XML tag to look for
- * @param preferredName Optional filename to match against named documents. When provided,
- * the extractor prioritizes named document matches before other fallbacks.
  * @returns Extraction result with content and method used
  */
 function extractDocument(
   outputContent: string,
   documentTag: string,
-  preferredName?: string,
 ): ExtractionResult {
-  // Try named document extraction first (if preferredName provided)
-  if (preferredName) {
-    const documents = extractMultipleTextFromTag(outputContent);
-    if (documents && documents.length > 0) {
-      const match = documents.find((doc) => doc.name === preferredName);
-      if (match && match.content) {
-        return { content: match.content, method: 'named' };
-      }
-    }
-  }
-
   // Try simple tag extraction
   const fallbackContent = extractTextFromTag(outputContent, documentTag);
   if (fallbackContent) {
@@ -275,16 +263,10 @@ export function extractDocuments(
   }
 
   if (preferredName) {
-    // No preferredName is passed into extractDocument, so the 'named' branch
-    // is never taken — narrow the type accordingly for the result mapping.
     const single = extractDocument(outputContent, 'latex_document');
     if (single.content && single.method !== 'none') {
       const method: MultipleExtractionResult['method'] =
-        single.method === 'simple'
-          ? 'latex_document'
-          : single.method === 'markdown' || single.method === 'latex'
-            ? single.method
-            : 'simple';
+        single.method === 'simple' ? 'latex_document' : single.method;
       return {
         documents: [{ content: single.content, name: preferredName }],
         method,

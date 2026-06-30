@@ -61,7 +61,7 @@ function getImageDimensionsFromBuffer(
     return undefined;
   }
 
-  // WebP: "RIFF" + 4 bytes + "WEBP", then VP8/VP8L/VP8X subtype
+  // WebP: "RIFF" + 4 bytes + "WEBP", then a "VP8" + subtype-byte chunk tag.
   if (
     buffer.length >= 30 &&
     buffer[0] === 0x52 &&
@@ -71,42 +71,31 @@ function getImageDimensionsFromBuffer(
     buffer[8] === 0x57 &&
     buffer[9] === 0x45 &&
     buffer[10] === 0x42 &&
-    buffer[11] === 0x50
+    buffer[11] === 0x50 &&
+    buffer[12] === 0x56 &&
+    buffer[13] === 0x50 &&
+    buffer[14] === 0x38
   ) {
-    if (
-      buffer[12] === 0x56 &&
-      buffer[13] === 0x50 &&
-      buffer[14] === 0x38 &&
-      buffer[15] === 0x20
-    ) {
-      return {
-        width: buffer.readUInt16LE(26) & 0x3fff,
-        height: buffer.readUInt16LE(28) & 0x3fff,
-      };
-    }
-    if (
-      buffer[12] === 0x56 &&
-      buffer[13] === 0x50 &&
-      buffer[14] === 0x38 &&
-      buffer[15] === 0x4c
-    ) {
-      if (buffer.length < 25) return undefined;
-      const bits = buffer.readUInt32LE(21);
-      return {
-        width: (bits & 0x3fff) + 1,
-        height: ((bits >> 14) & 0x3fff) + 1,
-      };
-    }
-    if (
-      buffer[12] === 0x56 &&
-      buffer[13] === 0x50 &&
-      buffer[14] === 0x38 &&
-      buffer[15] === 0x58
-    ) {
-      return {
-        width: (buffer[24] | (buffer[25] << 8) | (buffer[26] << 16)) + 1,
-        height: (buffer[27] | (buffer[28] << 8) | (buffer[29] << 16)) + 1,
-      };
+    switch (buffer[15]) {
+      case 0x20: // VP8 (lossy)
+        return {
+          width: buffer.readUInt16LE(26) & 0x3fff,
+          height: buffer.readUInt16LE(28) & 0x3fff,
+        };
+      case 0x4c: {
+        // VP8L (lossless)
+        if (buffer.length < 25) return undefined;
+        const bits = buffer.readUInt32LE(21);
+        return {
+          width: (bits & 0x3fff) + 1,
+          height: ((bits >> 14) & 0x3fff) + 1,
+        };
+      }
+      case 0x58: // VP8X (extended)
+        return {
+          width: (buffer[24] | (buffer[25] << 8) | (buffer[26] << 16)) + 1,
+          height: (buffer[27] | (buffer[28] << 8) | (buffer[29] << 16)) + 1,
+        };
     }
   }
 

@@ -154,19 +154,12 @@ function startSentence(text: string): string {
 function cliModelRecoveryActions(
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): Required<CliNoAvailableModelsRecoveryOptions> {
-  return {
-    includedModeAction:
-      options.includedModeAction ??
-      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.includedModeAction,
-    loginAction:
-      options.loginAction ?? DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.loginAction,
-    personalModeAction:
-      options.personalModeAction ??
-      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.personalModeAction,
-    configureKeyAction:
-      options.configureKeyAction ??
-      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.configureKeyAction,
-  };
+  // Drop null/undefined overrides so each missing field keeps its default,
+  // matching the per-field `?? DEFAULT` fallback this replaced.
+  const overrides = Object.fromEntries(
+    Object.entries(options).filter(([, value]) => value != null),
+  ) as Partial<CliNoAvailableModelsRecoveryOptions>;
+  return { ...DEFAULT_CLI_MODEL_RECOVERY_ACTIONS, ...overrides };
 }
 
 function isCliModelOptionBasicallyAvailable(model: ModelOptionData): boolean {
@@ -459,7 +452,7 @@ function formatCliModelRecovery(
     loginAction,
     personalModeAction,
     configureKeyAction,
-  } = cliModelRecoveryActions();
+  } = DEFAULT_CLI_MODEL_RECOVERY_ACTIONS;
 
   const availability = entry.model.availability;
 
@@ -533,16 +526,23 @@ function withModelAccess(
   return [...models, entry];
 }
 
+async function loadCliModelAccessList(
+  options: CliModelAccessEntryOptions,
+): Promise<readonly CliModelAccess[]> {
+  return (
+    options.accessList ??
+    getCliModelAccessList({
+      apiMode: options.apiMode,
+      agentCategory: options.agentCategory,
+    })
+  );
+}
+
 export async function resolveCliModelAccessEntry(
   model: string,
   options: CliModelAccessEntryOptions = {},
 ): Promise<CliModelAccess | undefined> {
-  const models =
-    options.accessList ??
-    (await getCliModelAccessList({
-      apiMode: options.apiMode,
-      agentCategory: options.agentCategory,
-    }));
+  const models = await loadCliModelAccessList(options);
   const trimmed = model.trim();
   const listedEntry = findCliModelAccessEntry(models, trimmed);
   if (listedEntry || trimmed.length === 0) return listedEntry;
@@ -566,12 +566,14 @@ export async function resolveCliModelAccessEntry(
   return hiddenModel;
 }
 
+type CliAvailableModelsMessageOptions = Pick<
+  CliRunnableModelOptions,
+  'apiMode' | 'noAvailableModelsMessage'
+>;
+
 function formatAvailableModels(
   ids: readonly string[],
-  options: Pick<
-    CliRunnableModelOptions,
-    'apiMode' | 'noAvailableModelsMessage'
-  >,
+  options: CliAvailableModelsMessageOptions,
 ): string {
   if (ids.length > 0) return `Available models: ${ids.join(', ')}.`;
   const recoveryMessage =
@@ -584,10 +586,7 @@ function formatUnavailableModelMessage(
   model: string,
   entry: CliModelAccess | undefined,
   availableIds: readonly string[],
-  options: Pick<
-    CliRunnableModelOptions,
-    'apiMode' | 'noAvailableModelsMessage'
-  >,
+  options: CliAvailableModelsMessageOptions,
 ): string {
   const status = entry ? ` (${entry.status})` : '';
   return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options)}`;
@@ -632,12 +631,7 @@ export async function resolveCliRunnableModel(
   model: string,
   options: CliRunnableModelOptions,
 ): Promise<CliRunnableModelResolution> {
-  const models =
-    options.accessList ??
-    (await getCliModelAccessList({
-      apiMode: options.apiMode,
-      agentCategory: options.agentCategory,
-    }));
+  const models = await loadCliModelAccessList(options);
   const trimmed = model.trim();
   const modelEntry = await resolveCliModelAccessEntry(trimmed, {
     apiMode: options.apiMode,

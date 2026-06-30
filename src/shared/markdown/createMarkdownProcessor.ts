@@ -124,25 +124,32 @@ const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /(?<!\\)\$(?!\$)[^\n$]+?(?<!\\)\$/g, // $ … $  (inline, single line, both $ unescaped)
 ];
 
-function protectLatexMath(content: string): {
-  content: string;
-  spans: string[];
-} {
-  const spans: string[] = [];
+// Replace every match of `patterns` with an indexed `@@<tag>-N@@` placeholder,
+// returning the captured matches so restorePlaceholders can reinstate them.
+function protectByPatterns(
+  content: string,
+  patterns: readonly RegExp[],
+  tag: string,
+): { content: string; items: string[] } {
+  const items: string[] = [];
   let out = content;
-  for (const pattern of MATH_SPAN_PATTERNS) {
+  for (const pattern of patterns) {
     out = out.replaceAll(pattern, (match) => {
-      const index = spans.push(match) - 1;
-      return `@@LATEX-MATH-${index}@@`;
+      const index = items.push(match) - 1;
+      return `@@${tag}-${index}@@`;
     });
   }
-  return { content: out, spans };
+  return { content: out, items };
 }
 
-function restoreLatexMath(content: string, spans: string[]): string {
-  return content.replaceAll(MATH_PLACEHOLDER, (match, rawIndex) => {
-    const span = spans[Number(rawIndex)];
-    return span ?? match;
+function restorePlaceholders(
+  content: string,
+  placeholder: RegExp,
+  items: string[],
+): string {
+  return content.replaceAll(placeholder, (match, rawIndex) => {
+    const item = items[Number(rawIndex)];
+    return item ?? match;
   });
 }
 
@@ -156,25 +163,6 @@ const MACRO_PLACEHOLDER = /@@LATEX-MACRO-(\d+)@@/g;
 // markdown escape in math output. We deliberately exclude `\$` `\#` `\&` `\%`
 // `\_` `\*` etc., which carry real markdown-escape semantics.
 const LATEX_MACRO = /\\([,;:!(){}[\]])/g;
-
-function protectLatexMacros(content: string): {
-  content: string;
-  macros: string[];
-} {
-  const macros: string[] = [];
-  const protectedContent = content.replaceAll(LATEX_MACRO, (match) => {
-    const index = macros.push(match) - 1;
-    return `@@LATEX-MACRO-${index}@@`;
-  });
-  return { content: protectedContent, macros };
-}
-
-function restoreLatexMacros(content: string, macros: string[]): string {
-  return content.replaceAll(MACRO_PLACEHOLDER, (match, rawIndex) => {
-    const macro = macros[Number(rawIndex)];
-    return macro ?? match;
-  });
-}
 
 /** FNV-1a hash → base-36 string. Cheap, no crypto needs here. */
 function hashContent(str: string): string {
@@ -211,12 +199,12 @@ export function createMarkdownProcessor(
     // reverse so a ref placeholder revealed inside a restored span is still
     // formatted. After span protection, only out-of-span macros remain to net.
     const { content: refProtected, refs } = protectLatexReferences(content);
-    const { content: mathProtected, spans } = config.protectLatexMath
-      ? protectLatexMath(refProtected)
-      : { content: refProtected, spans: [] };
-    const { content: protectedContent, macros } = config.protectLatexMath
-      ? protectLatexMacros(mathProtected)
-      : { content: mathProtected, macros: [] };
+    const { content: mathProtected, items: spans } = config.protectLatexMath
+      ? protectByPatterns(refProtected, MATH_SPAN_PATTERNS, 'LATEX-MATH')
+      : { content: refProtected, items: [] };
+    const { content: protectedContent, items: macros } = config.protectLatexMath
+      ? protectByPatterns(mathProtected, [LATEX_MACRO], 'LATEX-MACRO')
+      : { content: mathProtected, items: [] };
     // OpenAI reasoning summaries sometimes omit the line break before a bold
     // heading mid-sentence (".**Heading**" → no break). Force one.
     const formatted = protectedContent.replaceAll(/\.(\*\*[A-Z])/g, '.\n$1');
@@ -224,8 +212,8 @@ export function createMarkdownProcessor(
     const restoreProtectedLatex = (value: string): string => {
       let restored = value;
       if (config.protectLatexMath) {
-        restored = restoreLatexMacros(restored, macros);
-        restored = restoreLatexMath(restored, spans);
+        restored = restorePlaceholders(restored, MACRO_PLACEHOLDER, macros);
+        restored = restorePlaceholders(restored, MATH_PLACEHOLDER, spans);
       }
       return restoreLatexReferences(restored, refs, format);
     };

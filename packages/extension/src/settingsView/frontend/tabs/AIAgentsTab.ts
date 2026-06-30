@@ -155,30 +155,6 @@ export class AIAgentsTab extends LitElement {
     }
   }
 
-  private handleCodexSandboxModeChange = (e: Event): void => {
-    this.emitSelect('codex-sandbox-mode-change', 'mode', e);
-  };
-
-  private handleCodexReasoningEffortChange = (e: Event): void => {
-    this.emitSelect('codex-reasoning-effort-change', 'effort', e);
-  };
-
-  private handleCodexApprovalPolicyChange = (e: Event): void => {
-    this.emitSelect('codex-approval-policy-change', 'policy', e);
-  };
-
-  private handleClaudeAgentModelChange = (e: Event): void => {
-    this.emitSelect('claude-agent-model-change', 'model', e);
-  };
-
-  private handleClaudeAgentPermissionModeChange = (e: Event): void => {
-    this.emitSelect('claude-agent-permission-mode-change', 'mode', e);
-  };
-
-  private handleClaudeAgentEffortChange = (e: Event): void => {
-    this.emitSelect('claude-agent-effort-change', 'effort', e);
-  };
-
   private renderSelectRow(
     label: string,
     value: string,
@@ -206,19 +182,19 @@ export class AIAgentsTab extends LitElement {
           'Sandbox mode',
           this.codexSandboxMode,
           SANDBOX_MODE_OPTIONS,
-          this.handleCodexSandboxModeChange,
+          (e) => this.emitSelect('codex-sandbox-mode-change', 'mode', e),
         )}
         ${this.renderSelectRow(
           'Reasoning effort',
           this.codexReasoningEffort,
           REASONING_EFFORT_OPTIONS,
-          this.handleCodexReasoningEffortChange,
+          (e) => this.emitSelect('codex-reasoning-effort-change', 'effort', e),
         )}
         ${this.renderSelectRow(
           'Approval policy',
           this.codexApprovalPolicy,
           APPROVAL_POLICY_OPTIONS,
-          this.handleCodexApprovalPolicyChange,
+          (e) => this.emitSelect('codex-approval-policy-change', 'policy', e),
         )}
       </div>
     `;
@@ -231,19 +207,20 @@ export class AIAgentsTab extends LitElement {
           'Model',
           this.claudeAgentModel,
           CLAUDE_MODEL_OPTIONS,
-          this.handleClaudeAgentModelChange,
+          (e) => this.emitSelect('claude-agent-model-change', 'model', e),
         )}
         ${this.renderSelectRow(
           'Reasoning effort',
           this.claudeAgentEffort,
           CLAUDE_EFFORT_OPTIONS,
-          this.handleClaudeAgentEffortChange,
+          (e) => this.emitSelect('claude-agent-effort-change', 'effort', e),
         )}
         ${this.renderSelectRow(
           'Permission mode',
           this.claudeAgentPermissionMode,
           CLAUDE_PERMISSION_MODE_OPTIONS,
-          this.handleClaudeAgentPermissionModeChange,
+          (e) =>
+            this.emitSelect('claude-agent-permission-mode-change', 'mode', e),
         )}
       </div>
     `;

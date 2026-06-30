@@ -53,11 +53,9 @@ interface ProviderGroup {
 
 /** Stable sort: fast-first-response models bubble to the top of their provider. */
 function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
-  return items.toSorted((a, b) => {
-    const aFast = a.isFast ? 0 : 1;
-    const bFast = b.isFast ? 0 : 1;
-    return aFast - bFast;
-  });
+  return items.toSorted(
+    (a, b) => Number(Boolean(b.isFast)) - Number(Boolean(a.isFast)),
+  );
 }
 
 @customElement('model-selection-list')

@@ -13,11 +13,6 @@ import {
   type LatexConfigValues,
 } from '@shared/schemas/settingsViewMessages';
 
-export type LatexConfigPersistenceEntry = {
-  field: LatexConfigField;
-  key: WorkspaceStateKey;
-};
-
 export type LatexConfigPersistenceUpdatePlan =
   | {
       ok: true;
@@ -33,24 +28,15 @@ export type LatexConfigPersistenceUpdatePlan =
 
 /** Plans storage-backed LaTeX config reads and writes without host side effects. */
 export class LatexConfigPersistenceController {
-  getEntries(): LatexConfigPersistenceEntry[] {
-    return (
-      Object.entries(LATEX_FIELD_TO_KEY) as [
-        LatexConfigField,
-        WorkspaceStateKey,
-      ][]
-    ).map(([field, key]) => ({
-      field,
-      key,
-    }));
-  }
-
   buildConfigValues(
     readStoredValue: (key: WorkspaceStateKey) => unknown,
   ): LatexConfigValues {
     const values: Partial<Record<LatexConfigField, unknown>> = {};
 
-    for (const { field, key } of this.getEntries()) {
+    for (const [field, key] of Object.entries(LATEX_FIELD_TO_KEY) as [
+      LatexConfigField,
+      WorkspaceStateKey,
+    ][]) {
       const stored = readStoredValue(key);
       if (stored === undefined) continue;
 

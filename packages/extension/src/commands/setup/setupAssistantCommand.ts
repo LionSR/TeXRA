@@ -242,24 +242,31 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
 
   if (!picked) return false;
 
-  if (picked.id === 'signIn') {
-    await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-    return hasAnyUsableSetupCredential();
-  }
+  // Each credential path runs its action then re-checks for a usable
+  // credential; only the walkthrough leaves setup un-launched.
+  const credentialActions: Partial<
+    Record<typeof picked.id, () => PromiseLike<unknown>>
+  > = {
+    chatgpt: () => signInWithChatGptSubscription(CHANNEL),
+    signIn: () => vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN),
+    apiKey: () => vscode.commands.executeCommand(apiKeyCommands.setApiKey),
+  };
 
-  if (picked.id === 'apiKey') {
-    await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
-    return hasAnyUsableSetupCredential();
-  }
-
-  if (picked.id === 'chatgpt') {
-    await signInWithChatGptSubscription(CHANNEL);
+  const action = credentialActions[picked.id];
+  if (action) {
+    await action();
     return hasAnyUsableSetupCredential();
   }
 
   // walkthrough
   await vscode.commands.executeCommand('texra.openGettingStarted');
   return false;
+}
+
+// Routing is fine unless "Use OpenRouter" is on without an OpenRouter key.
+async function isRoutingConfigured(): Promise<boolean> {
+  if (!getUseOpenRouter()) return true;
+  return SecretManager.hasUsableApiKey('openRouter');
 }
 
 /**
@@ -272,8 +279,7 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
  * purpose and may have concurrent OR-routed agents running.
  */
 async function ensureRoutingConfigured(): Promise<boolean> {
-  if (!getUseOpenRouter()) return true;
-  if (await SecretManager.hasUsableApiKey('openRouter')) return true;
+  if (await isRoutingConfigured()) return true;
 
   const choice = await vscode.window.showWarningMessage(
     '"Use OpenRouter" is enabled in settings, but no OpenRouter key is set. Every model call routes through OpenRouter and will fail. Add an OpenRouter key, or disable "Use OpenRouter" in the Models tab, then retry.',
@@ -291,9 +297,7 @@ async function ensureRoutingConfigured(): Promise<boolean> {
   // Re-check: the user may have resolved the misconfiguration (added an
   // OR key, or disabled Use OpenRouter in the Models tab), in which case
   // we can proceed without forcing them to re-invoke the command.
-  if (!getUseOpenRouter()) return true;
-  if (await SecretManager.hasUsableApiKey('openRouter')) return true;
-  return false;
+  return isRoutingConfigured();
 }
 
 export type SetupAssistantLaunchResult =
