@@ -429,6 +429,8 @@ export abstract class ModelHandler<
       openRouterOnly: this.config.openRouterOnly,
       customBaseUrl: this.config.baseUrl,
       requiresResponsesAPI: this.config.requiresResponsesAPI,
+      forceDirectProvider: (this.config as { forceDirectProvider?: boolean })
+        .forceDirectProvider,
       useServerSideKeys: this.shouldUseServerSideKeys(),
       logger: this.logger,
     });

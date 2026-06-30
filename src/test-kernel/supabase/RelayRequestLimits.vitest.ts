@@ -17,6 +17,7 @@ import {
   acquireRelayRequestSlot,
   releaseWhenStreamCloses,
 } from '../../../supabase/functions/relay/requestGate';
+import { isModelFreeRelayPath } from '../../../supabase/functions/relay/paths';
 
 function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -234,6 +235,92 @@ describe('relay free-tier request limits', () => {
         temperature: 0.2,
       },
     });
+  });
+
+  it('caps Google Interactions generation_config max_output_tokens', () => {
+    const result = clampFreeTierMaxOutputTokens(
+      'google',
+      '/v1beta/interactions',
+      {
+        input: [],
+        generation_config: { max_output_tokens: 128_000, temperature: 0.2 },
+      },
+    );
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'generation_config.max_output_tokens');
+    assert.deepEqual(result.body, {
+      input: [],
+      generation_config: {
+        max_output_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+        temperature: 0.2,
+      },
+    });
+  });
+
+  it('adds Google Interactions max_output_tokens when missing', () => {
+    const result = clampFreeTierMaxOutputTokens(
+      'google',
+      '/v1beta/interactions',
+      { input: [] },
+    );
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'generation_config.max_output_tokens');
+    assert.deepEqual(result.body, {
+      input: [],
+      generation_config: {
+        max_output_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+      },
+    });
+  });
+
+  it('does not add Generate Content config when only Interactions-style config exists', () => {
+    const result = clampFreeTierMaxOutputTokens(
+      'google',
+      '/v1beta/models/gemini-3.5-flash:generateContent',
+      {
+        contents: [],
+        generation_config: { max_output_tokens: 128_000 },
+      },
+    );
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'generation_config.max_output_tokens');
+    assert.deepEqual(result.body, {
+      contents: [],
+      generation_config: { max_output_tokens: FREE_TIER_MAX_OUTPUT_TOKENS },
+    });
+  });
+
+  it('does not add Interactions config when only Generate Content-style config exists', () => {
+    const result = clampFreeTierMaxOutputTokens(
+      'google',
+      '/v1beta/interactions',
+      {
+        input: [],
+        generationConfig: { maxOutputTokens: 128_000 },
+      },
+    );
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'generationConfig.maxOutputTokens');
+    assert.deepEqual(result.body, {
+      input: [],
+      generationConfig: { maxOutputTokens: FREE_TIER_MAX_OUTPUT_TOKENS },
+    });
+  });
+
+  it('treats Google Interactions cancellation as a model-free relay path', () => {
+    assert.equal(
+      isModelFreeRelayPath('/v1beta/interactions/interaction-123:cancel'),
+      true,
+    );
+    assert.equal(isModelFreeRelayPath('/v1beta/interactions'), false);
+    assert.equal(
+      isModelFreeRelayPath('/v1beta/interactions/interaction-123'),
+      false,
+    );
   });
 
   it('releases request slots when the upstream stream closes', async () => {
