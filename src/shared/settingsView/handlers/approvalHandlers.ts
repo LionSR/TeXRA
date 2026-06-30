@@ -26,61 +26,54 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type { ConfigProvider, ConfigTarget } from '@platform/interfaces/config';
-import type { StateStore } from '@platform/interfaces/state';
 
 export interface ApprovalHandlerPorts extends SettingsStatePorts {
   readonly config: ConfigProvider;
-}
-
-/** Read a workspace-state string (with default) and parse it to its enum. */
-function readParsedSetting<T>(
-  workspaceState: StateStore,
-  key: WorkspaceStateKey,
-  fallback: string,
-  parse: (raw: string) => T,
-): T {
-  return parse(workspaceState.get<string>(key, fallback));
 }
 
 export function buildApprovalSettingsMessage(
   ports: ApprovalHandlerPorts,
 ): UpdateApprovalSettingsMessage {
   const { workspaceState, config } = ports;
+
+  // Read a workspace-state string (with default) and parse it to its enum.
+  function read<T>(
+    key: WorkspaceStateKey,
+    fallback: string,
+    parse: (raw: string) => T,
+  ): T {
+    return parse(workspaceState.get<string>(key, fallback));
+  }
+
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
     bashApprovalEnabled: config.get<boolean>(BASH_APPROVAL_CONFIG_KEY, true),
-    codexSandboxMode: readParsedSetting(
-      workspaceState,
+    codexSandboxMode: read(
       WorkspaceStateKey.CODEX_SANDBOX_MODE,
       CODEX_SANDBOX_MODE_DEFAULT,
       parseCodexSandboxMode,
     ),
-    codexReasoningEffort: readParsedSetting(
-      workspaceState,
+    codexReasoningEffort: read(
       WorkspaceStateKey.CODEX_REASONING_EFFORT,
       CODEX_REASONING_EFFORT_DEFAULT,
       parseCodexReasoningEffort,
     ),
-    codexApprovalPolicy: readParsedSetting(
-      workspaceState,
+    codexApprovalPolicy: read(
       WorkspaceStateKey.CODEX_APPROVAL_POLICY,
       CODEX_APPROVAL_POLICY_DEFAULT,
       parseCodexApprovalPolicy,
     ),
-    claudeAgentModel: readParsedSetting(
-      workspaceState,
+    claudeAgentModel: read(
       WorkspaceStateKey.CLAUDE_AGENT_MODEL,
       CLAUDE_AGENT_DEFAULT_MODEL,
       parseClaudeAgentModel,
     ),
-    claudeAgentPermissionMode: readParsedSetting(
-      workspaceState,
+    claudeAgentPermissionMode: read(
       WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
       CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
       parseClaudeAgentPermissionMode,
     ),
-    claudeAgentEffort: readParsedSetting(
-      workspaceState,
+    claudeAgentEffort: read(
       WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
       CLAUDE_AGENT_DEFAULT_EFFORT,
       parseClaudeAgentEffort,

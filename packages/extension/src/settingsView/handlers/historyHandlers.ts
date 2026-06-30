@@ -153,15 +153,16 @@ export class HistoryHandlers {
 
       const { exportInput } = result;
 
-      if (format === 'html') {
-        await this.exportAndOpenHtml(data.historyId, exportInput);
-        return;
-      }
-
-      if (format === 'md') {
-        await this.exportAndOpenMarkdown(data.historyId, exportInput);
-      } else {
-        await this.exportAndOpenLatex(data.historyId, exportInput);
+      switch (format) {
+        case 'html':
+          await this.exportAndOpenHtml(data.historyId, exportInput);
+          return;
+        case 'md':
+          await this.exportAndOpenMarkdown(data.historyId, exportInput);
+          return;
+        case 'tex':
+          await this.exportAndOpenLatex(data.historyId, exportInput);
+          return;
       }
     } catch (error) {
       await showLoggedErrorMessage(
@@ -203,7 +204,7 @@ export class HistoryHandlers {
       await this.chatExportController.exportAsMarkdown(historyId, exportInput);
     const doc = await vscode.workspace.openTextDocument(absolutePath);
     await vscode.window.showTextDocument(doc, { preview: false });
-    const filename = storagePath.split('/').pop() ?? storagePath;
+    const filename = path.basename(storagePath);
     void vscode.window.showInformationMessage(`Chat exported: ${filename}`);
   }
 
@@ -218,7 +219,7 @@ export class HistoryHandlers {
       // Open the generated PDF
       const pdfUri = vscode.Uri.file(pdfPath);
       await vscode.commands.executeCommand('vscode.open', pdfUri);
-      const filename = storagePath.split('/').pop() ?? storagePath;
+      const filename = path.basename(storagePath);
       void vscode.window.showInformationMessage(
         `Chat exported and compiled: ${filename.replace('.tex', '.pdf')}`,
       );

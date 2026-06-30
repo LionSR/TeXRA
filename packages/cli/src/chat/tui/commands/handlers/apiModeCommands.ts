@@ -95,11 +95,8 @@ export async function applyCliApiModeSelection(
 }
 
 export async function showCliAuthStatus(): Promise<void> {
-  appendLocalAssistantTranscript(
-    (
-      await loadCliApiStatusLines({
-        apiMode: cliState.sessionMeta.get().apiMode,
-      })
-    ).join('\n'),
-  );
+  const lines = await loadCliApiStatusLines({
+    apiMode: cliState.sessionMeta.get().apiMode,
+  });
+  appendLocalAssistantTranscript(lines.join('\n'));
 }

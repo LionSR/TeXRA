@@ -57,7 +57,7 @@ interface ModelAvailabilityStatus {
 }
 
 /**
- * Per-kind status fields. `kind` is intentionally omitted here — the record key
+ * Per-kind status fields. `kind` is intentionally omitted here: the record key
  * is the single source of truth and `availabilityStatus()` reattaches it.
  */
 const AVAILABILITY_STATUS_FIELDS: Record<

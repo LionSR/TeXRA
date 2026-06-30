@@ -55,10 +55,10 @@ export function pickDefaultToolUseAgent<T extends { readonly name: string }>(
   agents: readonly T[] | undefined,
 ): string {
   const candidates = agents ? implicitDefaultToolUseAgents(agents) : [];
-  const findByName = (name: string): T | undefined =>
-    candidates.find((candidate) => agentName(candidate.name) === name);
   for (const name of DEFAULT_AGENT_PRIORITY) {
-    const found = findByName(name);
+    const found = candidates.find(
+      (candidate) => agentName(candidate.name) === name,
+    );
     if (found) return found.name;
   }
   return candidates[0]?.name ?? BUILTIN_DEFAULT_CHAT_AGENT;

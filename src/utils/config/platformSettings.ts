@@ -36,13 +36,7 @@ export function readPlatformSetting<T>(
   if (!active) {
     return settingDefault(entry) as T;
   }
-  return readSetting(
-    entry,
-    {
-      config: active.config,
-      workspaceState: active.workspaceState,
-      globalState: active.globalState,
-    },
-    host,
-  ) as T;
+  // `Platform` structurally supplies the `config`/`workspaceState`/`globalState`
+  // slots `readSetting` reads from, so it passes as `SettingsStores` directly.
+  return readSetting(entry, active, host) as T;
 }

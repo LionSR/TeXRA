@@ -8,7 +8,7 @@ import type { BannerState } from '@shared/schemas';
  * `visible` flag. It mirrors `state.visible` onto a reflected `visible`
  * attribute so the `:host(:not([visible]))` rule in `bannerStyles` can hide the
  * host via CSS. Keeping the mirror here means each banner declares only its own
- * `state` shape — the visibility plumbing lives in exactly one place instead of
+ * `state` shape. The visibility plumbing lives in exactly one place instead of
  * being copy-pasted per banner.
  */
 export abstract class StateVisibleBanner<

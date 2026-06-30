@@ -154,15 +154,12 @@ export function formatSubagentDelivery(
 ): string {
   const lines = [
     `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(result.outcome)}">`,
-  ];
-
-  lines.push(
     ...formatDeliveryPreamble({
       wallTimeMs: options?.wallTimeMs,
       workingDirectory: options?.workingDirectory,
       memoryMisses: result.memoryMisses,
     }),
-  );
+  ];
 
   if (result.category === 'workflow') {
     if (options?.diffsUnavailable) {
@@ -215,14 +212,12 @@ export function formatSubagentError(
   const formatted = normalizeProviderError(err);
   const lines = [
     `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}" retryable="${formatted.userRetryable ? 'true' : 'false'}">`,
-  ];
-  lines.push(
     ...formatDeliveryPreamble({
       wallTimeMs: options?.wallTimeMs,
       workingDirectory: options?.workingDirectory,
       memoryMisses: options?.memoryMisses,
     }),
-  );
+  ];
   lines.push(
     `<message>${escapeText(formatted.message)}</message>`,
     '</subagent-error>',

@@ -172,7 +172,7 @@ class UsageLogServiceImpl {
   ): Promise<UsageLogResponse> {
     // ky's `timeout` only guards until response headers arrive (it clears the
     // timer once fetch settles), so a server that stalls mid-body would hang the
-    // subsequent `.json()` read indefinitely — wedging activeFlush and dispose().
+    // subsequent `.json()` read indefinitely, wedging activeFlush and dispose().
     // AbortSignal.timeout stays armed through the body read, like the previous
     // manual AbortController did.
     const data = await ky
