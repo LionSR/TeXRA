@@ -281,7 +281,6 @@ export class ToolCard extends LitElement {
       <wa-tag
         class="tool-badge"
         variant=${config.variant}
-        appearance="accent"
         size="small"
       >
         ${waIcon(config.icon)} ${label}
