@@ -5,28 +5,32 @@ import { describe, expect, it } from 'vitest';
 import { extractHoverText } from '@tools/lean/leanTypes';
 
 describe('extractHoverText', () => {
-  it('extracts plain string hover contents', () => {
-    expect(extractHoverText('Nat.succ')).toBe('Nat.succ');
-  });
-
-  it('joins marked string hover contents', () => {
-    expect(
-      extractHoverText([
-        { language: 'lean4', value: '#check Nat' },
-        'natural numbers',
-      ]),
-    ).toBe('#check Nat\n\nnatural numbers');
-  });
-
-  it('extracts single marked string hover contents', () => {
-    expect(extractHoverText({ language: 'lean4', value: '#check Nat' })).toBe(
-      '#check Nat',
-    );
-  });
-
-  it('extracts markup content hover values', () => {
-    expect(
-      extractHoverText({ kind: 'markdown', value: '**theorem** foo' }),
-    ).toBe('**theorem** foo');
+  it.each<{
+    name: string;
+    contents: Parameters<typeof extractHoverText>[0];
+    expected: string;
+  }>([
+    {
+      name: 'extracts plain string hover contents',
+      contents: 'Nat.succ',
+      expected: 'Nat.succ',
+    },
+    {
+      name: 'joins marked string hover contents',
+      contents: [{ language: 'lean4', value: '#check Nat' }, 'natural numbers'],
+      expected: '#check Nat\n\nnatural numbers',
+    },
+    {
+      name: 'extracts single marked string hover contents',
+      contents: { language: 'lean4', value: '#check Nat' },
+      expected: '#check Nat',
+    },
+    {
+      name: 'extracts markup content hover values',
+      contents: { kind: 'markdown', value: '**theorem** foo' },
+      expected: '**theorem** foo',
+    },
+  ])('$name', ({ contents, expected }) => {
+    expect(extractHoverText(contents)).toBe(expected);
   });
 });

@@ -74,29 +74,23 @@ describe('ExecutionsTool', () => {
     mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
 
-  it('caps oversized wait timeouts instead of rejecting the tool call', async () => {
-    const result = await new ExecutionsTool().call({
-      path: '/executions',
-      action: 'wait',
-      timeout: 3600,
-    });
+  it.each([
+    { label: 'caps oversized', timeout: 3600 },
+    { label: 'raises sub-minimum', timeout: 30 },
+  ])(
+    '$label wait timeouts instead of rejecting the tool call',
+    async ({ timeout }) => {
+      const result = await new ExecutionsTool().call({
+        path: '/executions',
+        action: 'wait',
+        timeout,
+      });
 
-    expect(result.isError).not.toBe(true);
-    expect(result.error).toBeUndefined();
-    expect(result.output).toBe('No execution history found.');
-  });
-
-  it('raises sub-minimum wait timeouts instead of rejecting the tool call', async () => {
-    const result = await new ExecutionsTool().call({
-      path: '/executions',
-      action: 'wait',
-      timeout: 30,
-    });
-
-    expect(result.isError).not.toBe(true);
-    expect(result.error).toBeUndefined();
-    expect(result.output).toBe('No execution history found.');
-  });
+      expect(result.isError).not.toBe(true);
+      expect(result.error).toBeUndefined();
+      expect(result.output).toBe('No execution history found.');
+    },
+  );
 
   it('rejects non-finite wait timeouts', async () => {
     const result = await new ExecutionsTool().call({

@@ -47,57 +47,32 @@ const toolUseHistoryItem: HistoryItem = {
   },
 };
 
+function matches(item: HistoryItem, query: string): boolean {
+  return historySearchTextMatches(
+    getHistorySearchText(item),
+    getHistorySearchTokens(query),
+  );
+}
+
 describe('history search prefilter', () => {
   it('matches rendered history fields without requiring DOM construction', () => {
-    const searchText = getHistorySearchText(workflowHistoryItem);
-
-    expect(
-      historySearchTextMatches(searchText, getHistorySearchTokens('spectrum')),
-    ).toBe(true);
-    expect(
-      historySearchTextMatches(searchText, getHistorySearchTokens('xelatex')),
-    ).toBe(true);
-    expect(
-      historySearchTextMatches(searchText, getHistorySearchTokens('cafe')),
-    ).toBe(true);
-    expect(
-      historySearchTextMatches(searchText, getHistorySearchTokens('absent')),
-    ).toBe(false);
+    expect(matches(workflowHistoryItem, 'spectrum')).toBe(true);
+    expect(matches(workflowHistoryItem, 'xelatex')).toBe(true);
+    expect(matches(workflowHistoryItem, 'cafe')).toBe(true);
+    expect(matches(workflowHistoryItem, 'absent')).toBe(false);
   });
 
   it('does not match workflow labels that are not rendered for an item', () => {
-    const searchText = getHistorySearchText(minimalWorkflowHistoryItem);
-
-    expect(
-      historySearchTextMatches(searchText, getHistorySearchTokens('mediafile')),
-    ).toBe(false);
-    expect(
-      historySearchTextMatches(searchText, getHistorySearchTokens('not set')),
-    ).toBe(true);
+    expect(matches(minimalWorkflowHistoryItem, 'mediafile')).toBe(false);
+    expect(matches(minimalWorkflowHistoryItem, 'not set')).toBe(true);
   });
 
   it('keeps multi-word searches broad like mark.js separate word search', () => {
-    const searchText = getHistorySearchText(workflowHistoryItem);
-
-    expect(
-      historySearchTextMatches(
-        searchText,
-        getHistorySearchTokens('missing variational'),
-      ),
-    ).toBe(true);
+    expect(matches(workflowHistoryItem, 'missing variational')).toBe(true);
   });
 
   it('matches edited files rendered for tool-use history items', () => {
-    const searchText = getHistorySearchText(toolUseHistoryItem);
-
-    expect(
-      historySearchTextMatches(searchText, getHistorySearchTokens('lemma.md')),
-    ).toBe(true);
-    expect(
-      historySearchTextMatches(
-        searchText,
-        getHistorySearchTokens('more details'),
-      ),
-    ).toBe(true);
+    expect(matches(toolUseHistoryItem, 'lemma.md')).toBe(true);
+    expect(matches(toolUseHistoryItem, 'more details')).toBe(true);
   });
 });

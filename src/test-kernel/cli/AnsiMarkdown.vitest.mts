@@ -5,7 +5,7 @@
 // inside fenced code, (c) routes through the shared factory + cache without
 // crashing, and (d) keeps implementation markers out of the final output.
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import stripAnsi from 'strip-ansi';
 
 import {
@@ -43,8 +43,11 @@ function displayWidthForTest(line: string): number {
 }
 
 describe('renderAnsiMarkdown', () => {
-  it('renders plain prose with no HTML escapes', () => {
+  beforeEach(() => {
     _resetAnsiMarkdownForTests();
+  });
+
+  it('renders plain prose with no HTML escapes', () => {
     const out = renderAnsiMarkdown('Hello <world>');
     expect(out).toContain('Hello <world>');
     expect(out).not.toContain('&lt;');
@@ -52,7 +55,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('renders common HTML formatting without leaking tags', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown(
       [
         '<blockquote><strong>Subagent <code>prover</code> finished execution abc:</strong>',
@@ -71,7 +73,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('renders HTML headings as markdown headings without leaking tags', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown(
       '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
       { colorEnabled: false, width: 80 },
@@ -87,7 +88,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps HTML headings inside HTML blockquotes quoted', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown(
       '<blockquote><h3>Quoted Report</h3><p>The proof is <b>fully verified</b>.</p></blockquote>',
       { colorEnabled: false, width: 80 },
@@ -103,7 +103,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('summarizes embedded subagent result XML before HTML rendering', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown(
       [
         '<blockquote>',
@@ -125,7 +124,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('passes typed code through cli-highlight without leaking sentinels', () => {
-    _resetAnsiMarkdownForTests();
     const md = '```ts\nconst x: number = 1;\n```';
     const out = renderAnsiMarkdown(md);
     expect(out).toContain('const');
@@ -135,14 +133,12 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('falls back to dim grey for unknown languages', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('```nosuchlang\nplain body\n```');
     expect(out).toContain('plain body');
     expect(out).not.toContain('ANSI_FENCE');
   });
 
   it('prefixes every rendered blockquote line', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('> first\n> second\n>\n> third');
     const plain = stripAnsi(out);
     expect(plain).toContain('│ first\n│ second');
@@ -150,7 +146,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('renders nested blockquote prefixes once per depth', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('> outer\n> > inner');
     const plain = stripAnsi(out);
     expect(plain).toContain('│ outer');
@@ -159,7 +154,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps the blockquote gutter on tight lists inside the quote', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('> - item 1\n> - item 2');
     const plain = stripAnsi(out);
     // First bullet inherits the gutter from blockquote_open; the second
@@ -171,7 +165,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps the blockquote gutter on quoted block nodes', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown(
       '> # Heading\n>\n> ```ts\n> const x = 1;\n> const y = 2;\n> ```\n>\n> ---',
     );
@@ -183,14 +176,12 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('preserves ordered-list delimiter markup', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('1) one\n2) two');
     expect(stripAnsi(out)).toContain('1) one');
     expect(stripAnsi(out)).toContain('2) two');
   });
 
   it('renders headings without visible Markdown markers', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown(
       '## What is a Tensor Network?\n\n### Core objects',
     );
@@ -202,7 +193,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('renders markdown without ANSI styles when color is disabled', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown(
       '**Bold** and _emphasis_ with `code`.\n\n```ts\nconst x = 1;\n```',
       { colorEnabled: false },
@@ -214,13 +204,11 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('separates consecutive paragraphs visually', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('First paragraph.\n\nSecond paragraph.');
     expect(stripAnsi(out)).toContain('First paragraph.\n\nSecond paragraph.');
   });
 
   it('wraps rendered markdown at display-cell boundaries', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('你好🙂abcdef', { width: 6 });
     const lines = stripAnsi(out).split('\n');
     expect(lines.length).toBeGreaterThan(1);
@@ -230,7 +218,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps blockquote gutters on wrapped continuation lines', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('> abcdef ghijkl mnopqr', { width: 10 });
     const plain = stripAnsi(out);
     const lines = plain.split('\n');
@@ -242,7 +229,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps list indentation on wrapped continuation lines', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('- abcdef ghijkl mnopqr', { width: 10 });
     const plain = stripAnsi(out);
     const lines = plain.split('\n');
@@ -313,7 +299,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('styles heading text across inline code boundaries', () => {
-    _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('## Use `git` correctly');
     const plain = stripAnsi(out);
     expect(plain).toContain('Use `git` correctly');
@@ -350,7 +335,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('renders GFM pipe tables as a box-drawing table, not raw HTML', () => {
-    _resetAnsiMarkdownForTests();
     const md = '| Dimension | Workflow |\n|---|---|\n| Output | Rewrites |';
     const out = renderAnsiMarkdown(md);
     const plain = stripAnsi(out);
@@ -365,7 +349,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps a table within the requested width', () => {
-    _resetAnsiMarkdownForTests();
     const md =
       '| Col A | Col B | Col C |\n|---|---|---|\n' +
       '| a fairly long cell value | another long one | third column here |';
@@ -376,7 +359,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('sizes a small table to its content instead of stretching to full width', () => {
-    _resetAnsiMarkdownForTests();
     const md = '| n | digits |\n|---|---|\n| 447 | 993.3 |';
     const out = renderAnsiMarkdown(md, { width: 80 });
     const widest = Math.max(
@@ -392,7 +374,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('does not leak protected LaTeX placeholders from wrapped table cells', () => {
-    _resetAnsiMarkdownForTests();
     const md = [
       '| Seed | n=0 | n=1 | Next exceeds bound? |',
       '|---|---|---|---|',
@@ -406,7 +387,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('memoises identical inputs (second call hits the cache)', () => {
-    _resetAnsiMarkdownForTests();
     const first = renderAnsiMarkdown('# Title\n\nParagraph.');
     const before = _ansiMarkdownStatsForTests();
     const second = renderAnsiMarkdown('# Title\n\nParagraph.');
@@ -422,7 +402,6 @@ describe('renderAnsiMarkdown', () => {
   // emphasis rule eats `_{…}` subscripts. The CLI shows LaTeX source verbatim,
   // so whole spans must survive untouched.
   it('preserves \\(…\\) and \\[…\\] math delimiter spans verbatim', () => {
-    _resetAnsiMarkdownForTests();
     const out = stripAnsi(
       renderAnsiMarkdown(
         'Euler: \\(e^{i\\pi}+1=0\\) and \\[a \\; = \\; b\\] done',
@@ -433,7 +412,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('preserves $…$ and $$…$$ spans incl. subscripts (no emphasis) and backslash-braces', () => {
-    _resetAnsiMarkdownForTests();
     const out = stripAnsi(
       renderAnsiMarkdown(
         'Pairs $a_{i}b_{j}$ and $$P_k = \\{2k-1,\\; 2k\\}$$ end',
@@ -447,7 +425,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('nets stray spacing macros / literal braces outside any math span', () => {
-    _resetAnsiMarkdownForTests();
     const out = stripAnsi(
       renderAnsiMarkdown('loose \\; macro and set \\{1,2\\}'),
     );
@@ -456,7 +433,6 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('still honours genuine markdown backslash-escapes outside the LaTeX set', () => {
-    _resetAnsiMarkdownForTests();
     const out = stripAnsi(renderAnsiMarkdown('a \\* b and \\$ c'));
     // `\*` and `\$` carry real markdown-escape meaning — leave them stripped.
     expect(out).toContain('a * b and $ c');
@@ -468,7 +444,6 @@ describe('renderAnsiMarkdown', () => {
   // the span and cascades into later `$`. With both delimiters guarded, the
   // fragment isn't protected — markdown handles `\$` → `$` instead.
   it('does not treat an escaped \\$ as a closing math delimiter', () => {
-    _resetAnsiMarkdownForTests();
     const out = stripAnsi(renderAnsiMarkdown('A price $a = \\$5$ here'));
     expect(out).not.toContain('$a = \\$');
     expect(out).toContain('here');

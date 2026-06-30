@@ -33,6 +33,18 @@ function createRuntimeHost(): {
   };
 }
 
+function outputEvent(stdout: string, stderr: string) {
+  return {
+    event: 'updateProcessOutput',
+    payload: {
+      parentStreamId: 'parent-stream',
+      executionId: 'exec-1',
+      stdout,
+      stderr,
+    },
+  };
+}
+
 async function makeProcessHandle(
   runtimeHost: AgentRuntimeHost,
   options: {
@@ -95,24 +107,8 @@ describe('ProcessOutputPoller', () => {
     await poller.flush(handle, host);
 
     expect(events).toEqual([
-      {
-        event: 'updateProcessOutput',
-        payload: {
-          parentStreamId: 'parent-stream',
-          executionId: 'exec-1',
-          stdout: 'out-1',
-          stderr: 'err-1',
-        },
-      },
-      {
-        event: 'updateProcessOutput',
-        payload: {
-          parentStreamId: 'parent-stream',
-          executionId: 'exec-1',
-          stdout: 'out-2',
-          stderr: 'err-2',
-        },
-      },
+      outputEvent('out-1', 'err-1'),
+      outputEvent('out-2', 'err-2'),
     ]);
   });
 
@@ -131,24 +127,8 @@ describe('ProcessOutputPoller', () => {
     await delay(550);
 
     expect(events).toEqual([
-      {
-        event: 'updateProcessOutput',
-        payload: {
-          parentStreamId: 'parent-stream',
-          executionId: 'exec-1',
-          stdout: 'out-1',
-          stderr: 'err-1',
-        },
-      },
-      {
-        event: 'updateProcessOutput',
-        payload: {
-          parentStreamId: 'parent-stream',
-          executionId: 'exec-1',
-          stdout: 'out-2',
-          stderr: 'err-2',
-        },
-      },
+      outputEvent('out-1', 'err-1'),
+      outputEvent('out-2', 'err-2'),
     ]);
   });
 
@@ -165,24 +145,8 @@ describe('ProcessOutputPoller', () => {
     }
 
     expect(events).toEqual([
-      {
-        event: 'updateProcessOutput',
-        payload: {
-          parentStreamId: 'parent-stream',
-          executionId: 'exec-1',
-          stdout: 'out-1',
-          stderr: 'err-1',
-        },
-      },
-      {
-        event: 'updateProcessOutput',
-        payload: {
-          parentStreamId: 'parent-stream',
-          executionId: 'exec-1',
-          stdout: 'out-1',
-          stderr: 'err-1',
-        },
-      },
+      outputEvent('out-1', 'err-1'),
+      outputEvent('out-1', 'err-1'),
     ]);
   });
 
@@ -196,16 +160,6 @@ describe('ProcessOutputPoller', () => {
 
     await poller.flush(handle, host);
 
-    expect(events).toEqual([
-      {
-        event: 'updateProcessOutput',
-        payload: {
-          parentStreamId: 'parent-stream',
-          executionId: 'exec-1',
-          stdout: '\uFFFD',
-          stderr: '',
-        },
-      },
-    ]);
+    expect(events).toEqual([outputEvent('\uFFFD', '')]);
   });
 });

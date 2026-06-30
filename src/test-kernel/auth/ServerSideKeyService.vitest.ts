@@ -108,23 +108,34 @@ function createAuthProvider(
   };
 }
 
+function createQuotaExceededSetup(): {
+  state: MemoryState;
+  tier: FakeTierService;
+  service: ServerSideKeyService;
+} {
+  const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: true });
+  const tier = createTierService({
+    providers: ['openai'],
+    quotaExceeded: true,
+  });
+  const service = new ServerSideKeyService(
+    'https://example.test',
+    createAuthProvider({
+      authenticated: true,
+      tier: ULTRA_TIER,
+      accessToken: 'token',
+    }),
+    tier.service,
+  );
+
+  service.initialize({ state });
+
+  return { state, tier, service };
+}
+
 describe('ServerSideKeyService quota fallback', () => {
   it('does not repeat the quota auto-switch after manual re-enable', async () => {
-    const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: true });
-    const service = new ServerSideKeyService(
-      'https://example.test',
-      createAuthProvider({
-        authenticated: true,
-        tier: ULTRA_TIER,
-        accessToken: 'token',
-      }),
-      createTierService({
-        providers: ['openai'],
-        quotaExceeded: true,
-      }).service,
-    );
-
-    service.initialize({ state });
+    const { service } = createQuotaExceededSetup();
 
     expect(await service.canUseServerSideKeys()).toBe(false);
     await delay(0);
@@ -146,22 +157,7 @@ describe('ServerSideKeyService quota fallback', () => {
   });
 
   it('preserves the spending-status cache after quota auto-switch', async () => {
-    const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: true });
-    const tier = createTierService({
-      providers: ['openai'],
-      quotaExceeded: true,
-    });
-    const service = new ServerSideKeyService(
-      'https://example.test',
-      createAuthProvider({
-        authenticated: true,
-        tier: ULTRA_TIER,
-        accessToken: 'token',
-      }),
-      tier.service,
-    );
-
-    service.initialize({ state });
+    const { tier, service } = createQuotaExceededSetup();
 
     expect(await service.canUseServerSideKeys()).toBe(false);
     expect(service.getUseIncludedModelAccess()).toBe(false);

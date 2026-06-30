@@ -61,47 +61,54 @@ class FakeDesktopProtocolApp implements DesktopProtocolApp {
 }
 
 describe('desktop protocol callback lifecycle', () => {
-  it('keeps normal launches behind the single-instance lock', () => {
-    const app = new FakeDesktopProtocolApp({ lockAvailable: false });
-
-    const lifecycle = installDesktopProtocolCallbackLifecycle({
-      app,
-      argv: [],
-    });
-
-    assert.equal(lifecycle.shouldContinue, false);
-    assert.equal(app.requestCount, 1);
-    assert.equal(app.quitCount, 1);
-    assert.deepEqual(app.protocolRegistrations, []);
-  });
-
-  it('lets explicit new-window launches run as separate processes', () => {
-    const app = new FakeDesktopProtocolApp({ lockAvailable: false });
-
-    const lifecycle = installDesktopProtocolCallbackLifecycle({
-      app,
+  it.each([
+    {
+      name: 'keeps normal launches behind the single-instance lock',
+      lockAvailable: false,
+      argv: [] as string[],
+      shouldContinue: false,
+      requestCount: 1,
+      quitCount: 1,
+      protocolRegistrations: [] as string[],
+    },
+    {
+      name: 'lets explicit new-window launches run as separate processes',
+      lockAvailable: false,
       argv: ['--texra-new-window', '--texra-workspace-path=/Users/ray/paper'],
-    });
-
-    assert.equal(lifecycle.shouldContinue, true);
-    assert.equal(app.requestCount, 1);
-    assert.equal(app.quitCount, 0);
-    assert.deepEqual(app.protocolRegistrations, []);
-  });
-
-  it('lets explicit new-window launches become primary when no owner exists', () => {
-    const app = new FakeDesktopProtocolApp({ lockAvailable: true });
-
-    const lifecycle = installDesktopProtocolCallbackLifecycle({
-      app,
+      shouldContinue: true,
+      requestCount: 1,
+      quitCount: 0,
+      protocolRegistrations: [] as string[],
+    },
+    {
+      name: 'lets explicit new-window launches become primary when no owner exists',
+      lockAvailable: true,
       argv: ['--texra-new-window', '--texra-workspace-path=/Users/ray/paper'],
-    });
+      shouldContinue: true,
+      requestCount: 1,
+      quitCount: 0,
+      protocolRegistrations: ['texra'],
+    },
+  ])(
+    '$name',
+    ({
+      lockAvailable,
+      argv,
+      shouldContinue,
+      requestCount,
+      quitCount,
+      protocolRegistrations,
+    }) => {
+      const app = new FakeDesktopProtocolApp({ lockAvailable });
 
-    assert.equal(lifecycle.shouldContinue, true);
-    assert.equal(app.requestCount, 1);
-    assert.equal(app.quitCount, 0);
-    assert.deepEqual(app.protocolRegistrations, ['texra']);
-  });
+      const lifecycle = installDesktopProtocolCallbackLifecycle({ app, argv });
+
+      assert.equal(lifecycle.shouldContinue, shouldContinue);
+      assert.equal(app.requestCount, requestCount);
+      assert.equal(app.quitCount, quitCount);
+      assert.deepEqual(app.protocolRegistrations, protocolRegistrations);
+    },
+  );
 
   it('does not focus the primary window for explicit new-window probes', () => {
     const app = new FakeDesktopProtocolApp({ lockAvailable: true });

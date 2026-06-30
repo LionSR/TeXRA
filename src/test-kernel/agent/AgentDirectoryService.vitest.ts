@@ -128,37 +128,32 @@ describe('AgentDirectoryService', () => {
     assert.deepEqual(reporter.reports, []);
   });
 
-  it('falls back to the default custom directory for relative configured paths', async () => {
-    const { service, storage, reporter } = createService('relative/custom');
+  it.each([
+    {
+      name: 'relative configured paths',
+      customPath: 'relative/custom',
+      message: 'Custom agents directory must be an absolute path',
+    },
+    {
+      name: 'a missing configured parent',
+      customPath: MISSING_CUSTOM_PATH,
+      message: 'Parent directory for custom agents directory does not exist',
+    },
+  ])(
+    'falls back to the default custom directory for $name',
+    async ({ customPath, message }) => {
+      const { service, storage, reporter } = createService(customPath);
 
-    assert.equal(
-      await service.custom(),
-      path.join(STORAGE_BASE_PATH, 'custom_agents'),
-    );
-    assert.deepEqual(storage.ensured, ['custom_agents']);
-    assert.deepEqual(reporter.reports, [
-      {
-        message: 'Custom agents directory must be an absolute path',
-        docsId: 'custom-agents',
-      },
-    ]);
-  });
-
-  it('falls back to the default custom directory when the configured parent is missing', async () => {
-    const { service, storage, reporter } = createService(MISSING_CUSTOM_PATH);
-
-    assert.equal(
-      await service.custom(),
-      path.join(STORAGE_BASE_PATH, 'custom_agents'),
-    );
-    assert.deepEqual(storage.ensured, ['custom_agents']);
-    assert.deepEqual(reporter.reports, [
-      {
-        message: 'Parent directory for custom agents directory does not exist',
-        docsId: 'custom-agents',
-      },
-    ]);
-  });
+      assert.equal(
+        await service.custom(),
+        path.join(STORAGE_BASE_PATH, 'custom_agents'),
+      );
+      assert.deepEqual(storage.ensured, ['custom_agents']);
+      assert.deepEqual(reporter.reports, [
+        { message, docsId: 'custom-agents' },
+      ]);
+    },
+  );
 
   it('returns local directories in source-priority order', async () => {
     const { service } = createService(VALID_CUSTOM_PATH);

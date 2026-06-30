@@ -4,35 +4,30 @@ import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResu
 import { STREAM_STATUS } from '@shared/schemas';
 
 describe('shouldProbePersistedFlowForFollowUp', () => {
-  it('probes when no in-memory status is available', () => {
-    expect(shouldProbePersistedFlowForFollowUp(undefined)).toBe(true);
+  it.each([
+    { label: 'no in-memory status is available', status: undefined },
+    {
+      label: 'a terminal error status may still have a persisted flow record',
+      status: STREAM_STATUS.ERROR,
+    },
+    {
+      label: 'a terminal stopped status may still have a persisted flow record',
+      status: STREAM_STATUS.STOPPED,
+    },
+  ])('probes when $label', ({ status }) => {
+    expect(shouldProbePersistedFlowForFollowUp(status)).toBe(true);
   });
 
-  it('probes terminal statuses that may still have a persisted flow record', () => {
-    expect(shouldProbePersistedFlowForFollowUp(STREAM_STATUS.ERROR)).toBe(true);
-    expect(shouldProbePersistedFlowForFollowUp(STREAM_STATUS.STOPPED)).toBe(
-      true,
-    );
-  });
-
-  it('does not probe the explicit ready status', () => {
-    expect(shouldProbePersistedFlowForFollowUp(STREAM_STATUS.READY)).toBe(
-      false,
-    );
-  });
-
-  it('does not probe active or already waiting statuses', () => {
-    expect(
-      shouldProbePersistedFlowForFollowUp(STREAM_STATUS.INITIALIZING),
-    ).toBe(false);
-    expect(shouldProbePersistedFlowForFollowUp(STREAM_STATUS.RUNNING)).toBe(
-      false,
-    );
-    expect(shouldProbePersistedFlowForFollowUp(STREAM_STATUS.RESUMING)).toBe(
-      false,
-    );
-    expect(shouldProbePersistedFlowForFollowUp(STREAM_STATUS.WAITING)).toBe(
-      false,
-    );
+  it.each([
+    { label: 'the explicit ready status', status: STREAM_STATUS.READY },
+    {
+      label: 'the active initializing status',
+      status: STREAM_STATUS.INITIALIZING,
+    },
+    { label: 'the active running status', status: STREAM_STATUS.RUNNING },
+    { label: 'the active resuming status', status: STREAM_STATUS.RESUMING },
+    { label: 'the already waiting status', status: STREAM_STATUS.WAITING },
+  ])('does not probe $label', ({ status }) => {
+    expect(shouldProbePersistedFlowForFollowUp(status)).toBe(false);
   });
 });

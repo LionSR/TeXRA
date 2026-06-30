@@ -1,10 +1,7 @@
-// Standard library imports
 import { strict as assert } from 'node:assert';
 
-// Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - Supabase relay
 import { capOpenAIReasoningEffortForTier } from '../../../supabase/functions/relay/reasoning';
 import {
   FREE_TIER,
@@ -18,90 +15,69 @@ const TIER_CAPS = {
 } as const;
 
 describe('relay GPT-5 reasoning effort caps', () => {
-  it('caps chat-completions xhigh to medium for free tier GPT-5 requests', () => {
-    const body = {
-      model: 'gpt-5-mini-2025-08-15',
-      reasoning_effort: 'xhigh',
-    };
-
-    assert.deepEqual(
-      capOpenAIReasoningEffortForTier(body, {
-        provider: 'openai',
-        tier: FREE_TIER,
-        modelName: body.model,
-        tierCaps: TIER_CAPS,
-      }),
-      {
-        model: 'gpt-5-mini-2025-08-15',
-        reasoning_effort: 'medium',
+  it.each([
+    {
+      name: 'caps chat-completions xhigh to medium for free tier GPT-5 requests',
+      body: { model: 'gpt-5-mini-2025-08-15', reasoning_effort: 'xhigh' },
+      provider: 'openai',
+      tier: FREE_TIER,
+      expected: { model: 'gpt-5-mini-2025-08-15', reasoning_effort: 'medium' },
+    },
+    {
+      name: 'caps responses xhigh to high for Max tier GPT-5 requests',
+      body: {
+        model: 'openai/gpt5-mini',
+        reasoning: { effort: 'xhigh', summary: 'auto' },
       },
-    );
-  });
-
-  it('caps responses xhigh to high for Max tier GPT-5 requests', () => {
-    const body = {
-      model: 'openai/gpt5-mini',
-      reasoning: { effort: 'xhigh', summary: 'auto' },
-    };
-
-    assert.deepEqual(
-      capOpenAIReasoningEffortForTier(body, {
-        provider: 'openai',
-        tier: MAX_TIER,
-        modelName: body.model,
-        tierCaps: TIER_CAPS,
-      }),
-      {
+      provider: 'openai',
+      tier: MAX_TIER,
+      expected: {
         model: 'openai/gpt5-mini',
         reasoning: { effort: 'high', summary: 'auto' },
       },
+    },
+  ])('$name', ({ body, provider, tier, expected }) => {
+    assert.deepEqual(
+      capOpenAIReasoningEffortForTier(body, {
+        provider,
+        tier,
+        modelName: body.model,
+        tierCaps: TIER_CAPS,
+      }),
+      expected,
     );
   });
 
-  it('does not cap Ultra tier GPT-5 requests', () => {
-    const body = {
-      model: 'gpt-5-mini-2025-08-15',
-      reasoning_effort: 'xhigh',
-    };
-
+  // No cap applies, so the helper returns the exact same body reference
+  // (asserted via identity equality, not deep equality).
+  it.each([
+    {
+      name: 'does not cap Ultra tier GPT-5 requests',
+      body: { model: 'gpt-5-mini-2025-08-15', reasoning_effort: 'xhigh' },
+      provider: 'openai',
+      tier: ULTRA_TIER,
+    },
+    {
+      name: 'does not cap non-GPT-5 requests',
+      body: { model: 'gpt-4.1', reasoning_effort: 'xhigh' },
+      provider: 'openai',
+      tier: FREE_TIER,
+    },
+    {
+      name: 'does not cap non-OpenAI requests',
+      body: { model: 'gpt-5-mini-2025-08-15', reasoning_effort: 'xhigh' },
+      provider: 'deepseek',
+      tier: FREE_TIER,
+    },
+  ])('$name', ({ body, provider, tier }) => {
     assert.equal(
       capOpenAIReasoningEffortForTier(body, {
-        provider: 'openai',
-        tier: ULTRA_TIER,
+        provider,
+        tier,
         modelName: body.model,
         tierCaps: TIER_CAPS,
       }),
       body,
-    );
-  });
-
-  it('does not cap non-GPT-5 or non-OpenAI requests', () => {
-    const nonGpt5Body = {
-      model: 'gpt-4.1',
-      reasoning_effort: 'xhigh',
-    };
-    const nonOpenAIBody = {
-      model: 'gpt-5-mini-2025-08-15',
-      reasoning_effort: 'xhigh',
-    };
-
-    assert.equal(
-      capOpenAIReasoningEffortForTier(nonGpt5Body, {
-        provider: 'openai',
-        tier: FREE_TIER,
-        modelName: nonGpt5Body.model,
-        tierCaps: TIER_CAPS,
-      }),
-      nonGpt5Body,
-    );
-    assert.equal(
-      capOpenAIReasoningEffortForTier(nonOpenAIBody, {
-        provider: 'deepseek',
-        tier: FREE_TIER,
-        modelName: nonOpenAIBody.model,
-        tierCaps: TIER_CAPS,
-      }),
-      nonOpenAIBody,
     );
   });
 });

@@ -31,6 +31,24 @@ type ModelsTabElement = LitTestElement & {
   reliabilitySettings: typeof reliabilitySettings;
 };
 
+async function mountModelsTab(): Promise<ModelsTabElement> {
+  const tab = document.createElement('models-tab') as ModelsTabElement;
+  tab.reliabilitySettings = reliabilitySettings;
+  document.body.append(tab);
+  await tab.updateComplete;
+  return tab;
+}
+
+async function getReliabilitySection(
+  tab: ModelsTabElement,
+): Promise<LitTestElement | null> {
+  const section = tab.shadowRoot?.querySelector(
+    'reliability-settings-section',
+  ) as LitTestElement | null;
+  await section?.updateComplete;
+  return section;
+}
+
 describe('settings reliability placement', () => {
   useLitComponentTestDom(async () => {
     await import('@settingsView/frontend/tabs/ModelsTab');
@@ -38,17 +56,10 @@ describe('settings reliability placement', () => {
   });
 
   it('shows reliability settings at the bottom of the Models tab', async () => {
-    const tab = document.createElement('models-tab') as ModelsTabElement;
-    tab.reliabilitySettings = reliabilitySettings;
-    document.body.append(tab);
-
-    await tab.updateComplete;
-    const section = tab.shadowRoot?.querySelector(
-      'reliability-settings-section',
-    ) as LitTestElement | null;
+    const tab = await mountModelsTab();
+    const section = await getReliabilitySection(tab);
 
     expect(section).not.toBeNull();
-    await section?.updateComplete;
     expect(section?.shadowRoot?.textContent).toContain('Reliability');
     expect(section?.shadowRoot?.textContent).toContain('Retry attempts');
   });
@@ -64,20 +75,14 @@ describe('settings reliability placement', () => {
   });
 
   it('emits numeric reliability changes through the existing VS Code setting event', async () => {
-    const tab = document.createElement('models-tab') as ModelsTabElement;
-    tab.reliabilitySettings = reliabilitySettings;
-    document.body.append(tab);
-    await tab.updateComplete;
+    const tab = await mountModelsTab();
 
     const events: unknown[] = [];
     tab.addEventListener('provider-vscode-setting-set', (event) => {
       events.push((event as CustomEvent).detail);
     });
 
-    const section = tab.shadowRoot?.querySelector(
-      'reliability-settings-section',
-    ) as LitTestElement | null;
-    await section?.updateComplete;
+    const section = await getReliabilitySection(tab);
 
     const input = section?.shadowRoot?.querySelector('wa-input') as
       | (HTMLElement & { value: string })

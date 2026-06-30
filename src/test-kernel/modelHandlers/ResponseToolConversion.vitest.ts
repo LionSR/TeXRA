@@ -1,10 +1,8 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
-
 // Standard library imports
+import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { describe, it } from 'vitest';
 import { z } from 'zod';
 
 // Local imports - test
@@ -121,52 +119,62 @@ describe('toOpenAIResponseTools', () => {
     });
   });
 
-  it('converts web_search to native WebSearchTool when supportsNativeWebSearch is true', () => {
-    const defs: ToolDefinition[] = [
-      {
-        name: 'web_search',
-        description: 'Search the web',
+  // web_search collapses to the native WebSearchTool when (and only when) the
+  // model supports it, regardless of whether function calling is also enabled.
+  it.each([
+    {
+      label:
+        'converts web_search to native WebSearchTool when supportsNativeWebSearch is true',
+      defs: [{ name: 'web_search', description: 'Search the web' }],
+      options: { supportsNativeWebSearch: true },
+    },
+    {
+      label:
+        'keeps native web_search when supportsFunctionCalling is false and supportsNativeWebSearch is true',
+      defs: [
+        { name: 'web_search', description: 'Search the web' },
+        { name: 'read_file', description: 'Read a file' },
+      ],
+      options: {
+        supportsFunctionCalling: false,
+        supportsNativeWebSearch: true,
       },
-    ];
-
-    const tools = toOpenAIResponseTools(defs, {
-      supportsNativeWebSearch: true,
-    });
+    },
+  ])('$label', ({ defs, options }) => {
+    const tools = toOpenAIResponseTools(defs as ToolDefinition[], options);
     assert.equal(tools.length, 1);
     assert.equal(tools[0].type, 'web_search');
   });
 
-  it('keeps web_search as function tool when supportsNativeWebSearch is false', () => {
-    const defs: ToolDefinition[] = [
-      {
-        name: 'web_search',
-        description: 'Search the web',
-      },
-    ];
-
-    const tools = toOpenAIResponseTools(defs, {
-      supportsNativeWebSearch: false,
-    });
+  // Any tool stays a plain function tool when native web search is off, which is
+  // also the default for both options.
+  it.each([
+    {
+      label:
+        'keeps web_search as function tool when supportsNativeWebSearch is false',
+      def: { name: 'web_search', description: 'Search the web' },
+      options: { supportsNativeWebSearch: false },
+    },
+    {
+      label: 'defaults supportsNativeWebSearch to false',
+      def: { name: 'web_search', description: 'Search the web' },
+      options: undefined,
+    },
+    {
+      label: 'defaults supportsFunctionCalling to true',
+      def: { name: 'custom_tool', description: 'A custom function tool' },
+      options: undefined,
+    },
+  ])('$label', ({ def, options }) => {
+    const defs: ToolDefinition[] = [def];
+    // The default cases call with no options argument, exactly as before.
+    const tools = options
+      ? toOpenAIResponseTools(defs, options)
+      : toOpenAIResponseTools(defs);
     assert.equal(tools.length, 1);
     const tool = tools[0] as FunctionTool;
     assert.equal(tool.type, 'function');
-    assert.equal(tool.name, 'web_search');
-  });
-
-  it('defaults supportsNativeWebSearch to false', () => {
-    const defs: ToolDefinition[] = [
-      {
-        name: 'web_search',
-        description: 'Search the web',
-      },
-    ];
-
-    // No options passed - should default to function tool
-    const tools = toOpenAIResponseTools(defs);
-    assert.equal(tools.length, 1);
-    const tool = tools[0] as FunctionTool;
-    assert.equal(tool.type, 'function');
-    assert.equal(tool.name, 'web_search');
+    assert.equal(tool.name, def.name);
   });
 
   it('filters out function tools when supportsFunctionCalling is false', () => {
@@ -186,50 +194,11 @@ describe('toOpenAIResponseTools', () => {
       },
     ];
 
-    // Deep research models don't support function calling
+    // Deep research models don't support function calling, so both drop out.
     const tools = toOpenAIResponseTools(defs, {
       supportsFunctionCalling: false,
     });
-    // Both read_file and write_file should be filtered out
     assert.equal(tools.length, 0);
-  });
-
-  it('keeps native web_search when supportsFunctionCalling is false and supportsNativeWebSearch is true', () => {
-    const defs: ToolDefinition[] = [
-      {
-        name: 'web_search',
-        description: 'Search the web',
-      },
-      {
-        name: 'read_file',
-        description: 'Read a file',
-      },
-    ];
-
-    // Deep research models support native web search but not function calling
-    const tools = toOpenAIResponseTools(defs, {
-      supportsFunctionCalling: false,
-      supportsNativeWebSearch: true,
-    });
-    // Only web_search should remain as native tool
-    assert.equal(tools.length, 1);
-    assert.equal(tools[0].type, 'web_search');
-  });
-
-  it('defaults supportsFunctionCalling to true', () => {
-    const defs: ToolDefinition[] = [
-      {
-        name: 'custom_tool',
-        description: 'A custom function tool',
-      },
-    ];
-
-    // No options passed - function calling should be allowed by default
-    const tools = toOpenAIResponseTools(defs);
-    assert.equal(tools.length, 1);
-    const tool = tools[0] as FunctionTool;
-    assert.equal(tool.type, 'function');
-    assert.equal(tool.name, 'custom_tool');
   });
 });
 
@@ -243,90 +212,68 @@ describe('toGoogleTools', () => {
     assert.deepEqual(tools, []);
   });
 
-  it('converts function declarations to single tool object', () => {
-    const defs: ToolDefinition[] = [
-      {
-        name: 'read_file',
-        description: 'Read a file',
-        parameters: {
-          type: 'object',
-          properties: { path: { type: 'string' } },
-          required: ['path'],
+  // Every tool (including web_search) becomes a function declaration wrapped in a
+  // single Tool object; native googleSearch is never emitted.
+  it.each([
+    {
+      label: 'converts function declarations to single tool object',
+      defs: [
+        {
+          name: 'read_file',
+          description: 'Read a file',
+          parameters: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+          },
         },
-      },
-    ];
-
-    const tools = toGoogleTools(defs);
+      ],
+      names: ['read_file'],
+    },
+    {
+      label:
+        'converts web_search to function declaration (native googleSearch disabled)',
+      defs: [{ name: 'web_search', description: 'Search the web' }],
+      names: ['web_search'],
+    },
+    {
+      label: 'converts all tools to function declarations',
+      defs: [
+        { name: 'web_search', description: 'Search the web' },
+        {
+          name: 'read_file',
+          description: 'Read a file',
+          parameters: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+          },
+        },
+        {
+          name: 'write_file',
+          description: 'Write a file',
+          parameters: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+              content: { type: 'string' },
+            },
+            required: ['path', 'content'],
+          },
+        },
+      ],
+      names: ['web_search', 'read_file', 'write_file'],
+    },
+  ])('$label', ({ defs, names }) => {
+    const tools = toGoogleTools(defs as ToolDefinition[]);
     assert.equal(tools.length, 1);
     const tool = tools[0] as GeminiTool;
+    assert.equal(tool.googleSearch, undefined);
     assert.ok(tool.functionDeclarations);
-    assert.equal(tool.functionDeclarations?.length, 1);
-    assert.equal(tool.functionDeclarations?.[0].name, 'read_file');
-    assert.equal(tool.googleSearch, undefined);
-  });
-
-  it('converts web_search to function declaration (native googleSearch disabled)', () => {
-    // Native googleSearch is disabled because it cannot be combined with
-    // function calling in Google's regular API (Live API only feature)
-    const defs: ToolDefinition[] = [
-      {
-        name: 'web_search',
-        description: 'Search the web',
-      },
-    ];
-
-    const tools = toGoogleTools(defs);
-    assert.equal(tools.length, 1);
-    const tool = tools[0] as GeminiTool;
-    // Should be function declaration, NOT native googleSearch
-    assert.ok(tool.functionDeclarations);
-    assert.equal(tool.functionDeclarations?.length, 1);
-    assert.equal(tool.functionDeclarations?.[0].name, 'web_search');
-    assert.equal(tool.googleSearch, undefined);
-  });
-
-  it('converts all tools to function declarations', () => {
-    const defs: ToolDefinition[] = [
-      {
-        name: 'web_search',
-        description: 'Search the web',
-      },
-      {
-        name: 'read_file',
-        description: 'Read a file',
-        parameters: {
-          type: 'object',
-          properties: { path: { type: 'string' } },
-          required: ['path'],
-        },
-      },
-      {
-        name: 'write_file',
-        description: 'Write a file',
-        parameters: {
-          type: 'object',
-          properties: { path: { type: 'string' }, content: { type: 'string' } },
-          required: ['path', 'content'],
-        },
-      },
-    ];
-
-    const tools = toGoogleTools(defs);
-    assert.equal(tools.length, 1);
-    const tool = tools[0] as GeminiTool;
-
-    // Check that googleSearch is NOT present
-    assert.equal(tool.googleSearch, undefined);
-
-    // Check that all tools are converted to function declarations
-    assert.ok(
-      tool.functionDeclarations,
-      'Expected functionDeclarations to be present',
+    assert.deepEqual(
+      tool.functionDeclarations?.map((fd) => fd.name),
+      names,
     );
-    assert.equal(tool.functionDeclarations?.length, 3);
-    assert.equal(tool.functionDeclarations?.[0].name, 'web_search');
-    assert.equal(tool.functionDeclarations?.[1].name, 'read_file');
-    assert.equal(tool.functionDeclarations?.[2].name, 'write_file');
   });
 
   it('flattens top-level discriminated unions into a single object schema', () => {

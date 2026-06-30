@@ -4,19 +4,21 @@ import { createCliStyle } from '@cli/runtime/style';
 
 const ESC = '\u001b';
 
+const STYLE_METHODS = [
+  'success',
+  'warn',
+  'error',
+  'emphasis',
+  'muted',
+  'command',
+] as const;
+
 describe('createCliStyle', () => {
   it('wraps text in SGR escapes when enabled', () => {
     const style = createCliStyle(true);
     expect(style.enabled).toBe(true);
-    for (const fn of [
-      style.success,
-      style.warn,
-      style.error,
-      style.emphasis,
-      style.muted,
-      style.command,
-    ]) {
-      const out = fn('text');
+    for (const method of STYLE_METHODS) {
+      const out = style[method]('text');
       // Styled output keeps the original text but adds opening/closing escapes.
       expect(out).toContain('text');
       expect(out.startsWith(ESC)).toBe(true);
@@ -27,15 +29,8 @@ describe('createCliStyle', () => {
   it('is identity (no escapes) when disabled', () => {
     const style = createCliStyle(false);
     expect(style.enabled).toBe(false);
-    for (const fn of [
-      style.success,
-      style.warn,
-      style.error,
-      style.emphasis,
-      style.muted,
-      style.command,
-    ]) {
-      expect(fn('text')).toBe('text');
+    for (const method of STYLE_METHODS) {
+      expect(style[method]('text')).toBe('text');
     }
   });
 });

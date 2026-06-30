@@ -12,6 +12,18 @@ import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 // Local imports - file utilities
 import { createExternalLocation, createRunStorageLocation } from '@utils/files';
 
+async function writePdf(filePath: string, contents: string): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, contents);
+}
+
+function readOutput(
+  runDirectory: string,
+  ...segments: string[]
+): Promise<string> {
+  return readFile(path.join(runDirectory, 'output', ...segments), 'utf8');
+}
+
 describe('compiled PDF artifacts', () => {
   const tempDirs: string[] = [];
 
@@ -43,8 +55,7 @@ describe('compiled PDF artifacts', () => {
     const runDirectory = await makeTempDir();
     const buildDir = path.join(runDirectory, 'compile', 'build', 'r2', 'paper');
     const compiledPdfPath = path.join(buildDir, 'paper.pdf');
-    await mkdir(buildDir, { recursive: true });
-    await writeFile(compiledPdfPath, 'pdf bytes');
+    await writePdf(compiledPdfPath, 'pdf bytes');
 
     const artifact = await publishCompiledPdfArtifact({
       runDirectory,
@@ -59,23 +70,19 @@ describe('compiled PDF artifacts', () => {
 
     expect(artifact?.pdf.relativePath).toBe('output/r2/paper.pdf');
     expect(artifact?.latestPdf.relativePath).toBe('output/latest/paper.pdf');
-    await expect(
-      readFile(path.join(runDirectory, 'output', 'r2', 'paper.pdf'), 'utf8'),
-    ).resolves.toBe('pdf bytes');
-    await expect(
-      readFile(
-        path.join(runDirectory, 'output', 'latest', 'paper.pdf'),
-        'utf8',
-      ),
-    ).resolves.toBe('pdf bytes');
+    await expect(readOutput(runDirectory, 'r2', 'paper.pdf')).resolves.toBe(
+      'pdf bytes',
+    );
+    await expect(readOutput(runDirectory, 'latest', 'paper.pdf')).resolves.toBe(
+      'pdf bytes',
+    );
   });
 
   it('allows callers to publish diff PDFs with canonical names', async () => {
     const runDirectory = await makeTempDir();
     const buildDir = path.join(runDirectory, 'diff', 'r1', 'build');
     const compiledPdfPath = path.join(buildDir, 'output-diff.pdf');
-    await mkdir(buildDir, { recursive: true });
-    await writeFile(compiledPdfPath, 'diff pdf');
+    await writePdf(compiledPdfPath, 'diff pdf');
 
     const artifact = await publishCompiledPdfArtifact({
       runDirectory,
@@ -97,8 +104,7 @@ describe('compiled PDF artifacts', () => {
     const runDirectory = await makeTempDir();
     const buildDir = path.join(runDirectory, 'diff', 'r4', 'build');
     const compiledPdfPath = path.join(buildDir, 'latexdiff-output.pdf');
-    await mkdir(buildDir, { recursive: true });
-    await writeFile(compiledPdfPath, 'diff pdf');
+    await writePdf(compiledPdfPath, 'diff pdf');
 
     const artifact = await publishCompiledPdfArtifact({
       runDirectory,
@@ -130,9 +136,8 @@ describe('compiled PDF artifacts', () => {
       path.join('r5', 'sections', 'main.tex'),
       'kind123',
     );
-    await mkdir(buildDir, { recursive: true });
-    await writeFile(baseDiffPdfPath, 'base diff');
-    await writeFile(roundDiffPdfPath, 'round diff');
+    await writePdf(baseDiffPdfPath, 'base diff');
+    await writePdf(roundDiffPdfPath, 'round diff');
 
     const baseDiff = await publishCompiledPdfArtifact({
       runDirectory,
@@ -158,22 +163,10 @@ describe('compiled PDF artifacts', () => {
       'output/r5/sections/main-round-diff.pdf',
     );
     await expect(
-      readFile(
-        path.join(runDirectory, 'output', 'r5', 'sections', 'main-diff.pdf'),
-        'utf8',
-      ),
+      readOutput(runDirectory, 'r5', 'sections', 'main-diff.pdf'),
     ).resolves.toBe('base diff');
     await expect(
-      readFile(
-        path.join(
-          runDirectory,
-          'output',
-          'r5',
-          'sections',
-          'main-round-diff.pdf',
-        ),
-        'utf8',
-      ),
+      readOutput(runDirectory, 'r5', 'sections', 'main-round-diff.pdf'),
     ).resolves.toBe('round diff');
   });
 
@@ -182,10 +175,8 @@ describe('compiled PDF artifacts', () => {
     const buildDir = path.join(runDirectory, 'compile', 'build', 'r3');
     const firstPdfPath = path.join(buildDir, 'ch1-main', 'main.pdf');
     const secondPdfPath = path.join(buildDir, 'ch2-main', 'main.pdf');
-    await mkdir(path.dirname(firstPdfPath), { recursive: true });
-    await mkdir(path.dirname(secondPdfPath), { recursive: true });
-    await writeFile(firstPdfPath, 'chapter 1');
-    await writeFile(secondPdfPath, 'chapter 2');
+    await writePdf(firstPdfPath, 'chapter 1');
+    await writePdf(secondPdfPath, 'chapter 2');
 
     const first = await publishCompiledPdfArtifact({
       runDirectory,
@@ -217,16 +208,10 @@ describe('compiled PDF artifacts', () => {
     expect(first?.latestPdf.relativePath).toBe('output/latest/ch1/main.pdf');
     expect(second?.latestPdf.relativePath).toBe('output/latest/ch2/main.pdf');
     await expect(
-      readFile(
-        path.join(runDirectory, 'output', 'r3', 'ch1', 'main.pdf'),
-        'utf8',
-      ),
+      readOutput(runDirectory, 'r3', 'ch1', 'main.pdf'),
     ).resolves.toBe('chapter 1');
     await expect(
-      readFile(
-        path.join(runDirectory, 'output', 'r3', 'ch2', 'main.pdf'),
-        'utf8',
-      ),
+      readOutput(runDirectory, 'r3', 'ch2', 'main.pdf'),
     ).resolves.toBe('chapter 2');
   });
 });

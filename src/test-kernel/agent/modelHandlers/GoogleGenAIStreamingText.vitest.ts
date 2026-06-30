@@ -76,6 +76,27 @@ function createStreamingHandler(
   return handler;
 }
 
+function createFakeClient(...chunks: GenerateContentResponse[]): any {
+  return {
+    chats: {
+      create: () => ({
+        sendMessageStream: async () =>
+          (async function* () {
+            for (const chunk of chunks) {
+              yield chunk;
+            }
+          })(),
+        sendMessage: async () => {
+          throw new Error(
+            'sendMessage should not be called when streaming is enabled',
+          );
+        },
+      }),
+    },
+    models: {},
+  };
+}
+
 describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
   it('does not read the Google SDK text getter for streamed function calls', async () => {
     const streamRecords: StreamRecord[] = [];
@@ -108,29 +129,12 @@ describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
       },
     });
 
-    const fakeClient = {
-      chats: {
-        create: () => ({
-          sendMessageStream: async () =>
-            (async function* () {
-              yield chunk;
-            })(),
-          sendMessage: async () => {
-            throw new Error(
-              'sendMessage should not be called when streaming is enabled',
-            );
-          },
-        }),
-      },
-      models: {},
-    } as any;
-
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('Hi there')] },
     ];
 
     const response = await handler.createResponse({
-      client: fakeClient,
+      client: createFakeClient(chunk),
       messages,
       temperature: 0,
     });
@@ -171,29 +175,12 @@ describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
       } as any,
     ];
 
-    const fakeClient = {
-      chats: {
-        create: () => ({
-          sendMessageStream: async () =>
-            (async function* () {
-              yield chunk;
-            })(),
-          sendMessage: async () => {
-            throw new Error(
-              'sendMessage should not be called when streaming is enabled',
-            );
-          },
-        }),
-      },
-      models: {},
-    } as any;
-
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('wait for subagent')] },
     ];
 
     const response = await handler.createResponse({
-      client: fakeClient,
+      client: createFakeClient(chunk),
       messages,
       temperature: 0,
     });
@@ -244,30 +231,12 @@ describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
       } as any,
     ];
 
-    const fakeClient = {
-      chats: {
-        create: () => ({
-          sendMessageStream: async () =>
-            (async function* () {
-              yield glyphChunk;
-              yield toolChunk;
-            })(),
-          sendMessage: async () => {
-            throw new Error(
-              'sendMessage should not be called when streaming is enabled',
-            );
-          },
-        }),
-      },
-      models: {},
-    } as any;
-
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('wait for subagent')] },
     ];
 
     const response = await handler.createResponse({
-      client: fakeClient,
+      client: createFakeClient(glyphChunk, toolChunk),
       messages,
       temperature: 0,
     });

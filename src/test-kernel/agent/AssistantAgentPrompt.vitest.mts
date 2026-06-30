@@ -35,22 +35,20 @@ function readAssistantAgent(): AssistantAgentYaml {
 }
 
 describe('assistant agent prompt', () => {
+  const agent = readAssistantAgent();
+  const { systemPrompt } = agent.prompts;
+
   it('is named assistant (renamed from chat)', () => {
-    expect(readAssistantAgent().name).toBe('assistant');
+    expect(agent.name).toBe('assistant');
   });
 
   it('owns general-purpose delegation guidance in the agent definition', () => {
-    const description = readAssistantAgent().description;
-
-    expect(description).toContain('General-purpose');
-    expect(description).toContain('Prefer a more specialized agent');
-    expect(description).toContain('pick assistant');
+    expect(agent.description).toContain('General-purpose');
+    expect(agent.description).toContain('Prefer a more specialized agent');
+    expect(agent.description).toContain('pick assistant');
   });
 
   it('uses TeXRA delegation for internal subagents instead of inquiry', () => {
-    const agent = readAssistantAgent();
-    const systemPrompt = agent.prompts.systemPrompt;
-
     expect(agent.settings.tools).toContain('delegate_agent');
     expect(agent.settings.tools).toContain('inquiry');
     expect(systemPrompt).toContain('Use `delegate_agent`');
@@ -58,9 +56,6 @@ describe('assistant agent prompt', () => {
   });
 
   it('mentions every declared tool family in the system prompt', () => {
-    const agent = readAssistantAgent();
-    const systemPrompt = agent.prompts.systemPrompt;
-
     for (const tool of [
       'wolfram',
       'zotero',

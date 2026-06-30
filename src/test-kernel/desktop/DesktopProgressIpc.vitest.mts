@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview command constants
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
@@ -40,8 +40,12 @@ function createProgress(
 }
 
 describe('desktop Progress IPC', () => {
+  let createDesktopProgressIpc: DesktopProgressIpcModule['createDesktopProgressIpc'];
+  beforeEach(async () => {
+    ({ createDesktopProgressIpc } = await loadDesktopProgressIpc());
+  });
+
   it('syncs Progress state on readiness while allowing shared view-state handling', async () => {
-    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
     const progress = createProgress();
     const ipc = createDesktopProgressIpc({ progress });
 
@@ -52,7 +56,6 @@ describe('desktop Progress IPC', () => {
   });
 
   it('dispatches recognized Progress commands through the bridge registry', async () => {
-    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
     const switchStream = vi.fn();
     const progress = createProgress({
       [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: switchStream,
@@ -72,7 +75,6 @@ describe('desktop Progress IPC', () => {
   });
 
   it('consumes recognized but unhandled commands with an explicit warning path', async () => {
-    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
     const onUnsupportedCommand = vi.fn();
     const ipc = createDesktopProgressIpc({
       progress: createProgress(),
@@ -92,7 +94,6 @@ describe('desktop Progress IPC', () => {
   });
 
   it('leaves shell-level pass-through commands for sibling desktop handlers', async () => {
-    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
     const onUnsupportedCommand = vi.fn();
     const ipc = createDesktopProgressIpc({
       progress: createProgress(),
@@ -109,7 +110,6 @@ describe('desktop Progress IPC', () => {
   });
 
   it('reports async registry failures through the desktop error path', async () => {
-    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
     const error = new Error('dispatch failed');
     const onAsyncError = vi.fn();
     const ipc = createDesktopProgressIpc({
@@ -130,7 +130,6 @@ describe('desktop Progress IPC', () => {
   });
 
   it('ignores invalid Progress IPC payloads', async () => {
-    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
     const ipc = createDesktopProgressIpc({ progress: createProgress() });
 
     expect(ipc.handleMessage({ command: 'not-a-progress-command' })).toBe(

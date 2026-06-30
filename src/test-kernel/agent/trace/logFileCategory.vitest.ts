@@ -53,49 +53,50 @@ describe('logFileCategory', () => {
     assert.equal(capturedMessages.length, 0);
   });
 
-  it('logs files with correct category label', () => {
-    logFileCategory(logger, 'Input Files', [
-      { path: '/path/to/file.tex', ok: true },
-    ]);
+  // Only files with `ok === true` count as loaded; missing/false/undefined
+  // `ok` are excluded from the numerator of the "Loading X (n/m)" label.
+  it.each<{
+    label: string;
+    files: { path: string; ok?: boolean }[];
+    expected: string;
+  }>([
+    {
+      label: 'Input Files',
+      files: [{ path: '/path/to/file.tex', ok: true }],
+      expected: 'Loading Input Files (1/1)',
+    },
+    {
+      label: 'Reference Files',
+      files: [
+        { path: '/path/exists.tex', ok: true },
+        { path: '/path/missing.tex', ok: false },
+        { path: '/path/also-exists.tex', ok: true },
+      ],
+      expected: 'Loading Reference Files (2/3)',
+    },
+    {
+      label: 'Auxiliary Files',
+      files: [
+        { path: '/path/exists.tex', ok: true },
+        { path: '/path/unknown.tex' }, // ok is undefined → not loaded
+      ],
+      expected: 'Loading Auxiliary Files (1/2)',
+    },
+    {
+      label: 'Media Files',
+      files: [
+        { path: '/path/missing1.png', ok: false },
+        { path: '/path/missing2.png', ok: false },
+      ],
+      expected: 'Loading Media Files (0/2)',
+    },
+  ])('logs "$expected"', ({ label, files, expected }) => {
+    logFileCategory(logger, label, files);
 
     refreshCaptured();
     assert.equal(capturedMessages.length, 1);
     assert.equal(capturedMessages[0].messageType, MESSAGE_TYPES.FILE_LIST);
-    assert.equal(capturedMessages[0].text, 'Loading Input Files (1/1)');
-  });
-
-  it('counts only files with ok === true as loaded', () => {
-    logFileCategory(logger, 'Reference Files', [
-      { path: '/path/exists.tex', ok: true },
-      { path: '/path/missing.tex', ok: false },
-      { path: '/path/also-exists.tex', ok: true },
-    ]);
-
-    refreshCaptured();
-    assert.equal(capturedMessages.length, 1);
-    assert.equal(capturedMessages[0].text, 'Loading Reference Files (2/3)');
-  });
-
-  it('treats undefined ok as false (not loaded)', () => {
-    logFileCategory(logger, 'Auxiliary Files', [
-      { path: '/path/exists.tex', ok: true },
-      { path: '/path/unknown.tex' }, // ok is undefined
-    ]);
-
-    refreshCaptured();
-    assert.equal(capturedMessages.length, 1);
-    assert.equal(capturedMessages[0].text, 'Loading Auxiliary Files (1/2)');
-  });
-
-  it('handles all files missing (none exist)', () => {
-    logFileCategory(logger, 'Media Files', [
-      { path: '/path/missing1.png', ok: false },
-      { path: '/path/missing2.png', ok: false },
-    ]);
-
-    refreshCaptured();
-    assert.equal(capturedMessages.length, 1);
-    assert.equal(capturedMessages[0].text, 'Loading Media Files (0/2)');
+    assert.equal(capturedMessages[0].text, expected);
   });
 
   it('includes source and sourceDisplay in entry data', () => {

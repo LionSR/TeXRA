@@ -14,12 +14,28 @@ interface TestActions {
   packed(input: { inputFile: string; agent: string }): void;
 }
 
+function makeActions(): TestActions {
+  return { noop: vi.fn(), packed: vi.fn() };
+}
+
+const PackArgs = z.object({
+  inputFile: z.string().min(1),
+  agent: z.string().min(1),
+});
+
+const packRegistry = {
+  'test.pack': definedHandler<TestActions, z.infer<typeof PackArgs>>(
+    PackArgs,
+    (a, args) => {
+      a.packed(args);
+      return true;
+    },
+  ),
+};
+
 describe('shared command registry', () => {
   it('dispatches legacy no-arg handlers', () => {
-    const actions: TestActions = {
-      noop: vi.fn(),
-      packed: vi.fn(),
-    };
+    const actions = makeActions();
     const registry = {
       'test.noop': (a: TestActions) => {
         a.noop();
@@ -38,7 +54,7 @@ describe('shared command registry', () => {
     const result = dispatchCommandFromRegistry(
       'test.missing',
       {} as Partial<Record<'test.missing', CommandHandler<TestActions>>>,
-      { noop: vi.fn(), packed: vi.fn() } satisfies TestActions,
+      makeActions(),
       onUnhandled,
     );
     expect(result).toBe(false);
@@ -46,29 +62,16 @@ describe('shared command registry', () => {
   });
 
   it('parses raw args through the typed handler schema', () => {
-    const actions: TestActions = {
-      noop: vi.fn(),
-      packed: vi.fn(),
-    };
-    const PackArgs = z.object({
-      inputFile: z.string().min(1),
-      agent: z.string().min(1),
-    });
-    const registry = {
-      'test.pack': definedHandler<TestActions, z.infer<typeof PackArgs>>(
-        PackArgs,
-        (a, args) => {
-          a.packed(args);
-          return true;
-        },
-      ),
-    };
+    const actions = makeActions();
 
     expect(
-      dispatchCommandFromRegistry('test.pack', registry, actions, undefined, {
-        inputFile: 'main.tex',
-        agent: 'editor',
-      }),
+      dispatchCommandFromRegistry(
+        'test.pack',
+        packRegistry,
+        actions,
+        undefined,
+        { inputFile: 'main.tex', agent: 'editor' },
+      ),
     ).toBe(true);
     expect(actions.packed).toHaveBeenCalledExactlyOnceWith({
       inputFile: 'main.tex',
@@ -77,30 +80,17 @@ describe('shared command registry', () => {
   });
 
   it('reports schema-failed args as unhandled rather than crashing', () => {
-    const actions: TestActions = {
-      noop: vi.fn(),
-      packed: vi.fn(),
-    };
-    const PackArgs = z.object({
-      inputFile: z.string().min(1),
-      agent: z.string().min(1),
-    });
-    const registry = {
-      'test.pack': definedHandler<TestActions, z.infer<typeof PackArgs>>(
-        PackArgs,
-        (a, args) => {
-          a.packed(args);
-          return true;
-        },
-      ),
-    };
+    const actions = makeActions();
     const onUnhandled = vi.fn();
 
     expect(
-      dispatchCommandFromRegistry('test.pack', registry, actions, onUnhandled, {
-        inputFile: '',
-        agent: 'editor',
-      }),
+      dispatchCommandFromRegistry(
+        'test.pack',
+        packRegistry,
+        actions,
+        onUnhandled,
+        { inputFile: '', agent: 'editor' },
+      ),
     ).toBe(false);
     expect(actions.packed).not.toHaveBeenCalled();
     expect(onUnhandled).toHaveBeenCalledExactlyOnceWith('test.pack');
