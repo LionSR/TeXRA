@@ -277,7 +277,6 @@ interface PendingStep {
 export class ModelHandlerGoogleInteractions extends ModelHandler<
   Step,
   Usage | null,
-  Usage,
   GoogleToolCall,
   GoogleGenAI,
   GoogleGenAIInteraction
