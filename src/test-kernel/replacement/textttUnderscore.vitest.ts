@@ -10,32 +10,34 @@ import { applyReplacements } from '@replacement/engine';
 import { EQUATION_STYLE_REPLACEMENTS } from '@replacement/rulesRegex';
 
 describe('escapeTextttUnderscores', () => {
-  it('escapes bare underscores inside texttt blocks', () => {
-    const input = '\\texttt{ch:BELIEF_PROP}';
-    const expected = '\\texttt{ch:BELIEF\\_PROP}';
+  it.each([
+    {
+      name: 'escapes bare underscores inside texttt blocks',
+      input: '\\texttt{ch:BELIEF_PROP}',
+      expected: '\\texttt{ch:BELIEF\\_PROP}',
+    },
+    {
+      name: 'escapes multiple bare underscores',
+      input: '\\texttt{multi_part_identifier}',
+      expected: '\\texttt{multi\\_part\\_identifier}',
+    },
+    {
+      name: 'preserves already escaped underscores',
+      input: '\\texttt{already\\_escaped}',
+      expected: '\\texttt{already\\_escaped}',
+    },
+    {
+      name: 'handles underscores adjacent to braces',
+      input: '\\texttt{outer_{inner_value}}',
+      expected: '\\texttt{outer\\_{inner\\_value}}',
+    },
+    {
+      name: 'leaves content without texttt unchanged',
+      input: 'plain_text_with_underscores',
+      expected: 'plain_text_with_underscores',
+    },
+  ])('$name', ({ input, expected }) => {
     assert.strictEqual(escapeTextttUnderscores(input), expected);
-  });
-
-  it('escapes multiple bare underscores', () => {
-    const input = '\\texttt{multi_part_identifier}';
-    const expected = '\\texttt{multi\\_part\\_identifier}';
-    assert.strictEqual(escapeTextttUnderscores(input), expected);
-  });
-
-  it('preserves already escaped underscores', () => {
-    const input = '\\texttt{already\\_escaped}';
-    assert.strictEqual(escapeTextttUnderscores(input), input);
-  });
-
-  it('handles underscores adjacent to braces', () => {
-    const input = '\\texttt{outer_{inner_value}}';
-    const expected = '\\texttt{outer\\_{inner\\_value}}';
-    assert.strictEqual(escapeTextttUnderscores(input), expected);
-  });
-
-  it('leaves content without texttt unchanged', () => {
-    const input = 'plain_text_with_underscores';
-    assert.strictEqual(escapeTextttUnderscores(input), input);
   });
 });
 

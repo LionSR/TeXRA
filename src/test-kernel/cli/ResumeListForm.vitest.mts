@@ -23,59 +23,46 @@ describe('CLI ResumeListForm row budget', () => {
 });
 
 describe('CLI ResumeListForm labels', () => {
-  it('summarizes the execution facts needed to choose a run', () => {
-    expect(
-      resumeEntryDescription({
-        id: 'abc',
-        timestamp: '2026-05-20T21:00:00.000Z',
-        agent: 'polish',
-        model: 'deepseekT',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
-        inputBasename: 'paper.tex',
-      }),
-    ).toBe('2026-05-20T21:00:00.000Z; polish; resumable; paper.tex');
-  });
+  const TIMESTAMP = '2026-05-20T21:00:00.000Z';
 
-  it('uses human wording for sessions without an input file', () => {
+  it.each([
+    {
+      name: 'summarizes the execution facts needed to choose a run',
+      agent: 'polish',
+      inputBasename: 'paper.tex',
+      expected: `${TIMESTAMP}; polish; resumable; paper.tex`,
+    },
+    {
+      name: 'uses human wording for sessions without an input file',
+      agent: 'chat',
+      inputBasename: '-',
+      expected: `${TIMESTAMP}; chat; resumable; no input`,
+    },
+    {
+      name: 'uses the history description for sessions without an input file',
+      agent: 'chat',
+      inputBasename: '-',
+      description: 'Sketching inductive Lean proof of Nat.add_comm.',
+      expected: `${TIMESTAMP}; chat; resumable; Sketching inductive Lean proof of Nat.add_comm.`,
+    },
+    {
+      name: 'keeps input file names ahead of history descriptions',
+      agent: 'polish',
+      inputBasename: 'paper.tex',
+      description: 'Rewrite the introduction.',
+      expected: `${TIMESTAMP}; polish; resumable; paper.tex`,
+    },
+  ])('$name', ({ agent, inputBasename, description, expected }) => {
     expect(
       resumeEntryDescription({
         id: 'abc',
-        timestamp: '2026-05-20T21:00:00.000Z',
-        agent: 'chat',
+        timestamp: TIMESTAMP,
+        agent,
         model: 'deepseekT',
         status: CLI_HISTORY_RESUMABLE_STATUS,
-        inputBasename: '-',
+        inputBasename,
+        description,
       }),
-    ).toBe('2026-05-20T21:00:00.000Z; chat; resumable; no input');
-  });
-
-  it('uses the history description for sessions without an input file', () => {
-    expect(
-      resumeEntryDescription({
-        id: 'abc',
-        timestamp: '2026-05-20T21:00:00.000Z',
-        agent: 'chat',
-        model: 'deepseekT',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
-        inputBasename: '-',
-        description: 'Sketching inductive Lean proof of Nat.add_comm.',
-      }),
-    ).toBe(
-      '2026-05-20T21:00:00.000Z; chat; resumable; Sketching inductive Lean proof of Nat.add_comm.',
-    );
-  });
-
-  it('keeps input file names ahead of history descriptions', () => {
-    expect(
-      resumeEntryDescription({
-        id: 'abc',
-        timestamp: '2026-05-20T21:00:00.000Z',
-        agent: 'polish',
-        model: 'deepseekT',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
-        inputBasename: 'paper.tex',
-        description: 'Rewrite the introduction.',
-      }),
-    ).toBe('2026-05-20T21:00:00.000Z; polish; resumable; paper.tex');
+    ).toBe(expected);
   });
 });

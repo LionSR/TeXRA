@@ -16,14 +16,16 @@ function readThemeTokens(): string {
   );
 }
 
-function createThemeDocument(extraCss = ''): Document {
+function readRootStyle(): CSSStyleDeclaration {
   const dom = new JSDOM(
     '<!doctype html><html><head></head><body></body></html>',
   );
   const style = dom.window.document.createElement('style');
-  style.textContent = `${readThemeTokens()}\n${extraCss}`;
+  style.textContent = readThemeTokens();
   dom.window.document.head.append(style);
-  return dom.window.document;
+  return dom.window.document.defaultView!.getComputedStyle(
+    dom.window.document.documentElement,
+  );
 }
 
 describe('desktop theme tokens', () => {
@@ -33,10 +35,7 @@ describe('desktop theme tokens', () => {
     // were retired (the desktop renderer no longer ships those aliases).
     // The bridge contract is now: --wa-form-control-* are defined in the
     // theme and consumers read them directly.
-    const document = createThemeDocument();
-    const rootStyle = document.defaultView!.getComputedStyle(
-      document.documentElement,
-    );
+    const rootStyle = readRootStyle();
 
     expect(
       rootStyle.getPropertyValue('--wa-form-control-background-color').trim(),
@@ -62,10 +61,7 @@ describe('desktop theme tokens', () => {
   });
 
   it('overrides --wa-border-radius-* tokens to VS Code-square values', () => {
-    const document = createThemeDocument();
-    const rootStyle = document.defaultView!.getComputedStyle(
-      document.documentElement,
-    );
+    const rootStyle = readRootStyle();
 
     expect(rootStyle.getPropertyValue('--wa-border-radius-s').trim()).toBe(
       '2px',

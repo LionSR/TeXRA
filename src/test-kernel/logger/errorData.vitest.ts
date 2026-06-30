@@ -1,10 +1,6 @@
-// Third-party imports
 import { strict as assert } from 'node:assert';
-import { describe, it, beforeEach } from 'vitest';
+import { beforeEach, describe, it } from 'vitest';
 
-// Standard library imports
-
-// Local imports - test
 import {
   createRunTrace,
   getDefaultStreamLogStore,

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';

@@ -15,79 +15,74 @@ function convert(input: string): string {
 }
 
 describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
-  it('converts a basic aligned fence', () => {
-    const input = String.raw`::: aligned
+  it.each([
+    {
+      name: 'converts a basic aligned fence',
+      input: String.raw`::: aligned
 &= a + b\\
 :::
-`;
-    const expected = String.raw`\begin{aligned}
+`,
+      expected: String.raw`\begin{aligned}
 &= a + b\\
 \end{aligned}
-`;
-    assert.strictEqual(convert(input), expected);
-  });
-
-  it('preserves indentation for align* blocks', () => {
-    const input = String.raw`
+`,
+    },
+    {
+      name: 'preserves indentation for align* blocks',
+      input: String.raw`
   ::: align*
   x &= y\\
   :::
-`;
-    const expected = String.raw`
+`,
+      expected: String.raw`
   \begin{align*}
   x &= y\\
   \end{align*}
-`;
-    assert.strictEqual(convert(input), expected);
-  });
-
-  it('produces empty environments for blank bodies', () => {
-    const input = String.raw`::: aligned
+`,
+    },
+    {
+      name: 'produces empty environments for blank bodies',
+      input: String.raw`::: aligned
 :::
-`;
-    const expected = String.raw`\begin{aligned}
+`,
+      expected: String.raw`\begin{aligned}
 
 \end{aligned}
-`;
-    assert.strictEqual(convert(input), expected);
-  });
-
-  it('converts inline fenced aligned blocks', () => {
-    const input = '::: aligned {_i=1^n X_i t} &(-) :::';
-    // Whitespace between the body and the closing fence stays part of the
-    // body (see the trailing-spaces test below).
-    const expected = '\\begin{aligned}\n{_i=1^n X_i t} &(-) \n\\end{aligned}';
-    assert.strictEqual(convert(input), expected);
-  });
-
-  it('captures inline bodies with trailing spaces before the fence', () => {
-    const input = '::: aligned a + b    :::';
-    const expected = '\\begin{aligned}\na + b    \n\\end{aligned}';
-    assert.strictEqual(convert(input), expected);
-  });
-
-  it('preserves CRLF line endings', () => {
-    const input = '::: align*\r\n&= a + b\\\\\r\n:::\r\n';
-    const expected = '\\begin{align*}\r\n&= a + b\\\\\r\n\\end{align*}\r\n';
-    assert.strictEqual(convert(input), expected);
-  });
-
-  it('appends a trailing newline when the body lacks one', () => {
-    const input = String.raw`::: gather
+`,
+    },
+    {
+      // Whitespace between the body and the closing fence stays part of the
+      // body (see the trailing-spaces case below).
+      name: 'converts inline fenced aligned blocks',
+      input: '::: aligned {_i=1^n X_i t} &(-) :::',
+      expected: '\\begin{aligned}\n{_i=1^n X_i t} &(-) \n\\end{aligned}',
+    },
+    {
+      name: 'captures inline bodies with trailing spaces before the fence',
+      input: '::: aligned a + b    :::',
+      expected: '\\begin{aligned}\na + b    \n\\end{aligned}',
+    },
+    {
+      name: 'preserves CRLF line endings',
+      input: '::: align*\r\n&= a + b\\\\\r\n:::\r\n',
+      expected: '\\begin{align*}\r\n&= a + b\\\\\r\n\\end{align*}\r\n',
+    },
+    {
+      name: 'appends a trailing newline when the body lacks one',
+      input: String.raw`::: gather
 1\\
 2
 :::
-`;
-    const expected = String.raw`\begin{gather}
+`,
+      expected: String.raw`\begin{gather}
 1\\
 2
 \end{gather}
-`;
-    assert.strictEqual(convert(input), expected);
-  });
-
-  it('handles multiple fenced blocks in the same string', () => {
-    const input = String.raw`::: aligned
+`,
+    },
+    {
+      name: 'handles multiple fenced blocks in the same string',
+      input: String.raw`::: aligned
 0\\
 :::
 Text
@@ -95,8 +90,8 @@ Text
 1\\\\
 2
 :::
-`;
-    const expected = String.raw`\begin{aligned}
+`,
+      expected: String.raw`\begin{aligned}
 0\\
 \end{aligned}
 Text
@@ -104,16 +99,21 @@ Text
 1\\\\
 2
 \end{gather}
-`;
-    assert.strictEqual(convert(input), expected);
-  });
-
-  it('ignores unsupported fence names', () => {
-    const input = String.raw`::: tip
+`,
+    },
+    {
+      name: 'ignores unsupported fence names',
+      input: String.raw`::: tip
 content
 :::
-`;
-    assert.strictEqual(convert(input), input);
+`,
+      expected: String.raw`::: tip
+content
+:::
+`,
+    },
+  ])('$name', ({ input, expected }) => {
+    assert.strictEqual(convert(input), expected);
   });
 
   it('is idempotent when applied repeatedly', () => {

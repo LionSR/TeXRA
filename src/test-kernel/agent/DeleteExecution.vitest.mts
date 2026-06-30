@@ -5,7 +5,6 @@ import type { ExecutionId } from '@shared/schemas';
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(),
   clear: vi.fn(),
-  invalidateListingCache: vi.fn(),
 }));
 
 vi.mock('@utils/files', async () => {

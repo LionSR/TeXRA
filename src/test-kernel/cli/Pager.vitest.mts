@@ -120,42 +120,42 @@ describe('pageStdout', () => {
     expect(stdout).toBe('row\n');
   });
 
-  it('falls back to a direct write when the pager fails to launch', () => {
-    spawnSyncMock.mockReturnValue({
-      error: new Error('spawn less ENOENT'),
-      status: null,
-    });
-    pageStdout('row', { stdoutIsTty: true, env: { PAGER: 'less' } });
+  it.each([
+    {
+      name: 'falls back to a direct write when the pager fails to launch',
+      result: { error: new Error('spawn less ENOENT'), status: null },
+      pager: 'less',
+      expected: 'row\n',
+    },
+    {
+      name: 'falls back to a direct write when the shell cannot exec the pager',
+      result: { status: 127 },
+      pager: 'missing-pager',
+      expected: 'row\n',
+    },
+    {
+      name: 'falls back to a direct write when the pager command is not executable',
+      result: { status: 126 },
+      pager: './not-exec',
+      expected: 'row\n',
+    },
+    {
+      name: 'does not duplicate output when a launched pager exits nonzero',
+      result: { status: 1 },
+      pager: 'less',
+      expected: '',
+    },
+    {
+      name: 'does not duplicate output when a launched pager is interrupted',
+      result: { status: null, signal: 'SIGINT' },
+      pager: 'less',
+      expected: '',
+    },
+  ])('$name', ({ result, pager, expected }) => {
+    spawnSyncMock.mockReturnValue(result);
+    pageStdout('row', { stdoutIsTty: true, env: { PAGER: pager } });
     expect(spawnSyncMock).toHaveBeenCalledTimes(1);
-    expect(stdout).toBe('row\n');
-  });
-
-  it('falls back to a direct write when the shell cannot exec the pager', () => {
-    spawnSyncMock.mockReturnValue({ status: 127 });
-    pageStdout('row', { stdoutIsTty: true, env: { PAGER: 'missing-pager' } });
-    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
-    expect(stdout).toBe('row\n');
-  });
-
-  it('falls back to a direct write when the pager command is not executable', () => {
-    spawnSyncMock.mockReturnValue({ status: 126 });
-    pageStdout('row', { stdoutIsTty: true, env: { PAGER: './not-exec' } });
-    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
-    expect(stdout).toBe('row\n');
-  });
-
-  it('does not duplicate output when a launched pager exits nonzero', () => {
-    spawnSyncMock.mockReturnValue({ status: 1 });
-    pageStdout('row', { stdoutIsTty: true, env: { PAGER: 'less' } });
-    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
-    expect(stdout).toBe('');
-  });
-
-  it('does not duplicate output when a launched pager is interrupted', () => {
-    spawnSyncMock.mockReturnValue({ status: null, signal: 'SIGINT' });
-    pageStdout('row', { stdoutIsTty: true, env: { PAGER: 'less' } });
-    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
-    expect(stdout).toBe('');
+    expect(stdout).toBe(expected);
   });
 
   it('never pages empty text', () => {

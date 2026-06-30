@@ -13,6 +13,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// Dynamic import: the no-platform-init-outside-composition-root lint rule
+// reserves static initPlatform imports for composition roots. Installs a fake
+// platform for the duration of `body`, then restores the previous one.
+async function withFakePlatform(
+  overrides: Parameters<typeof createFakePlatform>[1],
+  body: () => Promise<void>,
+): Promise<void> {
+  const { initPlatform, tryPlatform } = await import('@platform/platform');
+  const previousPlatform = tryPlatform();
+  initPlatform(createFakePlatform({}, overrides));
+  try {
+    await body();
+  } finally {
+    initPlatform(previousPlatform ?? createFakePlatform());
+  }
+}
+
 describe('external tool definitions', () => {
   it('keeps Zotero visible as a user-toggleable tool group', () => {
     const zotero = findExternalToolDef('zotero');

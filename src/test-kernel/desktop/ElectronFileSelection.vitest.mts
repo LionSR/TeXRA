@@ -33,6 +33,14 @@ async function loadDesktopFileSelection(): Promise<DesktopFileSelectionModule> {
   ) as Promise<DesktopFileSelectionModule>;
 }
 
+const BASE_FILE_OPTIONS = [
+  'main.tex',
+  'notes.md',
+  'sections/main_edited.tex',
+  'sections/main_r1.tex',
+  'templates/main.tex',
+];
+
 /**
  * Post W4-collapse the desktop file selection module routes only single-slot
  * base/edited dropdowns + the disk-listing refresh; input/context/media are
@@ -69,13 +77,26 @@ describe('desktop file selection', () => {
     await rm(workspacePath, { recursive: true, force: true });
   });
 
-  it('refreshes the base-file dropdown options on REFRESH_ALL_FILES', async () => {
+  async function createFileSelection(
+    overrides: Partial<
+      Parameters<DesktopFileSelectionModule['createDesktopFileSelection']>[0]
+    > = {},
+  ): Promise<{
+    files: ReturnType<DesktopFileSelectionModule['createDesktopFileSelection']>;
+    messages: unknown[];
+  }> {
     const { createDesktopFileSelection } = await loadDesktopFileSelection();
     const messages: unknown[] = [];
     const files = createDesktopFileSelection({
       postToRenderer: (message) => messages.push(message),
       getWorkspacePath: () => workspacePath,
+      ...overrides,
     });
+    return { files, messages };
+  }
+
+  it('refreshes the base-file dropdown options on REFRESH_ALL_FILES', async () => {
+    const { files, messages } = await createFileSelection();
 
     expect(
       files.handleMessage({ command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES }),
@@ -84,25 +105,14 @@ describe('desktop file selection', () => {
     await vi.waitFor(() =>
       expect(messages).toContainEqual({
         command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
-        files: [
-          'main.tex',
-          'notes.md',
-          'sections/main_edited.tex',
-          'sections/main_r1.tex',
-          'templates/main.tex',
-        ],
+        files: BASE_FILE_OPTIONS,
         preserveBaseFile: true,
       }),
     );
   });
 
   it('preserves the current base-file selection when requested', async () => {
-    const { createDesktopFileSelection } = await loadDesktopFileSelection();
-    const messages: unknown[] = [];
-    const files = createDesktopFileSelection({
-      postToRenderer: (message) => messages.push(message),
-      getWorkspacePath: () => workspacePath,
-    });
+    const { files, messages } = await createFileSelection();
 
     expect(
       files.handleMessage({
@@ -114,25 +124,14 @@ describe('desktop file selection', () => {
     await vi.waitFor(() =>
       expect(messages).toContainEqual({
         command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
-        files: [
-          'main.tex',
-          'notes.md',
-          'sections/main_edited.tex',
-          'sections/main_r1.tex',
-          'templates/main.tex',
-        ],
+        files: BASE_FILE_OPTIONS,
         preserveBaseFile: true,
       }),
     );
   });
 
   it('lists edited-file options for a given base file', async () => {
-    const { createDesktopFileSelection } = await loadDesktopFileSelection();
-    const messages: unknown[] = [];
-    const files = createDesktopFileSelection({
-      postToRenderer: (message) => messages.push(message),
-      getWorkspacePath: () => workspacePath,
-    });
+    const { files, messages } = await createFileSelection();
 
     expect(
       files.handleMessage({
@@ -150,17 +149,13 @@ describe('desktop file selection', () => {
   });
 
   it('opens the desktop multi-file picker and returns relative input paths', async () => {
-    const { createDesktopFileSelection } = await loadDesktopFileSelection();
-    const messages: unknown[] = [];
     const showOpenFileDialog = vi
       .fn()
       .mockResolvedValue([
         join(workspacePath, 'main.tex'),
         join(workspacePath, 'sections', 'main_r1.tex'),
       ]);
-    const files = createDesktopFileSelection({
-      postToRenderer: (message) => messages.push(message),
-      getWorkspacePath: () => workspacePath,
+    const { files, messages } = await createFileSelection({
       showOpenFileDialog,
     });
 
@@ -188,10 +183,8 @@ describe('desktop file selection', () => {
   });
 
   it('does not open the multi-file picker without a workspace', async () => {
-    const { createDesktopFileSelection } = await loadDesktopFileSelection();
     const showOpenFileDialog = vi.fn();
-    const files = createDesktopFileSelection({
-      postToRenderer: vi.fn(),
+    const { files } = await createFileSelection({
       getWorkspacePath: () => undefined,
       showOpenFileDialog,
     });
@@ -207,11 +200,7 @@ describe('desktop file selection', () => {
   });
 
   it('leaves recent-commit requests for the main IPC router', async () => {
-    const { createDesktopFileSelection } = await loadDesktopFileSelection();
-    const files = createDesktopFileSelection({
-      postToRenderer: vi.fn(),
-      getWorkspacePath: () => workspacePath,
-    });
+    const { files } = await createFileSelection();
 
     expect(
       files.handleMessage({
@@ -221,10 +210,8 @@ describe('desktop file selection', () => {
   });
 
   it('reports asynchronous file-listing errors without rejecting from handleMessage', async () => {
-    const { createDesktopFileSelection } = await loadDesktopFileSelection();
     const onError = vi.fn();
-    const files = createDesktopFileSelection({
-      postToRenderer: vi.fn(),
+    const { files } = await createFileSelection({
       getWorkspacePath: () => join(workspacePath, 'missing'),
       onError,
     });

@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - common webview
 import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
@@ -43,12 +43,15 @@ function deferredBoolean(): {
 }
 
 describe('WebviewBridge', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });
 
   it('flushes active stream log deltas', async () => {
-    vi.useFakeTimers();
     const store = new StreamLogStore();
     const activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
@@ -74,7 +77,6 @@ describe('WebviewBridge', () => {
   });
 
   it('does not queue inactive stream flushes that race with tab switches', async () => {
-    vi.useFakeTimers();
     const store = new StreamLogStore();
     let activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
@@ -93,7 +95,6 @@ describe('WebviewBridge', () => {
   });
 
   it('syncs inactive stream history explicitly on tab switch', async () => {
-    vi.useFakeTimers();
     const store = new StreamLogStore();
     let activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
@@ -124,7 +125,6 @@ describe('WebviewBridge', () => {
   });
 
   it('keeps the cursor and dirty updates when no target accepts a log delta', async () => {
-    vi.useFakeTimers();
     const store = new StreamLogStore();
     const activeStream = 'active' as StreamTabId;
     const sendMessage = vi
@@ -169,7 +169,6 @@ describe('WebviewBridge', () => {
   });
 
   it('serializes async flushes and preserves updates made during delivery', async () => {
-    vi.useFakeTimers();
     const store = new StreamLogStore();
     const activeStream = 'active' as StreamTabId;
     const firstDelivery = deferredBoolean();
