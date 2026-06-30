@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { logContextStateSnapshot, type AgentTrace } from '@agent/trace';
+import { logContextStateSnapshot } from '@agent/trace';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
@@ -13,12 +13,8 @@ import {
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import {
-  maybeSaveDebugObject,
-  type DebugContext,
-} from '@agent/utils/debugMessageSaver';
+import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { RetryErrorInfoSchema } from '@shared/schemas';
-import type { ExecutionId } from '@shared/schemas';
 import { formatPostCompactionContext } from '@tools/subagentResults';
 
 /** Base schema for fields common to all cycle flows. */
@@ -33,19 +29,6 @@ export const BaseCycleFieldsSchema = z.object({
 });
 
 export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
-
-/** Derive debug context from services at call site. */
-function getDebugContext(
-  services: { logger: AgentTrace; executionId?: ExecutionId },
-  params: { modelName?: string; isRemote?: boolean },
-): DebugContext {
-  return {
-    logger: services.logger,
-    executionId: services.executionId,
-    modelName: params.modelName,
-    isRemote: params.isRemote,
-  };
-}
 
 /** Result type for nodes that can be skipped based on flow state. */
 export type SkippableNodeResult<T> =
@@ -115,10 +98,12 @@ export async function saveCycleDebug(
   await maybeSaveDebugObject({
     object,
     objectType,
-    context: getDebugContext(services, {
+    context: {
+      logger: services.logger,
+      executionId: services.executionId,
       modelName: services.config.model,
       isRemote: isRemoteAgent(services.config.agent),
-    }),
+    },
     fileOptions,
   });
 }
