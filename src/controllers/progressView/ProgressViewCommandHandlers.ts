@@ -1,7 +1,12 @@
 // Local imports - shared
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
+import type {
+  AgentCategoryFilter,
+  ExternalInquiryThreadId,
+  StreamTabId,
+} from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
@@ -12,6 +17,8 @@ import {
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
+import { handleExternalInquiryAction } from '@tools/inquiry';
+import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 
 // Local imports - utilities
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
@@ -107,6 +114,23 @@ export interface ProgressViewApprovalCommandActions {
   ): unknown;
 }
 
+export interface ProgressViewExternalInquiryCommandActions {
+  /**
+   * Host log sink for the empty-answer guard. The guard policy and message
+   * live in the shared handler; hosts differ only in whether their logger
+   * carries a channel, so they pass just the transport here.
+   */
+  logWarn(
+    message: string,
+    context: { threadId: ExternalInquiryThreadId },
+  ): void;
+  /**
+   * Forwarded to the inquiry submit/drop settle path. Desktop scopes it to its
+   * window session; the extension omits it so the module default applies.
+   */
+  sessionContext?: { session?: SessionHandle };
+}
+
 export interface ProgressViewCommandActions {
   lifecycle: ProgressViewLifecycleCommandActions;
   run: ProgressViewRunCommandActions;
@@ -114,6 +138,7 @@ export interface ProgressViewCommandActions {
   bypass: ProgressViewBypassCommandOptions;
   file: ProgressViewFileCommandActions;
   approval: ProgressViewApprovalCommandActions;
+  externalInquiry: ProgressViewExternalInquiryCommandActions;
 }
 
 /**
@@ -128,7 +153,7 @@ export interface ProgressViewCommandActions {
 export function createProgressViewCommandHandlers(
   actions: ProgressViewCommandActions,
 ): ProgressViewInboundHandlerRegistry {
-  const { lifecycle, run, file, followUp, approval } = actions;
+  const { lifecycle, run, file, followUp, approval, externalInquiry } = actions;
   const { runtimeHost, showInfo } = actions.bypass;
 
   // Single source of truth for the coupled edit + bash session bypass behind
@@ -272,6 +297,46 @@ export function createProgressViewCommandHandlers(
     },
     [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: async (data) => {
       await approval.handleAgentProposalAction(data);
+    },
+
+    // External inquiry settle path: draft persists the open turn, submit/drop
+    // settle the durable thread. The empty-answer guard and warning message are
+    // shared; hosts supply only the log transport and (desktop) the session.
+    [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: async (data) => {
+      if (data.action === 'draft') {
+        await persistOpenTurnDraft({
+          threadId: data.threadId,
+          draft: data.draft ?? null,
+        });
+        return;
+      }
+      if (data.action === 'submit') {
+        if (data.answer == null || data.answer.length === 0) {
+          externalInquiry.logWarn(
+            'Ignoring external inquiry submit without an answer',
+            { threadId: data.threadId },
+          );
+          return;
+        }
+        await handleExternalInquiryAction(
+          {
+            action: 'submit',
+            threadId: data.threadId,
+            answer: data.answer,
+            sessionLinks: data.sessionLinks,
+          },
+          externalInquiry.sessionContext,
+        );
+        return;
+      }
+      await handleExternalInquiryAction(
+        {
+          action: 'drop',
+          threadId: data.threadId,
+          feedback: data.feedback,
+        },
+        externalInquiry.sessionContext,
+      );
     },
   };
 }

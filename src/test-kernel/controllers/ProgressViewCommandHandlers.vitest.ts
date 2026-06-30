@@ -69,6 +69,9 @@ function createActions(
       handleUserQuestionAction: vi.fn(),
       handleAgentProposalAction: vi.fn(),
     },
+    externalInquiry: {
+      logWarn: vi.fn(),
+    },
     ...overrides,
   };
 }

@@ -16,14 +16,15 @@ import { readMeta } from '@transcript/streamSnapshotRead';
 import type { AgentTrace } from '@agent/trace';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
+import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
+import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
+import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { toErrorMessage } from '@common/errors';
@@ -39,21 +40,30 @@ import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
-  RUN_OUTCOME,
   STREAM_STATUS,
   type AgentProposalPermission,
   type AgentCategoryFilter,
+  type BashPermission,
+  type ExternalInquiryPermission,
   type MainViewPersistedState,
+  type PlanApprovalPermission,
   type ProgressViewOutboundMessage,
+  type RetryPermission,
+  type ToolEditPermission,
+  type UserQuestionPermission,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
+import { ApprovalRequestHandler } from '@shared/progressView/backend/ApprovalRequestHandler';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
+import {
+  createProgressBackendUiConfig,
+  type ApprovalRequestHandlerSet,
+} from '@shared/progressView/backend/progressBackendUiConfig';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   cleanupUnscopedApprovals,
@@ -63,9 +73,7 @@ import {
 import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { GoalStore } from '@tools/goal';
-import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
-import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -185,13 +193,13 @@ export class DesktopProgressBridge {
   readonly streamLogs: ProgressBackend['state']['streamLogs'];
   private readonly agentProposalController: ProgressAgentProposalController;
   private readonly workflowFileActions: ProgressWorkflowFileActionsController;
-  private readonly agentProposals = new Map<string, AgentProposalPermission>();
   /**
-   * Shown-but-unresolved approval prompts, keyed by `kind:id` and holding the
-   * prompt's stream id (may be `''` when the prompt has no stream context).
-   * Backs the shared pending-permissions guard against view switches.
+   * Shown-but-unresolved approval prompts, one {@link ApprovalRequestHandler}
+   * per kind. These back the shared pending-permissions guard against view
+   * switches and the pending-proposal lookup — the same host-agnostic
+   * bookkeeping the extension uses, rather than a hand-rolled registry.
    */
-  private readonly pendingPermissionStreams = new Map<string, string>();
+  private approvalHandlers!: ApprovalRequestHandlerSet;
   private readonly resumeAttempts = new Set<StreamTabId>();
   private readonly deletedStreams = new Set<StreamTabId>();
   private readonly unsubscribe: () => void;
@@ -232,151 +240,118 @@ export class DesktopProgressBridge {
       hasTarget: () => true,
       getStreamControls: getProgressStreamControls,
       configureUi: ({ webviewUpdater }) => {
-        // Track shown-but-unresolved prompts so hasPendingPermissions can
-        // keep the active view on a stream awaiting input (the shared
-        // ProgressEventHandler guard), mirroring the extension's
-        // ApprovalRequestHandler bookkeeping.
-        const track = (kind: string, id: string, streamId: string) => {
-          this.pendingPermissionStreams.set(`${kind}:${id}`, streamId);
-        };
-        const release = (kind: string, id: string) => {
-          this.pendingPermissionStreams.delete(`${kind}:${id}`);
-        };
-        return {
-          callbacks: {
-            // Desktop has no retry panel yet: decline the affordance so the
-            // run takes the normal cancel path instead of hanging in WAITING
-            // for an answer that can never arrive.
-            showRetryRequest: (payload) => {
-              this.session.coordinators.cancelRetry(payload.streamId);
-            },
-            resolveRetryRequest: () => undefined,
-            showToolEditPermission: (payload) => {
-              track(
-                PERMISSION_KIND.TOOL_EDIT,
-                payload.requestId,
-                payload.streamId,
-              );
+        // The desktop renderer is always attached (no sidebar/editor re-target),
+        // so every show/resolve reaches the webview.
+        const canSend = () => true;
+        this.approvalHandlers = {
+          toolEdit: new ApprovalRequestHandler<ToolEditPermission, 'requestId'>(
+            'requestId',
+            (p) =>
               webviewUpdater.showPermission({
                 kind: PERMISSION_KIND.TOOL_EDIT,
-                data: payload,
-              });
-            },
-            resolveToolEditPermission: (requestId) => {
-              release(PERMISSION_KIND.TOOL_EDIT, requestId);
-              webviewUpdater.resolvePermission(
-                PERMISSION_KIND.TOOL_EDIT,
-                requestId,
-              );
-            },
-            updateToolEditApprovalBypassState: (streamId, bypassActive) =>
-              webviewUpdater.updateBypassState(
-                streamId,
-                'toolEdit',
-                bypassActive,
-              ),
-            updateSuperYoloBypassState: (streamId, bypassActive) =>
-              webviewUpdater.updateBypassState(
-                streamId,
-                'superYolo',
-                bypassActive,
-              ),
-            showBashPermission: (payload) => {
-              track(PERMISSION_KIND.BASH, payload.requestId, payload.streamId);
+                data: p,
+              }),
+            (id) =>
+              webviewUpdater.resolvePermission(PERMISSION_KIND.TOOL_EDIT, id),
+            canSend,
+          ),
+          bash: new ApprovalRequestHandler<BashPermission, 'requestId'>(
+            'requestId',
+            (p) =>
               webviewUpdater.showPermission({
                 kind: PERMISSION_KIND.BASH,
-                data: payload,
-              });
-            },
-            resolveBashPermission: (requestId) => {
-              release(PERMISSION_KIND.BASH, requestId);
-              webviewUpdater.resolvePermission(PERMISSION_KIND.BASH, requestId);
-            },
-            showAgentProposal: (payload) => {
-              this.agentProposals.set(payload.proposalId, payload);
-              track(
-                PERMISSION_KIND.PROPOSAL,
-                payload.proposalId,
-                payload.streamId,
-              );
+                data: p,
+              }),
+            (id) => webviewUpdater.resolvePermission(PERMISSION_KIND.BASH, id),
+            canSend,
+          ),
+          // Desktop has no retry panel: showRetryRequest below cancels instead
+          // of showing, so this handler is never populated and contributes
+          // nothing to the pending guard. Its transport is therefore unused.
+          retry: new ApprovalRequestHandler<RetryPermission, 'streamId'>(
+            'streamId',
+            () => undefined,
+            () => undefined,
+            canSend,
+          ),
+          agentProposal: new ApprovalRequestHandler<
+            AgentProposalPermission,
+            'proposalId'
+          >(
+            'proposalId',
+            (p) =>
               webviewUpdater.showPermission({
                 kind: PERMISSION_KIND.PROPOSAL,
-                data: payload,
-              });
-            },
-            resolveAgentProposal: (proposalId) => {
-              this.agentProposals.delete(proposalId);
-              release(PERMISSION_KIND.PROPOSAL, proposalId);
-              webviewUpdater.resolvePermission(
-                PERMISSION_KIND.PROPOSAL,
-                proposalId,
-              );
-            },
-            showPlanApproval: (payload) => {
-              track(
-                PERMISSION_KIND.PLAN_APPROVAL,
-                payload.approvalId,
-                payload.streamId,
-              );
+                data: p,
+              }),
+            (id) =>
+              webviewUpdater.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
+            canSend,
+          ),
+          planApproval: new ApprovalRequestHandler<
+            PlanApprovalPermission,
+            'approvalId'
+          >(
+            'approvalId',
+            (p) =>
               webviewUpdater.showPermission({
                 kind: PERMISSION_KIND.PLAN_APPROVAL,
-                data: payload,
-              });
-            },
-            resolvePlanApproval: (approvalId) => {
-              release(PERMISSION_KIND.PLAN_APPROVAL, approvalId);
+                data: p,
+              }),
+            (id) =>
               webviewUpdater.resolvePermission(
                 PERMISSION_KIND.PLAN_APPROVAL,
-                approvalId,
-              );
-            },
-            showExternalInquiry: (payload) => {
-              track(
-                PERMISSION_KIND.EXTERNAL_INQUIRY,
-                payload.requestId,
-                payload.streamId,
-              );
+                id,
+              ),
+            canSend,
+          ),
+          externalInquiry: new ApprovalRequestHandler<
+            ExternalInquiryPermission,
+            'requestId'
+          >(
+            'requestId',
+            (p) =>
               webviewUpdater.showPermission({
                 kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
-                data: payload,
-              });
-            },
-            resolveExternalInquiry: (requestId) => {
-              release(PERMISSION_KIND.EXTERNAL_INQUIRY, requestId);
+                data: p,
+              }),
+            (id) =>
               webviewUpdater.resolvePermission(
                 PERMISSION_KIND.EXTERNAL_INQUIRY,
-                requestId,
-              );
-            },
-            showUserQuestion: (payload) => {
-              track(
-                PERMISSION_KIND.USER_QUESTION,
-                payload.requestId,
-                payload.streamId,
-              );
+                id,
+              ),
+            canSend,
+          ),
+          userQuestion: new ApprovalRequestHandler<
+            UserQuestionPermission,
+            'requestId'
+          >(
+            'requestId',
+            (p) =>
               webviewUpdater.showPermission({
                 kind: PERMISSION_KIND.USER_QUESTION,
-                data: payload,
-              });
-            },
-            resolveUserQuestion: (requestId) => {
-              release(PERMISSION_KIND.USER_QUESTION, requestId);
+                data: p,
+              }),
+            (id) =>
               webviewUpdater.resolvePermission(
                 PERMISSION_KIND.USER_QUESTION,
-                requestId,
-              );
-            },
-          },
-          hasPendingPermissions: (streamId) => {
-            for (const pending of this.pendingPermissionStreams.values()) {
-              // An empty id means the prompt has no stream context; treat it
-              // as blocking any switch, matching the extension's
-              // ApprovalRequestHandler.hasPendingForStream.
-              if (!pending || pending === streamId) return true;
-            }
-            return false;
-          },
+                id,
+              ),
+            canSend,
+          ),
         };
+        return createProgressBackendUiConfig({
+          handlers: this.approvalHandlers,
+          webviewUpdater,
+          canSend,
+          // Desktop has no retry panel: decline the affordance so the run takes
+          // the normal cancel path instead of hanging in WAITING for an answer
+          // that can never arrive.
+          showRetryRequest: (payload) => {
+            this.session.coordinators.cancelRetry(payload.streamId);
+          },
+          resolveRetryRequest: () => undefined,
+        });
       },
     });
     this.state = this.backend.state;
@@ -493,7 +468,8 @@ export class DesktopProgressBridge {
       },
     });
     this.agentProposalController = new ProgressAgentProposalController({
-      getPendingProposal: (proposalId) => this.agentProposals.get(proposalId),
+      getPendingProposal: (proposalId) =>
+        this.approvalHandlers.agentProposal.get(proposalId),
       restoreTaskState: async (taskState) => {
         let state: MainViewPersistedState;
         try {
@@ -609,6 +585,11 @@ export class DesktopProgressBridge {
         handleAgentProposalAction: (message) =>
           this.agentProposalController.handleAction(message),
       },
+      externalInquiry: {
+        logWarn: (message, context) =>
+          this.logger.warn(message, { data: context }),
+        sessionContext: { session: this.session },
+      },
     });
     return {
       ...sharedHandlers,
@@ -627,45 +608,6 @@ export class DesktopProgressBridge {
         };
         await this.options.showInfoMessage?.(
           `"${labels[data.action]}" requires the VS Code extension.`,
-        );
-      },
-      // External inquiry rides outside the shared registry (as in the
-      // extension's ProgressViewMessageHandler): draft persists the open
-      // turn, submit/drop settle the durable thread.
-      [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: async (data) => {
-        if (data.action === 'draft') {
-          await persistOpenTurnDraft({
-            threadId: data.threadId,
-            draft: data.draft ?? null,
-          });
-          return;
-        }
-        if (data.action === 'submit') {
-          if (data.answer == null || data.answer.length === 0) {
-            this.logger.warn(
-              'Ignoring external inquiry submit without an answer',
-              { data: { threadId: data.threadId } },
-            );
-            return;
-          }
-          await handleExternalInquiryAction(
-            {
-              action: 'submit',
-              threadId: data.threadId,
-              answer: data.answer,
-              sessionLinks: data.sessionLinks,
-            },
-            { session: this.session },
-          );
-          return;
-        }
-        await handleExternalInquiryAction(
-          {
-            action: 'drop',
-            threadId: data.threadId,
-            feedback: data.feedback,
-          },
-          { session: this.session },
         );
       },
     };
@@ -690,8 +632,12 @@ export class DesktopProgressBridge {
   }
 
   private clearDesktopSessionMaps(): void {
-    this.agentProposals.clear();
-    this.pendingPermissionStreams.clear();
+    // Drop every pending approval (and proposal payload) without notifying the
+    // webview — the "delete all"/teardown sweep already settles the underlying
+    // approvals through releaseStreamResources/cleanup helpers.
+    for (const handler of Object.values(this.approvalHandlers)) {
+      handler.clear();
+    }
     // Ghost-stream state is owned by the extracted progressEvents bridge;
     // onAllStreamsDeleted handles clearing it.
   }
@@ -770,8 +716,7 @@ export class DesktopProgressBridge {
     // requests) and the follow-up queue for this stream.
     releaseStreamResources(streamId, this.session);
 
-    this.deleteAgentProposalsForStream(streamId);
-    this.releasePendingPermissionsForStream(streamId);
+    this.releaseApprovalsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
     await GoalStore.forget(streamId);
     await this.state.clearStream(streamId);
@@ -844,13 +789,7 @@ export class DesktopProgressBridge {
   private stopStream(streamId: StreamTabId): void {
     this.session.coordinators.clearRetryRequest(streamId);
     this.session.executions.stopAgentStream(streamId, {
-      // Read the live workspace-state value (written by the desktop settings
-      // view) at stop time, matching the extension and CLI hosts.
-      detachActiveChildren:
-        tryPlatform()?.workspaceState.get<boolean>(
-          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-          false,
-        ) === true,
+      detachActiveChildren: detachSubagentsOnStop(),
       runtimeHost: this.runtimeHost,
     });
   }
@@ -899,33 +838,27 @@ export class DesktopProgressBridge {
       }
 
       if (resume.type === 'toolUse') {
-        ToolUseFollowUpQueue.acquire(streamId);
-        ownsResumingStatus = true;
-        StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
-          runtimeHost: this.runtimeHost,
-        });
-        const queuedFollowUps = ToolUseFollowUpQueue.drainItems(streamId);
-        this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
-        try {
-          await resumeToolUseFromSnapshot(resume.snapshot, this.runtimeHost, {
+        // The shared helper owns the RESUMING flip, follow-up drain/replay,
+        // failure re-enqueue, and the RESUMING->WAITING reset, surfacing
+        // failures through this host's own log + error dialog (the same
+        // messaging the outer catch applies to the workflow path).
+        return await resumeQueuedToolUseSnapshot(
+          streamId,
+          resume.snapshot,
+          this.runtimeHost,
+          {
             session: this.session,
             runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-            setupSession: (session) => {
-              for (const item of queuedFollowUps) {
-                session.appendFollowUp(item);
-              }
+            onError: async (error) => {
+              this.logger.error(`Failed to resume desktop stream ${streamId}`, {
+                data: error instanceof Error ? error : { error },
+              });
+              await this.options.showErrorMessage?.(
+                `Resume failed: ${toErrorMessage(error)}`,
+              );
             },
-          });
-        } catch (error) {
-          for (const item of queuedFollowUps) {
-            ToolUseFollowUpQueue.enqueue(streamId, item, { force: true });
-          }
-          if (queuedFollowUps.length > 0) {
-            this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
-          }
-          throw error;
-        }
-        return true;
+          },
+        );
       }
 
       ownsResumingStatus = true;
@@ -1136,14 +1069,9 @@ export class DesktopProgressBridge {
       runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       openWorkflowOutput: async (result) => {
-        // Match the extension's auto-open contract: only a completed workflow
-        // opens its final output — cancelled runs may carry partial outputs
-        // the user did not ask to review — and the config gate applies.
-        if (!getConfig<boolean>('texra.agentOutputs.autoOpenFinal', true)) {
-          return;
-        }
-        if (result.outcome !== RUN_OUTCOME.COMPLETED) return;
-        const output = result.outputs.at(-1);
+        // Gate, outcome check, and final-output selection are shared policy
+        // (selectAutoOpenFinalOutput); the desktop host only supplies openPath.
+        const output = selectAutoOpenFinalOutput(result);
         if (!output) return;
         await this.options.openPath?.(output.absolutePath);
       },
@@ -1167,19 +1095,16 @@ export class DesktopProgressBridge {
     );
   }
 
-  private deleteAgentProposalsForStream(streamId: StreamTabId): void {
-    for (const [proposalId, proposal] of this.agentProposals.entries()) {
-      if (proposal.streamId === streamId) {
-        this.agentProposals.delete(proposalId);
-      }
-    }
-  }
-
-  private releasePendingPermissionsForStream(streamId: StreamTabId): void {
-    for (const [key, pending] of this.pendingPermissionStreams) {
-      if (pending === streamId) {
-        this.pendingPermissionStreams.delete(key);
-      }
+  /**
+   * Drop every pending approval (incl. proposal payloads) tied to a deleted
+   * stream from the pending guard. The underlying approvals are settled by
+   * releaseStreamResources; this only clears prompts that never receive a
+   * resolve event (e.g. durable external inquiries), keeping the guard from
+   * blocking switches on a stream that no longer exists.
+   */
+  private releaseApprovalsForStream(streamId: StreamTabId): void {
+    for (const handler of Object.values(this.approvalHandlers)) {
+      handler.releaseForStream(streamId);
     }
   }
 

@@ -52,6 +52,16 @@ vi.mock('@platform/platform', () => ({
   initPlatform: vi.fn(),
   tryPlatform: mocks.tryPlatform,
   tryGlobalState: () => mocks.tryPlatform()?.globalState,
+  platform: () => ({ config: { get: (_key: string, def: unknown) => def } }),
+}));
+
+// initCliPlatform delegates platform composition + the shared node-host agent
+// runtime (memory/goal injections, Lean, goal prompts) to nodeHost; stub it so
+// the test exercises only the CLI-specific wiring and feature registration does
+// not run twice across cases.
+vi.mock('@platform/defaults/nodeHost', () => ({
+  initNodePlatform: vi.fn(),
+  initNodeAgentRuntime: vi.fn(),
 }));
 
 vi.mock('@skills/index', () => ({
