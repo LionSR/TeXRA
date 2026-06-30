@@ -299,7 +299,6 @@ async function runReflectionAgent(
     ...createInterruptCallbacks(),
     onRoundFinalized,
     setting,
-    parentStage: ctx.parentStage,
     onRoundCompleted,
   });
   return buildWorkflowFlowResult(

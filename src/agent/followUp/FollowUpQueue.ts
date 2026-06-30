@@ -28,54 +28,25 @@ interface FollowUpQueueItem {
   readonly mediaFiles?: readonly string[];
 }
 
-function displayTextForItem(item: FollowUpQueueItem): string {
-  return item.displayText ?? item.text;
-}
+/** A queued follow-up surfaced in a drained batch; same shape as the stored item. */
+export type FollowUpQueueBatchItem = FollowUpQueueItem;
 
-function isVisibleItem(item: FollowUpQueueItem): item is FollowUpQueueItem & {
+/** A single visible follow-up drained for resume replay. */
+export type DrainedFollowUpItem = FollowUpQueueItem & {
   readonly origin: VisibleFollowUpQueueItemOrigin;
-} {
-  return item.origin !== 'synthetic';
-}
-
-export interface FollowUpQueueBatchItem {
-  readonly text: string;
-  readonly displayText?: string;
-  readonly mediaFiles?: readonly string[];
-  readonly origin: FollowUpQueueItemOrigin;
-}
+};
 
 export interface FollowUpQueueBatch {
   readonly items: FollowUpQueueBatchItem[];
   readonly synthetic: boolean;
 }
 
-/** A single visible follow-up drained for resume replay. */
-export interface DrainedFollowUpItem {
-  readonly text: string;
-  readonly displayText?: string;
-  readonly mediaFiles?: readonly string[];
-  readonly origin: VisibleFollowUpQueueItemOrigin;
+function displayTextForItem(item: FollowUpQueueItem): string {
+  return item.displayText ?? item.text;
 }
 
-function batchItem(item: FollowUpQueueItem): FollowUpQueueBatchItem {
-  return {
-    text: item.text,
-    displayText: item.displayText,
-    mediaFiles: item.mediaFiles,
-    origin: item.origin,
-  };
-}
-
-function drainedVisibleItem(
-  item: FollowUpQueueItem & { readonly origin: VisibleFollowUpQueueItemOrigin },
-): DrainedFollowUpItem {
-  return {
-    text: item.text,
-    displayText: item.displayText,
-    mediaFiles: item.mediaFiles,
-    origin: item.origin,
-  };
+function isVisibleItem(item: FollowUpQueueItem): item is DrainedFollowUpItem {
+  return item.origin !== 'synthetic';
 }
 
 export class FollowUpQueue {
@@ -119,7 +90,7 @@ export class FollowUpQueue {
    * the text-only {@link drain} stays for display/back-compat.
    */
   drainItems(): DrainedFollowUpItem[] {
-    return this.queued.splice(0).filter(isVisibleItem).map(drainedVisibleItem);
+    return this.queued.splice(0).filter(isVisibleItem);
   }
 
   waitForNext(
@@ -149,18 +120,14 @@ export class FollowUpQueue {
     const first = await this.waitForNext(checkInterruption);
     if (first === null) return null;
     if (first.origin === 'synthetic') {
-      return {
-        items: [batchItem(first)],
-        synthetic: true,
-      };
+      return { items: [first], synthetic: true };
     }
 
-    const items = [batchItem(first)];
+    const items: FollowUpQueueBatchItem[] = [first];
     while (true) {
       const next = this.queued[0];
       if (!next || next.origin === 'synthetic') break;
-      const item = this.queued.shift()!;
-      items.push(batchItem(item));
+      items.push(this.queued.shift()!);
     }
     return { items, synthetic: false };
   }

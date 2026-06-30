@@ -39,7 +39,8 @@ function decodeFileUri(value: string): string | null {
   }
 }
 
-function normalizeLocalPath(value: string): string | null {
+function normalizeLocalPath(value: string | null | undefined): string | null {
+  if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed || trimmed.startsWith('#')) return null;
   return decodeFileUri(trimmed) ?? trimmed;
@@ -49,24 +50,6 @@ function normalizeFileUri(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.startsWith('#')) return null;
   return decodeFileUri(trimmed);
-}
-
-function addLocalPath(
-  paths: Set<string>,
-  value: string | null | undefined,
-): void {
-  if (!value) return;
-  const path = normalizeLocalPath(value);
-  if (path) paths.add(path);
-}
-
-function addFileUri(
-  paths: Set<string>,
-  value: string | null | undefined,
-): void {
-  if (!value) return;
-  const path = normalizeFileUri(value);
-  if (path) paths.add(path);
 }
 
 function hasFileUri(dataTransfer: DataTransfer, type: string): boolean {
@@ -103,14 +86,16 @@ export function extractDroppedFilePaths(
 
   const paths = new Set<string>();
   for (const file of dataTransfer.files ?? []) {
-    addLocalPath(paths, (file as FileWithPath).path);
+    const path = normalizeLocalPath((file as FileWithPath).path);
+    if (path) paths.add(path);
   }
 
   for (const type of FILE_URI_TEXT_TYPES) {
     const data = dataTransfer.getData(type);
     if (!data) continue;
     for (const line of data.split(/\r?\n/)) {
-      addFileUri(paths, line);
+      const path = normalizeFileUri(line);
+      if (path) paths.add(path);
     }
   }
 

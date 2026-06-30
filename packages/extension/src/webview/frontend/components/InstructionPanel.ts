@@ -268,6 +268,42 @@ export class InstructionPanel extends LitElement {
     );
   }
 
+  private renderAgentSelect(session: SessionContextValue): TemplateResult {
+    const agent =
+      session.sessionType === SESSION_TYPES.WORKFLOW
+        ? {
+            id: 'workflowAgent',
+            sessionType: 'workflow',
+            ariaLabel: 'Workflow agent',
+            options: session.workflowAgentOptions,
+            value: session.workflowAgent,
+          }
+        : {
+            id: 'toolUseAgent',
+            sessionType: 'toolUse',
+            ariaLabel: 'Tool-use agent',
+            options: session.toolUseAgentOptions,
+            value: session.toolUseAgent,
+          };
+    return html`
+      <wa-select
+        id=${agent.id}
+        class="agent-select"
+        data-session-type=${agent.sessionType}
+        aria-label=${agent.ariaLabel}
+        placement="top"
+        placeholder="Agent…"
+        .value=${agent.value}
+        @focus=${this.handleAgentFocus}
+        @change=${this.handleAgentChange}
+      >
+        ${renderAgentOptions(agent.options, agent.value, {
+          includeBrowseAll: true,
+        })}
+      </wa-select>
+    `;
+  }
+
   override render(): TemplateResult | typeof nothing {
     const session = this.sessionData;
     if (!session) {
@@ -395,41 +431,7 @@ export class InstructionPanel extends LitElement {
                 className: 'settings-button',
                 onClick: this.handleAgentSettings,
               })}
-              ${(() => {
-                const agent =
-                  session.sessionType === SESSION_TYPES.WORKFLOW
-                    ? {
-                        id: 'workflowAgent',
-                        sessionType: 'workflow',
-                        ariaLabel: 'Workflow agent',
-                        options: session.workflowAgentOptions,
-                        value: session.workflowAgent,
-                      }
-                    : {
-                        id: 'toolUseAgent',
-                        sessionType: 'toolUse',
-                        ariaLabel: 'Tool-use agent',
-                        options: session.toolUseAgentOptions,
-                        value: session.toolUseAgent,
-                      };
-                return html`
-                  <wa-select
-                    id=${agent.id}
-                    class="agent-select"
-                    data-session-type=${agent.sessionType}
-                    aria-label=${agent.ariaLabel}
-                    placement="top"
-                    placeholder="Agent…"
-                    .value=${agent.value}
-                    @focus=${this.handleAgentFocus}
-                    @change=${this.handleAgentChange}
-                  >
-                    ${renderAgentOptions(agent.options, agent.value, {
-                      includeBrowseAll: true,
-                    })}
-                  </wa-select>
-                `;
-              })()}
+              ${this.renderAgentSelect(session)}
             </div>
             <div
               class="select-group model-select-group agent-model-select-group"

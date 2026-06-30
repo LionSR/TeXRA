@@ -42,16 +42,6 @@ export function getZoteroPort(): number {
 /** JSON-RPC error object. */
 const JsonRpcErrorSchema = z.object({ code: z.number(), message: z.string() });
 
-/** JSON-RPC response envelope around a method's typed result. */
-function jsonRpcResponseSchema<T>(result: z.ZodType<T>) {
-  return z.object({
-    jsonrpc: z.string(),
-    id: z.number().nullish(),
-    result: result.optional(),
-    error: JsonRpcErrorSchema.optional(),
-  });
-}
-
 /**
  * CSL JSON name/creator format.
  * See: https://citeproc-js.readthedocs.io/en/latest/csl-json/markup.html
@@ -82,7 +72,6 @@ const CslDateSchema = z.object({
   /** Literal date text */
   literal: z.string().nullish(),
 });
-export type CslDate = z.infer<typeof CslDateSchema>;
 
 /** Zotero collection metadata returned by `user.groups(true)`. */
 export const BbtCollectionSchema = z.object({
@@ -252,7 +241,13 @@ export async function callBetterBibTeX<T>(
     throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
   }
 
-  const parsed = jsonRpcResponseSchema(resultSchema).safeParse(raw);
+  const responseSchema = z.object({
+    jsonrpc: z.string(),
+    id: z.number().nullish(),
+    result: resultSchema.optional(),
+    error: JsonRpcErrorSchema.optional(),
+  });
+  const parsed = responseSchema.safeParse(raw);
   if (!parsed.success) {
     throw new ToolError(
       `Better BibTeX returned an unexpected response for ${method}: ${z.prettifyError(parsed.error)}`,

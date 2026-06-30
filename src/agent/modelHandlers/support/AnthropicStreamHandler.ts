@@ -10,7 +10,7 @@ import {
   type WebSearchResult,
   type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
-import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
+import type { StreamDiagnostics } from '@shared/schemas';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 // BetaMessageStream is only exported from lib/ — not re-exported from the SDK's
 // public resources/ entry point. The BetaMessageStream class is what

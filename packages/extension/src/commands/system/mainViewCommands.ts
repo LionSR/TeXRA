@@ -24,6 +24,48 @@ const mainViewCommands = {
   showImportOptions: 'texra.showImportOptions',
 };
 
+type ModelOptionsByCategory = Awaited<
+  ReturnType<typeof loadMainViewModelOptions>
+>;
+type AgentOptionsData = Awaited<ReturnType<typeof computeAgentOptionsData>>;
+
+function postModelOptions(
+  webview: vscode.WebviewView,
+  byCategory: ModelOptionsByCategory,
+): void {
+  webview.webview.postMessage({
+    command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+    optionsData: byCategory.workflow,
+    optionsDataByCategory: byCategory,
+  });
+}
+
+function postAgentOptions(
+  webview: vscode.WebviewView,
+  optionsData: AgentOptionsData,
+): void {
+  webview.webview.postMessage({
+    command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+    optionsData,
+  });
+}
+
+async function runRefresh(
+  label: string,
+  apply: (webview: vscode.WebviewView) => Promise<void>,
+): Promise<void> {
+  const webview = await getMainWebview(CHANNEL);
+  if (!webview) return;
+
+  try {
+    await apply(webview);
+  } catch (error) {
+    const message = toErrorMessage(error);
+    logger.error(CHANNEL, `Failed to refresh ${label}: ${message}`);
+    vscode.window.showErrorMessage(`Failed to refresh ${label}: ${message}`);
+  }
+}
+
 /**
  * Registers main view commands for the extension.
  *
@@ -36,77 +78,31 @@ export function registerMainViewCommands(
   registerCommands(context, [
     {
       id: mainViewCommands.refreshModelOptions,
-      handler: async () => {
-        const webview = await getMainWebview(CHANNEL);
-        if (!webview) return;
-
-        try {
-          const optionsDataByCategory = await loadMainViewModelOptions();
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-            optionsData: optionsDataByCategory.workflow,
-            optionsDataByCategory,
-          });
-        } catch (error) {
-          const message = toErrorMessage(error);
-          logger.error(CHANNEL, `Failed to refresh model options: ${message}`);
-          vscode.window.showErrorMessage(
-            `Failed to refresh model options: ${message}`,
-          );
-        }
-      },
+      handler: () =>
+        runRefresh('model options', async (webview) => {
+          postModelOptions(webview, await loadMainViewModelOptions());
+        }),
     },
     {
       id: mainViewCommands.refreshAgentOptions,
-      handler: async () => {
-        const webview = await getMainWebview(CHANNEL);
-        if (!webview) return;
-
-        try {
+      handler: () =>
+        runRefresh('agent options', async (webview) => {
           await refresh();
-          const optionsData = await computeAgentOptionsData();
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-            optionsData,
-          });
-        } catch (error) {
-          const message = toErrorMessage(error);
-          logger.error(CHANNEL, `Failed to refresh agent options: ${message}`);
-          vscode.window.showErrorMessage(
-            `Failed to refresh agent options: ${message}`,
-          );
-        }
-      },
+          postAgentOptions(webview, await computeAgentOptionsData());
+        }),
     },
     {
       id: mainViewCommands.refreshAllOptions,
-      handler: async () => {
-        const webview = await getMainWebview(CHANNEL);
-        if (!webview) return;
-
-        try {
+      handler: () =>
+        runRefresh('options', async (webview) => {
           await refresh();
           const [modelOptionsByCategory, agentOptionsData] = await Promise.all([
             loadMainViewModelOptions(),
             computeAgentOptionsData(),
           ]);
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-            optionsData: modelOptionsByCategory.workflow,
-            optionsDataByCategory: modelOptionsByCategory,
-          });
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-            optionsData: agentOptionsData,
-          });
-        } catch (error) {
-          const message = toErrorMessage(error);
-          logger.error(CHANNEL, `Failed to refresh options: ${message}`);
-          vscode.window.showErrorMessage(
-            `Failed to refresh options: ${message}`,
-          );
-        }
-      },
+          postModelOptions(webview, modelOptionsByCategory);
+          postAgentOptions(webview, agentOptionsData);
+        }),
     },
   ]);
 }

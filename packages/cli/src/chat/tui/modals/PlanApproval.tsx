@@ -246,6 +246,12 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
     nonCompactBodyRows === undefined
       ? 0
       : Math.max(0, bodyLines.length - nonCompactBodyRows);
+  const visibleBodyLines = compact
+    ? visibleCompactBodyLines
+    : visibleNonCompactBodyLines;
+  const hiddenBodyLineCount = compact
+    ? hiddenCompactBodyLines
+    : hiddenNonCompactBodyLines;
 
   return (
     <ConfirmCard
@@ -272,39 +278,24 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       onFeedbackValueChange={setFeedbackValue}
       onDecide={props.onDecide}
     >
-      {compact ? (
-        <Box flexDirection="column">
-          {visibleCompactBodyLines.map((line, index) => (
-            <Text key={index} wrap="truncate-end">
-              {renderCompactPlanLine(
-                line,
-                index === visibleCompactBodyLines.length - 1,
-                hiddenCompactBodyLines,
-                contentWidth,
-              )}
-            </Text>
-          ))}
-        </Box>
-      ) : (
-        <Box flexDirection="column" marginY={1}>
-          {visibleNonCompactBodyLines.map((line, index) => (
-            <Text key={index} wrap="truncate-end">
-              {renderCompactPlanLine(
-                line,
-                index === visibleNonCompactBodyLines.length - 1,
-                hiddenNonCompactBodyLines,
-                contentWidth,
-              )}
-            </Text>
-          ))}
-          {goalNoticeVisible ? (
-            <>
-              <Text> </Text>
-              <Text>{planApprovalGoalNoticeLine(contentWidth)}</Text>
-            </>
-          ) : null}
-        </Box>
-      )}
+      <Box flexDirection="column" marginY={compact ? 0 : 1}>
+        {visibleBodyLines.map((line, index) => (
+          <Text key={index} wrap="truncate-end">
+            {renderCompactPlanLine(
+              line,
+              index === visibleBodyLines.length - 1,
+              hiddenBodyLineCount,
+              contentWidth,
+            )}
+          </Text>
+        ))}
+        {!compact && goalNoticeVisible ? (
+          <>
+            <Text> </Text>
+            <Text>{planApprovalGoalNoticeLine(contentWidth)}</Text>
+          </>
+        ) : null}
+      </Box>
     </ConfirmCard>
   );
 }

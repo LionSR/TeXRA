@@ -33,6 +33,12 @@ function matchesConfigKey(candidate: string, changedKey: string): boolean {
   return changedKey === candidate || changedKey.startsWith(`${candidate}.`);
 }
 
+function keyMatchesChange(key: string, changedKey: string): boolean {
+  return configKeyVariants(key).some((candidate) =>
+    matchesConfigKey(candidate, changedKey),
+  );
+}
+
 export interface ConfigWatcher {
   key: string | readonly string[] | RegExp;
   listener: () => void;
@@ -43,19 +49,13 @@ function watcherMatches(
   changedKey: string,
 ): boolean {
   if (typeof watcherKey === 'string') {
-    return configKeyVariants(watcherKey).some((candidate) =>
-      matchesConfigKey(candidate, changedKey),
-    );
+    return keyMatchesChange(watcherKey, changedKey);
   }
   if (watcherKey instanceof RegExp) {
     return watcherKey.test(changedKey);
   }
   if (Array.isArray(watcherKey)) {
-    return watcherKey.some((item) =>
-      configKeyVariants(item).some((candidate) =>
-        matchesConfigKey(candidate, changedKey),
-      ),
-    );
+    return watcherKey.some((item) => keyMatchesChange(item, changedKey));
   }
   return false;
 }

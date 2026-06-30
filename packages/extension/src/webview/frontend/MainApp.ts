@@ -1797,20 +1797,9 @@ export class MainApp extends MainAppBase {
           ></instruction-panel>
 
           <banner-group
-            .apiKeyBanner=${{
-              visible: akb.visible,
-              provider: akb.provider,
-              requiresKey: akb.requiresKey,
-            }}
-            .agentConfigBanner=${{
-              visible: acb.visible,
-              agentName: acb.agentName,
-              customDirSet: acb.customDirSet,
-            }}
-            .dependencyBanner=${{
-              visible: db.visible,
-              missingTools: db.missingTools,
-            }}
+            .apiKeyBanner=${akb}
+            .agentConfigBanner=${acb}
+            .dependencyBanner=${db}
             .gettingStartedVisible=${this.gettingStartedVisible.get() &&
             !this.gettingStartedDismissed.get()}
             .loginBannerVisible=${this.loginBannerVisible.get()}

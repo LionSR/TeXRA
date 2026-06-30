@@ -11,7 +11,7 @@ export function generateExportFilename(
   input: ChatExportInput,
   extension: 'md' | 'tex' | 'html',
 ): string {
-  return `${generateExportStem(input)}.${extension}`;
+  return `${generateExportFolderName(input)}.${extension}`;
 }
 
 /**
@@ -19,10 +19,6 @@ export function generateExportFilename(
  * (md/tex) and the HTML export's containing folder.
  */
 export function generateExportFolderName(input: ChatExportInput): string {
-  return generateExportStem(input);
-}
-
-function generateExportStem(input: ChatExportInput): string {
   const date = new Date(input.timestamp);
   const datePart = isoDateOnly(date);
 

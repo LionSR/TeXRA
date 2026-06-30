@@ -62,7 +62,8 @@ export class ZoteroExportTool extends defineTool({
       ZOTERO_EXPORT_TIMEOUT_MS,
     );
 
-    if (typeof result !== 'string' || result.trim() === '') {
+    const exported = result.trim();
+    if (exported === '') {
       throw new ToolError(
         `No entries found for citation keys: ${citekeys.join(', ')}`,
       );
@@ -70,7 +71,7 @@ export class ZoteroExportTool extends defineTool({
 
     return {
       summary: `Exported ${citekeys.length} ${pluralize(citekeys.length, 'entry')} as ${translator}`,
-      output: result.trim(),
+      output: exported,
     };
   }
 }

@@ -77,11 +77,14 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
 
     const diffLabel =
       hasInlineDiff && this.inlineDiffOpen ? 'Hide diff' : 'Open diff';
-    const diffTitle = hasInlineDiff
-      ? this.inlineDiffOpen
-        ? 'Hide inline diff (d)'
-        : 'Open inline diff (d)'
-      : 'Open diff (d)';
+    let diffTitle: string;
+    if (!hasInlineDiff) {
+      diffTitle = 'Open diff (d)';
+    } else if (this.inlineDiffOpen) {
+      diffTitle = 'Hide inline diff (d)';
+    } else {
+      diffTitle = 'Open inline diff (d)';
+    }
 
     return html`
       <div class="diff-dropdown">

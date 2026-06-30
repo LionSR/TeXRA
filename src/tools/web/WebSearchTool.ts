@@ -116,7 +116,7 @@ export class WebSearchTool extends defineTool({
     }
 
     // Extract from RelatedTopics (including nested Topics)
-    const extractTopics = (topics: DuckDuckGoResult[], limit: number): void => {
+    function extractTopics(topics: DuckDuckGoResult[], limit: number): void {
       for (const item of topics) {
         if (results.length >= limit) break;
         if (
@@ -130,7 +130,7 @@ export class WebSearchTool extends defineTool({
           extractTopics(item.Topics, limit);
         }
       }
-    };
+    }
 
     if (Array.isArray(data.RelatedTopics)) {
       extractTopics(data.RelatedTopics, max_results);

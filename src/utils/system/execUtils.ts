@@ -28,18 +28,11 @@ const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
 
 /**
- * Encoding options compatible with execa v9.
- * execa uses a stricter encoding type than Node's BufferEncoding.
+ * execa's accepted `encoding` values, derived from its own option type.
+ * Narrower than Node's BufferEncoding, so callers passing BufferEncoding are
+ * normalized through {@link normalizeEncoding}.
  */
-type ExecaEncodingOption =
-  | 'utf8'
-  | 'utf16le'
-  | 'buffer'
-  | 'hex'
-  | 'base64'
-  | 'base64url'
-  | 'latin1'
-  | 'ascii';
+type ExecaEncodingOption = NonNullable<Options['encoding']>;
 
 const MAX_OUTPUT_LENGTH = 150;
 const FORCE_KILL_DELAY_MS = 5_000;
@@ -264,6 +257,7 @@ export async function executeCommand(
       if (options.signal.aborted) onAbort();
     };
 
+    let shellTimeout: number | undefined;
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
       logger.debug(
@@ -271,8 +265,6 @@ export async function executeCommand(
         `Running command: ${shellQuote([cmd, ...args])}`,
       );
       subprocess = execa(cmd, args, execaOptions);
-      if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
-      installAbortListener();
     } else {
       logger.debug(logChannel, `Running command: ${command}`);
       // Shell commands with pipes (e.g. "find / | head -2") create child
@@ -294,25 +286,27 @@ export async function executeCommand(
       // shell-form commands that opt into timeout/cancel handling, primarily
       // the bash tool. Acceptable because the alternative is `await` hanging
       // forever or leaving approved children running after a user stop.
-      const { timeout: _shellTimeout, ...execaNoTimeout } = execaOptions;
+      const { timeout, ...execaNoTimeout } = execaOptions;
+      shellTimeout = timeout;
       // Only use detached when we have a timeout/signal and need process-group killing.
       // On POSIX, detached creates a process group we can kill as a unit.
       // On Windows, detached opens a new console window so we always skip it.
-      const useDetached = (!!_shellTimeout || !!options.signal) && !IS_WINDOWS;
+      const useDetached = (!!shellTimeout || !!options.signal) && !IS_WINDOWS;
       subprocess = execa(command, {
         ...execaNoTimeout,
         shell: true,
         ...(useDetached ? { detached: true } : {}),
       });
-      if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
-      installAbortListener();
+    }
 
-      if (_shellTimeout) {
-        shellTimeoutId = setTimeout(() => {
-          shellTimedOut = true;
-          terminateSubprocess('SIGTERM');
-        }, _shellTimeout);
-      }
+    if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
+    installAbortListener();
+
+    if (shellTimeout) {
+      shellTimeoutId = setTimeout(() => {
+        shellTimedOut = true;
+        terminateSubprocess('SIGTERM');
+      }, shellTimeout);
     }
 
     // Subscribe to stdout/stderr streams for live output if callbacks provided

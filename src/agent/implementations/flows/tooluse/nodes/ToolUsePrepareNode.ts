@@ -88,9 +88,7 @@ export class ToolUsePrepareNode<C> extends Node<
         promptOptions,
       );
 
-    const systemMessage = systemPrompt
-      ? `${systemPrompt}\n${instructionSuffix}`
-      : instructionSuffix;
+    const systemMessage = buildSystemText(systemPrompt, instructionSuffix);
     // Attach any media files (CLI `--media`, an image pasted on the first
     // message) to the initial user message via the shared media slot. No-ops
     // when empty or the model lacks vision.
@@ -157,6 +155,20 @@ export class ToolUsePrepareNode<C> extends Node<
 }
 
 /**
+ * Combine the system prompt with the instruction suffix into the single text
+ * block used for the system message. Falls back to the suffix alone when there
+ * is no system prompt.
+ */
+function buildSystemText(
+  systemPrompt: string,
+  instructionSuffix: string,
+): string {
+  return systemPrompt
+    ? `${systemPrompt}\n${instructionSuffix}`
+    : instructionSuffix;
+}
+
+/**
  * Rebuild the persisted system message on resume so it reflects the current
  * policy (e.g. Max delegation depth) rather than whatever was frozen at
  * snapshot time.
@@ -191,9 +203,7 @@ async function refreshPersistedSystemMessage(
   if (role !== expectedRole) return persisted;
 
   const { systemPrompt, instructionSuffix } = await rebuild();
-  const systemText = systemPrompt
-    ? `${systemPrompt}\n${instructionSuffix}`
-    : instructionSuffix;
+  const systemText = buildSystemText(systemPrompt, instructionSuffix);
 
   const existing = first as Record<string, unknown>;
   const updated = [...persisted];

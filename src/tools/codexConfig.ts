@@ -39,9 +39,8 @@ export const CODEX_CLI_MODEL = 'gpt-5.5';
 
 // Derived from `CodexReasoningEffortSchema` (the single source of truth in
 // `@shared`) so the runtime list and the IPC schema can't drift.
-const REASONING_EFFORTS = CodexReasoningEffortSchema.options;
-export const CODEX_REASONING_EFFORTS = REASONING_EFFORTS;
-export type CodexReasoningEffort = (typeof REASONING_EFFORTS)[number];
+export const CODEX_REASONING_EFFORTS = CodexReasoningEffortSchema.options;
+export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number];
 
 export const getCodexReasoningEffort = createEnumStateGetter(
   WorkspaceStateKey.CODEX_REASONING_EFFORT,
@@ -76,9 +75,8 @@ export function getCodexCliReasoningEffort(): CodexCliReasoningEffort {
 
 // Derived from `CodexApprovalPolicySchema` (the single source of truth in
 // `@shared`); `satisfies` keeps the schema values aligned with the SDK union.
-const APPROVAL_POLICIES = CodexApprovalPolicySchema.options;
 export const CODEX_APPROVAL_POLICIES =
-  APPROVAL_POLICIES satisfies readonly ApprovalMode[];
+  CodexApprovalPolicySchema.options satisfies readonly ApprovalMode[];
 export type CodexApprovalPolicy = ApprovalMode;
 
 export const getCodexApprovalPolicy: () => CodexApprovalPolicy =
@@ -94,9 +92,8 @@ export const getCodexApprovalPolicy: () => CodexApprovalPolicy =
 
 // Derived from `CodexSandboxModeSchema` (the single source of truth in
 // `@shared`); `satisfies` keeps the schema values aligned with the SDK union.
-const SANDBOX_MODES = CodexSandboxModeSchema.options;
 export const CODEX_SANDBOX_MODES =
-  SANDBOX_MODES satisfies readonly SandboxMode[];
+  CodexSandboxModeSchema.options satisfies readonly SandboxMode[];
 export type CodexSandboxMode = SandboxMode;
 
 export const getCodexSandboxMode: () => CodexSandboxMode =

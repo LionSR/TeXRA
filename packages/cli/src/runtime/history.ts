@@ -386,8 +386,7 @@ async function toCliHistoryEntry(
 }
 
 function teamPresetId(config: AgentConfig | null): string | undefined {
-  const preset = config?.cliMultiAgentPresetId?.trim();
-  return preset ? preset : undefined;
+  return config?.cliMultiAgentPresetId?.trim() || undefined;
 }
 
 function firstInputBasename(config: AgentConfig | null): string {

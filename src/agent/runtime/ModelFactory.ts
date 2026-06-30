@@ -310,6 +310,23 @@ function withModelHandlerCompatibilityKey<T extends ModelHandler>(
 }
 
 /**
+ * Apply the user's reasoning-level override and tag the handler with its
+ * history-format compatibility key — the shared finishing step for every live
+ * provider handler. (The validation handler is deterministic and skips the
+ * reasoning override, so it tags directly with
+ * {@link withModelHandlerCompatibilityKey}.)
+ */
+function finalizeModelHandler<T extends ModelHandler>(
+  handler: T,
+  compatibilityKey: ModelHandlerCompatibilityKey,
+): T {
+  return withModelHandlerCompatibilityKey(
+    withReasoningOverride(handler),
+    compatibilityKey,
+  );
+}
+
+/**
  * Apply the user's "prefer short model names" setting.
  * When enabled, uses the model's shortName (e.g. "gpt-5.5") instead of the
  * date-pinned fullName (e.g. "gpt-5.5-2026-04-15"). Useful for proxies/gateways
@@ -368,8 +385,8 @@ export async function createModelHandler(
     logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');
     const { ModelHandlerCodex } =
       await import('@agent/modelHandlers/openai/modelHandlerCodex');
-    return withModelHandlerCompatibilityKey(
-      withReasoningOverride(new ModelHandlerCodex(config)),
+    return finalizeModelHandler(
+      new ModelHandlerCodex(config),
       'ModelHandlerOpenAIResponse',
     );
   }
@@ -395,8 +412,8 @@ export async function createModelHandler(
       logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
       const { ModelHandlerOpenAIResponse } =
         await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse');
-      return withModelHandlerCompatibilityKey(
-        withReasoningOverride(new ModelHandlerOpenAIResponse(config)),
+      return finalizeModelHandler(
+        new ModelHandlerOpenAIResponse(config),
         'ModelHandlerOpenAIResponse',
       );
     }
@@ -405,8 +422,8 @@ export async function createModelHandler(
       logger.debug(CHANNEL, 'Using Google Interactions API Handler');
       const { ModelHandlerGoogleInteractions } =
         await import('@agent/modelHandlers/google/modelHandlerGoogleInteractions');
-      return withModelHandlerCompatibilityKey(
-        withReasoningOverride(new ModelHandlerGoogleInteractions(config)),
+      return finalizeModelHandler(
+        new ModelHandlerGoogleInteractions(config),
         'ModelHandlerGoogleInteractions',
       );
     }
@@ -419,10 +436,8 @@ export async function createModelHandler(
         config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
       const { ModelHandlerOpenRouterNative } =
         await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative');
-      return withModelHandlerCompatibilityKey(
-        withReasoningOverride(
-          new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
-        ),
+      return finalizeModelHandler(
+        new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
         'ModelHandlerOpenRouterNative',
       );
     }
@@ -437,8 +452,8 @@ export async function createModelHandler(
       }
       const HandlerClass = await route.load();
       logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
-      return withModelHandlerCompatibilityKey(
-        withReasoningOverride(new HandlerClass(config)),
+      return finalizeModelHandler(
+        new HandlerClass(config),
         route.compatibilityKey,
       );
     }

@@ -105,7 +105,7 @@ class ArxivSourceProcessor {
     }
 
     const isTar = contentType.includes('tar');
-    const isGzip = contentType.includes('gzip') || contentType.includes('gz');
+    const isGzip = contentType.includes('gz');
     const isTex = contentType.includes('tex') || contentType.includes('plain');
 
     if (isTar && isGzip) return '.tar.gz';

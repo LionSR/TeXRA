@@ -46,6 +46,49 @@ function getQueryFromPath(path: string): string {
 }
 
 /**
+ * Read a callback URI's params and surface any auth error it carries.
+ *
+ * `priority` selects which source wins when a name appears in both the fragment
+ * and the query: implicit-flow token callbacks prefer the fragment, PKCE code
+ * callbacks prefer the query.
+ */
+function readCallbackParams(
+  uri: AuthCallbackUriParts,
+  priority: 'fragment' | 'query',
+): {
+  getParam: (name: string) => string | null;
+  authError: AuthCallbackTokenParseError | null;
+} {
+  const fragmentParams = new URLSearchParams(uri.fragment ?? '');
+  const queryParams = new URLSearchParams(
+    uri.query || getQueryFromPath(uri.path),
+  );
+  const sources =
+    priority === 'fragment'
+      ? [fragmentParams, queryParams]
+      : [queryParams, fragmentParams];
+
+  const getParam = (name: string): string | null => {
+    for (const source of sources) {
+      const value = source.get(name);
+      if (value !== null) return value;
+    }
+    return null;
+  };
+
+  const error = getParam('error');
+  const authError: AuthCallbackTokenParseError | null = error
+    ? {
+        success: false,
+        error: getParam('error_description') || error,
+        isAuthError: true,
+      }
+    : null;
+
+  return { getParam, authError };
+}
+
+/**
  * Extract Supabase callback tokens or auth errors from host-neutral URI parts.
  * Fragment params win over query params, matching the legacy implicit-flow
  * callback. PKCE callbacks use parseAuthCallbackCode instead.
@@ -53,33 +96,13 @@ function getQueryFromPath(path: string): string {
 export function parseAuthCallbackTokens(
   uri: AuthCallbackUriParts,
 ): AuthCallbackTokenParseResult {
-  const fragmentParams = new URLSearchParams(uri.fragment ?? '');
-  const queryParams = new URLSearchParams(
-    uri.query || getQueryFromPath(uri.path),
-  );
-
-  const getParam = (name: string): string | null =>
-    fragmentParams.get(name) ?? queryParams.get(name);
+  const { getParam, authError } = readCallbackParams(uri, 'fragment');
+  if (authError) return authError;
 
   const accessToken = getParam('access_token');
   const refreshToken = getParam('refresh_token');
-  const expiresIn = getParam('expires_in');
-  const error = getParam('error');
-  const errorDescription = getParam('error_description');
-
-  if (error) {
-    return {
-      success: false,
-      error: errorDescription || error,
-      isAuthError: true,
-    };
-  }
-
   if (!accessToken || !refreshToken) {
-    return {
-      success: false,
-      error: 'Missing tokens in callback',
-    };
+    return { success: false, error: 'Missing tokens in callback' };
   }
 
   return {
@@ -87,7 +110,7 @@ export function parseAuthCallbackTokens(
     tokens: {
       accessToken,
       refreshToken,
-      expiresIn,
+      expiresIn: getParam('expires_in'),
     },
   };
 }
@@ -109,31 +132,12 @@ export type AuthCallbackCodeParseResult =
 export function parseAuthCallbackCode(
   uri: AuthCallbackUriParts,
 ): AuthCallbackCodeParseResult {
-  const queryParams = new URLSearchParams(
-    uri.query || getQueryFromPath(uri.path),
-  );
-  const fragmentParams = new URLSearchParams(uri.fragment ?? '');
-
-  const getParam = (name: string): string | null =>
-    queryParams.get(name) ?? fragmentParams.get(name);
-
-  const error = getParam('error');
-  const errorDescription = getParam('error_description');
-
-  if (error) {
-    return {
-      success: false,
-      error: errorDescription || error,
-      isAuthError: true,
-    };
-  }
+  const { getParam, authError } = readCallbackParams(uri, 'query');
+  if (authError) return authError;
 
   const code = getParam('code');
   if (!code) {
-    return {
-      success: false,
-      error: 'Missing authorization code in callback',
-    };
+    return { success: false, error: 'Missing authorization code in callback' };
   }
 
   return { success: true, code };

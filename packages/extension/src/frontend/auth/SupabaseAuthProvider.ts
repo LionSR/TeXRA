@@ -366,7 +366,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
         const errorMsg =
           errorData.error || `Token exchange failed: ${response.status}`;
         logger.error(
@@ -504,7 +506,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private async waitForSession(
     cancellationToken: vscode.CancellationToken,
   ): Promise<SupabaseSession | null> {
-    if (!this.uriHandler) {
+    const uriHandler = this.uriHandler;
+    if (!uriHandler) {
       throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
     }
 
@@ -521,39 +524,37 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       };
 
       // Flag reset is handled by createSession's finally block
-      const subscription = this.uriHandler!.onDidReceiveCallback(
-        async (uri) => {
-          cleanupListeners();
+      const subscription = uriHandler.onDidReceiveCallback(async (uri) => {
+        cleanupListeners();
 
-          try {
-            const result =
-              await this.sessionCoordinator.createSessionFromCallback({
-                path: uri.path,
-                query: uri.query,
-                fragment: uri.fragment,
-              });
+        try {
+          const result =
+            await this.sessionCoordinator.createSessionFromCallback({
+              path: uri.path,
+              query: uri.query,
+              fragment: uri.fragment,
+            });
 
-            if (!result.success) {
-              if (result.error === 'Missing tokens in callback') {
-                logger.error(
-                  'SupabaseAuthProvider',
-                  `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
-                );
-              }
-              reject(new Error(`OAuth error: ${result.error}. Try again.`));
-              return;
+          if (!result.success) {
+            if (result.error === 'Missing tokens in callback') {
+              logger.error(
+                'SupabaseAuthProvider',
+                `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
+              );
             }
-
-            resolve(result.session);
-          } catch (error) {
-            logger.error(
-              'SupabaseAuthProvider',
-              `Error processing OAuth callback: ${toErrorMessage(error)}`,
-            );
-            reject(error);
+            reject(new Error(`OAuth error: ${result.error}. Try again.`));
+            return;
           }
-        },
-      );
+
+          resolve(result.session);
+        } catch (error) {
+          logger.error(
+            'SupabaseAuthProvider',
+            `Error processing OAuth callback: ${toErrorMessage(error)}`,
+          );
+          reject(error);
+        }
+      });
 
       const timeoutHandle = setTimeout(() => {
         cleanupListeners();

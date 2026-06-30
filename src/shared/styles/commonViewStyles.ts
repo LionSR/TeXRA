@@ -40,10 +40,7 @@ export const compactIconActionButtonStyles: CSSResult = css`
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(
-      --wa-color-text-quiet,
-      var(--wa-color-text-quiet, var(--wa-color-text-normal))
-    );
+    color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
     opacity: var(--opacity-subtle);
     transition: opacity var(--transition-fast);
   }

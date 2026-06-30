@@ -22,7 +22,6 @@ import { PersistedState } from '@shared/state';
 import {
   AgentCategoryFilterSchema,
   type ProgressViewOutboundMessage,
-  type StreamTabId,
 } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { designTokens, viewTabStyles } from '@shared/styles';
@@ -37,14 +36,7 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
 import { webviewStorage } from './webviewStorage';
-import {
-  createInitialState,
-  EMPTY_STREAM_LOGS,
-  getStreamState,
-  isToolUseState,
-  type StreamLogs,
-  type StreamState,
-} from './store';
+import { isToolUseState } from './store';
 import {
   activeStreamId$,
   appState,
@@ -55,6 +47,8 @@ import {
   permissions$,
   placement,
   resetProgressState,
+  setStreamLogsForId,
+  setStreamStateForId,
   streamFilter$,
   streamStates$,
   tabStreams$,
@@ -317,51 +311,11 @@ export class ProgressApp extends ProgressAppBase {
     dispatchMessage(message, this.createMessageHandlerContext());
   }
 
-  private setStreamState(
-    streamId: StreamTabId,
-    updater: (prev: StreamState) => StreamState,
-  ): void {
-    const state = appState.get();
-    // Fast path: stream already has state (common during streaming).
-    // Only fall back to streamById lookup when creating default state for new streams.
-    let current = state.streamStates.get(streamId);
-    if (!current) {
-      const streamInfo = state.streamById.get(streamId);
-      // Skip unknown streams - they'll receive full state via LOG_DELTA after initialization
-      if (!streamInfo) return;
-      current = getStreamState(state, streamId, streamInfo.agentCategory);
-    }
-    const updated = updater(current);
-    // Skip no-op updates: avoid Map copy + appState spread + willUpdate cycle
-    if (updated === current) return;
-    appState.set(
-      create(state, (draft) => {
-        draft.streamStates.set(streamId, updated);
-      }),
-    );
-  }
-
-  private setStreamLogs(
-    streamId: StreamTabId,
-    updater: (prev: StreamLogs) => StreamLogs,
-  ): void {
-    const state = appState.get();
-    // Skip unknown streams — prevents orphan streamLogs entries that survive
-    // updateStreamInfo cleanup (which only iterates streamStates keys)
-    if (!state.streamStates.has(streamId)) return;
-    const current = state.streamLogs.get(streamId) ?? EMPTY_STREAM_LOGS;
-    const updated = updater(current);
-    if (updated === current) return;
-    appState.set(
-      create(state, (draft) => {
-        draft.streamLogs.set(streamId, updated);
-      }),
-    );
-  }
-
   /**
    * Get the event handler context.
    * Always returns fresh context - closures capture current state via getters.
+   * Stream mutators delegate to the module-level helpers in `progressState`
+   * (shared with the desktop renderer).
    */
   private getEventHandlerContext(): FrontendEventHandlerContext {
     return {
@@ -369,10 +323,8 @@ export class ProgressApp extends ProgressAppBase {
       setState: (updater) => {
         appState.set(updater(appState.get()));
       },
-      setStreamState: (streamId, updater) =>
-        this.setStreamState(streamId, updater),
-      setStreamLogs: (streamId, updater) =>
-        this.setStreamLogs(streamId, updater),
+      setStreamState: setStreamStateForId,
+      setStreamLogs: setStreamLogsForId,
       savePrefs: (prefs) => this.prefsManager.update(prefs),
     };
   }
@@ -511,7 +463,7 @@ export class ProgressApp extends ProgressAppBase {
     const streamId = appState.get().activeStreamId;
     if (!streamId) return;
 
-    this.setStreamState(streamId, (prev) => {
+    setStreamStateForId(streamId, (prev) => {
       if (!isToolUseState(prev)) return prev;
       return create(prev, (draft) => {
         draft.ui.shouldFocusFollowUp = false;

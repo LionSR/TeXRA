@@ -7,13 +7,13 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-import { ToolError } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
+import { resolveLatexFileOrThrow } from './figureExtractionShared';
 
 const ExtractBibliographyInputSchema = z.strictObject({
   texPath: z
@@ -35,6 +35,12 @@ export type ExtractBibliographyInput = z.infer<
 
 const DEFAULT_MAX_ENTRIES = 25;
 
+function formatPathList(filePaths: string[]): string {
+  return filePaths
+    .map((filePath) => resolveAndFormat(filePath).display)
+    .join(', ');
+}
+
 export class ExtractBibliographyTool extends defineTool({
   name: 'extract_bib_entries',
   description:
@@ -42,11 +48,7 @@ export class ExtractBibliographyTool extends defineTool({
   schema: ExtractBibliographyInputSchema,
 }) {
   protected async execute({ texPath, bibPath }: ExtractBibliographyInput) {
-    const { path, display } = resolveAndFormat(texPath);
-
-    if (!(await WorkspaceFS.exists(path.relative))) {
-      throw new ToolError(`LaTeX file not found: ${display}`);
-    }
+    const { path, display } = await resolveLatexFileOrThrow(texPath);
 
     const context = await extractBibliographyContext(path.relative);
     const bibliographyFiles = [...context.bibliographyFiles];
@@ -64,10 +66,9 @@ export class ExtractBibliographyTool extends defineTool({
       if (!target.includes(resolved.relative)) {
         target.push(resolved.relative);
       }
-    }
-
-    if (effectiveBibPath && citationKeys.length === 0) {
-      citationKeys = ['*'];
+      if (citationKeys.length === 0) {
+        citationKeys = ['*'];
+      }
     }
 
     if (
@@ -87,9 +88,7 @@ export class ExtractBibliographyTool extends defineTool({
       const baseOutput = formatToolOutput(`BibTeX entries in ${display}`, null);
       const missingNote =
         missingBibliographyFiles.length > 0
-          ? `\n\nNote: Missing bibliography files: ${missingBibliographyFiles
-              .map((file) => resolveAndFormat(file).display)
-              .join(', ')}.`
+          ? `\n\nNote: Missing bibliography files: ${formatPathList(missingBibliographyFiles)}.`
           : '';
       return {
         summary,
@@ -118,18 +117,14 @@ export class ExtractBibliographyTool extends defineTool({
       'citation key',
     );
 
-    let summary: string;
-    if (entryCount === 0) {
-      summary = `No matching bibliography entries found for ${citationKeyCount} in ${display}.`;
-    } else {
-      summary = `Resolved ${formatResultCount(entryCount, 'bibliography entry', 'bibliography entries')} for ${citationKeyCount} in ${display}.`;
-    }
+    const summary =
+      entryCount === 0
+        ? `No matching bibliography entries found for ${citationKeyCount} in ${display}.`
+        : `Resolved ${formatResultCount(entryCount, 'bibliography entry', 'bibliography entries')} for ${citationKeyCount} in ${display}.`;
 
     const instructions = [
       missingBibliographyFiles.length > 0 &&
-        `Missing bibliography files: ${missingBibliographyFiles
-          .map((f) => resolveAndFormat(f).display)
-          .join(', ')}.`,
+        `Missing bibliography files: ${formatPathList(missingBibliographyFiles)}.`,
       missingKeys.length > 0 &&
         `Missing citation keys: ${missingKeys.map((k) => `\`${k}\``).join(', ')}.`,
       entries.size > DEFAULT_MAX_ENTRIES &&

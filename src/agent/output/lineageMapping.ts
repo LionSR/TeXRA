@@ -14,12 +14,28 @@ import { createFileMapping, getComparablePath } from '@utils/files';
 import type { OutputState } from './outputState';
 import type { RoundFileEntry, RoundFileMapping } from './types';
 
-interface BaseEntry {
-  readonly loc: FileLocation;
+interface PathKeys {
   readonly relativePath: string;
   readonly relativePathNoExt: string;
   readonly baseName: string;
   readonly baseNameNoExt: string;
+}
+
+interface BaseEntry extends PathKeys {
+  readonly loc: FileLocation;
+}
+
+/** Normalize a path and derive the relative/basename keys used for matching. */
+function computePathKeys(filePath: string): PathKeys {
+  const relativePath = normalizeFilePath(filePath);
+  const parsed = path.posix.parse(relativePath);
+  const baseName = path.posix.basename(relativePath);
+  return {
+    relativePath,
+    relativePathNoExt: path.posix.join(parsed.dir, parsed.name),
+    baseName,
+    baseNameNoExt: path.posix.parse(baseName).name,
+  };
 }
 
 /** Invert a Map<sourceKey, targetLocation> into Map<targetPath, sourceLocation>. */
@@ -43,19 +59,10 @@ function invertMapping(
 }
 
 function buildBaseEntries(baseFiles: FileLocation[]): BaseEntry[] {
-  return baseFiles.map((baseLoc) => {
-    const comparablePath = normalizeFilePath(getComparablePath(baseLoc));
-    const parsedPath = path.posix.parse(comparablePath);
-    const relativePathNoExt = path.posix.join(parsedPath.dir, parsedPath.name);
-    const baseName = path.posix.basename(comparablePath);
-    return {
-      loc: baseLoc,
-      relativePath: comparablePath,
-      relativePathNoExt,
-      baseName,
-      baseNameNoExt: path.posix.parse(baseName).name,
-    };
-  });
+  return baseFiles.map((loc) => ({
+    loc,
+    ...computePathKeys(getComparablePath(loc)),
+  }));
 }
 
 /**
@@ -67,19 +74,15 @@ function findMatchingBaseFile(
   baseEntries: readonly BaseEntry[],
   source: string,
 ): FileLocation | undefined {
-  const normalizedSource = normalizeFilePath(source);
-  const parsedSource = path.posix.parse(normalizedSource);
-  const sourcePathNoExt = path.posix.join(parsedSource.dir, parsedSource.name);
-  const sourceBaseName = path.posix.basename(normalizedSource);
-  const sourceBaseNameNoExt = path.posix.parse(sourceBaseName).name;
+  const src = computePathKeys(source);
 
   const matchers: Array<(entry: BaseEntry) => boolean> = [
-    (entry) => entry.relativePath === normalizedSource,
-    (entry) => entry.relativePathNoExt === sourcePathNoExt,
-    (entry) => entry.baseName === normalizedSource,
-    (entry) => entry.baseNameNoExt === sourceBaseNameNoExt,
-    (entry) => entry.baseNameNoExt === normalizedSource,
-    (entry) => entry.baseName === sourceBaseNameNoExt,
+    (entry) => entry.relativePath === src.relativePath,
+    (entry) => entry.relativePathNoExt === src.relativePathNoExt,
+    (entry) => entry.baseName === src.relativePath,
+    (entry) => entry.baseNameNoExt === src.baseNameNoExt,
+    (entry) => entry.baseNameNoExt === src.relativePath,
+    (entry) => entry.baseName === src.baseNameNoExt,
   ];
 
   for (const match of matchers) {

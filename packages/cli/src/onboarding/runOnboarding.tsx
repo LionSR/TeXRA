@@ -295,19 +295,14 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
         subtitle={props.pickerSubtitle}
         items={props.pickerItems}
         error={error}
-        onRelay={() => {
+        onSelect={(choice) => {
+          if (choice === 'skip') {
+            skip();
+            return;
+          }
           setError(undefined);
-          setScreen('relay-provider');
+          setScreen(PICKER_CHOICE_SCREENS[choice]);
         }}
-        onChatGpt={() => {
-          setError(undefined);
-          setScreen('chatgpt-progress');
-        }}
-        onKey={() => {
-          setError(undefined);
-          setScreen('key-provider');
-        }}
-        onSkip={skip}
       />
     );
   }
@@ -476,22 +471,25 @@ type OnboardingChoice = 'relay' | 'chatgpt' | 'key' | 'skip';
 type OnboardingSetupPath = Exclude<OnboardingChoice, 'skip'>;
 type OnboardingPickerItem = SelectItem<OnboardingChoice>;
 
-const RELAY_PICKER_ITEM: OnboardingPickerItem = {
-  value: 'relay',
-  label: ONBOARDING_CHOICE_SIGN_IN.label,
-  description: ONBOARDING_CHOICE_SIGN_IN.description,
-};
-
-const KEY_PICKER_ITEM: OnboardingPickerItem = {
-  value: 'key',
-  label: ONBOARDING_CHOICE_API_KEY.label,
-  description: ONBOARDING_CHOICE_API_KEY.description,
-};
-
-const CHATGPT_PICKER_ITEM: OnboardingPickerItem = {
-  value: 'chatgpt',
-  label: ONBOARDING_CHOICE_CHATGPT.label,
-  description: ONBOARDING_CHOICE_CHATGPT.description,
+const SETUP_PATH_PICKER_ITEMS: Record<
+  OnboardingSetupPath,
+  OnboardingPickerItem
+> = {
+  relay: {
+    value: 'relay',
+    label: ONBOARDING_CHOICE_SIGN_IN.label,
+    description: ONBOARDING_CHOICE_SIGN_IN.description,
+  },
+  chatgpt: {
+    value: 'chatgpt',
+    label: ONBOARDING_CHOICE_CHATGPT.label,
+    description: ONBOARDING_CHOICE_CHATGPT.description,
+  },
+  key: {
+    value: 'key',
+    label: ONBOARDING_CHOICE_API_KEY.label,
+    description: ONBOARDING_CHOICE_API_KEY.description,
+  },
 };
 
 const SKIP_PICKER_ITEM: OnboardingPickerItem = {
@@ -513,29 +511,24 @@ function onboardingSetupPaths(props: {
 function onboardingPickerItems(
   setupPaths: readonly OnboardingSetupPath[],
 ): readonly OnboardingPickerItem[] {
-  return [...setupPaths.map(onboardingPickerItem), SKIP_PICKER_ITEM];
+  return [
+    ...setupPaths.map((path) => SETUP_PATH_PICKER_ITEMS[path]),
+    SKIP_PICKER_ITEM,
+  ];
 }
 
-function onboardingPickerItem(path: OnboardingSetupPath): OnboardingPickerItem {
-  switch (path) {
-    case 'relay':
-      return RELAY_PICKER_ITEM;
-    case 'chatgpt':
-      return CHATGPT_PICKER_ITEM;
-    case 'key':
-      return KEY_PICKER_ITEM;
-  }
-  return assertNever(path, 'Unhandled onboarding setup path');
-}
+/** Screen each non-skip picker choice opens (skip resolves the gate instead). */
+const PICKER_CHOICE_SCREENS: Record<OnboardingSetupPath, Screen> = {
+  relay: 'relay-provider',
+  chatgpt: 'chatgpt-progress',
+  key: 'key-provider',
+};
 
 function PickerStep(props: {
   readonly subtitle: string;
   readonly items: readonly OnboardingPickerItem[];
   readonly error?: string;
-  readonly onRelay: () => void;
-  readonly onChatGpt: () => void;
-  readonly onKey: () => void;
-  readonly onSkip: () => void;
+  readonly onSelect: (choice: OnboardingChoice) => void;
 }): React.JSX.Element {
   return (
     <OnboardingFrame
@@ -551,13 +544,8 @@ function PickerStep(props: {
       <Select<OnboardingChoice>
         items={props.items}
         labelMaxCols={ONBOARDING_SELECT_LABEL_MAX_COLS}
-        onSelect={(value) => {
-          if (value === 'relay') props.onRelay();
-          else if (value === 'chatgpt') props.onChatGpt();
-          else if (value === 'key') props.onKey();
-          else props.onSkip();
-        }}
-        onCancel={props.onSkip}
+        onSelect={props.onSelect}
+        onCancel={() => props.onSelect('skip')}
       />
     </OnboardingFrame>
   );

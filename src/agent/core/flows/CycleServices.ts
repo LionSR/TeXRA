@@ -71,15 +71,20 @@ export interface TextConnectionService {
   ) => Promise<{ connector: string; choice: string }>;
 }
 
-/** Services for response cycle flow nodes. */
-export interface ResponseCycleServices<C = unknown>
-  extends
-    BaseFlowContextInit<C>,
-    ModelClientServices<C>,
-    TextConnectionService {
+/**
+ * Shared services for the cycle/round flows: the live model client plus the
+ * run-scoped file service and state both inner primitives operate on.
+ */
+interface CycleRunServices<C = unknown>
+  extends BaseFlowContextInit<C>, ModelClientServices<C> {
   readonly fileService: TaskRunFileService;
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
+}
+
+/** Services for response cycle flow nodes. */
+export interface ResponseCycleServices<C = unknown>
+  extends CycleRunServices<C>, TextConnectionService {
   round: ConversationRoundStateSnapshot;
 }
 
@@ -91,16 +96,12 @@ export interface ResponseCycleServices<C = unknown>
  * interface by adding `run`, `workspace`, and the {@link ModelClientServices}
  * fields before running the round.
  */
-export interface ToolUseRoundServices<C = unknown>
-  extends BaseFlowContextInit<C>, ModelClientServices<C> {
-  readonly fileService: TaskRunFileService;
+export interface ToolUseRoundServices<C = unknown> extends CycleRunServices<C> {
   readonly toolRegistry: IToolRegistry;
   /** Session for injecting queued user messages after tool dispatch. */
   readonly session?: IToolUseSession;
   /** Callback when a queued follow-up is consumed (clears UI display). */
   readonly onFollowUpConsumed?: () => void;
-  readonly run: AgentRunStateSnapshot;
-  readonly workspace: AgentWorkspaceState;
 }
 
 export type CycleParams = Record<string, unknown>;

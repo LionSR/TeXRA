@@ -1,7 +1,7 @@
-import { css } from 'lit';
+import { css, type CSSResult } from 'lit';
 
 /** Search-match highlight rules for mark.js output in history item rows. */
-export const searchHighlightStyles = css`
+export const searchHighlightStyles: CSSResult = css`
   mark {
     background-color: var(--wa-color-editor-find-match-highlight, #ffef0b80);
     color: var(--wa-color-editor-find-match-highlight-fg, inherit);

@@ -215,14 +215,6 @@ export class ToolCard extends LitElement {
     );
   }
 
-  private handleRunInstallCommand(): void {
-    this.runCommand('install');
-  }
-
-  private handleRunAuthCommand(): void {
-    this.runCommand('auth');
-  }
-
   private handleToggle(e: Event): void {
     const target = e.currentTarget as WaSwitch | null;
     this.dispatchEvent(
@@ -321,7 +313,7 @@ export class ToolCard extends LitElement {
                   appearance="filled"
                   variant="brand"
                   size="small"
-                  @click=${this.handleRunInstallCommand}
+                  @click=${() => this.runCommand('install')}
                   title=${this.item.installCommand}
                 >
                   ${waIcon('terminal', { slot: 'start' })} Install in Terminal
@@ -334,7 +326,7 @@ export class ToolCard extends LitElement {
                   appearance=${secondaryAppearance}
                   variant=${secondaryVariant}
                   size="small"
-                  @click=${this.handleRunAuthCommand}
+                  @click=${() => this.runCommand('auth')}
                   title=${this.item.authCommand}
                 >
                   ${waIcon('right-to-bracket', { slot: 'start' })} Sign in
@@ -377,14 +369,14 @@ export class ToolCard extends LitElement {
 
   private renderToggle(): TemplateResult | typeof nothing {
     if (!this.item.toggleable) return nothing;
+    const enabled = this.item.enabled !== false;
+    const toggleLabel = `${enabled ? 'Disable' : 'Enable'} ${this.item.name} for agent runs`;
     return html`
       <wa-switch
         class="tool-toggle"
-        title="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this.item
-          .name} for agent runs"
-        ?checked=${this.item.enabled !== false}
-        aria-label="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this
-          .item.name} for agent runs"
+        title=${toggleLabel}
+        ?checked=${enabled}
+        aria-label=${toggleLabel}
         @change=${this.handleToggle}
       >
         Use in runs

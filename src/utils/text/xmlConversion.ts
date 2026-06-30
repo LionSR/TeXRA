@@ -60,6 +60,11 @@ async function isPandocAvailable(): Promise<boolean> {
 }
 
 const LATEX_REPLACEMENTS: Array<[RegExp, string]> = [
+  // Drop list-environment markers; the inner \item lines become bullets below.
+  [/\\begin\{itemize\}/g, ''],
+  [/\\end\{itemize\}/g, ''],
+  [/\\begin\{enumerate\}/g, ''],
+  [/\\end\{enumerate\}/g, ''],
   [/\\section\{([^}]+)\}/g, '## $1\n\n'],
   [/\\subsection\{([^}]+)\}/g, '### $1\n\n'],
   [/\\textbf\{([^}]+)\}/g, '**$1**'],
@@ -68,26 +73,14 @@ const LATEX_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\\item\s+/g, '\n- '],
 ];
 
-const LATEX_ENVIRONMENT_MARKERS: RegExp[] = [
-  /\\begin\{itemize\}/g,
-  /\\end\{itemize\}/g,
-  /\\begin\{enumerate\}/g,
-  /\\end\{enumerate\}/g,
-];
-
 /**
  * Convert LaTeX content to Markdown (simple regex-based conversion).
  * Internal helper for formatContent fallback.
  */
 function convertLatexToMarkdown(latex: string): string {
-  const withoutEnvironments = LATEX_ENVIRONMENT_MARKERS.reduce(
-    (content, pattern) => content.replace(pattern, ''),
-    latex,
-  );
-
   return LATEX_REPLACEMENTS.reduce(
     (content, [pattern, replacement]) => content.replace(pattern, replacement),
-    withoutEnvironments,
+    latex,
   );
 }
 

@@ -282,34 +282,27 @@ export class HistoryItemElement extends LitElement {
       : null;
     const descriptionText = this.item.description?.trim() || null;
 
-    const extraDetails: Array<TemplateResult> = [];
+    const extraDetails: TemplateResult[] = [];
+    const pushSection = (
+      label: string | TemplateResult,
+      entries: Array<[string, ConfigValue]>,
+    ): void => {
+      // renderConfigSection filters empty entries and returns null when none remain.
+      const section = this.renderConfigSection(label, entries);
+      if (section) extraDetails.push(section);
+    };
 
     if (config.agentCategory === AgentCategory.Workflow) {
-      const contextSection = this.renderConfigSection('Context', [
-        ['ContextFiles', config.contextFiles],
-      ]);
-      if (contextSection) extraDetails.push(contextSection);
-
-      const outputSection = this.renderConfigSection('Output Files', [
-        ['Files', config.outputFiles],
-      ]);
-      if (outputSection) extraDetails.push(outputSection);
-
+      pushSection('Context', [['ContextFiles', config.contextFiles]]);
+      pushSection('Output Files', [['Files', config.outputFiles]]);
       if (config.toolConfig) {
-        const toolEntries = (
-          Object.entries(config.toolConfig) as Array<[string, ConfigValue]>
-        ).filter(([, value]) => this.hasValue(value));
-        const toolSection = this.renderConfigSection(
+        pushSection(
           html`${waIcon('tools')} Config`,
-          toolEntries,
+          Object.entries(config.toolConfig) as Array<[string, ConfigValue]>,
         );
-        if (toolSection) extraDetails.push(toolSection);
       }
     } else if (config.agentCategory === AgentCategory.ToolUse) {
-      const editedSection = this.renderConfigSection('Edited Files', [
-        ['Files', config.editedFiles],
-      ]);
-      if (editedSection) extraDetails.push(editedSection);
+      pushSection('Edited Files', [['Files', config.editedFiles]]);
     }
 
     const titleText = instructionText ?? descriptionText ?? '(no instruction)';

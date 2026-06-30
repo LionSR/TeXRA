@@ -27,7 +27,10 @@ import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
-import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
+import {
+  createCliRuntimeHost,
+  type CliRuntimeHost,
+} from '@cli/runtime/runtimeHost';
 import {
   explainNonResumable,
   resolveCliResumeSnapshot,
@@ -201,6 +204,35 @@ export function createChatSessionController(
     });
   };
 
+  // Build the wrapped runtime host shared by start and resume: attach the
+  // terminal-result toast and the TUI approval pipeline, and return a
+  // `finalize` teardown that both run promises invoke from their `.finally`.
+  const setupRunHost = (
+    sessionContext: CliContext,
+  ): {
+    readonly wrapped: CliRuntimeHost;
+    readonly approvalsUnavailable: boolean;
+    readonly finalize: () => void;
+  } => {
+    const runtimeHost = createCliRuntimeHost(sessionContext);
+    const wrapped = wrapRuntimeHost(runtimeHost);
+    const detachResultToast = attachTerminalResultToast(
+      defaultSession(),
+      wrapped,
+    );
+    disposers.push(installTuiApprovals(wrapped, sessionContext));
+    return {
+      wrapped,
+      approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
+      finalize: (): void => {
+        detachResultToast();
+        if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
+        markChatTuiRunCompleted(session);
+        void runtimeHost.close();
+      },
+    };
+  };
+
   // -----------------------------------------------------------------------
   // startRootRun
   // -----------------------------------------------------------------------
@@ -214,20 +246,13 @@ export function createChatSessionController(
       model: config.model,
       canDelegate: chatAgentSupportsDelegation(config.agent),
     });
-    const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost);
-    const detachResultToast = attachTerminalResultToast(
-      defaultSession(),
-      wrapped,
-    );
-    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
-    disposers.push(unbindApprovals);
+    const { wrapped, approvalsUnavailable, finalize } =
+      setupRunHost(sessionContext);
     const executionId = generateExecutionId();
     let waitingTurn = 0;
     let executionRegistered = false;
     let agentSettled = false;
     session.executionId = executionId;
-    const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
 
     const runPromise = registerFreshChatExecution(executionId, config)
       .then((registeredConfig) => {
@@ -289,12 +314,7 @@ export function createChatSessionController(
           ? CliExitCode.Success
           : CliExitCode.AgentError;
       })
-      .finally(() => {
-        detachResultToast();
-        if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
-        markChatTuiRunCompleted(session);
-        void runtimeHost.close();
-      });
+      .finally(finalize);
     markChatTuiRunPending(session, runPromise, wrapped);
   };
 
@@ -356,16 +376,9 @@ export function createChatSessionController(
     projectStreamTranscript(resolution.streamId);
     cliState.activeStreamId.set(resolution.streamId);
 
-    const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost);
+    const { wrapped, approvalsUnavailable, finalize } =
+      setupRunHost(sessionContext);
     session.runtimeHost = wrapped;
-    const detachResultToast = attachTerminalResultToast(
-      defaultSession(),
-      wrapped,
-    );
-    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
-    disposers.push(unbindApprovals);
-    const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
 
     session.runPromise = setCliHelperModel(currentModel)
       .then(() =>
@@ -389,12 +402,7 @@ export function createChatSessionController(
           ? CliExitCode.Success
           : CliExitCode.AgentError;
       })
-      .finally(() => {
-        detachResultToast();
-        if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
-        markChatTuiRunCompleted(session);
-        void runtimeHost.close();
-      });
+      .finally(finalize);
     publishChatTuiRootRunStartAvailability(session);
   };
 

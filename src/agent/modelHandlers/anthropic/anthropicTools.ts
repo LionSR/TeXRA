@@ -31,10 +31,11 @@ const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
   'image/webp',
 ]);
 
-export const isSupportedImageMediaType = (
+export function isSupportedImageMediaType(
   mediaType: string,
-): mediaType is Base64ImageSource['media_type'] =>
-  SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType);
+): mediaType is Base64ImageSource['media_type'] {
+  return SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType);
+}
 
 export interface UploadedAnthropicAttachment {
   attachment: ToolFileAttachment;

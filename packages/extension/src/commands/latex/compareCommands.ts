@@ -80,7 +80,7 @@ async function handleCompare(
   inputLocation: FileLocation,
   baseLocation: FileLocation,
   editedLocation: FileLocation,
-) {
+): Promise<void> {
   try {
     const fileToUseLocation = validateFileLocations(
       inputLocation,

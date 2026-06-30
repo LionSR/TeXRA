@@ -12,7 +12,8 @@ export type ReplacementValue = string | ReplacementFunction;
 export interface ReplacementCategory {
   name: string;
   description: string;
-  patterns: { [key: string]: ReplacementValue };
+  patterns: Record<string, ReplacementValue>;
   isRegex?: boolean;
-  flags?: string; // Optional regex flags
+  /** Regex flags such as 'g'; only consulted when isRegex is true. */
+  flags?: string;
 }

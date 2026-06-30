@@ -61,9 +61,8 @@ export type MinTier = 'free' | 'Max' | 'Ultra';
 
 interface RelayModel {
   shortName: string;
-  apiPatterns: string[];
+  apiPattern: string;
   minTier: MinTier;
-  inputPrice: number;
 }
 
 // =============================================================================
@@ -103,9 +102,8 @@ export const FREE_TIER_SUGGESTED_MODEL = 'gemini35f';
 function toRelayModel(config: ModelConfig): RelayModel {
   return {
     shortName: config.name,
-    apiPatterns: [config.fullName.toLowerCase()],
+    apiPattern: config.fullName.toLowerCase(),
     minTier: getTierFromPrice(config.inputPrice, config.outputPrice),
-    inputPrice: config.inputPrice,
   };
 }
 
@@ -130,9 +128,9 @@ const RETIRED_MODEL_PATTERNS = Object.values(MODEL_CONFIGS)
 // Derived Arrays
 // =============================================================================
 
-const FREE_TIER_MODELS = RELAY_MODELS.filter((m) => m.minTier === 'free');
-
-const FREE_TIER_SHORT_NAMES = FREE_TIER_MODELS.map((m) => m.shortName);
+const FREE_TIER_SHORT_NAMES = RELAY_MODELS.filter(
+  (m) => m.minTier === FREE_TIER,
+).map((m) => m.shortName);
 
 // All supported providers
 const ALL_PROVIDERS = [
@@ -212,7 +210,7 @@ export function getRequestLimits(tier: string): TierRequestLimit {
 const BOUNDARY_RE = /^[-/:@.]/;
 
 /**
- * Collect all RelayModel entries whose apiPatterns match the given API model
+ * Collect all RelayModel entries whose apiPattern matches the given API model
  * name. Exact matches take precedence over boundary-prefix matches.
  *
  * Strips an optional "provider/" prefix so "openai/gpt-4o-mini" and
@@ -234,32 +232,23 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
   const boundaryMatches: RelayModel[] = [];
 
   for (const model of RELAY_MODELS) {
-    let isExact = false;
-    for (const pattern of model.apiPatterns) {
-      if (modelPart === pattern || name === pattern) {
-        isExact = true;
-        break;
-      }
-    }
-    if (isExact) {
+    const pattern = model.apiPattern;
+    if (modelPart === pattern || name === pattern) {
       exactMatches.push(model);
       continue;
     }
 
-    for (const pattern of model.apiPatterns) {
-      const isBoundary =
-        (modelPart.startsWith(pattern) &&
-          BOUNDARY_RE.test(modelPart.slice(pattern.length))) ||
-        (name.startsWith(pattern) &&
-          BOUNDARY_RE.test(name.slice(pattern.length)));
-      if (isBoundary) {
-        if (pattern.length > bestBoundaryLen) {
-          boundaryMatches.length = 0;
-          bestBoundaryLen = pattern.length;
-        }
-        if (pattern.length === bestBoundaryLen) boundaryMatches.push(model);
-        break;
+    const isBoundary =
+      (modelPart.startsWith(pattern) &&
+        BOUNDARY_RE.test(modelPart.slice(pattern.length))) ||
+      (name.startsWith(pattern) &&
+        BOUNDARY_RE.test(name.slice(pattern.length)));
+    if (isBoundary) {
+      if (pattern.length > bestBoundaryLen) {
+        boundaryMatches.length = 0;
+        bestBoundaryLen = pattern.length;
       }
+      if (pattern.length === bestBoundaryLen) boundaryMatches.push(model);
     }
   }
 
