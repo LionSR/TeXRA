@@ -6,6 +6,7 @@
  * live handler instance. The handler keeps thin `computePrice` / `normalizeUsage`
  * overrides that delegate here with the model's pricing config and provider id.
  */
+
 import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
@@ -14,6 +15,7 @@ import {
 } from '@agent/utils/priceUtils';
 
 import { normalizeUsage } from '../support/UsageNormalizer';
+import type { ResponseUsage } from 'openai/resources/responses/responses';
 
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
 export type OpenAIPricingConfig = StandardPricingConfig;
@@ -41,6 +43,27 @@ export function computeOpenAIPrice(
       cachedTokens,
       reasoningTokens:
         responseUsage.completion_tokens_details?.reasoning_tokens ?? 0,
+    },
+    config,
+  );
+}
+
+/**
+ * Cost for the Responses API. Same inclusive-cache formula as
+ * {@link computeOpenAIPrice}; only the token field names differ
+ * (`input_tokens`/`output_tokens` vs `prompt_tokens`/`completion_tokens`).
+ */
+export function computeOpenAIResponsePrice(
+  responseUsage: ResponseUsage,
+  config: OpenAIPricingConfig,
+): number {
+  return computeStandardPrice(
+    {
+      inputTokens: responseUsage.input_tokens ?? 0,
+      outputTokens: responseUsage.output_tokens ?? 0,
+      cachedTokens: responseUsage.input_tokens_details?.cached_tokens ?? 0,
+      reasoningTokens:
+        responseUsage.output_tokens_details?.reasoning_tokens ?? 0,
     },
     config,
   );
