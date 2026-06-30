@@ -15,6 +15,8 @@ import {
 const REPRESENTATIVE_RECORDS: CliNdjsonRecord[] = [
   { kind: 'agent', agent: { name: 'coder' } },
   { kind: 'tool-status', tool: { name: 'bash', available: true } },
+  { kind: 'tool-toggle', tool: { id: 'codex', enabled: false } },
+  { kind: 'tool-guide', guide: { id: 'codex', operation: 'install' } },
   { kind: 'model', model: { value: 'sonnet45', label: 'Sonnet 4.5' } },
   { kind: 'memory', memory: { id: 'm1', text: 'remember' } },
   { kind: 'memory-detail', id: 'm1', text: 'remember', scope: 'workspace' },
