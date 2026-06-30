@@ -32,6 +32,10 @@ function normalizeTranscriptText(text: string): string {
   return text.trim();
 }
 
+function syntheticFallbackDedupeText(text: string): string {
+  return normalizeTranscriptText(text).replaceAll('\\checkmark', '✓');
+}
+
 function currentTurnStartIndex(entries: readonly ConversationEntry[]): number {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     if (entries[index]?.role === 'user') return index;
@@ -46,28 +50,28 @@ export function appendAssistantTranscriptIfMissing(
 ): void {
   const normalized = normalizeTranscriptText(text ?? '');
   if (!normalized) return;
+  const syntheticDedupeText = syntheticFallbackDedupeText(normalized);
   const syntheticAfterSeq = getDefaultStreamLogStore().get(streamId)?.head ?? 0;
 
   patchStream(streamId, (slice) => {
     const entryId = `${idPrefix}:${streamId}`;
     const turnStartIndex = currentTurnStartIndex(slice.entries);
-    const alreadyRendered = slice.entries.some((entry, index) => {
-      if (entry.id === entryId) return true;
-      if (
-        !entry.synthetic &&
-        index >= turnStartIndex &&
-        entry.role === 'assistant'
-      ) {
-        return true;
-      }
-      return (
-        entry.synthetic === true &&
-        entry.syntheticKind === 'final' &&
-        entry.syntheticAfterSeq === syntheticAfterSeq &&
-        entry.role === 'assistant' &&
-        normalizeTranscriptText(entry.text) === normalized
-      );
-    });
+    const lastStreamEntryInTurn = slice.entries.findLast(
+      (entry, index) => index >= turnStartIndex && !entry.synthetic,
+    );
+    const streamLogOwnsFallback = lastStreamEntryInTurn?.role === 'assistant';
+    const alreadyRendered =
+      streamLogOwnsFallback ||
+      slice.entries.some((entry) => {
+        if (entry.id === entryId) return true;
+        return (
+          entry.synthetic === true &&
+          entry.syntheticKind === 'final' &&
+          entry.syntheticAfterSeq === syntheticAfterSeq &&
+          entry.role === 'assistant' &&
+          syntheticFallbackDedupeText(entry.text) === syntheticDedupeText
+        );
+      });
     if (alreadyRendered) return slice;
 
     const entry: ConversationEntry = {
