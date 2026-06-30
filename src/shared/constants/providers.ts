@@ -168,6 +168,14 @@ export type ProviderVscodeSettingDef = z.infer<
   typeof ProviderVscodeSettingDefSchema
 >;
 
+export const USE_OPENROUTER_PROVIDER_SETTING = {
+  key: GlobalStateKey.USE_OPENROUTER,
+  label: 'Use OpenRouter for All Models',
+  description:
+    'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. Note: OpenRouter bypasses Included Access — your OpenRouter key is always used directly.',
+  globalStateKey: GlobalStateKey.USE_OPENROUTER,
+} satisfies ProviderVscodeSettingDef;
+
 /** VS Code config settings to surface per provider in the Models tab. */
 export const PROVIDER_VSCODE_SETTINGS: Record<
   string,
@@ -274,13 +282,5 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       globalStateKey: GlobalStateKey.GLM_CODING_PLAN,
     },
   ],
-  openrouter: [
-    {
-      key: GlobalStateKey.USE_OPENROUTER,
-      label: 'Use OpenRouter for All Models',
-      description:
-        'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. Note: OpenRouter bypasses Included Access — your OpenRouter key is always used directly.',
-      globalStateKey: GlobalStateKey.USE_OPENROUTER,
-    },
-  ],
+  openrouter: [USE_OPENROUTER_PROVIDER_SETTING],
 };

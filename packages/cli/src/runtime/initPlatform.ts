@@ -36,11 +36,17 @@ import { toErrorMessage } from '@common/errors';
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';
 
+// Local imports - model
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+
 // Local imports - shared state
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - tool integrations
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
+
+// Local imports - config
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 // Local imports - CLI runtime
 import { applyCliGitAuthorConfig } from './gitAuthor';
@@ -241,8 +247,19 @@ export async function initCliPlatform(
     serverSideKeysInitialized = true;
   }
 
+  const useOpenRouter = getUseOpenRouter();
+  if (context.apiMode === 'included' && useOpenRouter) {
+    await tryPlatform()?.globalState.update(
+      GlobalStateKey.USE_OPENROUTER,
+      false,
+    );
+    invalidateModelOptionsCache();
+  }
+
   const forcePersonalApiKeys =
-    context.skipIncludedModelAccess === true || context.apiMode === 'personal';
+    context.skipIncludedModelAccess === true ||
+    context.apiMode === 'personal' ||
+    (context.apiMode !== 'included' && useOpenRouter);
   let authed = false;
   if (!forcePersonalApiKeys) {
     try {
