@@ -144,6 +144,21 @@ export const ReasoningLevelSchema = z.enum([
   'max',
 ]);
 export type ReasoningLevel = z.infer<typeof ReasoningLevelSchema>;
+export const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
+  none: 'None',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra High',
+  max: 'Max',
+};
+export const REASONING_LEVEL_OPTIONS: readonly {
+  readonly value: ReasoningLevel;
+  readonly label: string;
+}[] = ReasoningLevelSchema.options.map((value) => ({
+  value,
+  label: REASONING_LEVEL_LABELS[value],
+}));
 
 export const ModelSelectionItemSchema = z.object({
   name: z.string(),

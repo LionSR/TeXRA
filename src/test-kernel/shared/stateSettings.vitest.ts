@@ -15,11 +15,16 @@ import {
   CLI_STATE_SETTINGS,
   STATE_SETTINGS,
   STATE_SETTING_KEYS,
+  settingEnumChoices,
   settingEnumOptions,
   stateSettingByKey,
   type SettingStore,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
+import {
+  API_ACCESS_MODE_OPTIONS,
+  REASONING_LEVEL_OPTIONS,
+} from '@shared/schemas/settingsViewMessages';
 import {
   readSetting,
   resetSetting,
@@ -28,6 +33,14 @@ import {
 } from '@shared/config/settingsAccess';
 
 // Local imports - canonical defaults + keys the catalog must agree with
+import {
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
+} from '@shared/schemas/agentCliSettings';
 import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
@@ -63,6 +76,13 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [WorkspaceStateKey.GIT_AUTHOR_NAME]: DEFAULT_GIT_AUTHOR_NAME,
   [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: DEFAULT_GIT_AUTHOR_EMAIL,
   [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: DEFAULT_GIT_WORKTREE_SUPPORT,
+  [WorkspaceStateKey.CODEX_SANDBOX_MODE]: CODEX_SANDBOX_MODE_DEFAULT,
+  [WorkspaceStateKey.CODEX_REASONING_EFFORT]: CODEX_REASONING_EFFORT_DEFAULT,
+  [WorkspaceStateKey.CODEX_APPROVAL_POLICY]: CODEX_APPROVAL_POLICY_DEFAULT,
+  [WorkspaceStateKey.CLAUDE_AGENT_MODEL]: CLAUDE_AGENT_DEFAULT_MODEL,
+  [WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE]:
+    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  [WorkspaceStateKey.CLAUDE_AGENT_EFFORT]: CLAUDE_AGENT_DEFAULT_EFFORT,
   [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]:
     LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
   [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]:
@@ -178,7 +198,7 @@ describe('state settings catalog', () => {
     }
   });
 
-  it('pairs enum entries with one description per schema option', () => {
+  it('pairs enum entries with aligned display metadata', () => {
     for (const entry of STATE_SETTINGS) {
       const options = settingEnumOptions(entry);
       if (!options) {
@@ -187,13 +207,23 @@ describe('state settings catalog', () => {
           undefined,
           `${entry.key} has enumDescriptions without an enum schema`,
         );
+        assert.equal(
+          entry.enumLabels,
+          undefined,
+          `${entry.key} has enumLabels without an enum schema`,
+        );
         continue;
       }
       assert.ok(
-        entry.enumDescriptions,
-        `${entry.key} enum entry is missing enumDescriptions`,
+        entry.enumDescriptions || entry.enumLabels,
+        `${entry.key} enum entry is missing display metadata`,
       );
-      assert.equal(entry.enumDescriptions?.length, options.length, entry.key);
+      if (entry.enumDescriptions) {
+        assert.equal(entry.enumDescriptions.length, options.length, entry.key);
+      }
+      if (entry.enumLabels) {
+        assert.equal(entry.enumLabels.length, options.length, entry.key);
+      }
     }
   });
 
@@ -233,6 +263,81 @@ describe('state settings catalog', () => {
       'tex-fmt',
       'none',
     ]);
+  });
+
+  it('drives the AI Agents tab enum option labels from catalog metadata', () => {
+    const labelsFor = (key: WorkspaceStateKey): string[] => {
+      const entry = stateSettingByKey(key);
+      assert.ok(entry, `missing catalog entry ${key}`);
+      return (settingEnumChoices(entry) ?? []).map(
+        (option) => `${option.value} — ${option.label}`,
+      );
+    };
+
+    assert.deepEqual(labelsFor(WorkspaceStateKey.CODEX_SANDBOX_MODE), [
+      'read-only — Read-only',
+      'workspace-write — Workspace write',
+      'danger-full-access — Full access',
+    ]);
+    assert.deepEqual(labelsFor(WorkspaceStateKey.CODEX_REASONING_EFFORT), [
+      'low — Low',
+      'medium — Medium',
+      'high — High',
+      'xhigh — Extra high',
+    ]);
+    assert.deepEqual(labelsFor(WorkspaceStateKey.CODEX_APPROVAL_POLICY), [
+      'never — Auto approve',
+      'on-request — Ask when requested',
+      'untrusted — Ask for untrusted',
+      'on-failure — Ask on failure',
+    ]);
+    assert.deepEqual(labelsFor(WorkspaceStateKey.CLAUDE_AGENT_MODEL), [
+      'claude-sonnet-4-6 — Sonnet 4.6',
+      'claude-fable-5 — Fable 5',
+      'claude-opus-4-8 — Opus 4.8',
+      'claude-haiku-4-5-20251001 — Haiku 4.5',
+    ]);
+    assert.deepEqual(
+      labelsFor(WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE),
+      [
+        'default — Prompt for risky actions',
+        'acceptEdits — Auto-accept edits',
+        'bypassPermissions — Bypass all (dangerous)',
+        'plan — Plan only (read-only)',
+      ],
+    );
+    assert.deepEqual(labelsFor(WorkspaceStateKey.CLAUDE_AGENT_EFFORT), [
+      'low — Low',
+      'medium — Medium',
+      'high — High',
+      'xhigh — Extra high',
+      'max — Maximum',
+    ]);
+  });
+
+  it('drives model-profile option labels from shared metadata', () => {
+    assert.deepEqual(
+      REASONING_LEVEL_OPTIONS.map(
+        (option) => `${option.value} — ${option.label}`,
+      ),
+      [
+        'none — None',
+        'low — Low',
+        'medium — Medium',
+        'high — High',
+        'xhigh — Extra High',
+        'max — Max',
+      ],
+    );
+    assert.deepEqual(
+      API_ACCESS_MODE_OPTIONS.map(
+        (option) => `${option.value} — ${option.label} — ${option.description}`,
+      ),
+      [
+        'included — Use Included Access — Works automatically. No setup needed. Does not apply to OpenRouter — those models always use your OpenRouter key. Bring your own provider API keys to use more of your own quota and avoid relay caps.',
+        'personal — Use My Own Keys — Provide your own API keys from OpenAI, Anthropic, etc. This uses your provider account directly for higher limits and models outside Included Access.',
+      ],
+    );
   });
 
   it('exposes exactly the verified CLI-consumed settings', () => {

@@ -14,6 +14,20 @@ import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latex';
+import {
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  ClaudeAgentEffortSchema,
+  ClaudeAgentModelSchema,
+  ClaudeAgentPermissionModeSchema,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
+  CodexApprovalPolicySchema,
+  CodexReasoningEffortSchema,
+  CodexSandboxModeSchema,
+} from '@shared/schemas/agentCliSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /**
@@ -103,6 +117,8 @@ export interface StateSettingEntry {
    * derived from the schema, not restated here.
    */
   readonly enumDescriptions?: readonly string[];
+  /** Display labels for enum options, aligned 1:1 with the schema options. */
+  readonly enumLabels?: readonly string[];
   /**
    * Delegate editing to an existing list form (e.g. `ModelListForm`) instead of
    * the scalar read/write accessor.
@@ -197,6 +213,84 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'cli', 'desktop'],
     cliConsumer: GIT_AUTHOR_CONSUMER,
     cliRuntimeReachability: GIT_WORKTREE_RUNTIME_REACHABILITY,
+  },
+
+  // --- External coding agent controls ---------------------------------------
+  // These are workspace-shared settings read by the Codex and Claude Code tool
+  // integrations. They are cataloged for the extension/desktop settings view;
+  // CLI exposure remains deferred until each value has a verified CLI consumer
+  // and runtime reachability trace.
+  {
+    key: WorkspaceStateKey.CODEX_SANDBOX_MODE,
+    schema: CodexSandboxModeSchema.prefault(CODEX_SANDBOX_MODE_DEFAULT),
+    title: 'Codex sandbox mode',
+    description: 'Filesystem access mode used when TeXRA launches Codex.',
+    category: 'ai-agents',
+    store: 'workspaceState',
+    hosts: ['vscode', 'desktop'],
+    enumLabels: ['Read-only', 'Workspace write', 'Full access'],
+  },
+  {
+    key: WorkspaceStateKey.CODEX_REASONING_EFFORT,
+    schema: CodexReasoningEffortSchema.prefault(CODEX_REASONING_EFFORT_DEFAULT),
+    title: 'Codex reasoning effort',
+    description: 'Reasoning effort hint passed to Codex runs.',
+    category: 'ai-agents',
+    store: 'workspaceState',
+    hosts: ['vscode', 'desktop'],
+    enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
+  },
+  {
+    key: WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+    schema: CodexApprovalPolicySchema.prefault(CODEX_APPROVAL_POLICY_DEFAULT),
+    title: 'Codex approval policy',
+    description: 'When Codex should ask for approval before risky actions.',
+    category: 'ai-agents',
+    store: 'workspaceState',
+    hosts: ['vscode', 'desktop'],
+    enumLabels: [
+      'Auto approve',
+      'Ask when requested',
+      'Ask for untrusted',
+      'Ask on failure',
+    ],
+  },
+  {
+    key: WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+    schema: ClaudeAgentModelSchema.prefault(CLAUDE_AGENT_DEFAULT_MODEL),
+    title: 'Claude Code model',
+    description: 'Claude model selected for Claude Code agent sessions.',
+    category: 'ai-agents',
+    store: 'workspaceState',
+    hosts: ['vscode', 'desktop'],
+    enumLabels: ['Sonnet 4.6', 'Fable 5', 'Opus 4.8', 'Haiku 4.5'],
+  },
+  {
+    key: WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+    schema: ClaudeAgentPermissionModeSchema.prefault(
+      CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+    ),
+    title: 'Claude Code permission mode',
+    description: 'Permission policy used by Claude Code agent sessions.',
+    category: 'ai-agents',
+    store: 'workspaceState',
+    hosts: ['vscode', 'desktop'],
+    enumLabels: [
+      'Prompt for risky actions',
+      'Auto-accept edits',
+      'Bypass all (dangerous)',
+      'Plan only (read-only)',
+    ],
+  },
+  {
+    key: WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+    schema: ClaudeAgentEffortSchema.prefault(CLAUDE_AGENT_DEFAULT_EFFORT),
+    title: 'Claude Code reasoning effort',
+    description: 'Reasoning effort hint passed to Claude Code agent sessions.',
+    category: 'ai-agents',
+    store: 'workspaceState',
+    hosts: ['vscode', 'desktop'],
+    enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
   },
 
   // --- Workflow auto-compile -------------------------------------------------
@@ -391,6 +485,27 @@ export function settingEnumOptions(
   return inner instanceof z.ZodEnum
     ? (inner.options as readonly string[])
     : undefined;
+}
+
+export interface SettingEnumChoice<T extends string = string> {
+  readonly value: T;
+  readonly label: string;
+  readonly description?: string;
+}
+
+/** Enum values paired with display metadata for settings UIs. */
+export function settingEnumChoices<T extends string = string>(
+  entry: StateSettingEntry,
+): readonly SettingEnumChoice<T>[] | undefined {
+  const values = settingEnumOptions(entry);
+  if (!values) return undefined;
+  return values.map((value, index) => ({
+    value: value as T,
+    label: entry.enumLabels?.[index] ?? value,
+    ...(entry.enumDescriptions?.[index] && {
+      description: entry.enumDescriptions[index],
+    }),
+  }));
 }
 
 /** Whether a setting's schema is a boolean (used to classify edit affordance). */
