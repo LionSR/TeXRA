@@ -29,12 +29,7 @@ export type RoundFinalizedCallback = (
 ) => void | Promise<void>;
 
 export interface AgentCore<C = unknown> {
-  modelHandler: IModelHandler<
-    ProviderMessage,
-    unknown,
-    SdkToolCall,
-    C
-  >;
+  modelHandler: IModelHandler<ProviderMessage, unknown, SdkToolCall, C>;
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;
