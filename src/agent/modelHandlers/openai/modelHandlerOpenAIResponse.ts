@@ -39,10 +39,8 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 // Local imports - utils
 import { clamp, filterNotNullish, roundTo } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
-import {
-  getWebSocketEnabled,
-  getUseOpenRouter,
-} from '@utils/config/providerConfig';
+import { getWebSocketEnabled } from '@utils/config/providerConfig';
+import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import { computeOpenAIResponsePrice } from './openAIUsage';
@@ -242,7 +240,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   Response
 > {
   private isOpenRouterRoutingEnabled(): boolean {
-    return this.config.openRouterOnly || getUseOpenRouter();
+    return shouldUseOpenRouter(this.config);
   }
 
   /**

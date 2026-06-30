@@ -79,7 +79,7 @@ export const DEFAULT_CORE_SETTINGS = {
     useImprovedConnection: false,
     improvedConnectionDomain: 'proxy.texra.ai',
     useOpenAIResponsesAPI: true,
-    useGoogleInteractionsAPI: false,
+    useGoogleInteractionsAPI: true,
     useGoogleInteractionsServerState: true,
     useBackgroundResponses: true,
     openaiParallelToolCalls: false,
@@ -362,7 +362,7 @@ export const CoreSettingsShape = {
       ),
       useGoogleInteractionsAPI: boolField(
         DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsAPI,
-        "Use Google's Interactions API instead of Generate Content when available. Experimental; disabled by default. OpenRouter-proxied Google models always use Generate Content.",
+        "Use Google's Interactions API instead of Generate Content when available. Enabled by default. OpenRouter-proxied Google models always use Generate Content.",
       ),
       useGoogleInteractionsServerState: boolField(
         DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsServerState,
