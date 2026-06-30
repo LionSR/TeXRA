@@ -120,28 +120,26 @@ const ExternalInquiryHydrationFieldsSchema = z.object({
   transcript: z.array(InquiryTranscriptTurnSchema).nullish(),
 });
 
+// Both inquiry modes share the same fields and differ only in the `mode`
+// discriminator. Hydration fields live on both so the discriminated union
+// exposes a common surface for renderers that read them regardless of mode.
+const ExternalInquiryPermissionBaseSchema = PermissionBaseSchema.extend(
+  CommonExternalInquiryFieldsSchema.shape,
+).extend(ExternalInquiryHydrationFieldsSchema.shape);
+
 /**
  * First inquiry in a thread. Fresh dispatches have no prior transcript, draft,
  * or session links, but durable hydration may carry a saved open-turn draft.
  */
-export const NewExternalInquiryPermissionSchema = PermissionBaseSchema.extend(
-  CommonExternalInquiryFieldsSchema.shape,
-).extend({
-  mode: z.literal('new'),
-  // Included so the discriminated union produces a common surface for renderers
-  // that access these fields.
-  ...ExternalInquiryHydrationFieldsSchema.shape,
-});
+export const NewExternalInquiryPermissionSchema =
+  ExternalInquiryPermissionBaseSchema.extend({ mode: z.literal('new') });
 export type NewExternalInquiryPermission = z.infer<
   typeof NewExternalInquiryPermissionSchema
 >;
 
 /** Follow-up inquiry — carries thread context from prior turns. */
 export const FollowUpExternalInquiryPermissionSchema =
-  PermissionBaseSchema.extend(CommonExternalInquiryFieldsSchema.shape).extend({
-    mode: z.literal('followUp'),
-    ...ExternalInquiryHydrationFieldsSchema.shape,
-  });
+  ExternalInquiryPermissionBaseSchema.extend({ mode: z.literal('followUp') });
 export type FollowUpExternalInquiryPermission = z.infer<
   typeof FollowUpExternalInquiryPermissionSchema
 >;

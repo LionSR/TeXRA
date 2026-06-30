@@ -24,13 +24,13 @@ export interface ChatGptSubscriptionLimit {
 
 function pickStringField(value: unknown, key: string): string | undefined {
   if (!isObject(value)) return undefined;
-  const field = (value as Record<string, unknown>)[key];
+  const field = value[key];
   return isString(field) && field.trim().length > 0 ? field : undefined;
 }
 
 function pickNumberField(value: unknown, key: string): number | undefined {
   if (!isObject(value)) return undefined;
-  const field = (value as Record<string, unknown>)[key];
+  const field = value[key];
   return typeof field === 'number' && Number.isFinite(field)
     ? field
     : undefined;
@@ -45,10 +45,7 @@ export function parseChatGptSubscriptionLimit(
   rawErrorBody: unknown,
 ): ChatGptSubscriptionLimit | null {
   if (!isObject(rawErrorBody)) return null;
-  const candidates = [
-    rawErrorBody,
-    (rawErrorBody as { error?: unknown }).error,
-  ];
+  const candidates = [rawErrorBody, rawErrorBody.error];
   for (const candidate of candidates) {
     if (pickStringField(candidate, 'type') !== 'usage_limit_reached') continue;
     return {

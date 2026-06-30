@@ -133,8 +133,8 @@ export function createProgressViewCommandHandlers(
 
   // Single source of truth for the coupled edit + bash session bypass behind
   // the one Yolo concept. The shield toolbar button flips it; the inline "Yolo
-  // (this session)" prompt button forces it on. Bash rides along silently — the
-  // shield reflects tool-edit state — so both surfaces stay in lockstep.
+  // (this session)" prompt button forces it on. Bash rides along silently (the
+  // shield reflects tool-edit state), so both surfaces stay in lockstep.
   const applyCoupledBypass = async (
     stream: StreamTabId,
     enabled: boolean,

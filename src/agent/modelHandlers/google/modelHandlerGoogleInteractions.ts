@@ -496,19 +496,19 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return isGemini3Model(this.config.fullName);
   }
 
-  private getMediaResolution(mimeType: string): MediaResolution | undefined {
-    if (!this.isGemini3Model()) return undefined;
-    if (mimeType.startsWith('image/')) return 'high';
-    // Interactions DocumentContent currently has no resolution field, so PDF
-    // resolution cannot mirror generateContent until the SDK exposes it.
-    return undefined;
-  }
-
+  /**
+   * Optional `resolution` field for an Interactions media `Content`: Gemini 3
+   * images use high resolution; everything else omits the field.
+   */
   private mediaResolutionFields(mimeType: string): {
     resolution?: MediaResolution;
   } {
-    const resolution = this.getMediaResolution(mimeType);
-    return resolution ? { resolution } : {};
+    // Interactions DocumentContent currently has no resolution field, so PDF
+    // resolution cannot mirror generateContent until the SDK exposes it.
+    if (this.isGemini3Model() && mimeType.startsWith('image/')) {
+      return { resolution: 'high' };
+    }
+    return {};
   }
 
   /**

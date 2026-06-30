@@ -72,7 +72,7 @@ const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
  * Each variant is a looseObject to preserve unknown keys for forward
  * compatibility.
  *
- * This is what gets passed to handlers — no binary data, properly typed fields.
+ * This is what gets passed to handlers: no binary data, properly typed fields.
  */
 export const ToolResultPayloadSchema = z.discriminatedUnion('status', [
   z.looseObject({
@@ -353,38 +353,32 @@ export function formatToolResultAsText(
 ): string {
   const textPieces: string[] = [];
 
-  if (result.status === 'executed') {
-    // Primary output text (the tool's result)
-    if (isNonEmptyString(result.output)) {
-      textPieces.push(result.output);
-    }
-    // userPatch captures user modifications to tool proposals (distinct from
-    // userDiffNote which only shows merge conflicts). Include when user modified
-    // the proposed edit.
-    if (result.userPatch) {
-      textPieces.push(
-        `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
-      );
-    }
-    if (result.userInstruction) {
-      textPieces.push(`User feedback: ${result.userInstruction}`);
-    }
-    // Fallback to summary when no output text was produced
-    if (textPieces.length === 0 && result.summary) {
-      textPieces.push(result.summary);
-    }
-  } else {
-    // Error variant — error is required (non-empty string), no output/summary
-    if (result.userPatch) {
-      textPieces.push(
-        `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
-      );
-    }
-    if (result.userInstruction) {
-      textPieces.push(`User feedback: ${result.userInstruction}`);
-    }
-    textPieces.push(result.error);
+  // Primary output text, present on the executed variant only.
+  if (result.status === 'executed' && isNonEmptyString(result.output)) {
+    textPieces.push(result.output);
   }
+
+  // userPatch / userInstruction are shared fields on both variants. userPatch
+  // captures user modifications to tool proposals (distinct from userDiffNote,
+  // which only shows merge conflicts); include it when the user modified the
+  // proposed edit.
+  if (result.userPatch) {
+    textPieces.push(
+      `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
+    );
+  }
+  if (result.userInstruction) {
+    textPieces.push(`User feedback: ${result.userInstruction}`);
+  }
+
+  if (result.status === 'error') {
+    // Error variant: error is a required non-empty string, no output/summary.
+    textPieces.push(result.error);
+  } else if (textPieces.length === 0 && result.summary) {
+    // Fallback to summary when no output text was produced.
+    textPieces.push(result.summary);
+  }
+
   if (attachmentSummary) {
     textPieces.push(attachmentSummary);
   }

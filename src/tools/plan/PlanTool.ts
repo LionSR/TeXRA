@@ -20,8 +20,10 @@ import { z } from 'zod';
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-import type { CurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import {
+  getCurrentToolContexts,
+  type CurrentToolContexts,
+} from '@agent/followUp/ToolFileInteractionContext';
 import { toErrorMessage } from '@common/errors';
 import { createChannelTrace } from '@logger';
 import type { Plan } from '@shared/schemas';
@@ -31,13 +33,13 @@ import {
   isGoalInFlight,
   type Goal,
 } from '@shared/schemas/goal';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovalState } from '@tools/approval';
 import {
   GoalStore,
   isGoalEnabled,
   setGoalSessionBashAutoApproval,
 } from '@tools/goal';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
