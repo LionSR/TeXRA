@@ -26,6 +26,11 @@ import type {
   ClaudeAgentModel,
   ClaudeAgentPermissionMode,
 } from '@shared/schemas/settingsViewMessages';
+import {
+  settingEnumChoices,
+  stateSettingByKey,
+} from '@shared/schemas/stateSettings';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -37,65 +42,32 @@ import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
 
-const SANDBOX_MODE_OPTIONS: readonly {
-  value: CodexSandboxMode;
-  label: string;
-}[] = [
-  { value: 'read-only', label: 'Read-only' },
-  { value: 'workspace-write', label: 'Workspace write' },
-  { value: 'danger-full-access', label: 'Full access' },
-] as const;
+function catalogSelectOptions<T extends string>(
+  key: WorkspaceStateKey,
+): readonly { value: T; label: string }[] {
+  const entry = stateSettingByKey(key);
+  return entry ? (settingEnumChoices<T>(entry) ?? []) : [];
+}
 
-const REASONING_EFFORT_OPTIONS: readonly {
-  value: CodexReasoningEffort;
-  label: string;
-}[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'Extra high' },
-] as const;
-
-const APPROVAL_POLICY_OPTIONS: readonly {
-  value: CodexApprovalPolicy;
-  label: string;
-}[] = [
-  { value: 'never', label: 'Auto approve' },
-  { value: 'on-request', label: 'Ask when requested' },
-  { value: 'untrusted', label: 'Ask for untrusted' },
-  { value: 'on-failure', label: 'Ask on failure' },
-] as const;
-
-const CLAUDE_MODEL_OPTIONS: readonly {
-  value: ClaudeAgentModel;
-  label: string;
-}[] = [
-  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
-  { value: 'claude-fable-5', label: 'Fable 5' },
-  { value: 'claude-opus-4-8', label: 'Opus 4.8' },
-  { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-] as const;
-
-const CLAUDE_PERMISSION_MODE_OPTIONS: readonly {
-  value: ClaudeAgentPermissionMode;
-  label: string;
-}[] = [
-  { value: 'default', label: 'Prompt for risky actions' },
-  { value: 'acceptEdits', label: 'Auto-accept edits' },
-  { value: 'bypassPermissions', label: 'Bypass all (dangerous)' },
-  { value: 'plan', label: 'Plan only (read-only)' },
-] as const;
-
-const CLAUDE_EFFORT_OPTIONS: readonly {
-  value: ClaudeAgentEffort;
-  label: string;
-}[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'Extra high' },
-  { value: 'max', label: 'Maximum' },
-] as const;
+const SANDBOX_MODE_OPTIONS = catalogSelectOptions<CodexSandboxMode>(
+  WorkspaceStateKey.CODEX_SANDBOX_MODE,
+);
+const REASONING_EFFORT_OPTIONS = catalogSelectOptions<CodexReasoningEffort>(
+  WorkspaceStateKey.CODEX_REASONING_EFFORT,
+);
+const APPROVAL_POLICY_OPTIONS = catalogSelectOptions<CodexApprovalPolicy>(
+  WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+);
+const CLAUDE_MODEL_OPTIONS = catalogSelectOptions<ClaudeAgentModel>(
+  WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+);
+const CLAUDE_PERMISSION_MODE_OPTIONS =
+  catalogSelectOptions<ClaudeAgentPermissionMode>(
+    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+  );
+const CLAUDE_EFFORT_OPTIONS = catalogSelectOptions<ClaudeAgentEffort>(
+  WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+);
 
 @customElement('ai-agents-tab')
 export class AIAgentsTab extends LitElement {
