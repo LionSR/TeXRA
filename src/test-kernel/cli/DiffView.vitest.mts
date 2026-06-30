@@ -11,13 +11,25 @@ import {
 } from '@cli/chat/tui/render/DiffView';
 import { fillRows } from '@cli/chat/tui/render/terminalText';
 
+// Builds hunks where every other line was upper-cased, giving an even mix of
+// context and changed rows for the display-budget tests below.
+function alternatingHunks(lines: string[]): ReturnType<typeof buildHunks> {
+  const revised = lines.map((line, index) =>
+    index % 2 === 1 ? line.toUpperCase() : line,
+  );
+  return buildHunks('draft.tex', lines.join('\n'), revised.join('\n'));
+}
+
 describe('CLI diff display', () => {
   it('keeps the overflow marker inside the total display budget', () => {
-    const hunks = buildHunks(
-      'draft.tex',
-      ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'].join('\n'),
-      ['alpha', 'BETA', 'gamma', 'DELTA', 'epsilon', 'ZETA'].join('\n'),
-    );
+    const hunks = alternatingHunks([
+      'alpha',
+      'beta',
+      'gamma',
+      'delta',
+      'epsilon',
+      'zeta',
+    ]);
 
     const lines = boundedDiffDisplayLines(hunks, 30, 4);
 
@@ -29,11 +41,14 @@ describe('CLI diff display', () => {
   });
 
   it('renders scroll markers around the visible diff window', () => {
-    const hunks = buildHunks(
-      'draft.tex',
-      ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'].join('\n'),
-      ['alpha', 'BETA', 'gamma', 'DELTA', 'epsilon', 'ZETA'].join('\n'),
-    );
+    const hunks = alternatingHunks([
+      'alpha',
+      'beta',
+      'gamma',
+      'delta',
+      'epsilon',
+      'zeta',
+    ]);
 
     const lines = scrollBoundedDiffDisplayLines(hunks, 0, 4, 2);
 
@@ -59,11 +74,7 @@ describe('CLI diff display', () => {
   });
 
   it('shows a changed line in a one-row diff window', () => {
-    const hunks = buildHunks(
-      'draft.tex',
-      ['alpha', 'beta', 'gamma', 'delta'].join('\n'),
-      ['alpha', 'BETA', 'gamma', 'DELTA'].join('\n'),
-    );
+    const hunks = alternatingHunks(['alpha', 'beta', 'gamma', 'delta']);
 
     const lines = scrollBoundedDiffDisplayLines(hunks, 0, 1, 0);
 
@@ -72,11 +83,7 @@ describe('CLI diff display', () => {
   });
 
   it('prioritizes changed rows in a cramped diff window', () => {
-    const hunks = buildHunks(
-      'draft.tex',
-      ['alpha', 'beta', 'gamma', 'delta'].join('\n'),
-      ['alpha', 'BETA', 'gamma', 'DELTA'].join('\n'),
-    );
+    const hunks = alternatingHunks(['alpha', 'beta', 'gamma', 'delta']);
 
     const lines = scrollBoundedDiffDisplayLines(hunks, 0, 3, 0);
 
@@ -159,20 +166,33 @@ describe('full-width diff bands', () => {
     expect(DIFF_LINE_STYLE.removed?.color).toBeDefined();
   });
 
-  it('pads a short row out to the full width so the band fills the row', () => {
-    expect(fillRows('+abc', 8)).toBe('+abc    ');
-  });
-
-  it('measures display columns, not code units, for wide glyphs', () => {
-    // `σ`/`∑` are single display columns; a naive `.length` pad would overshoot.
-    expect(fillRows('+ σ ∑', 10)).toBe('+ σ ∑     ');
-  });
-
-  it('pads every visual row of a pre-wrapped multi-row line', () => {
-    expect(fillRows('+aa\n+bb', 5)).toBe('+aa  \n+bb  ');
-  });
-
-  it('leaves a row that already meets or exceeds the width untouched', () => {
-    expect(fillRows('+abcdef', 4)).toBe('+abcdef');
+  // `σ`/`∑` are single display columns; a naive `.length` pad would overshoot.
+  it.each([
+    {
+      name: 'pads a short row out to the full width so the band fills the row',
+      input: '+abc',
+      width: 8,
+      expected: '+abc    ',
+    },
+    {
+      name: 'measures display columns, not code units, for wide glyphs',
+      input: '+ σ ∑',
+      width: 10,
+      expected: '+ σ ∑     ',
+    },
+    {
+      name: 'pads every visual row of a pre-wrapped multi-row line',
+      input: '+aa\n+bb',
+      width: 5,
+      expected: '+aa  \n+bb  ',
+    },
+    {
+      name: 'leaves a row that already meets or exceeds the width untouched',
+      input: '+abcdef',
+      width: 4,
+      expected: '+abcdef',
+    },
+  ])('$name', ({ input, width, expected }) => {
+    expect(fillRows(input, width)).toBe(expected);
   });
 });

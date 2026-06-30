@@ -113,56 +113,60 @@ function firstCompactionCacheControlFrom(call: unknown): unknown {
   return (firstMessage.content[0] as { cache_control?: unknown }).cache_control;
 }
 
+function compactionMessages(): MessageParam[] {
+  return [
+    {
+      role: 'assistant',
+      content: [
+        {
+          type: 'compaction',
+          content: '<summary>state</summary>',
+          cache_control: { type: 'ephemeral', ttl: '1h' },
+        },
+      ] as any,
+    },
+    ...structuredClone(USER_MESSAGES),
+  ];
+}
+
+async function runRequest(
+  messages: MessageParam[],
+  tools?: ToolDefinition[],
+): Promise<{ createCalls: unknown[]; countCalls: unknown[] }> {
+  const { client, createCalls, countCalls } = createClient();
+  await createHandler().createResponse({
+    client,
+    messages,
+    temperature: 0,
+    ...(tools ? { tools } : {}),
+  });
+  return { createCalls, countCalls };
+}
+
 describe('Anthropic extended cache TTL beta', () => {
   it('adds the beta to create and token-count requests when tool-use uses a 1h cache TTL', async () => {
-    const { client, createCalls, countCalls } = createClient();
-
-    await createHandler().createResponse({
-      client,
-      messages: structuredClone(USER_MESSAGES),
-      temperature: 0,
-      tools: [TOOL],
-    });
+    const { createCalls, countCalls } = await runRequest(
+      structuredClone(USER_MESSAGES),
+      [TOOL],
+    );
 
     expect(betasFrom(createCalls[0])).toContain(EXTENDED_CACHE_TTL_BETA);
     expect(betasFrom(countCalls[0])).toContain(EXTENDED_CACHE_TTL_BETA);
   });
 
   it('does not add the beta to simple 5-minute cache requests', async () => {
-    const { client, createCalls, countCalls } = createClient();
-
-    await createHandler().createResponse({
-      client,
-      messages: structuredClone(USER_MESSAGES),
-      temperature: 0,
-    });
+    const { createCalls, countCalls } = await runRequest(
+      structuredClone(USER_MESSAGES),
+    );
 
     expect(betasFrom(createCalls[0])).not.toContain(EXTENDED_CACHE_TTL_BETA);
     expect(betasFrom(countCalls[0])).not.toContain(EXTENDED_CACHE_TTL_BETA);
   });
 
   it('adds the beta when a retained compaction block uses a long-TTL request', async () => {
-    const { client, createCalls, countCalls } = createClient();
-    const messages: MessageParam[] = [
-      {
-        role: 'assistant',
-        content: [
-          {
-            type: 'compaction',
-            content: '<summary>state</summary>',
-            cache_control: { type: 'ephemeral', ttl: '1h' },
-          },
-        ] as any,
-      },
-      ...structuredClone(USER_MESSAGES),
-    ];
-
-    await createHandler().createResponse({
-      client,
-      messages,
-      temperature: 0,
-      tools: [TOOL],
-    });
+    const { createCalls, countCalls } = await runRequest(compactionMessages(), [
+      TOOL,
+    ]);
 
     expect(betasFrom(createCalls[0])).toContain(EXTENDED_CACHE_TTL_BETA);
     expect(betasFrom(countCalls[0])).toContain(EXTENDED_CACHE_TTL_BETA);
@@ -173,26 +177,7 @@ describe('Anthropic extended cache TTL beta', () => {
   });
 
   it('normalizes retained compaction blocks to a short TTL for non-tool requests', async () => {
-    const { client, createCalls, countCalls } = createClient();
-    const messages: MessageParam[] = [
-      {
-        role: 'assistant',
-        content: [
-          {
-            type: 'compaction',
-            content: '<summary>state</summary>',
-            cache_control: { type: 'ephemeral', ttl: '1h' },
-          },
-        ] as any,
-      },
-      ...structuredClone(USER_MESSAGES),
-    ];
-
-    await createHandler().createResponse({
-      client,
-      messages,
-      temperature: 0,
-    });
+    const { createCalls, countCalls } = await runRequest(compactionMessages());
 
     expect(firstCompactionCacheControlFrom(createCalls[0])).toEqual({
       type: 'ephemeral',

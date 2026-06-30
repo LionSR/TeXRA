@@ -16,26 +16,36 @@ interface LogListTestHooks {
   activateLinkFromEvent(event: Event): boolean;
 }
 
+function setupEnterKeyOnLink(): {
+  event: KeyboardEvent;
+  hooks: LogListTestHooks;
+  activateLinkFromEvent: ReturnType<typeof vi.fn>;
+} {
+  const element = document.createElement('log-list') as LogList;
+  const link = document.createElement('span');
+  link.className = 'file-link clickable-link';
+
+  const event = new KeyboardEvent('keydown', {
+    key: 'Enter',
+    bubbles: true,
+    composed: true,
+    cancelable: true,
+  });
+  Object.defineProperty(event, 'composedPath', {
+    configurable: true,
+    value: () => [link, element, document.body, document, window],
+  });
+
+  const hooks = element as unknown as LogListTestHooks;
+  const activateLinkFromEvent = vi.fn(() => true);
+  hooks.activateLinkFromEvent = activateLinkFromEvent;
+
+  return { event, hooks, activateLinkFromEvent };
+}
+
 describe('log-list keyboard activation', () => {
   it('uses the composed path for transcript links across shadow roots', () => {
-    const element = document.createElement('log-list') as LogList;
-    const link = document.createElement('span');
-    link.className = 'file-link clickable-link';
-
-    const event = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    });
-    Object.defineProperty(event, 'composedPath', {
-      configurable: true,
-      value: () => [link, element, document.body, document, window],
-    });
-
-    const hooks = element as unknown as LogListTestHooks;
-    const activateLinkFromEvent = vi.fn(() => true);
-    hooks.activateLinkFromEvent = activateLinkFromEvent;
+    const { event, hooks, activateLinkFromEvent } = setupEnterKeyOnLink();
 
     hooks.handleKeyEvent(event);
 
@@ -44,25 +54,8 @@ describe('log-list keyboard activation', () => {
   });
 
   it('does not re-activate links when a child handler consumed the key', () => {
-    const element = document.createElement('log-list') as LogList;
-    const link = document.createElement('span');
-    link.className = 'file-link clickable-link';
-
-    const event = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    });
-    Object.defineProperty(event, 'composedPath', {
-      configurable: true,
-      value: () => [link, element, document.body, document, window],
-    });
+    const { event, hooks, activateLinkFromEvent } = setupEnterKeyOnLink();
     event.preventDefault();
-
-    const hooks = element as unknown as LogListTestHooks;
-    const activateLinkFromEvent = vi.fn(() => true);
-    hooks.activateLinkFromEvent = activateLinkFromEvent;
 
     hooks.handleKeyEvent(event);
 

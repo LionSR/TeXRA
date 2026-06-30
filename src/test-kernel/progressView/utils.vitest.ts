@@ -1,90 +1,97 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
-
 // Standard library imports
+import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { JSDOM } from 'jsdom';
+import { describe, it } from 'vitest';
 
 // Local imports
 import { getComposedPathElement } from '@progressView/frontend/utils';
 import { updateRounds } from '@progressView/frontend/stateUtils';
 
+type RoundItems = Record<string, string[]>;
+
+type UpdateRoundsCase = {
+  title: string;
+  current: RoundItems;
+  update: { rounds?: RoundItems; reset?: boolean };
+  expected: RoundItems;
+};
+
+/**
+ * Run `body` with `globalThis.Element` / `HTMLElement` pointing at a fresh
+ * JSDOM instance so `instanceof Element` checks resolve, restoring the original
+ * globals afterwards.
+ */
+function withDomGlobals<T>(html: string, body: (document: Document) => T): T {
+  const dom = new JSDOM(html);
+  const originalElement = globalThis.Element;
+  const originalHTMLElement = globalThis.HTMLElement;
+  globalThis.Element = dom.window.Element;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  try {
+    return body(dom.window.document);
+  } finally {
+    globalThis.Element = originalElement;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+}
+
 describe('getComposedPathElement', () => {
   it('returns the first matching element from the composed path', () => {
-    const dom = new JSDOM(
+    withDomGlobals(
       '<button data-command="run"><span class="inner"></span></button>',
+      (document) => {
+        const button = document.querySelector('button') as HTMLElement;
+        const span = document.querySelector('span') as HTMLElement;
+        const event = {
+          composedPath: () => [span, button],
+        } as unknown as Event;
+
+        assert.equal(
+          getComposedPathElement<HTMLElement>(event, '[data-command]'),
+          button,
+        );
+      },
     );
-    const originalElement = globalThis.Element;
-    const originalHTMLElement = globalThis.HTMLElement;
-    try {
-      globalThis.Element = dom.window.Element;
-      globalThis.HTMLElement = dom.window.HTMLElement;
-
-      const button = dom.window.document.querySelector('button') as HTMLElement;
-      const span = dom.window.document.querySelector('span') as HTMLElement;
-      const event = {
-        composedPath: () => [span, button],
-      } as unknown as Event;
-
-      const result = getComposedPathElement<HTMLElement>(
-        event,
-        '[data-command]',
-      );
-
-      assert.equal(result, button);
-    } finally {
-      globalThis.Element = originalElement;
-      globalThis.HTMLElement = originalHTMLElement;
-    }
   });
 
   it('returns null when no element matches', () => {
-    const dom = new JSDOM('<div><span class="inner"></span></div>');
-    const originalElement = globalThis.Element;
-    const originalHTMLElement = globalThis.HTMLElement;
-    try {
-      globalThis.Element = dom.window.Element;
-      globalThis.HTMLElement = dom.window.HTMLElement;
-
-      const span = dom.window.document.querySelector('span') as HTMLElement;
+    withDomGlobals('<div><span class="inner"></span></div>', (document) => {
+      const span = document.querySelector('span') as HTMLElement;
       const event = {
         composedPath: () => [span],
       } as unknown as Event;
 
-      const result = getComposedPathElement<HTMLElement>(
-        event,
-        '[data-command]',
+      assert.equal(
+        getComposedPathElement<HTMLElement>(event, '[data-command]'),
+        null,
       );
-
-      assert.equal(result, null);
-    } finally {
-      globalThis.Element = originalElement;
-      globalThis.HTMLElement = originalHTMLElement;
-    }
+    });
   });
 });
 
 describe('updateRounds', () => {
-  it('replaces all rounds on reset', () => {
-    const current = { round1: ['a'], round2: ['b'] };
-    const result = updateRounds(current, {
-      reset: true,
-      rounds: { round3: ['c'] },
-    });
-    assert.deepEqual(result, { round3: ['c'] });
-  });
-
-  it('clears all rounds on reset without rounds', () => {
-    const current = { round1: ['a'], round2: ['b'] };
-    const result = updateRounds(current, { reset: true });
-    assert.deepEqual(result, {});
-  });
-
-  it('merges new rounds into existing ones', () => {
-    const current = { round1: ['a'] };
-    const result = updateRounds(current, { rounds: { round2: ['b'] } });
-    assert.deepEqual(result, { round1: ['a'], round2: ['b'] });
+  it.each<UpdateRoundsCase>([
+    {
+      title: 'replaces all rounds on reset',
+      current: { round1: ['a'], round2: ['b'] },
+      update: { reset: true, rounds: { round3: ['c'] } },
+      expected: { round3: ['c'] },
+    },
+    {
+      title: 'clears all rounds on reset without rounds',
+      current: { round1: ['a'], round2: ['b'] },
+      update: { reset: true },
+      expected: {},
+    },
+    {
+      title: 'merges new rounds into existing ones',
+      current: { round1: ['a'] },
+      update: { rounds: { round2: ['b'] } },
+      expected: { round1: ['a'], round2: ['b'] },
+    },
+  ])('$title', ({ current, update, expected }) => {
+    assert.deepEqual(updateRounds(current, update), expected);
   });
 });

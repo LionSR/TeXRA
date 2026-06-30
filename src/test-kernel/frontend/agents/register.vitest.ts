@@ -2,8 +2,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-// Standard library imports
-
 // Local imports
 import { getAgentRegistrationSkipReason } from '@frontend/agents';
 

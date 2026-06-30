@@ -17,6 +17,24 @@ const providerFlags = {
   isGoogle: false,
 };
 
+function buildVars(
+  agentConfig: ReturnType<typeof AgentConfigSchema.parse>,
+): ReturnType<typeof buildUserVars> {
+  const agentSetting = AgentWorkflowSettingSchema.parse({
+    agentCategory: AgentCategory.Workflow,
+  });
+  const agentPrompt = AgentPromptSchema.parse({});
+  return buildUserVars(
+    agentConfig,
+    agentSetting,
+    agentPrompt,
+    '/agents/generic',
+    providerFlags,
+    noopTrace,
+    '/workspace',
+  );
+}
+
 describe('buildUserVars with missing configured files', () => {
   beforeEach(async () => {
     const { initPlatform } = await import('@platform/platform');
@@ -35,25 +53,13 @@ describe('buildUserVars with missing configured files', () => {
   });
 
   it('keeps prompt file metadata in sync with readable prompt XML', async () => {
-    const agentConfig = AgentConfigSchema.parse({
-      agent: 'generic',
-      model: 'test-model',
-      inputFiles: ['missing.tex', 'present.tex'],
-      contextFiles: ['missing-context.tex', 'context.tex'],
-    });
-    const agentSetting = AgentWorkflowSettingSchema.parse({
-      agentCategory: AgentCategory.Workflow,
-    });
-    const agentPrompt = AgentPromptSchema.parse({});
-
-    const vars = await buildUserVars(
-      agentConfig,
-      agentSetting,
-      agentPrompt,
-      '/agents/generic',
-      providerFlags,
-      noopTrace,
-      '/workspace',
+    const vars = await buildVars(
+      AgentConfigSchema.parse({
+        agent: 'generic',
+        model: 'test-model',
+        inputFiles: ['missing.tex', 'present.tex'],
+        contextFiles: ['missing-context.tex', 'context.tex'],
+      }),
     );
 
     expect(vars.ALL_INPUTS).toBe(
@@ -75,24 +81,12 @@ describe('buildUserVars with missing configured files', () => {
   });
 
   it('records attached memory read misses from the prompt-load pass', async () => {
-    const agentConfig = AgentConfigSchema.parse({
-      agent: 'generic',
-      model: 'test-model',
-      memories: ['/memories/present.md', '/memories/missing.md'],
-    });
-    const agentSetting = AgentWorkflowSettingSchema.parse({
-      agentCategory: AgentCategory.Workflow,
-    });
-    const agentPrompt = AgentPromptSchema.parse({});
-
-    const vars = await buildUserVars(
-      agentConfig,
-      agentSetting,
-      agentPrompt,
-      '/agents/generic',
-      providerFlags,
-      noopTrace,
-      '/workspace',
+    const vars = await buildVars(
+      AgentConfigSchema.parse({
+        agent: 'generic',
+        model: 'test-model',
+        memories: ['/memories/present.md', '/memories/missing.md'],
+      }),
     );
 
     expect(vars.ATTACHED_MEMORIES).toBe(

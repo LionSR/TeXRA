@@ -35,41 +35,29 @@ function responseServices({
 }
 
 describe('response cycle tool visibility', () => {
-  it('filters approval-gated workflow tools when prompts are unavailable', () => {
-    const tools = responseCycleToolsForModel(
-      responseServices({
-        approvalPromptsUnavailable: true,
-      }) as any,
-    );
-
-    expect(toolNames(tools)).toEqual(['grep']);
-  });
-
-  it('keeps workflow tools when approval prompts are available', () => {
-    const tools = responseCycleToolsForModel(
-      responseServices({
-        approvalPromptsUnavailable: false,
-      }) as any,
-    );
-
-    expect(toolNames(tools)).toEqual([
-      'bash',
-      'grep',
-      'inquiry',
-      'write_file',
-      'wolfram',
-    ]);
-  });
-
-  it('filters runtime-unavailable workflow tools without hiding approvals', () => {
-    const tools = responseCycleToolsForModel(
-      responseServices({
+  it.each([
+    {
+      name: 'filters approval-gated workflow tools when prompts are unavailable',
+      services: { approvalPromptsUnavailable: true },
+      expected: ['grep'],
+    },
+    {
+      name: 'keeps workflow tools when approval prompts are available',
+      services: { approvalPromptsUnavailable: false },
+      expected: ['bash', 'grep', 'inquiry', 'write_file', 'wolfram'],
+    },
+    {
+      name: 'filters runtime-unavailable workflow tools without hiding approvals',
+      services: {
         approvalPromptsUnavailable: false,
         runtimeUnavailableTools: ['inquiry'],
-      }) as any,
-    );
+      },
+      expected: ['bash', 'grep', 'write_file', 'wolfram'],
+    },
+  ])('$name', ({ services, expected }) => {
+    const tools = responseCycleToolsForModel(responseServices(services) as any);
 
-    expect(toolNames(tools)).toEqual(['bash', 'grep', 'write_file', 'wolfram']);
+    expect(toolNames(tools)).toEqual(expected);
   });
 
   it('omits workflow tools when the model handler cannot call functions', () => {

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - shared schemas
 import { STREAM_STATUS } from '@shared/schemas';
@@ -69,6 +69,11 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 
 describe('DesktopStreamSnapshot', () => {
   let tempDir: string | undefined;
+  let openDesktopStreamSnapshotStore: Module['openDesktopStreamSnapshotStore'];
+
+  beforeEach(async () => {
+    ({ openDesktopStreamSnapshotStore } = await loadModule());
+  });
 
   afterEach(async () => {
     if (tempDir == null) return;
@@ -82,7 +87,6 @@ describe('DesktopStreamSnapshot', () => {
   }
 
   it('starts empty when the file does not exist', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
     const store = await openDesktopStreamSnapshotStore(await tempFilePath());
 
     expect(store.hydrated).toEqual([]);
@@ -90,7 +94,6 @@ describe('DesktopStreamSnapshot', () => {
   });
 
   it('persists snapshots and reloads them on a fresh open', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
     const filePath = await tempFilePath();
 
     const initial = await openDesktopStreamSnapshotStore(filePath);
@@ -106,7 +109,6 @@ describe('DesktopStreamSnapshot', () => {
   });
 
   it('normalises status to STOPPED on hydrate', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
     const filePath = await tempFilePath();
 
     const writer = await openDesktopStreamSnapshotStore(filePath);
@@ -121,7 +123,6 @@ describe('DesktopStreamSnapshot', () => {
   });
 
   it('preserves parent stream links on hydrate', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
     const filePath = await tempFilePath();
 
     const writer = await openDesktopStreamSnapshotStore(filePath);
@@ -137,7 +138,6 @@ describe('DesktopStreamSnapshot', () => {
   });
 
   it('upsert overwrites an existing snapshot with the same id', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
     const filePath = await tempFilePath();
 
     const store = await openDesktopStreamSnapshotStore(filePath);
@@ -149,7 +149,6 @@ describe('DesktopStreamSnapshot', () => {
   });
 
   it('remove drops a snapshot and persists the removal', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
     const filePath = await tempFilePath();
 
     const store = await openDesktopStreamSnapshotStore(filePath);
@@ -163,13 +162,11 @@ describe('DesktopStreamSnapshot', () => {
   });
 
   it('remove is a no-op when the id is unknown', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
     const store = await openDesktopStreamSnapshotStore(await tempFilePath());
     await expect(store.remove('does-not-exist')).resolves.toBeUndefined();
   });
 
   it('replaceAll wipes the snapshot list', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
     const filePath = await tempFilePath();
 
     const store = await openDesktopStreamSnapshotStore(filePath);
@@ -181,20 +178,16 @@ describe('DesktopStreamSnapshot', () => {
   });
 
   it('discards a malformed snapshot file without throwing', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-stream-snapshot-'));
-    const filePath = join(tempDir, 'streams.json');
+    const filePath = await tempFilePath();
     await writeFile(filePath, '{ not json');
 
-    const warn = (..._args: unknown[]): void => {};
     const store = await openDesktopStreamSnapshotStore(filePath, {
-      log: { warn },
+      log: { warn: () => {} },
     });
     expect(store.hydrated).toEqual([]);
   });
 
   it('writes a versioned envelope under the restoredStreams key', async () => {
-    const { openDesktopStreamSnapshotStore } = await loadModule();
     const filePath = await tempFilePath();
 
     const store = await openDesktopStreamSnapshotStore(filePath);

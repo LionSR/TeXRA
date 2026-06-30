@@ -5,68 +5,58 @@ import { describe, it } from 'vitest';
 import { cleanSessionDescription } from '@agent/runtime/sessionDescription';
 
 describe('cleanSessionDescription', () => {
-  it('returns short text unchanged', () => {
-    assert.equal(
-      cleanSessionDescription('Reviewing introduction for clarity'),
+  it.each<[name: string, input: string, expected: string]>([
+    [
+      'returns short text unchanged',
       'Reviewing introduction for clarity',
-    );
-  });
-
-  it('collapses newlines into single spaces', () => {
-    assert.equal(
-      cleanSessionDescription('Reviewing\nintroduction\n  for clarity'),
       'Reviewing introduction for clarity',
-    );
-  });
-
-  it('strips surrounding quotes and backticks', () => {
-    assert.equal(
-      cleanSessionDescription('"Fixing TikZ arrows"'),
+    ],
+    [
+      'collapses newlines into single spaces',
+      'Reviewing\nintroduction\n  for clarity',
+      'Reviewing introduction for clarity',
+    ],
+    [
+      'strips surrounding double quotes',
+      '"Fixing TikZ arrows"',
       'Fixing TikZ arrows',
-    );
-    assert.equal(
-      cleanSessionDescription('`Fixing TikZ arrows`'),
+    ],
+    [
+      'strips surrounding backticks',
+      '`Fixing TikZ arrows`',
       'Fixing TikZ arrows',
-    );
-    assert.equal(
-      cleanSessionDescription("'Fixing TikZ arrows'"),
+    ],
+    [
+      'strips surrounding single quotes',
+      "'Fixing TikZ arrows'",
       'Fixing TikZ arrows',
-    );
-  });
-
-  it('strips trailing sentence punctuation', () => {
-    assert.equal(cleanSessionDescription('Fixing arrows.'), 'Fixing arrows');
-    assert.equal(cleanSessionDescription('Fixing arrows!?'), 'Fixing arrows');
-    assert.equal(cleanSessionDescription('Fixing arrows…'), 'Fixing arrows');
-  });
-
-  it('returns empty string when input is only quotes/punctuation', () => {
-    assert.equal(cleanSessionDescription('"..."'), '');
-    assert.equal(cleanSessionDescription('``'), '');
-    assert.equal(cleanSessionDescription('   '), '');
-  });
-
-  it('rejects full-sentence helper responses instead of persisting stale prose', () => {
-    assert.equal(
-      cleanSessionDescription(
-        'Since the system environment for this run does not provide delegation tools, I cannot delegate.',
-      ),
+    ],
+    ['strips a trailing period', 'Fixing arrows.', 'Fixing arrows'],
+    [
+      'strips trailing bang and question marks',
+      'Fixing arrows!?',
+      'Fixing arrows',
+    ],
+    ['strips a trailing ellipsis', 'Fixing arrows…', 'Fixing arrows'],
+    ['empties quote-only input', '"..."', ''],
+    ['empties backtick-only input', '``', ''],
+    ['empties whitespace-only input', '   ', ''],
+    [
+      'rejects full-sentence helper responses instead of persisting stale prose',
+      'Since the system environment for this run does not provide delegation tools, I cannot delegate.',
       '',
-    );
-  });
-
-  it('keeps compact labels within the description word budget', () => {
-    assert.equal(
-      cleanSessionDescription(
-        'Checking concise proof with one delegated review subagent',
-      ),
+    ],
+    [
+      'keeps compact labels within the description word budget',
       'Checking concise proof with one delegated review subagent',
-    );
+      'Checking concise proof with one delegated review subagent',
+    ],
+  ])('%s', (_name, input, expected) => {
+    assert.equal(cleanSessionDescription(input), expected);
   });
 
   it('truncates with ellipsis at 80 characters', () => {
-    const long = 'a'.repeat(120);
-    const result = cleanSessionDescription(long);
+    const result = cleanSessionDescription('a'.repeat(120));
     assert.equal(result.length, 80);
     assert.ok(result.endsWith('…'));
   });

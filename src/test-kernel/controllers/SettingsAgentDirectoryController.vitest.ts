@@ -48,28 +48,23 @@ function createController(options?: {
 }
 
 describe('SettingsAgentDirectoryController', () => {
-  it('reports default custom directory status from blank persisted state', async () => {
-    const { controller } = createController({
+  it.each([
+    {
+      label: 'default custom directory status from blank persisted state',
       configuredCustomDir: '  ',
       customDir: '/repo/.texra/agents',
-    });
-
-    assert.deepEqual(await controller.getCustomDirStatus(), {
-      path: '/repo/.texra/agents',
-      isDefault: true,
-    });
-  });
-
-  it('reports configured custom directory status from trimmed persisted state', async () => {
-    const { controller } = createController({
+      expected: { path: '/repo/.texra/agents', isDefault: true },
+    },
+    {
+      label: 'configured custom directory status from trimmed persisted state',
       configuredCustomDir: ' /repo/custom ',
       customDir: '/repo/custom',
-    });
+      expected: { path: '/repo/custom', isDefault: false },
+    },
+  ])('reports $label', async ({ configuredCustomDir, customDir, expected }) => {
+    const { controller } = createController({ configuredCustomDir, customDir });
 
-    assert.deepEqual(await controller.getCustomDirStatus(), {
-      path: '/repo/custom',
-      isDefault: false,
-    });
+    assert.deepEqual(await controller.getCustomDirStatus(), expected);
   });
 
   it('resets configured custom directory state', async () => {

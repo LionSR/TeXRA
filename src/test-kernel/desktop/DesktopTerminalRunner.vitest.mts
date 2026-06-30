@@ -28,15 +28,21 @@ async function loadDesktopTerminalRunner(): Promise<DesktopTerminalRunnerModule>
   ) as Promise<DesktopTerminalRunnerModule>;
 }
 
+async function makeRunner(): Promise<
+  ReturnType<DesktopTerminalRunnerModule['createDesktopTerminalRunner']>
+> {
+  const { createDesktopTerminalRunner } = await loadDesktopTerminalRunner();
+  const cwd = await mkdtemp(join(tmpdir(), 'texra-terminal-runner-'));
+  return createDesktopTerminalRunner({ cwd });
+}
+
 function nodeCommand(script: string): string {
   return `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}`;
 }
 
 describe('desktop terminal runner', () => {
   it('captures command output and exit status', async () => {
-    const { createDesktopTerminalRunner } = await loadDesktopTerminalRunner();
-    const cwd = await mkdtemp(join(tmpdir(), 'texra-terminal-runner-'));
-    const runner = createDesktopTerminalRunner({ cwd });
+    const runner = await makeRunner();
 
     const result = await runner.runCommand({
       name: 'TeXRA Setup Test',
@@ -55,9 +61,7 @@ describe('desktop terminal runner', () => {
   });
 
   it('passes defined environment values and drops undefined values', async () => {
-    const { createDesktopTerminalRunner } = await loadDesktopTerminalRunner();
-    const cwd = await mkdtemp(join(tmpdir(), 'texra-terminal-runner-'));
-    const runner = createDesktopTerminalRunner({ cwd });
+    const runner = await makeRunner();
 
     const result = await runner.runCommand({
       name: 'TeXRA Setup Env Test',
@@ -79,9 +83,7 @@ describe('desktop terminal runner', () => {
   });
 
   it('keeps only a bounded output tail while streaming', async () => {
-    const { createDesktopTerminalRunner } = await loadDesktopTerminalRunner();
-    const cwd = await mkdtemp(join(tmpdir(), 'texra-terminal-runner-'));
-    const runner = createDesktopTerminalRunner({ cwd });
+    const runner = await makeRunner();
 
     const result = await runner.runCommand({
       name: 'TeXRA Setup Long Output Test',

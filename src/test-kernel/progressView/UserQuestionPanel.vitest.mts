@@ -104,6 +104,14 @@ async function mountPanel(): Promise<UserQuestionPanel> {
   return element;
 }
 
+function collectActions(element: UserQuestionPanel): string[] {
+  const actions: string[] = [];
+  element.addEventListener('permission-action', (event) => {
+    actions.push((event as CustomEvent<{ action: string }>).detail.action);
+  });
+  return actions;
+}
+
 beforeAll(async () => {
   installDom();
   await import('@progressView/frontend/components/UserQuestionPanel');
@@ -120,10 +128,7 @@ afterAll(() => {
 describe('user-question-panel', () => {
   it('does not emit inherited approve action while rejection feedback is open', async () => {
     const element = await mountPanel();
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
-    });
+    const actions = collectActions(element);
 
     expect(element.handleKeyboardShortcut('n')).toBe(true);
     await element.updateComplete;
@@ -134,10 +139,7 @@ describe('user-question-panel', () => {
 
   it('does not submit an empty answer set', async () => {
     const element = await mountPanel();
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
-    });
+    const actions = collectActions(element);
 
     const button = element.shadowRoot?.querySelector(
       'wa-button[data-action="submit"]',

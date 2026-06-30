@@ -122,10 +122,6 @@ async function setSettingsTab(
   );
 }
 
-async function refreshMemoryData(launched: LaunchedApp): Promise<void> {
-  await sendHostCommand(launched, { command: 'getMemoryData' });
-}
-
 async function sendHostCommand(
   launched: LaunchedApp,
   message: Record<string, unknown>,
@@ -151,6 +147,10 @@ interface RenderedMemoryItem {
   displayPath?: string;
   storagePath?: string;
   preview?: string;
+}
+
+function isTargetMemory(item: RenderedMemoryItem): boolean {
+  return item.displayPath === MEMORY_DISPLAY_PATH;
 }
 
 async function readRenderedMemoryItems(
@@ -179,14 +179,9 @@ async function waitForRenderedMemoryItem(
 }
 
 async function waitForMemoryEntry(launched: LaunchedApp): Promise<void> {
-  await waitForRenderedMemoryItem(
-    launched,
-    (item) => item.displayPath === MEMORY_DISPLAY_PATH,
-  );
+  await waitForRenderedMemoryItem(launched, isTargetMemory);
 
-  const item = (await readRenderedMemoryItems(launched)).find(
-    (candidate) => candidate.displayPath === MEMORY_DISPLAY_PATH,
-  );
+  const item = (await readRenderedMemoryItems(launched)).find(isTargetMemory);
   if (item?.storagePath) {
     await sendHostCommand(launched, {
       command: 'getMemoryPreview',
@@ -197,7 +192,7 @@ async function waitForMemoryEntry(launched: LaunchedApp): Promise<void> {
   await waitForRenderedMemoryItem(
     launched,
     (candidate) =>
-      candidate.displayPath === MEMORY_DISPLAY_PATH &&
+      isTargetMemory(candidate) &&
       candidate.preview?.includes(MEMORY_PREVIEW_TEXT) === true,
   );
 
@@ -206,7 +201,7 @@ async function waitForMemoryEntry(launched: LaunchedApp): Promise<void> {
 
 async function verifyMemoryEntryIsListed(launched: LaunchedApp): Promise<void> {
   await setSettingsTab(launched, SETTINGS_TAB_INDEX.MEMORY);
-  await refreshMemoryData(launched);
+  await sendHostCommand(launched, { command: 'getMemoryData' });
   await waitForMemoryEntry(launched);
 }
 

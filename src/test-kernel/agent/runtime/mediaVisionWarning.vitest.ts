@@ -9,40 +9,39 @@ import {
 } from '@agent/runtime/mediaVisionWarning';
 
 describe('media vision warnings', () => {
-  it('warns for attached media when native audio is supported but vision is not', () => {
-    const capabilities = {
-      supportsNativeAudio: true,
-      supportsVision: false,
-    };
-
-    expect(shouldWarnMediaNeedsVision(['figure.png'], capabilities)).toBe(true);
-  });
-
-  it('does not warn for audio-only media on non-vision models', () => {
-    expect(
-      shouldWarnMediaNeedsVision(['voice.mp3'], {
-        supportsVision: false,
-      }),
-    ).toBe(false);
+  it.each([
+    {
+      name: 'warns for attached media when native audio is supported but vision is not',
+      files: ['figure.png'],
+      capabilities: { supportsNativeAudio: true, supportsVision: false },
+      expected: true,
+    },
+    {
+      name: 'does not warn for audio-only media on non-vision models',
+      files: ['voice.mp3'],
+      capabilities: { supportsVision: false },
+      expected: false,
+    },
+    {
+      name: 'does not warn when there are no media files',
+      files: [],
+      capabilities: { supportsVision: false },
+      expected: false,
+    },
+    {
+      name: 'does not warn when vision is supported',
+      files: ['figure.png'],
+      capabilities: { supportsVision: true },
+      expected: false,
+    },
+  ])('$name', ({ files, capabilities, expected }) => {
+    expect(shouldWarnMediaNeedsVision(files, capabilities)).toBe(expected);
   });
 
   it('counts only media files that need vision', () => {
     expect(
       countMediaFilesNeedingVision(['figure.png', 'voice.mp3', 'document.pdf']),
     ).toBe(2);
-  });
-
-  it('does not warn when there are no media files or vision is supported', () => {
-    expect(
-      shouldWarnMediaNeedsVision([], {
-        supportsVision: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldWarnMediaNeedsVision(['figure.png'], {
-        supportsVision: true,
-      }),
-    ).toBe(false);
   });
 
   it('formats startup and follow-up warnings consistently', () => {

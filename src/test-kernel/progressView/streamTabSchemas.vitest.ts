@@ -5,42 +5,55 @@ import { describe, it } from 'vitest';
 // Standard library imports
 
 // Local imports
-import { selectPreferredLegacyInstruction } from '@shared/schemas';
+import {
+  selectPreferredLegacyInstruction,
+  type LegacyInstructionEntry,
+} from '@shared/schemas';
+
+type LegacyInstructionCase = {
+  title: string;
+  record: Record<string, LegacyInstructionEntry>;
+  preferredRunId?: string;
+  expected: string;
+};
 
 describe('selectPreferredLegacyInstruction', () => {
-  it('prefers the explicitly selected legacy run when available', () => {
-    const result = selectPreferredLegacyInstruction(
-      {
+  it.each<LegacyInstructionCase>([
+    {
+      title: 'prefers the explicitly selected legacy run when available',
+      record: {
         older: { text: 'older instruction', timestamp: 100 },
         active: { text: 'active instruction', timestamp: 50 },
       },
-      'active',
+      preferredRunId: 'active',
+      expected: 'active instruction',
+    },
+    {
+      title: 'falls back to the newest timestamp when no preferred run exists',
+      record: {
+        first: { text: 'first instruction', timestamp: 100 },
+        latest: { text: 'latest instruction', timestamp: 200 },
+      },
+      preferredRunId: undefined,
+      expected: 'latest instruction',
+    },
+    {
+      title: 'falls back to later insertion order when timestamps are absent',
+      record: {
+        first: { text: 'first instruction' },
+        second: { text: 'second instruction' },
+      },
+      preferredRunId: undefined,
+      expected: 'second instruction',
+    },
+  ])('$title', ({ record, preferredRunId, expected }) => {
+    assert.equal(
+      selectPreferredLegacyInstruction(record, preferredRunId)?.text,
+      expected,
     );
-
-    assert.equal(result?.text, 'active instruction');
-  });
-
-  it('falls back to the newest timestamp when no preferred run exists', () => {
-    const result = selectPreferredLegacyInstruction({
-      first: { text: 'first instruction', timestamp: 100 },
-      latest: { text: 'latest instruction', timestamp: 200 },
-    });
-
-    assert.equal(result?.text, 'latest instruction');
-  });
-
-  it('falls back to later insertion order when timestamps are absent', () => {
-    const result = selectPreferredLegacyInstruction({
-      first: { text: 'first instruction' },
-      second: { text: 'second instruction' },
-    });
-
-    assert.equal(result?.text, 'second instruction');
   });
 
   it('returns null when no legacy instructions exist', () => {
-    const result = selectPreferredLegacyInstruction({});
-
-    assert.equal(result, null);
+    assert.equal(selectPreferredLegacyInstruction({}), null);
   });
 });

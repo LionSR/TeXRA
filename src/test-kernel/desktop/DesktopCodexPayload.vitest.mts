@@ -48,6 +48,19 @@ const codexPlatforms = {
   },
 } as const;
 
+interface CodexPayloadModule {
+  inferCodexPlatformKeys(input: {
+    appPath: string;
+    arch?: number;
+    platform?: string;
+  }): string[];
+  expectedCodexPayloadBudgetBytes(platformKeys: string[]): number;
+}
+
+async function loadCodexPayload(): Promise<CodexPayloadModule> {
+  return (await import(payloadUrl)) as CodexPayloadModule;
+}
+
 let tempRoots: string[] = [];
 
 afterEach(() => {
@@ -107,9 +120,7 @@ describe('desktop Codex package payload', () => {
   });
 
   it('does not infer Windows from a darwin path segment', async () => {
-    const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
-      inferCodexPlatformKeys: (input: { appPath: string }) => string[];
-    };
+    const { inferCodexPlatformKeys } = await loadCodexPayload();
 
     expect(
       inferCodexPlatformKeys({
@@ -119,13 +130,7 @@ describe('desktop Codex package payload', () => {
   });
 
   it('infers architecture from path tokens nearest the app bundle', async () => {
-    const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
-      inferCodexPlatformKeys: (input: {
-        appPath: string;
-        arch?: number;
-        platform?: string;
-      }) => string[];
-    };
+    const { inferCodexPlatformKeys } = await loadCodexPayload();
 
     expect(
       inferCodexPlatformKeys({
@@ -147,9 +152,7 @@ describe('desktop Codex package payload', () => {
   });
 
   it('defaults Linux and Windows package paths without architecture tokens to x64', async () => {
-    const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
-      inferCodexPlatformKeys: (input: { appPath: string }) => string[];
-    };
+    const { inferCodexPlatformKeys } = await loadCodexPayload();
 
     expect(
       inferCodexPlatformKeys({
@@ -165,10 +168,7 @@ describe('desktop Codex package payload', () => {
 
   it('uses the universal Codex payload budget only for universal builds', async () => {
     const { expectedCodexPayloadBudgetBytes, inferCodexPlatformKeys } =
-      (await import(payloadUrl)) as {
-        expectedCodexPayloadBudgetBytes: (platformKeys: string[]) => number;
-        inferCodexPlatformKeys: (input: { appPath: string }) => string[];
-      };
+      await loadCodexPayload();
 
     const singlePlatformBudget = expectedCodexPayloadBudgetBytes(
       inferCodexPlatformKeys({
@@ -185,13 +185,7 @@ describe('desktop Codex package payload', () => {
   });
 
   it('keeps both Darwin Codex packages during universal temp packaging', async () => {
-    const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
-      inferCodexPlatformKeys: (input: {
-        arch: number;
-        appPath: string;
-        platform: string;
-      }) => string[];
-    };
+    const { inferCodexPlatformKeys } = await loadCodexPayload();
 
     expect(
       inferCodexPlatformKeys({

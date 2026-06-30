@@ -1,10 +1,6 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
-
-// Standard library imports
-
-// Third-party imports
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
@@ -63,31 +59,26 @@ describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
     vi.restoreAllMocks();
   });
 
-  it('caps xhigh to medium for free tier on GPT-5 with server-side keys', () => {
-    stubServerSideKeys(FREE_TIER);
+  it.each([
+    {
+      name: 'caps xhigh to medium for free tier on GPT-5 with server-side keys',
+      tier: FREE_TIER,
+      expected: ReasoningEffort.MEDIUM,
+    },
+    {
+      name: 'caps xhigh to high for Max tier on GPT-5 with server-side keys',
+      tier: MAX_TIER,
+      expected: ReasoningEffort.HIGH,
+    },
+    {
+      name: 'does not cap xhigh for Ultra tier on GPT-5 with server-side keys',
+      tier: ULTRA_TIER,
+      expected: ReasoningEffort.XHIGH,
+    },
+  ])('$name', ({ tier, expected }) => {
+    stubServerSideKeys(tier);
     const handler = new ModelHandlerOpenRouterNative(buildGpt5Config());
-    assert.equal(
-      (handler as any).getEffectiveReasoningEffort(),
-      ReasoningEffort.MEDIUM,
-    );
-  });
-
-  it('caps xhigh to high for Max tier on GPT-5 with server-side keys', () => {
-    stubServerSideKeys(MAX_TIER);
-    const handler = new ModelHandlerOpenRouterNative(buildGpt5Config());
-    assert.equal(
-      (handler as any).getEffectiveReasoningEffort(),
-      ReasoningEffort.HIGH,
-    );
-  });
-
-  it('does not cap xhigh for Ultra tier on GPT-5 with server-side keys', () => {
-    stubServerSideKeys(ULTRA_TIER);
-    const handler = new ModelHandlerOpenRouterNative(buildGpt5Config());
-    assert.equal(
-      (handler as any).getEffectiveReasoningEffort(),
-      ReasoningEffort.XHIGH,
-    );
+    assert.equal((handler as any).getEffectiveReasoningEffort(), expected);
   });
 
   it('does not cap when not using server-side keys (free tier, own key)', () => {

@@ -41,30 +41,35 @@ function createLogger() {
   };
 }
 
+function setupBinder(executionId: string) {
+  const registry = new ExecutionRegistry();
+  const releaseSource = createReleaseSource();
+  const logger = createLogger();
+  const explicit = createRecordingHost();
+  const binder = new ExecutionSubscriptionBinder({
+    registry,
+    releaseSource: releaseSource.source,
+    logger,
+  });
+  const handle = new AgentExecutionHandle(
+    executionId,
+    streamId,
+    childStreamId,
+    'search',
+    'toolUse',
+    explicit.host,
+  );
+  registry.track(handle);
+  return { registry, releaseSource, logger, explicit, binder, executionId };
+}
+
 describe('ExecutionSubscriptionBinder', () => {
   it('owns bind and unbind state per stream/execution pair', () => {
-    const registry = new ExecutionRegistry();
-    const releaseSource = createReleaseSource();
-    const logger = createLogger();
-    const explicit = createRecordingHost();
-    const binder = new ExecutionSubscriptionBinder({
-      registry,
-      releaseSource: releaseSource.source,
-      logger,
-    });
-    const executionId = 'exec-subscription-bind-test';
-    const handle = new AgentExecutionHandle(
-      executionId,
-      streamId,
-      childStreamId,
-      'search',
-      'toolUse',
-      explicit.host,
+    const { registry, logger, explicit, binder, executionId } = setupBinder(
+      'exec-subscription-bind-test',
     );
 
     try {
-      registry.track(handle);
-
       binder.bind(streamId, executionId, explicit.host);
       binder.bind(streamId, executionId, explicit.host);
 
@@ -78,26 +83,10 @@ describe('ExecutionSubscriptionBinder', () => {
   });
 
   it('disposes stream subscriptions when the follow-up queue is released', () => {
-    const registry = new ExecutionRegistry();
-    const releaseSource = createReleaseSource();
-    const explicit = createRecordingHost();
-    const binder = new ExecutionSubscriptionBinder({
-      registry,
-      releaseSource: releaseSource.source,
-      logger: createLogger(),
-    });
-    const executionId = 'exec-subscription-release-test';
-    const handle = new AgentExecutionHandle(
-      executionId,
-      streamId,
-      childStreamId,
-      'search',
-      'toolUse',
-      explicit.host,
-    );
+    const { registry, releaseSource, explicit, binder, executionId } =
+      setupBinder('exec-subscription-release-test');
 
     try {
-      registry.track(handle);
       binder.bind(streamId, executionId, explicit.host);
 
       releaseSource.release(streamId);
@@ -110,26 +99,10 @@ describe('ExecutionSubscriptionBinder', () => {
   });
 
   it('unregisters the release observer when disposed', () => {
-    const registry = new ExecutionRegistry();
-    const releaseSource = createReleaseSource();
-    const explicit = createRecordingHost();
-    const binder = new ExecutionSubscriptionBinder({
-      registry,
-      releaseSource: releaseSource.source,
-      logger: createLogger(),
-    });
-    const executionId = 'exec-subscription-dispose-test';
-    const handle = new AgentExecutionHandle(
-      executionId,
-      streamId,
-      childStreamId,
-      'search',
-      'toolUse',
-      explicit.host,
-    );
+    const { registry, releaseSource, explicit, binder, executionId } =
+      setupBinder('exec-subscription-dispose-test');
 
     try {
-      registry.track(handle);
       binder.bind(streamId, executionId, explicit.host);
 
       expect(releaseSource.hasObserver()).toBe(true);
