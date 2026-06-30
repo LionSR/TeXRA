@@ -14,7 +14,6 @@ import {
   type AgentSetting,
   hasEndTag,
 } from '@agent/core/definition/AgentDataclass';
-import type { AnthropicAPIResponseUsage } from '@agent/core/usage/ResponseUsage';
 import type {
   AgentWorkspaceState,
   ThinkingBlock,
@@ -185,7 +184,6 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   BetaUsage,
-  AnthropicAPIResponseUsage,
   AnthropicToolCall,
   Anthropic,
   BetaMessage

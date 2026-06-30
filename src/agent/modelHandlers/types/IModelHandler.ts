@@ -190,13 +190,13 @@ export type SdkToolCall =
  *               ChatCompletionMessageParam for OpenAI). Must extend ProviderMessage.
  * @template U - Usage/statistics type returned by the provider's API response
  *               (e.g., Usage for Anthropic, CompletionUsage for OpenAI)
- * @template R - Processed response usage type for internal tracking
- *               (e.g., AnthropicAPIResponseUsage, OpenAIAPIResponseUsage)
+ * @template T - Tool call type (defaults to the full SdkToolCall union)
+ * @template C - Provider-specific client type
+ * @template Resp - Provider-specific response object type
  */
 export interface IModelHandler<
   M extends ProviderMessage = ProviderMessage,
-  U = any,
-  R = any,
+  U = unknown,
   T extends SdkToolCall = SdkToolCall,
   C = unknown,
   Resp = unknown,
