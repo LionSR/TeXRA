@@ -15,7 +15,6 @@ import {
   hasEndTag,
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import { type OpenAIAPIResponseUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -238,7 +237,6 @@ function mergeMissingStreamedOutputItems(
 export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseInputItem,
   ResponseUsage,
-  OpenAIAPIResponseUsage,
   OpenAIResponseToolCall,
   OpenAI,
   Response

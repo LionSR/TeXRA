@@ -29,7 +29,7 @@ export function extractTouchedFiles(
   stateSlices: StateSlicesSnapshot | null,
 ): string[] {
   return (
-    stateSlices?.workspaceSnapshot?.interactions?.edits?.map((e) => e.path) ??
+    stateSlices?.workspaceSnapshot.interactions.edits.map((e) => e.path) ??
     []
   );
 }

@@ -48,7 +48,6 @@ This document was produced by the internal TeXRA CLI validation model handler.
 export class ModelHandlerValidation extends ModelHandler<
   ChatCompletionMessageParam,
   ValidationResponse['usage'],
-  ValidationResponse['usage'],
   SdkToolCall,
   unknown,
   ValidationResponse

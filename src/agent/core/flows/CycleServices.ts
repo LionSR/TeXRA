@@ -49,7 +49,6 @@ export async function withModelClient<C, T extends object>(
   modelHandler: IModelHandler<
     ProviderMessage,
     unknown,
-    unknown,
     SdkToolCall,
     C
   >,

@@ -80,7 +80,6 @@ import type { ProviderStopReason } from '../types/StopReasonTypes';
 export class ModelHandlerOpenRouterNative extends ModelHandler<
   ChatMessages,
   ChatUsage | null,
-  ChatUsage,
   OpenRouterToolCall,
   OpenRouter,
   ChatResult

@@ -109,18 +109,16 @@ const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  * @template M Provider-specific message type
  * @template U Provider-specific usage type
- * @template R Provider-specific response usage type
  * @template T Provider-specific tool call type
  * @template C Provider-specific client type
  */
 export abstract class ModelHandler<
   M extends ProviderMessage = ProviderMessage,
   U = unknown,
-  R = unknown,
   T extends SdkToolCall = SdkToolCall,
   C = unknown,
   Resp = unknown,
-> implements IModelHandler<M, U, R, T, C, Resp> {
+> implements IModelHandler<M, U, T, C, Resp> {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;
