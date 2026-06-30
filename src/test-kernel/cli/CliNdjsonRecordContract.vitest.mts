@@ -21,6 +21,7 @@ const REPRESENTATIVE_RECORDS: CliNdjsonRecord[] = [
   { kind: 'auth', authenticated: true, account: 'a@b.c', expiresAt: 1 },
   { kind: 'auth', authenticated: false, relayTokenConfigured: true },
   { kind: 'auth-status', authenticated: true, tier: 'pro' },
+  { kind: 'init-config', init: { path: '.texra/config.json' } },
   { kind: 'relay-usage', tier: 'pro', costUsd: 1, limitUsd: 10 },
   { kind: 'relay-token', name: 'ci', token: 'secret' },
   { kind: 'relay-token-info', name: 'ci', createdAt: 1 },
