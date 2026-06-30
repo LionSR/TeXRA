@@ -1234,7 +1234,7 @@ const SCENARIOS = [
       '$ npm run compile:safe',
       'Directory:',
       'y approve',
-      'a approve session',
+      'a approve bash for session',
       'Use foreground panel shortcuts',
     ],
     unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
