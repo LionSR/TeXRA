@@ -2,24 +2,22 @@ import { join } from 'node:path';
 
 import { app } from 'electron';
 
-import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import {
+  createNodePlatform,
+  initNodeAgentRuntime,
+  initializeNodeGoalPrompts,
+} from '@platform/defaults/nodeHost';
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { StreamSnapshotStore } from '@transcript';
-import { registerAgentFeatures } from '@agent/features';
-import { initializeGoalPrompts } from '@agent/goal';
 import { toErrorMessage } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { configKeyVariants } from '@shared/config/configKeys';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
 import { ElectronSecrets } from './electronSecrets.js';
@@ -131,27 +129,26 @@ export async function initializeElectronPlatform(
   const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
 
   repairLaunchPath();
-  initPlatform({
-    config: new JsonConfigProvider({
-      workspace: workspaceConfigStore,
-      global: globalConfigStore,
+  initPlatform(
+    createNodePlatform({
+      configStores: {
+        workspace: workspaceConfigStore,
+        global: globalConfigStore,
+      },
+      globalState: globalStateStore,
+      workspaceState: workspaceStateStore,
+      storage,
+      secrets: new ElectronSecrets(secretsStore, {
+        showWarningMessage: showSecretStorageWarningDialog,
+      }),
+      lifecycle,
+      agentResume: {
+        tryResumeStream: tryResumeDesktopStream,
+        isResumeInFlight: isDesktopResumeInFlight,
+      },
+      getWorkspacePath: () => workspacePath,
     }),
-    globalState: globalStateStore,
-    workspaceState: workspaceStateStore,
-    fs: nodeFilesystem,
-    workspace: createNodeWorkspace(() => workspacePath),
-    storage,
-    secrets: new ElectronSecrets(secretsStore, {
-      showWarningMessage: showSecretStorageWarningDialog,
-    }),
-    lifecycle,
-    agentResume: {
-      tryResumeStream: tryResumeDesktopStream,
-      isResumeInFlight: isDesktopResumeInFlight,
-    },
-    toolAvailability: NO_TOOL_AVAILABILITY_HOST,
-  });
-  registerAgentFeatures();
+  );
 
   // Capture the prior-install signal BEFORE bootstrapElectronAgentDirectories
   // (below) writes LAST_KNOWN_VERSION via the bundled-agent directory sync.
@@ -163,7 +160,6 @@ export async function initializeElectronPlatform(
     ) !== undefined;
 
   const resourcesPath = resolveResourcesPath(mainDirname);
-  initializeGoalPrompts(join(resourcesPath, 'goal', 'goal.yaml'));
 
   // Persist per-stream sidecar data (todos, plan, usage, output files) via the
   // shared, host-agnostic snapshot store. The desktop progress backend owns the
@@ -172,8 +168,12 @@ export async function initializeElectronPlatform(
   const snapshotStore = new StreamSnapshotStore();
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => snapshotStore.flush());
 
-  // Lean tools talk to `lake env lean --server` directly in the desktop build.
-  registerDirectLeanLanguageServices(lifecycle);
+  // Register the shared Node-host agent runtime: memory + goal tool injections
+  // and the direct Lean language services (lake env lean --server). Registered
+  // after the snapshot-store shutdown handler so the snapshot flush still runs
+  // before the Lean adapter dispose.
+  initNodeAgentRuntime(lifecycle);
+  initializeNodeGoalPrompts(resourcesPath);
 
   await bootstrapElectronAgentDirectories(resourcesPath, app.getVersion());
 

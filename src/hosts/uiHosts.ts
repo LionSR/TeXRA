@@ -1,3 +1,6 @@
+// Third-party imports
+import stripAnsi from 'strip-ansi';
+
 export interface ClipboardHost {
   readText(): Promise<string>;
   writeText(text: string): Promise<void>;
@@ -99,11 +102,23 @@ export interface TerminalRunRequest extends TerminalOptions {
 }
 
 /**
- * Length cap (chars) for {@link TerminalRunResult.output}. Every host's
- * `TerminalRunner` keeps the same sliding-window tail so agents see identical
- * truncation regardless of where a setup command ran.
+ * Length cap (chars) for {@link TerminalRunResult.output}. Apply it through
+ * {@link truncateTerminalOutput} so agents see identical truncation regardless
+ * of where a setup command ran.
  */
 export const TERMINAL_OUTPUT_MAX_CHARS = 12_000;
+
+/**
+ * The shared ANSI-stripped, length-capped tail every host's `TerminalRunner`
+ * returns in {@link TerminalRunResult.output}. Strips control sequences, then
+ * keeps the trailing {@link TERMINAL_OUTPUT_MAX_CHARS} characters.
+ */
+export function truncateTerminalOutput(output: string): string {
+  const stripped = stripAnsi(output);
+  return stripped.length > TERMINAL_OUTPUT_MAX_CHARS
+    ? stripped.slice(-TERMINAL_OUTPUT_MAX_CHARS)
+    : stripped;
+}
 
 export interface TerminalRunResult {
   /** Undefined when the host cannot observe the command exit code. */
@@ -128,12 +143,4 @@ export interface TerminalHost {
 
 export interface TerminalRunner {
   runCommand(request: TerminalRunRequest): Promise<TerminalRunResult>;
-}
-
-export interface UIHosts {
-  readonly prompt: PromptHost;
-  readonly externalOpener: ExternalOpener;
-  readonly diff: DiffViewHost;
-  readonly terminal: TerminalHost;
-  readonly clipboard: ClipboardHost;
 }

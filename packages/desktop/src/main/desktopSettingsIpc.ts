@@ -8,6 +8,7 @@ import {
 import { createSettingsViewCommandHandlers } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
+import { buildProviderKeyStatuses } from '@controllers/settingsView/SettingsProfileController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
   buildModelSelectionMessage,
@@ -350,21 +351,26 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
-    const statuses = await loadApiKeyStatusMap(secrets, API_PROVIDERS);
-    return API_PROVIDERS.map((provider) => ({
-      provider,
-      displayName: getProviderDisplayName(
-        provider,
-        PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-      ),
-      status: statuses[provider],
-      keyUrl: getProviderKeyUrl(provider, PROVIDER_URLS[provider] ?? ''),
-      streaming: getProviderStreaming(provider),
-      customEndpoint: getProviderEndpoint(provider),
-      supportsCustomEndpoint: supportsCustomEndpoint(provider),
-      vscodeSettings: [],
-    }));
+  // Desktop has no VS Code settings, so `getProviderVscodeSettings` returns [];
+  // the rest of the mapping is shared with the extension via
+  // `buildProviderKeyStatuses` so the wire shape stays in one place.
+  function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
+    return buildProviderKeyStatuses({
+      providerIds: API_PROVIDERS,
+      loadProviderKeyStatuses: () =>
+        loadApiKeyStatusMap(secrets, API_PROVIDERS),
+      getProviderDisplayName: (provider) =>
+        getProviderDisplayName(
+          provider,
+          PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+        ),
+      getProviderKeyUrl: (provider) =>
+        getProviderKeyUrl(provider, PROVIDER_URLS[provider] ?? ''),
+      getProviderStreaming,
+      getProviderEndpoint,
+      supportsCustomEndpoint,
+      getProviderVscodeSettings: () => [],
+    });
   }
 
   async function postProfileData(): Promise<void> {

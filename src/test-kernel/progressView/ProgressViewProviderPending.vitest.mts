@@ -23,15 +23,20 @@ function readProgressViewProvider(): string {
 
 describe('ProgressViewProvider pending permissions', () => {
   it('keeps streams with pending user questions active', () => {
-    const source = readProgressViewProvider();
-    const methodStart = source.indexOf('hasPendingPermissionsForStream');
-    const methodEnd = source.indexOf('private canSendToWebview', methodStart);
+    // The pending-permission gate now lives in the shared backend UI config so
+    // every host computes it the same way.
+    const source = readFileSync(
+      resolve(
+        REPO_ROOT,
+        'src/shared/progressView/backend/progressBackendUiConfig.ts',
+      ),
+      'utf8',
+    );
+    const methodStart = source.indexOf('hasPendingPermissions');
     expect(methodStart).toBeGreaterThanOrEqual(0);
-    expect(methodEnd).toBeGreaterThan(methodStart);
-    const method = source.slice(methodStart, methodEnd);
 
-    expect(method).toContain(
-      'this.userQuestionHandler.hasPendingForStream(streamId)',
+    expect(source).toContain(
+      'handlers.userQuestion.hasPendingForStream(streamId)',
     );
   });
 
