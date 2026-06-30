@@ -115,8 +115,16 @@ function toRelayModel(config: ModelConfig): RelayModel {
 
 /** All relay-compatible models from llm-zoo, converted to relay format. */
 const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
-  .filter((m) => !m.openRouterOnly)
+  .filter((m) => !m.openRouterOnly && !m.retired)
   .map(toRelayModel);
+
+const RETIRED_MODEL_PATTERNS = Object.values(MODEL_CONFIGS)
+  .filter((m) => !m.openRouterOnly && m.retired)
+  .flatMap((m) =>
+    [m.name, m.fullName, m.openrouterFullName]
+      .filter((name): name is string => name != null)
+      .map((name) => name.toLowerCase()),
+  );
 
 // =============================================================================
 // Derived Arrays
@@ -258,6 +266,14 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
   return exactMatches.length > 0 ? exactMatches : boundaryMatches;
 }
 
+export function isRetiredModelRequest(modelName: string): boolean {
+  const name = normalizeModelName(modelName);
+  const modelPart = stripProviderPrefix(name);
+  return RETIRED_MODEL_PATTERNS.some(
+    (pattern) => modelPart === pattern || name === pattern,
+  );
+}
+
 /**
  * Check if a model is allowed for a given tier.
  * Free tier: models within the free price ceiling (input <= $1.5/M AND
@@ -275,8 +291,11 @@ export function isModelAllowedForTier(
   tier: string,
   modelName: string | null,
 ): boolean {
-  if (tier === ULTRA_TIER) return true;
+  if (tier === ULTRA_TIER) {
+    return modelName == null || !isRetiredModelRequest(modelName);
+  }
   if (!modelName) return false;
+  if (isRetiredModelRequest(modelName)) return false;
   if (tier === MAX_TIER) return true;
 
   const models = resolveAllModelsByApiName(modelName);

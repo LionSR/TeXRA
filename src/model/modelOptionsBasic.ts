@@ -24,7 +24,7 @@ export const DEFAULT_MODELS = [
 ];
 
 /** Increment when the persisted model list needs reconciliation. */
-export const MODEL_LIST_VERSION = 20;
+export const MODEL_LIST_VERSION = 21;
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
@@ -32,6 +32,11 @@ const THOUSAND = 1_000;
 /** Return whether the registry marks a model as deprecated. */
 export function isDeprecatedModel(model: string): boolean {
   return MODEL_CONFIGS[model]?.deprecated ?? false;
+}
+
+/** Return whether the registry marks a model as no longer served. */
+export function isRetiredModel(model: string): boolean {
+  return MODEL_CONFIGS[model]?.retired ?? false;
 }
 
 /** Format context window number for display. */
