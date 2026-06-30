@@ -2,7 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { settleQuickInput, showQuickPick } from '@commands/_shared/quickInputUtils';
+import {
+  settleQuickInput,
+  showQuickPick,
+} from '@commands/_shared/quickInputUtils';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
@@ -129,7 +132,8 @@ export async function setApiKey(provider?: ApiProvider): Promise<void> {
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
   const providerPick = await showQuickPick<ProviderQuickPickItem>({
     placeholder: 'Select API provider',
-    prompt: "Keys are stored in VS Code's encrypted secret store, never on disk.",
+    prompt:
+      "Keys are stored in VS Code's encrypted secret store, never on disk.",
     items: providerItems,
   });
 
@@ -150,7 +154,8 @@ export async function removeApiKey(): Promise<void> {
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
   const providerPick = await showQuickPick<ProviderQuickPickItem>({
     placeholder: 'Select API provider to remove key',
-    prompt: 'Only removes the key from TeXRA — does not delete it from the provider.',
+    prompt:
+      'Only removes the key from TeXRA — does not delete it from the provider.',
     items: providerItems,
   });
 

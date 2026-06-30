@@ -47,7 +47,8 @@ export async function showQuickPick<T extends vscode.QuickPickItem>(opts: {
   const qp = vscode.window.createQuickPick<T>();
   if (opts.title !== undefined) qp.title = opts.title;
   if (opts.placeholder !== undefined) qp.placeholder = opts.placeholder;
-  if (opts.ignoreFocusOut !== undefined) qp.ignoreFocusOut = opts.ignoreFocusOut;
+  if (opts.ignoreFocusOut !== undefined)
+    qp.ignoreFocusOut = opts.ignoreFocusOut;
   qp.items = opts.items;
   const defaultItem = opts.items[0];
   if (defaultItem) qp.activeItems = [defaultItem];

@@ -108,7 +108,8 @@ export async function signIn(): Promise<boolean> {
       title: 'TeXRA Sign In',
       placeholder: 'Choose a sign-in method',
       // VS Code 1.108+: explain what signing in grants. Ignored on older hosts.
-      prompt: 'Sign in to access AI models, remote agents, and TeXRA Researcher features',
+      prompt:
+        'Sign in to access AI models, remote agents, and TeXRA Researcher features',
       items: getSignInOptions(),
     });
     if (!selected) return false;
