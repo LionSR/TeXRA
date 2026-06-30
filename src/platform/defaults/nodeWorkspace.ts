@@ -27,5 +27,3 @@ export function createNodeWorkspace(
     },
   };
 }
-
-export const nodeWorkspace: WorkspaceProvider = createNodeWorkspace();
