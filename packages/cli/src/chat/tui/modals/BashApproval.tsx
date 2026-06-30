@@ -171,7 +171,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       borderStyle="double"
       color="yellow"
       title={BASH_APPROVAL_TITLE}
-      alwaysAllow={{ kind: 'bash', label: 'approve session' }}
+      alwaysAllow={{ kind: 'bash', label: 'approve bash for session' }}
       onDecide={props.onDecide}
     >
       {cwdLine ? <Text dimColor>{cwdLine}</Text> : null}

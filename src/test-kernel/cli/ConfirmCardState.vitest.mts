@@ -27,25 +27,33 @@ describe('CLI confirm-card key handling', () => {
     expect(confirmCardKeyAction('a', {}, false)).toBe('ignore');
   });
 
-  it('keeps session-wide approval hints compact enough for approval modals', () => {
+  it('shows scoped session-wide approval hints for approval modals', () => {
     expect(
       confirmCardKeyHints({
-        alwaysAllowLabel: 'approve session',
+        alwaysAllowLabel: 'approve bash for session',
       }),
     ).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
-      { key: 'a', action: 'approve session' },
+      { key: 'a', action: 'approve bash for session' },
       { key: 'e', action: 'feedback' },
       { key: 'Esc', action: 'cancel' },
     ]);
 
-    const rendered = confirmCardKeyHints({
-      alwaysAllowLabel: 'approve session',
+    expect(
+      confirmCardKeyHints({
+        alwaysAllowLabel: 'approve edits for session',
+      }),
+    ).toContainEqual({ key: 'a', action: 'approve edits for session' });
+
+    const compactRendered = confirmCardKeyHintsForWidth({
+      alwaysAllowLabel: 'approve bash for session',
+      maxColumns: 72,
     })
       .map((hint) => `${hint.key} ${hint.action}`)
       .join(' · ');
-    expect(rendered.length).toBeLessThanOrEqual(72);
+    expect(compactRendered).toContain('a bash session');
+    expect(compactRendered.length).toBeLessThanOrEqual(72);
   });
 
   it('shows submit/back hints while collecting rejection feedback', () => {
@@ -58,32 +66,58 @@ describe('CLI confirm-card key handling', () => {
   it('compacts long optional approval hints before hiding cancel', () => {
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve session',
+        alwaysAllowLabel: 'approve bash for session',
         maxColumns: 80,
       }),
-    ).toEqual(confirmCardKeyHints({ alwaysAllowLabel: 'approve session' }));
+    ).toEqual(
+      confirmCardKeyHints({ alwaysAllowLabel: 'approve bash for session' }),
+    );
 
     const compact = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'approve session',
-      maxColumns: 56,
+      alwaysAllowLabel: 'approve bash for session',
+      maxColumns: 60,
     });
 
     expect(compact).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
-      { key: 'a', action: 'session' },
+      { key: 'a', action: 'bash session' },
       { key: 'e', action: 'note' },
       { key: 'Esc', action: 'cancel' },
     ]);
     expect(
       compact.map((hint) => `${hint.key} ${hint.action}`).join(' · ').length,
-    ).toBeLessThanOrEqual(56);
+    ).toBeLessThanOrEqual(60);
+
+    expect(
+      confirmCardKeyHintsForWidth({
+        alwaysAllowLabel: 'approve edits for session',
+        maxColumns: 60,
+      }),
+    ).toContainEqual({ key: 'a', action: 'edit session' });
+  });
+
+  it('keeps session-scope hints before feedback on mid-width terminals', () => {
+    const compact = confirmCardKeyHintsForWidth({
+      alwaysAllowLabel: 'approve bash for session',
+      maxColumns: 50,
+    });
+
+    expect(compact).toEqual([
+      { key: 'y', action: 'approve' },
+      { key: 'n', action: 'reject' },
+      { key: 'a', action: 'bash session' },
+      { key: 'Esc', action: 'cancel' },
+    ]);
+    expect(
+      compact.map((hint) => `${hint.key} ${hint.action}`).join(' · ').length,
+    ).toBeLessThanOrEqual(50);
   });
 
   it('drops optional approval hints before hiding cancel on narrow terminals', () => {
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve session',
+        alwaysAllowLabel: 'approve bash for session',
         maxColumns: 42,
       }),
     ).toEqual([
@@ -95,7 +129,7 @@ describe('CLI confirm-card key handling', () => {
 
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve session',
+        alwaysAllowLabel: 'approve bash for session',
         maxColumns: 36,
       }),
     ).toEqual([
@@ -106,7 +140,7 @@ describe('CLI confirm-card key handling', () => {
 
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve session',
+        alwaysAllowLabel: 'approve bash for session',
         maxColumns: 10,
       }),
     ).toEqual([{ key: 'Esc', action: 'cancel' }]);
