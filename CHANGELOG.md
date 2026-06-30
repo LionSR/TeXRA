@@ -2,35 +2,77 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.39.1] - 2026-06-30
 
 ### Shared (all surfaces)
 
 #### Improvements
 
-- **latexFixer repairs more bibliography and hyperlink failures** — it now treats reference, citation, bibliography, and hyperref breakages as first-class targets: completing the full BibTeX/Biber toolchain before editing, fixing `.bib` and citation-key errors without inventing references, and fixing hyperref issues (load order, duplicate destinations, unsafe PDF/URL characters, broken `\ref`/`\cref` targets).
+- **Claude Sonnet 5 support**
+- **Gemini now uses Google's Interactions API by default**
+- **ChatGPT subscription: tool-use-only scope and a context cap**
+- **latexFixer repairs more bibliography and hyperlink failures**
+- **The `ls` tool is gone**
 
 #### Bug Fixes
 
-- **latexFixer no longer overwrites your workspace files with generated output** — it can no longer copy a workflow's generated files over existing workspace files; it makes only minimal in-place edits, asks before touching a workspace file when the fix targets `/executions/*` output, and reports build-environment issues (wrong working directory, missing `TEXINPUTS`) instead of restructuring or copying files.
+- **latexFixer no longer overwrites your workspace files with generated output**
+- **Retired models are clearly marked unavailable**
+- **Clearer message for models from keyless providers**
+- **Workflow compile and LaTeX diff resolve inputs in subfolders**
+- **Workflow outputs are recovered from percent filename headers**
+- **Streaming output no longer hangs or gets double-cleaned on errors**
 
 ### Extension (VS Code) and Desktop
 
 #### Improvements
 
-- **The "fix LaTeX" actions run on the helper model** — the Fix-Compilation command and the progress-view compile fixer now run latexFixer on your configured helper model instead of the heavyweight model you have selected. Direct main-view launches and orchestrator delegations keep their chosen model; the action falls back to it when the helper model is unavailable or can't call tools.
-- **Sign in with ChatGPT from a non-default browser** — the ChatGPT subscription sign-in opens your system default browser, but if your ChatGPT subscription is signed in on a different browser you can now copy the sign-in link and open it there. The VS Code extension shows a "Copy Sign-in Link" notification action and the desktop app offers a "Copy Sign-in Link" dialog button; the loopback callback accepts the redirect from whichever browser you complete it in.
-- **First-run setup no longer launches itself** — after a new user connects a credential, TeXRA now selects the setup assistant and shows a "Run setup assistant" card instead of silently starting it. The setup assistant inspects your environment and may install tools, so it now runs only when you explicitly click to start it.
+- **The "fix LaTeX" actions run on the helper model**
+- **Sign in with ChatGPT from a non-default browser**
+- **First-run setup no longer launches itself**
+- **The usage panel shows how each run is billed**
+- **One place to manage provider keys in Settings**
+- **Consistent tooltips on icon-only buttons**
+
+#### Bug Fixes
+
+- **No stray whitespace in terminal output**
+
+### Extension (VS Code)
+
+#### Features
+
+- **Agents can leave inline comment threads**
+
+#### Improvements
+
+- **The setup assistant can audit your stored API keys**
 
 ### CLI
 
 #### Improvements
 
-- **The terminal starts with every agent enabled, not a single discipline** — the CLI no longer seeds a discipline roster the way the VS Code extension does, so a fresh `texra` session exposes the full agent catalog (`texra agents list`, the `/agent` picker, and orchestrator delegation reach any built-in agent out of the box). Applying a team with the setup agent still scopes that workspace; otherwise nothing is hidden.
-- **`assistant` is the default chat agent** — bare `texra chat` (and the launcher's "New chat") now starts the general-purpose `assistant` rather than `research`, a better fit for the now-unrestricted agent roster. Explicit `--agent`, `TEXRA_AGENT`, and `.texra/config.json` choices still win.
-- **Switch teams from the launcher** — `texra orchestrate` (the default screen on bare `texra` in a TTY) now lists every available multi-agent team so you can pick — and switch — among them, instead of being pinned to a single default team. Single-agent chats and resumes are still offered alongside.
-- **The launcher header shows the CLI version** — the bare-`texra` launcher now prints `TeXRA v<version>` in its header, the same way the chat session header does, so you can see which build you are on before starting a session.
-- **One command to inspect a team** — `texra multi-agent inspect` is gone; `texra multi-agent show <team>` now resolves the team's real agents and availability (what `inspect` did), so the suite is the consistent `list` / `show` / `run` — matching `agents list` / `show` / `run` — instead of two near-identical describe commands. Note for scripts: `texra multi-agent show --output-format json|ndjson` now emits the resolved run plan (ndjson `kind: multi-agent-preset-inspection`) instead of the bare preset definition (`multi-agent-preset`); `texra multi-agent list` still emits the bare-preset records.
+- **The terminal starts with every agent enabled, not a single discipline**
+- **`assistant` is the default chat agent**
+- **Switch teams from the launcher**
+- **The launcher header shows the CLI version**
+- **One command to inspect a team**
+- **The CLI auto-switches to your saved API key on a usage limit**
+- **Clearer `texra init` guidance when your model isn't usable**
+- **Clearer session-wide approval labels**
+- **`/config` exposes more settings**
+- **`/config` validates as you edit**
+- **No redundant "add a provider key" hint**
+
+#### Bug Fixes
+
+- **Memory and goal tools now reach CLI agents**
+- **History list shows chat descriptions**
+- **Headless multi-agent runs reject the "ask" approval policy**
+- **More CLI commands honor `--output-format`**
+- **Unsupported Copilot models are hidden from the CLI**
+- **Finished replies no longer print twice**
+- **No stray rows after display-math replies**
 
 ## [0.39.0] - 2026-06-28
 
