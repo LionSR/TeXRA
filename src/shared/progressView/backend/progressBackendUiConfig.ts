@@ -61,20 +61,6 @@ type PermissionData<K extends PermissionPayload['kind']> = Extract<
   { kind: K }
 >['data'] & { streamId: string };
 
-function webviewPermissionTransport<K extends PermissionPayload['kind']>(
-  webviewUpdater: WebviewUpdater,
-  kind: K,
-): ApprovalHandlerTransport<PermissionData<K>> {
-  return {
-    show: (data) =>
-      webviewUpdater.showPermission({
-        kind,
-        data,
-      } as Extract<PermissionPayload, { kind: K }>),
-    resolve: (id) => webviewUpdater.resolvePermission(kind, id),
-  };
-}
-
 function webviewPermissionHandler<
   K extends PermissionPayload['kind'],
   IdField extends keyof PermissionData<K>,
@@ -84,11 +70,14 @@ function webviewPermissionHandler<
   kind: K,
   idField: IdField,
 ): ApprovalRequestHandler<PermissionData<K>, IdField> {
-  const transport = webviewPermissionTransport(webviewUpdater, kind);
   return new ApprovalRequestHandler(
     idField,
-    transport.show,
-    transport.resolve,
+    (data) =>
+      webviewUpdater.showPermission({
+        kind,
+        data,
+      } as Extract<PermissionPayload, { kind: K }>),
+    (id) => webviewUpdater.resolvePermission(kind, id),
     canSend,
   );
 }
