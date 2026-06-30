@@ -54,8 +54,6 @@ export const AgentMetadataBaseSchema = z.object({
   description: z.string().optional(),
 });
 
-export type AgentMetadataBase = z.infer<typeof AgentMetadataBaseSchema>;
-
 /** Canonical key format: disambiguates agents with same name across sources. */
 export function agentKey(source: string, name: string): string {
   return `${source}:${name}`;

@@ -44,23 +44,16 @@ export const UpdateMemoryMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.UPDATE_MEMORY),
   items: z.array(MemoryViewItemSchema),
 });
-export type UpdateMemoryMessage = z.infer<typeof UpdateMemoryMessageSchema>;
 
 export const UpdateMemoryPreviewMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW),
   preview: MemoryPreviewSchema,
 });
-export type UpdateMemoryPreviewMessage = z.infer<
-  typeof UpdateMemoryPreviewMessageSchema
->;
 
 export const UpdateMemoryEnabledMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED),
   enabled: z.boolean(),
 });
-export type UpdateMemoryEnabledMessage = z.infer<
-  typeof UpdateMemoryEnabledMessageSchema
->;
 
 // ============================================================
 // Inbound message schemas (frontend → backend)

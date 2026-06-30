@@ -443,7 +443,7 @@ function processorFor(
   return processor;
 }
 
-export interface RenderAnsiMarkdownOptions {
+interface RenderAnsiMarkdownOptions {
   readonly width?: number;
   readonly colorEnabled?: boolean;
 }

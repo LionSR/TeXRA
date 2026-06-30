@@ -9,13 +9,11 @@ export {
   type ExecutionMeta,
   type TodoEntry,
   type ChildRecord,
-  type ChildRecordData,
   type ResultMeta,
   getExecutionStore,
   clearStoreCache,
 } from './ExecutionKVStore';
 export {
-  type ExecutionWorkspaceFile,
   listExecutionWorkspaceFiles,
   resolveExecutionWorkspaceFilePath,
 } from './executionWorkspaceFiles';

@@ -18,14 +18,9 @@ export const AddTaskGroupPayloadSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   ...TaskGroupSchema.shape,
 });
-export type AddTaskGroupPayload = z.infer<typeof AddTaskGroupPayloadSchema>;
-
 export const UpdateTaskGroupPayloadSchema = AddTaskGroupPayloadSchema.pick({
   streamId: true,
   id: true,
   status: true,
   endTime: true,
 });
-export type UpdateTaskGroupPayload = z.infer<
-  typeof UpdateTaskGroupPayloadSchema
->;
