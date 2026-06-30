@@ -29,6 +29,12 @@ function isTextContentItem(
   );
 }
 
+/** Join two strings with a newline; an empty operand passes the other through. */
+function joinStringsWithNewline(a: string, b: string): string {
+  if (a === '' || b === '') return a || b;
+  return `${a}\n${b}`;
+}
+
 function mergeReasoningContent(
   previous: MessageLike,
   current: MessageLike,
@@ -41,11 +47,10 @@ function mergeReasoningContent(
     return;
   }
   if (typeof prevReasoning === 'string' && typeof currReasoning === 'string') {
-    if (prevReasoning === '' || currReasoning === '') {
-      previous.reasoning_content = prevReasoning || currReasoning;
-    } else {
-      previous.reasoning_content = `${prevReasoning}\n${currReasoning}`;
-    }
+    previous.reasoning_content = joinStringsWithNewline(
+      prevReasoning,
+      currReasoning,
+    );
   }
 }
 
@@ -76,11 +81,7 @@ function mergeMessageContent(
 
   // Both strings: join with newline (empty strings pass through unchanged)
   if (typeof prevContent === 'string' && typeof currContent === 'string') {
-    if (prevContent === '' || currContent === '') {
-      previous.content = prevContent || currContent;
-    } else {
-      previous.content = `${prevContent}\n${currContent}`;
-    }
+    previous.content = joinStringsWithNewline(prevContent, currContent);
     return;
   }
 

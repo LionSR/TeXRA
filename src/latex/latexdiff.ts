@@ -231,28 +231,6 @@ export class LaTeXdiffService {
     }
   }
 
-  /** Run one VC diff, logging and reporting failure as `false` for the batch loop. */
-  private async runDiffVcEntry(
-    inputLocation: FileLocation,
-    commitHash: string,
-    mathMarkup?: MathMarkupOption,
-  ): Promise<boolean> {
-    try {
-      const result = await this.runDiffVc(
-        inputLocation,
-        commitHash,
-        mathMarkup,
-      );
-      return result.success;
-    } catch (err) {
-      logger.error(
-        this.channel,
-        `Error processing ${inputLocation.absolutePath}: ${toErrorMessage(err)}`,
-      );
-      return false;
-    }
-  }
-
   async runDiffVcMultiple(
     inputLocations: FileLocation[],
     commitHash: string,
@@ -273,9 +251,22 @@ export class LaTeXdiffService {
 
       for (const inputLocation of inputLocations) {
         const inputFile = inputLocation.absolutePath;
-        if (await this.runDiffVcEntry(inputLocation, commitHash, mathMarkup)) {
-          results.success.push(inputFile);
-        } else {
+        try {
+          const result = await this.runDiffVc(
+            inputLocation,
+            commitHash,
+            mathMarkup,
+          );
+          if (result.success) {
+            results.success.push(inputFile);
+          } else {
+            results.failed.push(inputFile);
+          }
+        } catch (err) {
+          logger.error(
+            this.channel,
+            `Error processing ${inputFile}: ${toErrorMessage(err)}`,
+          );
           results.failed.push(inputFile);
         }
       }
@@ -373,12 +364,9 @@ export class LaTeXdiffService {
   }
 
   private async validateDocumentStructure(
-    ...files: FileLocation[]
+    file: FileLocation,
   ): Promise<boolean> {
-    const contents = await Promise.all(
-      files.map((file) => flexibleFS.read(file)),
-    );
-    return contents.every(hasDocumentEnvironment);
+    return hasDocumentEnvironment(await flexibleFS.read(file));
   }
 
   private async bothFilesExist(

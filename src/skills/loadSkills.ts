@@ -52,6 +52,28 @@ export interface DiscoverSkillSourcesResult {
   errors: SkillLoadIssue[];
 }
 
+function dupNameIssue(name: string, path: string): SkillLoadIssue {
+  return issue(
+    'warning',
+    'duplicate_name',
+    `Skipping duplicate skill name "${name}"`,
+    { path, name },
+  );
+}
+
+function dupRealpathIssue(
+  realPath: string,
+  path: string,
+  name?: string,
+): SkillLoadIssue {
+  return issue(
+    'warning',
+    'duplicate_realpath',
+    `Skipping duplicate skill path ${realPath}`,
+    name === undefined ? { path } : { path, name },
+  );
+}
+
 /**
  * Discover one-level `SKILL.md` packages below `root`.
  *
@@ -102,14 +124,7 @@ export async function discoverSkills(
     }
 
     if (seenRealPaths.has(realSkillPath)) {
-      errors.push(
-        issue(
-          'warning',
-          'duplicate_realpath',
-          `Skipping duplicate skill path ${realSkillPath}`,
-          { path: skillPath },
-        ),
-      );
+      errors.push(dupRealpathIssue(realSkillPath, skillPath));
       continue;
     }
     seenRealPaths.add(realSkillPath);
@@ -119,14 +134,7 @@ export async function discoverSkills(
     if (!loaded.skill) continue;
 
     if (seenNames.has(loaded.skill.name)) {
-      errors.push(
-        issue(
-          'warning',
-          'duplicate_name',
-          `Skipping duplicate skill name "${loaded.skill.name}"`,
-          { path: loaded.skill.path, name: loaded.skill.name },
-        ),
-      );
+      errors.push(dupNameIssue(loaded.skill.name, loaded.skill.path));
       continue;
     }
 
@@ -225,26 +233,12 @@ export async function discoverSkillSources(
       }
 
       if (seenRealPaths.has(realSkillPath)) {
-        errors.push(
-          issue(
-            'warning',
-            'duplicate_realpath',
-            `Skipping duplicate skill path ${realSkillPath}`,
-            { path: skill.path, name: skill.name },
-          ),
-        );
+        errors.push(dupRealpathIssue(realSkillPath, skill.path, skill.name));
         continue;
       }
 
       if (seenNames.has(skill.name)) {
-        errors.push(
-          issue(
-            'warning',
-            'duplicate_name',
-            `Skipping duplicate skill name "${skill.name}"`,
-            { path: skill.path, name: skill.name },
-          ),
-        );
+        errors.push(dupNameIssue(skill.name, skill.path));
         continue;
       }
 
