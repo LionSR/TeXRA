@@ -40,6 +40,26 @@ describe('list_api_keys tool', () => {
     assert.match(result.output ?? '', /SecretStorage is empty/);
   });
 
+  it('reports unsupported SecretStorage enumeration instead of an empty store', async () => {
+    const base = createFakeSetupPlatform();
+    setSetupPlatform({
+      ...base,
+      secrets: {
+        ...base.secrets,
+        providers: FAKE_PROVIDERS,
+        async listStoredKeys() {
+          throw new Error('SecretStorage key enumeration is not supported');
+        },
+      },
+    });
+
+    const result = await tool.call({});
+
+    assert.equal(result.isError, true);
+    assert.match(result.error ?? '', /enumeration is not supported/);
+    assert.doesNotMatch(result.output ?? '', /SecretStorage is empty/);
+  });
+
   it('shows known provider keys by provider name, not raw SecretStorage key', async () => {
     installPlatformWithKeys([apiKeySecretName('anthropic')]);
     const result = await tool.call({});
