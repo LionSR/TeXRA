@@ -194,27 +194,15 @@ describe('PRPollingSource CI-started events', () => {
     expect(state.ciStartedSha).toBe(SHA);
   });
 
-  it('seeds existing check runs while disabled without emitting', async () => {
-    const { ghGet, source } = await createHarness();
-    const events: string[] = [];
-    const state = createState(events, {
-      initialized: false,
-      headSha: undefined,
-      state: undefined,
-      ciStartedSha: undefined,
-    });
-
-    queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
-
-    await source.pollOne('owner/repo/pulls/7', state);
-
-    expect(events).toEqual([]);
-    expect(state.ciStartedSha).toBe(SHA);
-  });
-
-  it('seeds existing check runs without replaying a CI-started event when enabled', async () => {
+  it.each([
+    { label: 'while disabled without emitting', enabled: false },
+    {
+      label: 'without replaying a CI-started event when enabled',
+      enabled: true,
+    },
+  ])('seeds existing check runs $label', async ({ enabled }) => {
     const { ghGet, source } = await createHarness({
-      emitCiStartedEvents: true,
+      emitCiStartedEvents: enabled,
     });
     const events: string[] = [];
     const state = createState(events, {

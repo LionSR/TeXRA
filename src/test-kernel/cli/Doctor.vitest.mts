@@ -46,6 +46,19 @@ const latexProbe = {
   hasLatexmk: false,
 } as const;
 
+const availableModels = [
+  {
+    available: true,
+    status: 'available',
+    model: { value: 'deepseekT', label: 'DeepSeek T' },
+  },
+];
+
+const allInstalledLatexProbe = {
+  ...latexProbe,
+  tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
+};
+
 const healthyNodeReport: DoctorReport = {
   ok: true,
   checks: [
@@ -91,6 +104,24 @@ async function buildNodeVersionReport(
     authProfile: async () => ({ authenticated: true }),
     modelAccessList: async () => [],
     latexToolchain: async () => latexProbe,
+    pathStat: async () => directory,
+    pathAccess: async () => undefined,
+  });
+}
+
+// A signed-in report on supported Node with one available model and a fully
+// installed LaTeX toolchain; only the auth profile (and optional context) vary.
+function buildReadyReport(
+  authProfile: NonNullable<
+    Parameters<typeof buildDoctorReport>[1]
+  >['authProfile'],
+  reportContext: CliContext = context,
+): Promise<DoctorReport> {
+  return buildDoctorReport(reportContext, {
+    nodeVersion: '24.15.0',
+    authProfile,
+    modelAccessList: async () => availableModels as never,
+    latexToolchain: async () => allInstalledLatexProbe,
     pathStat: async () => directory,
     pathAccess: async () => undefined,
   });
@@ -167,32 +198,12 @@ describe('CLI doctor', () => {
   });
 
   it('reports loaded workspace config warnings', async () => {
-    const report = await buildDoctorReport(
+    const report = await buildReadyReport(
+      async () => ({ authenticated: true }),
       {
         ...context,
         configFilePath: '/workspace/.texra/config.json',
         configWarnings: ['Ignoring invalid model.'],
-      },
-      {
-        nodeVersion: '24.15.0',
-        authProfile: async () => ({ authenticated: true }),
-        modelAccessList: async () =>
-          [
-            {
-              available: true,
-              status: 'available',
-              model: { value: 'deepseekT', label: 'DeepSeek T' },
-            },
-          ] as never,
-        latexToolchain: async () => ({
-          ...latexProbe,
-          tools: latexProbe.tools.map((tool) => ({
-            ...tool,
-            installed: true,
-          })),
-        }),
-        pathStat: async () => directory,
-        pathAccess: async () => undefined,
       },
     );
 
@@ -203,28 +214,11 @@ describe('CLI doctor', () => {
   });
 
   it('shows email account labels plainly in text output', async () => {
-    const report = await buildDoctorReport(context, {
-      nodeVersion: '24.15.0',
-      authProfile: async () => ({
-        authenticated: true,
-        accountLabel: 'user@example.edu',
-        tier: 'Max',
-      }),
-      modelAccessList: async () =>
-        [
-          {
-            available: true,
-            status: 'available',
-            model: { value: 'deepseekT', label: 'DeepSeek T' },
-          },
-        ] as never,
-      latexToolchain: async () => ({
-        ...latexProbe,
-        tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
-      }),
-      pathStat: async () => directory,
-      pathAccess: async () => undefined,
-    });
+    const report = await buildReadyReport(async () => ({
+      authenticated: true,
+      accountLabel: 'user@example.edu',
+      tier: 'Max',
+    }));
 
     const text = formatDoctorText(report);
     const authCheck = report.checks.find((check) => check.id === 'auth');
@@ -278,27 +272,10 @@ describe('CLI doctor', () => {
   });
 
   it('keeps non-email account labels readable in text output', async () => {
-    const report = await buildDoctorReport(context, {
-      nodeVersion: '24.15.0',
-      authProfile: async () => ({
-        authenticated: true,
-        accountLabel: 'team@internal',
-      }),
-      modelAccessList: async () =>
-        [
-          {
-            available: true,
-            status: 'available',
-            model: { value: 'deepseekT', label: 'DeepSeek T' },
-          },
-        ] as never,
-      latexToolchain: async () => ({
-        ...latexProbe,
-        tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
-      }),
-      pathStat: async () => directory,
-      pathAccess: async () => undefined,
-    });
+    const report = await buildReadyReport(async () => ({
+      authenticated: true,
+      accountLabel: 'team@internal',
+    }));
 
     const text = formatDoctorText(report);
     const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
@@ -313,27 +290,10 @@ describe('CLI doctor', () => {
   });
 
   it('falls back to unknown for an empty auth account label', async () => {
-    const report = await buildDoctorReport(context, {
-      nodeVersion: '24.15.0',
-      authProfile: async () => ({
-        authenticated: true,
-        accountLabel: '',
-      }),
-      modelAccessList: async () =>
-        [
-          {
-            available: true,
-            status: 'available',
-            model: { value: 'deepseekT', label: 'DeepSeek T' },
-          },
-        ] as never,
-      latexToolchain: async () => ({
-        ...latexProbe,
-        tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
-      }),
-      pathStat: async () => directory,
-      pathAccess: async () => undefined,
-    });
+    const report = await buildReadyReport(async () => ({
+      authenticated: true,
+      accountLabel: '',
+    }));
 
     expect(report.checks.find((check) => check.id === 'auth')?.message).toBe(
       'Signed in as unknown.',
@@ -341,28 +301,11 @@ describe('CLI doctor', () => {
   });
 
   it('emits stable ndjson record kinds', async () => {
-    const report = await buildDoctorReport(context, {
-      nodeVersion: '24.15.0',
-      authProfile: async () => ({
-        authenticated: true,
-        accountLabel: 'Ada',
-        tier: 'pro',
-      }),
-      modelAccessList: async () =>
-        [
-          {
-            available: true,
-            status: 'available',
-            model: { value: 'deepseekT', label: 'DeepSeek T' },
-          },
-        ] as never,
-      latexToolchain: async () => ({
-        ...latexProbe,
-        tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
-      }),
-      pathStat: async () => directory,
-      pathAccess: async () => undefined,
-    });
+    const report = await buildReadyReport(async () => ({
+      authenticated: true,
+      accountLabel: 'Ada',
+      tier: 'pro',
+    }));
 
     const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
 

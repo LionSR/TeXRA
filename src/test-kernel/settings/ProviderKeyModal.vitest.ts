@@ -20,34 +20,51 @@ async function flushDialogTicks(times = 5): Promise<void> {
   }
 }
 
+async function mountModal(): Promise<ProviderKeyModalElement> {
+  const modal = document.createElement(
+    'provider-key-modal',
+  ) as ProviderKeyModalElement;
+  modal.provider = 'google';
+  modal.displayName = 'Google';
+  document.body.append(modal);
+  await modal.updateComplete;
+  await flushDialogTicks();
+  return modal;
+}
+
+function setKey(
+  modal: ProviderKeyModalElement,
+  value: string,
+): HTMLElement & { value: string } {
+  const input = modal.shadowRoot!.querySelector('wa-input') as HTMLElement & {
+    value: string;
+  };
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  return input;
+}
+
+function submitForm(modal: ProviderKeyModalElement): void {
+  modal
+    .shadowRoot!.querySelector('form')!
+    .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
 describe('ProviderKeyModal', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/components/profile/ProviderKeyModal'),
   );
 
   it('emits the trimmed key on submit without rendering it back after save', async () => {
-    const modal = document.createElement(
-      'provider-key-modal',
-    ) as ProviderKeyModalElement;
-    modal.provider = 'google';
-    modal.displayName = 'Google';
-    document.body.append(modal);
-    await modal.updateComplete;
-    await flushDialogTicks();
+    const modal = await mountModal();
 
     const submitted: unknown[] = [];
     modal.addEventListener('provider-key-submit', (event) => {
       submitted.push((event as CustomEvent).detail);
     });
 
-    const input = modal.shadowRoot!.querySelector('wa-input') as HTMLElement & {
-      value: string;
-    };
-    input.value = '  sk-test  ';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    modal
-      .shadowRoot!.querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const input = setKey(modal, '  sk-test  ');
+    submitForm(modal);
     await modal.updateComplete;
 
     await flushDialogTicks();
@@ -56,14 +73,7 @@ describe('ProviderKeyModal', () => {
   });
 
   it('clears input and emits cancel without submitting a key', async () => {
-    const modal = document.createElement(
-      'provider-key-modal',
-    ) as ProviderKeyModalElement;
-    modal.provider = 'google';
-    modal.displayName = 'Google';
-    document.body.append(modal);
-    await modal.updateComplete;
-    await flushDialogTicks();
+    const modal = await mountModal();
 
     let cancelled = 0;
     let submitted = 0;
@@ -74,11 +84,7 @@ describe('ProviderKeyModal', () => {
       submitted += 1;
     });
 
-    const input = modal.shadowRoot!.querySelector('wa-input') as HTMLElement & {
-      value: string;
-    };
-    input.value = 'sk-cancel';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const input = setKey(modal, 'sk-cancel');
     // First wa-button in the footer is "Cancel" (outlined / neutral); clicking
     // it triggers the user-initiated close path that fires provider-key-cancel.
     const cancelButton = modal
@@ -93,14 +99,7 @@ describe('ProviderKeyModal', () => {
   });
 
   it('opens the wa-dialog when mounted and closes it after submit', async () => {
-    const modal = document.createElement(
-      'provider-key-modal',
-    ) as ProviderKeyModalElement;
-    modal.provider = 'google';
-    modal.displayName = 'Google';
-    document.body.append(modal);
-    await modal.updateComplete;
-    await flushDialogTicks();
+    const modal = await mountModal();
 
     const dialog =
       modal.shadowRoot!.querySelector<WaDialogElement>('wa-dialog')!;
@@ -113,14 +112,8 @@ describe('ProviderKeyModal', () => {
       cancelled += 1;
     });
 
-    const input = modal.shadowRoot!.querySelector('wa-input') as HTMLElement & {
-      value: string;
-    };
-    input.value = 'sk-after-submit';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    modal
-      .shadowRoot!.querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    setKey(modal, 'sk-after-submit');
+    submitForm(modal);
     await flushDialogTicks();
 
     // Submit closes the dialog programmatically and must NOT also fire cancel.

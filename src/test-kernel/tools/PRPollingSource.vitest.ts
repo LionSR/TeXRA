@@ -163,7 +163,6 @@ describe('PRPollingSource annotation drain', () => {
   });
 
   it('filters check annotations by each listener minimum level', async () => {
-    PRPollingSource.resetAnnotationFetchBudgetForTests();
     const source = new PRPollingSource() as unknown as AnnotationDrainSource;
     keepTestStatesActive(source);
     const run = createCheckRun(12);
@@ -210,7 +209,6 @@ describe('PRPollingSource annotation drain', () => {
   });
 
   it('updates the annotation level for an existing listener', async () => {
-    PRPollingSource.resetAnnotationFetchBudgetForTests();
     const source = new PRPollingSource() as unknown as AnnotationDrainSource;
     const pr = { owner: 'owner', repo: 'repo', pullNumber: 7 };
     const listener = vi.fn();

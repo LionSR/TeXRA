@@ -56,36 +56,26 @@ describe('SettingsAgentFileController', () => {
     assert.equal(result.plan.targetPath, path.join(CUSTOM_DIR, 'agent.yaml'));
   });
 
-  it('accepts child paths when the custom directory is the filesystem root', () => {
-    const result = controller.planDeleteCustomAgent({
+  it.each([
+    {
+      label:
+        'accepts child paths when the custom directory is the filesystem root',
       customDir: path.parse(ROOT).root,
-      entry: {
-        path: path.join(ROOT, 'custom-agents', 'agent.yaml'),
-      },
-    });
-
-    assert.deepEqual(result, {
-      ok: true,
-      plan: {
-        path: path.join(ROOT, 'custom-agents', 'agent.yaml'),
-      },
-    });
-  });
-
-  it('plans custom agent deletion for a custom directory agent', () => {
-    const result = controller.planDeleteCustomAgent({
+      entryPath: path.join(ROOT, 'custom-agents', 'agent.yaml'),
+    },
+    {
+      label: 'plans custom agent deletion for a custom directory agent',
       customDir: CUSTOM_DIR,
-      entry: {
-        path: path.join(CUSTOM_DIR, 'agent.yaml'),
-      },
-    });
-
-    assert.deepEqual(result, {
-      ok: true,
-      plan: {
-        path: path.join(CUSTOM_DIR, 'agent.yaml'),
-      },
-    });
+      entryPath: path.join(CUSTOM_DIR, 'agent.yaml'),
+    },
+  ])('$label', ({ customDir, entryPath }) => {
+    assert.deepEqual(
+      controller.planDeleteCustomAgent({
+        customDir,
+        entry: { path: entryPath },
+      }),
+      { ok: true, plan: { path: entryPath } },
+    );
   });
 
   it('rejects deletion outside the custom directory', () => {

@@ -8,34 +8,31 @@ import {
 
 describe('terminal requirement diagnostics', () => {
   it('classifies interactive terminal failures once for CLI entry points', () => {
-    expect(
-      interactiveTerminalFailure({
-        mode: 'headless',
-        stdoutIsTty: true,
-        termIsDumb: false,
-      }),
-    ).toBe('headless');
-    expect(
-      interactiveTerminalFailure({
-        mode: 'interactive',
-        stdoutIsTty: false,
-        termIsDumb: false,
-      }),
-    ).toBe('headless');
-    expect(
-      interactiveTerminalFailure({
-        mode: 'interactive',
-        stdoutIsTty: true,
-        termIsDumb: true,
-      }),
-    ).toBe('dumb-terminal');
-    expect(
-      interactiveTerminalFailure({
-        mode: 'interactive',
-        stdoutIsTty: true,
-        termIsDumb: false,
-      }),
-    ).toBeUndefined();
+    const cases: ReadonlyArray<{
+      input: Parameters<typeof interactiveTerminalFailure>[0];
+      expected: ReturnType<typeof interactiveTerminalFailure>;
+    }> = [
+      {
+        input: { mode: 'headless', stdoutIsTty: true, termIsDumb: false },
+        expected: 'headless',
+      },
+      {
+        input: { mode: 'interactive', stdoutIsTty: false, termIsDumb: false },
+        expected: 'headless',
+      },
+      {
+        input: { mode: 'interactive', stdoutIsTty: true, termIsDumb: true },
+        expected: 'dumb-terminal',
+      },
+      {
+        input: { mode: 'interactive', stdoutIsTty: true, termIsDumb: false },
+        expected: undefined,
+      },
+    ];
+
+    for (const { input, expected } of cases) {
+      expect(interactiveTerminalFailure(input)).toBe(expected);
+    }
   });
 
   it('gives interactive PTY users an exact TERM recovery hint', () => {

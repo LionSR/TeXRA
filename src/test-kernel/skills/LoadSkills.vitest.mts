@@ -1,12 +1,9 @@
-// Standard library imports
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
 
-// Local imports - skills
 import { discoverSkills, discoverSkillSources } from '@skills/loadSkills';
 
 const tempRoots: string[] = [];

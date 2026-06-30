@@ -90,6 +90,25 @@ describe('desktop platform adapters', () => {
     return tempDir;
   }
 
+  async function loadSecrets(
+    options?: ConstructorParameters<
+      ElectronSecretsModule['ElectronSecrets']
+    >[1],
+  ): Promise<{
+    module: ElectronSecretsModule;
+    store: JsonStore;
+    secrets: ElectronSecrets;
+  }> {
+    const [secretsModule, JsonStore] = await Promise.all([
+      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
+      loadJsonStore(),
+    ]);
+    const root = await makeTempDir('texra-electron-secrets-');
+    const store = await JsonStore.open(join(root, 'secrets.json'));
+    const secrets = new secretsModule.ElectronSecrets(store, options);
+    return { module: secretsModule, store, secrets };
+  }
+
   it('keeps default Electron app paths isolated from the checkout', () => {
     const userDataPath = electronApp.getPath('userData');
 
@@ -147,14 +166,11 @@ describe('desktop platform adapters', () => {
   });
 
   it('stores encrypted secrets, supports env overrides, and deletes persisted values', async () => {
-    const [{ ElectronSecrets, getSecretStorageMode }, JsonStore] =
-      await Promise.all([
-        loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
-        loadJsonStore(),
-      ]);
-    const root = await makeTempDir('texra-electron-secrets-');
-    const store = await JsonStore.open(join(root, 'secrets.json'));
-    const secrets = new ElectronSecrets(store);
+    const {
+      module: { getSecretStorageMode },
+      store,
+      secrets,
+    } = await loadSecrets();
 
     expect(getSecretStorageMode()).toBe('encrypted');
     await secrets.set(testSecretKey, 'persisted');
@@ -176,14 +192,11 @@ describe('desktop platform adapters', () => {
   });
 
   it('rejects secret writes when Electron safe storage is unavailable', async () => {
-    const [{ ElectronSecrets, getSecretStorageMode }, JsonStore] =
-      await Promise.all([
-        loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
-        loadJsonStore(),
-      ]);
-    const root = await makeTempDir('texra-electron-secrets-');
-    const store = await JsonStore.open(join(root, 'secrets.json'));
-    const secrets = new ElectronSecrets(store);
+    const {
+      module: { getSecretStorageMode },
+      store,
+      secrets,
+    } = await loadSecrets();
 
     configureElectronTestStub({ safeStorageEncryptionAvailable: false });
 
@@ -195,21 +208,12 @@ describe('desktop platform adapters', () => {
   });
 
   it('warns once and rejects secret writes on the Linux basic_text safe storage backend', async () => {
-    const [
-      {
-        ElectronSecrets,
-        LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
-        getSecretStorageMode,
-      },
-      JsonStore,
-    ] = await Promise.all([
-      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
-      loadJsonStore(),
-    ]);
-    const root = await makeTempDir('texra-electron-secrets-');
-    const store = await JsonStore.open(join(root, 'secrets.json'));
     const showWarningMessage = vi.fn();
-    const secrets = new ElectronSecrets(store, { showWarningMessage });
+    const {
+      module: { LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE, getSecretStorageMode },
+      store,
+      secrets,
+    } = await loadSecrets({ showWarningMessage });
 
     vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
     configureElectronTestStub({ safeStorageBackend: 'basic_text' });
@@ -229,16 +233,11 @@ describe('desktop platform adapters', () => {
   });
 
   it('preserves the storage-policy error when the basic_text warning fails', async () => {
-    const [
-      { ElectronSecrets, LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE },
-      JsonStore,
-    ] = await Promise.all([
-      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
-      loadJsonStore(),
-    ]);
-    const root = await makeTempDir('texra-electron-secrets-');
-    const store = await JsonStore.open(join(root, 'secrets.json'));
-    const secrets = new ElectronSecrets(store, {
+    const {
+      module: { LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE },
+      store,
+      secrets,
+    } = await loadSecrets({
       showWarningMessage: vi.fn(async () => {
         throw new Error('dialog failed');
       }),
@@ -254,13 +253,7 @@ describe('desktop platform adapters', () => {
   });
 
   it('ignores malformed persisted secret records', async () => {
-    const [{ ElectronSecrets }, JsonStore] = await Promise.all([
-      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
-      loadJsonStore(),
-    ]);
-    const root = await makeTempDir('texra-electron-secrets-');
-    const store = await JsonStore.open(join(root, 'secrets.json'));
-    const secrets = new ElectronSecrets(store);
+    const { store, secrets } = await loadSecrets();
 
     await store.set(testSecretKey, { encrypted: false, value: 'plain' });
 

@@ -46,6 +46,19 @@ function createFakeProtocolApp(
   };
 }
 
+function installLifecycle(argv: string[] = []) {
+  const app = createFakeProtocolApp();
+  const focusMainWindow = vi.fn();
+  const lifecycle = installDesktopProtocolCallbackLifecycle({
+    app,
+    argv,
+    focusMainWindow,
+  });
+  const listener = vi.fn();
+  lifecycle.router.subscribe(listener);
+  return { app, focusMainWindow, lifecycle, listener };
+}
+
 describe('desktop protocol callbacks', () => {
   it('parses texra auth callback URLs into host-neutral callback parts', () => {
     expect(
@@ -157,15 +170,7 @@ describe('desktop protocol callbacks', () => {
   });
 
   it('registers protocol handling and routes warm-start argv callbacks', () => {
-    const app = createFakeProtocolApp();
-    const focusMainWindow = vi.fn();
-    const lifecycle = installDesktopProtocolCallbackLifecycle({
-      app,
-      argv: [],
-      focusMainWindow,
-    });
-    const listener = vi.fn();
-    lifecycle.router.subscribe(listener);
+    const { app, focusMainWindow, listener } = installLifecycle();
 
     app.listeners.secondInstance?.(
       {},
@@ -182,15 +187,7 @@ describe('desktop protocol callbacks', () => {
   });
 
   it('focuses the existing window on second-instance launches without callbacks', () => {
-    const app = createFakeProtocolApp();
-    const focusMainWindow = vi.fn();
-    const lifecycle = installDesktopProtocolCallbackLifecycle({
-      app,
-      argv: [],
-      focusMainWindow,
-    });
-    const listener = vi.fn();
-    lifecycle.router.subscribe(listener);
+    const { app, focusMainWindow, listener } = installLifecycle();
 
     app.listeners.secondInstance?.({}, ['TeXRA.app'], '/tmp');
 
@@ -199,16 +196,8 @@ describe('desktop protocol callbacks', () => {
   });
 
   it('routes macOS open-url callbacks and prevents default handling', () => {
-    const app = createFakeProtocolApp();
-    const focusMainWindow = vi.fn();
-    const lifecycle = installDesktopProtocolCallbackLifecycle({
-      app,
-      argv: [],
-      focusMainWindow,
-    });
-    const listener = vi.fn();
+    const { app, focusMainWindow, listener } = installLifecycle();
     const event = { preventDefault: vi.fn() };
-    lifecycle.router.subscribe(listener);
 
     app.listeners.openUrl?.(
       event,
@@ -223,16 +212,8 @@ describe('desktop protocol callbacks', () => {
   });
 
   it('focuses the existing window for unsupported texra open-url events', () => {
-    const app = createFakeProtocolApp();
-    const focusMainWindow = vi.fn();
-    const lifecycle = installDesktopProtocolCallbackLifecycle({
-      app,
-      argv: [],
-      focusMainWindow,
-    });
-    const listener = vi.fn();
+    const { app, focusMainWindow, listener } = installLifecycle();
     const event = { preventDefault: vi.fn() };
-    lifecycle.router.subscribe(listener);
 
     app.listeners.openUrl?.(event, 'texra://texra-ai.texra/help');
 

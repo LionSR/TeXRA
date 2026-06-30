@@ -1,6 +1,6 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { beforeEach, describe, it } from 'vitest';
 
 // Standard library imports
 
@@ -11,83 +11,83 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 // Local imports - controllers
 
 describe('LatexConfigPersistenceController', () => {
-  it('builds webview config values from defined workspace entries', () => {
-    const controller = new LatexConfigPersistenceController();
-    const storedValues: Partial<Record<WorkspaceStateKey, unknown>> = {
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: false,
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: undefined,
-      [WorkspaceStateKey.LATEXDIFF_MATH_MARKUP]: 'fine',
-      [WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY]: false,
-      [WorkspaceStateKey.LATEX_FORMATTER]: 'tex-fmt',
-    };
+  let controller: LatexConfigPersistenceController;
 
-    assert.deepEqual(
-      controller.buildConfigValues((key) => storedValues[key]),
-      {
+  beforeEach(() => {
+    controller = new LatexConfigPersistenceController();
+  });
+
+  const configProjectionCases: Array<{
+    name: string;
+    storedValues: Partial<Record<WorkspaceStateKey, unknown>>;
+    expected: Record<string, unknown>;
+  }> = [
+    {
+      name: 'builds webview config values from defined workspace entries',
+      storedValues: {
+        [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: false,
+        [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: undefined,
+        [WorkspaceStateKey.LATEXDIFF_MATH_MARKUP]: 'fine',
+        [WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY]: false,
+        [WorkspaceStateKey.LATEX_FORMATTER]: 'tex-fmt',
+      },
+      expected: {
         workflowAutoCompile: false,
         latexdiffMathMarkup: 'fine',
         latexdiffChangesOnly: false,
         latexFormatter: 'tex-fmt',
       },
-    );
-  });
-
-  it('drops invalid stored values from the webview config projection', () => {
-    const controller = new LatexConfigPersistenceController();
-    const storedValues: Partial<Record<WorkspaceStateKey, unknown>> = {
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: false,
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 1000,
-      [WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS]: 25000,
-      [WorkspaceStateKey.LATEXDIFF_MATH_MARKUP]: 'invalid',
-    };
-
-    assert.deepEqual(
-      controller.buildConfigValues((key) => storedValues[key]),
-      {
+    },
+    {
+      name: 'drops invalid stored values from the webview config projection',
+      storedValues: {
+        [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: false,
+        [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 1000,
+        [WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS]: 25000,
+        [WorkspaceStateKey.LATEXDIFF_MATH_MARKUP]: 'invalid',
+      },
+      expected: {
         workflowAutoCompile: false,
         latexdiffTimeoutMs: 25000,
       },
+    },
+  ];
+
+  it.each(configProjectionCases)('$name', ({ storedValues, expected }) => {
+    assert.deepEqual(
+      controller.buildConfigValues((key) => storedValues[key]),
+      expected,
     );
   });
 
-  it('plans validated field updates using workspace storage keys', () => {
-    const controller = new LatexConfigPersistenceController();
-
-    assert.deepEqual(
-      controller.planUpdate({
-        field: 'latexdiffTimeoutMs',
-        value: 25000,
-      }),
-      {
+  const planUpdateCases: Array<{
+    name: string;
+    input: Parameters<LatexConfigPersistenceController['planUpdate']>[0];
+    expected: unknown;
+  }> = [
+    {
+      name: 'plans validated field updates using workspace storage keys',
+      input: { field: 'latexdiffTimeoutMs', value: 25000 },
+      expected: {
         ok: true,
-        update: {
-          key: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-          value: 25000,
-        },
+        update: { key: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, value: 25000 },
       },
-    );
-  });
-
-  it('normalizes null writes to undefined so callers clear the key', () => {
-    const controller = new LatexConfigPersistenceController();
-
-    assert.deepEqual(
-      controller.planUpdate({
-        field: 'latexFormatter',
-        value: null,
-      }),
-      {
+    },
+    {
+      name: 'normalizes null writes to undefined so callers clear the key',
+      input: { field: 'latexFormatter', value: null },
+      expected: {
         ok: true,
-        update: {
-          key: WorkspaceStateKey.LATEX_FORMATTER,
-          value: undefined,
-        },
+        update: { key: WorkspaceStateKey.LATEX_FORMATTER, value: undefined },
       },
-    );
+    },
+  ];
+
+  it.each(planUpdateCases)('$name', ({ input, expected }) => {
+    assert.deepEqual(controller.planUpdate(input), expected);
   });
 
   it('rejects values that do not match the selected field schema', () => {
-    const controller = new LatexConfigPersistenceController();
     const plan = controller.planUpdate({
       field: 'workflowAutoCompileTimeoutMs',
       value: 1000,

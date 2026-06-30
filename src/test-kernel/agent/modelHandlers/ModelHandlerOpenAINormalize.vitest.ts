@@ -1,25 +1,17 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
-
-// Standard library imports
-
-// (none needed)
-
-// Local imports - agent
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
+
+// Local imports - agent
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerDashScope } from '@agent/modelHandlers/openai/modelHandlerDashScope';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
-
-// Type imports
-
-// Local imports - model config
 
 type LoggerStub = Partial<AgentTrace> & {
   streamId: string;
@@ -127,23 +119,35 @@ function buildConfig(
   };
 }
 
+type NormalizingHandler =
+  | ModelHandlerDeepSeek
+  | ModelHandlerKimi
+  | ModelHandlerDashScope;
+
+async function runNormalize(handler: NormalizingHandler) {
+  const loggerStub = createLoggerStub();
+  handler.setLogger(loggerStub as unknown as AgentTrace);
+  (handler as any).getStreamingConfig = () => false;
+
+  const { client, createCalls } = createClientStub();
+  await handler.createResponse({
+    client: client as any,
+    messages: cloneMessages(BASE_MESSAGES),
+    temperature: 0.1,
+  });
+
+  return { createCalls, loggerStub };
+}
+
 describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
   it('DeepSeek handler merges consecutive user messages into string content', async () => {
     const config = buildConfig(ModelProvider.DEEPSEEK, {
       name: 'deepseek-chat',
       fullName: 'deepseek-chat',
     });
-    const handler = new ModelHandlerDeepSeek(config);
-    const loggerStub = createLoggerStub();
-    handler.setLogger(loggerStub as unknown as AgentTrace);
-    (handler as any).getStreamingConfig = () => false;
-
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: cloneMessages(BASE_MESSAGES),
-      temperature: 0.1,
-    });
+    const { createCalls, loggerStub } = await runNormalize(
+      new ModelHandlerDeepSeek(config),
+    );
 
     assert.equal(createCalls.length, 1, 'should issue a single completion');
     const sentMessages = createCalls[0].messages;
@@ -170,69 +174,46 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     assert.deepEqual(loggerStub.infoMessages, []);
   });
 
-  it('Kimi handler stringifies content without merging messages', async () => {
-    const config = buildConfig(ModelProvider.MOONSHOT, {
-      name: 'kimi128k',
-      fullName: 'moonshot-v1-128k',
-    });
-    const handler = new ModelHandlerKimi(config);
-    const loggerStub = createLoggerStub();
-    handler.setLogger(loggerStub as unknown as AgentTrace);
-    (handler as any).getStreamingConfig = () => false;
+  it.each([
+    {
+      name: 'Kimi',
+      makeHandler: () =>
+        new ModelHandlerKimi(
+          buildConfig(ModelProvider.MOONSHOT, {
+            name: 'kimi128k',
+            fullName: 'moonshot-v1-128k',
+          }),
+        ),
+    },
+    {
+      name: 'DashScope',
+      makeHandler: () =>
+        new ModelHandlerDashScope(
+          buildConfig(ModelProvider.DASHSCOPE, {
+            name: 'qwen',
+            fullName: 'qwen-plus',
+          }),
+        ),
+    },
+  ])(
+    '$name handler stringifies content without merging messages',
+    async ({ makeHandler }) => {
+      const { createCalls, loggerStub } = await runNormalize(makeHandler());
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: cloneMessages(BASE_MESSAGES),
-      temperature: 0.1,
-    });
-
-    assert.equal(createCalls.length, 1, 'should issue a single completion');
-    assert.deepEqual(createCalls[0].messages, [
-      { role: 'user', content: 'First part' },
-      { role: 'user', content: 'Second part' },
-      { role: 'assistant', content: 'Assistant reply' },
-    ]);
-    assert.equal(
-      loggerStub.debugMessages.some((entry) =>
-        entry.startsWith('Preprocessed message array'),
-      ),
-      false,
-      'message count is unchanged, so no preprocessing log expected',
-    );
-    assert.deepEqual(loggerStub.infoMessages, []);
-  });
-
-  it('DashScope handler stringifies content without merging messages', async () => {
-    const config = buildConfig(ModelProvider.DASHSCOPE, {
-      name: 'qwen',
-      fullName: 'qwen-plus',
-    });
-    const handler = new ModelHandlerDashScope(config);
-    const loggerStub = createLoggerStub();
-    handler.setLogger(loggerStub as unknown as AgentTrace);
-    (handler as any).getStreamingConfig = () => false;
-
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: cloneMessages(BASE_MESSAGES),
-      temperature: 0.1,
-    });
-
-    assert.equal(createCalls.length, 1, 'should issue a single completion');
-    assert.deepEqual(createCalls[0].messages, [
-      { role: 'user', content: 'First part' },
-      { role: 'user', content: 'Second part' },
-      { role: 'assistant', content: 'Assistant reply' },
-    ]);
-    assert.equal(
-      loggerStub.debugMessages.some((entry) =>
-        entry.startsWith('Preprocessed message array'),
-      ),
-      false,
-      'message count is unchanged, so no preprocessing log expected',
-    );
-    assert.deepEqual(loggerStub.infoMessages, []);
-  });
+      assert.equal(createCalls.length, 1, 'should issue a single completion');
+      assert.deepEqual(createCalls[0].messages, [
+        { role: 'user', content: 'First part' },
+        { role: 'user', content: 'Second part' },
+        { role: 'assistant', content: 'Assistant reply' },
+      ]);
+      assert.equal(
+        loggerStub.debugMessages.some((entry) =>
+          entry.startsWith('Preprocessed message array'),
+        ),
+        false,
+        'message count is unchanged, so no preprocessing log expected',
+      );
+      assert.deepEqual(loggerStub.infoMessages, []);
+    },
+  );
 });

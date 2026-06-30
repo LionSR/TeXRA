@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - test support
 import { repoPath } from './desktopTestPaths.mjs';
 
+type SecretStorageMode = 'encrypted' | 'basic_text' | 'unavailable';
+
 interface ElectronSecretsModule {
   ElectronSecrets: new (
     store: {
@@ -22,12 +24,44 @@ interface ElectronSecretsModule {
   };
   __resetKeychainStateForTests: () => void;
   KEYCHAIN_DENIED_WARNING_MESSAGE: string;
+  getSecretStorageMode: () => SecretStorageMode;
+}
+
+interface SafeStorageMethods {
+  decryptString: (value: Buffer) => string;
+  encryptString: (value: string) => Buffer;
+  isEncryptionAvailable: () => boolean;
 }
 
 async function loadElectronSecrets(): Promise<ElectronSecretsModule> {
   return (await import(
     repoPath('packages/desktop/src/main/platform/electronSecrets.ts')
   )) as ElectronSecretsModule;
+}
+
+async function safeStorageStub(): Promise<SafeStorageMethods> {
+  const electron = (await import('electron')) as unknown as {
+    safeStorage: SafeStorageMethods;
+  };
+  return electron.safeStorage;
+}
+
+async function resetKeychainState(): Promise<void> {
+  const mod = await loadElectronSecrets();
+  mod.__resetKeychainStateForTests();
+  vi.restoreAllMocks();
+}
+
+// A persisted store record for one encrypted secret, as ElectronSecrets.set() writes it.
+function encryptedRecordStore(): { get<T>(key: string): T | undefined } {
+  return {
+    get<T>(_key: string): T | undefined {
+      return {
+        encrypted: true,
+        value: Buffer.from('encrypted:value').toString('base64'),
+      } as unknown as T;
+    },
+  };
 }
 
 function loadRendererMain(): string {
@@ -42,40 +76,22 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
     delete process.env.SOME_TEST_KEY;
   });
 
-  afterEach(async () => {
-    const mod = await loadElectronSecrets();
-    mod.__resetKeychainStateForTests();
-    vi.restoreAllMocks();
-  });
+  afterEach(resetKeychainState);
 
   it('returns undefined (instead of throwing) when safeStorage.decryptString throws', async () => {
-    const electron = (await import('electron')) as unknown as {
-      safeStorage: {
-        decryptString: (value: Buffer) => string;
-        encryptString: (value: string) => Buffer;
-        isEncryptionAvailable: () => boolean;
-      };
-    };
     // The keychain denial path: decryptString rejects after the user clicks
     // "Don't Allow" or the encryption key is otherwise unavailable. The bug
     // we are guarding against is this throw bubbling up into the renderer
     // bootstrap and producing a blank window.
     const decryptSpy = vi
-      .spyOn(electron.safeStorage, 'decryptString')
+      .spyOn(await safeStorageStub(), 'decryptString')
       .mockImplementation(() => {
         throw new Error('User denied keychain access');
       });
 
     const { ElectronSecrets } = await loadElectronSecrets();
     const warnings: string[] = [];
-    const fakeStore = {
-      get: <T,>(_key: string): T | undefined =>
-        ({
-          encrypted: true,
-          value: Buffer.from('encrypted:value').toString('base64'),
-        }) as unknown as T,
-    };
-    const secrets = new ElectronSecrets(fakeStore, {
+    const secrets = new ElectronSecrets(encryptedRecordStore(), {
       showWarningMessage: (message: string) => {
         warnings.push(message);
       },
@@ -90,24 +106,14 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
   });
 
   it('only surfaces the keychain-denied warning once per ElectronSecrets instance', async () => {
-    const electron = (await import('electron')) as unknown as {
-      safeStorage: { decryptString: (value: Buffer) => string };
-    };
     const decryptSpy = vi
-      .spyOn(electron.safeStorage, 'decryptString')
+      .spyOn(await safeStorageStub(), 'decryptString')
       .mockImplementation(() => {
         throw new Error('denied');
       });
     const { ElectronSecrets } = await loadElectronSecrets();
     const warnings: string[] = [];
-    const fakeStore = {
-      get: <T,>(_key: string): T | undefined =>
-        ({
-          encrypted: true,
-          value: Buffer.from('encrypted:value').toString('base64'),
-        }) as unknown as T,
-    };
-    const secrets = new ElectronSecrets(fakeStore, {
+    const secrets = new ElectronSecrets(encryptedRecordStore(), {
       showWarningMessage: (message: string) => {
         warnings.push(message);
       },
@@ -162,26 +168,17 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
 
   afterEach(async () => {
     delete process.env.TEXRA_DISABLE_KEYCHAIN;
-    const mod = await loadElectronSecrets();
-    mod.__resetKeychainStateForTests();
-    vi.restoreAllMocks();
+    await resetKeychainState();
   });
 
   it('reports unavailable storage mode without touching safeStorage', async () => {
     process.env.TEXRA_DISABLE_KEYCHAIN = '1';
-    const electron = (await import('electron')) as unknown as {
-      safeStorage: { isEncryptionAvailable: () => boolean };
-    };
     const isAvailableSpy = vi.spyOn(
-      electron.safeStorage,
+      await safeStorageStub(),
       'isEncryptionAvailable',
     );
 
-    const mod = (await import(
-      repoPath('packages/desktop/src/main/platform/electronSecrets.ts')
-    )) as ElectronSecretsModule & {
-      getSecretStorageMode: () => 'encrypted' | 'basic_text' | 'unavailable';
-    };
+    const mod = await loadElectronSecrets();
 
     expect(mod.getSecretStorageMode()).toBe('unavailable');
     expect(isAvailableSpy).not.toHaveBeenCalled();
@@ -189,21 +186,10 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
 
   it('ElectronSecrets.get() returns undefined without calling safeStorage', async () => {
     process.env.TEXRA_DISABLE_KEYCHAIN = '1';
-    const electron = (await import('electron')) as unknown as {
-      safeStorage: { decryptString: (value: Buffer) => string };
-    };
-    const decryptSpy = vi.spyOn(electron.safeStorage, 'decryptString');
+    const decryptSpy = vi.spyOn(await safeStorageStub(), 'decryptString');
 
     const { ElectronSecrets } = await loadElectronSecrets();
-    const fakeStore = {
-      get<T>(_key: string): T | undefined {
-        return {
-          encrypted: true,
-          value: Buffer.from('encrypted:value').toString('base64'),
-        } as unknown as T;
-      },
-    };
-    const secrets = new ElectronSecrets(fakeStore);
+    const secrets = new ElectronSecrets(encryptedRecordStore());
 
     expect(await secrets.get('any.key')).toBeUndefined();
     expect(decryptSpy).not.toHaveBeenCalled();
@@ -214,12 +200,11 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
     process.env.SOME_TEST_KEY = 'from-env';
 
     const { ElectronSecrets } = await loadElectronSecrets();
-    const fakeStore = {
+    const secrets = new ElectronSecrets({
       get<T>(_key: string): T | undefined {
         return undefined;
       },
-    };
-    const secrets = new ElectronSecrets(fakeStore);
+    });
 
     expect(await secrets.get('SOME_TEST_KEY')).toBe('from-env');
     delete process.env.SOME_TEST_KEY;
@@ -227,22 +212,18 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
 
   it('ElectronSecrets.set() silently no-ops instead of throwing', async () => {
     process.env.TEXRA_DISABLE_KEYCHAIN = '1';
-    const electron = (await import('electron')) as unknown as {
-      safeStorage: { encryptString: (value: string) => Buffer };
-    };
-    const encryptSpy = vi.spyOn(electron.safeStorage, 'encryptString');
+    const encryptSpy = vi.spyOn(await safeStorageStub(), 'encryptString');
 
     const { ElectronSecrets } = await loadElectronSecrets();
     const writes: Array<[string, unknown]> = [];
-    const fakeStore = {
+    const secrets = new ElectronSecrets({
       get<T>(_key: string): T | undefined {
         return undefined;
       },
       async set(key: string, value: unknown): Promise<void> {
         writes.push([key, value]);
       },
-    };
-    const secrets = new ElectronSecrets(fakeStore);
+    });
 
     await expect(secrets.set('a', 'b')).resolves.toBeUndefined();
     expect(writes).toEqual([]);
@@ -251,11 +232,7 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
 
   it('accepts the literal string "true" in addition to "1"', async () => {
     process.env.TEXRA_DISABLE_KEYCHAIN = 'true';
-    const mod = (await import(
-      repoPath('packages/desktop/src/main/platform/electronSecrets.ts')
-    )) as ElectronSecretsModule & {
-      getSecretStorageMode: () => 'encrypted' | 'basic_text' | 'unavailable';
-    };
+    const mod = await loadElectronSecrets();
     expect(mod.getSecretStorageMode()).toBe('unavailable');
   });
 });

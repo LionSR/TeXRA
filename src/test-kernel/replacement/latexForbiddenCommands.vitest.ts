@@ -8,79 +8,59 @@ import { describe, it } from 'vitest';
 import { applyReplacements } from '@replacement/engine';
 import { LATEX_FORBIDDEN_REPLACEMENTS } from '@replacement/rules';
 
+function convert(input: string): string {
+  return applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
+    processMathUnicode: false,
+  });
+}
+
 describe('latex forbidden commands replacements', () => {
-  it('removes invalid section endings', () => {
-    const input = '\\section{Intro}\n\\end{section}\nBody';
-    const expected = '\\section{Intro}\n\nBody';
-    const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('removes starred invalid endings', () => {
-    const input = '\\subsection*{Overview}\n\\end{subsection*}\nMore';
-    const expected = '\\subsection*{Overview}\n\nMore';
-    const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('removes endings with stray spaces', () => {
-    const input = '\\paragraph{Detail}\n\\end {paragraph}\nNext';
-    const expected = '\\paragraph{Detail}\n\nNext';
-    const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('removes endings with space after opening brace', () => {
-    const input = '\\section{Intro}\n\\end{ section}\nBody';
-    const expected = '\\section{Intro}\n\nBody';
-    const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('removes endings with space before closing brace', () => {
-    const input = '\\subsection{Part}\n\\end{subsection }\nMore';
-    const expected = '\\subsection{Part}\n\nMore';
-    const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('removes starred endings with spaces in multiple positions', () => {
-    const input = '\\section*{Title}\n\\end { section* }\nText';
-    const expected = '\\section*{Title}\n\nText';
-    const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
+  it.each([
+    {
+      name: 'removes invalid section endings',
+      input: '\\section{Intro}\n\\end{section}\nBody',
+      expected: '\\section{Intro}\n\nBody',
+    },
+    {
+      name: 'removes starred invalid endings',
+      input: '\\subsection*{Overview}\n\\end{subsection*}\nMore',
+      expected: '\\subsection*{Overview}\n\nMore',
+    },
+    {
+      name: 'removes endings with stray spaces',
+      input: '\\paragraph{Detail}\n\\end {paragraph}\nNext',
+      expected: '\\paragraph{Detail}\n\nNext',
+    },
+    {
+      name: 'removes endings with space after opening brace',
+      input: '\\section{Intro}\n\\end{ section}\nBody',
+      expected: '\\section{Intro}\n\nBody',
+    },
+    {
+      name: 'removes endings with space before closing brace',
+      input: '\\subsection{Part}\n\\end{subsection }\nMore',
+      expected: '\\subsection{Part}\n\nMore',
+    },
+    {
+      name: 'removes starred endings with spaces in multiple positions',
+      input: '\\section*{Title}\n\\end { section* }\nText',
+      expected: '\\section*{Title}\n\nText',
+    },
+    {
+      name: 'handles multiple invalid endings in one document',
+      input: '\\section{A}\n\\end{section}\nText\n\\section{B}\n\\end{section}',
+      expected: '\\section{A}\n\nText\n\\section{B}\n',
+    },
+  ])('$name', ({ input, expected }) => {
+    assert.strictEqual(convert(input), expected);
   });
 
   it('removes invalid endings for all section types', () => {
     const input =
       '\\chapter{Ch}\n\\end{chapter}\n\\section{S}\n\\end{section}\n\\subsubsection{SS}\n\\end{subsubsection}';
-    const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
+    const result = convert(input);
     assert.strictEqual(result.includes('\\end{chapter}'), false);
     assert.strictEqual(result.includes('\\end{section}'), false);
     assert.strictEqual(result.includes('\\end{subsubsection}'), false);
-  });
-
-  it('handles multiple invalid endings in one document', () => {
-    const input =
-      '\\section{A}\n\\end{section}\nText\n\\section{B}\n\\end{section}';
-    const expected = '\\section{A}\n\nText\n\\section{B}\n';
-    const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
   });
 });

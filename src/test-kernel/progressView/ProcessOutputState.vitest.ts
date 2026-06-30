@@ -13,7 +13,10 @@ import {
   type StreamLogs,
   type StreamState,
 } from '@progressView/frontend/store';
-import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
+import type {
+  HandlerRegistry,
+  MessageHandlerContext,
+} from '@progressView/frontend/messageHandlerTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared schemas
@@ -82,19 +85,11 @@ function createProcessState(streamId: StreamTabId): ProgressState {
 }
 
 function dispatch(
+  handlers: HandlerRegistry,
   message: ProgressViewOutboundMessage,
   ctx: MessageHandlerContext,
 ) {
-  const handler = streamMetaHandlers[message.command];
-  expect(handler).toBeDefined();
-  handler?.(message as never, ctx);
-}
-
-function dispatchLifecycle(
-  message: ProgressViewOutboundMessage,
-  ctx: MessageHandlerContext,
-) {
-  const handler = streamLifecycleHandlers[message.command];
+  const handler = handlers[message.command];
   expect(handler).toBeDefined();
   handler?.(message as never, ctx);
 }
@@ -105,6 +100,7 @@ describe('process output frontend state', () => {
     const { ctx, getState } = createContext(createProcessState(streamId));
 
     dispatch(
+      streamMetaHandlers,
       {
         command: PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
         stream: streamId,
@@ -131,6 +127,7 @@ describe('process output frontend state', () => {
     const { ctx, getState } = createContext(createProcessState(streamId));
 
     dispatch(
+      streamMetaHandlers,
       {
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
         stream: streamId,
@@ -172,7 +169,8 @@ describe('process output frontend state', () => {
     });
     const { ctx, getState } = createContext(state);
 
-    dispatchLifecycle(
+    dispatch(
+      streamLifecycleHandlers,
       {
         command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
         stream: child,

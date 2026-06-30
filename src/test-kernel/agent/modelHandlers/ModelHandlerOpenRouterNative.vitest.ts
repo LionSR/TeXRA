@@ -1,10 +1,6 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
-
-// Standard library imports
-
-// Third-party imports
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
@@ -51,38 +47,38 @@ describe('ModelHandlerOpenRouterNative routing precedence', () => {
     vi.restoreAllMocks();
   });
 
-  it('shouldUseServerSideKeys returns false when getUseOpenRouter=true even if server-side keys are available', () => {
-    // Simulate: user has "Use Included Access" enabled with a valid server-side key service
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
-    stubServerSideKeyService();
+  it.each([
+    {
+      name: 'returns false when getUseOpenRouter=true even if server-side keys are available',
+      useOpenRouter: true,
+      openRouterOnly: false,
+      expected: false,
+    },
+    {
+      name: 'returns false for openRouterOnly=true models regardless of server-side key availability',
+      useOpenRouter: false,
+      openRouterOnly: true,
+      expected: false,
+    },
+    {
+      name: 'respects server-side key service when NOT routing through OpenRouter',
+      useOpenRouter: false,
+      openRouterOnly: false,
+      expected: true,
+    },
+  ])(
+    'shouldUseServerSideKeys $name',
+    ({ useOpenRouter, openRouterOnly, expected }) => {
+      vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(
+        useOpenRouter,
+      );
+      stubServerSideKeyService();
 
-    const handler = new ModelHandlerOpenRouterNative(buildConfig());
+      const handler = new ModelHandlerOpenRouterNative(
+        buildConfig({ openRouterOnly }),
+      );
 
-    // OpenRouter routing must take precedence — server-side relay does not apply here
-    assert.equal((handler as any).shouldUseServerSideKeys(), false);
-  });
-
-  it('shouldUseServerSideKeys returns false for openRouterOnly=true models regardless of server-side key availability', () => {
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
-    stubServerSideKeyService();
-
-    const handler = new ModelHandlerOpenRouterNative(
-      buildConfig({ openRouterOnly: true }),
-    );
-
-    assert.equal((handler as any).shouldUseServerSideKeys(), false);
-  });
-
-  it('shouldUseServerSideKeys respects server-side key service when NOT routing through OpenRouter', () => {
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
-    stubServerSideKeyService();
-
-    // Use a non-OpenRouter handler (base class logic), openRouterOnly=false, global toggle off
-    // shouldUseServerSideKeys should delegate to the service and return true
-    const handler = new ModelHandlerOpenRouterNative(
-      buildConfig({ openRouterOnly: false }),
-    );
-
-    assert.equal((handler as any).shouldUseServerSideKeys(), true);
-  });
+      assert.equal((handler as any).shouldUseServerSideKeys(), expected);
+    },
+  );
 });

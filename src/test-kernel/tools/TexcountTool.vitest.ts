@@ -1,12 +1,29 @@
-// Third-party imports
-import * as assert from 'node:assert';
-import { describe, it, afterEach, vi } from 'vitest';
-
 // Node.js built-in imports
+import * as assert from 'node:assert';
+
+// Third-party imports
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Local imports - tools
 import * as texcountModule from '@latex/texcount';
 import { TexcountTool } from '@tools/texcount/TexcountTool';
+
+type TexcountCall = {
+  files: string[];
+  options?: texcountModule.TexcountOptions;
+};
+
+// Spies getTeXCount to a fixed output and records each call's files/options.
+function captureTexcountCalls(output: string): TexcountCall[] {
+  const calls: TexcountCall[] = [];
+  vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(
+    async (files, options) => {
+      calls.push({ files: Array.isArray(files) ? files : [files], options });
+      return { output, errors: [] };
+    },
+  );
+  return calls;
+}
 
 describe('TexcountTool', () => {
   afterEach(() => {
@@ -14,19 +31,7 @@ describe('TexcountTool', () => {
   });
 
   it('returns raw texcount output for single file input', async () => {
-    const calls: Array<{
-      files: string[];
-      options?: texcountModule.TexcountOptions;
-    }> = [];
-    vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(
-      async (files, options) => {
-        calls.push({
-          files: Array.isArray(files) ? files : [files],
-          options,
-        });
-        return { output: 'Words in text: 42', errors: [] };
-      },
-    );
+    const calls = captureTexcountCalls('Words in text: 42');
 
     const tool = new TexcountTool();
     const result = await tool.call({ files: 'main.tex' });
@@ -69,19 +74,7 @@ describe('TexcountTool', () => {
   });
 
   it('passes selected mode to texcount implementation', async () => {
-    const calls: Array<{
-      files: string[];
-      options?: texcountModule.TexcountOptions;
-    }> = [];
-    vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(
-      async (files, options) => {
-        calls.push({
-          files: Array.isArray(files) ? files : [files],
-          options,
-        });
-        return { output: 'Words in text: 21', errors: [] };
-      },
-    );
+    const calls = captureTexcountCalls('Words in text: 21');
 
     const tool = new TexcountTool();
     const result = await tool.call({

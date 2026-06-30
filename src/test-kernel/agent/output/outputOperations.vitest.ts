@@ -8,47 +8,49 @@ import { tryOperation } from '@agent/output/outputOperations';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('tryOperation', () => {
-  it('logs recoverable failures as internal by default', async () => {
-    const warn = vi.fn();
-    const logger = { warn } as unknown as AgentTrace;
+  it.each([
+    {
+      name: 'logs recoverable failures as internal by default',
+      label: 'Output processing',
+      message: 'boom',
+      messageType: undefined,
+      recover: () => 'fallback',
+      expectedResult: 'fallback',
+      loggedType: MESSAGE_TYPES.INTERNAL,
+    },
+    {
+      name: 'allows callers to keep warnings user-visible',
+      label: 'Compile check',
+      message: 'visible',
+      messageType: MESSAGE_TYPES.DEFAULT,
+      recover: () => undefined,
+      expectedResult: undefined,
+      loggedType: MESSAGE_TYPES.DEFAULT,
+    },
+  ])(
+    '$name',
+    async ({
+      label,
+      message,
+      messageType,
+      recover,
+      expectedResult,
+      loggedType,
+    }) => {
+      const warn = vi.fn();
+      const logger = { warn } as unknown as AgentTrace;
 
-    const result = await tryOperation(
-      async () => {
-        throw new Error('boom');
-      },
-      {
-        logger,
-        level: 'warn',
-        label: 'Output processing',
-        recover: () => 'fallback',
-      },
-    );
+      const result = await tryOperation(
+        async () => {
+          throw new Error(message);
+        },
+        { logger, level: 'warn', label, messageType, recover },
+      );
 
-    assert.equal(result, 'fallback');
-    assert.deepEqual(warn.mock.calls, [
-      ['Output processing: boom', { messageType: MESSAGE_TYPES.INTERNAL }],
-    ]);
-  });
-
-  it('allows callers to keep warnings user-visible', async () => {
-    const warn = vi.fn();
-    const logger = { warn } as unknown as AgentTrace;
-
-    await tryOperation(
-      async () => {
-        throw new Error('visible');
-      },
-      {
-        logger,
-        level: 'warn',
-        label: 'Compile check',
-        messageType: MESSAGE_TYPES.DEFAULT,
-        recover: () => undefined,
-      },
-    );
-
-    assert.deepEqual(warn.mock.calls, [
-      ['Compile check: visible', { messageType: MESSAGE_TYPES.DEFAULT }],
-    ]);
-  });
+      assert.equal(result, expectedResult);
+      assert.deepEqual(warn.mock.calls, [
+        [`${label}: ${message}`, { messageType: loggedType }],
+      ]);
+    },
+  );
 });

@@ -69,6 +69,14 @@ function fakeClock(): {
   };
 }
 
+/** Bundles the queued fetch + fake clock into the poll dependency shape. */
+function pollDeps(
+  clock: ReturnType<typeof fakeClock>,
+  fetchImpl: typeof fetch,
+): Parameters<typeof pollForDeviceSession>[1] {
+  return { fetchImpl, sleep: clock.sleep, now: clock.now };
+}
+
 describe('CLI device-code sign-in (texra login --device)', () => {
   it('parses a device authorization and defaults a missing interval', () => {
     const parsed = DeviceAuthorizationSchema.parse({
@@ -101,11 +109,10 @@ describe('CLI device-code sign-in (texra login --device)', () => {
       jsonResponse(SESSION_PAYLOAD),
     ]);
 
-    const exchange = await pollForDeviceSession(AUTHORIZATION, {
-      fetchImpl,
-      sleep: clock.sleep,
-      now: clock.now,
-    });
+    const exchange = await pollForDeviceSession(
+      AUTHORIZATION,
+      pollDeps(clock, fetchImpl),
+    );
 
     expect(exchange.access_token).toBe('access-token');
     expect(exchange.user.email).toBe('user@example.edu');
@@ -123,11 +130,7 @@ describe('CLI device-code sign-in (texra login --device)', () => {
       jsonResponse({ error: 'access_denied' }, 400),
     ]);
     await expect(
-      pollForDeviceSession(AUTHORIZATION, {
-        fetchImpl,
-        sleep: clock.sleep,
-        now: clock.now,
-      }),
+      pollForDeviceSession(AUTHORIZATION, pollDeps(clock, fetchImpl)),
     ).rejects.toThrow('Sign-in was denied in the browser.');
   });
 
@@ -137,11 +140,7 @@ describe('CLI device-code sign-in (texra login --device)', () => {
       jsonResponse({ error: 'expired_token' }, 400),
     ]);
     await expect(
-      pollForDeviceSession(AUTHORIZATION, {
-        fetchImpl,
-        sleep: clock.sleep,
-        now: clock.now,
-      }),
+      pollForDeviceSession(AUTHORIZATION, pollDeps(clock, fetchImpl)),
     ).rejects.toThrow(/expired before it was approved/);
   });
 
@@ -153,7 +152,7 @@ describe('CLI device-code sign-in (texra login --device)', () => {
     await expect(
       pollForDeviceSession(
         { ...AUTHORIZATION, expires_in: 10 },
-        { fetchImpl, sleep: clock.sleep, now: clock.now },
+        pollDeps(clock, fetchImpl),
       ),
     ).rejects.toThrow(/expired before it was approved/);
     expect(calls).toHaveLength(1);
@@ -166,11 +165,10 @@ describe('CLI device-code sign-in (texra login --device)', () => {
       new Error('socket hang up'),
       jsonResponse(SESSION_PAYLOAD),
     ]);
-    const exchange = await pollForDeviceSession(AUTHORIZATION, {
-      fetchImpl,
-      sleep: clock.sleep,
-      now: clock.now,
-    });
+    const exchange = await pollForDeviceSession(
+      AUTHORIZATION,
+      pollDeps(clock, fetchImpl),
+    );
     expect(exchange.access_token).toBe('access-token');
 
     const persistent = queuedFetch([
@@ -180,11 +178,10 @@ describe('CLI device-code sign-in (texra login --device)', () => {
     ]);
     const failingClock = fakeClock();
     await expect(
-      pollForDeviceSession(AUTHORIZATION, {
-        fetchImpl: persistent.fetchImpl,
-        sleep: failingClock.sleep,
-        now: failingClock.now,
-      }),
+      pollForDeviceSession(
+        AUTHORIZATION,
+        pollDeps(failingClock, persistent.fetchImpl),
+      ),
     ).rejects.toThrow('socket hang up');
   });
 
@@ -194,11 +191,10 @@ describe('CLI device-code sign-in (texra login --device)', () => {
       jsonResponse({ error: 'rate_limited' }, 429),
       jsonResponse(SESSION_PAYLOAD),
     ]);
-    const exchange = await pollForDeviceSession(AUTHORIZATION, {
-      fetchImpl,
-      sleep: clock.sleep,
-      now: clock.now,
-    });
+    const exchange = await pollForDeviceSession(
+      AUTHORIZATION,
+      pollDeps(clock, fetchImpl),
+    );
     expect(exchange.access_token).toBe('access-token');
   });
 
