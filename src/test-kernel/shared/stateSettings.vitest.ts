@@ -344,6 +344,8 @@ describe('state settings catalog', () => {
     // Each entry below is confirmed to actually take effect in the CLI:
     //  - git author identity is merged into spawned commands (execUtils) and
     //    drives worktree delegation (DelegationTools);
+    //  - Codex and Claude Code agent defaults are read by their tool runtimes
+    //    when a headless tool-use run launches either external CLI;
     //  - the workflow compile settings run in `texra workflow` / `texra run`
     //    (the reflection flow, via OutputNode/runCompileCheck).
     //  - the OpenAI WebSocket toggle is read by the Responses handler the CLI
@@ -354,6 +356,12 @@ describe('state settings catalog', () => {
     assert.deepEqual(
       [...CLI_STATE_SETTINGS].map((entry) => entry.key).sort(),
       [
+        WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+        WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+        WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+        WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+        WorkspaceStateKey.CODEX_REASONING_EFFORT,
+        WorkspaceStateKey.CODEX_SANDBOX_MODE,
         WorkspaceStateKey.GIT_AUTHOR_EMAIL,
         WorkspaceStateKey.GIT_AUTHOR_NAME,
         WorkspaceStateKey.GIT_MARK_COMMITS,
