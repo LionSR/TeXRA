@@ -9,10 +9,7 @@ import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/pa
 import { logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import type {
-  OpenAIAPIResponseUsage,
-  ExtendedCompletionUsage,
-} from '@agent/core/usage/ResponseUsage';
+import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -113,7 +110,6 @@ export class ModelHandlerOpenAI<
 > extends ModelHandler<
   ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
-  OpenAIAPIResponseUsage,
   TCall,
   OpenAI,
   ChatCompletion
