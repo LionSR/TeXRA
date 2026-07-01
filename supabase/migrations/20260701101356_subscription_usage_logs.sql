@@ -98,7 +98,7 @@ BEGIN
       COALESCE(NULLIF(r->>'used_relay', '')::boolean, false) AS used_relay,
       NULLIF(r->>'stream_id', '') AS stream_id,
       NULLIF(r->>'extension_version', '') AS extension_version,
-      (r->>'batch_id')::uuid AS batch_id,
+      NULLIF(r->>'batch_id', '')::uuid AS batch_id,
       NULLIF(r->>'editor_type', '') AS editor_type
     FROM jsonb_array_elements(p_rows) WITH ORDINALITY AS input(r, row_ordinal)
   ),
