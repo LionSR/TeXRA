@@ -1054,4 +1054,122 @@ Appendix.
       '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n',
     );
   });
+
+  it('recovers documents from bare filename labels with no % prefix', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '## Reflection',
+        '',
+        'Some narrative text about what changed.',
+        '',
+        'Draft/LeanMPSPaper/Draft3.tex:',
+        '```latex',
+        '\\documentclass{article}',
+        '\\begin{document}',
+        'Body one.',
+        '\\end{document}',
+        '```',
+        '',
+        'Draft/LeanMPSPaper/endmatter.tex:',
+        '```latex',
+        'End matter body.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', [
+      'Draft/LeanMPSPaper/Draft3.tex',
+      'Draft/LeanMPSPaper/endmatter.tex',
+    ]);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'Draft/LeanMPSPaper/Draft3.tex',
+      'Draft/LeanMPSPaper/endmatter.tex',
+    ]);
+    await expect(
+      AbsoluteFS.read('/tmp/run/Draft/LeanMPSPaper/Draft3.tex'),
+    ).resolves.toBe(
+      '\\documentclass{article}\n\\begin{document}\nBody one.\n\\end{document}\n',
+    );
+    await expect(
+      AbsoluteFS.read('/tmp/run/Draft/LeanMPSPaper/endmatter.tex'),
+    ).resolves.toBe('End matter body.\n');
+  });
+
+  it('matches a bare label by basename when the model drops the directory prefix', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['Draft3.tex:', '```latex', 'Recovered by basename.', '```'].join('\n'),
+    );
+    const manager = createXmlManager('documents', [
+      'Draft/LeanMPSPaper/Draft3.tex',
+    ]);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'Draft/LeanMPSPaper/Draft3.tex',
+    ]);
+  });
+
+  it('falls back to content-similarity matching for unlabeled fenced blocks against the original inputs', async () => {
+    const appendicesOriginal =
+      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n';
+    const costSectionOriginal =
+      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n';
+
+    await AbsoluteFS.write('/tmp/run/appendices.tex', appendicesOriginal);
+    await AbsoluteFS.write('/tmp/run/cost_section.tex', costSectionOriginal);
+
+    // Response order is deliberately swapped relative to inputFiles, and
+    // neither fence carries any filename label, to prove the match is
+    // driven by content rather than declaration or response order.
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '# Phase 2: Revised Documents',
+        '',
+        '```latex',
+        '% !TEX root = Draft3SM.tex',
+        '\\section{Computational cost}',
+        'Revised numbers from the local interactive logs.',
+        '```',
+        '',
+        '```latex',
+        '\\appendix',
+        '\\section{Agent architecture}',
+        'The formalization system uses a multi-agent architecture with a persistent shared memory.',
+        '```',
+      ].join('\n'),
+    );
+
+    const manager = createXmlManager('documents', [
+      'appendices.tex',
+      'cost_section.tex',
+    ]);
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+      'scratchpad',
+      [
+        createExternalLocation('/tmp/run/appendices.tex'),
+        createExternalLocation('/tmp/run/cost_section.tex'),
+      ],
+    );
+
+    expect(outputs.map((output) => output.source).sort()).toEqual([
+      'appendices.tex',
+      'cost_section.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/appendices.tex')).resolves.toBe(
+      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a persistent shared memory.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/cost_section.tex')).resolves.toBe(
+      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nRevised numbers from the local interactive logs.\n',
+    );
+  });
 });

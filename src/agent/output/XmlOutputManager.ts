@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { diff_match_patch } from 'diff-match-patch';
 import escapeRegExp from 'escape-string-regexp';
 import { XMLParser } from 'fast-xml-parser';
 
@@ -69,6 +70,34 @@ const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
 
 const PERCENT_FILENAME_HEADER_REGEX =
   /^%\s+((?:\.[/\\])*[A-Za-z0-9_][A-Za-z0-9._/\\-]*\.[A-Za-z0-9]+)\s*$/;
+/** Strip markdown emphasis/label punctuation a model might wrap a bare filename in. */
+const BARE_LABEL_DECORATION_REGEX = /^[*_`]+|[*_`:]+$/g;
+
+/**
+ * Recognize a header line that names one of the agent's known input files
+ * directly, without the `%` comment prefix (e.g. `Draft/Draft3.tex:` or
+ * `**Draft3.tex**`). Unlike the percent-header form, a bare line like this is
+ * never valid LaTeX on its own, so the only ambiguity risk is a coincidental
+ * match — guarded against by only ever matching against the agent's own
+ * declared input files rather than any path-shaped string.
+ */
+function matchKnownInputFileLabel(
+  line: string,
+  inputFiles: readonly string[],
+): string | null {
+  const candidate = line.trim().replaceAll(BARE_LABEL_DECORATION_REGEX, '');
+  if (!candidate) return null;
+  const normalize = (p: string) => p.replaceAll('\\', '/');
+  const exact = inputFiles.find((f) => normalize(f) === normalize(candidate));
+  if (exact) return exact;
+
+  // Fall back to a basename match when the model dropped the leading
+  // directories, but only when it resolves unambiguously.
+  const basenameMatches = inputFiles.filter(
+    (f) => path.posix.basename(normalize(f)) === candidate,
+  );
+  return basenameMatches.length === 1 ? basenameMatches[0] : null;
+}
 const LATEX_DOCUMENTCLASS_REGEX = /\\documentclass\b/;
 const LATEX_DOCUMENT_BEGIN_REGEX = /\\begin\s*\{\s*document\s*\}/;
 const LATEX_DOCUMENT_END_REGEX = /\\end\s*\{\s*document\s*\}/;
@@ -196,6 +225,102 @@ function shouldKeepPercentHeaderAsLatexComment(
 
 function hasLikelyLatexContent(lines: readonly string[]): boolean {
   return lines.some((line) => LIKELY_LATEX_CONTENT_REGEX.test(line.trim()));
+}
+
+/** Opening delimiter for a fenced block explicitly tagged as latex/tex. */
+const LATEX_FENCE_OPEN_REGEX = /^(`{3,}|~{3,})\s*(?:latex|tex)\s*$/i;
+
+/** Collect the content of every ```latex/```tex fenced block, in document order. */
+function collectLatexFencedBlocks(
+  content: string,
+  thinkingTag: string,
+): string[] {
+  const lines = stripXmlTagBlocks(content, thinkingTag)
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .split('\n');
+
+  const blocks: string[] = [];
+  let openFence: MarkdownFence | null = null;
+  let current: string[] = [];
+
+  for (const line of lines) {
+    if (!openFence) {
+      if (LATEX_FENCE_OPEN_REGEX.test(line.trim())) {
+        openFence = parseMarkdownFenceDelimiter(line);
+        current = [];
+      }
+      continue;
+    }
+    if (isClosingMarkdownFence(line, openFence)) {
+      const block = current.join('\n').trim();
+      if (block) blocks.push(block);
+      openFence = null;
+      current = [];
+      continue;
+    }
+    current.push(line);
+  }
+  return blocks;
+}
+
+/**
+ * Similarity in [0, 1] between two documents via a line-mode Myers diff
+ * (`diff-match-patch`, already a project dependency): 1 minus the edit
+ * distance implied by the diff, normalized by the longer document's length.
+ * Line mode keeps this cheap even for large, mostly-unchanged documents.
+ */
+function documentSimilarity(
+  dmp: InstanceType<typeof diff_match_patch>,
+  a: string,
+  b: string,
+): number {
+  if (a === b) return 1;
+  const maxLength = Math.max(a.length, b.length, 1);
+  const diffs = dmp.diff_main(a, b, true);
+  return 1 - dmp.diff_levenshtein(diffs) / maxLength;
+}
+
+/**
+ * Greedily pair each candidate document with the base file it most closely
+ * resembles, highest-confidence pairs first, so an unambiguous match never
+ * gets displaced by a later tie. Candidates/files below `minSimilarity`, or
+ * left over once the other side is exhausted, come back unmatched rather
+ * than being guessed.
+ */
+function assignByContentSimilarity(
+  candidates: readonly string[],
+  files: ReadonlyArray<{ name: string; content: string }>,
+  minSimilarity = 0.15,
+): Array<{ content: string; name: string } | null> {
+  const dmp = new diff_match_patch();
+  const scored: Array<{ c: number; f: number; score: number }> = [];
+  for (const [c, candidate] of candidates.entries()) {
+    for (const [f, file] of files.entries()) {
+      scored.push({
+        c,
+        f,
+        score: documentSimilarity(dmp, candidate, file.content),
+      });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score);
+
+  const takenCandidates = new Set<number>();
+  const takenFiles = new Set<number>();
+  const nameByCandidate = new Map<number, string>();
+  for (const { c, f, score } of scored) {
+    if (score < minSimilarity) break;
+    if (takenCandidates.has(c) || takenFiles.has(f)) continue;
+    takenCandidates.add(c);
+    takenFiles.add(f);
+    nameByCandidate.set(c, files[f].name);
+  }
+
+  return candidates.map((content, idx) => {
+    const name = nameByCandidate.get(idx);
+    return name ? { content, name } : null;
+  });
 }
 
 function stripXmlTagBlocks(content: string, tagName: string): string {
@@ -379,15 +504,17 @@ export class XmlOutputManager {
         continue;
       }
 
-      const match = PERCENT_FILENAME_HEADER_REGEX.exec(line.trim());
-      if (match && synthesizedSingleInputFromPrefix) {
+      const headerName =
+        PERCENT_FILENAME_HEADER_REGEX.exec(line.trim())?.[1] ??
+        matchKnownInputFileLabel(line, this.agentConfig.inputFiles);
+      if (headerName && synthesizedSingleInputFromPrefix) {
         currentLines.push(line);
         continue;
       }
 
       const linesBeforeHeader = currentName ? currentLines : preHeaderLines;
       if (
-        match &&
+        headerName &&
         !shouldKeepPercentHeaderAsLatexComment(linesBeforeHeader, lines, index)
       ) {
         if (!currentName && hasLikelyLatexContent(preHeaderLines)) {
@@ -404,7 +531,7 @@ export class XmlOutputManager {
           preHeaderLines = [];
         }
         const carriedFence = flushCurrent();
-        currentName = match[1];
+        currentName = headerName;
         currentMarkdownFence = pendingPrefacedMarkdownFence ?? carriedFence;
         pendingPrefacedMarkdownFence = null;
         preHeaderLines = [];
@@ -433,7 +560,45 @@ export class XmlOutputManager {
 
     logInternal(
       this.logger,
-      `Recovered ${this.agentSetting.documentTag} from % filename headers (${formatResultCount(documents.length, 'document')})`,
+      `Recovered ${this.agentSetting.documentTag} from filename headers (${formatResultCount(documents.length, 'document')})`,
+    );
+    return documents;
+  }
+
+  /**
+   * Last-resort recovery for multi-input agents that returned fenced
+   * ```latex/```tex blocks with no filename header at all (neither the
+   * `%`-comment nor bare-label forms `extractPercentHeaderDocuments`
+   * recognizes). Matches each fenced block against the agent's original
+   * input files by content similarity rather than guessing from response
+   * order, since a model can reorder or drop files in its response.
+   */
+  private async extractDocumentsByContentSimilarity(
+    outputContent: string,
+    thinkingTag: string,
+    baseFiles: readonly FileLocation[],
+  ): Promise<Array<{ content: string; name: string }> | null> {
+    const blocks = collectLatexFencedBlocks(outputContent, thinkingTag);
+    if (blocks.length === 0) return null;
+
+    const inputFiles = this.agentConfig.inputFiles;
+    const files = await Promise.all(
+      baseFiles.slice(0, inputFiles.length).map(async (loc, idx) => ({
+        name: inputFiles[idx],
+        content: await AbsoluteFS.read(loc.absolutePath).catch(() => ''),
+      })),
+    );
+    if (files.length === 0) return null;
+
+    const documents = assignByContentSimilarity(blocks, files).filter(
+      (d): d is { content: string; name: string } => d !== null,
+    );
+    if (documents.length === 0) return null;
+
+    logInternal(
+      this.logger,
+      `Recovered ${this.agentSetting.documentTag} by matching unlabeled fenced ` +
+        `blocks against the original input files (${formatResultCount(documents.length, 'document')})`,
     );
     return documents;
   }
@@ -443,6 +608,7 @@ export class XmlOutputManager {
     documentTag: string,
     round: number,
     thinkingTag: string = 'scratchpad',
+    baseFiles: readonly FileLocation[] = [],
   ): Promise<OutputFileInfo[]> {
     const rawOutputContent = await AbsoluteFS.read(outputLocation.absolutePath);
     let outputContent = rawOutputContent;
@@ -500,6 +666,17 @@ export class XmlOutputManager {
         outputContent,
         documentTag,
         preferredName,
+      );
+    }
+
+    if (!documents && this.agentConfig.inputFiles.length > 1) {
+      // Multi-input agents have no name to synthesize a single-document
+      // recovery from, but an unlabeled fenced block can still be routed by
+      // comparing it against each original input file's content.
+      documents = await this.extractDocumentsByContentSimilarity(
+        rawOutputContent,
+        thinkingTag,
+        baseFiles,
       );
     }
 

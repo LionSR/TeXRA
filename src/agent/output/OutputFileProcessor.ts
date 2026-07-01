@@ -48,6 +48,8 @@ export class OutputFileProcessor {
             outputLocation,
             this.ctx.agentSetting.documentTag,
             currRound,
+            'scratchpad',
+            this.ctx.baseFiles,
           );
 
         if (processedPairs.length === 0) {
