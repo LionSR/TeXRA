@@ -10,10 +10,15 @@ import { AgentConfigSchema, type AgentConfig } from '../definition/AgentConfig';
 
 const ToolSessionStateSchema = z.object({});
 
-const ActiveFilesSchema = z.partialRecord(
-  z.enum(MULTIPLE_DOCUMENT_FILE_TYPES),
-  z.boolean(),
-) as z.ZodType<Record<MultipleDocumentFileType, boolean>>;
+const ActiveFilesSchema = z
+  .partialRecord(z.enum(MULTIPLE_DOCUMENT_FILE_TYPES), z.boolean())
+  .transform((partial) => {
+    const complete = {} as Record<MultipleDocumentFileType, boolean>;
+    for (const key of MULTIPLE_DOCUMENT_FILE_TYPES) {
+      complete[key] = partial[key] ?? false;
+    }
+    return complete;
+  });
 
 type WorkflowAgentConfig = AgentConfig & {
   agentCategory: typeof AgentCategory.Workflow;
