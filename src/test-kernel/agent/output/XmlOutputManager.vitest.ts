@@ -50,6 +50,7 @@ function createXmlManager(
     },
     {
       inputFiles,
+      outputFiles: [],
     } as AgentConfig,
     { debug: vi.fn(), info: vi.fn() } as unknown as AgentTrace,
     new TaskRunFileService(),
@@ -1171,5 +1172,49 @@ Appendix.
     await expect(AbsoluteFS.read('/tmp/run/cost_section.tex')).resolves.toBe(
       '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nRevised numbers from the local interactive logs.\n',
     );
+  });
+
+  it('skips content-similarity matching for single-artifact-from-many-inputs agents', async () => {
+    // Agents like ocr/paper2slide declare one defaultOutputFiles entry while
+    // accepting several attached input files. runReflectionFlow.ts then
+    // builds baseFiles from outputFiles, not inputFiles, so baseFiles[i] no
+    // longer corresponds to inputFiles[i] — content-similarity matching must
+    // not run in this shape, or it would label a block with the wrong name.
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['```latex', 'Unlabeled recovered content.', '```'].join('\n'),
+    );
+    const manager = new XmlOutputManager(
+      {
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'documents',
+        endTag: '</documents>',
+        temperature: 0,
+        requiredFiles: {},
+        requiredFilesInternal: {},
+        defaultOutputFiles: ['ocr_result.tex'],
+        filePatternsContain: [],
+        tools: [],
+        isRewrite: true,
+        rounds: 1,
+        prefills: [],
+      },
+      {
+        inputFiles: ['page1.png', 'page2.png'],
+        outputFiles: ['ocr_result.tex'],
+      } as AgentConfig,
+      { debug: vi.fn(), info: vi.fn(), warn: vi.fn() } as unknown as AgentTrace,
+      new TaskRunFileService(),
+    );
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+      'scratchpad',
+      [createExternalLocation('/tmp/run/ocr_result.tex')],
+    );
+
+    expect(outputs).toEqual([]);
   });
 });

@@ -20,6 +20,7 @@ import { toErrorMessage } from '@common/errors';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
+import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import {
   AbsoluteFS,
   createExternalLocation,
@@ -87,14 +88,15 @@ function matchKnownInputFileLabel(
 ): string | null {
   const candidate = line.trim().replaceAll(BARE_LABEL_DECORATION_REGEX, '');
   if (!candidate) return null;
-  const normalize = (p: string) => p.replaceAll('\\', '/');
-  const exact = inputFiles.find((f) => normalize(f) === normalize(candidate));
+  const exact = inputFiles.find(
+    (f) => normalizeFilePath(f) === normalizeFilePath(candidate),
+  );
   if (exact) return exact;
 
   // Fall back to a basename match when the model dropped the leading
   // directories, but only when it resolves unambiguously.
   const basenameMatches = inputFiles.filter(
-    (f) => path.posix.basename(normalize(f)) === candidate,
+    (f) => getBasename(f) === candidate,
   );
   return basenameMatches.length === 1 ? basenameMatches[0] : null;
 }
@@ -585,6 +587,9 @@ export class XmlOutputManager {
     const files = await Promise.all(
       baseFiles.slice(0, inputFiles.length).map(async (loc, idx) => ({
         name: inputFiles[idx],
+        // An unreadable base file becomes '': it will score near-zero
+        // similarity against any real fenced block rather than aborting the
+        // whole recovery pass.
         content: await AbsoluteFS.read(loc.absolutePath).catch(() => ''),
       })),
     );
@@ -669,10 +674,19 @@ export class XmlOutputManager {
       );
     }
 
-    if (!documents && this.agentConfig.inputFiles.length > 1) {
+    if (
+      !documents &&
+      this.agentConfig.inputFiles.length > 1 &&
+      this.agentConfig.outputFiles.length === 0
+    ) {
       // Multi-input agents have no name to synthesize a single-document
       // recovery from, but an unlabeled fenced block can still be routed by
-      // comparing it against each original input file's content.
+      // comparing it against each original input file's content. Only valid
+      // when baseFiles really is the input files: runReflectionFlow.ts
+      // substitutes config.outputFiles for baseFiles whenever the agent
+      // declares any (single-artifact-from-many-inputs agents like ocr/
+      // paper2slide), so zipping baseFiles[i] with inputFiles[i] there would
+      // label a matched block with the wrong input filename.
       documents = await this.extractDocumentsByContentSimilarity(
         rawOutputContent,
         thinkingTag,
