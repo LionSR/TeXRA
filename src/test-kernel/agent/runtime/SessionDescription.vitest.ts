@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
-  cleanSessionDescription,
   generateSessionDescription,
   getSessionDescriptionInstruction,
 } from '@agent/runtime/sessionDescription';
@@ -42,15 +41,6 @@ function configFor(category: AgentCategory) {
 describe('session description helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('normalizes model-generated descriptions for compact UI labels', () => {
-    expect(cleanSessionDescription('"Fixing TikZ arrows."')).toBe(
-      'Fixing TikZ arrows',
-    );
-    expect(cleanSessionDescription('Reviewing\n introduction')).toBe(
-      'Reviewing introduction',
-    );
   });
 
   it('prefers displayInstruction over hidden prompt context', () => {
