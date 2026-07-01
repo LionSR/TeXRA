@@ -23,8 +23,10 @@ describe('agent option labels', () => {
   it.each(['review', 'codeReviewer', 'paper-reviewer'])(
     'uses the authored agent name %j as the option label',
     (name) => {
-      const [option] = entriesToOptionData([toolUseAgent(name)]);
+      const options = entriesToOptionData([toolUseAgent(name)]);
+      const [option] = options;
 
+      expect(options).toHaveLength(1);
       expect(option?.label).toBe(name);
     },
   );
