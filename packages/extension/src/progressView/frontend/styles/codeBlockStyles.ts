@@ -63,7 +63,7 @@ export const codeBlockStyles = css`
     word-break: inherit;
   }
 
-  .code-block-copy {
+  .code-block-copy::part(base) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -71,21 +71,20 @@ export const codeBlockStyles = css`
     border: none;
     background: transparent;
     color: var(--wa-color-text-quiet, #888);
-    cursor: pointer;
     border-radius: var(--border-radius-small);
+  }
 
-    &:hover {
-      color: var(--wa-color-text-normal);
-    }
+  .code-block-copy::part(base):hover {
+    color: var(--wa-color-text-normal);
+  }
 
-    &.copied {
-      color: var(--wa-color-git-added, #3fb950);
-    }
+  .code-block-copy.copied::part(base) {
+    color: var(--wa-color-git-added, #3fb950);
+  }
 
-    &:focus-visible {
-      outline: var(--border-thin) solid var(--wa-color-focus);
-      outline-offset: var(--border-thin);
-    }
+  .code-block-copy:focus-visible::part(base) {
+    outline: var(--border-thin) solid var(--wa-color-focus);
+    outline-offset: var(--border-thin);
   }
 
   /* Syntax highlighted code blocks */

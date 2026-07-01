@@ -319,20 +319,25 @@ export const profileViewStyles: CSSResult = css`
     align-items: center;
     flex: 1;
     min-width: 0;
+  }
+
+  .provider-group-toggle::part(base) {
+    display: flex;
+    align-items: center;
+    width: 100%;
     padding: var(--wa-space-xs);
     background: none;
     border: none;
     color: inherit;
-    cursor: pointer;
     font: inherit;
     text-align: left;
   }
 
-  .provider-group-toggle:hover {
+  .provider-group-toggle::part(base):hover {
     background: var(--wa-color-neutral-fill-quiet);
   }
 
-  .provider-group-toggle:focus-visible {
+  .provider-group-toggle:focus-visible::part(base) {
     outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
