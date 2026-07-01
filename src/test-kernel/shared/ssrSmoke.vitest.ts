@@ -47,6 +47,3 @@ describe('@lit-labs/ssr smoke', () => {
     expect(out).toContain('hello');
   });
 });
-
-// Reference the class so esbuild can't dead-strip the side-effecting decorator.
-void SmokeBubble;
