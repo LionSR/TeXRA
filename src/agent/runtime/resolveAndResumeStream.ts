@@ -11,11 +11,7 @@
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { TaskState } from '@agent/core/state/TaskState';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import {
-  STREAM_STATUS,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import { retrieveSessionResumeData } from './SessionResumeRetrieval';
 import { StreamStatusService } from './StreamStatusService';
@@ -86,7 +82,6 @@ export async function resolveAndResumeStream(
   }
 
   resumeInFlight.add(streamId);
-  let ownsResumingStatus = false;
   try {
     const resolved = await ports.resolveResumeState(streamId);
     // The host's resolveResumeState owns its own "no persisted state" messaging.
@@ -116,14 +111,9 @@ export async function resolveAndResumeStream(
       return await ports.resumeToolUseSnapshot(resume.snapshot);
     }
 
-    // Flip to RESUMING synchronously before awaiting the launch so a concurrent
-    // queued-delivery wake sees the stream as active/resuming (alongside
-    // isResumeInFlight) instead of re-poking the resume port and releasing the
-    // queue this resume is about to drain.
-    ownsResumingStatus = true;
-    StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
-      runtimeHost: ports.runtimeHost,
-    });
+    // Workflow launch owns stream acquisition and status transitions through
+    // runAgent/buildAgentLaunchContext. Pre-marking the same stream RESUMING
+    // here would make the launch reject itself as already in flight.
     await ports.executeWorkflow(
       resume.agentConfig,
       resume.executionId,
@@ -131,17 +121,6 @@ export async function resolveAndResumeStream(
     );
     return true;
   } catch (error) {
-    // Only the early-failure path leaves the stream RESUMING (a started run owns
-    // its own status); settle it back to WAITING before surfacing the error so a
-    // blocking host dialog cannot hold the stream in RESUMING.
-    if (
-      ownsResumingStatus &&
-      StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING
-    ) {
-      StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
-        runtimeHost: ports.runtimeHost,
-      });
-    }
     await ports.reportFailure?.(streamId, error);
     return false;
   } finally {

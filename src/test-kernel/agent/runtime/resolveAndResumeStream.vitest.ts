@@ -57,7 +57,7 @@ describe('resolveAndResumeStream', () => {
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
   });
 
-  it('flips RESUMING and launches the workflow executor with the resume data', async () => {
+  it('launches workflow resumes without pre-acquiring the stream', async () => {
     const agentConfig = { agent: 'a', model: 'm' } as never;
     retrieveSessionResumeDataMock.mockResolvedValue({
       type: 'workflow',
@@ -73,7 +73,7 @@ describe('resolveAndResumeStream', () => {
     });
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
-    expect(statusDuringLaunch).toBe(STREAM_STATUS.RESUMING);
+    expect(statusDuringLaunch).toBeUndefined();
     expect(ports.executeWorkflow).toHaveBeenCalledWith(
       agentConfig,
       'exec-1',
