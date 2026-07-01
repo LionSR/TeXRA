@@ -18,6 +18,7 @@ import {
   getSdkErrorMessage,
   isMissingFinishReasonError,
   attachPartialText,
+  attachFlowAutoRetryRequired,
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -202,6 +203,10 @@ export class ModelHandlerOpenAI<
     return this.createOpenAIClient();
   }
 
+  override get usesProviderManagedAutoRetry(): boolean {
+    return true;
+  }
+
   /**
    * Allows subclasses to provide a streaming aggregator implementation.
    */
@@ -354,6 +359,10 @@ export class ModelHandlerOpenAI<
     const stream = await client.chat.completions.stream(streamParams, {
       signal,
     });
+    let streamConnected = false;
+    const onConnect = (): void => {
+      streamConnected = true;
+    };
     const streamingAggregator = this.createStreamingAggregator();
 
     const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
@@ -372,10 +381,12 @@ export class ModelHandlerOpenAI<
       }
     };
 
+    stream.on('connect', onConnect);
     stream.on('content.delta', onContentDelta);
     stream.on('chunk', onChunk);
 
     const cleanup = (): void => {
+      stream.off('connect', onConnect);
       stream.off('content.delta', onContentDelta);
       stream.off('chunk', onChunk);
     };
@@ -423,6 +434,9 @@ export class ModelHandlerOpenAI<
       );
       if (partialText) {
         attachPartialText(streamError, partialText);
+      }
+      if (streamConnected || partialText) {
+        attachFlowAutoRetryRequired(streamError);
       }
       const isAbort = isUserAbort(streamError);
       if (!isAbort) {

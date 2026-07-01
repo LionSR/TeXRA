@@ -23,6 +23,7 @@ import {
   isPreviousResponseIdError,
   isUserAbort,
   attachPartialText,
+  attachFlowAutoRetryRequired,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -471,6 +472,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const { providerError, shouldRetainPendingResponse } =
         classifyOpenAIBackgroundResumeError(err, this.config.provider);
       if (shouldRetainPendingResponse) {
+        attachFlowAutoRetryRequired(err);
         throw err;
       }
       this.logger.warn(
@@ -978,6 +980,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Returns OpenAI client with configured API key. */
   async getClient(): Promise<OpenAI> {
     return this.createOpenAIClient();
+  }
+
+  override get usesProviderManagedAutoRetry(): boolean {
+    return true;
   }
 
   /** Reset conversation bookkeeping when starting a new session. */
@@ -1753,16 +1759,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Hoisted so the catch can finalize the progress streams on a mid-stream
     // failure (otherwise the progress view hangs in a loading state).
     let processor: ResponseStreamProcessor | undefined;
+    let streamConnected = false;
+    let streamEventObserved = false;
+    const onConnect = (): void => {
+      streamConnected = true;
+    };
+    let removeConnectListener: (() => void) | undefined;
     try {
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
       const stream = await client.responses.stream(streamParams, { signal });
+      if (typeof stream.on === 'function') {
+        stream.on('connect', onConnect);
+        if (typeof stream.off === 'function') {
+          removeConnectListener = () => stream.off('connect', onConnect);
+        }
+      }
 
       // Processor handles interleaved thinking and web search
       // GPT can: think → web_search → think more → web_search → text
       processor = this.createStreamProcessor();
 
       for await (const event of stream) {
+        streamEventObserved = true;
         processor.process(event);
         if (event.type === 'response.output_text.delta') {
           streamedText += event.delta;
@@ -1806,7 +1825,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (streamedText) {
         attachPartialText(error, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
       }
+      if (streamConnected || streamEventObserved || streamedText) {
+        attachFlowAutoRetryRequired(error);
+      }
       throw error;
+    } finally {
+      removeConnectListener?.();
     }
   }
 
@@ -2046,61 +2070,70 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.pendingBackgroundResponseId = initialResponse.id;
 
     let pollStats: BackgroundPollStats | undefined;
-    const polled = (await this.backgroundPoller.poll({
-      initialResponse,
-      retrieve: async (responseId, sig) => {
-        try {
-          return (await client.responses.retrieve(
-            responseId,
-            undefined,
-            sig ? { signal: sig } : undefined,
-          )) as T;
-        } catch (err) {
-          // Tag before checking: retrieve() throws the SDK's APIUserAbortError,
-          // not a DOMException, when the signal fires.
-          tagOpenAISdkError(err, this.config.provider);
-          if (isUserAbort(err)) {
-            // User cancelled during retrieve — clear pending ID to prevent
-            // ghost-resume on next call.
-            this.clearPendingBackgroundResponse();
+    let polled: T;
+    try {
+      polled = (await this.backgroundPoller.poll({
+        initialResponse,
+        retrieve: async (responseId, sig) => {
+          try {
+            return (await client.responses.retrieve(
+              responseId,
+              undefined,
+              sig ? { signal: sig } : undefined,
+            )) as T;
+          } catch (err) {
+            // Tag before checking: retrieve() throws the SDK's APIUserAbortError,
+            // not a DOMException, when the signal fires.
+            tagOpenAISdkError(err, this.config.provider);
+            if (isUserAbort(err)) {
+              // User cancelled during retrieve — clear pending ID to prevent
+              // ghost-resume on next call.
+              this.clearPendingBackgroundResponse();
+              throw err;
+            }
+            // 404 "response not found" during polling means the response is truly
+            // gone server-side. Clear the pending ID so the next retry creates a
+            // fresh background request instead of routing through
+            // tryResumeBackgroundResponse to rediscover the 404.
+            const statusCode = detectStatusCode(err);
+            if (statusCode === 404) {
+              this.clearPendingBackgroundResponse();
+              throw createOpenAIBackgroundPollingError(
+                responseId,
+                err,
+                this.config.provider,
+              );
+            }
+            attachFlowAutoRetryRequired(err);
+            // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
+            // so downstream handlers (relay 401 token refresh, retryability checks,
+            // non-retryable classification) work correctly with full HTTP metadata.
+            // The ID is intentionally NOT cleared — retry may resume the same response.
             throw err;
           }
-          // 404 "response not found" during polling means the response is truly
-          // gone server-side. Clear the pending ID so the next retry creates a
-          // fresh background request instead of routing through
-          // tryResumeBackgroundResponse to rediscover the 404.
-          const statusCode = detectStatusCode(err);
-          if (statusCode === 404) {
-            this.clearPendingBackgroundResponse();
-            throw createOpenAIBackgroundPollingError(
-              responseId,
-              err,
-              this.config.provider,
-            );
-          }
-          // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
-          // so downstream handlers (relay 401 token refresh, retryability checks,
-          // non-retryable classification) work correctly with full HTTP metadata.
-          // The ID is intentionally NOT cleared — retry may resume the same response.
-          throw err;
-        }
-      },
-      extractId: (r) => r.id,
-      extractStatus: (r) => r.status ?? 'unknown',
-      signal,
-      resourceLabel: 'response',
-      providerLabel: 'OpenAI',
-      onAbort: () => this.clearPendingBackgroundResponse(),
-      formatTimeoutError: ({ responseId, maxDurationMs }) =>
-        `OpenAI response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms. ` +
-        `Retry later or cancel the job with client.responses.cancel("${responseId}").`,
-      extraFinishData: (response) => ({
-        usage: response.usage ?? undefined,
-      }),
-      onFinished: (_response, stats) => {
-        pollStats = stats;
-      },
-    })) as T;
+        },
+        extractId: (r) => r.id,
+        extractStatus: (r) => r.status ?? 'unknown',
+        signal,
+        resourceLabel: 'response',
+        providerLabel: 'OpenAI',
+        onAbort: () => this.clearPendingBackgroundResponse(),
+        formatTimeoutError: ({ responseId, maxDurationMs }) =>
+          `OpenAI response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms. ` +
+          `Retry later or cancel the job with client.responses.cancel("${responseId}").`,
+        extraFinishData: (response) => ({
+          usage: response.usage ?? undefined,
+        }),
+        onFinished: (_response, stats) => {
+          pollStats = stats;
+        },
+      })) as T;
+    } catch (err) {
+      if (!isUserAbort(err)) {
+        attachFlowAutoRetryRequired(err);
+      }
+      throw err;
+    }
 
     if (polled.status === 'completed') {
       return polled;
