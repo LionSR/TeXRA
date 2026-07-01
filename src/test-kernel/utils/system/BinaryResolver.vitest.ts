@@ -37,58 +37,34 @@ describe('BinaryResolverService', () => {
     });
   });
 
-  it('routes extensionless Windows TeX scripts through Perl', () => {
-    const resolver = createResolver(
-      { latexdiff: 'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff' },
-      true,
-    );
+  it.each([
+    {
+      tool: 'latexdiff',
+      path: 'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff',
+      args: ['a', 'b'],
+    },
+    {
+      tool: 'latexmk',
+      path: 'C:\\texlive\\texmf-dist\\scripts\\latexmk\\latexmk',
+      args: ['-pdf'],
+    },
+    {
+      tool: 'latexdiff-vc',
+      path: 'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff-vc',
+      args: ['--git'],
+    },
+  ])(
+    'routes extensionless Windows $tool scripts through Perl',
+    ({ tool, path, args }) => {
+      const resolver = createResolver({ [tool]: path }, true);
 
-    assert.deepEqual(resolver.resolveOptionalCommand('latexdiff', ['a', 'b']), {
-      command: 'perl',
-      args: [
-        'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff',
-        'a',
-        'b',
-      ],
-      resolvedPath: 'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff',
-    });
-  });
-
-  it('routes extensionless Windows latexmk scripts through Perl', () => {
-    const resolver = createResolver(
-      { latexmk: 'C:\\texlive\\texmf-dist\\scripts\\latexmk\\latexmk' },
-      true,
-    );
-
-    assert.deepEqual(resolver.resolveOptionalCommand('latexmk', ['-pdf']), {
-      command: 'perl',
-      args: ['C:\\texlive\\texmf-dist\\scripts\\latexmk\\latexmk', '-pdf'],
-      resolvedPath: 'C:\\texlive\\texmf-dist\\scripts\\latexmk\\latexmk',
-    });
-  });
-
-  it('routes extensionless Windows latexdiff-vc scripts through Perl', () => {
-    const resolver = createResolver(
-      {
-        'latexdiff-vc':
-          'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff-vc',
-      },
-      true,
-    );
-
-    assert.deepEqual(
-      resolver.resolveOptionalCommand('latexdiff-vc', ['--git']),
-      {
+      assert.deepEqual(resolver.resolveOptionalCommand(tool, args), {
         command: 'perl',
-        args: [
-          'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff-vc',
-          '--git',
-        ],
-        resolvedPath:
-          'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff-vc',
-      },
-    );
-  });
+        args: [path, ...args],
+        resolvedPath: path,
+      });
+    },
+  );
 
   it('launches extensionless Windows binaries directly', () => {
     const resolver = createResolver({ sox: 'C:\\msys64\\usr\\bin\\sox' }, true);

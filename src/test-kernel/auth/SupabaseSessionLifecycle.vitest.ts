@@ -144,6 +144,17 @@ describe('SupabaseSession', () => {
       assert.equal(parseStoredSupabaseSession('{'), null);
       assert.equal(parseStoredSupabaseSession(JSON.stringify({ id: 1 })), null);
     });
+
+    it('trims whitespace from the account label on parse', () => {
+      const session = makeSession({
+        account: { id: 'user-id', label: '  stored@example.com  ' },
+      });
+
+      assert.equal(
+        parseStoredSupabaseSession(JSON.stringify(session))?.account.label,
+        'stored@example.com',
+      );
+    });
   });
 
   describe('toStorableSupabaseSession', () => {
@@ -171,6 +182,23 @@ describe('SupabaseSession', () => {
       });
       assert.equal(session.expiresAt, 123_000);
       assert.equal(session.useCustomRefresh, true);
+    });
+
+    it('trims whitespace from the native session email label', () => {
+      const nativeSession = {
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+        expires_at: 123,
+        user: {
+          id: 'user-id',
+          email: '  native@example.com  ',
+        },
+      } as unknown as SupabaseNativeSession;
+
+      assert.equal(
+        toStorableSupabaseSession(nativeSession).account.label,
+        'native@example.com',
+      );
     });
 
     it('falls back to the user id when email is missing', () => {
@@ -239,6 +267,26 @@ describe('SupabaseSession', () => {
         },
         expiresAt: 123_000,
       });
+    });
+
+    it('trims whitespace from the exchange fallback label', () => {
+      const session = toStorableSupabaseSession(
+        {
+          access_token: 'access-token',
+          refresh_token: 'refresh-token',
+          token_type: 'bearer',
+          user: {
+            id: 'user-id',
+            email: null,
+          },
+        },
+        {
+          fallbackLabel: '  github@example.com  ',
+          defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+        },
+      );
+
+      assert.equal(session.account.label, 'github@example.com');
     });
 
     it('falls back to the supplied label and default expiry', () => {

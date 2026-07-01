@@ -20,23 +20,16 @@ describe('agent option labels', () => {
     };
   }
 
-  it('uses authored agent names for option labels', () => {
-    const options = entriesToOptionData([toolUseAgent('review')]);
+  it.each(['review', 'codeReviewer', 'paper-reviewer'])(
+    'uses the authored agent name %j as the option label',
+    (name) => {
+      const options = entriesToOptionData([toolUseAgent(name)]);
+      const [option] = options;
 
-    expect(options.map((option) => option.label)).toEqual(['review']);
-  });
-
-  it('keeps camelCase names exactly as authored', () => {
-    const [option] = entriesToOptionData([toolUseAgent('codeReviewer')]);
-
-    expect(option?.label).toBe('codeReviewer');
-  });
-
-  it('preserves ordinary hyphenated agent labels', () => {
-    const [option] = entriesToOptionData([toolUseAgent('paper-reviewer')]);
-
-    expect(option?.label).toBe('paper-reviewer');
-  });
+      expect(options).toHaveLength(1);
+      expect(option?.label).toBe(name);
+    },
+  );
 
   it('does not carry descriptions into picker options', () => {
     const [option] = entriesToOptionData([
