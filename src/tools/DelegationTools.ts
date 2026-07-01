@@ -34,7 +34,7 @@ import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
-import { isNonEmptyString } from '@utils/core/stringCore';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 // Local imports - delegation
 import {

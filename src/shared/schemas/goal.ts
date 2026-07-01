@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { formatCompactDuration } from '@utils/core/stringCore';
+import { formatCompactDuration } from '@utils/text/stringUtils';
 
 import { StreamTabIdSchema } from './identifiers';
 

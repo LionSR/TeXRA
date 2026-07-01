@@ -7,7 +7,7 @@ import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 import { designTokens } from '@shared/styles';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { clamp } from '@utils/core';
-import { formatPercent } from '@utils/core/stringCore';
+import { formatPercent } from '@utils/text/stringUtils';
 
 import { profileViewStyles } from './styles';
 
