@@ -429,6 +429,82 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.deepEqual(retrieveCalls, ['resp-final-fallback']);
   });
 
+  it('rethrows unhandled stream events before response.created', async () => {
+    const handler = createHandler();
+    handler.getStreamingConfig = () => true;
+
+    let retrieveCalls = 0;
+    const client = {
+      responses: {
+        stream: () => ({
+          [Symbol.asyncIterator]() {
+            return {
+              async next() {
+                throw new OpenAIError(
+                  'Unhandled response stream event: response.keepalive',
+                );
+              },
+            };
+          },
+          finalResponse: async () => {
+            throw new Error('stream failure should not call finalResponse');
+          },
+        }),
+        retrieve: async () => {
+          retrieveCalls += 1;
+          throw new Error('stream without response id should not retrieve');
+        },
+      },
+    };
+
+    await assert.rejects(
+      handler.createResponse({
+        client: client as any,
+        messages: createMessages(1),
+        temperature: 0,
+      }),
+      /Unhandled response stream event/,
+    );
+    assert.equal(retrieveCalls, 0);
+  });
+
+  it('rethrows non-OpenAI stream errors without polling', async () => {
+    const handler = createHandler();
+    handler.getStreamingConfig = () => true;
+
+    let retrieveCalls = 0;
+    const client = {
+      responses: {
+        stream: () => ({
+          async *[Symbol.asyncIterator]() {
+            yield {
+              type: 'response.created',
+              response: { id: 'resp-network-error' },
+            };
+            throw new TypeError('network unavailable');
+          },
+          finalResponse: async () => {
+            throw new Error('stream failure should not call finalResponse');
+          },
+        }),
+        retrieve: async () => {
+          retrieveCalls += 1;
+          throw new Error('non-OpenAI stream error should not retrieve');
+        },
+      },
+    };
+
+    await assert.rejects(
+      handler.createResponse({
+        client: client as any,
+        messages: createMessages(1),
+        temperature: 0,
+      }),
+      /network unavailable/,
+    );
+    assert.equal(retrieveCalls, 0);
+  });
+
   it('does not retrieve stateless responses after an unhandled stream event', async () => {
     const handler = createStatelessHandler();
     handler.getStreamingConfig = () => true;
