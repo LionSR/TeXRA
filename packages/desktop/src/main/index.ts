@@ -413,11 +413,13 @@ function createWindow(options: {
     callbackState: options.authCallbackState,
   });
   setOpenBuildDisplay(previewHost.openBuildDisplay);
+  const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
   const openLogsFolder = async () =>
     previewHost.openPath(getDesktopLogDirectory());
   const openWorkspaceFolder = async () => {
     const result = await dialog.showOpenDialog(window, {
       title: 'Open Workspace Folder',
+      defaultPath: folderPickerDefaultPath,
       properties: ['openDirectory'],
     });
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
@@ -435,6 +437,7 @@ function createWindow(options: {
   const openWorkspaceInNewWindow = async () => {
     const result = await dialog.showOpenDialog(window, {
       title: 'Open Folder in New Window',
+      defaultPath: folderPickerDefaultPath,
       properties: ['openDirectory'],
     });
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
@@ -600,6 +603,7 @@ function createWindow(options: {
     selectCustomAgentDirectory: async () => {
       const result = await dialog.showOpenDialog(window, {
         title: 'Select Custom Agents Folder',
+        defaultPath: folderPickerDefaultPath,
         properties: ['openDirectory', 'createDirectory'],
       });
       return result.canceled ? undefined : result.filePaths[0];
