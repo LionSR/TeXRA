@@ -143,28 +143,6 @@ export class AgentsTab extends LitElement {
         flex-shrink: 0;
         margin-left: auto;
       }
-
-      .agents-dir-icon-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: var(--wa-space-3xs);
-        color: var(--color-text-secondary);
-        background: none;
-        border: none;
-        border-radius: var(--border-radius);
-        cursor: pointer;
-      }
-
-      .agents-dir-icon-btn:hover {
-        color: var(--wa-color-text-normal);
-      }
-
-      .agents-dir-icon-btn:focus-visible {
-        outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: var(--border-thin);
-        border-radius: var(--border-radius-small);
-      }
     `,
   ];
 
@@ -304,13 +282,17 @@ export class AgentsTab extends LitElement {
               >`
             : nothing}
           <div class="agents-dir-actions">
-            <button
-              class="agents-dir-icon-btn"
+            <wa-button
+              class="action-icon-button"
+              appearance="plain"
+              variant="neutral"
+              size="small"
               @click=${this.handleOpenFolder}
               title="Open folder in file explorer"
+              aria-label="Open folder in file explorer"
             >
               ${waIcon('folder-opened')}
-            </button>
+            </wa-button>
             <wa-button
               appearance="outlined"
               variant="neutral"
