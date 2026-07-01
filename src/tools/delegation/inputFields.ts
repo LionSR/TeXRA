@@ -20,7 +20,7 @@ import { displayToStoragePath } from '@tools/memory/memoryUtils';
 // Local imports - utils
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
-import { isNonEmptyString } from '@utils/core/stringCore';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
 

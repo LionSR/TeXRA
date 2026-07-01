@@ -1,6 +1,6 @@
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider, type OAuthProvider } from '@auth/sharedConfig';
-import { isNonEmptyString } from '@utils/core/stringCore';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CLI_OAUTH_PROVIDER_INPUTS } from './oauthProviderDisplay';
 

@@ -1,4 +1,4 @@
-import { isNonEmptyString } from '@utils/core/stringCore';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import type {
   CliApprovalPolicy,
