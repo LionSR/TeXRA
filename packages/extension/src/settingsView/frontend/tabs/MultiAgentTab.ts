@@ -12,6 +12,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
@@ -173,23 +174,18 @@ export class MultiAgentTab extends LitElement {
         top: var(--wa-space-2xs);
         right: var(--wa-space-2xs);
         display: none;
-        align-items: center;
-        justify-content: center;
-        padding: var(--wa-space-3xs);
-        color: var(--color-text-secondary);
-        background: none;
-        border: none;
-        border-radius: var(--border-radius);
-        cursor: pointer;
-        font-size: var(--font-size-sm);
         z-index: 10;
       }
 
-      .preset-delete-btn:hover {
+      .preset-delete-btn::part(base) {
+        color: var(--color-text-secondary);
+      }
+
+      .preset-delete-btn::part(base):hover {
         color: var(--wa-color-danger-on-quiet);
       }
 
-      .preset-delete-btn:focus-visible {
+      .preset-delete-btn:focus-visible::part(base) {
         outline: var(--border-thin) solid var(--wa-color-focus);
         outline-offset: var(--border-thin);
         border-radius: var(--border-radius-small);
@@ -342,13 +338,17 @@ export class MultiAgentTab extends LitElement {
           )}
         </div>
         ${deletable
-          ? html`<button
+          ? html`<wa-button
               class="preset-delete-btn"
+              appearance="plain"
+              variant="neutral"
+              size="small"
               @click=${(e: Event) => this.handleDeletePreset(e, preset)}
               title="Delete team"
+              aria-label="Delete team"
             >
               ${waIcon('trash')}
-            </button>`
+            </wa-button>`
           : nothing}
       </div>
     `;
