@@ -218,5 +218,3 @@ train. Do not re-open the adjudicated traps.
   (`ModelInvocationNode.ts:40`), three `is*` booleans (`IModelHandler.ts:206-226`),
   `PlatformAgentDirectoryBootstrapOptions` zero external importers
   (`platformAgentDirectories.ts:18/57`).
-  </content>
-  </invoke>
