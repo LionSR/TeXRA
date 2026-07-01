@@ -27,6 +27,7 @@ import {
   getSdkErrorMessage,
   attachStreamDiagnostics,
   attachPartialText,
+  attachFlowAutoRetryRequired,
   takeTail,
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
@@ -249,8 +250,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const baseUrl = this.getBaseUrl();
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
 
-    // For relay auth: credential is the user's JWT, SDK sends it via x-api-key header
-    return new Anthropic({ apiKey: credential, baseURL: baseUrl });
+    // For relay auth: credential is the user's JWT, SDK sends it via x-api-key header.
+    return new Anthropic({
+      apiKey: credential,
+      baseURL: baseUrl,
+    });
+  }
+
+  override get usesProviderManagedAutoRetry(): boolean {
+    return true;
   }
 
   /**
@@ -588,6 +596,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
         throw new AnthropicUserAbortError();
       }
 
+      let streamConnected = false;
+      const onConnect = (): void => {
+        streamConnected = true;
+      };
+      stream.on('connect', onConnect);
+
       let cleanupAbortListener: (() => void) | undefined;
       if (signal) {
         const abortListener = () => {
@@ -694,10 +708,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
         attachStreamDiagnostics(enrichedError, diagnostics);
         attachPartialText(enrichedError, partialText);
+        if (streamConnected || partialText) {
+          attachFlowAutoRetryRequired(enrichedError);
+        }
         throw enrichedError;
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
         streamHandler.finalize();
+        if (typeof stream.off === 'function') {
+          stream.off('connect', onConnect);
+        }
         cleanupAbortListener?.();
       }
     } else {

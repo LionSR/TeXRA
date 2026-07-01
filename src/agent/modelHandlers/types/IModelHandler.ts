@@ -214,6 +214,23 @@ export interface IModelHandler<
   readonly supportsManualCompaction: boolean;
 
   /**
+   * True when the provider client or handler already owns automatic transient
+   * retries. Flow-level model invocation should not add another automatic retry
+   * layer on top of it; manual retry remains available after the provider layer
+   * gives up. Provider handlers may still mark post-request failures, such as
+   * stream-consumption or background-polling errors, as requiring flow-level
+   * auto-retry because those failures are outside the SDK retry boundary.
+   */
+  readonly usesProviderManagedAutoRetry?: boolean;
+
+  /**
+   * Error-specific refinement for provider-managed retry ownership. Handlers
+   * whose SDK retries only a subset of transient failures can return false for
+   * errors that should still use TeXRA's flow-level automatic retry.
+   */
+  isAutoRetryManagedByProvider?(error: Error): boolean;
+
+  /**
    * Request context compaction on the next API call.
    * For handlers that support it, this forces compaction regardless of the
    * automatic threshold. No-op for handlers that don't support compaction.

@@ -16,6 +16,8 @@ export {
   attachSdkErrorMetadata,
   attachStreamDiagnostics,
   attachPartialText,
+  attachFlowAutoRetryRequired,
+  requiresFlowAutoRetry,
   attachProviderError,
 } from './sdkError/errorMetadata';
 

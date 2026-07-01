@@ -1,9 +1,13 @@
 // Third-party imports
 import { OpenRouter } from '@openrouter/sdk';
+import {
+  ConnectionError as OpenRouterConnectionError,
+  RequestTimeoutError as OpenRouterRequestTimeoutError,
+} from '@openrouter/sdk/models/errors';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
-import { logSdkError } from '@agent/trace';
+import { logSdkError, type StreamHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -12,6 +16,8 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   attachPartialText,
+  attachFlowAutoRetryRequired,
+  detectStatusCode,
   getSdkErrorMessage,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -131,6 +137,24 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     });
   }
 
+  override get usesProviderManagedAutoRetry(): boolean {
+    return true;
+  }
+
+  override isAutoRetryManagedByProvider(error: Error): boolean {
+    if (
+      error instanceof OpenRouterConnectionError ||
+      error instanceof OpenRouterRequestTimeoutError
+    ) {
+      return true;
+    }
+
+    const statusCode = detectStatusCode(error);
+    // @openrouter/sdk v0.13.21 defaults chatSend retryCodes to ["5XX"];
+    // 429/408 HTTP responses remain owned by TeXRA's flow retry.
+    return statusCode !== undefined && statusCode >= 500;
+  }
+
   // ---------------------------------------------------------------------------
   // createResponse
   // ---------------------------------------------------------------------------
@@ -209,17 +233,22 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         stream: true,
         streamOptions: { includeUsage: true },
       };
-      const stream = await client.chat.send(
-        { chatRequest: streamRequest },
-        { signal },
-      );
       const aggregator = new OpenRouterStreamAggregator();
-      // Opened before the request; the deferred starts fire (if ever) at the
-      // first reasoning/content delta — the phase signal for this API.
-      const thinking = this.createThinkingStream();
-      const output = this.createOutputStream();
+      let thinking: StreamHandle | undefined;
+      let output: StreamHandle | undefined;
+      let streamConnected = false;
 
       try {
+        const stream = await client.chat.send(
+          { chatRequest: streamRequest },
+          { signal },
+        );
+        streamConnected = true;
+        // Opened after the SDK request-retry boundary returns; the deferred
+        // starts fire (if ever) at the first reasoning/content delta.
+        thinking = this.createThinkingStream();
+        output = this.createOutputStream();
+
         for await (const chunk of stream) {
           const { contentDelta, reasoningDelta } =
             aggregator.consumeChunk(chunk);
@@ -246,8 +275,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         // the progress view from being stuck in a loading state. No explicit
         // final text so any chunks already streamed are preserved (passing `''`
         // would overwrite the visible partial output).
-        thinking.finalize(undefined);
-        output.finalize();
+        thinking?.finalize(undefined);
+        output?.finalize();
         // Lift the accumulated partial text onto the error so the retry UI
         // can show the tail (parity with the other streaming providers).
         const partialTail = takeTail(
@@ -256,6 +285,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         );
         if (partialTail) {
           attachPartialText(err, partialTail);
+        }
+        if (streamConnected || partialTail) {
+          attachFlowAutoRetryRequired(err);
         }
         throw err;
       }
