@@ -308,8 +308,13 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return this.usingSubscription() ? false : super.supportsTokenCounting;
   }
 
-  protected override shouldFailWhenFallbackOutputBudgetIsReduced(): boolean {
-    return this.usingSubscription();
+  protected override shouldFailWhenFallbackOutputBudgetIsReduced(
+    inputEstimate: number,
+    _maxOutputTokens: number,
+    contextWindow: number,
+    buffer: number,
+  ): boolean {
+    return this.usingSubscription() && inputEstimate + buffer >= contextWindow;
   }
 
   public override get supportsManualCompaction(): boolean {
