@@ -42,14 +42,11 @@ function mergeBackendOwnedState(
       taskGroups: existing.taskGroups,
     });
   }
+  // Overlay every backend-owned field from metadata (its own keys are exactly
+  // the BackendOwnedFieldsSchema shape) so a new field added there is picked
+  // up here without also updating this call site.
   return create(existing, (draft) => {
-    draft.status = metadata.status;
-    draft.lastTimestamp = metadata.lastTimestamp;
-    draft.conversationProgress = metadata.conversationProgress;
-    draft.activeSubagents = metadata.activeSubagents;
-    draft.finishedSubagentCount = metadata.finishedSubagentCount;
-    draft.activeProcesses = metadata.activeProcesses;
-    draft.finishedProcessCount = metadata.finishedProcessCount;
+    Object.assign(draft, metadata);
   });
 }
 
