@@ -13,6 +13,7 @@ import { WebSocketError } from 'openai/resources/responses/internal-base';
 
 import type { AgentTrace } from '@agent/trace';
 import {
+  attachFlowAutoRetryRequired,
   attachPartialText,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -157,6 +158,7 @@ export class OpenAIResponseWebSocketTransport {
       const onError = (err: Error): void => {
         cleanup();
         closeQuietly(ws);
+        attachFlowAutoRetryRequired(err);
         reject(err);
       };
       const onAbort = (): void => {
@@ -278,6 +280,7 @@ export class OpenAIResponseWebSocketTransport {
         if (streamedText) {
           attachPartialText(err, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
         }
+        attachFlowAutoRetryRequired(err);
         reject(err);
       };
 

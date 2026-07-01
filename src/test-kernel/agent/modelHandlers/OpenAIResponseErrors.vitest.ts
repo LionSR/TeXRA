@@ -14,6 +14,7 @@ import {
 import {
   formatProviderHttpError,
   normalizeProviderError,
+  requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
 
 describe('OpenAI Responses error normalization', () => {
@@ -85,6 +86,7 @@ describe('OpenAI Responses error normalization', () => {
     expect(normalized.statusCode).toBeUndefined();
     expect(normalized.requestId).toBe('req_poll');
     expect(normalized.userRetryable).toBe(true);
+    expect(requiresFlowAutoRetry(wrapped)).toBe(true);
   });
 
   it('keeps terminal background statuses retryable without HTTP metadata', () => {
@@ -105,5 +107,6 @@ describe('OpenAI Responses error normalization', () => {
     expect(providerError.statusCode).toBeUndefined();
     expect(providerError.userRetryable).toBe(true);
     expect(providerError.message).toContain('resp_failed');
+    expect(requiresFlowAutoRetry(wrapped)).toBe(true);
   });
 });

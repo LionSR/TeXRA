@@ -8,6 +8,7 @@ import {
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
+import { requiresFlowAutoRetry } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
 import { FlowTransition } from './FlowTransitions';
@@ -64,6 +65,30 @@ export class ModelInvocationNode<
       this._config.backgroundModeAware === true &&
       this.services.modelHandler.isBackgroundModeActive()
     );
+  }
+
+  override shouldAutoRetry(error: Error): boolean {
+    if (!super.shouldAutoRetry(error)) return false;
+
+    if (requiresFlowAutoRetry(error)) {
+      this.services.logger.debug(
+        'Using flow-level auto-retry; the failure is outside the provider-managed retry boundary.',
+      );
+      return true;
+    }
+
+    const isProviderManagedAutoRetry =
+      this.services.modelHandler.isAutoRetryManagedByProvider?.(error) ??
+      this.services.modelHandler.usesProviderManagedAutoRetry === true;
+
+    if (isProviderManagedAutoRetry) {
+      this.services.logger.debug(
+        'Skipping flow-level auto-retry; the model handler uses provider-managed auto-retry.',
+      );
+      return false;
+    }
+
+    return true;
   }
 
   async prep(shared: TShared): Promise<BaseInvocationPrepResult> {
