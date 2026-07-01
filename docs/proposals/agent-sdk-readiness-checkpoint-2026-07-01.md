@@ -20,7 +20,7 @@ logger/platform, and the public surface. Exactly as the 2026-06-25 → 2026-06-3
 checkpoints predicted for a recurring request, a fresh uninformed audit would
 re-surface the same already-adjudicated traps. Those are filtered out here under
 "Already adjudicated — do NOT re-litigate." What remains is smaller than any
-prior pass: **two of the six 2026-06-30 backlog items have since landed** through
+prior pass: **two of the seven 2026-06-30 backlog items have since landed** through
 the reviewed PR train, and **no genuinely-new, unattended-safe cleanup exists**
 this pass. Nothing was applied — see the reasoning below.
 
