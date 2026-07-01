@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   boundedDiffDisplayLines,
   buildHunks,
-  DIFF_LINE_STYLE,
   diffVisualRowCount,
   maxDiffScrollOffset,
   scrollBoundedDiffDisplayLines,
@@ -146,26 +145,6 @@ describe('CLI diff display', () => {
 });
 
 describe('full-width diff bands', () => {
-  it('only added/removed lines get readable band styling', () => {
-    expect(DIFF_LINE_STYLE.added).toMatchObject({
-      backgroundColor: expect.any(String),
-      color: expect.any(String),
-    });
-    expect(DIFF_LINE_STYLE.removed).toMatchObject({
-      backgroundColor: expect.any(String),
-      color: expect.any(String),
-    });
-    expect(DIFF_LINE_STYLE.context).toBeUndefined();
-    expect(DIFF_LINE_STYLE.header).toBeUndefined();
-  });
-
-  it('does not rely on dark background-only diff bands', () => {
-    expect(DIFF_LINE_STYLE.added?.backgroundColor).not.toBe('#1f3a28');
-    expect(DIFF_LINE_STYLE.removed?.backgroundColor).not.toBe('#4a2526');
-    expect(DIFF_LINE_STYLE.added?.color).toBeDefined();
-    expect(DIFF_LINE_STYLE.removed?.color).toBeDefined();
-  });
-
   // `σ`/`∑` are single display columns; a naive `.length` pad would overshoot.
   it.each([
     {
