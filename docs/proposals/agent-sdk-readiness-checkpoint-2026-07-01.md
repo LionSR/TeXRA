@@ -47,7 +47,7 @@ deliberate reviewed-PR-train tracks — not unattended sweeps.
 ## The plan kept landing — 2026-06-30 backlog converging
 
 Verified in-tree at HEAD. Since the 2026-06-30 checkpoint, the PR train closed
-two of that checkpoint's six deferred backlog items and shrank the tracked
+two of that checkpoint's seven deferred backlog items and shrank the tracked
 god-file concentration:
 
 - **`createWorkspaceStateWorkflowOutputPolicy` single-use factory (was LOW) —
