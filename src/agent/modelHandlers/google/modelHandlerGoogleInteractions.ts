@@ -38,7 +38,7 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
-import { isNonEmptyString, isObject } from '@utils/core';
+import { filterNotNull, isNonEmptyString, isObject } from '@utils/core';
 import { getShortDisplayPath } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
@@ -675,7 +675,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       if (step.type === 'user_input' || step.type === 'model_output') {
         const parts = (step.content ?? [])
           .map((content) => this.contentToCountablePart(content))
-          .filter((part): part is Part => part !== null);
+          .filter(filterNotNull);
         if (parts.length > 0) {
           contents.push({
             role: step.type === 'model_output' ? 'model' : 'user',
@@ -690,7 +690,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         const parts = Array.isArray(step.result)
           ? step.result
               .map((content) => this.contentToCountablePart(content))
-              .filter((part): part is Part => part !== null)
+              .filter(filterNotNull)
           : [createPartFromText(this.functionResultToText(step.result))];
         if (parts.length > 0) {
           contents.push(createUserContent(parts));
@@ -1337,7 +1337,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         await Promise.all(
           attachments.map((a) => this.buildFunctionResultImage(a)),
         )
-      ).filter((image): image is ImageContent => image !== null);
+      ).filter(filterNotNull);
       subcontent.push(...encoded);
       if (encoded.length === 0) {
         this.logger.warn(
