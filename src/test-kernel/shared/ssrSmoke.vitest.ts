@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { LitElement, css, html } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 import { render } from '@lit-labs/ssr';
 import { collectResultSync } from '@lit-labs/ssr/lib/render-result.js';
 
-@customElement('smoke-bubble')
 class SmokeBubble extends LitElement {
+  static override properties = {
+    role: {},
+  };
+
   static override styles = css`
     :host {
       display: block;
@@ -16,7 +19,7 @@ class SmokeBubble extends LitElement {
     }
   `;
 
-  @property() role = 'user';
+  role = 'user';
 
   override render() {
     return html`
@@ -27,6 +30,8 @@ class SmokeBubble extends LitElement {
     `;
   }
 }
+
+customElement('smoke-bubble')(SmokeBubble);
 
 describe('@lit-labs/ssr smoke', () => {
   it('renders a custom element to declarative shadow DOM in Node', () => {
