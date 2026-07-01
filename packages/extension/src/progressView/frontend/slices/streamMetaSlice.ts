@@ -7,12 +7,18 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  EMPTY_STREAM_META,
+  reduceStreamMeta,
+} from '@shared/streams/streamMetaReducer';
 
-import { getStreamState, isToolUseState } from '../store';
-import type {
-  HandlerRegistry,
-  MessageHandlerContext,
-} from '../messageHandlerTypes';
+import {
+  EMPTY_PROCESS_OUTPUTS,
+  getStreamState,
+  isToolUseState,
+  type ProcessOutputMap,
+} from '../store';
+import type { HandlerRegistry } from '../messageHandlerTypes';
 
 /**
  * Buffer for subagent descriptions that race their own UPDATE_STREAMS
@@ -29,46 +35,12 @@ export function takePendingDescription(
   return desc;
 }
 
-/** Max characters retained per output stream (stdout/stderr) per process. */
-const MAX_OUTPUT = 100_000;
-/** Trim below the cap so new output can append for a while before the next reset. */
-const TRIMMED_OUTPUT_LENGTH = 80_000;
-
-/** Append delta to prev, trimming below MAX_OUTPUT when the cap is crossed. */
-function capOutput(prev: string, delta: string): string {
-  if (!delta) return prev;
-  const combined = prev + delta;
-  return combined.length > MAX_OUTPUT
-    ? combined.slice(combined.length - TRIMMED_OUTPUT_LENGTH)
-    : combined;
-}
-
-/** Remove output entries for processes no longer in the active list. */
-function pruneStaleOutputs(
-  ctx: MessageHandlerContext,
-  stream: string,
-  activeIds: Set<string>,
-): void {
-  ctx.setState((prev) => {
-    const streamOutputs = prev.processOutputs.get(stream);
-    if (!streamOutputs) return prev;
-    let hasStale = false;
-    for (const id of streamOutputs.keys()) {
-      if (!activeIds.has(id)) {
-        hasStale = true;
-        break;
-      }
-    }
-    if (!hasStale) return prev;
-    return create(prev, (draft) => {
-      const outputs = draft.processOutputs.get(stream);
-      if (!outputs) return;
-      for (const id of [...outputs.keys()]) {
-        if (!activeIds.has(id)) outputs.delete(id);
-      }
-    });
-  });
-}
+/**
+ * Per-output cap policy for the webview: keep at most 100k UTF-16 code units
+ * per stdout/stderr, trimming to 80k when the cap is crossed so output can keep
+ * appending for a while before the next reset. The shared reducer applies it.
+ */
+const WEBVIEW_OUTPUT_CAP = { maxChars: 100_000, retainChars: 80_000 } as const;
 
 export const streamMetaHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
@@ -139,33 +111,39 @@ export const streamMetaHandlers: HandlerRegistry = {
         draft.finishedProcessCount = data.finishedProcessCount;
       }),
     );
-    pruneStaleOutputs(
-      ctx,
-      data.stream,
-      new Set(
-        data.activeProcesses.map((p: { executionId: string }) => p.executionId),
-      ),
-    );
+    // Prune output buffers for processes that just left the active list. Output
+    // lives in a separate store, so only `processOutput` is projected into the
+    // shared reducer and spliced back; an unchanged map skips the re-render.
+    ctx.setState((prev) => {
+      const current = prev.processOutputs.get(data.stream);
+      if (!current) return prev;
+      const { processOutput } = reduceStreamMeta(
+        { ...EMPTY_STREAM_META, processOutput: current },
+        { kind: 'activeProcesses', processes: data.activeProcesses },
+        { outputCap: WEBVIEW_OUTPUT_CAP },
+      );
+      if (processOutput === current) return prev;
+      return create(prev, (draft) => {
+        draft.processOutputs.set(
+          data.stream,
+          processOutput as ProcessOutputMap,
+        );
+      });
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT]: (data, ctx) => {
     const { stream, executionId, stdout, stderr } = data;
-    ctx.setState((prev) =>
-      create(prev, (draft) => {
-        let streamOutputs = draft.processOutputs.get(stream);
-        if (!streamOutputs) {
-          streamOutputs = new Map();
-          draft.processOutputs.set(stream, streamOutputs);
-        }
-        const existing = streamOutputs.get(executionId) ?? {
-          stdout: '',
-          stderr: '',
-        };
-        streamOutputs.set(executionId, {
-          stdout: capOutput(existing.stdout, stdout),
-          stderr: capOutput(existing.stderr, stderr),
-        });
-      }),
-    );
+    ctx.setState((prev) => {
+      const current = prev.processOutputs.get(stream) ?? EMPTY_PROCESS_OUTPUTS;
+      const { processOutput } = reduceStreamMeta(
+        { ...EMPTY_STREAM_META, processOutput: current },
+        { kind: 'processOutput', executionId, stdout, stderr },
+        { outputCap: WEBVIEW_OUTPUT_CAP },
+      );
+      return create(prev, (draft) => {
+        draft.processOutputs.set(stream, processOutput as ProcessOutputMap);
+      });
+    });
   },
 };
