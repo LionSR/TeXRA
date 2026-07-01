@@ -313,8 +313,9 @@ export class GitTab extends LitElement {
                   ${this.githubTokenStatus === 'env'
                     ? html`<p>
                         A token is currently being read from the
-                        <code>GITHUB_TOKEN</code> environment variable. Setting
-                        one above will override it.
+                        <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
+                        environment variable. Setting one above will override
+                        it.
                       </p>`
                     : nothing}
                 </div>
