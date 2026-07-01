@@ -9,7 +9,10 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { bus } from '@eventBus/ProgressEventBus';
-import { appendTail } from '@utils/strings/appendTail';
+import {
+  reduceStreamMeta,
+  type StreamMetaCommand,
+} from '@shared/streams/streamMetaReducer';
 
 import {
   cliState,
@@ -17,7 +20,7 @@ import {
   registerChildStreams,
   removeStream,
   setParentStream,
-  type ProcessOutputTail,
+  type StreamSlice,
 } from './cliState';
 import { mergeChildStreams } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
@@ -60,9 +63,28 @@ function refreshQueuedFollowUps(
 
 /** Cap on per-process tail length held in the signal map (UTF-16 code
  *  units, not bytes — markdown-it / ink work in JS strings). Beyond this
- *  we truncate at the head via the shared `appendTail` helper so the live
- *  pane never grows unbounded. */
+ *  the shared stream-meta reducer truncates at the head (exact cut, no
+ *  `retainChars`) so the live pane never grows unbounded. */
 const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
+const CLI_OUTPUT_CAP = { maxChars: PROCESS_TAIL_CHARS_MAX } as const;
+
+/**
+ * Run one stream-meta command against a CLI slice with the CLI cap policy.
+ * The shared reducer owns only process-tail capping and pruning.
+ */
+function applyStreamMeta(
+  s: StreamSlice,
+  command: StreamMetaCommand,
+): Pick<StreamSlice, 'activeProcesses' | 'processOutput'> {
+  return reduceStreamMeta(
+    {
+      activeProcesses: s.activeProcesses,
+      processOutput: s.processOutput,
+    },
+    command,
+    { outputCap: CLI_OUTPUT_CAP },
+  );
+}
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;
@@ -138,7 +160,10 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'updateConversationProgress': {
       const p = payload as ProgressEventPayloads['updateConversationProgress'];
-      patchStream(p.streamId, (s) => ({ ...s, conversation: p.progress }));
+      patchStream(p.streamId, (s) => ({
+        ...s,
+        conversation: p.progress,
+      }));
       return;
     }
     case 'updateStreamDescription': {
@@ -161,56 +186,56 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'updateActiveProcesses': {
       const p = payload as ProgressEventPayloads['updateActiveProcesses'];
-      // Drop tails for executions that just left the active list — mirrors
-      // `pruneStaleOutputs` in the webview's streamMetaSlice so the map
-      // doesn't grow unboundedly for the lifetime of the parent stream.
+      // The shared reducer drops tails for executions that left the active
+      // list; the CLI also persists a bounded transcript for each finished
+      // process before its tail is pruned (a CLI-only side effect).
       const live = new Set(p.processes.map((c) => c.executionId));
       patchStream(p.parentStreamId, (s) => {
-        let pruned: Map<string, ProcessOutputTail> | undefined;
-        for (const id of s.processOutput.keys()) {
-          if (live.has(id)) continue;
-          pruned ??= new Map(s.processOutput);
-          pruned.delete(id);
-        }
         const entries = appendCompletedProcessEntries(
           p.parentStreamId,
           s,
           live,
         );
+        const meta = applyStreamMeta(s, {
+          kind: 'activeProcesses',
+          processes: p.processes,
+        });
         return {
           ...s,
-          activeProcesses: p.processes,
+          activeProcesses: meta.activeProcesses,
           entries,
-          processOutput: pruned ?? s.processOutput,
+          processOutput: meta.processOutput,
         };
       });
       return;
     }
     case 'updateProcessOutput': {
       const p = payload as ProgressEventPayloads['updateProcessOutput'];
-      patchStream(p.parentStreamId, (s) => {
-        const prev = s.processOutput.get(p.executionId) ?? {
-          stdout: '',
-          stderr: '',
-        };
-        const next = {
-          stdout: appendTail(prev.stdout, p.stdout, PROCESS_TAIL_CHARS_MAX),
-          stderr: appendTail(prev.stderr, p.stderr, PROCESS_TAIL_CHARS_MAX),
-        };
-        const map = new Map(s.processOutput);
-        map.set(p.executionId, next);
-        return { ...s, processOutput: map };
-      });
+      patchStream(p.parentStreamId, (s) => ({
+        ...s,
+        processOutput: applyStreamMeta(s, {
+          kind: 'processOutput',
+          executionId: p.executionId,
+          stdout: p.stdout,
+          stderr: p.stderr,
+        }).processOutput,
+      }));
       return;
     }
     case 'updateTodos': {
       const p = payload as ProgressEventPayloads['updateTodos'];
-      patchStream(p.streamId, (s) => ({ ...s, todos: p.todos }));
+      patchStream(p.streamId, (s) => ({
+        ...s,
+        todos: p.todos,
+      }));
       return;
     }
     case 'updatePlan': {
       const p = payload as ProgressEventPayloads['updatePlan'];
-      patchStream(p.streamId, (s) => ({ ...s, plan: p.plan }));
+      patchStream(p.streamId, (s) => ({
+        ...s,
+        plan: p.plan,
+      }));
       return;
     }
     case 'updateToolEditApprovalBypassState': {
