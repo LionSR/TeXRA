@@ -18,7 +18,7 @@ import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
-import { isNonEmptyString } from '@utils/core/stringCore';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
 
 const CHANNEL = 'AgentCreator';
