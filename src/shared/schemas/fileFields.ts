@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { isNonEmptyString } from '@utils/core/stringCore';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 const LEGACY_KEYS = [
   'referenceFile',

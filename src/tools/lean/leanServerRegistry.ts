@@ -12,7 +12,7 @@
  */
 
 import { warn } from '@logger/logUtils';
-import { formatCompactDuration } from '@utils/core/stringCore';
+import { formatCompactDuration } from '@utils/text/stringUtils';
 
 import { LEAN_SERVER_MODE_LABELS } from './leanConstants';
 

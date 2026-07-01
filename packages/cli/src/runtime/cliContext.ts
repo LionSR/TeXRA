@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
-import { isNonEmptyString } from '@utils/core/stringCore';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import { setWebSocketEnabledOverride } from '@utils/config/providerConfig';
 
 import {
