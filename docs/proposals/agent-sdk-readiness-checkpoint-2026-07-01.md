@@ -146,17 +146,17 @@ they belong to the reviewed train, not this unattended pass.
 The standing rulings hold at HEAD. See the canonical doc's "Rejected findings"
 table, the delta-2026-06-24 citations, and the 2026-06-30 table.
 
-| Re-surfaced candidate | Ruling |
-| --------------------- | ------ |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler` | **Trap (8th refutation)** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing; removal breaks `tsc`. |
-| Collapse OpenAI-compatible subclasses to a config/data table | **Trap** — DeepSeek/Kimi/MiniMax/GLM each carry ~12 real per-provider override points; not URL/id shims. |
-| Inline the `createResponse → withCreateResponseGuard → sdkErrorTagger` chain | **Keep** — each layer is a real override seam. |
-| Collapse `runAgent` / `runAgentStream` (`executeAgent`) dual entry | **Trap** — Step-6 deliberate naming; the facade merge hits a real type wall (`registerExecution` needs parsed `AgentConfig`; callers hold `AgentConfigPayload`). |
-| Add a `src/agent/runtime/index.ts` public barrel | **Trap** — Step 4 rejected standalone runtime/toolUse barrels as pure churn; `@texra/core` **is** the curated barrel. |
-| Split `assembleAgentLaunchContext` / `buildAgentLaunchContext` | **Keep** — a genuine commit-point + saga-compensation high/low split, not a forwarder. |
-| Inline the cycle-wrapper nodes / `createXCycleFlow` factories | **Keep** — this _is_ the mandated `Node.exec → createFlow → flow.run` shape. |
-| `@logger` not routed through `platform()` | **Intentional, documented** — logging is its own host-injected subsystem. |
-| Sweep knip's "354 unused exports" | **Trap** — dominated by dynamically-wired false positives (string-registered commands, webview signals, channel IDs, test helpers); reviewed-PR curation only. |
+| Re-surfaced candidate                                                        | Ruling                                                                                                                                                           |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                    | **Trap (8th refutation)** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing; removal breaks `tsc`.           |
+| Collapse OpenAI-compatible subclasses to a config/data table                 | **Trap** — DeepSeek/Kimi/MiniMax/GLM each carry ~12 real per-provider override points; not URL/id shims.                                                         |
+| Inline the `createResponse → withCreateResponseGuard → sdkErrorTagger` chain | **Keep** — each layer is a real override seam.                                                                                                                   |
+| Collapse `runAgent` / `runAgentStream` (`executeAgent`) dual entry           | **Trap** — Step-6 deliberate naming; the facade merge hits a real type wall (`registerExecution` needs parsed `AgentConfig`; callers hold `AgentConfigPayload`). |
+| Add a `src/agent/runtime/index.ts` public barrel                             | **Trap** — Step 4 rejected standalone runtime/toolUse barrels as pure churn; `@texra/core` **is** the curated barrel.                                            |
+| Split `assembleAgentLaunchContext` / `buildAgentLaunchContext`               | **Keep** — a genuine commit-point + saga-compensation high/low split, not a forwarder.                                                                           |
+| Inline the cycle-wrapper nodes / `createXCycleFlow` factories                | **Keep** — this _is_ the mandated `Node.exec → createFlow → flow.run` shape.                                                                                     |
+| `@logger` not routed through `platform()`                                    | **Intentional, documented** — logging is its own host-injected subsystem.                                                                                        |
+| Sweep knip's "354 unused exports"                                            | **Trap** — dominated by dynamically-wired false positives (string-registered commands, webview signals, channel IDs, test helpers); reviewed-PR curation only.   |
 
 ## Subagent split points — re-confirmed, unchanged
 
@@ -218,5 +218,5 @@ train. Do not re-open the adjudicated traps.
   (`ModelInvocationNode.ts:40`), three `is*` booleans (`IModelHandler.ts:206-226`),
   `PlatformAgentDirectoryBootstrapOptions` zero external importers
   (`platformAgentDirectories.ts:18/57`).
-</content>
-</invoke>
+  </content>
+  </invoke>
