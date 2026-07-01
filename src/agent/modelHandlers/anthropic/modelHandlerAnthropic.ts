@@ -666,14 +666,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
         const requestId = stream.request_id;
 
-        // Wrap only non-APIError, non-abort stream failures. APIError
-        // subclasses carry status/headers/requestID/type needed for retry
-        // classification; aborts are identified through the metadata tag
-        // attached above (isUserAbort), which wrapping would hide.
+        // Wrap only non-APIError, non-abort stream failures that happened
+        // before message_start. APIError subclasses carry status/headers/
+        // requestID/type needed for retry classification; aborts are
+        // identified through the metadata tag attached above (isUserAbort),
+        // which wrapping would hide. Gate on diagnostics.messageStartReceived
+        // (tracked from the actual message_start SSE event) rather than
+        // stream.currentMessage, which the SDK does not keep populated once
+        // finalMessage() has settled — using it here previously mislabeled
+        // post-message_start failures (e.g. the message_stop guard above) as
+        // "closed before message_start", clobbering the more accurate error.
         const isAbort = isUserAbort(streamError);
         let enrichedError: unknown = streamError;
         if (
-          !stream.currentMessage &&
+          !diagnostics.messageStartReceived &&
           streamError instanceof Error &&
           !(streamError instanceof AnthropicAPIError) &&
           !isAbort

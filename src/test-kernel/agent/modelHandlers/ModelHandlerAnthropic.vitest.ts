@@ -1472,17 +1472,32 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
   /**
    * Builds a minimal stream stub that mimics the surface of the Anthropic
    * SDK's MessageStream used by ModelHandlerAnthropic.createResponse:
-   *   - `.on()` for event listener registration (no-op)
+   *   - `.on()` for event listener registration; captures the `streamEvent`
+   *     handler so the option below can simulate a real message_start event
    *   - `.controller.abort()` (no-op)
    *   - `.finalMessage()` returning a promise that rejects with `error`
-   *   - `.currentMessage` undefined (simulates no message_start received)
+   *     (after emitting message_start first, if requested)
+   *   - `.currentMessage` undefined, mirroring the SDK not keeping this
+   *     populated once finalMessage() has resolved/rejected
    *   - `.request_id` undefined
    */
-  function buildStreamStub(error: unknown): unknown {
+  function buildStreamStub(
+    error: unknown,
+    options: { emitMessageStart?: boolean } = {},
+  ): unknown {
+    let streamEventHandler: ((event: unknown) => void) | undefined;
     return {
-      on: () => {},
+      on: (eventName: string, handler: (event: unknown) => void) => {
+        if (eventName === 'streamEvent') streamEventHandler = handler;
+      },
       controller: { abort: () => {} },
       finalMessage: async () => {
+        if (options.emitMessageStart) {
+          streamEventHandler?.({
+            type: 'message_start',
+            message: { id: 'msg_test123' },
+          });
+        }
         throw error;
       },
       currentMessage: undefined,
@@ -1552,6 +1567,70 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
           ),
           'abort error must not be wrapped with the pre-message_start sentinel message',
         );
+        return true;
+      },
+    );
+  });
+
+  it('preserves the original error message once message_start was received (does not mislabel a post-start stream failure)', async () => {
+    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
+      shouldUseServerSideKeysSync: () => false,
+      getUseIncludedModelAccess: () => false,
+      canUseServerSideKeys: async () => false,
+      getRelayBaseUrl: (provider: string) =>
+        `https://relay.example.com/functions/v1/relay/${provider}/v1`,
+    } as unknown as ReturnType<
+      typeof serverKeysModule.getServerSideKeyService
+    >);
+
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+    (handler as any).getStreamingConfig = () => true;
+
+    // Simulates the message_stop guard above: message_start (and content)
+    // was received, but the stream was truncated (e.g. proxy idle timeout
+    // during extended thinking) before message_stop ever arrived.
+    const droppedStreamError = new Error(
+      'Stream ended without message_stop after 400s (462 events, ' +
+        '37004 thinking chars, 0 text chars). Stream truncated, likely ' +
+        'proxy idle timeout during extended thinking.',
+    );
+    const streamStub = buildStreamStub(droppedStreamError, {
+      emitMessageStart: true,
+    });
+
+    const client = {
+      beta: {
+        messages: {
+          stream: () => streamStub,
+        },
+      },
+    } as any;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+
+    await assert.rejects(
+      handler.createResponse({ client, messages, temperature: 0 }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, 'expected an Error to be thrown');
+        // The fix under test: once message_start was actually received, the
+        // pre-message_start wrap guard must not fire and clobber a more
+        // specific, more accurate error (previously this mislabeled the
+        // message_stop-guard error as "closed before message_start", even
+        // though message_start diagnostics showed it had, in fact, started).
+        assert.ok(
+          !/Stream closed before message_start/.test((err as Error).message),
+          `expected the original message_stop-guard error to survive unwrapped, got: ${(err as Error).message}`,
+        );
+        assert.equal((err as Error).message, droppedStreamError.message);
         return true;
       },
     );
