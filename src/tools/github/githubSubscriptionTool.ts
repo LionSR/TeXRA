@@ -33,6 +33,7 @@ import {
 } from './checkAnnotationLevels';
 import { getGitHubToken } from './githubAuth';
 import { ghGet } from './githubClient';
+import { MAX_CONCURRENT_PR_SUBSCRIPTIONS } from './prSubscriptionConstants';
 import {
   bindIssueSubscription,
   bindPRSubscription,
@@ -123,7 +124,7 @@ function parsePath(raw: string): ParsedPath {
 async function requireToken(): Promise<void> {
   if (!(await getGitHubToken())) {
     throw new ToolError(
-      'No GitHub token configured. Open TeXRA settings → Git tab → "Set token" (or export GITHUB_TOKEN). Needs `repo` scope for private repos, `public_repo` for public.',
+      'No GitHub token configured. Set one in host settings (VS Code: TeXRA settings → Git tab → "Set token"), or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
     );
   }
 }
@@ -514,7 +515,7 @@ export class GitHubSubscriptionTool extends defineTool({
     '- list: list active subscriptions on this stream.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',
     'Bot-authored events are dropped end-to-end by policy.',
-    'Caps: 10 concurrent PR subscriptions, 10 concurrent issue subscriptions, 3 concurrent repo subscriptions per process. Poll interval ≈ 30s. Requires a GitHub token — set it in TeXRA settings → Git tab, or via GITHUB_TOKEN.',
+    `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, 10 concurrent issue subscriptions, 3 concurrent repo subscriptions per process. Poll interval ≈ 30s. Requires a GitHub token — set it in host settings, or via GITHUB_TOKEN or GH_TOKEN.`,
   ].join(' '),
   schema: GitHubSubscriptionInputSchema,
 }) {

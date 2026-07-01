@@ -1193,7 +1193,7 @@ The rest of round 2 is the spec for these deltas, in dependency order: §22 → 
 
 The CLI's relationship to the RunContext PRD is one of _consumer_, not _driver_:
 
-- The CLI's `cli/src/runtime/initPlatform.ts` constructs a `RunContext` per `texra run` invocation, populates `RunCapabilities` (no extension; GitHub token from `process.env.GITHUB_TOKEN`; no callback resolver), and threads it via `withRunContext(ctx, () => executeAgent(...))`.
+- The CLI's `cli/src/runtime/initPlatform.ts` constructs a `RunContext` per `texra run` invocation, populates `RunCapabilities` (no extension; GitHub token from `process.env.GITHUB_TOKEN` or `process.env.GH_TOKEN`; no callback resolver), and threads it via `withRunContext(ctx, () => executeAgent(...))`.
 - The CLI's `texra mcp serve` host (§24) constructs _one `RunContext` per MCP `tools/call`_ — that's the workload that gates the RunContext PRD's Phase 2 (singleton retirement) for v1.1 concurrency safety.
 - Until the RunContext PRD's Phase 1 lands, the CLI's `runAgent()` SDK is documented as **single-consumer-per-process** (round-1 §7.6 caveat). The shim path makes this safe-by-default, not safe-by-design.
 
