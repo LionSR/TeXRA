@@ -1,20 +1,12 @@
 // Host-neutral per-stream-meta reducer shared by the CLI TUI and the webview
-// progress view. Both hosts used to maintain their own near-identical copy of
-// this logic (the CLI's `applyToState` mirrored the webview's `streamMetaSlice`
-// prune/cap rules). This is the single source of truth: each host projects its
-// own store into a `StreamMeta`, runs a `StreamMetaCommand`, and splices the
-// returned fields back. Host-only concerns (finished counts, usage, focus,
-// task groups, child-stream routing, transcript entries) stay in the adapters.
+// progress view. It owns only the cross-host logic that was duplicated:
+// bounded per-process output tails and pruning vanished process tails. Verbatim
+// assignments stay in the host adapters.
 //
 // NO host imports here (no vscode / electron / ink / immer): the reducer is a
 // pure function over plain values.
 
-import type {
-  ActiveChildInfo,
-  ConversationProgress,
-  Plan,
-  TodoItem,
-} from '@shared/schemas';
+import type { ActiveChildInfo } from '@shared/schemas';
 import { appendTail } from '@utils/strings/appendTail';
 
 /** Per-execution captured stdout/stderr tail held in stream meta. */
@@ -23,18 +15,10 @@ export interface StreamProcessOutput {
   readonly stderr: string;
 }
 
-/**
- * The slice of per-stream state this reducer owns. `ActiveChildInfo` is the
- * shared badge value object used for both subagent and process rows.
- */
+/** The slice of per-stream state this reducer owns. */
 export interface StreamMeta {
-  readonly conversation: ConversationProgress | undefined;
-  readonly activeSubagents: readonly ActiveChildInfo[];
   readonly activeProcesses: readonly ActiveChildInfo[];
   readonly processOutput: ReadonlyMap<string, StreamProcessOutput>;
-  readonly todos: readonly TodoItem[];
-  readonly plan: Plan | null;
-  readonly description: string | undefined;
 }
 
 export type StreamMetaCommand =
@@ -48,18 +32,7 @@ export type StreamMetaCommand =
   | {
       readonly kind: 'activeProcesses';
       readonly processes: readonly ActiveChildInfo[];
-    }
-  | {
-      readonly kind: 'activeSubagents';
-      readonly subagents: readonly ActiveChildInfo[];
-    }
-  | {
-      readonly kind: 'conversation';
-      readonly conversation: ConversationProgress | undefined;
-    }
-  | { readonly kind: 'todos'; readonly todos: readonly TodoItem[] }
-  | { readonly kind: 'plan'; readonly plan: Plan | null }
-  | { readonly kind: 'description'; readonly description: string | undefined };
+    };
 
 /**
  * Output-cap policy. Once a stream's stdout/stderr crosses `maxChars`, it is
@@ -84,13 +57,8 @@ const EMPTY_OUTPUT: StreamProcessOutput = { stdout: '', stderr: '' };
  * just the field a command touches over this default.
  */
 export const EMPTY_STREAM_META: StreamMeta = {
-  conversation: undefined,
-  activeSubagents: [],
   activeProcesses: [],
   processOutput: new Map(),
-  todos: [],
-  plan: null,
-  description: undefined,
 };
 
 /**
@@ -105,7 +73,8 @@ export function reduceStreamMeta(
 ): StreamMeta {
   switch (command.kind) {
     case 'processOutput': {
-      const { maxChars, retainChars } = options.outputCap;
+      const { maxChars } = options.outputCap;
+      const retainChars = options.outputCap.retainChars ?? maxChars;
       const prev = meta.processOutput.get(command.executionId) ?? EMPTY_OUTPUT;
       const processOutput = new Map(meta.processOutput);
       processOutput.set(command.executionId, {
@@ -128,15 +97,5 @@ export function reduceStreamMeta(
         processOutput: pruned ?? meta.processOutput,
       };
     }
-    case 'activeSubagents':
-      return { ...meta, activeSubagents: command.subagents };
-    case 'conversation':
-      return { ...meta, conversation: command.conversation };
-    case 'todos':
-      return { ...meta, todos: command.todos };
-    case 'plan':
-      return { ...meta, plan: command.plan };
-    case 'description':
-      return { ...meta, description: command.description };
   }
 }

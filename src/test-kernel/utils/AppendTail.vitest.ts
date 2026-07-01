@@ -22,6 +22,15 @@ describe('appendTail', () => {
     expect(appendTail('0123456789', 'abc', 10, 5)).toBe('89abc');
   });
 
+  it('clamps retainChars to maxChars', () => {
+    // Misconfigured callers still get the documented "at most maxChars" tail.
+    expect(appendTail('0123456789', 'abc', 5, 100)).toBe('89abc');
+  });
+
+  it('clamps negative caps to an empty tail', () => {
+    expect(appendTail('0123456789', 'abc', -1, 100)).toBe('');
+  });
+
   it('does not reset while within maxChars even when retainChars is lower', () => {
     // joined = "012345ab" (8) ≤ maxChars 10 ⇒ plain append, no reset.
     expect(appendTail('012345', 'ab', 10, 5)).toBe('012345ab');

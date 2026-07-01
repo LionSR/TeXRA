@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type {
-  ActiveChildInfo,
-  ConversationProgress,
-  Plan,
-  TodoItem,
-} from '@shared/schemas';
+import type { ActiveChildInfo } from '@shared/schemas';
 import {
   EMPTY_STREAM_META,
   reduceStreamMeta,
@@ -45,6 +40,18 @@ describe('reduceStreamMeta', () => {
         base,
         { kind: 'processOutput', executionId: 'e', stdout: 'abc', stderr: '' },
         { outputCap: { maxChars: 10, retainChars: 5 } },
+      );
+      expect(next.processOutput.get('e')?.stdout).toBe('89abc');
+    });
+
+    it('clamps retainChars to maxChars', () => {
+      const base = meta({
+        processOutput: new Map([['e', { stdout: '0123456789', stderr: '' }]]),
+      });
+      const next = reduceStreamMeta(
+        base,
+        { kind: 'processOutput', executionId: 'e', stdout: 'abc', stderr: '' },
+        { outputCap: { maxChars: 5, retainChars: 100 } },
       );
       expect(next.processOutput.get('e')?.stdout).toBe('89abc');
     });
@@ -115,47 +122,6 @@ describe('reduceStreamMeta', () => {
         OPTS,
       );
       expect(next.processOutput).toBe(output);
-    });
-  });
-
-  describe('verbatim copies', () => {
-    it('sets activeSubagents', () => {
-      const subagents: ActiveChildInfo[] = [
-        { executionId: 's1', agentName: 'review', childStreamId: 'c1' },
-      ];
-      expect(
-        reduceStreamMeta(meta(), { kind: 'activeSubagents', subagents }, OPTS)
-          .activeSubagents,
-      ).toBe(subagents);
-    });
-
-    it('sets conversation, todos, plan, and description', () => {
-      const conversation: ConversationProgress = {
-        conversationTurns: 2,
-        toolCallCount: 5,
-      };
-      const todos: TodoItem[] = [
-        { content: 'do x', status: 'pending', activeForm: 'doing x' },
-      ];
-      const plan: Plan = { objective: 'finish the proof' };
-
-      expect(
-        reduceStreamMeta(meta(), { kind: 'conversation', conversation }, OPTS)
-          .conversation,
-      ).toBe(conversation);
-      expect(
-        reduceStreamMeta(meta(), { kind: 'todos', todos }, OPTS).todos,
-      ).toBe(todos);
-      expect(reduceStreamMeta(meta(), { kind: 'plan', plan }, OPTS).plan).toBe(
-        plan,
-      );
-      expect(
-        reduceStreamMeta(
-          meta(),
-          { kind: 'description', description: 'desc' },
-          OPTS,
-        ).description,
-      ).toBe('desc');
     });
   });
 

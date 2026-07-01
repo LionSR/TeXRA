@@ -11,7 +11,6 @@ import type {
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   reduceStreamMeta,
-  type StreamMeta,
   type StreamMetaCommand,
 } from '@shared/streams/streamMetaReducer';
 
@@ -71,23 +70,20 @@ const CLI_OUTPUT_CAP = { maxChars: PROCESS_TAIL_CHARS_MAX } as const;
 
 /**
  * Run one stream-meta command against a CLI slice with the CLI cap policy.
- * The slice is projected onto the host-neutral `StreamMeta` shape so host-only
- * fields (usage, bypass, entries, …) never reach the shared reducer.
+ * The shared reducer owns only process-tail capping and pruning.
  */
 function applyStreamMeta(
   s: StreamSlice,
   command: StreamMetaCommand,
-): StreamMeta {
-  const meta: StreamMeta = {
-    conversation: s.conversation,
-    activeSubagents: s.activeSubagents,
-    activeProcesses: s.activeProcesses,
-    processOutput: s.processOutput,
-    todos: s.todos,
-    plan: s.plan,
-    description: s.description,
-  };
-  return reduceStreamMeta(meta, command, { outputCap: CLI_OUTPUT_CAP });
+): Pick<StreamSlice, 'activeProcesses' | 'processOutput'> {
+  return reduceStreamMeta(
+    {
+      activeProcesses: s.activeProcesses,
+      processOutput: s.processOutput,
+    },
+    command,
+    { outputCap: CLI_OUTPUT_CAP },
+  );
 }
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
@@ -166,10 +162,7 @@ function applyToState<K extends ProgressEvent>(
       const p = payload as ProgressEventPayloads['updateConversationProgress'];
       patchStream(p.streamId, (s) => ({
         ...s,
-        conversation: applyStreamMeta(s, {
-          kind: 'conversation',
-          conversation: p.progress,
-        }).conversation,
+        conversation: p.progress,
       }));
       return;
     }
@@ -177,10 +170,7 @@ function applyToState<K extends ProgressEvent>(
       const p = payload as ProgressEventPayloads['updateStreamDescription'];
       patchStream(p.streamId, (s) => ({
         ...s,
-        description: applyStreamMeta(s, {
-          kind: 'description',
-          description: p.description,
-        }).description,
+        description: p.description,
       }));
       return;
     }
@@ -189,10 +179,7 @@ function applyToState<K extends ProgressEvent>(
       registerChildStreams(p.parentStreamId, p.children);
       patchStream(p.parentStreamId, (s) => ({
         ...s,
-        activeSubagents: applyStreamMeta(s, {
-          kind: 'activeSubagents',
-          subagents: p.children,
-        }).activeSubagents,
+        activeSubagents: p.children,
         childStreams: mergeChildStreams(s.childStreams, p.children),
       }));
       return;
@@ -239,7 +226,7 @@ function applyToState<K extends ProgressEvent>(
       const p = payload as ProgressEventPayloads['updateTodos'];
       patchStream(p.streamId, (s) => ({
         ...s,
-        todos: applyStreamMeta(s, { kind: 'todos', todos: p.todos }).todos,
+        todos: p.todos,
       }));
       return;
     }
@@ -247,7 +234,7 @@ function applyToState<K extends ProgressEvent>(
       const p = payload as ProgressEventPayloads['updatePlan'];
       patchStream(p.streamId, (s) => ({
         ...s,
-        plan: applyStreamMeta(s, { kind: 'plan', plan: p.plan }).plan,
+        plan: p.plan,
       }));
       return;
     }

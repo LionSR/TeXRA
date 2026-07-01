@@ -6,7 +6,8 @@
 // `retainChars` is the length to keep once the cap is crossed; it defaults to
 // `maxChars` (an exact head-cut at the cap). Passing a smaller `retainChars`
 // trims further below the cap so output can keep appending for a while before
-// the next reset (the webview's 100k→80k policy).
+// the next reset (the webview's 100k→80k policy). It is clamped to the cap so
+// callers cannot accidentally retain more than `maxChars`.
 
 export function appendTail(
   current: string,
@@ -14,10 +15,12 @@ export function appendTail(
   maxChars: number,
   retainChars: number = maxChars,
 ): string {
+  const safeMaxChars = Math.max(0, maxChars);
+  const safeRetainChars = Math.min(Math.max(0, retainChars), safeMaxChars);
   if (!chunk) return current;
   const combined = current + chunk;
-  if (combined.length <= maxChars) return combined;
-  let cut = Math.max(0, combined.length - retainChars);
+  if (combined.length <= safeMaxChars) return combined;
+  let cut = combined.length - safeRetainChars;
   // Don't slice in the middle of a surrogate pair — the low half (DC00..DFFF)
   // alone is a ?-rendering invalid code point.
   const code = combined.charCodeAt(cut);
