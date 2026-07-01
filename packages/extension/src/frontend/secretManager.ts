@@ -4,7 +4,11 @@ import * as vscode from 'vscode';
 // Local imports
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
-import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
+import {
+  GITHUB_TOKEN_STORAGE_KEY,
+  getGitHubEnvToken,
+  normalizeGitHubToken,
+} from '@tools/github/githubAuth';
 import { isNonEmptyString } from '@utils/core';
 
 export type { ApiProvider };
@@ -59,9 +63,9 @@ export class SecretManager {
   }
 
   public static async gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {
-    const stored = await this.get(this.GITHUB_TOKEN_KEY);
+    const stored = normalizeGitHubToken(await this.get(this.GITHUB_TOKEN_KEY));
     if (stored) return 'secret';
-    if (process.env.GITHUB_TOKEN) return 'env';
+    if (getGitHubEnvToken()) return 'env';
     return 'none';
   }
 

@@ -337,7 +337,7 @@ export const UpdateGitAuthorSettingsMessageSchema = z.object({
 /** Outbound: backend → frontend GitHub token status. */
 export const UpdateGitHubTokenStatusMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS),
-  /** 'secret' = stored in SecretStorage; 'env' = GITHUB_TOKEN env var; 'none' = missing. */
+  /** 'secret' = stored in SecretStorage; 'env' = GITHUB_TOKEN/GH_TOKEN env var; 'none' = missing. */
   status: z.enum(['secret', 'env', 'none']),
 });
 

@@ -256,7 +256,7 @@ The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Settings Dashboard` → **G
 
 <GitTabCard />
 
-<p class="hero-caption">The Git tab: the GitHub token row (here picked up from <code>GITHUB_TOKEN</code>, shown as <strong>Env</strong>) with Create on GitHub and Set token, and the commit-author toggle.</p>
+<p class="hero-caption">The Git tab: the GitHub token row (here picked up from <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>, shown as <strong>Env</strong>) with Create on GitHub and Set token, and the commit-author toggle.</p>
 
 ### GitHub personal access token
 
@@ -272,7 +272,7 @@ Setup:
 3. Pick an expiration (90 days is a common choice) and generate the token. GitHub shows it only once.
 4. Back in TeXRA's Git tab, click **Set token** and paste it in.
 
-The token is stored in VS Code's encrypted **Secret Storage** — never written to `settings.json`. Alternatively, export `GITHUB_TOKEN` in the shell VS Code is launched from and the tool will pick it up automatically (the Git tab will show **Env** as the status).
+The token is stored in VS Code's encrypted **Secret Storage** — never written to `settings.json`. Alternatively, export `GITHUB_TOKEN` or `GH_TOKEN` in the host environment and the tool will pick it up automatically (the Git tab will show **Env** as the status).
 
 Once a token is configured, an agent can run `github_subscription command=subscribe path=owner/repo/pulls/N` (or `path=owner/repo` for the whole repo, `path=owner/repo/issues/N` for a single issue) and every new event arrives wrapped in a `<github-webhook-activity>` tag in the follow-up queue. Use `command=unsubscribe` with the same path to stop, `command=list` to see active subscriptions, and `command=find_current` to resolve the current branch's PR. Subscriptions auto-terminate when the PR closes or merges, and up to 25 PRs can be watched concurrently.
 
