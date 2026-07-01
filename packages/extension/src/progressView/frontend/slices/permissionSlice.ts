@@ -12,6 +12,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import { clearInquiryDraft } from '../components/ExternalInquiryPanel';
 import { updateToolUseState } from '../stateUtils';
+import { createBoundedIdSet } from '../utils/boundedIdSet';
 import type { PermissionState } from '../permissionState';
 import type {
   HandlerRegistry,
@@ -22,11 +23,11 @@ import type {
 // Module state
 // ============================================================
 
-/** Proposal IDs resolved before a show message arrives (out-of-order guard). */
-export const resolvedProposalIds = new Set<string>();
-
 /** Maximum entries before evicting oldest resolved IDs. */
 const RESOLVED_PROPOSAL_IDS_CAP = 200;
+
+/** Proposal IDs resolved before a show message arrives (out-of-order guard). */
+const resolvedProposalIds = createBoundedIdSet(RESOLVED_PROPOSAL_IDS_CAP);
 
 /** Clear all resolved proposal IDs (called on stream delete / delete-all). */
 export function clearResolvedProposalIds(): void {
@@ -36,11 +37,11 @@ export function clearResolvedProposalIds(): void {
 /** Add a resolved proposal ID, evicting the oldest entry if over cap. */
 export function addResolvedProposalId(id: string): void {
   resolvedProposalIds.add(id);
-  if (resolvedProposalIds.size > RESOLVED_PROPOSAL_IDS_CAP) {
-    // Set iteration order is insertion order — first value is oldest
-    const oldest = resolvedProposalIds.values().next().value;
-    if (oldest !== undefined) resolvedProposalIds.delete(oldest);
-  }
+}
+
+/** Consume (delete) a resolved proposal ID; returns true if it was present. */
+function consumeResolvedProposalId(id: string): boolean {
+  return resolvedProposalIds.delete(id);
 }
 
 // ============================================================
@@ -121,7 +122,7 @@ export const permissionHandlers: HandlerRegistry = {
       const { permission } = data;
       if (permission.kind === PERMISSION_KIND.PROPOSAL) {
         // Drop if this proposal was already resolved (out-of-order messages)
-        if (resolvedProposalIds.delete(permission.data.proposalId)) return;
+        if (consumeResolvedProposalId(permission.data.proposalId)) return;
         upsertProposalPermission(ctx, {
           kind: PERMISSION_KIND.PROPOSAL,
           data: permission.data,
