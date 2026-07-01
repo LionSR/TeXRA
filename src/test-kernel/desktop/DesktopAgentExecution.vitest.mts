@@ -1500,7 +1500,12 @@ describe('DesktopProgressBridge', () => {
         'stream-1',
         executionId,
         expect.objectContaining({
-          activeFiles: {},
+          activeFiles: expect.objectContaining({
+            input: false,
+            context: false,
+            media: false,
+            output: false,
+          }),
           agentConfig: expect.objectContaining(taskState.agentConfig),
         }),
       );
@@ -1582,7 +1587,12 @@ describe('DesktopProgressBridge', () => {
         'stream-1',
         executionId,
         expect.objectContaining({
-          activeFiles: {},
+          activeFiles: expect.objectContaining({
+            input: false,
+            context: false,
+            media: false,
+            output: false,
+          }),
           agentConfig: expect.objectContaining(taskState.agentConfig),
         }),
       );
