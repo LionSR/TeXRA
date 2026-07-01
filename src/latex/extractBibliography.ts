@@ -10,6 +10,7 @@ import { WorkspaceFS } from '@utils/files';
 // Local file imports
 import {
   collectBibliographyPaths,
+  collectCommaSeparatedMatches,
   stripLatexComments,
 } from './latexParsingUtils';
 
@@ -53,19 +54,7 @@ export interface BibliographyEntriesResult {
 }
 
 function collectCitationKeys(content: string): string[] {
-  const keys = new Set<string>();
-
-  for (const match of content.matchAll(CITATION_PATTERN)) {
-    const block = match[1];
-    for (const raw of block.split(',')) {
-      const key = raw.trim();
-      if (key) {
-        keys.add(key);
-      }
-    }
-  }
-
-  return [...keys];
+  return collectCommaSeparatedMatches(content, CITATION_PATTERN);
 }
 
 export async function extractBibliographyContext(
