@@ -36,7 +36,10 @@ import {
 import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { getAuthStatus } from '@commands/auth';
 import { hasAnyUsableSetupCredential } from '@commands/setup';
-import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
+import {
+  isResumeInFlight,
+  tryResumeFromSnapshot,
+} from '@commands/agent/resumeFromSnapshot';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { toErrorMessage } from '@common/errors';
@@ -214,6 +217,7 @@ export async function activate(context: vscode.ExtensionContext) {
     lifecycle,
     agentResume: {
       tryResumeStream: (streamId) => tryResumeFromSnapshot(streamId),
+      isResumeInFlight: (streamId) => isResumeInFlight(streamId),
     },
     toolAvailability: {
       ...NO_TOOL_AVAILABILITY_HOST,
