@@ -6,6 +6,7 @@ import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewE
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
+import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -14,14 +15,19 @@ import { StreamSnapshotStore } from '@transcript';
 import { streamDataDir } from '@transcript/streamDataPaths';
 import { readMeta } from '@transcript/streamSnapshotRead';
 import type { AgentTrace } from '@agent/trace';
-import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
+import {
+  validateExecutionRequest,
+  type ValidatedExecutionRequest,
+} from '@agent/core/state/executionRequests';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import {
+  isResumeInFlight as isStreamResumeInFlight,
+  resolveAndResumeStream,
+} from '@agent/runtime/resolveAndResumeStream';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
+import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
@@ -41,6 +47,7 @@ import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   STREAM_STATUS,
+  type AgentProposalPermission,
   type AgentCategoryFilter,
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
@@ -185,6 +192,7 @@ export class DesktopProgressBridge {
   private readonly state: ProgressBackend['state'];
   readonly streamLogs: ProgressBackend['state']['streamLogs'];
   private readonly agentProposalController: ProgressAgentProposalController;
+  private readonly workflowActions: ProgressWorkflowActionsController;
   private readonly workflowFileActions: ProgressWorkflowFileActionsController;
   /**
    * Shown-but-unresolved approval prompts, one {@link ApprovalRequestHandler}
@@ -193,7 +201,6 @@ export class DesktopProgressBridge {
    * bookkeeping the extension uses, rather than a hand-rolled registry.
    */
   private approvalHandlers!: ApprovalRequestHandlerSet;
-  private readonly resumeAttempts = new Set<StreamTabId>();
   private readonly deletedStreams = new Set<StreamTabId>();
   private readonly unsubscribe: () => void;
   private readonly toolEditApprovals: DesktopToolEditApprovalController;
@@ -341,6 +348,37 @@ export class DesktopProgressBridge {
         listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
       },
     );
+    // Shared run-new path (mirrors the extension wiring). Only `getTaskState`
+    // and `executeAgent` matter here: diff/file-operation actions are routed
+    // through `workflowFileActions`/`fileActions`, so those deps stay unwired.
+    this.workflowActions = new ProgressWorkflowActionsController({
+      state: {
+        getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
+        getExecutionId: (stream) => this.getStreamExecutionId(stream),
+        getOutputFiles: (stream) =>
+          new Map(this.state.snapshots.getOutputFiles(stream)),
+        getKnownWorkspaceOutputPaths: () => new Set(),
+      },
+      executeAgent: async (request) => {
+        const validated = validateExecutionRequest(request);
+        if (!validated.valid) {
+          this.logger.error('Invalid desktop workflow execution request', {
+            data: validated.issue,
+          });
+          await this.options.showErrorMessage?.(validated.message);
+          return;
+        }
+        await this.runExecution(validated.request);
+      },
+      runDiff: () => {
+        throw new Error('Desktop diff is routed through workflowFileActions');
+      },
+      runFileOperation: () => {
+        throw new Error(
+          'Desktop file operations are routed through workflowFileActions',
+        );
+      },
+    });
     this.workflowFileActions = new ProgressWorkflowFileActionsController({
       state: {
         getActiveStream: () => this.state.activeStream,
@@ -440,7 +478,7 @@ export class DesktopProgressBridge {
         resumeStream: async (stream) => {
           await this.tryResumeStream(stream);
         },
-        runNewStream: (stream) => this.runNewStream(stream),
+        runNewStream: (stream) => this.workflowActions.runNew(stream),
       },
       followUp: {
         sendFollowUp: ({ stream, text, mediaFiles }) =>
@@ -710,109 +748,74 @@ export class DesktopProgressBridge {
   }
 
   async tryResumeStream(streamId: StreamTabId): Promise<boolean> {
-    if (
-      StreamStatusService.isActiveOrResuming(streamId) ||
-      this.resumeAttempts.has(streamId) ||
-      this.deletedStreams.has(streamId)
-    ) {
+    // Desktop-only pre-check: a stream deleted in this window must never be
+    // resurrected, even if its persisted meta.json survives on disk. The shared
+    // orchestrator owns the active/resuming + in-flight guards.
+    if (this.deletedStreams.has(streamId)) {
       this.logger.debug(
         `Stream ${streamId} cannot be resumed, skipping desktop resume`,
       );
       return false;
     }
 
-    this.resumeAttempts.add(streamId);
-    let ownsResumingStatus = false;
-    try {
-      const resumeState = await this.resolveResumeState(streamId);
-      if (!resumeState) {
-        await this.options.showInfoMessage?.(
-          'No persisted run state was found for this stream. Start a new run instead.',
-        );
-        return false;
-      }
-
-      const { taskState, executionId } = resumeState;
-      if (!executionId) {
-        await this.options.showInfoMessage?.(
-          'This stream has no persisted execution id. Start a new run instead.',
-        );
-        return false;
-      }
-
-      const resume = await retrieveSessionResumeData(
-        streamId,
-        executionId,
-        taskState,
-      );
-      if (!resume) {
+    return resolveAndResumeStream(streamId, {
+      runtimeHost: this.runtimeHost,
+      resolveResumeState: async (id) => {
+        const resumeState = await this.resolveResumeState(id);
+        if (!resumeState) {
+          await this.options.showInfoMessage?.(
+            'No persisted run state was found for this stream. Start a new run instead.',
+          );
+          return undefined;
+        }
+        if (!resumeState.executionId) {
+          await this.options.showInfoMessage?.(
+            'This stream has no persisted execution id. Start a new run instead.',
+          );
+          return undefined;
+        }
+        return {
+          taskState: resumeState.taskState,
+          executionId: resumeState.executionId,
+        };
+      },
+      resumeToolUseSnapshot: (snapshot) =>
+        resumeToolUseSnapshot(snapshot, {
+          runtimeHost: this.runtimeHost,
+          session: this.session,
+          runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
+          reportFailure: (error) => this.reportResumeFailure(streamId, error),
+        }),
+      executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
+        this.runExecution(
+          { config, executionId },
+          { modelHandlerCompatibilityKey },
+        ),
+      reportNoResumableSession: async () => {
         await this.options.showInfoMessage?.(
           'This run has no resumable session state. Start a new run instead.',
         );
-        return false;
-      }
-
-      if (resume.type === 'toolUse') {
-        // The shared helper owns the RESUMING flip, follow-up drain/replay,
-        // failure re-enqueue, and the RESUMING->WAITING reset, surfacing
-        // failures through this host's own log + error dialog (the same
-        // messaging the outer catch applies to the workflow path).
-        return await resumeQueuedToolUseSnapshot(
-          streamId,
-          resume.snapshot,
-          this.runtimeHost,
-          {
-            session: this.session,
-            runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-            onError: async (error) => {
-              this.logger.error(`Failed to resume desktop stream ${streamId}`, {
-                data: error instanceof Error ? error : { error },
-              });
-              await this.options.showErrorMessage?.(
-                `Resume failed: ${toErrorMessage(error)}`,
-              );
-            },
-          },
-        );
-      }
-
-      ownsResumingStatus = true;
-      StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
-        runtimeHost: this.runtimeHost,
-      });
-      await this.runExecution(
-        {
-          config: resume.agentConfig,
-          executionId: resume.executionId,
-        },
-        {
-          modelHandlerCompatibilityKey: resume.modelHandlerCompatibilityKey,
-        },
-      );
-      return true;
-    } catch (error) {
-      this.logger.error(`Failed to resume desktop stream ${streamId}`, {
-        data: error instanceof Error ? error : { error },
-      });
-      if (
-        ownsResumingStatus &&
-        StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING
-      ) {
-        StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
-          runtimeHost: this.runtimeHost,
-        });
-      }
-      await this.options.showErrorMessage?.(
-        `Resume failed: ${toErrorMessage(error)}`,
-      );
-      return false;
-    } finally {
-      this.resumeAttempts.delete(streamId);
-    }
+      },
+      reportFailure: async (id, error) => {
+        await this.reportResumeFailure(id, error);
+      },
+    });
   }
 
   isResumeInFlight(streamId: StreamTabId): boolean {
-    return this.resumeAttempts.has(streamId);
+    return isStreamResumeInFlight(streamId);
+  }
+
+  private async reportResumeFailure(
+    streamId: StreamTabId,
+    error: unknown,
+  ): Promise<void> {
+    this.logger.error(`Failed to resume desktop stream ${streamId}`, {
+      data: error instanceof Error ? error : { error },
+    });
+    await this.options.showErrorMessage?.(
+      `Resume failed: ${toErrorMessage(error)}`,
+    );
   }
 
   private async runLatexdiffFile(
@@ -934,13 +937,6 @@ export class DesktopProgressBridge {
       });
       return undefined;
     }
-  }
-
-  private async runNewStream(streamId: StreamTabId): Promise<void> {
-    const taskState = this.state.snapshots.getTaskState(streamId);
-    if (!taskState) return;
-
-    await this.runExecution({ config: taskState.agentConfig });
   }
 
   private async sendFollowUp(
