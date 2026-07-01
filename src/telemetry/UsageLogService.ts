@@ -36,6 +36,7 @@ const DEFAULT_CONFIG: UsageLogConfig = {
 
 class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
+  private retryBatch: UsageLogBatch | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
   private activeFlush: Promise<boolean> | null = null;
   private config: UsageLogConfig = DEFAULT_CONFIG;
@@ -85,7 +86,7 @@ class UsageLogServiceImpl {
   }
 
   async flush(): Promise<boolean> {
-    while (this.queue.length > 0 || this.activeFlush) {
+    while (this.retryBatch || this.queue.length > 0 || this.activeFlush) {
       if (this.activeFlush) {
         const madeProgress = await this.activeFlush;
         if (!madeProgress) return false;
@@ -105,7 +106,7 @@ class UsageLogServiceImpl {
   }
 
   private async flushQueuedBatch(): Promise<boolean> {
-    let entries: UsageLogEntry[] = [];
+    let batch: UsageLogBatch | null = null;
     try {
       const token = await SupabaseClient.getRelayAccessToken();
       if (!token) {
@@ -113,18 +114,23 @@ class UsageLogServiceImpl {
         return false;
       }
 
-      entries = this.queue;
-      this.queue = [];
-      if (entries.length === 0) return false;
+      batch = this.retryBatch;
+      if (batch) {
+        this.retryBatch = null;
+      } else {
+        const entries = this.queue;
+        this.queue = [];
+        if (entries.length === 0) return false;
 
-      const batch: UsageLogBatch = {
-        entries,
-        batchId: randomUUID(),
-      };
+        batch = {
+          entries,
+          batchId: randomUUID(),
+        };
+      }
 
       logger.debug(
         CHANNEL,
-        `Flushing ${entries.length} entries (batch: ${batch.batchId})`,
+        `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
       );
 
       const response = await this.sendBatch(batch, token);
@@ -136,13 +142,13 @@ class UsageLogServiceImpl {
       } else {
         logger.warn(
           CHANNEL,
-          `Batch rejected; dropped ${entries.length} queued entries: ${response.error}`,
+          `Batch rejected; dropped ${batch.entries.length} queued entries: ${response.error}`,
         );
       }
       return true;
     } catch (error) {
-      const requeued = entries.length;
-      if (requeued > 0) this.restoreFailedBatch(entries);
+      const requeued = batch?.entries.length ?? 0;
+      if (batch) this.retryBatch = batch;
       const requeuedMessage =
         requeued > 0 ? `; requeued ${requeued} entries` : '';
       logger.warn(
@@ -151,19 +157,6 @@ class UsageLogServiceImpl {
       );
       return false;
     }
-  }
-
-  private restoreFailedBatch(entries: UsageLogEntry[]): void {
-    this.queue = [...entries, ...this.queue];
-
-    const overflow = this.queue.length - MAX_QUEUE_SIZE;
-    if (overflow <= 0) return;
-
-    this.queue.splice(0, overflow);
-    logger.warn(
-      CHANNEL,
-      `Queue full while restoring failed batch, dropped ${overflow} oldest entries`,
-    );
   }
 
   private async sendBatch(

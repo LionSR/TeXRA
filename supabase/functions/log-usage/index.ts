@@ -2,8 +2,9 @@
  * Log Usage Edge Function - Records API usage for analytics and rate limiting.
  *
  * Receives batched usage entries from the TeXRA extension and stores them
- * via the public.usage_logs_upsert RPC, which aggregates per-stream so the
- * table grows by run rather than by round.
+ * via service-role RPCs, which aggregate per-stream so the tables grow by run
+ * rather than by round. ChatGPT-subscription usage is kept in a separate table
+ * from paid relay/API-key usage.
  *
  * Authentication: JWT token in Authorization header (Bearer {jwt}), or a
  * CI relay token minted by `texra setup-token` (prefix `texra_relay_`)
@@ -12,8 +13,8 @@
  * - POST /log-usage - Log a batch of usage entries
  *
  * Database Requirements:
- * - Table: usage_logs with unique index on (user_id, stream_id) where stream_id IS NOT NULL
- * - RPC: usage_logs_upsert (service role only)
+ * - Tables: usage_logs, chatgpt_subscription_usage_logs
+ * - RPCs: usage_logs_upsert, chatgpt_subscription_usage_logs_upsert (service role only)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -27,7 +28,7 @@ import { versionedJsonResponse } from '../_shared/responses.ts';
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.3.0';
+const LOG_USAGE_VERSION = '1.4.0';
 
 // =============================================================================
 // Schemas
@@ -35,29 +36,74 @@ const LOG_USAGE_VERSION = '1.3.0';
 
 // Invalid optional fields are dropped (`.catch(undefined)`) rather than
 // rejecting the whole entry; invalid required fields reject the entry.
+const optionalString = z
+  .string()
+  .nullish()
+  .catch(undefined)
+  .transform((value) => value ?? undefined);
+const optionalNonnegativeInt = z
+  .int()
+  .nonnegative()
+  .nullish()
+  .catch(undefined)
+  .transform((value) => value ?? undefined);
+const optionalBoolean = z
+  .boolean()
+  .nullish()
+  .catch(undefined)
+  .transform((value) => value ?? undefined);
+
 const UsageLogEntrySchema = z.object({
-  timestamp: z.string(),
+  timestamp: z.iso.datetime(),
   model: z.string(),
   provider: z.string(),
-  inputTokens: z.number().nonnegative(),
-  outputTokens: z.number().nonnegative(),
+  inputTokens: z.int().nonnegative(),
+  outputTokens: z.int().nonnegative(),
   cost: z.number().nonnegative(),
-  agentName: z.string().optional().catch(undefined),
-  agentCategory: z.enum(['workflow', 'toolUse']).optional().catch(undefined),
-  isMultipleOutput: z.boolean().optional().catch(undefined),
-  responseTimeMs: z.number().nonnegative().optional().catch(undefined),
-  cachedInputTokens: z.number().nonnegative().optional().catch(undefined),
-  reasoningTokens: z.number().nonnegative().optional().catch(undefined),
-  usedRelay: z.boolean().optional().catch(undefined),
-  streamId: z.string().optional().catch(undefined),
-  extensionVersion: z.string().optional().catch(undefined),
-  editorType: z.string().optional().catch(undefined),
+  agentName: optionalString,
+  agentCategory: z
+    .enum(['workflow', 'toolUse'])
+    .nullish()
+    .catch(undefined)
+    .transform((value) => value ?? undefined),
+  isMultipleOutput: optionalBoolean,
+  responseTimeMs: optionalNonnegativeInt,
+  cachedInputTokens: optionalNonnegativeInt,
+  reasoningTokens: optionalNonnegativeInt,
+  usedRelay: optionalBoolean,
+  viaChatGptSubscription: z
+    .boolean()
+    .nullish()
+    .catch(false)
+    .transform((value) => value ?? false),
+  streamId: optionalString,
+  extensionVersion: optionalString,
+  editorType: optionalString,
 });
 
 const UsageBatchSchema = z.object({
   entries: z.array(z.unknown()),
-  batchId: z.string(),
+  batchId: z.uuid(),
 });
+
+type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
+
+const UsageDestinations = {
+  paid: {
+    table: 'usage_logs',
+    rpc: 'usage_logs_upsert',
+    accepts: (entry: UsageLogEntry) => !entry.viaChatGptSubscription,
+  },
+  chatgptSubscription: {
+    table: 'chatgpt_subscription_usage_logs',
+    rpc: 'chatgpt_subscription_usage_logs_upsert',
+    accepts: (entry: UsageLogEntry) => entry.viaChatGptSubscription,
+  },
+} as const;
+
+type UsageDestination =
+  (typeof UsageDestinations)[keyof typeof UsageDestinations];
+const usageDestinations = Object.values(UsageDestinations);
 
 // =============================================================================
 // Helpers
@@ -87,6 +133,64 @@ function errorResponse(req: Request, error: string, status: number): Response {
     { success: false, accepted: 0, error },
     status,
   );
+}
+
+function toDbRows(
+  userId: string,
+  batchId: string,
+  entries: readonly UsageLogEntry[],
+) {
+  return entries.map((entry) => ({
+    user_id: userId,
+    logged_at: entry.timestamp,
+    model: entry.model,
+    provider: entry.provider,
+    agent_name: entry.agentName ?? null,
+    agent_category: entry.agentCategory ?? null,
+    is_multiple_output: entry.isMultipleOutput ?? null,
+    input_tokens: entry.inputTokens,
+    output_tokens: entry.outputTokens,
+    cost: entry.cost,
+    response_time_ms: entry.responseTimeMs ?? null,
+    cached_input_tokens: entry.cachedInputTokens ?? null,
+    reasoning_tokens: entry.reasoningTokens ?? null,
+    used_relay: entry.usedRelay ?? false,
+    stream_id: entry.streamId ?? null,
+    extension_version: entry.extensionVersion ?? null,
+    editor_type: entry.editorType ?? null,
+    batch_id: batchId,
+  }));
+}
+
+async function batchExists(
+  destination: UsageDestination,
+  userId: string,
+  batchId: string,
+): Promise<boolean> {
+  const { data: existingBatch, error } = await adminClient!
+    .from(destination.table)
+    .select('id')
+    .eq('user_id', userId)
+    .eq('batch_id', batchId)
+    .limit(1);
+  if (error) {
+    throw new Error(
+      `Failed to check ${destination.table} batch deduplication: ${error.message}`,
+    );
+  }
+  return (existingBatch?.length ?? 0) > 0;
+}
+
+async function upsertUsageRows(
+  destination: UsageDestination,
+  rows: ReturnType<typeof toDbRows>,
+): Promise<string | undefined> {
+  if (rows.length === 0) return undefined;
+
+  const { error: rpcError } = await adminClient!.rpc(destination.rpc, {
+    p_rows: rows,
+  });
+  return rpcError?.message;
 }
 
 // =============================================================================
@@ -156,14 +260,14 @@ Deno.serve(async (req: Request) => {
     if (!batchResult.success) {
       return errorResponse(
         req,
-        'Invalid batch format: expected { entries: [], batchId: string }',
+        'Invalid batch format: expected { entries: [], batchId: UUID }',
         400,
       );
     }
     const batch = batchResult.data;
 
     // 5. Validate and transform entries
-    const validEntries: z.infer<typeof UsageLogEntrySchema>[] = [];
+    const validEntries: UsageLogEntry[] = [];
     for (const entry of batch.entries) {
       const result = UsageLogEntrySchema.safeParse(entry);
       if (result.success) validEntries.push(result.data);
@@ -176,15 +280,22 @@ Deno.serve(async (req: Request) => {
     // 6. Check for duplicate batch (idempotency for client retries).
     // After per-stream compaction the canonical row keeps only one batch_id
     // out of the inputs that produced it, so this is best-effort: it catches
-    // the common case of an immediate retry of an in-flight request.
-    const { data: existingBatch } = await adminClient
-      .from('usage_logs')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('batch_id', batch.batchId)
-      .limit(1);
+    // the common case of an immediate retry of an in-flight request. Each
+    // destination is checked separately so a retry after a partial write can
+    // still fill the missing table.
+    const destinationRows = await Promise.all(
+      usageDestinations.map(async (destination) => {
+        const entries = validEntries.filter(destination.accepts);
+        const rows =
+          entries.length === 0 ||
+          (await batchExists(destination, userId, batch.batchId))
+            ? []
+            : toDbRows(userId, batch.batchId, entries);
+        return { destination, rows };
+      }),
+    );
 
-    if (existingBatch && existingBatch.length > 0) {
+    if (destinationRows.every(({ rows }) => rows.length === 0)) {
       return successResponse(
         req,
         validEntries.length,
@@ -192,39 +303,22 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const rows = validEntries.map((entry) => ({
-      user_id: userId,
-      logged_at: entry.timestamp,
-      model: entry.model,
-      provider: entry.provider,
-      agent_name: entry.agentName ?? null,
-      agent_category: entry.agentCategory ?? null,
-      is_multiple_output: entry.isMultipleOutput ?? null,
-      input_tokens: entry.inputTokens,
-      output_tokens: entry.outputTokens,
-      cost: entry.cost,
-      response_time_ms: entry.responseTimeMs ?? null,
-      cached_input_tokens: entry.cachedInputTokens ?? null,
-      reasoning_tokens: entry.reasoningTokens ?? null,
-      used_relay: entry.usedRelay ?? false,
-      stream_id: entry.streamId ?? null,
-      extension_version: entry.extensionVersion ?? null,
-      editor_type: entry.editorType ?? null,
-      batch_id: batch.batchId,
-    }));
-
     // Server-side aggregation: rows with the same (user_id, stream_id) update
     // the canonical row instead of producing per-round duplicates.
-    const { error: rpcError } = await adminClient.rpc('usage_logs_upsert', {
-      p_rows: rows,
-    });
+    const upsertErrors = (
+      await Promise.all(
+        destinationRows.map(({ destination, rows }) =>
+          upsertUsageRows(destination, rows),
+        ),
+      )
+    ).filter((message): message is string => message != null);
 
-    if (rpcError) {
-      console.error('[LOG_USAGE] Upsert error:', rpcError.message);
+    if (upsertErrors.length > 0) {
+      console.error('[LOG_USAGE] Upsert error:', upsertErrors.join('; '));
       return errorResponse(req, 'Failed to store usage logs', 500);
     }
 
-    // 7. Return success response
+    // 8. Return success response
     return successResponse(req, validEntries.length);
   } catch (error) {
     console.error('[LOG_USAGE] Unexpected error:', error);
