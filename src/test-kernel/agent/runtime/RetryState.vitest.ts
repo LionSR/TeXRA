@@ -4,6 +4,8 @@ import { describe, expect, it, vi, type Mock } from 'vitest';
 // Local imports - agent runtime
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { NonIterableObject } from '@agent/node';
+import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
+import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { RetryableInvocationNode } from '@agent/core/flows/RetryState';
 import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import {
@@ -14,6 +16,7 @@ import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
+import { attachFlowAutoRetryRequired } from '@common/errors/sdkErrorUtils';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 interface TestRetryServices {
@@ -66,6 +69,24 @@ function createRetryNode(streamId: StreamTabId): RetryNodeKit {
   return { node, streamStatus, waitForRetry };
 }
 
+function createModelInvocationNode(input: {
+  usesProviderManagedAutoRetry: boolean;
+  isAutoRetryManagedByProvider?: (error: Error) => boolean;
+}): ModelInvocationNode<BaseCycleFields> {
+  return new ModelInvocationNode<BaseCycleFields>({
+    operationName: 'Model call',
+    streaming: false,
+    storeResponse: vi.fn(),
+  }).setServices({
+    modelHandler: {
+      usesProviderManagedAutoRetry: input.usesProviderManagedAutoRetry,
+      isAutoRetryManagedByProvider: input.isAutoRetryManagedByProvider,
+      isBackgroundModeActive: () => false,
+    },
+    logger: noopTrace,
+  } as never);
+}
+
 describe('RetryState', () => {
   it('treats user aborts as cancellations instead of failed invocations', () => {
     const node = new ExposedRetryNode();
@@ -73,6 +94,46 @@ describe('RetryState', () => {
 
     expect(node.shouldAutoRetry(abort)).toBe(false);
     expect(node.fallbackFor(abort)).toEqual({ kind: 'cancelled' });
+  });
+
+  it('skips flow-level auto-retry when the model handler delegates retries to the provider', () => {
+    const node = createModelInvocationNode({
+      usesProviderManagedAutoRetry: true,
+    });
+
+    expect(node.shouldAutoRetry(new Error('temporary provider failure'))).toBe(
+      false,
+    );
+  });
+
+  it('keeps flow-level auto-retry for errors outside the provider retry boundary', () => {
+    const node = createModelInvocationNode({
+      usesProviderManagedAutoRetry: true,
+    });
+    const streamError = new Error('stream closed after response started');
+
+    attachFlowAutoRetryRequired(streamError);
+
+    expect(node.shouldAutoRetry(streamError)).toBe(true);
+  });
+
+  it('keeps flow-level auto-retry when the handler predicate excludes an error', () => {
+    const node = createModelInvocationNode({
+      usesProviderManagedAutoRetry: true,
+      isAutoRetryManagedByProvider: () => false,
+    });
+
+    expect(node.shouldAutoRetry(new Error('rate limit'))).toBe(true);
+  });
+
+  it('uses flow-level auto-retry when the model handler has no provider-managed retry', () => {
+    const node = createModelInvocationNode({
+      usesProviderManagedAutoRetry: false,
+    });
+
+    expect(node.shouldAutoRetry(new Error('temporary provider failure'))).toBe(
+      true,
+    );
   });
 
   it('updates the injected stream status owner during manual retry', async () => {

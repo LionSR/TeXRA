@@ -503,6 +503,14 @@ export abstract class ModelHandler<
     return false;
   }
 
+  get usesProviderManagedAutoRetry(): boolean {
+    return false;
+  }
+
+  isAutoRetryManagedByProvider(_error: Error): boolean {
+    return this.usesProviderManagedAutoRetry;
+  }
+
   /**
    * Flag to force compaction on the next API call, set by {@link requestCompaction}.
    * Read by the per-provider compaction paths and cleared once compaction is

@@ -64,6 +64,31 @@ export function attachPartialText(err: unknown, text: string): void {
 
 export const detectPartialText = partialTextMetadata.detect;
 
+const flowAutoRetryRequiredMetadata = createErrorMetadata<boolean>(
+  'flowAutoRetryRequired',
+  (v): v is boolean => v === true,
+);
+
+/**
+ * Marks errors that are outside the provider SDK's automatic retry boundary.
+ * Examples include failures while consuming an already-open stream or polling
+ * an already-created background response.
+ */
+export function attachFlowAutoRetryRequired(err: unknown): void {
+  flowAutoRetryRequiredMetadata.attach(err, true);
+}
+
+export function requiresFlowAutoRetry(err: unknown): boolean {
+  for (
+    let current: unknown = err;
+    current != null && typeof current === 'object';
+    current = (current as { cause?: unknown }).cause
+  ) {
+    if (flowAutoRetryRequiredMetadata.detect(current) === true) return true;
+  }
+  return false;
+}
+
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');
 

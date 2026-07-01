@@ -1,5 +1,9 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
+import {
+  ConnectionError as OpenRouterConnectionError,
+  RequestTimeoutError as OpenRouterRequestTimeoutError,
+} from '@openrouter/sdk/models/errors';
 import { describe, it, afterEach, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
@@ -42,6 +46,12 @@ function stubServerSideKeyService(): void {
   } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
 }
 
+function statusError(statusCode: number): Error {
+  return Object.assign(new Error(`OpenRouter HTTP ${statusCode}`), {
+    statusCode,
+  });
+}
+
 describe('ModelHandlerOpenRouterNative routing precedence', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -81,4 +91,28 @@ describe('ModelHandlerOpenRouterNative routing precedence', () => {
       assert.equal((handler as any).shouldUseServerSideKeys(), expected);
     },
   );
+});
+
+describe('ModelHandlerOpenRouterNative retry ownership', () => {
+  it('matches the OpenRouter SDK retry boundary', () => {
+    const handler = new ModelHandlerOpenRouterNative(buildConfig());
+
+    assert.equal(handler.usesProviderManagedAutoRetry, true);
+    assert.equal(handler.isAutoRetryManagedByProvider(statusError(500)), true);
+    assert.equal(handler.isAutoRetryManagedByProvider(statusError(529)), true);
+    assert.equal(handler.isAutoRetryManagedByProvider(statusError(429)), false);
+    assert.equal(handler.isAutoRetryManagedByProvider(statusError(408)), false);
+    assert.equal(
+      handler.isAutoRetryManagedByProvider(
+        new OpenRouterConnectionError('connection failed'),
+      ),
+      true,
+    );
+    assert.equal(
+      handler.isAutoRetryManagedByProvider(
+        new OpenRouterRequestTimeoutError('request timed out'),
+      ),
+      true,
+    );
+  });
 });
