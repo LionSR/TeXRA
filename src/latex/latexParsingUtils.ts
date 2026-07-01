@@ -99,9 +99,21 @@ export function collectCommaSeparatedMatches(
   pattern: RegExp,
   transform: (token: string) => string = (token) => token,
 ): string[] {
+  if (!pattern.global) {
+    throw new Error(
+      'collectCommaSeparatedMatches requires a global RegExp pattern; add the g flag.',
+    );
+  }
+
   const tokens = new Set<string>();
   for (const match of content.matchAll(pattern)) {
-    for (const raw of match[1].split(',')) {
+    const rawGroup = match[1];
+    if (rawGroup == null) {
+      throw new Error(
+        'collectCommaSeparatedMatches requires the pattern to provide a first capture group.',
+      );
+    }
+    for (const raw of rawGroup.split(',')) {
       const trimmed = raw.trim();
       if (!trimmed) continue;
       tokens.add(transform(trimmed));
