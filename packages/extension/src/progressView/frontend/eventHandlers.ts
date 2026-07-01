@@ -21,7 +21,7 @@ import {
   type StreamLogs,
   type StreamState,
 } from './store';
-import { removePrompt, resolvedProposalIds } from './slices/permissionSlice';
+import { addResolvedProposalId, removePrompt } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
 import {
@@ -370,7 +370,7 @@ export function handlePermissionAction(
         permission.data.proposalId,
       );
       if (!removed) {
-        resolvedProposalIds.add(permission.data.proposalId);
+        addResolvedProposalId(permission.data.proposalId);
       }
       break;
     }

@@ -42,6 +42,7 @@ import { tryParseUrl } from '@utils/core';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { ProgressEvents } from '../events';
+import { createBoundedIdSet } from '../utils/boundedIdSet';
 import type { PermissionState } from '../permissionState';
 
 // ── Draft persistence ──
@@ -49,7 +50,7 @@ import type { PermissionState } from '../permissionState';
 const DRAFT_CACHE_CAP = 50;
 const DRAFT_SAVE_DELAY_MS = 400;
 const draftCache = new Map<string, InquiryDraft>();
-const resolvedIds = new Set<string>();
+const resolvedIds = createBoundedIdSet(DRAFT_CACHE_CAP);
 const INQUIRY_SUBMIT_ACTION = 'submit';
 
 interface InquiryPermissionIds {
@@ -86,11 +87,6 @@ function idsEqual(a: InquiryPermissionIds, b: InquiryPermissionIds): boolean {
 export function clearInquiryDraft(requestId: string): void {
   draftCache.delete(requestId);
   resolvedIds.add(requestId);
-  // Bound resolvedIds like draftCache
-  if (resolvedIds.size > DRAFT_CACHE_CAP) {
-    const oldest = resolvedIds.values().next().value;
-    if (oldest !== undefined) resolvedIds.delete(oldest);
-  }
 }
 
 // ── Component ──
