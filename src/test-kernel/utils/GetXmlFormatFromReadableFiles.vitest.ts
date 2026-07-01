@@ -51,20 +51,7 @@ describe('getXmlFormatFromReadableFiles', () => {
     );
   });
 
-  it('skips a file that cannot be read instead of rejecting the batch', async () => {
-    mocks.read.mockImplementation(readBodyExceptMissing);
-
-    const { xml } = await getXmlFormatFromReadableFiles([
-      'missing.tex',
-      'present.tex',
-    ]);
-
-    expect(xml).toBe(
-      '<document name="present.tex">\nbody of present.tex\n</document>',
-    );
-  });
-
-  it('reports the same readable file set used to build XML', async () => {
+  it('skips a file that cannot be read instead of rejecting the batch, and reports the same readable file set used to build XML', async () => {
     mocks.read.mockImplementation(readBodyExceptMissing);
 
     const result = await getXmlFormatFromReadableFiles([
