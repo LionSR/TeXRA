@@ -29,6 +29,10 @@ function batchModels(batch: unknown): string[] {
   return entries.map((entry) => entry.model);
 }
 
+function batchId(batch: unknown): string {
+  return (batch as { batchId: string }).batchId;
+}
+
 // ky passes a Request object; read each batch body from it. `beforeRespond`
 // lets a test stall or fail a specific call before the success response.
 function stubFetch(
@@ -131,5 +135,32 @@ describe('UsageLogService', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
+    expect(batchId(batches[1])).toBe(batchId(batches[0]));
+  });
+
+  it('keeps a failed batch id separate from later queued entries', async () => {
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+
+    const batches: unknown[] = [];
+    const fetchMock = stubFetch(batches, (callCount) => {
+      if (callCount === 1) {
+        throw new Error('network unavailable');
+      }
+    });
+
+    UsageLogService.log(usageEntry('first'));
+    await expect(UsageLogService.flush()).resolves.toBe(false);
+
+    UsageLogService.log(usageEntry('second'));
+    await expect(UsageLogService.flush()).resolves.toBe(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(batches.map(batchModels)).toEqual([
+      ['first'],
+      ['first'],
+      ['second'],
+    ]);
+    expect(batchId(batches[1])).toBe(batchId(batches[0]));
+    expect(batchId(batches[2])).not.toBe(batchId(batches[0]));
   });
 });
