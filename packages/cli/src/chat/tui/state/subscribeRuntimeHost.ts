@@ -69,9 +69,16 @@ function refreshQueuedFollowUps(
 const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
 const CLI_OUTPUT_CAP = { maxChars: PROCESS_TAIL_CHARS_MAX } as const;
 
-/** Project a CLI stream slice onto the host-neutral stream-meta shape. */
-function toStreamMeta(s: StreamSlice): StreamMeta {
-  return {
+/**
+ * Run one stream-meta command against a CLI slice with the CLI cap policy.
+ * The slice is projected onto the host-neutral `StreamMeta` shape so host-only
+ * fields (usage, bypass, entries, …) never reach the shared reducer.
+ */
+function applyStreamMeta(
+  s: StreamSlice,
+  command: StreamMetaCommand,
+): StreamMeta {
+  const meta: StreamMeta = {
     conversation: s.conversation,
     activeSubagents: s.activeSubagents,
     activeProcesses: s.activeProcesses,
@@ -80,16 +87,7 @@ function toStreamMeta(s: StreamSlice): StreamMeta {
     plan: s.plan,
     description: s.description,
   };
-}
-
-/** Run one stream-meta command against a CLI slice with the CLI cap policy. */
-function applyStreamMeta(
-  s: StreamSlice,
-  command: StreamMetaCommand,
-): StreamMeta {
-  return reduceStreamMeta(toStreamMeta(s), command, {
-    outputCap: CLI_OUTPUT_CAP,
-  });
+  return reduceStreamMeta(meta, command, { outputCap: CLI_OUTPUT_CAP });
 }
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
