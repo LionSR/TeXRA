@@ -272,7 +272,7 @@ export function buildCodeBlock(
   // prettier-ignore
   const languageBadge = showLanguage ? html`<span class="code-block-language">${getLanguageLabel(language)}</span>` : nothing;
   // prettier-ignore
-  const copyButton = showCopy ? html`<button class="code-block-copy" title="Copy to clipboard" data-copy-id=${registerCopyContent(text)} data-copy-type="code-block"><wa-icon library=${TEXRA_ICON_LIBRARY} name="copy" aria-hidden="true"></wa-icon></button>` : nothing;
+  const copyButton = showCopy ? html`<wa-button class="code-block-copy" appearance="plain" variant="neutral" size="small" type="button" title="Copy to clipboard" aria-label="Copy to clipboard" data-copy-id=${registerCopyContent(text)} data-copy-type="code-block"><wa-icon library=${TEXRA_ICON_LIBRARY} name="copy" aria-hidden="true"></wa-icon></wa-button>` : nothing;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)}><code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>`;
   // prettier-ignore

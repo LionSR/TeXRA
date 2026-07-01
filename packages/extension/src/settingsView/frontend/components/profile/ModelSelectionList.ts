@@ -18,6 +18,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
 
 // Local imports - shared constants
 import {
@@ -280,8 +281,10 @@ export class ModelSelectionList extends LitElement {
     return html`
       <div class="provider-group">
         <div class="provider-group-header">
-          <button
+          <wa-button
             class="provider-group-toggle"
+            appearance="plain"
+            variant="neutral"
             @click=${() => this.toggleProvider(group.provider)}
           >
             ${waIcon('chevron-right', {
@@ -293,7 +296,7 @@ export class ModelSelectionList extends LitElement {
             <span class="provider-group-count">
               ${enabledCount}/${totalCount} enabled
             </span>
-          </button>
+          </wa-button>
           <div class="provider-group-actions">${providerKeyStatus}</div>
         </div>
         ${isExpanded
