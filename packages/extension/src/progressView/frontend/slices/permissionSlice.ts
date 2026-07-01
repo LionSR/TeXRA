@@ -39,11 +39,6 @@ export function addResolvedProposalId(id: string): void {
   resolvedProposalIds.add(id);
 }
 
-/** Consume (delete) a resolved proposal ID; returns true if it was present. */
-function consumeResolvedProposalId(id: string): boolean {
-  return resolvedProposalIds.delete(id);
-}
-
 // ============================================================
 // Helpers (exported for use by eventHandlers.ts)
 // ============================================================
@@ -122,7 +117,7 @@ export const permissionHandlers: HandlerRegistry = {
       const { permission } = data;
       if (permission.kind === PERMISSION_KIND.PROPOSAL) {
         // Drop if this proposal was already resolved (out-of-order messages)
-        if (consumeResolvedProposalId(permission.data.proposalId)) return;
+        if (resolvedProposalIds.delete(permission.data.proposalId)) return;
         upsertProposalPermission(ctx, {
           kind: PERMISSION_KIND.PROPOSAL,
           data: permission.data,
