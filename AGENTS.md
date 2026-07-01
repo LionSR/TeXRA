@@ -85,11 +85,11 @@ This repository is a pnpm workspace. Repo-root `src/` contains shared core logic
   - `common/state/` - State managers including `pendingStateManager`
   - `common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
 - `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
-  - `utils/core/` - Async utilities (`debounce`, `delay`)
+  - `utils/core/` - Async, type-guard, math, comparator, and URL primitives (`debounce`, `delay`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`); re-exports string primitives from `utils/text/stringUtils` for browser-safe barrel access
   - `utils/files/` - Filesystem utilities, rules, and vars
   - `utils/config/` - Settings helpers (`getConfig`, `updateConfig`, `watchConfig`)
   - `utils/system/` - Shell command execution (`execUtils`)
-  - `utils/text/` - Text and XML processing utilities
+  - `utils/text/` - Text, string, and XML processing utilities — the single home for generic string helpers (validation, truncation, duration/token/percent formatting)
   - `utils/prompt/` - Prompt builder utilities
 - `packages/extension/src/commands/` - VS Code commands grouped by domain
 - `packages/extension/src/settingsView/` - Unified settings webview combining History, Memory, Models, Agents, Multi-Agent, LaTeX, and Tools tabs
