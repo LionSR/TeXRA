@@ -1161,7 +1161,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * but such routes cannot enforce a reduced budget. They should fail locally
    * instead of sending a request that the backend will reject opaquely.
    */
-  protected shouldFailWhenFallbackOutputBudgetIsReduced(): boolean {
+  protected shouldFailWhenFallbackOutputBudgetIsReduced(
+    _inputEstimate: number,
+    _maxOutputTokens: number,
+    _contextWindow: number,
+    _buffer: number,
+  ): boolean {
     return false;
   }
 
@@ -1232,7 +1237,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
     if (capped === maxOutputTokens) return maxOutputTokens;
 
-    if (this.shouldFailWhenFallbackOutputBudgetIsReduced()) {
+    if (
+      this.shouldFailWhenFallbackOutputBudgetIsReduced(
+        inputEstimate,
+        maxOutputTokens,
+        contextWindow,
+        buffer,
+      )
+    ) {
       throw new Error(
         `Token estimate (${inputEstimate}) + output budget (${maxOutputTokens}) + safety buffer (${buffer}) exceeds context window (${contextWindow}), and this route cannot enforce a reduced output budget locally.`,
       );

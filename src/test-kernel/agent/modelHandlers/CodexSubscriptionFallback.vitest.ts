@@ -68,6 +68,23 @@ const RAW_USAGE = {
   output_tokens: 1_000_000,
 } as ResponseUsage;
 
+function createResponse(inputTokens: number) {
+  return {
+    id: 'response-id',
+    status: 'completed',
+    output: [],
+    output_text: 'ok',
+    usage: { input_tokens: inputTokens, output_tokens: 1 },
+  };
+}
+
+function createResponseStream(response: ReturnType<typeof createResponse>) {
+  return {
+    async *[Symbol.asyncIterator]() {},
+    finalResponse: async () => response,
+  };
+}
+
 /** Seed the handler's running input-token tally (a private field). */
 function setCumulativeInputTokens(
   handler: ModelHandlerCodex,
@@ -230,6 +247,32 @@ describe('ModelHandlerCodex subscription fallback', () => {
       }),
     ).rejects.toThrow(/safety buffer/);
     expect(requestSpy).not.toHaveBeenCalled();
+  });
+
+  it('sends subscription requests when only the stripped output budget exceeds the Codex cap', async () => {
+    await initFakePlatformWithSubscription();
+
+    const handler = new ModelHandlerCodex(largeWindowConfig);
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    const streamSpy = vi
+      .fn()
+      .mockResolvedValue(
+        createResponseStream(
+          createResponse(CODEX_SUBSCRIPTION_CONTEXT_WINDOW - 1),
+        ),
+      );
+    setCumulativeInputTokens(handler, CODEX_SUBSCRIPTION_CONTEXT_WINDOW - 3000);
+
+    await handler.createResponse({
+      client: { responses: { stream: streamSpy } } as never,
+      messages: [],
+      temperature: 0,
+    });
+
+    expect(streamSpy).toHaveBeenCalledOnce();
+    expect(streamSpy.mock.calls[0]?.[0]?.max_output_tokens).toBeLessThan(
+      config.maxOutputTokens,
+    );
   });
 
   it('keeps workflow agents on the subscription when the tool-use-only switch is off', async () => {
