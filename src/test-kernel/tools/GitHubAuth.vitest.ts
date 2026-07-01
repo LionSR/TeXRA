@@ -2,10 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalGitHubToken = process.env.GITHUB_TOKEN;
+const originalGhToken = process.env.GH_TOKEN;
 
 beforeEach(() => {
   vi.resetModules();
-  process.env.GITHUB_TOKEN = 'gh-env-token';
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.GH_TOKEN;
 });
 
 afterEach(() => {
@@ -14,17 +16,53 @@ afterEach(() => {
   } else {
     process.env.GITHUB_TOKEN = originalGitHubToken;
   }
+  if (originalGhToken === undefined) {
+    delete process.env.GH_TOKEN;
+  } else {
+    process.env.GH_TOKEN = originalGhToken;
+  }
   vi.resetModules();
 });
 
 describe('getGitHubToken', () => {
   it('uses the GITHUB_TOKEN fallback before platform initialization', async () => {
+    process.env.GITHUB_TOKEN = 'github-env-token';
+
+    const { getGitHubToken } = await import('@tools/github/githubAuth');
+
+    await expect(getGitHubToken()).resolves.toBe('github-env-token');
+  });
+
+  it('uses the GH_TOKEN fallback before platform initialization', async () => {
+    process.env.GH_TOKEN = 'gh-env-token';
+
+    const { getGitHubToken } = await import('@tools/github/githubAuth');
+
+    await expect(getGitHubToken()).resolves.toBe('gh-env-token');
+  });
+
+  it('prefers GH_TOKEN over GITHUB_TOKEN', async () => {
+    process.env.GITHUB_TOKEN = 'github-env-token';
+    process.env.GH_TOKEN = 'gh-env-token';
+
+    const { getGitHubToken } = await import('@tools/github/githubAuth');
+
+    await expect(getGitHubToken()).resolves.toBe('gh-env-token');
+  });
+
+  it('ignores blank environment token values', async () => {
+    process.env.GITHUB_TOKEN = '   ';
+    process.env.GH_TOKEN = 'gh-env-token';
+
     const { getGitHubToken } = await import('@tools/github/githubAuth');
 
     await expect(getGitHubToken()).resolves.toBe('gh-env-token');
   });
 
   it('prefers the platform secret when the platform is initialized', async () => {
+    process.env.GITHUB_TOKEN = 'github-env-token';
+    process.env.GH_TOKEN = 'gh-env-token';
+
     const [{ initPlatform }, { createFakePlatform }, githubAuth] =
       await Promise.all([
         import('@platform/platform'),
@@ -41,5 +79,26 @@ describe('getGitHubToken', () => {
     );
 
     await expect(githubAuth.getGitHubToken()).resolves.toBe('gh-secret-token');
+  });
+
+  it('ignores blank platform secrets before using environment fallbacks', async () => {
+    process.env.GH_TOKEN = 'gh-env-token';
+
+    const [{ initPlatform }, { createFakePlatform }, githubAuth] =
+      await Promise.all([
+        import('@platform/platform'),
+        import('@test/support/FakePlatform'),
+        import('@tools/github/githubAuth'),
+      ]);
+
+    initPlatform(
+      createFakePlatform({
+        secrets: {
+          [githubAuth.GITHUB_TOKEN_STORAGE_KEY]: '   ',
+        },
+      }),
+    );
+
+    await expect(githubAuth.getGitHubToken()).resolves.toBe('gh-env-token');
   });
 });
