@@ -30,7 +30,7 @@
     "esbuild": "^0.28.1",
     "playwright": "^1.61.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16"
+    "vite": "^8.1.2"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.197",
