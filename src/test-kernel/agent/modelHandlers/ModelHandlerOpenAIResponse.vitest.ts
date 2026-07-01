@@ -11,6 +11,7 @@ import {
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
+import { OpenAIError } from 'openai';
 
 // Local imports - platform
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -27,6 +28,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
+import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 
 // Type imports
 import { pathToLocation } from '@utils/files';
@@ -112,10 +114,25 @@ class NonChainingResponseHandler extends ModelHandlerOpenAIResponse {
   }
 }
 
+class StatelessResponseHandler extends ModelHandlerOpenAIResponse {
+  protected override get storesResponsesServerSide(): boolean {
+    return false;
+  }
+}
+
 function createNonChainingHandler(
   configOverrides: Partial<ModelConfig> = {},
 ): ModelHandlerOpenAIResponse {
   const handler = new NonChainingResponseHandler(createConfig(configOverrides));
+  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+  handler.getStreamingConfig = () => false;
+  return handler;
+}
+
+function createStatelessHandler(
+  configOverrides: Partial<ModelConfig> = {},
+): ModelHandlerOpenAIResponse {
+  const handler = new StatelessResponseHandler(createConfig(configOverrides));
   handler.setLogger(createLoggerStub() as unknown as AgentTrace);
   handler.getStreamingConfig = () => false;
   return handler;
@@ -328,6 +345,204 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
 
     assert.deepEqual(result.response.output, [reasoningItem, functionCallItem]);
+  });
+
+  it('keeps healthy streams on finalResponse after response.created', async () => {
+    const handler = createHandler();
+    handler.getStreamingConfig = () => true;
+
+    let finalResponseCalls = 0;
+    let retrieveCalls = 0;
+    const finalResponse = createResponse('resp-stream-ok', {
+      input_tokens: 12,
+    });
+    const client = {
+      responses: {
+        stream: () => ({
+          async *[Symbol.asyncIterator]() {
+            yield {
+              type: 'response.created',
+              response: { id: 'resp-stream-ok' },
+            };
+            yield { type: 'response.output_text.delta', delta: 'ok' };
+          },
+          finalResponse: async () => {
+            finalResponseCalls += 1;
+            return finalResponse;
+          },
+        }),
+        retrieve: async () => {
+          retrieveCalls += 1;
+          throw new Error('healthy stream should not retrieve by id');
+        },
+      },
+    };
+
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+
+    assert.equal(result.response.id, 'resp-stream-ok');
+    assert.equal(finalResponseCalls, 1);
+    assert.equal(retrieveCalls, 0);
+  });
+
+  it('falls back to retrieve when finalResponse sees an unhandled stream event', async () => {
+    const handler = createHandler();
+    handler.getStreamingConfig = () => true;
+
+    const retrieveCalls: string[] = [];
+    const recoveredResponse = createResponse('resp-final-fallback', {
+      input_tokens: 12,
+    });
+    const client = {
+      responses: {
+        stream: () => ({
+          async *[Symbol.asyncIterator]() {
+            yield {
+              type: 'response.created',
+              response: { id: 'resp-final-fallback' },
+            };
+          },
+          finalResponse: async () => {
+            throw new OpenAIError(
+              'Unhandled response stream event: response.keepalive',
+            );
+          },
+        }),
+        retrieve: async (id: string) => {
+          retrieveCalls.push(id);
+          return recoveredResponse;
+        },
+      },
+    };
+
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+
+    assert.equal(result.response.id, 'resp-final-fallback');
+    assert.deepEqual(retrieveCalls, ['resp-final-fallback']);
+  });
+
+  it('does not retrieve stateless responses after an unhandled stream event', async () => {
+    const handler = createStatelessHandler();
+    handler.getStreamingConfig = () => true;
+
+    let retrieveCalls = 0;
+    const client = {
+      responses: {
+        stream: () => ({
+          async *[Symbol.asyncIterator]() {
+            yield {
+              type: 'response.created',
+              response: { id: 'resp-stateless-fallback' },
+            };
+            throw new OpenAIError(
+              'Unhandled response stream event: response.keepalive',
+            );
+          },
+          finalResponse: async () => {
+            throw new Error('stateless stream should not call finalResponse');
+          },
+        }),
+        retrieve: async () => {
+          retrieveCalls += 1;
+          throw new Error('stateless stream should not retrieve by id');
+        },
+      },
+    };
+
+    await assert.rejects(
+      handler.createResponse({
+        client: client as any,
+        messages: createMessages(1),
+        temperature: 0,
+      }),
+      /Unhandled response stream event/,
+    );
+    assert.equal(retrieveCalls, 0);
+  });
+
+  it('preserves include fields when polling after an unhandled stream event', async () => {
+    const handler = createHandler({
+      capabilities: {
+        ...DEFAULT_MODEL_CAPABILITIES,
+        supportsNativeWebSearch: true,
+      },
+    });
+    handler.getStreamingConfig = () => true;
+    (
+      handler as unknown as { backgroundPoller: BackgroundPoller<any> }
+    ).backgroundPoller = new BackgroundPoller({
+      pollIntervalMs: 0,
+      maxDurationMs: 1000,
+      isPending: (response: { status?: string | null }) =>
+        response.status === 'queued' || response.status === 'in_progress',
+      logger: createLoggerStub() as unknown as AgentTrace,
+    });
+
+    const retrieveCalls: Array<{
+      id: string;
+      params: unknown;
+      options: unknown;
+    }> = [];
+    const pendingResponse = {
+      ...createResponse('resp-stream-fallback', { input_tokens: 12 }),
+      status: 'in_progress',
+    };
+    const recoveredResponse = createResponse('resp-stream-fallback', {
+      input_tokens: 12,
+    });
+    const retrievedResponses = [pendingResponse, recoveredResponse];
+    const client = {
+      responses: {
+        stream: () => ({
+          async *[Symbol.asyncIterator]() {
+            yield {
+              type: 'response.created',
+              response: { id: 'resp-stream-fallback' },
+            };
+            throw new OpenAIError(
+              'Unhandled response stream event: response.keepalive',
+            );
+          },
+          finalResponse: async () => {
+            throw new Error('fallback stream should retrieve by id');
+          },
+        }),
+        retrieve: async (id: string, params: unknown, options: unknown) => {
+          retrieveCalls.push({ id, params, options });
+          const response = retrievedResponses.shift();
+          if (!response) throw new Error('unexpected extra retrieve');
+          return response;
+        },
+      },
+    };
+
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+
+    assert.equal(result.response.id, 'resp-stream-fallback');
+    assert.deepEqual(retrieveCalls, [
+      {
+        id: 'resp-stream-fallback',
+        params: { include: ['web_search_call.action.sources'] },
+        options: undefined,
+      },
+      {
+        id: 'resp-stream-fallback',
+        params: { include: ['web_search_call.action.sources'] },
+        options: undefined,
+      },
+    ]);
   });
 
   it('uses the preserved token baseline after an invalid previous response id clears chaining', async () => {

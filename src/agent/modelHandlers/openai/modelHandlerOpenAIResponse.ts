@@ -1,5 +1,5 @@
 // Third-party imports
-import OpenAI from 'openai';
+import OpenAI, { OpenAIError } from 'openai';
 // Exported by openai@6.x via the package's ./lib/* subpath; keep typecheck
 // coverage around SDK upgrades because this is not a top-level public helper.
 import { addOutputText } from 'openai/lib/ResponsesParser';
@@ -117,6 +117,7 @@ import type {
   ResponseCreateParamsBase,
   ResponseCreateParamsNonStreaming,
   ResponseReasoningItem,
+  ResponseRetrieveParamsNonStreaming,
   ResponseFunctionToolCall,
   ResponseInputItem,
   ResponseInputContent,
@@ -184,6 +185,29 @@ function collectWebSearchPairedBlocks(
     blocks.push(item);
   }
   return blocks;
+}
+
+/**
+ * The SDK's response-stream accumulator (`client.responses.stream()`) throws
+ * on any event `type` outside its typed union — including heartbeat/keepalive
+ * frames a long-running or background response can emit that predate this SDK
+ * release adding support for them. That's a transport-level signal, not a
+ * failed response, so callers holding a response id should poll by id instead
+ * of failing the turn.
+ */
+function isUnhandledStreamEventError(error: unknown): boolean {
+  // The SDK currently exposes this accumulator failure only through its
+  // message; keep the prefix check narrow until it publishes a stable code.
+  return (
+    error instanceof OpenAIError &&
+    error.message.startsWith('Unhandled response stream event')
+  );
+}
+
+function responseRetrieveParamsFor(
+  params: ResponseCreateParamsBase,
+): ResponseRetrieveParamsNonStreaming | undefined {
+  return params.include ? { include: params.include } : undefined;
 }
 
 function responseOutputItemKey(item: ResponseOutputItem): string | undefined {
@@ -1711,6 +1735,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         client,
         response,
         signal,
+        responseRetrieveParamsFor(params),
       );
     }
 
@@ -1765,9 +1790,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       streamConnected = true;
     };
     let removeConnectListener: (() => void) | undefined;
+    // Captured from `response.created` so a stream event outside the SDK's
+    // typed union (see isUnhandledStreamEventError) can fall back to polling
+    // by id instead of failing an otherwise-healthy turn.
+    let responseId: string | undefined;
     try {
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
+      const retrieveParams = responseRetrieveParamsFor(params);
       const stream = await client.responses.stream(streamParams, { signal });
       if (typeof stream.on === 'function') {
         stream.on('connect', onConnect);
@@ -1780,17 +1810,53 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // GPT can: think → web_search → think more → web_search → text
       processor = this.createStreamProcessor();
 
-      for await (const event of stream) {
-        streamEventObserved = true;
-        processor.process(event);
-        if (event.type === 'response.output_text.delta') {
-          streamedText += event.delta;
-        } else if (event.type === 'response.output_item.done') {
-          streamedItems.push(event.item);
+      const retrieveAfterUnhandledStreamEvent = async (
+        streamError: unknown,
+      ): Promise<Response> => {
+        if (!responseId || !isUnhandledStreamEventError(streamError)) {
+          throw streamError;
         }
+        if (!this.storesResponsesServerSide) {
+          this.logger.debug(
+            `OpenAI stream emitted an event outside the SDK's typed union for stateless response ${responseId}; polling fallback is unavailable: ${getSdkErrorMessage(streamError)}`,
+          );
+          throw streamError;
+        }
+        this.logger.debug(
+          `OpenAI stream emitted an event outside the SDK's typed union for response ${responseId} — falling back to polling: ${getSdkErrorMessage(streamError)}`,
+        );
+        return client.responses.retrieve(
+          responseId,
+          retrieveParams,
+          signal ? { signal } : undefined,
+        );
+      };
+
+      let response: Response | undefined;
+      try {
+        for await (const event of stream) {
+          streamEventObserved = true;
+          if (event.type === 'response.created') {
+            responseId = event.response.id;
+          }
+          processor.process(event);
+          if (event.type === 'response.output_text.delta') {
+            streamedText += event.delta;
+          } else if (event.type === 'response.output_item.done') {
+            streamedItems.push(event.item);
+          }
+        }
+      } catch (streamError) {
+        response = await retrieveAfterUnhandledStreamEvent(streamError);
       }
 
-      let response = await stream.finalResponse();
+      if (!response) {
+        try {
+          response = await stream.finalResponse();
+        } catch (streamError) {
+          response = await retrieveAfterUnhandledStreamEvent(streamError);
+        }
+      }
 
       // If the stream ended before the response completed (e.g., relay timeout
       // during slow GPT-5 requests), poll until it finishes instead of silently
@@ -1803,6 +1869,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           client,
           response,
           signal,
+          retrieveParams,
         );
       }
 
@@ -1882,6 +1949,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         client,
         response,
         signal,
+        responseRetrieveParamsFor(params),
       );
     }
 
@@ -2060,6 +2128,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     client: OpenAI,
     initialResponse: T,
     signal?: AbortSignal,
+    retrieveParams?: ResponseRetrieveParamsNonStreaming,
   ): Promise<T> {
     if (!initialResponse.id) {
       return initialResponse;
@@ -2078,7 +2147,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           try {
             return (await client.responses.retrieve(
               responseId,
-              undefined,
+              retrieveParams,
               sig ? { signal: sig } : undefined,
             )) as T;
           } catch (err) {
