@@ -28,14 +28,10 @@ vi.mock('@platform/platform', () => ({
 }));
 
 import { StreamSnapshotStore } from '@transcript';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
-import {
-  buildInitialChatAgentConfig,
-  createChatSessionController,
-} from '@cli/chat/chatSessionController';
+import { createChatSessionController } from '@cli/chat/chatSessionController';
 import {
   chatTuiCanStartRootRun,
   type TuiSession,
@@ -205,50 +201,5 @@ describe('createChatSessionController', () => {
       detachActiveChildren: true,
       runtimeHost,
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// buildInitialChatAgentConfig (regression guard)
-// ---------------------------------------------------------------------------
-
-describe('buildInitialChatAgentConfig', () => {
-  it('builds a tool-use config with the given fields', () => {
-    const config = buildInitialChatAgentConfig({
-      agent: 'chat',
-      model: 'gpt54',
-      instruction: 'Prove a compactness lemma.',
-      workingDirectory: '/tmp/texra-chat',
-    });
-    expect(config).toMatchObject({
-      agent: 'chat',
-      model: 'gpt54',
-      instruction: 'Prove a compactness lemma.',
-      workingDirectory: '/tmp/texra-chat',
-      agentCategory: AgentCategory.ToolUse,
-    });
-  });
-
-  it('attaches the multi-agent preset id when provided', () => {
-    const config = buildInitialChatAgentConfig({
-      agent: 'orchestrator',
-      model: 'claude',
-      instruction: 'go',
-      workingDirectory: '/tmp',
-      cliMultiAgentPresetId: 'math-team',
-    });
-    expect(config.cliMultiAgentPresetId).toBe('math-team');
-  });
-
-  it('preserves the display instruction separately', () => {
-    const config = buildInitialChatAgentConfig({
-      agent: 'chat',
-      model: 'claude',
-      instruction: '<skill>hidden</skill>',
-      displayInstruction: 'visible text',
-      workingDirectory: '/tmp',
-    });
-    expect(config.instruction).toBe('<skill>hidden</skill>');
-    expect(config.displayInstruction).toBe('visible text');
   });
 });
