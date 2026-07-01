@@ -47,8 +47,7 @@ export function tryResumeFromSnapshot(streamId: StreamTabId): Promise<boolean> {
       }
       return { taskState, executionId };
     },
-    resumeToolUseSnapshot: (snapshot) =>
-      resumeExtensionToolUseSnapshot(snapshot),
+    resumeToolUseSnapshot: resumeExtensionToolUseSnapshot,
     executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
       runExecuteCommand({ config, executionId, modelHandlerCompatibilityKey }),
     reportFailure: (id, error) => {
