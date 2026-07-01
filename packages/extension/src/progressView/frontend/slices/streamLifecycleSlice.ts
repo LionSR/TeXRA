@@ -42,9 +42,10 @@ function mergeBackendOwnedState(
       taskGroups: existing.taskGroups,
     });
   }
-  // Overlay every backend-owned field from metadata (its own keys are exactly
-  // the BackendOwnedFieldsSchema shape) so a new field added there is picked
-  // up here without also updating this call site.
+  // Overlay every backend-owned field from metadata (its own keys include
+  // every BackendOwnedFieldsSchema field plus `kind`, which the guard above
+  // already ensures matches `existing.kind`) so a new field added to that
+  // schema is picked up here without also updating this call site.
   return create(existing, (draft) => {
     Object.assign(draft, metadata);
   });
