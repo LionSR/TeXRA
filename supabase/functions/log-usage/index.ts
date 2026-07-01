@@ -47,12 +47,6 @@ const optionalNonnegativeInt = z
   .nullish()
   .catch(undefined)
   .transform((value) => value ?? undefined);
-const optionalNonnegativeNumber = z
-  .number()
-  .nonnegative()
-  .nullish()
-  .catch(undefined)
-  .transform((value) => value ?? undefined);
 const optionalBoolean = z
   .boolean()
   .nullish()
@@ -73,7 +67,7 @@ const UsageLogEntrySchema = z.object({
     .catch(undefined)
     .transform((value) => value ?? undefined),
   isMultipleOutput: optionalBoolean,
-  responseTimeMs: optionalNonnegativeNumber,
+  responseTimeMs: optionalNonnegativeInt,
   cachedInputTokens: optionalNonnegativeInt,
   reasoningTokens: optionalNonnegativeInt,
   usedRelay: optionalBoolean,
@@ -98,15 +92,18 @@ const UsageDestinations = {
   paid: {
     table: 'usage_logs',
     rpc: 'usage_logs_upsert',
+    accepts: (entry: UsageLogEntry) => !entry.viaChatGptSubscription,
   },
   chatgptSubscription: {
     table: 'chatgpt_subscription_usage_logs',
     rpc: 'chatgpt_subscription_usage_logs_upsert',
+    accepts: (entry: UsageLogEntry) => entry.viaChatGptSubscription,
   },
 } as const;
 
 type UsageDestination =
   (typeof UsageDestinations)[keyof typeof UsageDestinations];
+const usageDestinations = Object.values(UsageDestinations);
 
 // =============================================================================
 // Helpers
@@ -170,12 +167,17 @@ async function batchExists(
   userId: string,
   batchId: string,
 ): Promise<boolean> {
-  const { data: existingBatch } = await adminClient!
+  const { data: existingBatch, error } = await adminClient!
     .from(destination.table)
     .select('id')
     .eq('user_id', userId)
     .eq('batch_id', batchId)
     .limit(1);
+  if (error) {
+    throw new Error(
+      `Failed to check ${destination.table} batch deduplication: ${error.message}`,
+    );
+  }
   return (existingBatch?.length ?? 0) > 0;
 }
 
@@ -258,7 +260,7 @@ Deno.serve(async (req: Request) => {
     if (!batchResult.success) {
       return errorResponse(
         req,
-        'Invalid batch format: expected { entries: [], batchId: string }',
+        'Invalid batch format: expected { entries: [], batchId: UUID }',
         400,
       );
     }
@@ -275,36 +277,25 @@ Deno.serve(async (req: Request) => {
       return successResponse(req, 0, 'No valid entries in batch');
     }
 
-    // 6. Split paid relay/API-key usage from ChatGPT-subscription usage.
-    const paidEntries = validEntries.filter(
-      (entry) => !entry.viaChatGptSubscription,
-    );
-    const chatgptSubscriptionEntries = validEntries.filter(
-      (entry) => entry.viaChatGptSubscription,
-    );
-
-    // 7. Check for duplicate batch (idempotency for client retries).
+    // 6. Check for duplicate batch (idempotency for client retries).
     // After per-stream compaction the canonical row keeps only one batch_id
     // out of the inputs that produced it, so this is best-effort: it catches
     // the common case of an immediate retry of an in-flight request. Each
     // destination is checked separately so a retry after a partial write can
     // still fill the missing table.
-    const paidRows = (await batchExists(
-      UsageDestinations.paid,
-      userId,
-      batch.batchId,
-    ))
-      ? []
-      : toDbRows(userId, batch.batchId, paidEntries);
-    const chatgptSubscriptionRows = (await batchExists(
-      UsageDestinations.chatgptSubscription,
-      userId,
-      batch.batchId,
-    ))
-      ? []
-      : toDbRows(userId, batch.batchId, chatgptSubscriptionEntries);
+    const destinationRows = await Promise.all(
+      usageDestinations.map(async (destination) => {
+        const entries = validEntries.filter(destination.accepts);
+        const rows =
+          entries.length === 0 ||
+          (await batchExists(destination, userId, batch.batchId))
+            ? []
+            : toDbRows(userId, batch.batchId, entries);
+        return { destination, rows };
+      }),
+    );
 
-    if (paidRows.length === 0 && chatgptSubscriptionRows.length === 0) {
+    if (destinationRows.every(({ rows }) => rows.length === 0)) {
       return successResponse(
         req,
         validEntries.length,
@@ -315,13 +306,11 @@ Deno.serve(async (req: Request) => {
     // Server-side aggregation: rows with the same (user_id, stream_id) update
     // the canonical row instead of producing per-round duplicates.
     const upsertErrors = (
-      await Promise.all([
-        upsertUsageRows(UsageDestinations.paid, paidRows),
-        upsertUsageRows(
-          UsageDestinations.chatgptSubscription,
-          chatgptSubscriptionRows,
+      await Promise.all(
+        destinationRows.map(({ destination, rows }) =>
+          upsertUsageRows(destination, rows),
         ),
-      ])
+      )
     ).filter((message): message is string => message != null);
 
     if (upsertErrors.length > 0) {
