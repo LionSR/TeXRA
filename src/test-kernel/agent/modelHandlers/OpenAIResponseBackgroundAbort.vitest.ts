@@ -7,9 +7,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
+import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 
 // Local imports - common errors
-import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import {
+  isUserAbort,
+  requiresFlowAutoRetry,
+} from '@common/errors/sdkErrorUtils';
 
 // Type imports
 import type OpenAI from 'openai';
@@ -40,9 +44,18 @@ function createHandler(): ModelHandlerOpenAIResponse {
 }
 
 type BackgroundInternals = {
+  backgroundPoller: BackgroundPoller<{
+    id?: string;
+    status?: string | null;
+  }>;
   pendingBackgroundResponseId: string | null;
   tryResumeBackgroundResponse(
     client: OpenAI,
+    signal?: AbortSignal,
+  ): Promise<unknown>;
+  waitForBackgroundCompletion(
+    client: OpenAI,
+    initialResponse: { id?: string; status?: string | null },
     signal?: AbortSignal,
   ): Promise<unknown>;
 };
@@ -111,5 +124,36 @@ describe('OpenAI Responses background abort handling', () => {
     // No status code → likely still alive server-side → keep the ID so the
     // outer retry resumes the same response.
     expect(target.pendingBackgroundResponseId).toBe('resp_pending_transient');
+    expect(requiresFlowAutoRetry(transient)).toBe(true);
+  });
+
+  it('marks background polling timeouts for flow-level retry', async () => {
+    const handler = createHandler();
+    const target = internals(handler);
+    target.backgroundPoller = new BackgroundPoller({
+      pollIntervalMs: 1,
+      maxDurationMs: 0,
+      isPending: (response) => response.status === 'in_progress',
+      logger: {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        domain: vi.fn(),
+      } as unknown as AgentTrace,
+    });
+
+    let thrown: unknown;
+    try {
+      await target.waitForBackgroundCompletion(
+        { responses: { retrieve: vi.fn() } } as unknown as OpenAI,
+        { id: 'resp_timeout', status: 'in_progress' },
+      );
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(requiresFlowAutoRetry(thrown)).toBe(true);
   });
 });
