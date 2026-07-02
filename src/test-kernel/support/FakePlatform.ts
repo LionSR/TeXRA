@@ -694,10 +694,16 @@ export class FakeStorageProvider implements StorageProvider {
 export class FakeSecrets implements PlatformSecrets {
   private readonly values = new Map<string, string>();
 
-  constructor(values: Record<string, string> = {}) {
+  private readonly env: Record<string, string>;
+
+  constructor(
+    values: Record<string, string> = {},
+    env: Record<string, string> = {},
+  ) {
     for (const [key, value] of Object.entries(values)) {
       this.values.set(key, value);
     }
+    this.env = env;
   }
 
   async get(key: string): Promise<string | undefined> {
@@ -711,6 +717,10 @@ export class FakeSecrets implements PlatformSecrets {
   async delete(key: string): Promise<void> {
     this.values.delete(key);
   }
+
+  getEnv(name: string): string | undefined {
+    return this.env[name];
+  }
 }
 
 export interface FakePlatformOptions {
@@ -719,6 +729,8 @@ export interface FakePlatformOptions {
   workspaceState?: Record<string, unknown>;
   files?: Record<string, string | Uint8Array>;
   secrets?: Record<string, string>;
+  /** Conventional env-var fallbacks (e.g. `ANTHROPIC_API_KEY`) surfaced via `PlatformSecrets.getEnv`. */
+  secretsEnv?: Record<string, string>;
   workspacePath?: string | undefined;
   storagePath?: string;
   globalStoragePath?: string;
@@ -742,7 +754,7 @@ export function createFakePlatform(
       options.storagePath,
       options.globalStoragePath,
     ),
-    secrets: new FakeSecrets(options.secrets),
+    secrets: new FakeSecrets(options.secrets, options.secretsEnv),
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeStream: async () => false },
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,

@@ -17,4 +17,15 @@ export interface PlatformSecrets {
 
   /** Delete a secret. */
   delete(key: string): Promise<void>;
+
+  /**
+   * Read a conventional environment variable (e.g. `ANTHROPIC_API_KEY`).
+   * Distinct from `get()`, which is keyed by the internal secret-storage
+   * name (e.g. `apiKey.anthropic`) and already applies its own env override
+   * for that name. Callers that fall back to a differently-named
+   * conventional env var (see `apiKeyEnvName`) go through this seam instead
+   * of reading `process.env` directly, so the fallback stays host-agnostic
+   * and mockable in tests.
+   */
+  getEnv(name: string): string | undefined;
 }
