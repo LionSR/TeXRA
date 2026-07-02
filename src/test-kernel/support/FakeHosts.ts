@@ -1,6 +1,5 @@
 // Local imports - hosts
 import type {
-  ClipboardHost,
   DiffOptions,
   DiffSession,
   DiffSource,
@@ -10,9 +9,6 @@ import type {
   PromptHost,
   PromptInputOptions,
   PromptMessageOptions,
-  TerminalHandle,
-  TerminalHost,
-  TerminalOptions,
 } from '@hosts/uiHosts';
 
 export type PromptEventKind = 'info' | 'warning' | 'error';
@@ -44,20 +40,10 @@ export interface DiffRevealEvent {
   line: number;
 }
 
-export interface TerminalSendEvent {
-  text: string;
-  shouldExecute?: boolean;
-}
-
-export interface TerminalShowEvent {
-  preserveFocus?: boolean;
-}
-
 export interface FakeUIHostsOptions {
   promptResponses?: readonly string[];
   confirmResponses?: readonly boolean[];
   inputResponses?: readonly (string | undefined)[];
-  clipboardText?: string;
   proposedDiffContent?: Record<string, string>;
 }
 
@@ -149,21 +135,6 @@ export class FakeExternalOpener implements ExternalOpener {
   }
 }
 
-export class FakeClipboardHost implements ClipboardHost {
-  readonly writes: string[] = [];
-
-  constructor(private text = '') {}
-
-  async readText(): Promise<string> {
-    return this.text;
-  }
-
-  async writeText(text: string): Promise<void> {
-    this.text = text;
-    this.writes.push(text);
-  }
-}
-
 export class FakeDiffViewHost implements DiffViewHost {
   readonly opened: DiffOpenEvent[] = [];
 
@@ -211,80 +182,8 @@ export class FakeDiffViewHost implements DiffViewHost {
   }
 }
 
-export class FakeTerminalHost implements TerminalHost {
-  readonly created: FakeTerminalHandle[] = [];
-
-  createTerminal(options: TerminalOptions): FakeTerminalHandle {
-    const terminal = new FakeTerminalHandle(options);
-    this.created.push(terminal);
-    return terminal;
-  }
-
-  findTerminal(name: string): TerminalHandle | undefined {
-    const terminal = this.created.find(
-      (terminal) => terminal.name === name && !terminal.isDisposed,
-    );
-    return terminal?.createLookupHandle();
-  }
-
-  getTerminals(): readonly TerminalHandle[] {
-    return this.created
-      .filter((terminal) => !terminal.isDisposed)
-      .map((terminal) => terminal.createLookupHandle());
-  }
-}
-
-interface FakeTerminalState {
-  sentText: TerminalSendEvent[];
-  showCalls: TerminalShowEvent[];
-  isDisposed: boolean;
-}
-
-export class FakeTerminalHandle implements TerminalHandle {
-  constructor(
-    readonly options: TerminalOptions,
-    private readonly state: FakeTerminalState = {
-      sentText: [],
-      showCalls: [],
-      isDisposed: false,
-    },
-  ) {}
-
-  get sentText(): readonly TerminalSendEvent[] {
-    return this.state.sentText;
-  }
-
-  get showCalls(): readonly TerminalShowEvent[] {
-    return this.state.showCalls;
-  }
-
-  get isDisposed(): boolean {
-    return this.state.isDisposed;
-  }
-
-  get name(): string {
-    return this.options.name;
-  }
-
-  sendText(text: string, shouldExecute?: boolean): void {
-    this.state.sentText.push({ text, shouldExecute });
-  }
-
-  show(preserveFocus?: boolean): void {
-    this.state.showCalls.push({ preserveFocus });
-  }
-
-  dispose(): void {
-    this.state.isDisposed = true;
-  }
-
-  createLookupHandle(): FakeTerminalHandle {
-    return new FakeTerminalHandle(this.options, this.state);
-  }
-}
-
 /**
- * The five UI ports a host wires together. Production hosts (VS Code,
+ * The three UI ports a host wires together. Production hosts (VS Code,
  * desktop) inject each port individually; this aggregate exists only so
  * test support can assemble and pass them as a single bundle.
  */
@@ -292,16 +191,12 @@ export interface UIHosts {
   readonly prompt: PromptHost;
   readonly externalOpener: ExternalOpener;
   readonly diff: DiffViewHost;
-  readonly terminal: TerminalHost;
-  readonly clipboard: ClipboardHost;
 }
 
 export interface FakeUIHosts extends UIHosts {
   readonly prompt: FakePromptHost;
   readonly externalOpener: FakeExternalOpener;
   readonly diff: FakeDiffViewHost;
-  readonly terminal: FakeTerminalHost;
-  readonly clipboard: FakeClipboardHost;
 }
 
 export function createFakeUIHosts(
@@ -311,7 +206,5 @@ export function createFakeUIHosts(
     prompt: new FakePromptHost(options),
     externalOpener: new FakeExternalOpener(),
     diff: new FakeDiffViewHost(options.proposedDiffContent),
-    terminal: new FakeTerminalHost(),
-    clipboard: new FakeClipboardHost(options.clipboardText),
   };
 }

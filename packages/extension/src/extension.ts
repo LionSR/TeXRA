@@ -99,14 +99,11 @@ import {
   repoPollingSource,
   issuePollingSource,
 } from '@tools/github';
-import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
-import { setAddCriticismSink, setLinterProvider } from '@tools/DiagnosticsTool';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { setToolMissingHandler } from '@utils/system';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 // Local imports - components
@@ -223,6 +220,39 @@ export async function activate(context: vscode.ExtensionContext) {
       ...NO_TOOL_AVAILABILITY_HOST,
       isVscodeExtensionInstalled: (id) =>
         vscode.extensions.getExtension(id) !== undefined,
+    },
+    linter: getLinterMessages,
+    addCriticismSink: (payload) => {
+      const accepted = pushManualCriticism({
+        absolutePath: payload.absolutePath,
+        line: payload.line,
+        message: payload.message,
+        severity: payload.severity,
+        confidence: payload.confidence,
+      });
+      return { accepted, resolvedPath: payload.absolutePath };
+    },
+    toolMissingHandler: async (message, openDocsCommand) => {
+      const actions = openDocsCommand ? ['View Installation Guide'] : [];
+      const choice = await vscode.window.showErrorMessage(message, ...actions);
+      if (choice === 'View Installation Guide' && openDocsCommand) {
+        const [command, ...args] = openDocsCommand.split(',');
+        void vscode.commands.executeCommand(command, ...args);
+      }
+    },
+    toolNotificationHandler: (message, actionCommand, actionLabel) => {
+      if (actionCommand) {
+        const label = actionLabel ?? 'Open Tools Dashboard';
+        void vscode.window
+          .showInformationMessage(message, label)
+          .then((choice) => {
+            if (choice === label) {
+              void vscode.commands.executeCommand(actionCommand);
+            }
+          });
+      } else {
+        void vscode.window.showInformationMessage(message);
+      }
     },
   });
   registerAgentFeatures();
@@ -487,14 +517,6 @@ export async function activate(context: vscode.ExtensionContext) {
       } satisfies vscode.TextDocumentShowOptions,
     );
   });
-  setToolMissingHandler(async (message, openDocsCommand) => {
-    const actions = openDocsCommand ? ['View Installation Guide'] : [];
-    const choice = await vscode.window.showErrorMessage(message, ...actions);
-    if (choice === 'View Installation Guide' && openDocsCommand) {
-      const [command, ...args] = openDocsCommand.split(',');
-      void vscode.commands.executeCommand(command, ...args);
-    }
-  });
   // Defense in depth: the only consumers today validate keys before reaching
   // the config adapter, but the adapter is documented as `texra.*`-scoped and a
   // future tool wiring through `platform.config` should not be able to read or
@@ -611,37 +633,11 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   );
   context.subscriptions.push({ dispose: disposeGitHubAuthListener });
-  setLinterProvider(getLinterMessages);
   setOpenBuildDisplay(openBuildDisplayIfTex);
   registerInlineCriticism(context);
   registerInlineComments(context);
   setInlineCommentProvider(getInlineCommentProvider());
-  setAddCriticismSink((payload) => {
-    const accepted = pushManualCriticism({
-      absolutePath: payload.absolutePath,
-      line: payload.line,
-      message: payload.message,
-      severity: payload.severity,
-      confidence: payload.confidence,
-    });
-    return { accepted, resolvedPath: payload.absolutePath };
-  });
   applyGitAuthorConfig();
-
-  setToolNotificationHandler((message, actionCommand, actionLabel) => {
-    if (actionCommand) {
-      const label = actionLabel ?? 'Open Tools Dashboard';
-      void vscode.window
-        .showInformationMessage(message, label)
-        .then((choice) => {
-          if (choice === label) {
-            void vscode.commands.executeCommand(actionCommand);
-          }
-        });
-    } else {
-      void vscode.window.showInformationMessage(message);
-    }
-  });
 
   statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,

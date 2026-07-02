@@ -6,6 +6,7 @@ import { execa, execaSync } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 // Local imports
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas/opResults';
@@ -40,31 +41,12 @@ interface ToolConfig {
   openDocsCommand?: string; // Optional command to open documentation
 }
 
-/**
- * Pluggable handler for surfacing tool-missing errors to the user.
- * Set by the extension host at activation; defaults to a no-op so this
- * module remains free of platform-specific (vscode) dependencies.
- */
-export type ToolMissingHandler = (
-  message: string,
-  openDocsCommand?: string,
-) => void | Promise<void>;
-
-let toolMissingHandler: ToolMissingHandler = () => {
-  // No-op by default; the extension host registers a real handler.
-};
-
-/** Register a platform-specific handler for displaying tool-missing errors. */
-export function setToolMissingHandler(handler: ToolMissingHandler): void {
-  toolMissingHandler = handler;
-}
-
 async function reportMissingTool(
   message: string,
   openDocsCommand?: string,
 ): Promise<void> {
   try {
-    await toolMissingHandler(message, openDocsCommand);
+    await platform().toolMissingHandler(message, openDocsCommand);
   } catch (err) {
     logger.error(
       CHANNEL,

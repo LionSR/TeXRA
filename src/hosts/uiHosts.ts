@@ -1,11 +1,6 @@
 // Third-party imports
 import stripAnsi from 'strip-ansi';
 
-export interface ClipboardHost {
-  readText(): Promise<string>;
-  writeText(text: string): Promise<void>;
-}
-
 export interface DiffSource {
   filePath: string;
 }
@@ -126,19 +121,6 @@ export interface TerminalRunResult {
   /** ANSI-stripped, length-capped tail of command output when available. */
   output: string;
   timedOut: boolean;
-}
-
-export interface TerminalHandle {
-  readonly name: string;
-  sendText(text: string, shouldExecute?: boolean): void;
-  show(preserveFocus?: boolean): void;
-  dispose(): void;
-}
-
-export interface TerminalHost {
-  createTerminal(options: TerminalOptions): TerminalHandle;
-  findTerminal(name: string): TerminalHandle | undefined;
-  getTerminals(): readonly TerminalHandle[];
 }
 
 export interface TerminalRunner {

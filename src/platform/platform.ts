@@ -9,9 +9,15 @@
  * Pattern: Composition Root (Mark Seemann) + Frozen Object.
  */
 import type { AgentResumePort } from './interfaces/agentResume';
+import type { AddCriticismSink } from './interfaces/criticism';
 import type { ConfigProvider } from './interfaces/config';
 import type { StateStore } from './interfaces/state';
 import type { FileSystemProvider } from './interfaces/filesystem';
+import type { LinterProvider } from './interfaces/linter';
+import type {
+  ToolMissingHandler,
+  ToolNotificationHandler,
+} from './interfaces/toolNotifications';
 import type { WorkspaceProvider } from './interfaces/workspace';
 import type { StorageProvider } from './interfaces/storage';
 import type { LifecycleHost } from './interfaces/lifecycle';
@@ -38,6 +44,14 @@ export interface Platform {
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
   readonly toolAvailability: ToolAvailabilityHost;
+  /** Linter diagnostics provider for the diagnostics tool's `list`/`count` commands. */
+  readonly linter: LinterProvider;
+  /** Sink for the diagnostics tool's `add` (manual criticism) command. */
+  readonly addCriticismSink: AddCriticismSink;
+  /** Surfaces a tool-missing error to the user. */
+  readonly toolMissingHandler: ToolMissingHandler;
+  /** Surfaces a tool-group-unavailable notification to the user. */
+  readonly toolNotificationHandler: ToolNotificationHandler;
 }
 
 let _platform: Readonly<Platform> | null = null;
