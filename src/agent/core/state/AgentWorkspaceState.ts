@@ -7,6 +7,7 @@ import {
   FileLocationSchema,
   WorkPlanSnapshotSchema,
   planSummaryLine,
+  TodoItemSchema,
   type TodoItem,
   type Plan,
   type FileLocation,
@@ -327,44 +328,77 @@ export class WorkPlanState {
   }
 }
 
-function unwrapLegacyStateValue(value: unknown, key: string): unknown {
-  if (Array.isArray(value)) return value;
-  if (!isObject(value)) return undefined;
-  return value[key] ?? value;
-}
-
-function normalizeAgentWorkspaceSnapshot(input: unknown): unknown {
-  const record = isObject(input) ? input : {};
-  const workPlan = record.workPlan ?? {
-    todos: unwrapLegacyStateValue(record.todos, 'todos'),
-    plan: unwrapLegacyStateValue(record.plan, 'plan'),
-  };
-
-  return {
-    ...record,
-    workPlan,
-  };
-}
-
-export const AgentWorkspaceStateSnapshotSchema = z.preprocess(
-  normalizeAgentWorkspaceSnapshot,
-  z.object({
-    assembly: ResponseAssemblyStateSchema.prefault({
-      lastResponse: '',
-      accumulatedOutput: '',
-    }),
-    media: MediaAttachmentStateSnapshotSchema.prefault({ files: [] }),
-    reasoning: ReasoningCacheStateSchema.prefault({
-      thinkingBlocks: [],
-      thinkingAdded: false,
-    }),
-    interactions: FileInteractionStateSnapshotSchema.prefault({
-      readFiles: [],
-      edits: [],
-    }),
-    workPlan: WorkPlanSnapshotSchema.prefault({}),
+const AgentWorkspaceSnapshotFieldsSchema = z.object({
+  assembly: ResponseAssemblyStateSchema.prefault({
+    lastResponse: '',
+    accumulatedOutput: '',
   }),
-);
+  media: MediaAttachmentStateSnapshotSchema.prefault({ files: [] }),
+  reasoning: ReasoningCacheStateSchema.prefault({
+    thinkingBlocks: [],
+    thinkingAdded: false,
+  }),
+  interactions: FileInteractionStateSnapshotSchema.prefault({
+    readFiles: [],
+    edits: [],
+  }),
+  workPlan: WorkPlanSnapshotSchema,
+});
+
+const AgentWorkspaceCurrentSnapshotSchema = z
+  .looseObject({ workPlan: z.unknown() })
+  .refine(
+    (record) => Object.hasOwn(record, 'workPlan') && record.workPlan != null,
+  )
+  .transform((record) => AgentWorkspaceSnapshotFieldsSchema.parse(record));
+
+const LegacyTodosSnapshotValueSchema = z.union([
+  z.undefined(),
+  z.null().transform(() => undefined),
+  z.array(TodoItemSchema),
+  z
+    .looseObject({ todos: z.unknown().optional() })
+    .refine((record) => Object.hasOwn(record, 'todos'))
+    .transform(({ todos }) => todos),
+]);
+
+const LegacyPlanSnapshotValueSchema = z.union([
+  z.undefined(),
+  z
+    .looseObject({ plan: z.unknown().optional() })
+    .refine((record) => Object.hasOwn(record, 'plan'))
+    .transform(({ plan }) => plan),
+  z.unknown(),
+]);
+
+const AgentWorkspaceLegacySnapshotSchema = z
+  .looseObject({
+    todos: LegacyTodosSnapshotValueSchema.optional(),
+    plan: LegacyPlanSnapshotValueSchema.optional(),
+  })
+  .refine(
+    (record) => !Object.hasOwn(record, 'workPlan') || record.workPlan == null,
+  )
+  .transform((record) =>
+    AgentWorkspaceSnapshotFieldsSchema.parse({
+      ...record,
+      workPlan: {
+        todos: record.todos,
+        plan: record.plan,
+      },
+    }),
+  );
+
+const EmptyAgentWorkspaceSnapshotSchema = z
+  .unknown()
+  .refine((input) => !isObject(input))
+  .transform(() => AgentWorkspaceSnapshotFieldsSchema.parse({ workPlan: {} }));
+
+export const AgentWorkspaceStateSnapshotSchema = z.union([
+  AgentWorkspaceCurrentSnapshotSchema,
+  AgentWorkspaceLegacySnapshotSchema,
+  EmptyAgentWorkspaceSnapshotSchema,
+]);
 
 export type AgentWorkspaceSnapshot = z.output<
   typeof AgentWorkspaceStateSnapshotSchema

@@ -27,6 +27,10 @@ const legacyPlan = {
   ],
 };
 
+const objectivePlan = {
+  objective: 'Use one workspace owner for plan and todo progress.',
+};
+
 describe('agent workspace work-plan state', () => {
   it('migrates legacy todo and plan snapshots into the current workPlan shape', () => {
     const state = AgentWorkspaceState.fromSnapshot({
@@ -47,6 +51,71 @@ describe('agent workspace work-plan state', () => {
       plan: null,
       planSummary: null,
     });
+  });
+
+  it('migrates legacy todo and plan snapshots when workPlan is null', () => {
+    const state = AgentWorkspaceState.fromSnapshot({
+      workPlan: null,
+      todos: { todos: [todo] },
+      plan: { plan: legacyPlan },
+    });
+
+    expect(state.workPlan.todos).toEqual([todo]);
+    expect(state.workPlan.plan).toBeNull();
+  });
+
+  it('rejects invalid legacy todo entries instead of clearing them', () => {
+    expect(() =>
+      AgentWorkspaceState.fromSnapshot({
+        todos: {
+          todos: [
+            {
+              content: 'Missing status and active form',
+            },
+          ],
+        },
+      }),
+    ).toThrow();
+  });
+
+  it('treats legacy null todos as absent', () => {
+    const state = AgentWorkspaceState.fromSnapshot({
+      todos: null,
+    });
+
+    expect(state.workPlan.todos).toEqual([]);
+  });
+
+  it('preserves a bare legacy plan document without a wrapper key', () => {
+    const state = AgentWorkspaceState.fromSnapshot({
+      plan: objectivePlan,
+    });
+
+    expect(state.workPlan.plan).toEqual(objectivePlan);
+  });
+
+  it('rejects a bare legacy todo object without a wrapper key', () => {
+    expect(() =>
+      AgentWorkspaceState.fromSnapshot({
+        todos: {
+          content: 'Missing wrapper key',
+        },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects invalid current workPlan entries instead of falling back to legacy fields', () => {
+    expect(() =>
+      AgentWorkspaceState.fromSnapshot({
+        workPlan: {
+          todos: [
+            {
+              content: 'Missing status and active form',
+            },
+          ],
+        },
+      }),
+    ).toThrow();
   });
 
   it('keeps the stored summary line visible after compaction when only a legacy plan remains', () => {
