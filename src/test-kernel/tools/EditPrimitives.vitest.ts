@@ -14,13 +14,13 @@ describe('editPrimitives literal replacement', () => {
   // $<name> in the replacement string, silently corrupting LaTeX/code edits.
   // The primitives must insert the replacement verbatim.
   const dollarPatterns = [
-    ['$&', '$&'],
-    ["$'", "$'"],
-    ['$`', '$`'],
-    ['$$', '$$'],
-    ['$1', '$1'],
-    ['a$&b$$c', 'a$&b$$c'],
-    ['\\sum_{i=1}^{n} $x_i$', '\\sum_{i=1}^{n} $x_i$'],
+    '$&',
+    "$'",
+    '$`',
+    '$$',
+    '$1',
+    'a$&b$$c',
+    '\\sum_{i=1}^{n} $x_i$',
   ] as const;
 
   it.each(dollarPatterns)(
