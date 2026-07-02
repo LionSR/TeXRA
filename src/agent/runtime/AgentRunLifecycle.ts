@@ -235,7 +235,8 @@ export async function runFlowWithLifecycle(
     // flow-exit rethrows (T2-2) when one was attached, or formats a fresh one
     // otherwise; either way sdkMsg is unchanged from the prior getSdkErrorMessage
     // call (it reads the same .message).
-    const { message: sdkMsg, ...providerErrorInfo } = normalizeProviderError(err);
+    const { message: sdkMsg, ...providerErrorInfo } =
+      normalizeProviderError(err);
     const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
 
     // Root-agent failures are surfaced in the stream log. Subagent failures
