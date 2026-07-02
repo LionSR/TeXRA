@@ -113,7 +113,6 @@ describe('child stream progress events', () => {
         executionId,
         taskState: {
           agentConfig: config,
-          toolSessionState: {},
         },
       },
     });

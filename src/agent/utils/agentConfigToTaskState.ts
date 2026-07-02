@@ -14,7 +14,6 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
     case AgentCategory.ToolUse:
       return {
         agentConfig: config as ToolUseTaskState['agentConfig'],
-        toolSessionState: {},
       };
     case AgentCategory.Workflow:
       return {
