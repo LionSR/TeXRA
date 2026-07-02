@@ -2111,10 +2111,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return this.createResponseImpl(options);
     } else if (this.previousResponseId) {
       // Log diagnostic info for other errors when chaining was active
-      this.logger.debug(
-        `Request failed with previousResponseId=${this.previousResponseId}. ` +
-          `Error: ${providerError.message}`,
-      );
+      this.logger.debug('Request failed while response chaining was active', {
+        data: {
+          previousResponseId: this.previousResponseId,
+          error: providerError.message,
+        },
+      });
     }
 
     // Retention of pendingBackgroundResponseId is decided at the point of
@@ -2296,9 +2298,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Terminal failure — the background response ended with a non-completed,
     // non-pending status (failed / cancelled / incomplete).
-    const fallbackStatus = polled.status ?? 'unknown';
     this.logger.error(
-      `Background response ${polled.id} ended with status ${fallbackStatus}`,
+      'Background response ended with a non-completed status',
       {
         data: {
           responseId: polled.id,
@@ -2505,9 +2506,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (thoughtContent) {
-      this.logger.debug(
-        `OpenAI Responses reasoning preview (${reasoningItems.length} item(s)): ${thoughtContent.slice(0, K_SLICE)}...`,
-      );
+      this.logger.debug('OpenAI Responses reasoning preview', {
+        data: {
+          itemCount: reasoningItems.length,
+          preview: thoughtContent.slice(0, K_SLICE),
+        },
+      });
     }
 
     return thoughtContent || null;

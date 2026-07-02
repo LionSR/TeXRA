@@ -946,7 +946,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         } else {
           if (resolvedMediaType !== 'image/png') {
             this.logger.warn(
-              `Unsupported image media type ${resolvedMediaType} for ${media.file_name}, defaulting to image/png`,
+              'Unsupported image media type, defaulting to image/png',
+              { data: { mediaType: resolvedMediaType, fileName: media.file_name } },
             );
           }
           imageMediaType = 'image/png';

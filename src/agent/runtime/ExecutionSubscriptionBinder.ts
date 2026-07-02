@@ -40,8 +40,8 @@ interface ReleaseSource {
 }
 
 interface BinderLogger {
-  info(message: string): void;
-  warn(message: string): void;
+  info(message: string, options?: { data?: unknown }): void;
+  warn(message: string, options?: { data?: unknown }): void;
 }
 
 interface ExecutionSubscriptionBinderOptions {
