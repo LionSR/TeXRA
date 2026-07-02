@@ -15,6 +15,7 @@ import {
   type StreamStatus,
   type StreamTabId,
 } from '@shared/schemas';
+import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
   WebviewUpdater,
   type LogContentExtras,
@@ -436,15 +437,14 @@ export class ProgressEventHandler {
     let nextBadges: StreamBadgeSnapshot | null = null;
 
     this.state.updateStreamState(parentStreamId, (prev) => {
-      const prevIds = new Set(prev[opts.activeField].map((c) => c.executionId));
-      const nextIds = new Set(opts.next.map((c) => c.executionId));
-      const newlyFinished = [...prevIds].filter(
-        (id) => !nextIds.has(id),
-      ).length;
+      const { vanishedIds } = diffActiveChildren(
+        prev[opts.activeField],
+        opts.next,
+      );
       const updatedState = {
         ...prev,
         [opts.activeField]: opts.next,
-        [opts.countField]: (prev[opts.countField] ?? 0) + newlyFinished,
+        [opts.countField]: (prev[opts.countField] ?? 0) + vanishedIds.size,
       };
       nextBadges = this.toBadgeSnapshot(updatedState);
       return updatedState;

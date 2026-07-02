@@ -9,6 +9,7 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { bus } from '@eventBus/ProgressEventBus';
+import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
   reduceStreamMeta,
   type StreamMetaCommand,
@@ -189,12 +190,15 @@ function applyToState<K extends ProgressEvent>(
       // The shared reducer drops tails for executions that left the active
       // list; the CLI also persists a bounded transcript for each finished
       // process before its tail is pruned (a CLI-only side effect).
-      const live = new Set(p.processes.map((c) => c.executionId));
       patchStream(p.parentStreamId, (s) => {
+        const { vanishedIds } = diffActiveChildren(
+          s.activeProcesses,
+          p.processes,
+        );
         const entries = appendCompletedProcessEntries(
           p.parentStreamId,
           s,
-          live,
+          vanishedIds,
         );
         const meta = applyStreamMeta(s, {
           kind: 'activeProcesses',
