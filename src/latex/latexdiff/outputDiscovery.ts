@@ -59,16 +59,11 @@ export async function collectTexFiles(
     // Skip symlinks — they are mirrored dependency copies placed by
     // ensureMirroredInRoundDir, not revised outputs.
     if (await fs.isSymlink(absPath).catch(() => false)) continue;
-    if (isFile(type)) {
-      if (hasExtension(name, '.tex')) {
-        results.push(prefix ? `${prefix}/${name}` : name);
-      }
+    const relative = prefix ? `${prefix}/${name}` : name;
+    if (isFile(type) && hasExtension(name, '.tex')) {
+      results.push(relative);
     } else if (isDirectory(type)) {
-      const sub = await collectTexFiles(
-        absPath,
-        prefix ? `${prefix}/${name}` : name,
-      );
-      results.push(...sub);
+      results.push(...(await collectTexFiles(absPath, relative)));
     }
   }
   return results;

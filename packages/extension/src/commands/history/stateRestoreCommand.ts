@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 
 // Local imports
-import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
+import { TaskStateSchema } from '@agent/core/state/TaskState';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { setPendingState } from '@common/state';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -46,7 +46,7 @@ async function restoreState(
   }
 
   try {
-    const nextState = buildMainViewState(parsed.data as TaskState);
+    const nextState = buildMainViewState(parsed.data);
 
     await vscode.commands.executeCommand('texra.showMainView');
 

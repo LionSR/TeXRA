@@ -169,8 +169,8 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
   }
 
   private updateFreeText(question: string, event: Event): void {
-    const value = ((event.currentTarget as HTMLElement & { value?: string })
-      .value ?? '') as string;
+    const value =
+      (event.currentTarget as HTMLElement & { value?: string }).value ?? '';
     this.freeText = { ...this.freeText, [question]: value };
   }
 

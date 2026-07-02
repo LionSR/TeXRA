@@ -11,14 +11,12 @@ import { highlightCode } from './highlightCode';
 let md: MarkdownIt | null = null;
 
 /** Returns a shared, lazily-initialized MarkdownIt instance. */
-export const getLightweightMd = (): MarkdownIt => {
-  if (!md) {
-    md = new MarkdownIt({
-      breaks: false,
-      linkify: true,
-      html: false,
-      highlight: highlightCode,
-    });
-  }
+export function getLightweightMd(): MarkdownIt {
+  md ??= new MarkdownIt({
+    breaks: false,
+    linkify: true,
+    html: false,
+    highlight: highlightCode,
+  });
   return md;
-};
+}

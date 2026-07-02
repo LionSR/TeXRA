@@ -14,8 +14,7 @@ export function parseUserQuestionAnswer(
 
   const selected = parts.every((part) => /^\d+$/.test(part))
     ? parts
-        .map((part) => Number(part))
-        .map((index) => question.options[index - 1]?.label)
+        .map((part) => question.options[Number(part) - 1]?.label)
         .filter((value): value is string => Boolean(value))
     : [];
 

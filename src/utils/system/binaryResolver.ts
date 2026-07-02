@@ -78,12 +78,8 @@ export class BinaryResolverService {
       hasExtension(resolvedPath, '.pl') ||
       (this.options.isWindows &&
         path.extname(resolvedPath) === '' &&
-        this.isKnownPerlScript(toolName))
+        WINDOWS_EXTENSIONLESS_PERL_TOOLS.has(toolName))
     );
-  }
-
-  private isKnownPerlScript(toolName: string): boolean {
-    return WINDOWS_EXTENSIONLESS_PERL_TOOLS.has(toolName);
   }
 }
 

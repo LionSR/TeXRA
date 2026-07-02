@@ -333,6 +333,9 @@ function createWindow(options: {
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
   };
+  const showInfoMessage = async (message: string) => {
+    await dialog.showMessageBox(window, { type: 'info', message });
+  };
   const setupCommandCwd = options.workspacePath ?? app.getPath('home');
   const setupTerminalRunner = createDesktopTerminalRunner({
     cwd: setupCommandCwd,
@@ -404,9 +407,7 @@ function createWindow(options: {
     coordinator: options.authCoordinator,
     secrets: platform().secrets,
     openExternalUrl: (url) => previewHost.openExternal(url),
-    showInfoMessage: async (message) => {
-      await dialog.showMessageBox(window, { type: 'info', message });
-    },
+    showInfoMessage,
     showErrorMessage,
     onSessionChanged: refreshDesktopAuthSurfaces,
     log: console,
@@ -493,9 +494,7 @@ function createWindow(options: {
       });
       return result.response === 0;
     },
-    showInfoMessage: async (message) => {
-      await dialog.showMessageBox(window, { type: 'info', message });
-    },
+    showInfoMessage,
     showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore: options.progressSnapshotStore,
@@ -576,12 +575,8 @@ function createWindow(options: {
     promptSecret: (input) =>
       promptInRenderer(window, { ...input, password: true }),
     promptText: (input) => promptInRenderer(window, input),
-    showInfoMessage: async (message) => {
-      await dialog.showMessageBox(window, { type: 'info', message });
-    },
-    showErrorMessage: async (message) => {
-      await dialog.showMessageBox(window, { type: 'error', message });
-    },
+    showInfoMessage,
+    showErrorMessage,
     confirmAction: async (message, confirmLabel = 'OK') => {
       const result = await dialog.showMessageBox(window, {
         type: 'warning',
@@ -816,9 +811,7 @@ function createWindow(options: {
       openWorkspaceFolder,
       signIn: () => desktopAuth.signIn(),
       getRecentCommits: () => gitHost.getRecentCommits(),
-      showInfoMessage: async (message) => {
-        await dialog.showMessageBox(window, { type: 'info', message });
-      },
+      showInfoMessage,
       onAsyncError: reportAsyncError,
     },
   );

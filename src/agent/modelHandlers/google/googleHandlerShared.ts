@@ -71,11 +71,11 @@ export async function resolveGoogleClient(
     setCached,
   } = params;
 
-  if (shouldUseServerSideKeys) {
+  const createClient = async (relayAuth: boolean): Promise<GoogleGenAI> => {
     const credential = await getApiKey();
     const baseUrl = getBaseUrl();
     logger.debug(
-      `Using Google GenAI ${sdkLabel} SDK with relay auth. Base URL: ${baseUrl}`,
+      `Using Google GenAI ${sdkLabel} SDK${relayAuth ? ' with relay auth' : ''}. Base URL: ${baseUrl}`,
     );
     return new GoogleGenAI({
       apiKey: credential,
@@ -84,23 +84,19 @@ export async function resolveGoogleClient(
         retryOptions: { attempts: 1 },
       },
     });
+  };
+
+  if (shouldUseServerSideKeys) {
+    return createClient(true);
   }
 
-  if (!cached) {
-    const credential = await getApiKey();
-    const baseUrl = getBaseUrl();
-    logger.debug(`Using Google GenAI ${sdkLabel} SDK. Base URL: ${baseUrl}`);
-    const client = new GoogleGenAI({
-      apiKey: credential,
-      httpOptions: {
-        baseUrl: baseUrl ?? undefined,
-        retryOptions: { attempts: 1 },
-      },
-    });
-    setCached(client);
-    return client;
+  if (cached) {
+    return cached;
   }
-  return cached;
+
+  const client = await createClient(false);
+  setCached(client);
+  return client;
 }
 
 interface ResolveGeminiThinkingLevelParams<T> {

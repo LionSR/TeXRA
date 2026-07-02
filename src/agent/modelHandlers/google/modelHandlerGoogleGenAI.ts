@@ -757,7 +757,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       lastMessage?.role === 'user' &&
       this.containCutOffMessage(
         (lastMessage.parts ?? [])
-          .filter((part): part is Part & { text: string } => isTextPart(part))
+          .filter(isTextPart)
           .map((part) => part.text)
           .join(''),
       )

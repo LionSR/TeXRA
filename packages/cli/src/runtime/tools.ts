@@ -136,7 +136,7 @@ export async function setCliToolEnabled(
   enabled: boolean,
 ): Promise<boolean> {
   const def = findCliToolDef(id);
-  if (!def || !def.toggleable) return false;
+  if (!def?.toggleable) return false;
   await setToolEnabled(id, enabled);
   return true;
 }

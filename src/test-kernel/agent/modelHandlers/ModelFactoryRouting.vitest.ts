@@ -78,11 +78,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('routes switchable OpenAI models to Responses when the setting is unset', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(createFakePlatform());
+    await initFakePlatform();
 
     expect(
       shouldUseResponsesAPI(modelConfig(ModelProvider.OPENAI), false),
@@ -159,15 +155,9 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('uses short-name routing when computing compatibility keys', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(
-      createFakePlatform({
-        config: { 'texra.model.useOpenAIResponsesAPI': false },
-      }),
-    );
+    await initFakePlatform({
+      config: { 'texra.model.useOpenAIResponsesAPI': false },
+    });
 
     expect(
       modelHandlerCompatibilityKey(
@@ -273,25 +263,19 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('uses the Codex endpoint for a signed-in preferred subscription even when relay access is selected', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
     const codexSession: CodexSession = {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       expiresAtMs: Date.now() + 60_000,
       accountId: 'account-id',
     };
-    initPlatform(
-      createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
-        globalState: { 'texra.useIncludedModelAccess': true },
-        secrets: {
-          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
-        },
-      }),
-    );
+    await initFakePlatform({
+      config: { 'texra.chatgptCodex.preferSubscription': true },
+      globalState: { 'texra.useIncludedModelAccess': true },
+      secrets: {
+        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
+      },
+    });
 
     const handler = await createModelHandler(codexEligibleConfig);
     try {
@@ -306,24 +290,18 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('does not let the Codex subscription override an explicit legacy OpenAI compatibility key', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
     const codexSession: CodexSession = {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       expiresAtMs: Date.now() + 60_000,
       accountId: 'account-id',
     };
-    initPlatform(
-      createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
-        secrets: {
-          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
-        },
-      }),
-    );
+    await initFakePlatform({
+      config: { 'texra.chatgptCodex.preferSubscription': true },
+      secrets: {
+        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
+      },
+    });
 
     const handler = await createModelHandlerForCompatibilityKey(
       codexEligibleConfig,
@@ -340,28 +318,22 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('keeps Responses-compatible resumes on the Codex endpoint when subscription access is preferred', async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
     const codexSession: CodexSession = {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       expiresAtMs: Date.now() + 60_000,
       accountId: 'account-id',
     };
-    initPlatform(
-      createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
-        globalState: {
-          'texra.useIncludedModelAccess': true,
-          'texra.useOpenRouter': true,
-        },
-        secrets: {
-          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
-        },
-      }),
-    );
+    await initFakePlatform({
+      config: { 'texra.chatgptCodex.preferSubscription': true },
+      globalState: {
+        'texra.useIncludedModelAccess': true,
+        'texra.useOpenRouter': true,
+      },
+      secrets: {
+        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
+      },
+    });
 
     const handler = await createModelHandlerForCompatibilityKey(
       codexEligibleConfig,

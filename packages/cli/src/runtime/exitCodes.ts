@@ -1,5 +1,3 @@
-// Local imports - CLI runtime
-
 /** Canonical CLI process exit codes. */
 export const CliExitCode = {
   Success: 0,

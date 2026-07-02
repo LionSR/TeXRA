@@ -37,7 +37,7 @@ const PREAMBLE_SKIP_MARKERS = ['%DIF ADD', 'Here is', '以下是'];
 const DOCUMENT_START_MARKERS = ['\\documentclass', '\\input'];
 
 /** Patterns to fix broken document endings after latexdiff processing. */
-const DOCUMENT_END_FIXES: Array<[RegExp, string]> = [
+const DOCUMENT_END_FIXES: [RegExp, string][] = [
   [/\\end\{document\}\s*\\chapter/g, '\\chapter'],
   [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
 ];
