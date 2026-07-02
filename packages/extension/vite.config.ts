@@ -52,8 +52,7 @@ function createWebviewConfig(webviewName: string, isDev: boolean) {
  * If not specified, defaults to building all webviews sequentially via npm script.
  */
 const targetWebview = process.env.VITE_WEBVIEW as
-  | (typeof webviews)[number]
-  | undefined;
+  (typeof webviews)[number] | undefined;
 
 export default defineConfig(({ mode }) => {
   const isDev = mode === 'development';

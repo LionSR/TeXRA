@@ -204,9 +204,7 @@ export function tryUseRunContext(): RunContext | undefined {
 export function useLaunchRunContext(): LaunchRunContext {
   const context = useRunContext();
   if (context.kind !== 'launch') {
-    throw new Error(
-      'useLaunchRunContext() called outside a launch RunContext',
-    );
+    throw new Error('useLaunchRunContext() called outside a launch RunContext');
   }
   return context;
 }

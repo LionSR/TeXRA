@@ -29,12 +29,7 @@ import { FormFrame } from './_shared/FormFrame';
 import { computeSelectWindowSize } from './_shared/selectWindow';
 
 export type SettingEditKind =
-  | 'form'
-  | 'boolean'
-  | 'enum'
-  | 'string'
-  | 'number'
-  | 'readonly';
+  'form' | 'boolean' | 'enum' | 'string' | 'number' | 'readonly';
 
 export type SettingInputResult =
   | { readonly ok: true; readonly value: unknown }

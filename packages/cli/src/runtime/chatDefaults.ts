@@ -40,11 +40,7 @@ export interface ChatDefaults {
 }
 
 export type ChatDefaultSource =
-  | 'workspace'
-  | 'user'
-  | 'history'
-  | 'builtin'
-  | 'mixed';
+  'workspace' | 'user' | 'history' | 'builtin' | 'mixed';
 
 export type ChatDefaultValueSource =
   | 'override'

@@ -89,9 +89,11 @@ export function renderEmptyState({
                       variant=${action.variant ?? 'neutral'}
                       @click=${action.onClick}
                     >
-                      ${action.icon
-                        ? waIcon(action.icon, { slot: 'start' })
-                        : nothing}
+                      ${
+                        action.icon
+                          ? waIcon(action.icon, { slot: 'start' })
+                          : nothing
+                      }
                       ${action.label}
                     </wa-button>
                   `,

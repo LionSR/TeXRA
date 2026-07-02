@@ -4,8 +4,7 @@ import { toErrorMessage } from '@common/errors';
 import type { ChildProcess } from 'node:child_process';
 
 export type ClipboardTextWriteResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly reason: string };
+  { readonly ok: true } | { readonly ok: false; readonly reason: string };
 
 const DEFAULT_CLIPBOARD_WRITE_TIMEOUT_MS = 5_000;
 

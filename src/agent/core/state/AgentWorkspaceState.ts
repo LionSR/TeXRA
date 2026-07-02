@@ -168,9 +168,8 @@ export class FileInteractionState {
 
 const MediaFileEntrySchema = z
   .union([z.string(), FileLocationSchema])
-  .transform(
-    (entry): FileLocation =>
-      typeof entry === 'string' ? pathToLocation(entry) : entry,
+  .transform((entry): FileLocation =>
+    typeof entry === 'string' ? pathToLocation(entry) : entry,
   );
 
 /** Internal schema for media attachment state snapshot. */

@@ -98,9 +98,11 @@ export class ReliabilitySettingsSection extends LitElement {
           @change=${(event: Event) =>
             this.handleSettingChange(setting, event.target as WaInput)}
         ></wa-input>
-        ${setting.unit
-          ? html`<span class="setting-unit">${setting.unit}</span>`
-          : nothing}
+        ${
+          setting.unit
+            ? html`<span class="setting-unit">${setting.unit}</span>`
+            : nothing
+        }
       </div>
       <p class="setting-help">${setting.description}</p>
     `;

@@ -67,7 +67,10 @@ describe('DiagnosticsTool', () => {
   });
 
   it('reports when the criticism sink does not accept (feature disabled)', async () => {
-    await installAddCriticismSink(() => ({ accepted: false, resolvedPath: '' }));
+    await installAddCriticismSink(() => ({
+      accepted: false,
+      resolvedPath: '',
+    }));
 
     const result = await withRunContext(worktreeContext(), () =>
       new DiagnosticsTool().call({

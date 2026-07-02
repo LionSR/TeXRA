@@ -131,8 +131,7 @@ describe('desktop Electron host bridge', () => {
     const { ELECTRON_WEBVIEW_MESSAGE_CHANNEL, ELECTRON_WEBVIEW_PUSH_CHANNEL } =
       await loadHostBridgeModule();
     let rendererListener:
-      | ((event: { sender: unknown }, message: unknown) => void)
-      | undefined;
+      ((event: { sender: unknown }, message: unknown) => void) | undefined;
     const ipcMain = {
       on: vi.fn((channel, listener) => {
         expect(channel).toBe(ELECTRON_WEBVIEW_MESSAGE_CHANNEL);

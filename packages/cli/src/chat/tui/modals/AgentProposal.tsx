@@ -76,12 +76,10 @@ export function agentProposalInstructionDisplayLines({
       line.length === 0
         ? ['']
         : wrapAnsiToWidth(line, instructionWidth).split('\n');
-    return wrapped.map(
-      (text): AgentProposalInstructionLine => ({
-        kind: 'instruction',
-        text,
-      }),
-    );
+    return wrapped.map((text): AgentProposalInstructionLine => ({
+      kind: 'instruction',
+      text,
+    }));
   });
 }
 

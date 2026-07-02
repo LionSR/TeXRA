@@ -53,10 +53,8 @@ describe('tool-use progress events', () => {
       resolvedTools: [],
     } as unknown as ToolUseServices);
 
-    const result = await withTestRunContext(
-      host,
-      'stream:tool-use-cycle',
-      () => node.exec(createPrepResult(workspaceState)),
+    const result = await withTestRunContext(host, 'stream:tool-use-cycle', () =>
+      node.exec(createPrepResult(workspaceState)),
     );
 
     expect(result).toEqual({ outcome: 'skipped' });

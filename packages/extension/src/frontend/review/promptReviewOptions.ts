@@ -140,13 +140,11 @@ export async function promptReviewOptions(
       detail: "Diff against the repository's main branch (recommended).",
       ref: undefined,
     },
-    ...candidates.map(
-      (candidate): BranchItem => ({
-        label: `$(git-branch) ${candidate.ref}`,
-        description: candidate.current ? 'current branch' : undefined,
-        ref: candidate.ref,
-      }),
-    ),
+    ...candidates.map((candidate): BranchItem => ({
+      label: `$(git-branch) ${candidate.ref}`,
+      description: candidate.current ? 'current branch' : undefined,
+      ref: candidate.ref,
+    })),
   ];
   // VS Code 1.109+ can place a button in the QuickPick title area; offer a
   // one-click "use auto-detect" since most runs take the default.

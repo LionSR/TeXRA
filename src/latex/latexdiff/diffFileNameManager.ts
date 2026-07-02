@@ -7,9 +7,7 @@ import {
 } from '@agent/utils/mergeFileUtils';
 
 export type GeneratedLatexdiffArtifactKind =
-  | 'workspaceDiff'
-  | 'versionControlDiff'
-  | 'betweenRoundDiff';
+  'workspaceDiff' | 'versionControlDiff' | 'betweenRoundDiff';
 
 export interface GeneratedLatexdiffArtifact {
   kind: GeneratedLatexdiffArtifactKind;

@@ -301,9 +301,7 @@ async function ensureRoutingConfigured(): Promise<boolean> {
 }
 
 export type SetupAssistantLaunchResult =
-  | 'launched'
-  | 'already-running'
-  | 'not-started';
+  'launched' | 'already-running' | 'not-started';
 
 export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult> {
   try {

@@ -30,12 +30,10 @@ export type SettingsOpenAgentYamlResult =
   | { ok: false; reason: 'missingAgent' | 'missingPath' };
 
 export type SettingsRevealAgentFileResult =
-  | { ok: true; path: string }
-  | { ok: false; reason: 'missingFile' };
+  { ok: true; path: string } | { ok: false; reason: 'missingFile' };
 
 export type SettingsOpenAgentFolderResult =
-  | { ok: true; path: string }
-  | { ok: false; reason: 'missingLocalDirectory' };
+  { ok: true; path: string } | { ok: false; reason: 'missingLocalDirectory' };
 
 export class SettingsAgentDirectoryController {
   constructor(private readonly deps: SettingsAgentDirectoryControllerDeps) {}

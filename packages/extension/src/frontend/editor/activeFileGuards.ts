@@ -6,9 +6,7 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 export type ActiveFileGuardFailureReason =
-  | 'noEditor'
-  | 'unsupportedExtension'
-  | 'saveFailed';
+  'noEditor' | 'unsupportedExtension' | 'saveFailed';
 
 export interface ActiveFileGuardOptions {
   allowedExtensions: string[];
@@ -23,8 +21,7 @@ export interface ActiveFileGuardSuccess {
 }
 
 export type ActiveFileGuardResult =
-  | ActiveFileGuardSuccess
-  | { status: ActiveFileGuardFailureReason };
+  ActiveFileGuardSuccess | { status: ActiveFileGuardFailureReason };
 
 /**
  * Retrieve the active text editor when available and ensure the document

@@ -104,8 +104,7 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
    * else (`deepseek-reasoner`, V4 series) defaults ON.
    */
   protected override getThinkingParameter():
-    | { type: 'enabled' | 'disabled' }
-    | undefined {
+    { type: 'enabled' | 'disabled' } | undefined {
     const wantsThinking = this.capabilities.supportsReasoning;
     const defaultsOn = this.config.fullName !== 'deepseek-chat';
     if (defaultsOn === wantsThinking) return undefined;

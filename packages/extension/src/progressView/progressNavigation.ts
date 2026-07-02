@@ -7,8 +7,7 @@ import {
 } from './ProgressViewProvider';
 
 export type ProgressNavigationRevealResult =
-  | ProgressStreamRevealResult
-  | 'unavailable';
+  ProgressStreamRevealResult | 'unavailable';
 
 export async function revealProgressStream(
   streamId: StreamTabId,

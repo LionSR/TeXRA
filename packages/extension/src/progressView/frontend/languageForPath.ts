@@ -2,8 +2,7 @@
 import { getBasename } from '@shared/utils/path';
 
 type LanguageMap =
-  | ReadonlyMap<string, string>
-  | Readonly<Record<string, string>>;
+  ReadonlyMap<string, string> | Readonly<Record<string, string>>;
 
 interface LanguageForPathConfig {
   basenameLanguages: LanguageMap;

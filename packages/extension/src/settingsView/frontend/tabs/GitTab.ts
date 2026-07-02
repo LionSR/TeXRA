@@ -246,110 +246,118 @@ export class GitTab extends LitElement {
     const tokenIsSet = this.githubTokenStatus !== 'none';
     return html`
       <div class="git-container">
-        ${this.desktopHost
-          ? nothing
-          : html`
-              <div class="setting-block">
-                <p class="section-title">GitHub personal access token</p>
-                <p class="setting-description">
-                  Used to poll GitHub for pull request events (comments,
-                  reviews, failed CI) when you subscribe to a PR.
-                </p>
-                <div class="token-row">
-                  <span class="token-row-label">Status:</span>
-                  ${this.renderTokenStatusBadge()}
-                  <span class="token-actions">
-                    <wa-button
-                      appearance="outlined"
-                      variant="neutral"
-                      size="small"
-                      @click=${this.handleSetGitHubToken}
-                    >
-                      ${waIcon('key', { slot: 'start' })}
-                      ${tokenIsSet ? 'Replace token' : 'Set token'}
-                    </wa-button>
-                    ${this.githubTokenStatus === 'secret'
-                      ? html`<wa-button
-                          class="token-remove-btn"
-                          appearance="outlined"
-                          variant="neutral"
-                          size="small"
-                          @click=${this.handleRemoveGitHubToken}
-                        >
-                          ${waIcon('trash', { slot: 'start' })} Remove
-                        </wa-button>`
-                      : nothing}
-                    <wa-button
-                      appearance="outlined"
-                      variant="neutral"
-                      size="small"
-                      @click=${this.handleOpenGitHubTokenUrl}
-                    >
-                      ${waIcon('github', { slot: 'start' })} Create on GitHub…
-                    </wa-button>
-                  </span>
+        ${
+          this.desktopHost
+            ? nothing
+            : html`
+                <div class="setting-block">
+                  <p class="section-title">GitHub personal access token</p>
+                  <p class="setting-description">
+                    Used to poll GitHub for pull request events (comments,
+                    reviews, failed CI) when you subscribe to a PR.
+                  </p>
+                  <div class="token-row">
+                    <span class="token-row-label">Status:</span>
+                    ${this.renderTokenStatusBadge()}
+                    <span class="token-actions">
+                      <wa-button
+                        appearance="outlined"
+                        variant="neutral"
+                        size="small"
+                        @click=${this.handleSetGitHubToken}
+                      >
+                        ${waIcon('key', { slot: 'start' })}
+                        ${tokenIsSet ? 'Replace token' : 'Set token'}
+                      </wa-button>
+                      ${
+                      this.githubTokenStatus === 'secret'
+                        ? html`<wa-button
+                            class="token-remove-btn"
+                            appearance="outlined"
+                            variant="neutral"
+                            size="small"
+                            @click=${this.handleRemoveGitHubToken}
+                          >
+                            ${waIcon('trash', { slot: 'start' })} Remove
+                          </wa-button>`
+                        : nothing
+                    }
+                      <wa-button
+                        appearance="outlined"
+                        variant="neutral"
+                        size="small"
+                        @click=${this.handleOpenGitHubTokenUrl}
+                      >
+                        ${waIcon('github', { slot: 'start' })} Create on GitHub…
+                      </wa-button>
+                    </span>
+                  </div>
+                  <div class="instructions">
+                    <strong>How to get a token:</strong>
+                    <ol>
+                      <li>
+                        Click <em>Create on GitHub…</em> to open the
+                        token-creation page in your browser.
+                      </li>
+                      <li>
+                        Choose scopes: <code>repo</code> for private repos or
+                        <code>public_repo</code> for public only. Read-only
+                        usage; no write scopes needed.
+                      </li>
+                      <li>
+                        Pick an expiration (90 days is common) and click
+                        <em>Generate token</em>.
+                      </li>
+                      <li>
+                        Copy the token (shown only once) and paste it here via
+                        <em>Set token</em>.
+                      </li>
+                    </ol>
+                    ${
+                    this.githubTokenStatus === 'env'
+                      ? html`<p>
+                          A token is currently being read from the
+                          <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
+                          environment variable. Setting one above will override
+                          it.
+                        </p>`
+                      : nothing
+                  }
+                  </div>
                 </div>
-                <div class="instructions">
-                  <strong>How to get a token:</strong>
-                  <ol>
-                    <li>
-                      Click <em>Create on GitHub…</em> to open the
-                      token-creation page in your browser.
-                    </li>
-                    <li>
-                      Choose scopes: <code>repo</code> for private repos or
-                      <code>public_repo</code> for public only. Read-only usage;
-                      no write scopes needed.
-                    </li>
-                    <li>
-                      Pick an expiration (90 days is common) and click
-                      <em>Generate token</em>.
-                    </li>
-                    <li>
-                      Copy the token (shown only once) and paste it here via
-                      <em>Set token</em>.
-                    </li>
-                  </ol>
-                  ${this.githubTokenStatus === 'env'
-                    ? html`<p>
-                        A token is currently being read from the
-                        <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
-                        environment variable. Setting one above will override
-                        it.
-                      </p>`
-                    : nothing}
-                </div>
-              </div>
-            `}
-        ${!this.desktopHost && this.prSubscriptions.length > 0
-          ? html`
-              <div class="setting-block">
-                <p class="section-title">Active GitHub subscriptions</p>
-                <p class="setting-description">
-                  An agent is monitoring these repositories
-                  (<code>owner/repo</code>), pull requests
-                  (<code>owner/repo/pulls/N</code>), or issues
-                  (<code>owner/repo/issues/N</code>) in the background, polling
-                  GitHub every ~30 seconds. New comments, reviews, and CI
-                  failures arrive as follow-up messages in the agent's
-                  conversation so it can investigate and act on them. PR
-                  subscriptions end automatically on close/merge; issue
-                  subscriptions stay active across close so reopens are caught.
-                  All kinds detach after 24 hours of continuous network failure.
-                  Click <em>Stop</em> to cancel one manually.
-                </p>
-                <ul class="subscriptions-list">
-                  ${this.prSubscriptions.map(
+              `
+        }
+        ${
+          !this.desktopHost && this.prSubscriptions.length > 0
+            ? html`
+                <div class="setting-block">
+                  <p class="section-title">Active GitHub subscriptions</p>
+                  <p class="setting-description">
+                    An agent is monitoring these repositories
+                    (<code>owner/repo</code>), pull requests
+                    (<code>owner/repo/pulls/N</code>), or issues
+                    (<code>owner/repo/issues/N</code>) in the background,
+                    polling GitHub every ~30 seconds. New comments, reviews, and
+                    CI failures arrive as follow-up messages in the agent's
+                    conversation so it can investigate and act on them. PR
+                    subscriptions end automatically on close/merge; issue
+                    subscriptions stay active across close so reopens are
+                    caught. All kinds detach after 24 hours of continuous
+                    network failure. Click <em>Stop</em> to cancel one manually.
+                  </p>
+                  <ul class="subscriptions-list">
+                    ${this.prSubscriptions.map(
                     (subscription) => html`
                       <li>
                         <div class="subscription-meta">
                           <code class="subscription-key"
                             >${subscription.key}</code
                           >
-                          ${subscription.owners.length > 0
-                            ? html`
-                                <div class="subscription-owners">
-                                  ${subscription.owners.map(
+                          ${
+                            subscription.owners.length > 0
+                              ? html`
+                                  <div class="subscription-owners">
+                                    ${subscription.owners.map(
                                     (owner) => html`
                                       <div class="subscription-owner-row">
                                         <span class="subscription-owner-label"
@@ -372,13 +380,15 @@ export class GitTab extends LitElement {
                                       </div>
                                     `,
                                   )}
-                                </div>
-                              `
-                            : html`
-                                <p class="subscription-owner-placeholder">
-                                  Started by an agent that is no longer active.
-                                </p>
-                              `}
+                                  </div>
+                                `
+                              : html`
+                                  <p class="subscription-owner-placeholder">
+                                    Started by an agent that is no longer
+                                    active.
+                                  </p>
+                                `
+                          }
                         </div>
                         <wa-button
                           appearance="outlined"
@@ -392,10 +402,11 @@ export class GitTab extends LitElement {
                       </li>
                     `,
                   )}
-                </ul>
-              </div>
-            `
-          : nothing}
+                  </ul>
+                </div>
+              `
+            : nothing
+        }
 
         <div class="setting-block">
           <wa-switch
@@ -411,33 +422,35 @@ export class GitTab extends LitElement {
           </p>
         </div>
 
-        ${this.markCommits
-          ? html`
-              <div class="setting-block">
-                <div class="input-row">
-                  <label>Name</label>
-                  <wa-input
-                    .value=${this.authorName}
-                    placeholder=${DEFAULT_GIT_AUTHOR_NAME}
-                    @change=${this.handleAuthorNameChange}
-                  ></wa-input>
+        ${
+          this.markCommits
+            ? html`
+                <div class="setting-block">
+                  <div class="input-row">
+                    <label>Name</label>
+                    <wa-input
+                      .value=${this.authorName}
+                      placeholder=${DEFAULT_GIT_AUTHOR_NAME}
+                      @change=${this.handleAuthorNameChange}
+                    ></wa-input>
+                  </div>
+                  <div class="input-row">
+                    <label>Email</label>
+                    <wa-input
+                      .value=${this.authorEmail}
+                      placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
+                      @change=${this.handleAuthorEmailChange}
+                    ></wa-input>
+                  </div>
+                  <p class="setting-description">
+                    These values are set as GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL,
+                    GIT_COMMITTER_NAME, and GIT_COMMITTER_EMAIL for all commands
+                    run by TeXRA.
+                  </p>
                 </div>
-                <div class="input-row">
-                  <label>Email</label>
-                  <wa-input
-                    .value=${this.authorEmail}
-                    placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
-                    @change=${this.handleAuthorEmailChange}
-                  ></wa-input>
-                </div>
-                <p class="setting-description">
-                  These values are set as GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL,
-                  GIT_COMMITTER_NAME, and GIT_COMMITTER_EMAIL for all commands
-                  run by TeXRA.
-                </p>
-              </div>
-            `
-          : nothing}
+              `
+            : nothing
+        }
       </div>
     `;
   }

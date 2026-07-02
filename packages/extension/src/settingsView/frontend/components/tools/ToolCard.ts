@@ -303,66 +303,78 @@ export class ToolCard extends LitElement {
         @wa-show=${this.handleGuideShow}
         @wa-hide=${this.handleGuideHide}
       >
-        ${this.item.installGuide
-          ? html`<div class="tool-guide">${this.item.installGuide}</div>`
-          : nothing}
+        ${
+          this.item.installGuide
+            ? html`<div class="tool-guide">${this.item.installGuide}</div>`
+            : nothing
+        }
         <div class="tool-guide-actions">
-          ${this.item.installCommand
-            ? html`
-                <wa-button
-                  appearance="filled"
-                  variant="brand"
-                  size="small"
-                  @click=${() => this.runCommand('install')}
-                  title=${this.item.installCommand}
-                >
-                  ${waIcon('terminal', { slot: 'start' })} Install in Terminal
-                </wa-button>
-              `
-            : nothing}
-          ${this.item.authCommand
-            ? html`
-                <wa-button
-                  appearance=${secondaryAppearance}
-                  variant=${secondaryVariant}
-                  size="small"
-                  @click=${() => this.runCommand('auth')}
-                  title=${this.item.authCommand}
-                >
-                  ${waIcon('right-to-bracket', { slot: 'start' })} Sign in
-                </wa-button>
-              `
-            : nothing}
-          ${this.item.installExtensionId
-            ? html`
-                <wa-button
-                  appearance="filled"
-                  variant="brand"
-                  size="small"
-                  @click=${this.handleInstallExtension}
-                >
-                  ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
-                  Extension
-                </wa-button>
-              `
-            : nothing}
-          ${this.item.installUrl
-            ? html`
-                <wa-button
-                  appearance=${secondaryAppearance}
-                  variant=${secondaryVariant}
-                  size="small"
-                  @click=${this.handleInstallUrl}
-                >
-                  ${waIcon('arrow-up-right-from-square', { slot: 'start' })}
-                  Open Install Page
-                </wa-button>
-              `
-            : nothing}
+          ${
+            this.item.installCommand
+              ? html`
+                  <wa-button
+                    appearance="filled"
+                    variant="brand"
+                    size="small"
+                    @click=${() => this.runCommand('install')}
+                    title=${this.item.installCommand}
+                  >
+                    ${waIcon('terminal', { slot: 'start' })} Install in Terminal
+                  </wa-button>
+                `
+              : nothing
+          }
+          ${
+            this.item.authCommand
+              ? html`
+                  <wa-button
+                    appearance=${secondaryAppearance}
+                    variant=${secondaryVariant}
+                    size="small"
+                    @click=${() => this.runCommand('auth')}
+                    title=${this.item.authCommand}
+                  >
+                    ${waIcon('right-to-bracket', { slot: 'start' })} Sign in
+                  </wa-button>
+                `
+              : nothing
+          }
+          ${
+            this.item.installExtensionId
+              ? html`
+                  <wa-button
+                    appearance="filled"
+                    variant="brand"
+                    size="small"
+                    @click=${this.handleInstallExtension}
+                  >
+                    ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
+                    Extension
+                  </wa-button>
+                `
+              : nothing
+          }
+          ${
+            this.item.installUrl
+              ? html`
+                  <wa-button
+                    appearance=${secondaryAppearance}
+                    variant=${secondaryVariant}
+                    size="small"
+                    @click=${this.handleInstallUrl}
+                  >
+                    ${waIcon('arrow-up-right-from-square', { slot: 'start' })}
+                    Open Install Page
+                  </wa-button>
+                `
+              : nothing
+          }
         </div>
-        ${this.item.configNotes
-          ? html`<div class="tool-config-note">${this.item.configNotes}</div>`
-          : nothing}
+        ${
+          this.item.configNotes
+            ? html`<div class="tool-config-note">${this.item.configNotes}</div>`
+            : nothing
+        }
       </wa-details>
     `;
   }
@@ -398,25 +410,34 @@ export class ToolCard extends LitElement {
       <div class="tool-card">
         <div class="tool-header">
           <div class="tool-title-group">
-            ${this.item.status === 'available'
-              ? this.renderAvailableStatusIcon()
-              : nothing}
+            ${
+              this.item.status === 'available'
+                ? this.renderAvailableStatusIcon()
+                : nothing
+            }
             <span class="tool-name">${this.item.name}</span>
-            ${this.item.status === 'available'
-              ? nothing
-              : this.renderStatusBadge()}
+            ${
+              this.item.status === 'available'
+                ? nothing
+                : this.renderStatusBadge()
+            }
             ${this.renderAuthNote()}
           </div>
           ${this.renderToggle()}
         </div>
         <div class="tool-description">${this.item.description}</div>
-        ${this.item.statusDetail
-          ? html`<div class="tool-config-note">${this.item.statusDetail}</div>`
-          : nothing}
-        ${this.item.tools.length > 0
-          ? html`
-              <div class="tool-ids">
-                ${this.item.tools.map(
+        ${
+          this.item.statusDetail
+            ? html`<div class="tool-config-note">
+                ${this.item.statusDetail}
+              </div>`
+            : nothing
+        }
+        ${
+          this.item.tools.length > 0
+            ? html`
+                <div class="tool-ids">
+                  ${this.item.tools.map(
                   (tool) =>
                     html`<wa-badge
                       class="tool-id-tag"
@@ -426,9 +447,10 @@ export class ToolCard extends LitElement {
                       >${tool.name}</wa-badge
                     >`,
                 )}
-              </div>
-            `
-          : nothing}
+                </div>
+              `
+            : nothing
+        }
         <slot name="details"></slot>
         ${this.renderGuide()}
       </div>

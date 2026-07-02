@@ -30,8 +30,7 @@ export function isResponseFunctionToolCallItem(
 export function isReasoningDeltaEvent(
   event: ResponseStreamEvent,
 ): event is
-  | ResponseReasoningTextDeltaEvent
-  | ResponseReasoningSummaryTextDeltaEvent {
+  ResponseReasoningTextDeltaEvent | ResponseReasoningSummaryTextDeltaEvent {
   return (
     event.type === 'response.reasoning_text.delta' ||
     event.type === 'response.reasoning_summary_text.delta'

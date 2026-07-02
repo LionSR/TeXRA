@@ -16,8 +16,7 @@ export interface MainViewConfigUpdate {
 }
 
 export type MainViewAgentDirectoryAction =
-  | { kind: 'openAgentSettings' }
-  | { kind: 'revealCustomDirectory' };
+  { kind: 'openAgentSettings' } | { kind: 'revealCustomDirectory' };
 
 export interface MainViewInteractionControllerDeps {
   getProviderUrl(provider: string): string | undefined;

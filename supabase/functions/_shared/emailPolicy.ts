@@ -48,8 +48,7 @@ const PRIVACY_RELAY_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
 ]);
 
 export type EmailPolicyDecision =
-  | { allowed: true }
-  | { allowed: false; reason: string; userMessage: string };
+  { allowed: true } | { allowed: false; reason: string; userMessage: string };
 
 function normalizeDomain(email: string): string | null {
   const at = email.lastIndexOf('@');

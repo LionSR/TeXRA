@@ -715,11 +715,13 @@ export class ProgressApp extends LitElement {
     return html`
       <stream-tabs .streams=${this.state.streams}></stream-tabs>
 
-      ${this.isToolUse
-        ? html`<tooluse-content .state=${this.streamState}></tooluse-content>`
-        : html`<workflow-content
-            .state=${this.streamState}
-          ></workflow-content>`}
+      ${
+        this.isToolUse
+          ? html`<tooluse-content .state=${this.streamState}></tooluse-content>`
+          : html`<workflow-content
+              .state=${this.streamState}
+            ></workflow-content>`
+      }
 
       <prompt-overlay .prompt=${this.activePrompt}></prompt-overlay>
     `;
@@ -875,11 +877,13 @@ export class ProgressApp extends LitElement {
     return html`
       <stream-tabs .streams=${this.state.streams}></stream-tabs>
 
-      ${this.isToolUse
-        ? html`<tooluse-content .state=${this.streamState}></tooluse-content>`
-        : html`<workflow-content
-            .state=${this.streamState}
-          ></workflow-content>`}
+      ${
+        this.isToolUse
+          ? html`<tooluse-content .state=${this.streamState}></tooluse-content>`
+          : html`<workflow-content
+              .state=${this.streamState}
+            ></workflow-content>`
+      }
     `;
   }
 }

@@ -1766,7 +1766,7 @@ a wrapper, barrel, or run-entry indirection:
   change.
 - **`d7d6bc2` "simplify code changed since v0.38.7 (#5949)," `d6d4182` "share
   `clampOptional` and `joinNonEmpty."** Repo flatten/DRY rules applied — small, additive,
-  no surface change. **`4f75594` "Replace async-lock with async-mutex (#5953)"** is a
+no surface change. **`4f75594` "Replace async-lock with async-mutex (#5953)"** is a
   dependency swap, not a structural change to the audited surface.
 
 **Guardrails intact:** `find src/agent -name index.ts` shows **no new barrel** (the eight

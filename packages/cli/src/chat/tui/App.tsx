@@ -406,10 +406,7 @@ export function digitFromMetaShortcut(value: string): number | undefined {
 }
 
 export type ForegroundSurfaceKind =
-  | 'transcript'
-  | 'childControls'
-  | 'form'
-  | 'approval';
+  'transcript' | 'childControls' | 'form' | 'approval';
 
 export function foregroundSurfaceKind({
   activeFormOpen,

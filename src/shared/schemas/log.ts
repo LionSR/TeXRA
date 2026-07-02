@@ -114,20 +114,18 @@ const LegacyLogMessageSchema = z
     verbose: z.boolean().optional(),
     data: z.unknown().optional(),
   })
-  .transform(
-    (msg): StreamLogEntry => ({
-      seqNo: 0, // placeholder — StreamLog constructor renumbers
-      id: msg.id,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: msg.level,
-      timestamp: msg.timestamp,
-      groupId: msg.groupId,
-      messageType: msg.messageType,
-      text: msg.text,
-      verbose: msg.verbose,
-      data: msg.data,
-    }),
-  );
+  .transform((msg): StreamLogEntry => ({
+    seqNo: 0, // placeholder — StreamLog constructor renumbers
+    id: msg.id,
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: msg.level,
+    timestamp: msg.timestamp,
+    groupId: msg.groupId,
+    messageType: msg.messageType,
+    text: msg.text,
+    verbose: msg.verbose,
+    data: msg.data,
+  }));
 
 /**
  * Accepts both current StreamLogEntry format and legacy log messages.

@@ -32,9 +32,7 @@ export function diffActiveChildren<T extends HasExecutionId>(
 ): ChildActivityDiff<T> {
   const nextIds = new Set(next.map((child) => child.executionId));
   const vanishedIds = new Set(
-    previous
-      .map((child) => child.executionId)
-      .filter((id) => !nextIds.has(id)),
+    previous.map((child) => child.executionId).filter((id) => !nextIds.has(id)),
   );
   return { next, vanishedIds };
 }

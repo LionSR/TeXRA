@@ -27,8 +27,7 @@ export interface AuthCallbackTokenParseError {
 }
 
 export type AuthCallbackTokenParseResult =
-  | AuthCallbackTokenParseSuccess
-  | AuthCallbackTokenParseError;
+  AuthCallbackTokenParseSuccess | AuthCallbackTokenParseError;
 
 export function getAuthCallbackBasePath(path: string): string {
   return path.split('?')[0];
@@ -121,8 +120,7 @@ export interface AuthCallbackCodeParseSuccess {
 }
 
 export type AuthCallbackCodeParseResult =
-  | AuthCallbackCodeParseSuccess
-  | AuthCallbackTokenParseError;
+  AuthCallbackCodeParseSuccess | AuthCallbackTokenParseError;
 
 /**
  * Extract the PKCE authorization code (or an auth error) from host-neutral URI
