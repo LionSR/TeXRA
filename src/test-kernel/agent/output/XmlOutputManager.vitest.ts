@@ -1338,6 +1338,35 @@ Appendix.
     );
   });
 
+  it('recovers real filename-labelled outputs inside a prefaced text fence', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'Here are the files:',
+        '```text',
+        'main.tex:',
+        'Main body.',
+        'appendix.tex:',
+        'Appendix body.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['main.tex', 'appendix.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main.tex',
+      'appendix.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Main body.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
+      'Appendix body.\n',
+    );
+  });
+
   it('keeps inner fence delimiters inside fenced LaTeX fragments', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
@@ -1646,6 +1675,37 @@ Appendix.
     );
     await expect(AbsoluteFS.exists('/tmp/run/ocr_result-2.tex')).resolves.toBe(
       false,
+    );
+  });
+
+  it('coalesces unlabeled chunks after a sole-output header chunk', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'ocr_result.tex:',
+        '```latex',
+        'Page one transcription.',
+        '```',
+        '',
+        'page2.png:',
+        '```latex',
+        'Page two transcription.',
+        '```',
+      ].join('\n'),
+    );
+
+    const outputs =
+      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
+        createExternalLocation('/tmp/run/output.xml'),
+        'documents',
+        0,
+        'scratchpad',
+        [createExternalLocation('/tmp/run/ocr_result.tex')],
+      );
+
+    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
+      'Page one transcription.\n\nPage two transcription.\n',
     );
   });
 

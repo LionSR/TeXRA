@@ -148,6 +148,43 @@ function stripDocumentsEnvelope(lines: readonly string[]): string[] {
   return [...lines];
 }
 
+function matchHeaderName(
+  line: string,
+  labelFiles: readonly string[],
+): string | null {
+  return (
+    PERCENT_FILENAME_HEADER_REGEX.exec(line.trim())?.[1] ??
+    matchKnownFileLabel(line, labelFiles)
+  );
+}
+
+function findClosingFenceIndex(
+  lines: readonly string[],
+  startIndex: number,
+  openingFence: MarkdownFence,
+): number {
+  return lines.findIndex(
+    (line, index) =>
+      index >= startIndex && isClosingMarkdownFence(line, openingFence),
+  );
+}
+
+function shouldParseHeaderInsideNonLatexFence(
+  lines: readonly string[],
+  headerIndex: number,
+  openingFence: MarkdownFence,
+  labelFiles: readonly string[],
+): boolean {
+  const closingIndex = findClosingFenceIndex(lines, headerIndex, openingFence);
+  if (closingIndex === -1) return true;
+
+  const bodyLines = lines.slice(headerIndex + 1, closingIndex);
+  return (
+    hasLikelyLatexContent(bodyLines) ||
+    bodyLines.some((line) => matchHeaderName(line, labelFiles) !== null)
+  );
+}
+
 /**
  * Recover named documents from filename headers in a raw response. Returns
  * the recovered documents in response order, or null when none were found.
@@ -256,15 +293,17 @@ export function extractFilenameHeaderDocuments(
       !isLatexMarkdownFence(pendingPrefacedMarkdownFence)
     ) {
       const openExampleFence = pendingPrefacedMarkdownFence;
-      const fenceClosesLater = lines
-        .slice(index)
-        .some((candidate) =>
-          isClosingMarkdownFence(candidate, openExampleFence),
-        );
-      if (!headerName || fenceClosesLater) {
+      if (
+        !headerName ||
+        !shouldParseHeaderInsideNonLatexFence(
+          lines,
+          index,
+          openExampleFence,
+          labelFiles,
+        )
+      ) {
         continue;
       }
-      pendingPrefacedMarkdownFence = null;
     }
 
     if (
