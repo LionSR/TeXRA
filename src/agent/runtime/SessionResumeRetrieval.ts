@@ -56,20 +56,18 @@ type WorkflowResumeData = z.infer<typeof WorkflowResumeDataSchema>;
 
 export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
+/** Fields shared by both `messages` (current) and `conversation` (legacy) branches. */
+const SharedToolUseFields = z.object({
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
+  stateSlices: StateSlicesSchema,
+});
+
 /** Core fields schema — accepts `messages` (current) or `conversation` (legacy), normalizing to `messages`. */
 const ToolUseStateFieldsSchema = z
   .union([
-    z.object({
-      messages: z.array(ProviderMessageSchema),
-      modelHandlerCompatibilityKey:
-        ModelHandlerCompatibilityKeySchema.nullish(),
-      stateSlices: StateSlicesSchema,
-    }),
-    z.object({
+    SharedToolUseFields.extend({ messages: z.array(ProviderMessageSchema) }),
+    SharedToolUseFields.extend({
       conversation: z.array(ProviderMessageSchema),
-      modelHandlerCompatibilityKey:
-        ModelHandlerCompatibilityKeySchema.nullish(),
-      stateSlices: StateSlicesSchema,
     }),
   ])
   .transform((data) => ({

@@ -91,22 +91,29 @@ export function loadFileListSettings(
   };
 }
 
+function buildInputLikeConfig(
+  category: 'input' | 'edited',
+  settings: FileListSettings,
+): FileListConfig {
+  return {
+    extensions: getIncludedExtensions(category),
+    ignoredExtensions: settings.ignoredFileExtensions,
+    ignoredDirs: [
+      ...settings.ignoredDirectories,
+      ...settings.ignoredInputDirectories,
+    ],
+    ignoredKeywords: settings.ignoredKeywords,
+    ignoredFiles: settings.ignoredInputFiles,
+  };
+}
+
 export function getFileListConfig(
   fileType: ListableFileType,
   settings: FileListSettings,
 ): FileListConfig | null {
   switch (fileType) {
     case 'input':
-      return {
-        extensions: getIncludedExtensions('input'),
-        ignoredExtensions: settings.ignoredFileExtensions,
-        ignoredDirs: [
-          ...settings.ignoredDirectories,
-          ...settings.ignoredInputDirectories,
-        ],
-        ignoredKeywords: settings.ignoredKeywords,
-        ignoredFiles: settings.ignoredInputFiles,
-      };
+      return buildInputLikeConfig('input', settings);
     case 'context':
       return {
         extensions: getIncludedExtensions('context'),
@@ -137,16 +144,7 @@ export function getFileListConfig(
 export function getEditedFileListConfig(
   settings: FileListSettings,
 ): FileListConfig {
-  return {
-    extensions: getIncludedExtensions('edited'),
-    ignoredExtensions: settings.ignoredFileExtensions,
-    ignoredDirs: [
-      ...settings.ignoredDirectories,
-      ...settings.ignoredInputDirectories,
-    ],
-    ignoredKeywords: settings.ignoredKeywords,
-    ignoredFiles: settings.ignoredInputFiles,
-  };
+  return buildInputLikeConfig('edited', settings);
 }
 
 function sanitizeDirectories(directories: readonly string[]): string[] {

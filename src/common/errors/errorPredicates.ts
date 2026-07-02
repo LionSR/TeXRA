@@ -20,14 +20,30 @@ export function isModuleNotFoundError(err: unknown): boolean {
   return code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND';
 }
 
-/** Check if an error represents a "no space left on device" condition. */
-export function isDiskFullError(err: unknown): boolean {
+/** Walks `err` and its `cause` chain, returning the first defined result of
+ *  `extract`, or `undefined` if none of the nodes match. Shared traversal for
+ *  predicates/metadata lookups that may be attached at any depth of a wrapped
+ *  error's cause chain. */
+export function findInCauseChain<T>(
+  err: unknown,
+  extract: (node: unknown) => T | undefined,
+): T | undefined {
   for (
     let current: unknown = err;
     current != null && typeof current === 'object';
     current = (current as { cause?: unknown }).cause
   ) {
-    if ((current as { code?: string }).code === 'ENOSPC') return true;
+    const result = extract(current);
+    if (result !== undefined) return result;
   }
-  return false;
+  return undefined;
+}
+
+/** Check if an error represents a "no space left on device" condition. */
+export function isDiskFullError(err: unknown): boolean {
+  return (
+    findInCauseChain(err, (current) =>
+      (current as { code?: string }).code === 'ENOSPC' ? true : undefined,
+    ) ?? false
+  );
 }
