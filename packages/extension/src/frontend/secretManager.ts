@@ -7,6 +7,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   API_PROVIDERS,
   apiKeyExists as resolvedApiKeyExists,
+  apiKeyEnvName,
   apiKeySecretName,
   getApiKey as requireApiKey,
   lookupApiKey,
@@ -78,7 +79,14 @@ export class SecretManager {
   }
 
   public static async getApiKey(provider: ApiProvider): Promise<string> {
-    return requireApiKey(platform().secrets, provider);
+    try {
+      return await requireApiKey(platform().secrets, provider);
+    } catch (err) {
+      throw new Error(
+        `No API key found for ${provider}. Please set it using the "Set API Key" command or ${apiKeyEnvName(provider)} environment variable.`,
+        { cause: err },
+      );
+    }
   }
 
   public static async anyApiKeyExists(): Promise<boolean> {

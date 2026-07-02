@@ -92,7 +92,6 @@ import {
   apiKeyExists,
   apiKeySecretName,
   lookupApiKey,
-  type ApiProvider,
 } from '@model/apiProviders';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { type StreamStatus, type TokenUsageStats } from '@shared/schemas';
@@ -535,8 +534,6 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     }
   };
-  const hasResolvedUsableApiKey = async (provider: ApiProvider) =>
-    isNonEmptyString(await lookupApiKey(platform().secrets, provider));
   setSetupPlatform({
     secrets: {
       providers: SecretManager.API_PROVIDERS,
@@ -545,7 +542,8 @@ export async function activate(context: vscode.ExtensionContext) {
       deleteApiKey: (provider) =>
         platform().secrets.delete(apiKeySecretName(provider)),
       apiKeyExists: (provider) => apiKeyExists(platform().secrets, provider),
-      hasUsableApiKey: hasResolvedUsableApiKey,
+      hasUsableApiKey: async (provider) =>
+        isNonEmptyString(await lookupApiKey(platform().secrets, provider)),
       storedApiKeyExists: async (provider) => {
         const stored = await SecretManager.get(apiKeySecretName(provider));
         return stored !== undefined;
