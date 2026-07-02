@@ -6,10 +6,10 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 export type CliApiMode = 'included' | 'personal';
 
 // Two canonical names per mode: the descriptive `included`/`personal` (used in
-// labels and config) plus the common shorthand `relay`/`byok` (surfaced by
-// `shortCliApiMode` and the `--api-mode` help). Earlier builds also accepted
-// `texra`/`direct`/`api`/`key`/`keys`, but those undocumented synonyms only
-// bloated the accepted-value list without adding clarity.
+// labels and config) plus the common shorthand `relay`/`byok` (accepted as
+// input aliases). Earlier builds also accepted `texra`/`direct`/`api`/`key`/
+// `keys`, but those undocumented synonyms only bloated the accepted-value list
+// without adding clarity.
 const CLI_API_MODE_BY_INPUT = {
   included: 'included',
   relay: 'included',
@@ -40,7 +40,7 @@ export function formatCliApiMode(mode: CliApiMode): string {
 }
 
 export function shortCliApiMode(mode: CliApiMode): string {
-  return mode === 'included' ? 'relay' : 'byok';
+  return mode === 'included' ? 'relay' : 'personal';
 }
 
 export function parseCliApiMode(input: string): CliApiMode | undefined {
