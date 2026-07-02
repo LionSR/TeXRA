@@ -66,6 +66,7 @@ function createModelOptionsAccess(
       get: async (key) => secrets[key],
       set: async () => {},
       delete: async () => {},
+      getEnv: () => undefined,
     },
     useOpenRouter: false,
     serverSideKeyService: createServerSideKeyService(options),
@@ -289,36 +290,26 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('does not reuse cached provider keys for injected access', async () => {
-    const previousDeepseekKey = process.env.DEEPSEEK_API_KEY;
-    delete process.env.DEEPSEEK_API_KEY;
-    try {
-      installServerSideKeyService({
+    installServerSideKeyService({
+      useIncludedAccess: false,
+      relayQuotaExceeded: false,
+      quotaAutoSwitched: false,
+    });
+    await computeModelOptionsData(['deepseekproT']);
+
+    const access = createModelOptionsAccess(
+      {
         useIncludedAccess: false,
         relayQuotaExceeded: false,
         quotaAutoSwitched: false,
-      });
-      await computeModelOptionsData(['deepseekproT']);
+      },
+      {},
+    );
 
-      const access = createModelOptionsAccess(
-        {
-          useIncludedAccess: false,
-          relayQuotaExceeded: false,
-          quotaAutoSwitched: false,
-        },
-        {},
-      );
+    const [model] = await computeModelOptionsData(['deepseekproT'], access);
 
-      const [model] = await computeModelOptionsData(['deepseekproT'], access);
-
-      expect(model.availability).toBe('missing-key');
-      expect(model.disabled).toBe(true);
-    } finally {
-      if (previousDeepseekKey === undefined) {
-        delete process.env.DEEPSEEK_API_KEY;
-      } else {
-        process.env.DEEPSEEK_API_KEY = previousDeepseekKey;
-      }
-    }
+    expect(model.availability).toBe('missing-key');
+    expect(model.disabled).toBe(true);
   });
 
   it('caches explicit model-list availability until invalidated', async () => {

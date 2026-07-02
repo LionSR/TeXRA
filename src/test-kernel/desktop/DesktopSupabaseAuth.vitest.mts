@@ -49,6 +49,7 @@ function createSecrets() {
     get: vi.fn(async () => undefined),
     set: vi.fn(async () => {}),
     delete: vi.fn(async () => {}),
+    getEnv: vi.fn(() => undefined),
   };
 }
 
