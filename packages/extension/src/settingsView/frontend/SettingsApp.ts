@@ -904,7 +904,9 @@ export class SettingsApp extends SettingsAppBase {
           'memory'}
           @wa-tab-show=${this.handleTabShow}
         >
-          ${SETTINGS_TABS.map(
+          ${SETTINGS_TABS.filter(
+            (tab) => tab.panel !== 'goal' || !desktopHost,
+          ).map(
             (tab) =>
               html`<wa-tab panel=${tab.panel}
                 >${waIcon(tab.icon, { className: 'settings-tab-icon' })}
@@ -928,9 +930,13 @@ export class SettingsApp extends SettingsAppBase {
             ></memory-tab>
           </wa-tab-panel>
 
-          <wa-tab-panel name="goal">
-            <goal-tab .items=${this.goalItems.get()}></goal-tab>
-          </wa-tab-panel>
+          ${desktopHost
+            ? nothing
+            : html`
+                <wa-tab-panel name="goal">
+                  <goal-tab .items=${this.goalItems.get()}></goal-tab>
+                </wa-tab-panel>
+              `}
 
           <wa-tab-panel name="history">
             <history-tab
