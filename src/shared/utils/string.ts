@@ -1,3 +1,4 @@
+import { intlFormatDistance } from 'date-fns';
 import prettyBytes from 'pretty-bytes';
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -8,24 +9,10 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 });
 
-const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat(undefined, {
-  numeric: 'auto',
-});
-
+/** Calendar-aware "X ago" / "in X" via Intl.RelativeTimeFormat (handles future timestamps too). */
 export function formatRelativeTime(timestamp: number): string {
   if (!timestamp) return '';
-  const diffMs = Date.now() - timestamp;
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return RELATIVE_TIME_FORMATTER.format(0, 'second');
-  if (diffMin < 60) return RELATIVE_TIME_FORMATTER.format(-diffMin, 'minute');
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return RELATIVE_TIME_FORMATTER.format(-diffHr, 'hour');
-  const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 30) return RELATIVE_TIME_FORMATTER.format(-diffDay, 'day');
-  const diffMonth = Math.floor(diffDay / 30);
-  if (diffMonth < 12)
-    return RELATIVE_TIME_FORMATTER.format(-diffMonth, 'month');
-  return RELATIVE_TIME_FORMATTER.format(-Math.floor(diffMonth / 12), 'year');
+  return intlFormatDistance(timestamp, Date.now());
 }
 
 export function formatUpdatedDate(
