@@ -358,28 +358,29 @@ export class GitTab extends LitElement {
                                 ? html`
                                     <div class="subscription-owners">
                                       ${subscription.owners.map(
-                                      (owner) => html`
-                                        <div class="subscription-owner-row">
-                                          <span class="subscription-owner-label"
-                                            >${owner.label}</span
-                                          >
-                                          <wa-button
-                                            appearance="outlined"
-                                            variant="neutral"
-                                            size="small"
-                                            @click=${() =>
-                                              this.handleOpenPRSubscriptionStream(
-                                                owner.streamId,
-                                              )}
-                                          >
-                                            ${waIcon('comment-discussion', {
-                                              slot: 'start',
-                                            })}
-                                            Jump to agent
-                                          </wa-button>
-                                        </div>
-                                      `,
-                                    )}
+                                        (owner) => html`
+                                          <div class="subscription-owner-row">
+                                            <span
+                                              class="subscription-owner-label"
+                                              >${owner.label}</span
+                                            >
+                                            <wa-button
+                                              appearance="outlined"
+                                              variant="neutral"
+                                              size="small"
+                                              @click=${() =>
+                                                this.handleOpenPRSubscriptionStream(
+                                                  owner.streamId,
+                                                )}
+                                            >
+                                              ${waIcon('comment-discussion', {
+                                                slot: 'start',
+                                              })}
+                                              Jump to agent
+                                            </wa-button>
+                                          </div>
+                                        `,
+                                      )}
                                     </div>
                                   `
                                 : html`
