@@ -336,8 +336,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
             ? html`
                 <div class="external-inquiry-request__transcript-links">
                   ${turn.sessionLinks.map((link) =>
-                  this.renderKnownSessionLink(link),
-                )}
+                    this.renderKnownSessionLink(link),
+                  )}
                 </div>
               `
             : nothing
@@ -442,10 +442,10 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
                   </div>
                   <div class="external-inquiry-request__session-links-list">
                     ${repeat(
-                    sessionLinks,
-                    (link) => link,
-                    (link) => this.renderKnownSessionLink(link),
-                  )}
+                      sessionLinks,
+                      (link) => link,
+                      (link) => this.renderKnownSessionLink(link),
+                    )}
                   </div>
                 </div>
               `

@@ -143,7 +143,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
                 rows="2"
                 .value=${this.freeText[question.question] ?? ''}
                 @input=${(event: Event) =>
-                this.updateFreeText(question.question, event)}
+                  this.updateFreeText(question.question, event)}
               ></wa-textarea>`
             : nothing
         }

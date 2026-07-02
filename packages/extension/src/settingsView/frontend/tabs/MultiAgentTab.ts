@@ -313,20 +313,20 @@ export class MultiAgentTab extends LitElement {
           orchestratorAgents.length > 0
             ? html`<div class="preset-card-orchestrators">
                 ${orchestratorAgents.map(
-                (name) => html`
-                  <wa-tag
-                    class="preset-agent-badge preset-agent-badge--orchestrator"
-                    variant="brand"
-                    size="small"
-                    title="${name} is the orchestrator for this team"
-                  >
-                    <span class="preset-orchestrator-icon" aria-hidden="true"
-                      >${waIcon('bullseye')}</span
+                  (name) => html`
+                    <wa-tag
+                      class="preset-agent-badge preset-agent-badge--orchestrator"
+                      variant="brand"
+                      size="small"
+                      title="${name} is the orchestrator for this team"
                     >
-                    ${name}
-                  </wa-tag>
-                `,
-              )}
+                      <span class="preset-orchestrator-icon" aria-hidden="true"
+                        >${waIcon('bullseye')}</span
+                      >
+                      ${name}
+                    </wa-tag>
+                  `,
+                )}
               </div>`
             : nothing
         }

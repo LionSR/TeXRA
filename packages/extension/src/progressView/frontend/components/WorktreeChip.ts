@@ -234,15 +234,15 @@ export class WorktreeChip extends LitElement {
         showStats
           ? html`<span class="diff-stats" title="Lines changed">
               ${
-              pr.additions != null
-                ? html`<span class="diff-added">+${pr.additions}</span>`
-                : nothing
-            }
+                pr.additions != null
+                  ? html`<span class="diff-added">+${pr.additions}</span>`
+                  : nothing
+              }
               ${
-              pr.deletions != null
-                ? html`<span class="diff-removed">−${pr.deletions}</span>`
-                : nothing
-            }
+                pr.deletions != null
+                  ? html`<span class="diff-removed">−${pr.deletions}</span>`
+                  : nothing
+              }
             </span>`
           : nothing
       }

@@ -315,12 +315,12 @@ export class LaTeXTab extends LitElement {
                       size="small"
                       title="${dep.actionLabel ?? 'Install'}"
                       @click=${() =>
-                      this.dispatchEvent(
-                        new CustomEvent(dep.actionEvent!, {
-                          bubbles: true,
-                          composed: true,
-                        }),
-                      )}
+                        this.dispatchEvent(
+                          new CustomEvent(dep.actionEvent!, {
+                            bubbles: true,
+                            composed: true,
+                          }),
+                        )}
                     >
                       ${waIcon('cloud-download', { slot: 'start' })}
                       ${dep.actionLabel ?? 'Install'}
@@ -530,8 +530,8 @@ export class LaTeXTab extends LitElement {
                 </div>
 
                 ${RECOMMENDED_SETTINGS.map((info) =>
-                this.renderSettingCard(info),
-              )}
+                  this.renderSettingCard(info),
+                )}
               `
         }
         ${this.renderInlineCriticismSetting()}
