@@ -1,5 +1,6 @@
 // Type imports - agent
 import { logContextManagementEvent, type AgentTrace } from '@agent/trace';
+import { computeUtilizationPercent } from '../support/contextUtilization';
 
 // Type imports - Anthropic SDK
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
@@ -198,8 +199,11 @@ export function logContextManagementFromResponse(
       tokensBefore,
       tokensAfter: totalInputTokens,
       contextWindow,
-      utilizationBefore: (tokensBefore / contextWindow) * 100,
-      utilizationAfter: (totalInputTokens / contextWindow) * 100,
+      utilizationBefore: computeUtilizationPercent(tokensBefore, contextWindow),
+      utilizationAfter: computeUtilizationPercent(
+        totalInputTokens,
+        contextWindow,
+      ),
       details,
       summary,
     },

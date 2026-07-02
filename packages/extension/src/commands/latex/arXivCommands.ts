@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { toErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   arxivProcessor,
   type ArxivDownloadDestination,
@@ -99,10 +99,10 @@ export async function downloadArXivSource(): Promise<void> {
       );
     }
   } catch (error) {
-    const message = toErrorMessage(error);
-    vscode.window.showErrorMessage(
-      `Failed to download arXiv source: ${message}`,
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'Failed to download arXiv source',
+      error,
     );
-    logger.error(CHANNEL, `Error downloading arXiv source: ${message}`);
   }
 }

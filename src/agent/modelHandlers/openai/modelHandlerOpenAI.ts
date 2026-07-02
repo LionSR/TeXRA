@@ -35,6 +35,7 @@ import {
   joinNonEmpty,
   objectToLogString,
 } from '@utils/text/stringUtils';
+import { computeUtilizationPercent } from '../support/contextUtilization';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 import { tagOpenAISdkError } from './openAISdkError';
@@ -146,8 +147,12 @@ export class ModelHandlerOpenAI<
     didCompact: boolean;
   }> {
     const tokensBefore = this.lastKnownInputTokens;
+    const utilizationBefore = computeUtilizationPercent(
+      tokensBefore,
+      this.config.contextWindow,
+    );
     this.logger.debug(
-      `Compacting conversation with ${tokensBefore} input tokens (${((tokensBefore / this.config.contextWindow) * 100).toFixed(1)}% of ${this.config.contextWindow} context window)`,
+      `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${this.config.contextWindow} context window)`,
     );
 
     return this.runClientCompaction(
