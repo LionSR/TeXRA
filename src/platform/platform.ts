@@ -18,6 +18,7 @@ import type {
   ToolMissingHandler,
   ToolNotificationHandler,
 } from './interfaces/toolNotifications';
+import type { ToolEditApprovalPort } from './interfaces/toolEditApproval';
 import type { WorkspaceProvider } from './interfaces/workspace';
 import type { StorageProvider } from './interfaces/storage';
 import type { LifecycleHost } from './interfaces/lifecycle';
@@ -52,6 +53,8 @@ export interface Platform {
   readonly toolMissingHandler: ToolMissingHandler;
   /** Surfaces a tool-group-unavailable notification to the user. */
   readonly toolNotificationHandler: ToolNotificationHandler;
+  /** Host-provided tool-edit approval UI (diff viewer + accept/reject). */
+  readonly toolEditApproval: ToolEditApprovalPort;
 }
 
 let _platform: Readonly<Platform> | null = null;

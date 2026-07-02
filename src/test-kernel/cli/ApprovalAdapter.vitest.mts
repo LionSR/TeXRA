@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
 
@@ -6,6 +6,10 @@ vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
 }));
 
+import {
+  setActiveCliToolEditApprovalHandler,
+  createCliToolEditApprovalPort,
+} from '@cli/runtime/initPlatform';
 import {
   appendCliApiSwitchHint,
   approvalPromptAllowed,
@@ -22,10 +26,7 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
-import {
-  requestToolEditApproval,
-  setToolEditApprovalHandler,
-} from '@tools/approval/toolEditApproval';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return {
@@ -54,8 +55,21 @@ const credentialExhaustedRetry: ProgressEventPayloads['showRetryRequest'] = {
   },
 };
 
+beforeEach(async () => {
+  // Wire the Platform with a delegating port that reads the CLI's active
+  // approval handler — the same pattern used by `initCliPlatform`.
+  const { initPlatform: init } = await import('@platform/platform');
+  const { createFakePlatform } = await import('@test/support/FakePlatform');
+  init(
+    createFakePlatform(
+      {},
+      { toolEditApproval: createCliToolEditApprovalPort() },
+    ),
+  );
+});
+
 afterEach(() => {
-  setToolEditApprovalHandler();
+  setActiveCliToolEditApprovalHandler(undefined);
   handleExternalInquiryActionMock.mockClear();
 });
 

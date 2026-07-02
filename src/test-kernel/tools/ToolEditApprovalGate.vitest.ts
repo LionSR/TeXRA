@@ -15,23 +15,44 @@ import { TextEditorTool } from '@tools/TextEditorTool';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
   cleanupAllApprovals,
-  setToolEditApprovalHandler,
   setToolEditApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,
   type ToolEditApprovalRequest,
+  type ToolEditApprovalResult,
 } from '@tools/approval';
 import { WorkspaceFS } from '@utils/files';
 
 // Test stream ID for per-stream YOLO mode tests
 const TEST_STREAM_ID = 'TestAgent@model: test.tex' as StreamTabId;
 
+// Mutable test handler reference — the Platform is frozen at init time, so
+// tests inject a delegating handler that reads this reference, mirroring the
+// pattern used by the CLI and desktop hosts.
+let testApprovalHandler:
+  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
+  | undefined;
+
 async function installPlatform(
   config: Record<string, unknown> = {},
   files: Record<string, string | Uint8Array> = {},
 ) {
   const { initPlatform } = await import('@platform/platform');
+  testApprovalHandler = undefined;
   initPlatform(
-    createFakePlatform({ workspacePath: '/workspace', config, files }),
+    createFakePlatform(
+      { workspacePath: '/workspace', config, files },
+      {
+        toolEditApproval: (request) => {
+          const handler = testApprovalHandler;
+          if (!handler) {
+            throw new Error(
+              'No test approval handler configured. Set `testApprovalHandler` first.',
+            );
+          }
+          return handler(request);
+        },
+      },
+    ),
   );
 }
 
@@ -70,7 +91,7 @@ describe('Tool edit approval gating', () => {
     WorkspaceFS.read = originalRead;
     WorkspaceFS.write = originalWrite;
     WorkspaceFS.appendFile = originalAppend;
-    setToolEditApprovalHandler();
+    testApprovalHandler = undefined;
     cleanupAllApprovals();
   });
 
@@ -85,10 +106,10 @@ describe('Tool edit approval gating', () => {
       writtenContent = content;
     };
 
-    setToolEditApprovalHandler(async (request) => {
+    testApprovalHandler = async (request) => {
       capturedRequest = request;
       return { accepted: true };
-    });
+    };
 
     const result = await tool.call({ path: 'doc.txt', content: 'new content' });
 
@@ -110,10 +131,10 @@ describe('Tool edit approval gating', () => {
       writeCalled = true;
     };
 
-    setToolEditApprovalHandler(async () => ({
+    testApprovalHandler = async () => ({
       accepted: false,
       userMessage: 'Rejected by user',
-    }));
+    });
 
     const result = await tool.call({
       path: 'summary.txt',
@@ -142,10 +163,10 @@ describe('Tool edit approval gating', () => {
       writtenContent = content;
     };
 
-    setToolEditApprovalHandler(async () => {
+    testApprovalHandler = async () => {
       handlerCalled = true;
       return { accepted: true };
-    });
+    };
 
     const result = await tool.call({ path: 'doc.txt', content: 'new content' });
 
@@ -165,10 +186,10 @@ describe('Tool edit approval gating', () => {
       writtenContent = content;
     };
 
-    setToolEditApprovalHandler(async () => {
+    testApprovalHandler = async () => {
       handlerCalled = true;
       return { accepted: true };
-    });
+    };
 
     setToolEditApprovalSessionBypass(
       TEST_STREAM_ID,
@@ -201,7 +222,7 @@ describe('Tool edit approval gating', () => {
     );
     const tool = new TextEditorTool();
 
-    setToolEditApprovalHandler(async () => ({ accepted: true }));
+    testApprovalHandler = async () => ({ accepted: true });
 
     const parentEdit = await callTextEditorInRun(tool, 'aaaaaa', {
       command: 'str_replace',
@@ -245,9 +266,9 @@ describe('Tool edit approval gating', () => {
     );
     const tool = new TextEditorTool();
 
-    setToolEditApprovalHandler(async () => {
+    testApprovalHandler = async () => {
       throw new Error('approval should not be requested');
-    });
+    };
 
     const result = await tool.call({
       command: 'str_replace',
