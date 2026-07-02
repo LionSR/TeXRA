@@ -97,7 +97,9 @@ export class PlanView extends LitElement {
 
   /** Kept to one line so the pre-wrap body gets no template whitespace. */
   private renderDocument(text: string): TemplateResult {
-    return html`<div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-document">${text}</div>`;
+    return html`<div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-document">
+      ${text}
+    </div>`;
   }
 
   private handleShow(e: Event): void {

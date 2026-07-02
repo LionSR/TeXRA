@@ -234,10 +234,14 @@ describe('output progress events', () => {
 
   it('honors disabled compile-failure repair context setting', async () => {
     const { host } = createRecordingHost();
-    const outputNode = createOutputNode('stream:compile-context-disabled', host, {
-      ...defaultWorkflowOutputPolicy,
-      shouldRejectOnCompileFailure: () => false,
-    });
+    const outputNode = createOutputNode(
+      'stream:compile-context-disabled',
+      host,
+      {
+        ...defaultWorkflowOutputPolicy,
+        shouldRejectOnCompileFailure: () => false,
+      },
+    );
     const {
       outputLocation,
       compileFailure,
