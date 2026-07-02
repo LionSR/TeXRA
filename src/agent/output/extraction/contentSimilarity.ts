@@ -139,6 +139,7 @@ export function assignByContentSimilarity(
     madeProgress = false;
     for (const { c, f, score } of scored) {
       if (score < minSimilarity) break;
+      if (score < bestScoreOf[c]) continue;
       if (takenCandidates.has(c) || takenFiles.has(f)) continue;
       // An exact score tie against another still-free file means there is no
       // evidence which file this block belongs to yet. Leave it for a later

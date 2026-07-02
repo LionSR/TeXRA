@@ -1262,6 +1262,122 @@ Appendix.
     await expect(AbsoluteFS.exists('/tmp/run/main-2.tex')).resolves.toBe(false);
   });
 
+  it('does not strip unrelated example and output fences as one wrapper', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '```text',
+        'main.tex:',
+        'example body',
+        '```',
+        '',
+        'main.tex:',
+        '```latex',
+        'Real output.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['main.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Real output.\n',
+    );
+    await expect(AbsoluteFS.exists('/tmp/run/main-2.tex')).resolves.toBe(false);
+  });
+
+  it('preserves a shared outer fence across filename-label splits', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'Here are the files:',
+        '```latex',
+        'main.tex:',
+        'Main body.',
+        'appendix.tex:',
+        'Appendix body.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['main.tex', 'appendix.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main.tex',
+      'appendix.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Main body.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
+      'Appendix body.\n',
+    );
+  });
+
+  it('recovers headers after an unclosed non-LaTeX example fence', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'Example:',
+        '```text',
+        'The response should then provide the real file.',
+        'main.tex:',
+        'Real body.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['main.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Real body.\n',
+    );
+  });
+
+  it('keeps inner fence delimiters inside fenced LaTeX fragments', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'main.tex:',
+        '```latex',
+        '\\begin{verbatim}',
+        '```',
+        '\\end{verbatim}',
+        'Tail.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['main.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      '\\begin{verbatim}\n```\n\\end{verbatim}\nTail.\n',
+    );
+  });
+
+  it('strips an outer documents envelope before filename-label recovery', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['<documents>', 'main.tex:', 'Recovered body.', '</documents>'].join(
+        '\n',
+      ),
+    );
+    const manager = createXmlManager('documents', ['main.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Recovered body.\n',
+    );
+  });
+
   it('drops a bare label that triggers single-input prefix synthesis', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
@@ -1496,6 +1612,64 @@ Appendix.
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
       'Transcribed content.\n',
+    );
+  });
+
+  it('coalesces repeated labels for the sole declared output', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'ocr_result.tex:',
+        '```latex',
+        'Page one transcription.',
+        '```',
+        '',
+        'ocr_result.tex:',
+        '```latex',
+        'Page two transcription.',
+        '```',
+      ].join('\n'),
+    );
+
+    const outputs =
+      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
+        createExternalLocation('/tmp/run/output.xml'),
+        'documents',
+        0,
+        'scratchpad',
+        [createExternalLocation('/tmp/run/ocr_result.tex')],
+      );
+
+    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
+      'Page one transcription.\n\nPage two transcription.\n',
+    );
+    await expect(AbsoluteFS.exists('/tmp/run/ocr_result-2.tex')).resolves.toBe(
+      false,
+    );
+  });
+
+  it('does not concatenate later explanatory fences for single-input edits', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '```latex',
+        'Revised paper body.',
+        '```',
+        '',
+        'Explanation:',
+        '```latex',
+        '\\LaTeX{} example, not output.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['paper.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
+      'Revised paper body.\n',
     );
   });
 
@@ -1892,5 +2066,25 @@ describe('assignByContentSimilarity', () => {
     expect(assigned.filter(Boolean)).toHaveLength(2);
     expect(assigned[0]?.name).toBe('b.tex');
     expect(assigned[1]?.name).toBe('a.tex');
+  });
+
+  it('does not route a repeated block to a weaker secondary file', () => {
+    const main =
+      '\\documentclass{article}\n\\begin{document}\nMain result.\n\\end{document}';
+    const mainRevision =
+      '\\documentclass{article}\n\\begin{document}\nRevised main result.\n\\end{document}';
+    const appendix =
+      '\\documentclass{article}\n\\begin{document}\nAppendix result.\n\\end{document}';
+
+    const assigned = assignByContentSimilarity(
+      [mainRevision, mainRevision],
+      [
+        { name: 'main.tex', content: main },
+        { name: 'appendix.tex', content: appendix },
+      ],
+    );
+
+    expect(assigned[0]?.name).toBe('main.tex');
+    expect(assigned[1]).toBeNull();
   });
 });

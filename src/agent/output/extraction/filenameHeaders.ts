@@ -38,6 +38,8 @@ const TRAILING_COLON_REGEX = /:+$/;
 const SAFE_DECORATION_REGEX = /^[*`]+|[*`:]+$/g;
 /** Full decoration strip, including emphasis underscores (`_x_`). */
 const FULL_DECORATION_REGEX = /^[*_`]+|[*_`:]+$/g;
+const DOCUMENTS_OPEN_REGEX = /^<documents\b[^>]*>\s*$/i;
+const DOCUMENTS_CLOSE_REGEX = /^<\/documents>\s*$/i;
 
 function matchNormalizedCandidate(
   stripped: string,
@@ -113,6 +115,39 @@ function makeUniquePercentHeaderName(
   return candidate;
 }
 
+function safeDocumentName(source: string): string {
+  return getSafeDocumentRelativePath(source.replaceAll('\\', '/')).replaceAll(
+    '\\',
+    '/',
+  );
+}
+
+function sameNormalizedPath(a: string, b: string): boolean {
+  return (
+    normalizeFilePath(a).replace(/^(?:\.\/)+/, '') ===
+    normalizeFilePath(b).replace(/^(?:\.\/)+/, '')
+  );
+}
+
+function stripDocumentsEnvelope(lines: readonly string[]): string[] {
+  const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
+  const lastContentIndex = lines.findLastIndex((line) => line.trim() !== '');
+  if (
+    firstContentIndex !== -1 &&
+    lastContentIndex !== -1 &&
+    firstContentIndex < lastContentIndex &&
+    DOCUMENTS_OPEN_REGEX.test(lines[firstContentIndex].trim()) &&
+    DOCUMENTS_CLOSE_REGEX.test(lines[lastContentIndex].trim())
+  ) {
+    return [
+      ...lines.slice(0, firstContentIndex),
+      ...lines.slice(firstContentIndex + 1, lastContentIndex),
+      ...lines.slice(lastContentIndex + 1),
+    ];
+  }
+  return [...lines];
+}
+
 /**
  * Recover named documents from filename headers in a raw response. Returns
  * the recovered documents in response order, or null when none were found.
@@ -130,9 +165,21 @@ export function extractFilenameHeaderDocuments(
      * prefix synthesis (there is no way to pick the right name).
      */
     synthesisName: string | null;
+    /**
+     * When an agent declares one generated output, models often repeat that
+     * same output label for chunks of one artifact. Coalesce only that exact
+     * target; multi-file and in-place edits still keep duplicate names unique.
+     */
+    coalesceRepeatedName?: string | null;
   },
 ): Array<{ content: string; name: string }> | null {
-  const { thinkingTag, roundDir, labelFiles, synthesisName } = options;
+  const {
+    thinkingTag,
+    roundDir,
+    labelFiles,
+    synthesisName,
+    coalesceRepeatedName = null,
+  } = options;
   const documents: Array<{ content: string; name: string }> = [];
   const reservedFinalPaths = new Set<string>();
   let currentName: string | null = null;
@@ -148,16 +195,32 @@ export function extractFilenameHeaderDocuments(
     const content = stripSurroundingMarkdownFence(currentLines)
       .join('\n')
       .trim();
-    const carriedFence = content ? null : currentMarkdownFence;
+    const carriedFence = currentMarkdownFence;
     if (content) {
-      documents.push({
-        name: makeUniquePercentHeaderName(
-          currentName,
-          reservedFinalPaths,
-          roundDir,
-        ),
-        content,
-      });
+      if (
+        coalesceRepeatedName &&
+        sameNormalizedPath(currentName, coalesceRepeatedName)
+      ) {
+        const name = safeDocumentName(currentName);
+        const existing = documents.find((document) => document.name === name);
+        if (existing) {
+          existing.content = `${existing.content}\n\n${content}`;
+        } else {
+          reservedFinalPaths.add(
+            getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/'),
+          );
+          documents.push({ name, content });
+        }
+      } else {
+        documents.push({
+          name: makeUniquePercentHeaderName(
+            currentName,
+            reservedFinalPaths,
+            roundDir,
+          ),
+          content,
+        });
+      }
     }
     currentLines = [];
     currentMarkdownFence = null;
@@ -165,10 +228,14 @@ export function extractFilenameHeaderDocuments(
   };
 
   const lines = stripSurroundingMarkdownFence(
-    responseLines(outputContent, thinkingTag),
+    stripDocumentsEnvelope(responseLines(outputContent, thinkingTag)),
   );
   for (const [index, line] of lines.entries()) {
     const fence = parseMarkdownFenceDelimiter(line);
+    const percentHeaderName =
+      PERCENT_FILENAME_HEADER_REGEX.exec(line.trim())?.[1] ?? null;
+    const headerName =
+      percentHeaderName ?? matchKnownFileLabel(line, labelFiles);
 
     if (!currentName && fence) {
       if (
@@ -188,14 +255,24 @@ export function extractFilenameHeaderDocuments(
       pendingPrefacedMarkdownFence &&
       !isLatexMarkdownFence(pendingPrefacedMarkdownFence)
     ) {
-      continue;
+      const openExampleFence = pendingPrefacedMarkdownFence;
+      const fenceClosesLater = lines
+        .slice(index)
+        .some((candidate) =>
+          isClosingMarkdownFence(candidate, openExampleFence),
+        );
+      if (!headerName || fenceClosesLater) {
+        continue;
+      }
+      pendingPrefacedMarkdownFence = null;
     }
 
     if (
       currentName &&
       currentMarkdownFence &&
       isClosingMarkdownFence(line, currentMarkdownFence) &&
-      !getLatexDocumentContext(currentLines).insideDocumentBody
+      !getLatexDocumentContext(currentLines).insideDocumentBody &&
+      !isInsideLiteralEnvironment(currentLines)
     ) {
       flushCurrent();
       currentName = null;
@@ -206,10 +283,6 @@ export function extractFilenameHeaderDocuments(
       continue;
     }
 
-    const percentHeaderName =
-      PERCENT_FILENAME_HEADER_REGEX.exec(line.trim())?.[1] ?? null;
-    const headerName =
-      percentHeaderName ?? matchKnownFileLabel(line, labelFiles);
     if (headerName && synthesizedSingleInputFromPrefix) {
       // A `%` header is a valid LaTeX comment and can stay in the
       // synthesized document's body, as can a filename-looking line inside

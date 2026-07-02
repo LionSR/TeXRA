@@ -56,10 +56,15 @@ export function stripSurroundingMarkdownFence(
   }
 
   const lastContentIndex = lines.findLastIndex((line) => line.trim() !== '');
+  const openingFence = parseMarkdownFenceDelimiter(lines[firstContentIndex]);
   if (
     firstContentIndex < lastContentIndex &&
-    isMarkdownFenceDelimiter(lines[firstContentIndex]) &&
-    isMarkdownFenceDelimiter(lines[lastContentIndex])
+    openingFence &&
+    isMarkdownFenceDelimiter(lines[lastContentIndex]) &&
+    isClosingMarkdownFence(lines[lastContentIndex], openingFence) &&
+    !lines
+      .slice(firstContentIndex + 1, lastContentIndex)
+      .some((line) => isClosingMarkdownFence(line, openingFence))
   ) {
     return [
       ...lines.slice(0, firstContentIndex),

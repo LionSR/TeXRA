@@ -298,6 +298,8 @@ export class XmlOutputManager {
         roundDir: getFileDirectory(outputLocation),
         labelFiles: expectedFiles,
         synthesisName: soleExpectedFile,
+        coalesceRepeatedName:
+          this.agentConfig.outputFiles.length === 1 ? soleExpectedFile : null,
       });
       if (documents) {
         logInternal(
@@ -314,7 +316,11 @@ export class XmlOutputManager {
       }
     }
 
-    if (!documents && soleExpectedFile) {
+    if (
+      !documents &&
+      this.agentConfig.outputFiles.length === 1 &&
+      soleExpectedFile
+    ) {
       const fencedBlocks = this.collectLatexFencedBlocks(
         rawOutputContent,
         thinkingTag,
