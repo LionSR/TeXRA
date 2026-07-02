@@ -392,7 +392,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - `packages/extension/src/commands/` (VS Code command handlers)
 - `packages/extension/src/frontend/` (VS Code UI utilities)
 - `src/common/webview/` (webview base classes)
-- `src/common/state/` (state managers backed by VS Code Memento)
+- `packages/extension/src/common/state/` (state managers backed by VS Code Memento)
 - `src/utils/config/` (wraps `vscode.workspace.getConfiguration`)
 - `src/utils/files/workspaceFS.ts`, `storageFS.ts` (wraps `vscode.workspace.fs`)
 - `src/auth/` (authentication providers)
