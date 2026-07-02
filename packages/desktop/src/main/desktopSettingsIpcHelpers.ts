@@ -14,6 +14,7 @@ export const emptySecrets: PlatformSecrets = {
   get: () => Promise.resolve(undefined),
   set: () => Promise.resolve(),
   delete: () => Promise.resolve(),
+  getEnv: () => undefined,
 };
 
 export function defaultOnError(error: unknown): void {

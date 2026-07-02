@@ -29,4 +29,8 @@ export class VscodeSecrets implements PlatformSecrets {
   async delete(key: string): Promise<void> {
     await this.storage.delete(key);
   }
+
+  getEnv(name: string): string | undefined {
+    return process.env[name];
+  }
 }
