@@ -58,11 +58,10 @@ export interface CliModelAccessEntryOptions extends CliModelAccessListOptions {
   readonly accessList?: readonly CliModelAccess[];
 }
 
-export interface CliRunnableModelOptions
-  extends Pick<
-    CliModelAccessEntryOptions,
-    'apiMode' | 'agentCategory' | 'accessList'
-  > {
+export interface CliRunnableModelOptions extends Pick<
+  CliModelAccessEntryOptions,
+  'apiMode' | 'agentCategory' | 'accessList'
+> {
   /** Source category that owns unavailable-model fallback behavior. */
   readonly fallbackSource: CliModelSelectionSource;
   readonly noAvailableModelsMessage?: string;
