@@ -1375,6 +1375,7 @@ describe('desktop settings IPC', () => {
       ),
     ).toMatchObject({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      selectedToolUseAgent: 'orchestrator',
       optionsData: {
         workflow: [
           expect.objectContaining({ value: 'builtInWorkflow:correct' }),

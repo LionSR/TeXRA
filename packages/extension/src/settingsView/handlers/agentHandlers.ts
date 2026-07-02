@@ -409,7 +409,9 @@ export class AgentHandlers {
       }
 
       await this.refreshAfterAgentMutation(
-        this.getPresetToolUseRoot(result.preset.toolUseAgents),
+        this.catalogController.getPresetToolUseRoot(
+          result.preset.toolUseAgents,
+        ),
       );
 
       void vscode.window.showInformationMessage(
@@ -449,17 +451,6 @@ export class AgentHandlers {
         error,
       );
     }
-  }
-
-  private getPresetToolUseRoot(toolUseAgents: string[]): string | undefined {
-    const orchestratorNames = new Set(
-      this.catalogController.getOrchestratorAgentNames(),
-    );
-    return toolUseAgents.find(
-      (name) =>
-        orchestratorNames.has(name) ||
-        name.toLowerCase().includes('orchestrator'),
-    );
   }
 
   async handleDeleteAgentModePreset(
