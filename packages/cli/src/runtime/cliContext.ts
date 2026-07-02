@@ -70,6 +70,14 @@ export class CliUsageError extends Error {
   }
 }
 
+/**
+ * Resolves stdout color from a `CliContext`, falling back to the legacy
+ * `colorEnabled` alias for fixtures/callers that only set that field.
+ */
+export function resolveCliStdoutColorEnabled(context: CliContext): boolean {
+  return context.stdoutColorEnabled ?? context.colorEnabled;
+}
+
 export interface CliAmbientState {
   readonly isCi: boolean;
   readonly stdinIsTty: boolean;

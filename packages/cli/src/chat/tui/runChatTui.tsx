@@ -25,7 +25,11 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
+import {
+  type CliContext,
+  readCliVersion,
+  resolveCliStdoutColorEnabled,
+} from '@cli/runtime/cliContext';
 import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
@@ -699,7 +703,7 @@ export async function runChat(
     });
   };
 
-  const stdoutColorEnabled = context.stdoutColorEnabled ?? context.colorEnabled;
+  const stdoutColorEnabled = resolveCliStdoutColorEnabled(context);
   const inkRef: { current?: InkInstance } = {};
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(

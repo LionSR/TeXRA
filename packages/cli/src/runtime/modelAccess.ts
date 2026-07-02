@@ -28,21 +28,6 @@ export interface CliRunnableModelResolution {
 
 type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
 
-export interface CliRunnableModelOptions {
-  /** Source category that owns unavailable-model fallback behavior. */
-  readonly fallbackSource: CliModelSelectionSource;
-  readonly apiMode?: CliApiMode;
-  readonly agentCategory?: AgentCategory;
-  /** Optional preloaded list, used by launchers that already fetched access. */
-  readonly accessList?: readonly CliModelAccess[];
-  readonly noAvailableModelsMessage?: string;
-}
-
-export interface CliModelAccessEntryOptions extends CliModelAccessListOptions {
-  /** Optional preloaded list, used by commands that already fetched access. */
-  readonly accessList?: readonly CliModelAccess[];
-}
-
 export type CliModelSelectionSource =
   | 'override'
   | 'env'
@@ -66,6 +51,21 @@ export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
   readonly models?: readonly string[];
   readonly agentCategory?: AgentCategory;
+}
+
+export interface CliModelAccessEntryOptions extends CliModelAccessListOptions {
+  /** Optional preloaded list, used by commands that already fetched access. */
+  readonly accessList?: readonly CliModelAccess[];
+}
+
+export interface CliRunnableModelOptions
+  extends Pick<
+    CliModelAccessEntryOptions,
+    'apiMode' | 'agentCategory' | 'accessList'
+  > {
+  /** Source category that owns unavailable-model fallback behavior. */
+  readonly fallbackSource: CliModelSelectionSource;
+  readonly noAvailableModelsMessage?: string;
 }
 
 function computeCliModelOptionsData(

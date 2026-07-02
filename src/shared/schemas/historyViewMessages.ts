@@ -10,6 +10,7 @@ import { HISTORY_VIEW_COMMANDS } from '@shared/ipc';
 import { commandOnly } from './messageFactories';
 
 import { AgentCategory } from './agent';
+import { ToolConfigSchema } from './toolConfig';
 
 // ============================================================
 // Data schemas
@@ -29,7 +30,7 @@ const WorkflowConfigSummarySchema = BaseConfigSummarySchema.extend({
   mediaFiles: z.array(z.string()).optional(),
   contextFiles: z.array(z.string()).optional(),
   outputFiles: z.array(z.string()).optional(),
-  toolConfig: z.record(z.string(), z.unknown()).nullish(),
+  toolConfig: ToolConfigSchema.nullish(),
 });
 
 /** Tool-use agents only have the base fields. */

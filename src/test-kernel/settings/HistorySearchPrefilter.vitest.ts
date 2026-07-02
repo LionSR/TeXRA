@@ -21,8 +21,11 @@ const workflowHistoryItem: HistoryItem = {
     contextFiles: ['refs/source.tex', 'notes/context.md'],
     outputFiles: ['build/revised.tex'],
     toolConfig: {
-      latexEngine: 'xelatex',
-      maxRounds: 2,
+      autoExtractFigure: false,
+      autoExtractTikzFigure: false,
+      attachTeXCount: true,
+      attachDiagnostics: true,
+      autoCompileInputPdf: false,
     },
   },
 };
@@ -57,7 +60,7 @@ function matches(item: HistoryItem, query: string): boolean {
 describe('history search prefilter', () => {
   it('matches rendered history fields without requiring DOM construction', () => {
     expect(matches(workflowHistoryItem, 'spectrum')).toBe(true);
-    expect(matches(workflowHistoryItem, 'xelatex')).toBe(true);
+    expect(matches(workflowHistoryItem, 'diagnostics')).toBe(true);
     expect(matches(workflowHistoryItem, 'cafe')).toBe(true);
     expect(matches(workflowHistoryItem, 'absent')).toBe(false);
   });
