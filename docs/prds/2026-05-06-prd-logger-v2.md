@@ -513,7 +513,7 @@ The single `idle` promise resolves only when the queue is genuinely empty — th
 | **Total to CLI v1.1** | + Phase 4 (when `2026-05-06-prd-runcontext-refactor.md` Phase 2 lands)                                                                                  | **~3.0**        |
 | **Total with MCP**    | + Phase 5 (when `texra mcp serve` ships, post-v1.x)                                                                                                     | **~3.3**        |
 
-Net code reduction vs round 1: Phase 2 cut saves ~30 LOC, simpler bootstrap saves ~50 LOC, simpler shim saves ~80 LOC of mechanical changes. Round-1 §9 estimated +600/-290 ≈ +310 net; round-2 estimate is **~+200 net** to v1.0, **~+220 net** to v1.1 (Phase 4 only — Phase 5 / `McpProgressSink` is no longer in v1.x; it adds ~+80 net whenever MCP eventually ships).
+Net code reduction vs round 1: Phase 2 cut saves \~30 LOC, simpler bootstrap saves \~50 LOC, simpler shim saves \~80 LOC of mechanical changes. Round-1 §9 estimated +600/-290 ≈ +310 net; round-2 estimate is **\~+200 net** to v1.0, **\~+220 net** to v1.1 (Phase 4 only — Phase 5 / `McpProgressSink` is no longer in v1.x; it adds \~+80 net whenever MCP eventually ships).
 
 ### 15.7 What round 2 does NOT change
 
