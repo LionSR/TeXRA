@@ -84,7 +84,7 @@ export class XmlOutputManager {
     return applyReplacements(normalized, FENCED_LATEX_BLOCK_REPLACEMENTS);
   }
 
-  private extractMultipleDocumentsbyRegex(
+  private extractMultipleDocumentsByRegex(
     outputContent: string,
     documentTag: string,
     preferredName?: string,
@@ -204,17 +204,21 @@ export class XmlOutputManager {
     baseFiles: readonly FileLocation[] = [],
   ): Promise<OutputFileInfo[]> {
     const rawOutputContent = await AbsoluteFS.read(outputLocation.absolutePath);
-    let outputContent = rawOutputContent;
-    const expectedDocumentCount = this.countDocumentTags(outputContent);
+    const expectedDocumentCount = this.countDocumentTags(rawOutputContent);
 
-    const tagsToWrap = [thinkingTag, 'document'];
-    outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
+    // The XML-parse and regex tiers read the CDATA-wrapped variant (so the
+    // parser treats thinking/document bodies as opaque text); the header and
+    // similarity tiers below read the raw response instead.
+    const cdataWrapped = addCdataToTagsMultiple(rawOutputContent, [
+      thinkingTag,
+      'document',
+    ]);
 
     let documents: Array<{ content: string; name: string }> | null = null;
 
     try {
       const parser = new XMLParser(XML_PARSER_OPTIONS);
-      const root = parser.parse(outputContent);
+      const root = parser.parse(cdataWrapped);
       documents = extractContentFromXMLbyTagMultiple(root, documentTag);
       if (!documents) {
         debugInternal(
@@ -230,8 +234,8 @@ export class XmlOutputManager {
     }
 
     if (!documents) {
-      documents = this.extractMultipleDocumentsbyRegex(
-        outputContent,
+      documents = this.extractMultipleDocumentsByRegex(
+        cdataWrapped,
         documentTag,
       );
     }
@@ -273,8 +277,8 @@ export class XmlOutputManager {
       // preserves subdirectories so `Draft/Draft1.tex` lands at the right
       // workspace location instead of collapsing to the round root.
       const preferredName = inputFiles.length === 1 ? inputFiles[0] : undefined;
-      documents = this.extractMultipleDocumentsbyRegex(
-        outputContent,
+      documents = this.extractMultipleDocumentsByRegex(
+        cdataWrapped,
         documentTag,
         preferredName,
       );
