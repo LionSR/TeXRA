@@ -70,6 +70,7 @@ import {
   type StreamStatusRegistry,
 } from './StreamStatusService';
 import { currentSession, type SessionHandle } from './SessionHandle';
+import { attachConversationProgressHub } from './conversationProgressHub';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface AgentLaunchContext extends AgentCore {
@@ -578,9 +579,18 @@ export async function buildAgentLaunchContext(
     // returns a context) can never publish a result event. Bundle the detach
     // into the run's trace teardown.
     const detachResultHub = ctx.session.attachRunTrace(ctx.logger);
+    // Single derivation point for `updateConversationProgress` (F-1b): flow
+    // code reports counters via `logConversationProgress`, this hub is the
+    // only place that turns them into the host UI event.
+    const detachProgressHub = attachConversationProgressHub(
+      ctx.logger,
+      ctx.runtimeHost,
+      ctx.streamId,
+    );
     const disposeTrace = ctx.disposeTrace;
     ctx.disposeTrace = () => {
       detachResultHub();
+      detachProgressHub();
       disposeTrace();
     };
     return ctx;

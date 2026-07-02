@@ -284,10 +284,12 @@ export class AIAgentsTab extends LitElement {
                       return html`
                         <tool-card .item=${item}>
                           ${
-                          inlineSettings
-                            ? html`<div slot="details">${inlineSettings}</div>`
-                            : nothing
-                        }
+                            inlineSettings
+                              ? html`<div slot="details">
+                                  ${inlineSettings}
+                                </div>`
+                              : nothing
+                          }
                         </tool-card>
                       `;
                     },

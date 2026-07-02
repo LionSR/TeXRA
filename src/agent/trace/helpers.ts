@@ -16,6 +16,7 @@ import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import {
   MESSAGE_TYPES,
   type ContextManagementData,
+  type ConversationProgress,
   type ErrorContext,
   type FileListEntry,
 } from '@shared/schemas';
@@ -164,6 +165,23 @@ export function logFileCategory(
     sourceDisplay: category,
   }));
   logFilesLoaded(trace, category, entries, stageId);
+}
+
+/**
+ * Report conversation-progress counters (round/turn count, tool-call count).
+ * The single producer emission for `updateConversationProgress` — a per-run
+ * hub subscriber ({@link attachConversationProgressHub}) derives the host UI
+ * event from this instead of flow code calling `runtimeHost.emit` directly,
+ * so workflow and tool-use agents share one emission path even though they
+ * count turns differently. Never rendered as a transcript row (suppressed in
+ * `TexraTranscriptRecorder`) — it is a UI-only signal, not a log line.
+ */
+export function logConversationProgress(
+  trace: AgentTrace,
+  data: ConversationProgress,
+  stageId?: string,
+): void {
+  trace.domain({ key: 'conversationProgress', data, stageId });
 }
 
 /** Missing-outputs notification — counts `missing` entries for the label. */

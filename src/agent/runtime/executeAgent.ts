@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
   getToolUseFlowErrorResult,
@@ -153,8 +154,7 @@ function buildToolUseFlowResult(
 /** Create an onRoundCompleted callback that feeds progress into the execution registry and orchestrator. */
 function createRoundProgressCallback(
   executionId: ExecutionId,
-  streamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
+  trace: AgentTrace,
   onProgress?: (update: SubagentProgressUpdate) => void,
 ): (
   roundIndex: number,
@@ -172,12 +172,12 @@ function createRoundProgressCallback(
       totalRounds,
       outputPaths: outputPaths ?? [],
     });
-    runtimeHost.emit('updateConversationProgress', {
-      streamId,
-      progress: {
-        conversationTurns: roundIndex + 1,
-        toolCallCount: 0,
-      },
+    // Single producer emission (F-1b): the conversationProgressHub attached in
+    // AgentLaunchContext derives the host `updateConversationProgress` event
+    // from this instead of emitting to the runtimeHost directly.
+    logConversationProgress(trace, {
+      conversationTurns: roundIndex + 1,
+      toolCallCount: 0,
     });
   };
 }
@@ -223,12 +223,10 @@ async function runToolUseAgent(
         onProgress: (update) => {
           if (update.kind === 'overview') {
             toolUseTurns++;
-            ctx.runtimeHost.emit('updateConversationProgress', {
-              streamId,
-              progress: {
-                conversationTurns: toolUseTurns,
-                toolCallCount: update.toolCallCount,
-              },
+            // Single producer emission (F-1b): see createRoundProgressCallback.
+            logConversationProgress(ctx.logger, {
+              conversationTurns: toolUseTurns,
+              toolCallCount: update.toolCallCount,
             });
           }
           options.onProgress?.(update);
@@ -291,8 +289,7 @@ async function runReflectionAgent(
   const { streamId } = ctx;
   const onRoundCompleted = createRoundProgressCallback(
     ctx.executionId,
-    streamId,
-    ctx.runtimeHost,
+    ctx.logger,
     options.onProgress,
   );
   const onRoundFinalized = createUsageRecordingCallback(ctx);
