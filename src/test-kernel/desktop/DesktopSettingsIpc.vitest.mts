@@ -183,6 +183,10 @@ class MemorySecrets {
   async delete(key: string): Promise<void> {
     this.values.delete(key);
   }
+
+  getEnv(): string | undefined {
+    return undefined;
+  }
 }
 
 async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {

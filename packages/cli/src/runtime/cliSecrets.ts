@@ -50,6 +50,10 @@ export class CliSecrets implements PlatformSecrets {
     });
   }
 
+  getEnv(name: string): string | undefined {
+    return cliEnvValue(name);
+  }
+
   private async updateSecrets(
     mutator: (data: SecretFileData) => void,
   ): Promise<void> {
