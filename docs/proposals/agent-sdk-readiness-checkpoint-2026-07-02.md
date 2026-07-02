@@ -246,4 +246,3 @@ unattended sweep. Do not re-open the adjudicated traps.
 - Carried backlog re-confirmed at HEAD (line refs above).
 - `npm run typecheck` — **exit 0** across all projects at HEAD `0fac656` (tree
   green; this checkpoint is a docs-only change, no source touched).
-  </content>
