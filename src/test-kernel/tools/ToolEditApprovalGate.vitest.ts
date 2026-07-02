@@ -236,6 +236,31 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
   });
 
+  it('text editor str_replace rejects an empty old_str before approval', async () => {
+    await installPlatform(
+      {},
+      {
+        '/workspace/shared.tex': 'alpha\n',
+      },
+    );
+    const tool = new TextEditorTool();
+
+    setToolEditApprovalHandler(async () => {
+      throw new Error('approval should not be requested');
+    });
+
+    const result = await tool.call({
+      command: 'str_replace',
+      path: 'shared.tex',
+      old_str: '',
+      new_str: 'beta',
+    });
+
+    assert.strictEqual(result.isError, true);
+    assert.match(result.error ?? '', /old_str must not be empty/);
+    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
+  });
+
   it('toggleToolEditApprovalSessionBypass toggles state and returns new value', () => {
     // Test toggle mechanics (per-stream state)
     // Initially bypass is off (cleared in beforeEach)

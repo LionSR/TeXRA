@@ -16,6 +16,10 @@ import { splitContentLines } from '@utils/text/stringUtils';
 // Local imports - tool core
 import { defineTool } from '../core/define';
 import {
+  findOccurrenceLineNumbers,
+  replaceFirstLiteral,
+} from '../editPrimitives';
+import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '../fileInteractions';
@@ -348,20 +352,15 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     }
 
     if (occurrences > 1) {
-      const lines = content.split('\n');
-      const lineNumbers = lines.flatMap((line, index) =>
-        line.includes(oldStr) ? [index + 1] : [],
-      );
+      const lineNumbers = findOccurrenceLineNumbers(content, oldStr);
       throw new ToolError(
         `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
       );
     }
 
-    // Use indexOf/slice for literal replacement
-    // (String.replace has special patterns like $$, $&, $' that corrupt content)
-    const idx = content.indexOf(oldStr);
-    const updated =
-      content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
+    // Literal replacement (String.replace would interpret $$, $&, $', `$\``
+    // patterns and corrupt LaTeX/content); see editPrimitives.
+    const updated = replaceFirstLiteral(content, oldStr, newStr);
     await this.writeMemoryFile(resolvedPath, updated, meta);
     recordToolFileRead(inputPath);
 
