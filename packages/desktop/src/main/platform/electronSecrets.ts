@@ -137,6 +137,10 @@ export class ElectronSecrets implements PlatformSecrets {
     await this.store.set(key, undefined);
   }
 
+  getEnv(name: string): string | undefined {
+    return process.env[name];
+  }
+
   private async warnAboutBasicTextStorage(): Promise<void> {
     if (this.warnedAboutBasicText) return;
     this.warnedAboutBasicText = true;

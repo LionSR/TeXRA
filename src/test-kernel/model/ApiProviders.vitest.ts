@@ -14,7 +14,10 @@ import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
 import { setSetupPlatform, type SetupPlatform } from '@tools/setup/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 
-function createSecrets(initial: Record<string, string> = {}): {
+function createSecrets(
+  initial: Record<string, string> = {},
+  env: Record<string, string> = {},
+): {
   secrets: PlatformSecrets;
   store: Map<string, string>;
 } {
@@ -30,6 +33,9 @@ function createSecrets(initial: Record<string, string> = {}): {
       },
       async delete(key) {
         store.delete(key);
+      },
+      getEnv(name) {
+        return env[name];
       },
     },
   };
@@ -111,23 +117,12 @@ function setupApiKeyToolPlatform(store: Map<string, string>): void {
 }
 
 describe('API provider key caches', () => {
-  let hadOpenAiApiKey = false;
-  let originalOpenAiApiKey: string | undefined;
-
   beforeEach(() => {
-    hadOpenAiApiKey = Object.hasOwn(process.env, 'OPENAI_API_KEY');
-    originalOpenAiApiKey = process.env.OPENAI_API_KEY;
     invalidateApiKeyCache();
-    delete process.env.OPENAI_API_KEY;
   });
 
   afterEach(() => {
     invalidateApiKeyCache();
-    if (hadOpenAiApiKey && originalOpenAiApiKey !== undefined) {
-      process.env.OPENAI_API_KEY = originalOpenAiApiKey;
-    } else {
-      delete process.env.OPENAI_API_KEY;
-    }
   });
 
   it('derives provider status from the canonical API-key origin cache', async () => {
@@ -140,8 +135,7 @@ describe('API provider key caches', () => {
     });
 
     invalidateApiKeyCache();
-    const empty = createSecrets();
-    process.env.OPENAI_API_KEY = 'from-env';
+    const empty = createSecrets({}, { OPENAI_API_KEY: 'from-env' });
 
     await expect(
       loadApiKeyStatusMap(empty.secrets, ['openai']),
@@ -151,11 +145,9 @@ describe('API provider key caches', () => {
   });
 
   it('treats empty env keys as missing in uncached lookups', async () => {
-    process.env.OPENAI_API_KEY = '';
+    const { secrets } = createSecrets({}, { OPENAI_API_KEY: '' });
 
-    await expect(
-      apiKeyExistsUncached(createSecrets().secrets, 'openai'),
-    ).resolves.toBe(false);
+    await expect(apiKeyExistsUncached(secrets, 'openai')).resolves.toBe(false);
   });
 
   it('set_api_key invalidates stale missing-key lookups', async () => {
@@ -183,6 +175,9 @@ describe('API provider key caches', () => {
       },
       async delete(key) {
         store.delete(key);
+      },
+      getEnv() {
+        return undefined;
       },
     };
 
