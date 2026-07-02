@@ -863,17 +863,27 @@ export class MainApp extends MainAppBase {
 
     if (optionsData.toolUse) {
       this.toolUseAgentOptions.set(optionsData.toolUse);
+      const selectedToolUseAgent = message.selectedToolUseAgent
+        ? this.findAgentSelection(
+            optionsData.toolUse,
+            message.selectedToolUseAgent,
+          )
+        : undefined;
       this.toolUseAgent.set(
-        this.validateAgentSelection(
-          optionsData.toolUse,
-          this.toolUseAgent.get(),
-          // State 2 sanity (PRD: agent-native onboarding): a persisted agent
-          // that no longer resolves (e.g. BYOK user with the sign-in-only
-          // 'orchestrator' default) falls back along the preferred list
-          // instead of leaving the dropdown with no selection.
-          PREFERRED_TOOL_USE_AGENTS,
-        ),
+        selectedToolUseAgent ??
+          this.validateAgentSelection(
+            optionsData.toolUse,
+            this.toolUseAgent.get(),
+            // State 2 sanity (PRD: agent-native onboarding): a persisted agent
+            // that no longer resolves (e.g. BYOK user with the sign-in-only
+            // 'orchestrator' default) falls back along the preferred list
+            // instead of leaving the dropdown with no selection.
+            PREFERRED_TOOL_USE_AGENTS,
+          ),
       );
+      if (selectedToolUseAgent) {
+        this.enterToolUseSession();
+      }
     }
   }
 
@@ -903,6 +913,29 @@ export class MainApp extends MainAppBase {
     // No match — keep stale value so the UI shows no selection.
     // Execution will error with "unknown agent" if the user proceeds.
     return currentValue;
+  }
+
+  private findAgentSelection(
+    options: AgentOptionData[],
+    candidate: string,
+  ): string | undefined {
+    const exact = options.find((opt) => opt.value === candidate);
+    if (exact) return exact.value;
+    const name = agentName(candidate);
+    return options.find((opt) => agentName(opt.value) === name)?.value;
+  }
+
+  private enterToolUseSession(): void {
+    if (this.sessionType.get() !== SESSION_TYPES.TOOL_USE) {
+      this.swapModeInstruction(this.sessionType.get(), SESSION_TYPES.TOOL_USE);
+      this.sessionType.set(SESSION_TYPES.TOOL_USE);
+      this.fileSelectionOpen.set(false);
+      this.outputFilesActive.set(false);
+      this.updateMultiFiles('outputFiles', []);
+      this.refreshModelSelectionForActiveSession();
+    }
+    this.refreshInstructionPlaceholder();
+    this.saveState();
   }
 
   private handleSetEditedFileOptions(

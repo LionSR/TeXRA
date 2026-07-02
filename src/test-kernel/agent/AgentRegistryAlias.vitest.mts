@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Third-party imports
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -17,6 +17,7 @@ import {
   setAgentDirectories,
 } from '@agent/index/agentDirectoriesRegistry';
 import {
+  computeAgentOptionsData,
   getAgent,
   getVisibleAgent,
   getVisibleAgents,
@@ -25,6 +26,21 @@ import {
   refresh,
 } from '@agent/index/agentRegistry';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+
+vi.mock('@agent/remote/RemoteAgentLoader', () => ({
+  RemoteAgentLoader: {
+    listRemoteAgents: vi.fn(async () => [
+      {
+        id: 'remote-orchestrator',
+        name: 'orchestrator',
+        description: 'Remote team root',
+        visibility: ['researcher'],
+        tools: ['delegate_agent'],
+        agentCategory: 'toolUse',
+      },
+    ]),
+  },
+}));
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
@@ -141,6 +157,80 @@ describe('agent registry legacy aliases', () => {
     expect(getAgent('assistant')?.name).toBe('assistant');
 
     useAgentDirectories();
+  });
+
+  it('includes remote agents in launcher options after local-only startup load', async () => {
+    const originalEnabledToolUseAgents = platform().workspaceState.get<
+      string[]
+    >(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS);
+
+    try {
+      await platform().workspaceState.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        ['orchestrator', 'research', 'review'],
+      );
+
+      await refresh({ includeRemote: false });
+      expect(
+        getVisibleAgents('toolUse').map((agent) => agent.name),
+      ).not.toContain('orchestrator');
+
+      const options = await computeAgentOptionsData();
+
+      expect(options.toolUse.map((option) => option.label)).toContain(
+        'orchestrator',
+      );
+    } finally {
+      await platform().workspaceState.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        originalEnabledToolUseAgents,
+      );
+      await refresh({ includeRemote: false });
+    }
+  });
+
+  it('includes remote agents in launcher options after pending local-only startup load', async () => {
+    const originalEnabledToolUseAgents = platform().workspaceState.get<
+      string[]
+    >(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS);
+
+    let releaseBuiltInToolUseDir: (() => void) | undefined;
+    const waitForBuiltInToolUseDir = new Promise<void>((resolveWait) => {
+      releaseBuiltInToolUseDir = resolveWait;
+    });
+
+    try {
+      await platform().workspaceState.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        ['orchestrator', 'research', 'review'],
+      );
+      useAgentDirectories({
+        builtInToolUse: async () => {
+          await waitForBuiltInToolUseDir;
+          return BUILTIN_TOOL_USE_AGENTS_DIR;
+        },
+      });
+
+      const pendingRefresh = refresh({ includeRemote: false });
+      await new Promise((resolveNextTick) => setTimeout(resolveNextTick, 0));
+      const optionsPromise = computeAgentOptionsData();
+
+      releaseBuiltInToolUseDir?.();
+      await pendingRefresh;
+      const options = await optionsPromise;
+
+      expect(options.toolUse.map((option) => option.label)).toContain(
+        'orchestrator',
+      );
+    } finally {
+      releaseBuiltInToolUseDir?.();
+      await platform().workspaceState.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        originalEnabledToolUseAgents,
+      );
+      useAgentDirectories();
+      await refresh({ includeRemote: false });
+    }
   });
 
   it('migrates persisted legacy keys at load time', () => {

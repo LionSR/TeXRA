@@ -50,7 +50,9 @@ export class AgentHandlers {
 
   constructor(
     private readonly ctx: SettingsHandlerContext,
-    private readonly refreshAfterAgentMutation: () => Promise<void>,
+    private readonly refreshAfterAgentMutation: (
+      selectedToolUseAgent?: string,
+    ) => Promise<void>,
   ) {
     const controllers = createSettingsAgentControllers({
       workspaceState: workspaceSM,
@@ -406,7 +408,11 @@ export class AgentHandlers {
         return;
       }
 
-      await this.refreshAfterAgentMutation();
+      await this.refreshAfterAgentMutation(
+        this.catalogController.getPresetToolUseRoot(
+          result.preset.toolUseAgents,
+        ),
+      );
 
       void vscode.window.showInformationMessage(
         `Applied "${result.preset.name}" team`,
