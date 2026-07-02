@@ -3,13 +3,7 @@
 // Tab / Shift-Tab cycles focus across subagent streams.
 
 import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -719,9 +713,6 @@ export function App(props: AppProps): React.JSX.Element {
     childControlMode !== undefined
       ? childControlTargets[childControlMode]
       : undefined;
-  const updateChildControlEscapeAction = useCallback((action: string) => {
-    setChildControlEscapeAction(action);
-  }, []);
   useEffect(() => {
     if (childControlMode === undefined) setChildControlEscapeAction('close');
   }, [childControlMode]);
@@ -800,7 +791,7 @@ export function App(props: AppProps): React.JSX.Element {
             availableRows={foregroundRows}
             mode={childControlMode}
             onClose={() => setChildControlMode(undefined)}
-            onEscapeActionChange={updateChildControlEscapeAction}
+            onEscapeActionChange={setChildControlEscapeAction}
             onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
             onViewStream={(streamId) =>
               cliState.transcriptViewerStreamId.set(streamId)

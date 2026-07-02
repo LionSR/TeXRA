@@ -84,8 +84,6 @@ export async function buildUserVars(
   logger: AgentTrace,
   workspacePath?: string,
 ): Promise<UserVars> {
-  const allLoadedFiles: LoadedFileEntry[] = [];
-
   // Parallelize independent I/O: required files, pattern files, rules, and memories
   const [
     { vars: requiredVars, files: requiredFiles },
@@ -110,8 +108,7 @@ export async function buildUserVars(
       ? loadRuntimeSkillCatalog(logger)
       : Promise.resolve(''),
   ]);
-  allLoadedFiles.push(...requiredFiles);
-  allLoadedFiles.push(...patternFiles);
+  const allLoadedFiles: LoadedFileEntry[] = [...requiredFiles, ...patternFiles];
 
   // Merge all variable sources using spread operator.
   // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.

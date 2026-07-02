@@ -49,7 +49,7 @@ export class ApprovalRequestHandler<
    *  is either new or lost state, so everything must be (re-)delivered. */
   replay(): void {
     this.delivered.clear();
-    for (const [id, item] of this.pending.entries()) {
+    for (const [id, item] of this.pending) {
       this.delivered.add(id);
       this.sendShow(item);
     }

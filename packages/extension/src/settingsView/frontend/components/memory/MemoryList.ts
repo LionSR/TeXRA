@@ -74,6 +74,15 @@ export class MemoryList extends LitElement {
     this.page = event.detail.page;
   }
 
+  private renderPagination(): TemplateResult {
+    return html`<list-pagination
+      .page=${this.page}
+      .totalItems=${this.items.length}
+      .pageSize=${DEFAULT_PAGE_SIZE}
+      @page-change=${this.handlePageChange}
+    ></list-pagination>`;
+  }
+
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
@@ -89,12 +98,7 @@ export class MemoryList extends LitElement {
     const { paged } = paginate(this.items, this.page, DEFAULT_PAGE_SIZE);
 
     return html`
-      <list-pagination
-        .page=${this.page}
-        .totalItems=${this.items.length}
-        .pageSize=${DEFAULT_PAGE_SIZE}
-        @page-change=${this.handlePageChange}
-      ></list-pagination>
+      ${this.renderPagination()}
       <div class="memory-list">
         ${repeat(
           paged,
@@ -102,12 +106,7 @@ export class MemoryList extends LitElement {
           (item) => html`<memory-item .item=${item}></memory-item>`,
         )}
       </div>
-      <list-pagination
-        .page=${this.page}
-        .totalItems=${this.items.length}
-        .pageSize=${DEFAULT_PAGE_SIZE}
-        @page-change=${this.handlePageChange}
-      ></list-pagination>
+      ${this.renderPagination()}
     `;
   }
 }

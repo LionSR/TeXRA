@@ -28,11 +28,11 @@ export class ToggleStateStore {
     this.saveCallback?.();
   }
 
-  entries(): Array<[string, boolean]> {
+  entries(): [string, boolean][] {
     return [...this.states.entries()];
   }
 
-  load(data: Array<[string, boolean]>): void {
+  load(data: [string, boolean][]): void {
     this.states = new Map(data);
   }
 }

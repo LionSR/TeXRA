@@ -53,18 +53,13 @@ export class FileLister {
     );
   }
 
-  /** Get file listing config for each file type */
-  private getListConfig(fileType: ListableFileType) {
-    return getFileListConfig(fileType, this.settings);
-  }
-
   public async list(fileType: ListableFileType): Promise<string[]> {
     if (!this.workspacePath) {
       logger.warn(CHANNEL, 'No workspace folder found');
       return [];
     }
 
-    const config = this.getListConfig(fileType);
+    const config = getFileListConfig(fileType, this.settings);
     if (!config) {
       return [];
     }

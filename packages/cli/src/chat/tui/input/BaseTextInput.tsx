@@ -331,10 +331,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   const isControlled = props.cursor !== undefined;
   const [internalCursor, setInternalCursor] = useState<number>(value.length);
-  const cursor = clampCursor(
-    isControlled ? (props.cursor as number) : internalCursor,
-    value.length,
-  );
+  const cursor = clampCursor(props.cursor ?? internalCursor, value.length);
 
   // Mirror the latest value/cursor for async handlers (image paste): a
   // clipboard probe that resolves after the user keeps typing must insert at

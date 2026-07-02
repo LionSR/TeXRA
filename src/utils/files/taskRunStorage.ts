@@ -312,7 +312,6 @@ export class TaskRunFileService {
       return;
     }
 
-    const destinationSegment = relativeDirectory;
     const runDir = getRunDir(executionId);
 
     await Promise.all(
@@ -331,7 +330,7 @@ export class TaskRunFileService {
         ) {
           logger.debug(
             CHANNEL,
-            `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${destinationSegment}`,
+            `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
           );
           return;
         }
@@ -358,7 +357,7 @@ export class TaskRunFileService {
         }
         const destinationAbsolute = path.join(
           runDir,
-          destinationSegment,
+          relativeDirectory,
           relativePath,
         );
 
@@ -372,7 +371,7 @@ export class TaskRunFileService {
           if (!stat.isSymbolicLink()) {
             logger.debug(
               CHANNEL,
-              `Skipping run-dir mirror of ${relativePath}: destination in ${destinationSegment} is an existing real file`,
+              `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
             );
             return;
           }
@@ -391,7 +390,7 @@ export class TaskRunFileService {
         } catch (error) {
           logger.debug(
             CHANNEL,
-            `Unable to mirror ${relativePath} into ${destinationSegment}: ${toErrorMessage(error)}`,
+            `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
           );
         }
       }),

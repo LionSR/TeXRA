@@ -52,7 +52,7 @@ function formatFileContext(ctx: FileContext): string {
 
   const fileEntries: string[] = [];
 
-  const arrays: Array<[string, string[] | undefined]> = [
+  const arrays: [string, string[] | undefined][] = [
     ['Input Files', ctx.inputFiles],
     ['Context Files', ctx.contextFiles],
     ['Media Files', ctx.mediaFiles],

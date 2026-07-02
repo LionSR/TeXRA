@@ -104,8 +104,7 @@ export class CopyButtonController implements ReactiveController {
    * Automatically resets to default state after the configured delay.
    */
   copy = async (text: string): Promise<boolean> => {
-    const trimmed = text.trim();
-    if (!trimmed) {
+    if (!text.trim()) {
       return false;
     }
 

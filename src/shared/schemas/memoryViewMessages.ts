@@ -91,33 +91,28 @@ export const GetMemoryDataMessageSchema = commandOnly(
   MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA,
 );
 
-export const GetMemoryPreviewMessageSchema = z.object({
+export const GetMemoryPreviewMessageSchema = MemoryPathMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.GET_MEMORY_PREVIEW),
-  storagePath: z.string().min(1),
 });
 
-export const OpenMemoryFileMessageSchema = z.object({
+export const OpenMemoryFileMessageSchema = MemoryPathMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE),
-  storagePath: z.string().min(1),
 });
 
 export const OpenMemoryFolderMessageSchema = commandOnly(
   MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
 );
 
-export const DeleteMemoryMessageSchema = z.object({
+export const DeleteMemoryMessageSchema = MemoryDeleteMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.DELETE_MEMORY),
-  storagePath: z.string().min(1),
-  displayPath: z.string().min(1),
 });
 
 export const GetMemoryEnabledMessageSchema = commandOnly(
   MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED,
 );
 
-export const SetMemoryEnabledMessageSchema = z.object({
+export const SetMemoryEnabledMessageSchema = MemoryEnabledMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED),
-  enabled: z.boolean(),
 });
 
 export const PinMemoryMessageSchema = MemoryPathMessageSchema.extend({

@@ -122,8 +122,7 @@ export class FileSelectGroup extends LitElement {
   }
 
   private get currentFiles(): string[] {
-    const key =
-      `${this.config.type}Files` as keyof FileStateContextValue['multiFiles'];
+    const key = this.listId as keyof FileStateContextValue['multiFiles'];
     return this.fileState?.multiFiles[key] ?? [];
   }
 

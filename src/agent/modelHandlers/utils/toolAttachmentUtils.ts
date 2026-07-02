@@ -207,13 +207,11 @@ export function extractToolAttachments(
 
   // Strip binary data from file references, keep metadata
   if (status === 'executed' && attachments.length > 0) {
-    sanitizedResult.files = attachments.map(
-      ({ base64Data, bytes, ...rest }): FileReference => ({
-        path: rest.path,
-        mimeType: rest.mimeType,
-        ...(rest.description ? { description: rest.description } : {}),
-      }),
-    );
+    sanitizedResult.files = attachments.map((file): FileReference => ({
+      path: file.path,
+      mimeType: file.mimeType,
+      ...(file.description ? { description: file.description } : {}),
+    }));
   } else {
     // Remove files key if no valid attachments
     delete sanitizedResult.files;

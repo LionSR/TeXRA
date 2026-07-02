@@ -99,13 +99,11 @@ async function initSubscriptionPlatform(
 }
 
 describe('computeModelOptionsData relay quota state', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     invalidateApiKeyCache();
     invalidateModelOptionsCache();
     resetCodexCoordinator();
-  });
 
-  beforeEach(async () => {
     const { initPlatform } = await import('@platform/platform');
     initPlatform(
       createFakePlatform({

@@ -18,9 +18,7 @@ export function readGitAuthorSettings(): GitAuthorSettings {
 }
 
 /** Apply settings and return them so callers can forward without re-reading. */
-export function applyGitAuthorConfig(): ReturnType<
-  typeof readGitAuthorSettings
-> {
+export function applyGitAuthorConfig(): GitAuthorSettings {
   const settings = readGitAuthorSettings();
   return applyGitAuthorSettings(settings);
 }

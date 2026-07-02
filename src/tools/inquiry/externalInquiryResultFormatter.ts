@@ -14,7 +14,7 @@ export function collectKnownSessionLinks(
   const known: string[] = [];
   const seen = new Set<string>();
 
-  for (const turn of [...manifest.turns].reverse()) {
+  for (const turn of manifest.turns.toReversed()) {
     for (const link of turn.sessionLinks ?? []) {
       if (seen.has(link)) continue;
       seen.add(link);

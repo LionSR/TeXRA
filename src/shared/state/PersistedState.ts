@@ -184,7 +184,7 @@ function describeStored(value: unknown): string {
 }
 
 /** First few zod issues, trimmed so the console stays readable. */
-function summarizeIssues(error: z.ZodError): Array<Record<string, unknown>> {
+function summarizeIssues(error: z.ZodError): Record<string, unknown>[] {
   return error.issues.slice(0, 5).map((issue) => ({
     path: issue.path.join('.') || '(root)',
     code: issue.code,

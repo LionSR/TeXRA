@@ -51,7 +51,7 @@ export abstract class BaseFS {
     try {
       await platform().fs.stat(this.preparePath(target));
       return true;
-    } catch (_err) {
+    } catch {
       return false;
     }
   }
@@ -184,7 +184,7 @@ export abstract class BaseFS {
     try {
       const stats = await this.stat(target);
       return isDirectory(stats.type);
-    } catch (_err) {
+    } catch {
       return false;
     }
   }
@@ -196,7 +196,7 @@ export abstract class BaseFS {
     try {
       const stats = await this.stat(target);
       return isFile(stats.type);
-    } catch (_err) {
+    } catch {
       return false;
     }
   }
@@ -208,7 +208,7 @@ export abstract class BaseFS {
     try {
       const stats = await this.stat(target);
       return (stats.type & FileType.SymbolicLink) === FileType.SymbolicLink;
-    } catch (_err) {
+    } catch {
       return false;
     }
   }

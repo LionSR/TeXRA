@@ -30,14 +30,6 @@ import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
-const STATUS_LABELS: Record<
-  Exclude<ProviderKeyStatus['status'], 'set'>,
-  string
-> = {
-  env: 'Env',
-  'not-set': 'Not set',
-};
-
 @customElement('provider-key-list')
 export class ProviderKeyList extends LitElement {
   static override styles = [
@@ -64,8 +56,8 @@ export class ProviderKeyList extends LitElement {
       status,
       title: 'Key set',
       fallbacks: {
-        env: { label: STATUS_LABELS.env },
-        'not-set': { label: STATUS_LABELS['not-set'] },
+        env: { label: 'Env' },
+        'not-set': { label: 'Not set' },
       },
     });
   }

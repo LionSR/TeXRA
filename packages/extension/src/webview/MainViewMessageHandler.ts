@@ -113,14 +113,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private createHandlerRegistry(): MainViewInboundHandlerRegistry {
     return {
       // Common messages
-      [MAIN_VIEW_COMMANDS.THEME_SET]: (m) => {
-        const view = this.getActiveView();
-        if (view) return this.handleTheme(m, view);
-      },
-      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) => {
-        const view = this.getActiveView();
-        if (view) return this.handleDebugMode(m, view);
-      },
+      [MAIN_VIEW_COMMANDS.THEME_SET]: (m) =>
+        this.runWithActiveView((view) => this.handleTheme(m, view)),
+      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) =>
+        this.runWithActiveView((view) => this.handleDebugMode(m, view)),
       [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: () => this.handleWebviewReady(),
       [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (m) => {
         vscode.window.showInformationMessage(m.text);
@@ -234,14 +230,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: (m) =>
         this.instructionManager.handleClipboardImage(m),
 
-      [MAIN_VIEW_COMMANDS.START_RECORDING]: () => {
-        const view = this.getActiveView();
-        if (view) return this.recordingManager.start(view);
-      },
-      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: () => {
-        const view = this.getActiveView();
-        if (view) return this.recordingManager.stop(view);
-      },
+      [MAIN_VIEW_COMMANDS.START_RECORDING]: () =>
+        this.runWithActiveView((view) => this.recordingManager.start(view)),
+      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: () =>
+        this.runWithActiveView((view) => this.recordingManager.stop(view)),
 
       [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () => {
         await safeExecuteCommand('texra.setApiKey');
@@ -416,6 +408,14 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     value: boolean;
   }): Promise<void> {
     await updateConfig(configUpdate.key, configUpdate.value);
+  }
+
+  /** Run `fn` with the active webview view, or no-op when none is attached. */
+  private runWithActiveView<T>(
+    fn: (view: vscode.WebviewView) => T,
+  ): T | undefined {
+    const view = this.getActiveView();
+    return view ? fn(view) : undefined;
   }
 
   /**

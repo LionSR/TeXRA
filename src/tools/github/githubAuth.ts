@@ -20,7 +20,7 @@ export function normalizeGitHubToken(
   token: string | undefined,
 ): string | undefined {
   const trimmed = token?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+  return trimmed ? trimmed : undefined;
 }
 
 export function getGitHubEnvToken(): string | undefined {

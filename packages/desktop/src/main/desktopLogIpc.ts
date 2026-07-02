@@ -41,23 +41,17 @@ export function createDesktopLogIpc(
     return log;
   }
 
-  function copyLog() {
-    const log = postSnapshot();
-    void options.copyLog?.(log.text).catch(reportAsyncError);
-  }
-
-  function exportLog() {
-    const log = postSnapshot();
-    void options.exportLog?.(log.text).catch(reportAsyncError);
-  }
-
   return createCommandHandler(
     {
       [DESKTOP_LOG_COMMANDS.REQUEST_LOG]: () => {
         postSnapshot();
       },
-      [DESKTOP_LOG_COMMANDS.COPY_LOG]: () => copyLog(),
-      [DESKTOP_LOG_COMMANDS.EXPORT_LOG]: () => exportLog(),
+      [DESKTOP_LOG_COMMANDS.COPY_LOG]: () => {
+        void options.copyLog?.(postSnapshot().text).catch(reportAsyncError);
+      },
+      [DESKTOP_LOG_COMMANDS.EXPORT_LOG]: () => {
+        void options.exportLog?.(postSnapshot().text).catch(reportAsyncError);
+      },
     },
     { onAsyncError: options.onAsyncError },
   );

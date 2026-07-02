@@ -115,11 +115,8 @@ export function nextWrappingHighlightIndex({
 }): number {
   if (itemCount <= 0) return 0;
   const clampedHighlight = clampIndex(highlight, itemCount);
-  return direction === 1
-    ? (clampedHighlight + 1) % itemCount
-    : clampedHighlight <= 0
-      ? itemCount - 1
-      : clampedHighlight - 1;
+  if (direction === 1) return (clampedHighlight + 1) % itemCount;
+  return clampedHighlight <= 0 ? itemCount - 1 : clampedHighlight - 1;
 }
 
 export function visibleSelectRange({
