@@ -7,14 +7,10 @@
  * so that output files can be compiled outside the workspace.
  */
 
-// Standard library imports
-import * as path from 'node:path';
-
 // Third-party imports
 import pMap from 'p-map';
 
 // Local imports
-import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
@@ -23,6 +19,7 @@ import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 import {
   collectBibliographyPaths,
   existingExternalPath,
+  resolveLatexDir,
   stripLatexComments,
 } from './latexParsingUtils';
 
@@ -59,7 +56,7 @@ async function resolveTexInputPath(
  * Extract file dependencies (\input, \include, \bibliography, \addbibresource)
  * from a LaTeX file. Returns absolute paths to existing files.
  *
- * Uses the platform realpath operation to follow symlinks so that when the input file lives in
+ * Uses resolveLatexDir to follow symlinks so that when the input file lives in
  * run storage (as a symlink to the workspace), dependencies are resolved
  * relative to the original workspace location where they actually exist.
  */
@@ -67,8 +64,7 @@ export async function extractLatexFileDependencies(
   latexFileLocation: FileLocation,
 ): Promise<string[]> {
   // Follow symlinks so run-storage paths resolve against the workspace
-  const realPath = await platform().fs.realPath(latexFileLocation.absolutePath);
-  const latexDir = path.dirname(realPath);
+  const latexDir = await resolveLatexDir(latexFileLocation.absolutePath);
 
   const content = await flexibleFS.read(latexFileLocation);
   const uncommented = stripLatexComments(content);

@@ -2,14 +2,12 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// Third-party imports
-import { execa } from 'execa';
-
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
 import { WorkspaceFS } from '@utils/files';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { isoDateOnly } from '@utils/text/stringUtils';
+import { executeCommand } from '@utils/system/execUtils';
 import { IS_WINDOWS } from './platformPaths';
 import { isWSL } from './wslDetect';
 
@@ -68,37 +66,33 @@ function getPlatformLabel(): string {
  * Returns null if the workspace is not a git repo or git is unavailable.
  */
 async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
-  try {
-    const opts = {
-      cwd: workspacePath,
-      reject: false,
-      timeout: GIT_TIMEOUT_MS,
-    } as const;
+  const opts = { cwd: workspacePath, timeout: GIT_TIMEOUT_MS } as const;
 
-    // Check if inside a git repo
-    const insideWorkTree = await execa(
-      'git',
-      ['rev-parse', '--is-inside-work-tree'],
-      opts,
-    );
-    if (insideWorkTree.exitCode !== 0) return null;
+  // Check if inside a git repo. executeCommand swallows spawn errors (e.g.
+  // git missing from PATH) and reports them as a failed result, so this also
+  // covers the "git not installed" case.
+  const insideWorkTree = await executeCommand(
+    ['git', 'rev-parse', '--is-inside-work-tree'],
+    opts,
+  );
+  if (!insideWorkTree.success) return null;
 
-    // Run branch and status checks in parallel
-    const [branchResult, statusResult] = await Promise.all([
-      execa('git', ['symbolic-ref', '--short', 'HEAD'], opts),
-      execa('git', ['status', '--porcelain'], opts),
-    ]);
+  // Run branch and status checks in parallel
+  const [branchResult, statusResult] = await Promise.all([
+    executeCommand(['git', 'symbolic-ref', '--short', 'HEAD'], opts),
+    executeCommand(['git', 'status', '--porcelain'], opts),
+  ]);
 
-    const branch =
-      branchResult.exitCode === 0 ? branchResult.stdout.trim() : null;
-    const dirty =
-      statusResult.exitCode === 0 && statusResult.stdout.trim().length > 0;
+  // Unlike a non-zero exit (e.g. detached HEAD), a timeout means we couldn't
+  // determine dirty/branch state at all — report unknown (null) rather than
+  // silently defaulting `dirty` to false, which would misreport a repo as
+  // clean when `git status` merely timed out.
+  if (branchResult.timedOut || statusResult.timedOut) return null;
 
-    return { branch, dirty };
-  } catch {
-    // git not installed or not on PATH (ENOENT), or timed out
-    return null;
-  }
+  const branch = branchResult.success ? branchResult.stdout : null;
+  const dirty = statusResult.success && statusResult.stdout !== null;
+
+  return { branch, dirty };
 }
 
 /**
