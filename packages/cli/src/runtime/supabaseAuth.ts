@@ -100,14 +100,13 @@ const cliAuthProvider = {
 };
 
 function getCliSupabaseAuthCoordinator(): SupabaseSessionCoordinator {
-  initializeCliSupabaseAuth();
-  return coordinator!;
+  return initializeCliSupabaseAuth();
 }
 
 export function initializeCliSupabaseAuth(
   log?: LogBackend,
   storageRoot?: string,
-): void {
+): SupabaseSessionCoordinator {
   activeAuthLog = log ?? activeAuthLog;
   const secrets = tryPlatform()?.secrets ?? getCliSecrets(storageRoot);
   if (!coordinator || coordinatorSecrets !== secrets) {
@@ -117,6 +116,7 @@ export function initializeCliSupabaseAuth(
     });
     coordinatorSecrets = secrets;
   }
+  return coordinator;
 }
 
 export function getCliAuthProvider() {
@@ -255,6 +255,20 @@ export async function getCliSessionAccessToken(): Promise<string | null> {
  */
 export async function getCliSessionTier(): Promise<string> {
   return (await SupabaseClient.getSessionAuthContext()).tier;
+}
+
+/**
+ * Resolves the tier that should back relay usage queries: the session tier
+ * for a CI relay token (the token's own tier may describe a different
+ * account than the session reading its usage), and the profile's own tier
+ * otherwise.
+ */
+export async function resolveCliUsageTier(
+  profile: Pick<CliAuthProfile, 'credentialSource' | 'tier'>,
+): Promise<string | undefined> {
+  return profile.credentialSource === 'relayToken'
+    ? getCliSessionTier()
+    : profile.tier;
 }
 
 export async function getCliAuthProfile(): Promise<CliAuthProfile> {

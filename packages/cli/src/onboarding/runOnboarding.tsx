@@ -49,6 +49,7 @@ import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { Select, type SelectItem } from '../chat/tui/ui/Select';
 import { type CliApiMode } from '../runtime/apiAccessMode';
 import { chatGptAccountLabel, signInCliChatGpt } from '../runtime/chatgptLogin';
+import { resolveCliStdoutColorEnabled } from '../runtime/cliContext';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
@@ -178,7 +179,7 @@ export async function maybeRunCliOnboarding(
   return runOnboardingFlow({
     firstRun: true,
     apiMode: context.apiMode,
-    colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,
+    colorEnabled: resolveCliStdoutColorEnabled(context),
   });
 }
 

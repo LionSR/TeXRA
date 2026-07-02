@@ -33,7 +33,10 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import type { CliContext } from '../runtime/cliContext';
+import {
+  resolveCliStdoutColorEnabled,
+  type CliContext,
+} from '../runtime/cliContext';
 
 interface InitAgentOption {
   readonly name: string;
@@ -209,7 +212,7 @@ async function runInit(
     const result = await runInitWizard({
       agents,
       models,
-      colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,
+      colorEnabled: resolveCliStdoutColorEnabled(context),
     });
     if (!result) {
       if (seededRoster) await clearCliSeededRoster();
