@@ -11,6 +11,7 @@
 
 import Table from 'cli-table3';
 import { highlight, supportsLanguage } from 'cli-highlight';
+import { LRUCache } from 'lru-cache';
 import Token from 'markdown-it/lib/token.mjs';
 import pico from 'picocolors';
 import stringWidth from 'string-width';
@@ -406,8 +407,7 @@ function formatAnsiLatexReference(
 // estimator defaults color on while a NO_COLOR painter passes false), and
 // with a single slot any alternation would rebuild the processor and discard
 // its content LRU — re-parsing every visible markdown body per frame.
-const PROCESSOR_CACHE_MAX = 4;
-const processorCache = new Map<string, MarkdownProcessor>();
+const processorCache = new LRUCache<string, MarkdownProcessor>({ max: 4 });
 
 function processorFor(
   width: number | undefined,
@@ -415,12 +415,8 @@ function processorFor(
 ): MarkdownProcessor {
   const key = `${width ?? 'auto'}:${colorEnabled ? 'color' : 'plain'}`;
   const cached = processorCache.get(key);
-  if (cached) {
-    // Re-insert to mark as most recently used.
-    processorCache.delete(key);
-    processorCache.set(key, cached);
-    return cached;
-  }
+  if (cached) return cached;
+
   const style = ansiMarkdownStyle(colorEnabled);
   const renderer = createMarkdownRenderer({
     highlight: (code, lang) => highlightForTui(code, lang, style),
@@ -435,10 +431,6 @@ function processorFor(
     // would otherwise strip `\(`→`(`, `\;`→`;` and eat `_{…}` subscripts.
     protectLatexMath: true,
   });
-  if (processorCache.size >= PROCESSOR_CACHE_MAX) {
-    const oldest = processorCache.keys().next().value;
-    if (oldest !== undefined) processorCache.delete(oldest);
-  }
   processorCache.set(key, processor);
   return processor;
 }
