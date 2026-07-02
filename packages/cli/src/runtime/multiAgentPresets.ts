@@ -83,7 +83,7 @@ const MULTI_AGENT_LOGIN_HINT =
   'Hint: Researcher Access sign-in may load additional remote team agents.';
 export const MULTI_AGENT_NO_TEAM_ROOT_REASON = 'no runnable team root';
 const MULTI_AGENT_LAUNCHER_SHOW_HINT =
-  'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.';
+  'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.';
 const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
   'Researcher Access sign-in may unlock more remote team agents.';
 const MULTI_AGENT_LAUNCHER_NO_TEAM_ROOT_REASON = 'no team root';

@@ -168,7 +168,7 @@ describe('CLI multi-agent presets', () => {
       'degraded; 1/6 workflows; 2/9 tools',
     );
     expect(formatCliMultiAgentPresetLauncherHints(plan)).toEqual([
-      'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
+      'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
       'Researcher Access sign-in may unlock more remote team agents.',
     ]);
   });
