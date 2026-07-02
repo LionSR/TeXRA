@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -34,8 +35,6 @@ export const bashApprovalController =
     rejectionResult: () => ({ accepted: false }),
     bypassEvent: 'updateBashApprovalBypassState',
   });
-
-let approvalCounter = 0;
 
 export function setBashApprovalSessionBypass(
   streamId: StreamTabId,
@@ -95,7 +94,7 @@ async function showApprovalPrompt(
     return { accepted: true };
   }
 
-  const requestId = `bash-${Date.now().toString(36)}-${++approvalCounter}`;
+  const requestId = `bash-${nanoid()}`;
 
   try {
     return await new Promise<BashApprovalResult>((resolve) => {

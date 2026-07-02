@@ -14,6 +14,7 @@
  */
 
 // Third-party imports
+import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 // Local imports - tools
@@ -44,9 +45,6 @@ import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 const logger = createChannelTrace('PlanTool');
-
-/** Counter for generating unique approval IDs */
-let approvalCounter = 0;
 
 function formatGoalView(goal: Goal): string {
   return [
@@ -255,7 +253,7 @@ Best practices:
     streamId: string,
     workPlanState: WorkPlanState,
   ): Promise<ToolResult> {
-    const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
+    const approvalId = `plan-${nanoid()}`;
     const goalEnabled = isGoalEnabled();
 
     logger.info('Requesting approval for plan objective');

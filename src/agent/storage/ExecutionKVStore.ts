@@ -8,6 +8,7 @@
 
 import * as path from 'node:path';
 
+import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
 import {
@@ -279,22 +280,11 @@ function normalizeWorkspaceFilePaths(paths: readonly string[]): string[] {
 
 // LRU-capped store cache. StorageFSKVStore is stateless (file-backed),
 // so eviction is lossless — re-creation just makes a new thin wrapper.
-const MAX_STORE_CACHE_SIZE = 50;
-const storeCache = new Map<ExecutionId, ExecutionKVStore>();
+const storeCache = new LRUCache<ExecutionId, ExecutionKVStore>({ max: 50 });
 
 export function getExecutionStore(executionId: ExecutionId): ExecutionKVStore {
   const cached = storeCache.get(executionId);
-  if (cached) {
-    // Move to end (most-recently used)
-    storeCache.delete(executionId);
-    storeCache.set(executionId, cached);
-    return cached;
-  }
-
-  if (storeCache.size >= MAX_STORE_CACHE_SIZE) {
-    const oldest = storeCache.keys().next().value;
-    if (oldest !== undefined) storeCache.delete(oldest);
-  }
+  if (cached) return cached;
 
   const store = new StorageFSKVStore(executionId);
   storeCache.set(executionId, store);
