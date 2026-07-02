@@ -28,13 +28,17 @@ import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+import {
+  findOccurrenceLineNumbers,
+  replaceFirstLiteral,
+} from './editPrimitives';
 import { formatFileView, formatLinesWithNumbers } from './formatting';
 import {
   assertWritable,
   resolveAndFormat,
   currentToolRoot,
 } from './pathResolution';
-import { requireField } from './utils';
+import { countOccurrences, requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -422,7 +426,7 @@ export class TextEditorTool extends defineTool({
       const expandedOldStr = oldStr.replaceAll('\t', '    ');
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
-      const occurrences = expandedFileContent.split(expandedOldStr).length - 1;
+      const occurrences = countOccurrences(expandedFileContent, expandedOldStr);
 
       if (occurrences === 0) {
         throw new ToolError(
@@ -431,19 +435,20 @@ export class TextEditorTool extends defineTool({
       }
 
       if (occurrences > 1) {
-        const lines = expandedFileContent.split('\n');
-        const lineNumbers = lines
-          .map((line, index) =>
-            line.includes(expandedOldStr) ? index + 1 : -1,
-          )
-          .filter((num) => num !== -1);
+        const lineNumbers = findOccurrenceLineNumbers(
+          expandedFileContent,
+          expandedOldStr,
+        );
 
         throw new ToolError(
           `No replacement was performed. Multiple occurrences of old_str \`${oldStr}\` in lines ${lineNumbers.join(', ')}. Please ensure it is unique`,
         );
       }
 
-      const newFileContent = expandedFileContent.replace(
+      // Literal replacement (String.replace would interpret $$, $&, $', `$\``
+      // patterns and corrupt LaTeX/code); see editPrimitives.
+      const newFileContent = replaceFirstLiteral(
+        expandedFileContent,
         expandedOldStr,
         expandedNewStr,
       );

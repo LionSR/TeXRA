@@ -23,6 +23,7 @@ import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { replaceAllLiteral, replaceFirstLiteral } from './editPrimitives';
 
 const EditInputSchema = z.strictObject({
   path: z
@@ -94,18 +95,11 @@ export class EditFileTool extends defineTool({
       );
     }
 
-    // Use split/join and indexOf/slice for literal replacement
-    // (String.replace has special patterns like $$, $&, $' that corrupt LaTeX)
-    let updatedContent: string;
-    if (replace_all) {
-      updatedContent = currentContent.split(old_str).join(new_str);
-    } else {
-      const idx = currentContent.indexOf(old_str);
-      updatedContent =
-        currentContent.slice(0, idx) +
-        new_str +
-        currentContent.slice(idx + old_str.length);
-    }
+    // Literal replacement (String.replace would interpret $$, $&, $', `$\``
+    // patterns and corrupt LaTeX/code); see editPrimitives.
+    const updatedContent = replace_all
+      ? replaceAllLiteral(currentContent, old_str, new_str)
+      : replaceFirstLiteral(currentContent, old_str, new_str);
 
     const outcome = await requestApprovedEditContent({
       path: targetPath,
