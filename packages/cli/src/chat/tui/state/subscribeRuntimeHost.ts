@@ -191,10 +191,7 @@ function applyToState<K extends ProgressEvent>(
       // list; the CLI also persists a bounded transcript for each finished
       // process before its tail is pruned (a CLI-only side effect).
       patchStream(p.parentStreamId, (s) => {
-        const { vanishedIds } = diffActiveChildren(
-          s.activeProcesses,
-          p.processes,
-        );
+        const vanishedIds = diffActiveChildren(s.activeProcesses, p.processes);
         const entries = appendCompletedProcessEntries(
           p.parentStreamId,
           s,

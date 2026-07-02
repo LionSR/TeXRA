@@ -44,7 +44,7 @@ export function withTestRunContext<T>(
     createRunContext({
       runtimeHost,
       streamId: streamId as StreamTabId,
-      executionId: 'test-execution' as ExecutionId,
+      executionId: 'deadbeef' as ExecutionId,
       coordinators: {} as RunCoordinators,
       modelSource: 'live',
       getModel: () => undefined,

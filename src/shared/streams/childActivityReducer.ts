@@ -11,28 +11,19 @@ export interface HasExecutionId {
   readonly executionId: string;
 }
 
-export interface ChildActivityDiff<T extends HasExecutionId> {
-  /** The next active-child list, passed through unchanged. */
-  readonly next: readonly T[];
-  /**
-   * Ids present in `previous` but absent from `next` — i.e. children that
-   * finished between the two snapshots. The caller decides what "vanished"
-   * means (count it, persist a transcript row, prune a side map, or several).
-   */
-  readonly vanishedIds: ReadonlySet<string>;
-}
-
 /**
- * Diff two active-child snapshots by executionId. Pure: never mutates either
- * input.
+ * Diff two active-child snapshots by executionId, returning ids present in
+ * `previous` but absent from `next` — i.e. children that finished between
+ * the two snapshots. The caller decides what "vanished" means (count it,
+ * persist a transcript row, prune a side map, or several). Pure: never
+ * mutates either input.
  */
-export function diffActiveChildren<T extends HasExecutionId>(
-  previous: readonly T[],
-  next: readonly T[],
-): ChildActivityDiff<T> {
+export function diffActiveChildren(
+  previous: readonly HasExecutionId[],
+  next: readonly HasExecutionId[],
+): ReadonlySet<string> {
   const nextIds = new Set(next.map((child) => child.executionId));
-  const vanishedIds = new Set(
+  return new Set(
     previous.map((child) => child.executionId).filter((id) => !nextIds.has(id)),
   );
-  return { next, vanishedIds };
 }

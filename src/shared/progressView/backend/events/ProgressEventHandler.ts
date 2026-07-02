@@ -437,10 +437,7 @@ export class ProgressEventHandler {
     let nextBadges: StreamBadgeSnapshot | null = null;
 
     this.state.updateStreamState(parentStreamId, (prev) => {
-      const { vanishedIds } = diffActiveChildren(
-        prev[opts.activeField],
-        opts.next,
-      );
+      const vanishedIds = diffActiveChildren(prev[opts.activeField], opts.next);
       const updatedState = {
         ...prev,
         [opts.activeField]: opts.next,
