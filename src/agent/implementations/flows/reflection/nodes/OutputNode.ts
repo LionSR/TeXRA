@@ -1,6 +1,5 @@
 import { Node } from '@agent/node';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import { toErrorMessage } from '@common/errors';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { CompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
@@ -187,7 +186,7 @@ export class OutputNode<C = unknown> extends Node<
   ): Promise<OutputExecResult> {
     const { logger, outputState, setting } = this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
-    logger.warn(`Output processing failed: ${error.message}`);
+    logger.warn('Output processing failed', { data: error });
 
     // Still summarize what we can for post() side effects
     let summary: RoundSummary;
@@ -203,7 +202,8 @@ export class OutputNode<C = unknown> extends Node<
       // Double-fault: summarizeRound failed during fallback, so we drop the
       // round's file infos. Log it so silently-missing output files are visible.
       logger.warn(
-        `Output fallback summary failed; output files may be dropped: ${toErrorMessage(summaryError)}`,
+        'Output fallback summary failed; output files may be dropped',
+        { data: summaryError },
       );
       summary = {
         storageKey: getStorageKey(outputState),

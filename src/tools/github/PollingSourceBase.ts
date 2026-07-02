@@ -163,7 +163,7 @@ export abstract class PollingSourceBase<
       try {
         cb(text);
       } catch (err) {
-        this.logger.warn(`Listener threw: ${String(err)}`);
+        this.logger.warn('Listener threw', { data: err });
       }
     }
   }
@@ -207,7 +207,7 @@ export abstract class PollingSourceBase<
       try {
         listener(keys);
       } catch (err) {
-        this.logger.warn(`Keys-changed listener threw: ${String(err)}`);
+        this.logger.warn('Keys-changed listener threw', { data: err });
       }
     }
     this.emitKeysChangedEvent(keys, unique(runtimeHosts));
@@ -290,16 +290,16 @@ export abstract class PollingSourceBase<
     try {
       await this.afterTick(entries, now);
     } catch (err) {
-      this.logger.warn(`Post-poll hook failed: ${String(err)}`);
+      this.logger.warn('Post-poll hook failed', { data: err });
     }
   }
 
   protected handleFailure(key: K, state: S, err: unknown): void {
     const now = Date.now();
     if (err instanceof GitHubAuthError) {
-      this.logger.warn(
-        `Auth error for ${key}; stopping subscription. ${err.message}`,
-      );
+      this.logger.warn(`Auth error for ${key}; stopping subscription.`, {
+        data: err,
+      });
       this.emit(state, this.formatErrorEvent(key, state, err.message));
       this.emitToStateHosts(state, 'githubTokenInvalid', {
         message: err.message,
@@ -308,9 +308,9 @@ export abstract class PollingSourceBase<
       return;
     }
     if (err instanceof GitHubPermanentError) {
-      this.logger.warn(
-        `Permanent error for ${key} (HTTP ${err.status}); stopping subscription. ${err.message}`,
-      );
+      this.logger.warn(`Permanent error for ${key}; stopping subscription.`, {
+        data: err,
+      });
       this.emitErrorAndDetach(key, state, err.message);
       return;
     }
@@ -349,8 +349,8 @@ export abstract class PollingSourceBase<
     state.skipPollUntilMs = now + actualDelayMs;
     if (now - state.lastSuccessAt >= this.config.maxFailureDurationMs) {
       this.logger.warn(
-        `Poll failed for ${key} (failure #${state.consecutiveFailures}); ` +
-          `unreachable for over 24 h, detaching: ${String(err)}`,
+        `Poll failed for ${key}; unreachable for over 24 h, detaching.`,
+        { data: { failureCount: state.consecutiveFailures, error: err } },
       );
       this.emitErrorAndDetach(
         key,
@@ -359,9 +359,12 @@ export abstract class PollingSourceBase<
       );
       return;
     }
-    this.logger.warn(
-      `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
-        `retrying in ${Math.round(actualDelayMs / 1000)}s): ${String(err)}`,
-    );
+    this.logger.warn(`Poll failed for ${key}; retrying.`, {
+      data: {
+        failureCount: state.consecutiveFailures,
+        retryInSec: Math.round(actualDelayMs / 1000),
+        error: err,
+      },
+    });
   }
 }

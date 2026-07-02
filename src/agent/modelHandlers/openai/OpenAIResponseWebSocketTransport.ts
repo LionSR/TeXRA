@@ -124,9 +124,9 @@ export class OpenAIResponseWebSocketTransport {
         return this.wsConnection;
       }
       // Connection expired or closed — reconnect
-      this.logger.debug(
-        `WebSocket connection stale (age: ${Math.round(age / 1000)}s, ready: ${socketReady}) — reconnecting`,
-      );
+      this.logger.debug('WebSocket connection stale — reconnecting', {
+        data: { ageSeconds: Math.round(age / 1000), socketReady },
+      });
       this.closeWebSocket();
     }
 

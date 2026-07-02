@@ -144,10 +144,14 @@ export class OutputFileProcessor {
     const rawText = await flexibleFS.read(outputLocation).catch(() => '');
     if (rawText.trim().length > 0) {
       this.ctx.logger.warn(
-        `Round ${currRound}: the model returned output but no files could be ` +
-          `extracted from it — it likely did not wrap each document in ` +
-          `<${this.ctx.agentSetting.documentTag} name="…">. The raw response ` +
-          `was kept at ${outputLocation.absolutePath}.`,
+        'The model returned output but no files could be extracted from it — it likely did not wrap each document in the expected tag. The raw response was kept for recovery.',
+        {
+          data: {
+            round: currRound,
+            documentTag: this.ctx.agentSetting.documentTag,
+            rawResponsePath: outputLocation.absolutePath,
+          },
+        },
       );
     }
     logMissingOutputs(this.ctx.logger, {

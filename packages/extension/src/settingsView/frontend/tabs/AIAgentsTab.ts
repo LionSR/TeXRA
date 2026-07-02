@@ -33,7 +33,6 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Side-effect imports - register WA components
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
@@ -101,6 +100,32 @@ export class AIAgentsTab extends LitElement {
         font-size: var(--font-size-sm);
       }
 
+      .ai-agents-status {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-s);
+        font-size: var(--font-size-sm);
+        white-space: nowrap;
+      }
+
+      .ai-agents-status-stat {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+      }
+
+      .ai-agents-status-stat wa-icon {
+        font-size: var(--font-size-sm);
+      }
+
+      .ai-agents-status-available {
+        color: var(--color-status-ok);
+      }
+
+      .ai-agents-status-missing {
+        color: var(--color-status-error);
+      }
+
       .category-section {
         margin-bottom: var(--wa-space-m);
       }
@@ -142,10 +167,6 @@ export class AIAgentsTab extends LitElement {
   @property({ type: String })
   claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
   @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';
-
-  private handleRecheck(): void {
-    this.dispatchEvent(createEvent('tool-recheck'));
-  }
 
   private emitSelect(eventName: string, key: string, e: Event): void {
     const select = e.currentTarget as WaSelect | null;
@@ -237,6 +258,40 @@ export class AIAgentsTab extends LitElement {
     return this.items.filter((item) => item.category === 'ai-agents');
   }
 
+  /**
+   * Read-only status summary derived from the same `toolDashboardItems`
+   * signal the Tools tab uses to drive its actionable "Re-check" button.
+   * This tab only reflects that shared state — the Tools tab owns the one
+   * control that re-runs the probe (see CLAUDE.md "Duplicate UI Controls").
+   */
+  private renderStatusSummary(
+    items: readonly ToolDashboardItem[],
+  ): TemplateResult | typeof nothing {
+    if (items.length === 0) return nothing;
+
+    let available = 0;
+    let missing = 0;
+    for (const item of items) {
+      if (item.status === 'available') available++;
+      else if (item.status === 'not-found') missing++;
+    }
+
+    return html`
+      <div class="ai-agents-status">
+        <span class="ai-agents-status-stat ai-agents-status-available">
+          ${waIcon('check')} ${available} available
+        </span>
+        ${missing > 0
+          ? html`
+              <span class="ai-agents-status-stat ai-agents-status-missing">
+                ${waIcon('warning')} ${missing} need setup
+              </span>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
   override render(): TemplateResult {
     if (!this.loaded) {
       return html`
@@ -256,15 +311,7 @@ export class AIAgentsTab extends LitElement {
             runs, such as coding agents, GitHub, and reference managers. Each
             integration shows its own setup and authentication state here.
           </p>
-          <wa-button
-            appearance="outlined"
-            variant="neutral"
-            size="small"
-            title="Re-check integration availability"
-            @click=${this.handleRecheck}
-          >
-            ${waIcon('refresh', { slot: 'start' })} Re-check
-          </wa-button>
+          ${this.renderStatusSummary(items)}
         </div>
 
         ${

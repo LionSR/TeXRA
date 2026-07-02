@@ -11,8 +11,6 @@
  * layer above.
  */
 
-import { z } from 'zod';
-
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getConfig } from '@utils/config';
 import { shouldDropBotEvent } from './botFilter';
@@ -329,7 +327,8 @@ export class PRPollingSource extends PollingSourceBase<
       const parsed = GhPullRequestSchema.safeParse(prRes.data);
       if (!parsed.success) {
         this.logger.warn(
-          `Skipping PR poll for ${prKeyToString(pr)}: malformed pull-request payload; ${z.prettifyError(parsed.error)}`,
+          `Skipping PR poll for ${prKeyToString(pr)}: malformed pull-request payload`,
+          { data: parsed.error },
         );
         return;
       }
@@ -789,22 +788,24 @@ export class PRPollingSource extends PollingSourceBase<
       if (err instanceof GitHubRateLimitError) throw err;
       if (err instanceof GitHubPermanentError) {
         this.logger.warn(
-          `Annotations for check ${run.id} unavailable (HTTP ${err.status}); dropping.`,
+          `Annotations for check ${run.id} unavailable; dropping.`,
+          { data: err },
         );
         this.removePendingAnnotationRun(state, run.id);
         return true;
       }
       if (err instanceof GitHubAuthError) {
-        this.logger.warn(
-          `Annotations for check ${run.id} forbidden (${err.message}); dropping.`,
-        );
+        this.logger.warn(`Annotations for check ${run.id} forbidden; dropping.`, {
+          data: err,
+        });
         this.removePendingAnnotationRun(state, run.id);
         return true;
       }
       this.removePendingAnnotationRun(state, run.id);
       state.pendingAnnotationRuns.push(run);
       this.logger.warn(
-        `Annotation fetch for check ${run.id} failed; rotating to back of queue: ${String(err)}`,
+        `Annotation fetch for check ${run.id} failed; rotating to back of queue`,
+        { data: err },
       );
       return true;
     }
@@ -849,7 +850,7 @@ export class PRPollingSource extends PollingSourceBase<
           ),
         );
       } catch (err) {
-        this.logger.warn(`Listener threw: ${String(err)}`);
+        this.logger.warn('Listener threw', { data: err });
       }
     }
   }

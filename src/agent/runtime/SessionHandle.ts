@@ -30,7 +30,6 @@
 import { getActiveFlushers, unregisterFlushers } from '@transcript';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { toErrorMessage } from '@common/errors';
 import { createChannelTrace } from '@logger';
 
 import { tryUseRunContext } from './RunContext';
@@ -154,7 +153,7 @@ export class SessionHandle {
         try {
           listener(event);
         } catch (err) {
-          logger.warn(`onResult listener threw: ${toErrorMessage(err)}`);
+          logger.warn('onResult listener threw', { data: err });
         }
       }
     });
@@ -185,7 +184,7 @@ export class SessionHandle {
       this.flushPendingTraces();
       if (keepActiveExecutions) {
         void this.disposeWhenIdle().catch((err) => {
-          logger.warn(`Idle session disposal failed: ${toErrorMessage(err)}`);
+          logger.warn('Idle session disposal failed', { data: err });
         });
       } else {
         this.teardownOwners();

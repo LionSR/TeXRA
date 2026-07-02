@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 
 import { defineCommand } from 'citty';
+import { parse as shellParse } from 'shell-quote';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -90,12 +91,23 @@ async function toggleTool(
   return CliExitCode.Success;
 }
 
+// Not routed through executeCommand: install/auth guide commands are
+// interactive (they can prompt for input or open a browser), which needs true
+// stdio:'inherit' that executeCommand's buffered/streamed output can't
+// provide. `command` always comes from the static EXTERNAL_TOOL_DEFS
+// registry (src/tools/externalToolDefs.ts), never from user or LLM input;
+// parsing it into argv (instead of a shell string) still closes off shell
+// metacharacter injection as defense in depth.
 function shellRun(command: string): Promise<number> {
   return new Promise((resolve) => {
-    const child = spawn(command, {
-      shell: true,
-      stdio: 'inherit',
-    });
+    const [cmd, ...args] = shellParse(command).filter(
+      (arg): arg is string => typeof arg === 'string',
+    );
+    if (!cmd) {
+      resolve(CliExitCode.AgentError);
+      return;
+    }
+    const child = spawn(cmd, args, { stdio: 'inherit' });
     child.on('error', () => resolve(CliExitCode.AgentError));
     child.on('exit', (code) => resolve(code ?? CliExitCode.AgentError));
   });

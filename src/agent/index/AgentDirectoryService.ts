@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 
 // Local imports
-import { toErrorMessage } from '@common/errors';
 import type { AgentSource } from '@shared/schemas/agent';
 
 import {
@@ -39,8 +38,8 @@ export interface AgentDirectoryIssueReporter {
 }
 
 export interface AgentDirectoryServiceLogger {
-  debug(message: string): void;
-  error(message: string): void;
+  debug(message: string, data?: unknown): void;
+  error(message: string, data?: unknown): void;
 }
 
 export interface AgentDirectoryServiceOptions {
@@ -122,7 +121,8 @@ export class AgentDirectoryService {
       await this.options.storage.ensureDir(this.defaultCustomDirectoryName);
     } catch (error) {
       this.options.logger.error(
-        `Failed to create default custom agents directory: ${toErrorMessage(error)}`,
+        'Failed to create default custom agents directory',
+        error,
       );
       throw new Error(
         'Unable to create custom agents directory. Please check permissions.',

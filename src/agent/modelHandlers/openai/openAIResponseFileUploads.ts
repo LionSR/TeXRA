@@ -15,10 +15,7 @@ import OpenAI, {
 } from 'openai';
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  buildErrorLogData,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
+import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
@@ -141,10 +138,9 @@ async function replaceFileDataWithUpload(
 
     // The retry layer owns the visible failure row for this rethrow; keep
     // the upload diagnostics at debug to avoid a duplicate ERROR entry.
-    logger.debug(
-      `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
-      { data: buildErrorLogData(err, { operation: 'upload file' }) },
-    );
+    logger.debug(`Failed to upload file ${filename}`, {
+      data: buildErrorLogData(err, { operation: 'upload file' }),
+    });
     throw err;
   } finally {
     buffer = wipeBuffer(buffer);
@@ -171,9 +167,9 @@ export async function uploadToolAttachments(
     try {
       buffer = await loadAttachmentBuffer(attachment);
     } catch (err) {
-      logger.warn(
-        `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
-      );
+      logger.warn(`Unable to read attachment ${attachment.path ?? 'attachment'}`, {
+        data: buildErrorLogData(err, { operation: 'read attachment' }),
+      });
       continue;
     }
 
@@ -194,9 +190,9 @@ export async function uploadToolAttachments(
         isImage: mimeType.startsWith('image/'),
       });
     } catch (err) {
-      logger.warn(
-        `Failed to upload attachment to OpenAI: ${getSdkErrorMessage(err)}`,
-      );
+      logger.warn('Failed to upload attachment to OpenAI', {
+        data: buildErrorLogData(err, { operation: 'upload attachment' }),
+      });
     } finally {
       buffer = wipeBuffer(buffer);
     }
@@ -266,9 +262,9 @@ export async function buildInlineAttachmentParts(
       }
       inlined.push(attachment);
     } catch (err) {
-      logger.debug(
-        `Unable to inline attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
-      );
+      logger.debug(`Unable to inline attachment ${attachment.path ?? 'attachment'}`, {
+        data: buildErrorLogData(err, { operation: 'inline attachment' }),
+      });
       skipped.push(attachment);
     } finally {
       buffer = wipeBuffer(buffer);

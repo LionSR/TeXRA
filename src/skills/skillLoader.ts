@@ -178,7 +178,8 @@ export async function loadSkillDirectory(
   const skillPath = path.join(skillDir, 'SKILL.md');
 
   try {
-    const content = await fs.readFile(skillPath, 'utf8');
+    const raw = await platform().fs.readFile(skillPath);
+    const content = Buffer.from(raw).toString('utf8');
     const { frontmatter, body } = extractFrontmatter(content);
     if (!isObject(frontmatter)) {
       return {

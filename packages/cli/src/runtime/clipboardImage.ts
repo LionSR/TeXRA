@@ -106,16 +106,14 @@ async function readClipboardPngWindows(
 ): Promise<ClipboardRead> {
   const quotedOutFile = outFile.replaceAll("'", "''");
   const script = `$img = Get-Clipboard -Format Image; if ($img) { Add-Type -AssemblyName System.Drawing; $img.Save('${quotedOutFile}', [System.Drawing.Imaging.ImageFormat]::Png) } else { Write-Output 'NO_IMAGE' }`;
-  try {
-    const { stdout } = await execFileAsync('powershell', [
-      '-NoProfile',
-      '-Command',
-      script,
-    ]);
-    if (String(stdout).includes('NO_IMAGE')) return 'none';
-  } catch {
-    return 'none';
-  }
+  const result = await executeCommand([
+    'powershell',
+    '-NoProfile',
+    '-Command',
+    script,
+  ]);
+  if (!result.success) return 'none';
+  if ((result.stdout ?? '').includes('NO_IMAGE')) return 'none';
   return readPngFileWithinLimit(outFile);
 }
 

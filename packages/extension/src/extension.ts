@@ -243,6 +243,7 @@ export async function activate(context: vscode.ExtensionContext) {
     },
     toolMissingHandler: async (message, openDocsCommand) => {
       const actions = openDocsCommand ? ['View Installation Guide'] : [];
+      logger.error('extension', message);
       const choice = await vscode.window.showErrorMessage(message, ...actions);
       if (choice === 'View Installation Guide' && openDocsCommand) {
         const [command, ...args] = openDocsCommand.split(',');
@@ -435,7 +436,10 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     } else {
       const authProvider = new SupabaseAuthProvider(context, {
-        showError: (msg) => void vscode.window.showErrorMessage(msg),
+        showError: (msg) => {
+          logger.error('SupabaseAuthProvider', msg);
+          void vscode.window.showErrorMessage(msg);
+        },
         showInfo: (msg) => void vscode.window.showInformationMessage(msg),
         showSignInPrompt: async (reason) => {
           const message =
@@ -629,6 +633,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const disposeGitHubAuthListener = bus.on(
     'githubTokenInvalid',
     ({ message }) => {
+      logger.error('extension', `GitHub token rejected: ${message}`);
       void vscode.window
         .showErrorMessage(
           `GitHub token rejected: ${message}`,

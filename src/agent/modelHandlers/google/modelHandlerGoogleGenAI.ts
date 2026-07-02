@@ -494,9 +494,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const errorWithResponse = error as Error & {
           response?: { promptFeedback?: unknown };
         };
-        this.logger.warn(
-          `Content blocked by safety filter: ${JSON.stringify(errorWithResponse.response?.promptFeedback)}`,
-        );
+        this.logger.warn('Content blocked by safety filter.', {
+          data: errorWithResponse.response?.promptFeedback,
+        });
       }
       // If the stream produced any text before failing, attach a tail to the
       // error so the retry UI can show progress and future continuation logic
@@ -639,9 +639,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (!responseObject.candidates || responseObject.candidates.length === 0) {
       if (responseObject?.promptFeedback?.blockReason) {
         const { blockReason, safetyRatings } = responseObject.promptFeedback;
-        this.logger.error(
-          `Request blocked due to ${blockReason}. Safety ratings: ${JSON.stringify(safetyRatings)}`,
-        );
+        this.logger.error('Request blocked.', {
+          data: { blockReason, safetyRatings },
+        });
         return {
           text: '',
           usage: responseObject.usageMetadata ?? undefined,
@@ -649,7 +649,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
       }
       this.logger.error(
-        `Invalid or empty response structure from Google GenAI: ${JSON.stringify(responseObject)}`,
+        'Invalid or empty response structure from Google GenAI.',
+        { data: responseObject },
       );
       return {
         text: '',
@@ -878,9 +879,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     if (thoughtContent) {
-      this.logger.debug(
-        `Google GenAI thought summary preview: ${thoughtContent.slice(0, K_SLICE)}...`,
-      );
+      this.logger.debug('Google GenAI thought summary preview.', {
+        data: thoughtContent.slice(0, K_SLICE),
+      });
     }
 
     return thoughtContent || null;
@@ -935,7 +936,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       );
     } catch (attachmentError) {
       this.logger.warn(
-        `Failed to encode attachment '${attachment.path}' for Google function response: ${getSdkErrorMessage(attachmentError)}`,
+        `Failed to encode attachment '${attachment.path}' for Google function response.`,
+        { data: attachmentError },
       );
       return null;
     }

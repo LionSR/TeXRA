@@ -27,7 +27,10 @@ import {
   type AgentReviewNode,
 } from '@frontend/review/AgentReviewTreeProvider';
 import { promptReviewOptions } from '@frontend/review/promptReviewOptions';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { setReportReviewIssueSink } from '@tools/ReportReviewIssueTool';
 import { WorkspaceFS } from '@utils/files';
 
@@ -75,7 +78,8 @@ async function handleOpenIssue(node: AgentReviewNode): Promise<void> {
 async function handleRunWithOptions(): Promise<void> {
   const cwd = WorkspaceFS.getPath();
   if (!cwd) {
-    void vscode.window.showErrorMessage(
+    void showLoggedMessage(
+      CHANNEL,
       'Agent review needs an open workspace folder.',
     );
     return;

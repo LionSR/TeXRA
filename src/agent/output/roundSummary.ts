@@ -79,10 +79,10 @@ export async function summarizeRound(
         }
       }
 
-      deps.logger.debug(
-        `Finalized round ${currRound} storageKey=${storageKey} files=${fileInfos.length}`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
-      );
+      deps.logger.debug('Finalized round', {
+        data: { round: currRound, storageKey, files: fileInfos.length },
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
 
       return {
         storageKey,

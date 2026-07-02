@@ -238,9 +238,9 @@ export class ExecutionSubscriptionBinder {
     );
     bound.set(executionId, subscription);
     if (subscription.bind()) {
-      this.logger.info(
-        `Bound execution subscription ${executionId} → stream ${streamId}`,
-      );
+      this.logger.info('Bound execution subscription to stream', {
+        data: { executionId, streamId },
+      });
     }
   }
 
@@ -254,9 +254,9 @@ export class ExecutionSubscriptionBinder {
     try {
       d.dispose();
     } catch (err) {
-      this.logger.warn(
-        `Disposer threw on explicit unsubscribe: ${String(err)}`,
-      );
+      this.logger.warn('Disposer threw on explicit unsubscribe', {
+        data: err,
+      });
     }
     return true;
   }
@@ -285,7 +285,7 @@ export class ExecutionSubscriptionBinder {
       try {
         d.dispose();
       } catch (err) {
-        this.logger.warn(`Disposer threw during ${reason}: ${String(err)}`);
+        this.logger.warn(`Disposer threw during ${reason}`, { data: err });
       }
     }
   }

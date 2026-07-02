@@ -1,6 +1,9 @@
 // Standard library imports
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+
+// Local imports - platform
+import { platform } from '@platform/platform';
+import { isDirectory } from '@utils/files/fsEntryType';
 
 // Local imports - common
 import {
@@ -13,9 +16,6 @@ import { byName } from '@utils/core';
 // Local imports - skill parsing
 import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';
 import type { Skill } from './SkillSchema';
-
-// Local imports - utilities
-import type { Dirent } from 'node:fs';
 
 export {
   type SkillIssueCode,
@@ -84,9 +84,9 @@ export async function discoverSkills(
   const seenNames = new Set<string>();
   const seenRealPaths = new Set<string>();
 
-  let entries: Dirent[];
+  let entries: [string, number][];
   try {
-    entries = await fs.readdir(root, { withFileTypes: true });
+    entries = await platform().fs.readDirectory(root);
   } catch (err) {
     if (isFileNotFoundError(err)) {
       return { skills, errors };
@@ -100,14 +100,27 @@ export async function discoverSkills(
     return { skills, errors };
   }
 
-  for (const entry of entries.sort(byName)) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+  const sortedEntries = entries
+    .map(([name, type]) => ({ name, type }))
+    .sort(byName);
 
+  for (const entry of sortedEntries) {
     const skillDir = path.join(root, entry.name);
+    // `readDirectory`'s type bitmask doesn't reliably surface the symlink bit
+    // on every FileSystemProvider backend (see `FileSystemProvider.isSymlink`
+    // doc comment), so fall back to the dedicated symlink check for entries
+    // the bitmask doesn't already report as a directory.
+    if (
+      !isDirectory(entry.type) &&
+      !(await platform().fs.isSymlink(skillDir))
+    ) {
+      continue;
+    }
+
     const skillPath = path.join(skillDir, 'SKILL.md');
     let realSkillPath: string;
     try {
-      realSkillPath = await fs.realpath(skillPath);
+      realSkillPath = await platform().fs.realPath(skillPath);
     } catch (err) {
       if (!isFileNotFoundError(err)) {
         errors.push(
@@ -149,8 +162,8 @@ async function validateRequiredSource(
   source: SkillSource,
 ): Promise<SkillLoadIssue | undefined> {
   try {
-    const sourceStat = await fs.stat(source.path);
-    if (!sourceStat.isDirectory()) {
+    const sourceStat = await platform().fs.stat(source.path);
+    if (!isDirectory(sourceStat.type)) {
       return issue(
         'error',
         'invalid_source',
@@ -222,7 +235,7 @@ export async function discoverSkillSources(
     for (const skill of result.skills) {
       let realSkillPath = skill.path;
       try {
-        realSkillPath = await fs.realpath(skill.path);
+        realSkillPath = await platform().fs.realPath(skill.path);
       } catch {
         // The one-root loader has already read this file. If the path vanishes
         // between the read and this check, name deduplication still suffices.

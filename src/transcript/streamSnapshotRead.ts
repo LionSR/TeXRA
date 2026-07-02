@@ -136,10 +136,9 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
     if (raw === undefined) return new Map() as T;
     const wasLegacy = isLegacyNested(raw);
     if (wasLegacy) legacyKeys.push(key);
-    const parsed = schema.safeParse(
-      wasLegacy ? flattenLegacyRuns(raw, activeRunId) : raw,
-    );
-    return parsed.success ? parsed.data : (new Map() as T);
+    return schema
+      .catch(new Map() as T)
+      .parse(wasLegacy ? flattenLegacyRuns(raw, activeRunId) : raw);
   };
 
   const [outputFiles, missingOutputs, compileFailures] = await Promise.all([
@@ -149,11 +148,7 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
   ]);
 
   const usageRaw = await tryRead(kv, STREAM_DATA_KEYS.USAGE_STATS);
-  const usageParsed =
-    usageRaw === undefined ? undefined : UsageDataSchema.safeParse(usageRaw);
-  const usage = usageParsed?.success
-    ? usageParsed.data
-    : new Map<string, TokenUsageStats>();
+  const usage = UsageDataSchema.parse(usageRaw);
 
   const workPlan = readPersistedWorkPlan(
     await tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN),

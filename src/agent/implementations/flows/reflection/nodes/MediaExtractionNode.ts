@@ -83,7 +83,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
     error: Error,
   ): Promise<FileLocation[] | null> {
     const { logger } = this.services;
-    logger.debug(`Media extraction skipped: ${error.message}`);
+    logger.debug('Media extraction skipped', { data: error });
     return null;
   }
 

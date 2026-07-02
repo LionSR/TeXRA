@@ -1073,7 +1073,6 @@ export class SettingsApp extends SettingsAppBase {
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-run-command=${this.handleToolRunCommand}
-              @tool-recheck=${this.handleToolRecheck}
               @tool-toggle=${this.handleToolToggle}
               @codex-sandbox-mode-change=${this.handleCodexSandboxModeChange}
               @codex-reasoning-effort-change=${

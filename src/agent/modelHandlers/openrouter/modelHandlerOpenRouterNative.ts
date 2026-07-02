@@ -18,7 +18,6 @@ import {
   attachPartialText,
   attachFlowAutoRetryRequired,
   detectStatusCode,
-  getSdkErrorMessage,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -444,10 +443,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         const formattedMedia = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMedia);
       } catch (err) {
-        this.logger.error(
-          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          { data: err },
-        );
+        this.logger.error('Error processing media files for follow-up round', {
+          data: err,
+        });
       }
     }
 
@@ -638,9 +636,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     workspaceState?: AgentWorkspaceState,
   ): void {
     this.applyStringReasoningToWorkspaceState(reasoning, workspaceState);
-    this.logger.debug(
-      `Reasoning content preview: ${reasoning.slice(0, K_SLICE)}...`,
-    );
+    this.logger.debug('Reasoning content preview', {
+      data: reasoning.slice(0, K_SLICE),
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -745,9 +743,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       workspaceState,
       agentSetting,
     );
-    this.logger.debug(
-      `Adding continuation message. Continuation:\n ${userMessageContinuation}`,
-    );
+    this.logger.debug('Adding continuation message', {
+      data: userMessageContinuation,
+    });
 
     const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
     messages.push({
@@ -955,7 +953,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     } catch (err) {
       logSdkError(
         this.logger,
-        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+        'Error adding media to user message',
         err,
         { operation: 'add media to user message' },
       );

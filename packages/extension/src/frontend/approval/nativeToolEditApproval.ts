@@ -16,6 +16,7 @@ import * as vscode from 'vscode';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   type DiffSession,
   type DiffSource,
@@ -42,6 +43,8 @@ import {
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+
+const CHANNEL = 'nativeToolEditApproval';
 
 interface PendingApprovalEntry extends LatexPreviewEntry {
   request: ToolEditApprovalRequest;
@@ -206,7 +209,7 @@ export async function nativeRequestApproval(
         settle,
         workspaceTempCleanup: [],
         latexOperationInProgress: false,
-        onError: (msg) => vscode.window.showErrorMessage(msg),
+        onError: (msg) => void showLoggedMessage(CHANNEL, msg),
       };
 
       pendingApprovals.set(requestId, entry);

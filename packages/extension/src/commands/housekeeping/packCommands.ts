@@ -5,7 +5,10 @@ import { z } from 'zod';
 // Local imports
 import type { FileOpResult } from '@agent/types';
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { parseWithErrorDisplay } from '@frontend/ui/errorHandlingUtils';
+import {
+  parseWithErrorDisplay,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import {
   runPack,
   runPackSingle,
@@ -63,10 +66,10 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
       );
       break;
     case 'missingParams':
-      vscode.window.showErrorMessage('Missing required parameters for pack');
+      void showLoggedMessage(CHANNEL, 'Missing required parameters for pack');
       break;
     case 'error':
-      vscode.window.showErrorMessage(`Error during packing: ${result.error}`);
+      void showLoggedMessage(CHANNEL, `Error during packing: ${result.error}`);
       break;
   }
 }

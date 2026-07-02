@@ -150,9 +150,9 @@ export async function runCompileCheck(
       }
       if (result.artifact) artifacts.push(result.artifact);
     } catch (err) {
-      ctx.logger.warn(
-        `Compile check: ${displayName} skipped — ${toErrorMessage(err)}`,
-      );
+      ctx.logger.warn(`Compile check: ${displayName} skipped`, {
+        data: err,
+      });
     }
   }
 
@@ -260,9 +260,9 @@ async function compileOne(
       : null;
 
     if (artifact) {
-      ctx.logger.debug(
-        `Compile check: ${displayName} PDF persisted at ${artifact.latestPdf.relativePath}`,
-      );
+      ctx.logger.debug(`Compile check: ${displayName} PDF persisted`, {
+        data: artifact.latestPdf.relativePath,
+      });
     }
     return { failure: null, failureLogExcerpt: '', artifact };
   }
@@ -271,9 +271,9 @@ async function compileOne(
   const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${tail}`;
   await flexibleFS.ensureDir(pathToLocation(opts.compileRoot));
   await flexibleFS.write(logDest, `${failureLogExcerpt}\n`);
-  ctx.logger.warn(
-    `Compile check: ${displayName} failed — wrote ${path.relative(opts.runDirectory, logDest.absolutePath)}`,
-  );
+  ctx.logger.warn(`Compile check: ${displayName} failed`, {
+    data: path.relative(opts.runDirectory, logDest.absolutePath),
+  });
   const executionId = ctx.fileService.metadata.executionId;
   const logLocation = executionId
     ? createRunStorageLocation(

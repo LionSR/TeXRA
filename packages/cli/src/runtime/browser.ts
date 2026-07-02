@@ -1,4 +1,5 @@
 // Internal imports
+import { toErrorMessage } from '@common/errors';
 import { executeCommand } from '@utils/system/execUtils';
 
 export interface BrowserLaunchCommand {
@@ -55,8 +56,7 @@ export function openBrowser(
   manualBrowserHint: string,
 ): Promise<void> {
   return launchBrowser(url).catch((error: unknown) => {
-    const message =
-      error instanceof Error ? error.message : 'unknown browser launch error';
+    const message = toErrorMessage(error);
     log?.debug('cli-auth', message);
     throw new Error(
       `${message}. Run ${manualBrowserHint} to open the sign-in URL manually.`,

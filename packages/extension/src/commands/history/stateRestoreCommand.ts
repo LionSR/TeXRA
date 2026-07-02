@@ -9,7 +9,10 @@ import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreCo
 import { TaskStateSchema } from '@agent/core/state/TaskState';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { setPendingState } from '@common/state';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { COMMON_COMMANDS } from '@shared/ipc';
@@ -41,7 +44,7 @@ async function restoreState(
     logger.info(CHANNEL, RESTORE_MALFORMED_MESSAGE, {
       data: { validationError: z.prettifyError(parsed.error) },
     });
-    await vscode.window.showErrorMessage(RESTORE_MALFORMED_MESSAGE);
+    await showLoggedMessage(CHANNEL, RESTORE_MALFORMED_MESSAGE);
     return false;
   }
 

@@ -12,11 +12,11 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
-import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import {
   CHATGPT_SETUP_MODEL,
@@ -391,8 +391,10 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     return 'launched';
   } catch (error) {
     logger.error(CHANNEL, 'Setup assistant failed to launch.', { data: error });
-    void vscode.window.showErrorMessage(
-      `Failed to launch setup assistant: ${toErrorMessage(error)}`,
+    void showLoggedErrorMessage(
+      CHANNEL,
+      'Failed to launch setup assistant',
+      error,
     );
     return 'not-started';
   }

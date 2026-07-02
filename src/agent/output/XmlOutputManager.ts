@@ -440,9 +440,9 @@ export class XmlOutputManager {
         lineage: null,
         diff: null,
       });
-      this.logger.debug(
-        `XML Source: ${source} -> TeX file written: ${texFile}`,
-      );
+      this.logger.debug('XML source written to TeX file', {
+        data: { source, texFile },
+      });
     }
 
     return outputFiles;
