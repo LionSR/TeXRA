@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { ZodError } from 'zod';
 
 // Local imports - common
 import * as logger from '@logger/logUtils';
@@ -126,9 +127,18 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
+   * Extension point invoked at the start of {@link dispatchInbound}, before
+   * the dispatcher runs. Subclasses that need per-message setup against the
+   * active webview (e.g. attaching it to sub-managers) override this instead
+   * of reimplementing dispatch.
+   */
+  protected onDispatch?(webviewView: T): void;
+
+  /**
    * Schema-driven dispatch shared by views that route through a typed
    * {@link DispatcherFn}. Tracks the active view, runs the dispatcher, logs
-   * validation failures at debug, and warns on commands with no handler.
+   * Zod validation failures at debug (expected, frequent) and handler
+   * exceptions at error (a real bug), and warns on commands with no handler.
    */
   protected async dispatchInbound<TMessage extends CommandMessage>(
     message: unknown,
@@ -137,10 +147,18 @@ export abstract class BaseViewMessageHandler<
     handlers: HandlerRegistry<TMessage>,
   ): Promise<void> {
     await this.withActiveView(webviewView, () => {
+      this.onDispatch?.(webviewView);
+
       const handled = dispatcher(message, handlers, (error) => {
-        this.logger.debug(this.channel, 'Message validation failed', {
-          data: error,
-        });
+        if (error instanceof ZodError) {
+          this.logger.debug(this.channel, 'Message validation failed', {
+            data: error,
+          });
+        } else {
+          this.logger.error(this.channel, 'Error handling message', {
+            data: error,
+          });
+        }
       });
 
       if (!handled && isCommandMessage(message)) {

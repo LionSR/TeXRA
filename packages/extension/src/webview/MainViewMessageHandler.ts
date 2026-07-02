@@ -61,6 +61,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly instructionManager: InstructionManager;
   private readonly interactionController: MainViewInteractionController;
   private readonly startupController: MainViewStartupController;
+  private readonly handlerRegistry: MainViewInboundHandlerRegistry;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -87,42 +88,39 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       loadOptions,
       getAuthStatus,
     });
+    this.handlerRegistry = this.createHandlerRegistry();
   }
 
   public override async handleMessage(
     message: unknown,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    await this.withActiveView(webviewView, async () => {
-      this.fileManager.attachWebview(webviewView);
-      this.instructionManager.attachWebview(webviewView);
-      this.diffManager.attachWebview(webviewView);
-
-      const handled = dispatchMainViewInbound(
-        message,
-        this.createHandlerRegistry(webviewView),
-        (error) => {
-          this.logger.error(
-            this.channel,
-            `Error handling message: ${toErrorMessage(error)}`,
-          );
-        },
-      );
-
-      if (!handled) {
-        await super.handleMessage(message, webviewView);
-      }
-    });
+    await this.dispatchInbound(
+      message,
+      webviewView,
+      dispatchMainViewInbound,
+      this.handlerRegistry,
+    );
   }
 
-  private createHandlerRegistry(
-    webviewView: vscode.WebviewView,
-  ): MainViewInboundHandlerRegistry {
+  /** Attaches the current webview to the sub-managers before dispatch. */
+  protected override onDispatch(webviewView: vscode.WebviewView): void {
+    this.fileManager.attachWebview(webviewView);
+    this.instructionManager.attachWebview(webviewView);
+    this.diffManager.attachWebview(webviewView);
+  }
+
+  private createHandlerRegistry(): MainViewInboundHandlerRegistry {
     return {
       // Common messages
-      [MAIN_VIEW_COMMANDS.THEME_SET]: (m) => this.handleTheme(m, webviewView),
-      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) =>
-        this.handleDebugMode(m, webviewView),
+      [MAIN_VIEW_COMMANDS.THEME_SET]: (m) => {
+        const view = this.getActiveView();
+        if (view) return this.handleTheme(m, view);
+      },
+      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) => {
+        const view = this.getActiveView();
+        if (view) return this.handleDebugMode(m, view);
+      },
       [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: () => this.handleWebviewReady(),
       [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (m) => {
         vscode.window.showInformationMessage(m.text);
@@ -236,10 +234,14 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: (m) =>
         this.instructionManager.handleClipboardImage(m),
 
-      [MAIN_VIEW_COMMANDS.START_RECORDING]: () =>
-        this.recordingManager.start(webviewView),
-      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: () =>
-        this.recordingManager.stop(webviewView),
+      [MAIN_VIEW_COMMANDS.START_RECORDING]: () => {
+        const view = this.getActiveView();
+        if (view) return this.recordingManager.start(view);
+      },
+      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: () => {
+        const view = this.getActiveView();
+        if (view) return this.recordingManager.stop(view);
+      },
 
       [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () => {
         await safeExecuteCommand('texra.setApiKey');

@@ -2,6 +2,7 @@ import { maybeBuildGoalContinuation } from '@agent/goal';
 import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
@@ -53,12 +54,11 @@ export class ToolUseWaitNode<C> extends Node<
     const {
       checkInterruption,
       session,
-      streamId,
       streamStatus,
       onBeforeWaiting,
-      runtimeHost,
       isSubagent,
     } = this.services;
+    const { streamId, runtimeHost } = useLaunchRunContext();
 
     if (checkInterruption()) {
       if (prepRes.previouslyDeliveredToOrchestrator) {
@@ -149,8 +149,8 @@ export class ToolUseWaitNode<C> extends Node<
     prepRes: WaitPrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
-    const { onFollowUpConsumed, streamId, logger, runtimeHost, streamStatus } =
-      this.services;
+    const { onFollowUpConsumed, logger, streamStatus } = this.services;
+    const { streamId, runtimeHost } = useLaunchRunContext();
 
     if (execRes.kind === 'stop') {
       if (prepRes.deliveredToOrchestrator) {

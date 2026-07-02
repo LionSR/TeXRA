@@ -13,7 +13,6 @@ import {
   type ProcessingContext,
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import { flexibleFS } from '@utils/files';
 import { normalizeRunId } from '@common/constants/runIds';
 import type {
   AgentFileLocation,
@@ -24,7 +23,8 @@ import type {
   OutputXmlSummary,
   RoundOutput,
 } from '@shared/schemas';
-import { createRecordingHost } from '../progressTestUtils';
+import { flexibleFS } from '@utils/files';
+import { createRecordingHost, withTestRunContext } from '../progressTestUtils';
 
 function createLocation(path: string): FileLocation {
   return { kind: 'external', absolutePath: path };
@@ -142,27 +142,32 @@ describe('output progress events', () => {
       xmlSummary: emptyXmlSummary,
     };
 
-    const transition = await outputNode.post(
-      { roundOutputs: [] } as never,
-      {
-        outputLocation,
-        currentRound: 2,
-        endTurn: false,
-      },
-      {
-        roundOutput,
-        summary: {
-          storageKey: normalizeRunId('run:output-node'),
-          currRound: 2,
-          fileInfos: [fileInfo],
-          filesToOpen: [openedLocation],
-          outputFile: outputLocation,
-          endTurn: false,
-        },
-        compileFailures: [],
-        compiledArtifacts: [],
-        emitCompileFailures: false,
-      },
+    const transition = await withTestRunContext(
+      host,
+      'stream:output-node',
+      () =>
+        outputNode.post(
+          { roundOutputs: [] } as never,
+          {
+            outputLocation,
+            currentRound: 2,
+            endTurn: false,
+          },
+          {
+            roundOutput,
+            summary: {
+              storageKey: normalizeRunId('run:output-node'),
+              currRound: 2,
+              fileInfos: [fileInfo],
+              filesToOpen: [openedLocation],
+              outputFile: outputLocation,
+              endTurn: false,
+            },
+            compileFailures: [],
+            compiledArtifacts: [],
+            emitCompileFailures: false,
+          },
+        ),
     );
 
     expect(transition).toBe('default');
@@ -199,21 +204,23 @@ describe('output progress events', () => {
     } = createCompileFailureFixture();
     const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
 
-    await outputNode.post(
-      shared,
-      {
-        outputLocation,
-        currentRound: 0,
-        endTurn: false,
-      },
-      {
-        roundOutput,
-        summary,
-        compileFailures: [compileFailure],
-        compileResult,
-        compiledArtifacts: [],
-        emitCompileFailures: false,
-      },
+    await withTestRunContext(host, 'stream:compile-context', () =>
+      outputNode.post(
+        shared,
+        {
+          outputLocation,
+          currentRound: 0,
+          endTurn: false,
+        },
+        {
+          roundOutput,
+          summary,
+          compileFailures: [compileFailure],
+          compileResult,
+          compiledArtifacts: [],
+          emitCompileFailures: false,
+        },
+      ),
     );
 
     expect(shared.lastCompileResult).toEqual(compileResult);
@@ -244,21 +251,23 @@ describe('output progress events', () => {
     } = createCompileFailureFixture();
     const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
 
-    await outputNode.post(
-      shared,
-      {
-        outputLocation,
-        currentRound: 0,
-        endTurn: false,
-      },
-      {
-        roundOutput,
-        summary,
-        compileFailures: [compileFailure],
-        compileResult,
-        compiledArtifacts: [],
-        emitCompileFailures: false,
-      },
+    await withTestRunContext(host, 'stream:compile-context-disabled', () =>
+      outputNode.post(
+        shared,
+        {
+          outputLocation,
+          currentRound: 0,
+          endTurn: false,
+        },
+        {
+          roundOutput,
+          summary,
+          compileFailures: [compileFailure],
+          compileResult,
+          compiledArtifacts: [],
+          emitCompileFailures: false,
+        },
+      ),
     );
 
     expect(shared.lastCompileResult).toEqual(compileResult);
@@ -288,21 +297,23 @@ describe('output progress events', () => {
       },
     } as unknown as ReflectionFlowShared;
 
-    await outputNode.post(
-      shared,
-      {
-        outputLocation,
-        currentRound: 1,
-        endTurn: false,
-      },
-      {
-        roundOutput: { ...roundOutput, round: 1, compileFailures: [] },
-        summary: { ...summary, currRound: 1 },
-        compileFailures: [],
-        compileResult,
-        compiledArtifacts: [],
-        emitCompileFailures: false,
-      },
+    await withTestRunContext(host, 'stream:compile-context-ok', () =>
+      outputNode.post(
+        shared,
+        {
+          outputLocation,
+          currentRound: 1,
+          endTurn: false,
+        },
+        {
+          roundOutput: { ...roundOutput, round: 1, compileFailures: [] },
+          summary: { ...summary, currRound: 1 },
+          compileFailures: [],
+          compileResult,
+          compiledArtifacts: [],
+          emitCompileFailures: false,
+        },
+      ),
     );
 
     expect(shared.lastCompileResult).toEqual(compileResult);

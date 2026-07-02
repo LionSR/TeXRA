@@ -25,9 +25,9 @@ import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo } from '@shared/schemas';
-import type { ManualCriticismEntry } from '@tools/DiagnosticsTool';
 import { AbsoluteFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
+import type { ManualCriticismEntry } from '@platform/interfaces/criticism';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';

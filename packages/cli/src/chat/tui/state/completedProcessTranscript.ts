@@ -84,12 +84,12 @@ function buildCompletedProcessEntry(params: {
 export function appendCompletedProcessEntries(
   streamId: StreamTabId,
   slice: StreamSlice,
-  liveExecutionIds: ReadonlySet<string>,
+  vanishedExecutionIds: ReadonlySet<string>,
 ): ConversationEntry[] {
   const next = [...slice.entries];
   const existingIds = new Set(next.map((entry) => entry.id));
   for (const info of slice.activeProcesses) {
-    if (liveExecutionIds.has(info.executionId)) continue;
+    if (!vanishedExecutionIds.has(info.executionId)) continue;
     const entry = buildCompletedProcessEntry({
       streamId,
       info,
