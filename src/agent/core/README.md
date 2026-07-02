@@ -26,6 +26,20 @@ flows ──▶ state ──▶ definition
 depend on neither. Don't introduce imports that point back outward (e.g.
 `definition` importing from `state`).
 
+This diagram covers dependencies _within_ `core`. Two `flows/` files also take
+narrow, accepted dependencies on host-agnostic collaborators outside `core`
+that aren't otherwise abstracted: `BaseFlowServices.ts` and `RetryState.ts`
+take `type`-only imports of `AgentRuntimeHost`/`StreamStatusRegistry` from
+`@agent/runtime` (the shared service-injection contract every flow node
+receives; `CycleServices.ts` only inherits these transitively through
+`BaseFlowContextInit`, not via its own import), and `RetryState.ts`
+additionally calls `@auth/SupabaseClient` directly for relay-401 token
+refresh — the same pattern `@agent/modelHandlers` already uses, not a
+`core`-specific exception. None of this pulls in `vscode` or `packages/*`;
+it's still host-agnostic, just not self-contained within `core`'s own module
+boundaries. Don't read the diagram above as "flow files never import outside
+`core`."
+
 Files kept at the `core/` root are limited infrastructure helpers or shared
 constants, not domain types:
 
