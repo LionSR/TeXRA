@@ -13,6 +13,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   isToolUseTaskState,
   isWorkflowTaskState,
+  TaskStateSchema,
 } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
@@ -65,7 +66,24 @@ describe('agentConfigToTaskState', () => {
       assert.fail('Expected a tool-use task state');
     }
     assert.equal(taskState.agentConfig, config);
-    assert.deepEqual(taskState.toolSessionState, {});
+    assert.deepEqual(taskState, { agentConfig: config });
+  });
+
+  it('accepts old tool-use task states with the removed empty session placeholder', () => {
+    const config = AgentConfigSchema.parse({
+      agentCategory: AgentCategory.ToolUse,
+      agent: 'assistant',
+      model: 'sonnet46T',
+      instruction: 'Check the proof.',
+      toolConfig: DEFAULT_TOOL_CONFIG,
+    });
+
+    const taskState = TaskStateSchema.parse({
+      agentConfig: config,
+      toolSessionState: {},
+    });
+
+    assert.deepEqual(taskState, { agentConfig: config });
   });
 
   it('tolerates minimal workflow configs from tests and legacy callers', () => {

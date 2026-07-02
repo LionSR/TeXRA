@@ -8,8 +8,6 @@ import {
 import { AgentCategory } from '../definition/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '../definition/AgentConfig';
 
-const ToolSessionStateSchema = z.object({});
-
 const ActiveFilesSchema = z
   .partialRecord(z.enum(MULTIPLE_DOCUMENT_FILE_TYPES), z.boolean())
   .transform((partial) => {
@@ -35,7 +33,6 @@ export interface WorkflowTaskState {
 
 export interface ToolUseTaskState {
   agentConfig: ToolUseAgentConfig;
-  toolSessionState?: ToolSessionState;
 }
 
 export type TaskState = WorkflowTaskState | ToolUseTaskState;
@@ -57,15 +54,12 @@ const WorkflowTaskStateSchema = z.object({
 
 const ToolUseTaskStateSchema = z.object({
   agentConfig: ToolUseAgentConfigSchema,
-  toolSessionState: ToolSessionStateSchema.optional(),
 }) satisfies z.ZodType<ToolUseTaskState>;
 
 export const TaskStateSchema = z.union([
   WorkflowTaskStateSchema,
   ToolUseTaskStateSchema,
 ]) satisfies z.ZodType<TaskState>;
-
-export type ToolSessionState = z.infer<typeof ToolSessionStateSchema>;
 
 export function isWorkflowTaskState(
   taskState: TaskState,
