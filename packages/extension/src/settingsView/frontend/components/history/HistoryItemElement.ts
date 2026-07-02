@@ -363,26 +363,26 @@ export class HistoryItemElement extends LitElement {
               isToolUse
                 ? html`
                     ${renderIconActionButton({
-                    id: 'history-export-md-button',
-                    icon: 'file-lines',
-                    label: 'Export Markdown',
-                    tooltip: 'Export as Markdown',
-                    action: 'export-md',
-                  })}
+                      id: 'history-export-md-button',
+                      icon: 'file-lines',
+                      label: 'Export Markdown',
+                      tooltip: 'Export as Markdown',
+                      action: 'export-md',
+                    })}
                     ${renderIconActionButton({
-                    id: 'history-export-pdf-button',
-                    icon: 'file-pdf',
-                    label: 'Export PDF',
-                    tooltip: 'Export as LaTeX/PDF',
-                    action: 'export-tex',
-                  })}
+                      id: 'history-export-pdf-button',
+                      icon: 'file-pdf',
+                      label: 'Export PDF',
+                      tooltip: 'Export as LaTeX/PDF',
+                      action: 'export-tex',
+                    })}
                     ${renderIconActionButton({
-                    id: 'history-export-html-button',
-                    icon: 'globe',
-                    label: 'Export HTML',
-                    tooltip: 'Export as shareable HTML webpage',
-                    action: 'export-html',
-                  })}
+                      id: 'history-export-html-button',
+                      icon: 'globe',
+                      label: 'Export HTML',
+                      tooltip: 'Export as shareable HTML webpage',
+                      action: 'export-html',
+                    })}
                   `
                 : nothing
             }

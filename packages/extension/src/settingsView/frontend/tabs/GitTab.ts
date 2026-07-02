@@ -270,18 +270,18 @@ export class GitTab extends LitElement {
                         ${tokenIsSet ? 'Replace token' : 'Set token'}
                       </wa-button>
                       ${
-                      this.githubTokenStatus === 'secret'
-                        ? html`<wa-button
-                            class="token-remove-btn"
-                            appearance="outlined"
-                            variant="neutral"
-                            size="small"
-                            @click=${this.handleRemoveGitHubToken}
-                          >
-                            ${waIcon('trash', { slot: 'start' })} Remove
-                          </wa-button>`
-                        : nothing
-                    }
+                        this.githubTokenStatus === 'secret'
+                          ? html`<wa-button
+                              class="token-remove-btn"
+                              appearance="outlined"
+                              variant="neutral"
+                              size="small"
+                              @click=${this.handleRemoveGitHubToken}
+                            >
+                              ${waIcon('trash', { slot: 'start' })} Remove
+                            </wa-button>`
+                          : nothing
+                      }
                       <wa-button
                         appearance="outlined"
                         variant="neutral"
@@ -314,15 +314,15 @@ export class GitTab extends LitElement {
                       </li>
                     </ol>
                     ${
-                    this.githubTokenStatus === 'env'
-                      ? html`<p>
-                          A token is currently being read from the
-                          <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
-                          environment variable. Setting one above will override
-                          it.
-                        </p>`
-                      : nothing
-                  }
+                      this.githubTokenStatus === 'env'
+                        ? html`<p>
+                            A token is currently being read from the
+                            <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
+                            environment variable. Setting one above will
+                            override it.
+                          </p>`
+                        : nothing
+                    }
                   </div>
                 </div>
               `
@@ -347,39 +347,39 @@ export class GitTab extends LitElement {
                   </p>
                   <ul class="subscriptions-list">
                     ${this.prSubscriptions.map(
-                    (subscription) => html`
-                      <li>
-                        <div class="subscription-meta">
-                          <code class="subscription-key"
-                            >${subscription.key}</code
-                          >
-                          ${
+                      (subscription) => html`
+                        <li>
+                          <div class="subscription-meta">
+                            <code class="subscription-key"
+                              >${subscription.key}</code
+                            >
+                            ${
                             subscription.owners.length > 0
                               ? html`
                                   <div class="subscription-owners">
                                     ${subscription.owners.map(
-                                    (owner) => html`
-                                      <div class="subscription-owner-row">
-                                        <span class="subscription-owner-label"
-                                          >${owner.label}</span
-                                        >
-                                        <wa-button
-                                          appearance="outlined"
-                                          variant="neutral"
-                                          size="small"
-                                          @click=${() =>
+                                      (owner) => html`
+                                        <div class="subscription-owner-row">
+                                          <span class="subscription-owner-label"
+                                            >${owner.label}</span
+                                          >
+                                          <wa-button
+                                            appearance="outlined"
+                                            variant="neutral"
+                                            size="small"
+                                            @click=${() =>
                                             this.handleOpenPRSubscriptionStream(
                                               owner.streamId,
                                             )}
-                                        >
-                                          ${waIcon('comment-discussion', {
+                                          >
+                                            ${waIcon('comment-discussion', {
                                             slot: 'start',
                                           })}
-                                          Jump to agent
-                                        </wa-button>
-                                      </div>
-                                    `,
-                                  )}
+                                            Jump to agent
+                                          </wa-button>
+                                        </div>
+                                      `,
+                                    )}
                                   </div>
                                 `
                               : html`
@@ -389,19 +389,19 @@ export class GitTab extends LitElement {
                                   </p>
                                 `
                           }
-                        </div>
-                        <wa-button
-                          appearance="outlined"
-                          variant="neutral"
-                          size="small"
-                          @click=${() =>
+                          </div>
+                          <wa-button
+                            appearance="outlined"
+                            variant="neutral"
+                            size="small"
+                            @click=${() =>
                             this.handleUnsubscribePR(subscription.key)}
-                        >
-                          ${waIcon('debug-stop', { slot: 'start' })} Stop
-                        </wa-button>
-                      </li>
-                    `,
-                  )}
+                          >
+                            ${waIcon('debug-stop', { slot: 'start' })} Stop
+                          </wa-button>
+                        </li>
+                      `,
+                    )}
                   </ul>
                 </div>
               `

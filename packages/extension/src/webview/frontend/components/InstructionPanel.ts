@@ -366,20 +366,20 @@ export class InstructionPanel extends LitElement {
               session.debugMode
                 ? html`
                     ${renderIconActionButton({
-                    id: 'packButton',
-                    icon: 'archive',
-                    label: 'Pack output to History',
-                    tooltip:
-                      'Pack the output for this agent into the History folder',
-                    action: 'pack',
-                  })}
+                      id: 'packButton',
+                      icon: 'archive',
+                      label: 'Pack output to History',
+                      tooltip:
+                        'Pack the output for this agent into the History folder',
+                      action: 'pack',
+                    })}
                     ${renderIconActionButton({
-                    id: 'cleanButton',
-                    icon: 'trash',
-                    label: 'Clean output',
-                    tooltip: 'Clean the output for this agent',
-                    action: 'clean',
-                  })}
+                      id: 'cleanButton',
+                      icon: 'trash',
+                      label: 'Clean output',
+                      tooltip: 'Clean the output for this agent',
+                      action: 'clean',
+                    })}
                   `
                 : nothing
             }

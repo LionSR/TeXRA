@@ -188,10 +188,10 @@ export class GoalTab extends LitElement {
             : html`
                 <div class="goal-list">
                   ${repeat(
-                  this.items,
-                  (it) => it.goalId,
-                  (it) => this.renderRow(it),
-                )}
+                    this.items,
+                    (it) => it.goalId,
+                    (it) => this.renderRow(it),
+                  )}
                 </div>
               `
         }

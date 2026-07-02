@@ -412,14 +412,14 @@ export class AgentSelectionPanel extends LitElement {
                   <div class="agent-detail-meta-value">
                     <div class="agent-detail-tools">
                       ${agent.tools.map(
-                      (t) =>
-                        html`<wa-tag
-                          class="agent-tool-badge"
-                          variant="neutral"
-                          size="small"
-                          >${t}</wa-tag
-                        >`,
-                    )}
+                        (t) =>
+                          html`<wa-tag
+                            class="agent-tool-badge"
+                            variant="neutral"
+                            size="small"
+                            >${t}</wa-tag
+                          >`,
+                      )}
                     </div>
                   </div>
                 `
@@ -432,12 +432,12 @@ export class AgentSelectionPanel extends LitElement {
             agent.hasPath
               ? html`
                   ${renderLabeledActionButton({
-                  icon: 'file-lines',
-                  text: 'Open YAML',
-                  label: 'Open agent YAML definition',
-                  className: 'agent-action-btn',
-                  onClick: () => this.handleOpenYaml(agent),
-                })}
+                    icon: 'file-lines',
+                    text: 'Open YAML',
+                    label: 'Open agent YAML definition',
+                    className: 'agent-action-btn',
+                    onClick: () => this.handleOpenYaml(agent),
+                  })}
                 `
               : nothing
           }
@@ -448,14 +448,14 @@ export class AgentSelectionPanel extends LitElement {
             !this.desktopHost
               ? html`
                   ${renderLabeledActionButton({
-                  icon: 'file-lines',
-                  text: 'View Prompt',
-                  label: "View the remote agent's prompt definition",
-                  title:
-                    "View the remote agent's prompt definition (read-only)",
-                  className: 'agent-action-btn',
-                  onClick: () => this.handleViewRemotePrompt(agent),
-                })}
+                    icon: 'file-lines',
+                    text: 'View Prompt',
+                    label: "View the remote agent's prompt definition",
+                    title:
+                      "View the remote agent's prompt definition (read-only)",
+                    className: 'agent-action-btn',
+                    onClick: () => this.handleViewRemotePrompt(agent),
+                  })}
                 `
               : nothing
           }
@@ -463,12 +463,12 @@ export class AgentSelectionPanel extends LitElement {
             agent.hasPath
               ? html`
                   ${renderLabeledActionButton({
-                  icon: 'folder-open',
-                  text: 'Reveal in File Explorer',
-                  title: 'Show this file in your system file explorer',
-                  className: 'agent-action-btn',
-                  onClick: () => this.handleRevealAgentFile(agent),
-                })}
+                    icon: 'folder-open',
+                    text: 'Reveal in File Explorer',
+                    title: 'Show this file in your system file explorer',
+                    className: 'agent-action-btn',
+                    onClick: () => this.handleRevealAgentFile(agent),
+                  })}
                 `
               : nothing
           }
@@ -476,15 +476,16 @@ export class AgentSelectionPanel extends LitElement {
             builtIn && !this.desktopHost
               ? html`
                   ${renderLabeledActionButton({
-                  icon: 'pencil',
-                  text: 'Customize',
-                  label: 'Customize agent',
-                  title: 'Create an editable copy in your custom agents folder',
-                  className: 'agent-action-btn',
-                  appearance: 'filled',
-                  variant: 'brand',
-                  onClick: () => this.handleCustomizeAgent(agent),
-                })}
+                    icon: 'pencil',
+                    text: 'Customize',
+                    label: 'Customize agent',
+                    title:
+                      'Create an editable copy in your custom agents folder',
+                    className: 'agent-action-btn',
+                    appearance: 'filled',
+                    variant: 'brand',
+                    onClick: () => this.handleCustomizeAgent(agent),
+                  })}
                 `
               : nothing
           }
@@ -492,13 +493,13 @@ export class AgentSelectionPanel extends LitElement {
             isCustom && !this.desktopHost
               ? html`
                   ${renderLabeledActionButton({
-                  icon: 'trash',
-                  text: 'Delete',
-                  label: 'Delete custom agent',
-                  title: 'Delete this custom agent',
-                  className: 'agent-action-btn agent-action-btn--danger',
-                  onClick: () => this.handleDeleteCustomAgent(agent),
-                })}
+                    icon: 'trash',
+                    text: 'Delete',
+                    label: 'Delete custom agent',
+                    title: 'Delete this custom agent',
+                    className: 'agent-action-btn agent-action-btn--danger',
+                    onClick: () => this.handleDeleteCustomAgent(agent),
+                  })}
                 `
               : nothing
           }
@@ -513,19 +514,19 @@ export class AgentSelectionPanel extends LitElement {
                   </span>
                   <div class="agent-delete-confirm-actions">
                     ${renderLabeledActionButton({
-                    icon: 'trash',
-                    text: 'Delete',
-                    label: 'Confirm delete custom agent',
-                    className: 'agent-action-btn agent-action-btn--danger',
-                    onClick: () => this.handleDeleteCustomAgent(agent),
-                  })}
+                      icon: 'trash',
+                      text: 'Delete',
+                      label: 'Confirm delete custom agent',
+                      className: 'agent-action-btn agent-action-btn--danger',
+                      onClick: () => this.handleDeleteCustomAgent(agent),
+                    })}
                     ${renderLabeledActionButton({
-                    icon: 'xmark',
-                    text: 'Cancel',
-                    label: 'Cancel delete custom agent',
-                    className: 'agent-action-btn',
-                    onClick: () => this.cancelDelete(),
-                  })}
+                      icon: 'xmark',
+                      text: 'Cancel',
+                      label: 'Cancel delete custom agent',
+                      className: 'agent-action-btn',
+                      onClick: () => this.cancelDelete(),
+                    })}
                   </div>
                 </div>
               `

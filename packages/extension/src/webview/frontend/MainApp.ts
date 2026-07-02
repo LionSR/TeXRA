@@ -1799,8 +1799,8 @@ export class MainApp extends MainAppBase {
               ? html`<onboarding-setup-card
                   @onboarding-run-setup=${this.onOnboardingRunSetup}
                   @onboarding-open-getting-started=${
-                  this.onOnboardingOpenGettingStarted
-                }
+                    this.onOnboardingOpenGettingStarted
+                  }
                   @onboarding-skip-setup=${this.onOnboardingSkipSetup}
                 ></onboarding-setup-card>`
               : nothing

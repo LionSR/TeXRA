@@ -438,15 +438,15 @@ export class ToolCard extends LitElement {
             ? html`
                 <div class="tool-ids">
                   ${this.item.tools.map(
-                  (tool) =>
-                    html`<wa-badge
-                      class="tool-id-tag"
-                      variant="neutral"
-                      appearance="filled"
-                      title=${tool.description ?? tool.name}
-                      >${tool.name}</wa-badge
-                    >`,
-                )}
+                    (tool) =>
+                      html`<wa-badge
+                        class="tool-id-tag"
+                        variant="neutral"
+                        appearance="filled"
+                        title=${tool.description ?? tool.name}
+                        >${tool.name}</wa-badge
+                      >`,
+                  )}
                 </div>
               `
             : nothing

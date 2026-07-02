@@ -311,10 +311,10 @@ export class ModelSelectionList extends LitElement {
                 <div class="provider-group-content">
                   ${group.current.map((m) => this.renderModelRow(m))}
                   ${
-                  group.deprecated.length > 0
-                    ? this.renderDeprecatedToggle(group)
-                    : nothing
-                }
+                    group.deprecated.length > 0
+                      ? this.renderDeprecatedToggle(group)
+                      : nothing
+                  }
                 </div>
               `
             : nothing
