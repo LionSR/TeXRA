@@ -12,7 +12,7 @@ import { fetchRelayUsageSummary, type RelayUsageSummary } from './relayUsage';
 import {
   getCliAuthProfile,
   getCliSessionAccessToken,
-  getCliSessionTier,
+  resolveCliUsageTier,
   type CliAuthProfile,
 } from './supabaseAuth';
 
@@ -127,13 +127,7 @@ export async function loadCliApiStatusLines(
       );
     } else {
       try {
-        // The usage rows belong to the session account, so the spending
-        // limit must use that account's tier — profile.tier may describe a
-        // configured env token's account instead.
-        const usageTier =
-          profile.credentialSource === 'relayToken'
-            ? await getCliSessionTier()
-            : profile.tier;
+        const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
         lines.push(
           formatRelayUsageStatus(
             await fetchRelayUsageSummary({ tier: usageTier }),
