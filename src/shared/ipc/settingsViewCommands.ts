@@ -1,39 +1,46 @@
 import { COMMON_COMMANDS } from './commonCommands';
+import { MEMORY_VIEW_COMMANDS } from './memoryViewCommands';
+import { HISTORY_VIEW_COMMANDS } from './historyViewCommands';
+import { PROFILE_VIEW_COMMANDS } from './profileViewCommands';
 
 /**
  * Command string literals for settings view schema definitions.
  * Defined here (not in settingsViewMessages.ts) to avoid circular dependency:
  * commands.ts → settingsViewMessages.ts → memoryViewMessages.ts → commands.ts
+ *
+ * Memory/History/Profile inbound commands reference their own view's
+ * command map (the single source of truth for those literals) instead of
+ * repeating the string values, so the two can't drift.
  */
 export const SETTINGS_VIEW_CMD = {
   // Navigation commands
   SET_TAB: 'setTab',
   OPEN_VSCODE_SETTINGS: 'openVscodeSettings',
   // Memory commands
-  GET_MEMORY_DATA: 'getMemoryData',
-  GET_MEMORY_PREVIEW: 'getMemoryPreview',
-  OPEN_MEMORY_FILE: 'openMemoryFile',
-  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
-  DELETE_MEMORY: 'deleteMemory',
-  GET_MEMORY_ENABLED: 'getMemoryEnabled',
-  SET_MEMORY_ENABLED: 'setMemoryEnabled',
-  PIN_MEMORY: 'pinMemory',
-  UNPIN_MEMORY: 'unpinMemory',
+  GET_MEMORY_DATA: MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA,
+  GET_MEMORY_PREVIEW: MEMORY_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
+  OPEN_MEMORY_FILE: MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE,
+  OPEN_MEMORY_FOLDER: MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
+  DELETE_MEMORY: MEMORY_VIEW_COMMANDS.DELETE_MEMORY,
+  GET_MEMORY_ENABLED: MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED,
+  SET_MEMORY_ENABLED: MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED,
+  PIN_MEMORY: MEMORY_VIEW_COMMANDS.PIN_MEMORY,
+  UNPIN_MEMORY: MEMORY_VIEW_COMMANDS.UNPIN_MEMORY,
   // History commands
-  GET_HISTORY_DATA: 'getHistoryData',
-  RERUN_AGENT: 'rerunAgent',
-  RESTORE_AGENT: 'restoreAgent',
-  DELETE_AGENT: 'deleteAgent',
-  CLEAR_HISTORY: 'clearHistory',
-  EXPORT_CHAT_MD: 'exportChatMd',
-  EXPORT_CHAT_TEX: 'exportChatTex',
-  EXPORT_CHAT_HTML: 'exportChatHtml',
+  GET_HISTORY_DATA: HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA,
+  RERUN_AGENT: HISTORY_VIEW_COMMANDS.RERUN_AGENT,
+  RESTORE_AGENT: HISTORY_VIEW_COMMANDS.RESTORE_AGENT,
+  DELETE_AGENT: HISTORY_VIEW_COMMANDS.DELETE_AGENT,
+  CLEAR_HISTORY: HISTORY_VIEW_COMMANDS.CLEAR_HISTORY,
+  EXPORT_CHAT_MD: HISTORY_VIEW_COMMANDS.EXPORT_CHAT_MD,
+  EXPORT_CHAT_TEX: HISTORY_VIEW_COMMANDS.EXPORT_CHAT_TEX,
+  EXPORT_CHAT_HTML: HISTORY_VIEW_COMMANDS.EXPORT_CHAT_HTML,
   // Profile commands
-  GET_PROFILE_DATA: 'getProfileData',
-  SELECT_AGENT: 'selectAgent',
-  SIGN_IN: 'signIn',
-  SIGN_OUT: 'signOut',
-  SET_API_ACCESS_MODE: 'setApiAccessMode',
+  GET_PROFILE_DATA: PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA,
+  SELECT_AGENT: PROFILE_VIEW_COMMANDS.SELECT_AGENT,
+  SIGN_IN: PROFILE_VIEW_COMMANDS.SIGN_IN,
+  SIGN_OUT: PROFILE_VIEW_COMMANDS.SIGN_OUT,
+  SET_API_ACCESS_MODE: PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE,
   SET_PROVIDER_KEY: 'setProviderKey',
   REMOVE_PROVIDER_KEY: 'removeProviderKey',
   OPEN_PROVIDER_KEY_URL: 'openProviderKeyUrl',
