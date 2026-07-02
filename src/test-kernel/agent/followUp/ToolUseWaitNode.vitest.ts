@@ -22,6 +22,7 @@ import {
 } from '@shared/schemas';
 import { cleanupApprovalsForStream } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
+import { withTestRunContext } from '../progressTestUtils';
 
 describe('ToolUseWaitNode', () => {
   it('marks a delivered subagent cycle before stopping on interruption', async () => {
@@ -58,8 +59,14 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     const prep = await node.prep(shared);
-    const exec = await node.exec(prep);
-    const transition = await node.post(shared, prep, exec);
+    const transition = await withTestRunContext(
+      services.runtimeHost,
+      'test-stream',
+      async () => {
+        const exec = await node.exec(prep);
+        return node.post(shared, prep, exec);
+      },
+    );
 
     expect(onBeforeWaiting).toHaveBeenCalledOnce();
     expect(onBeforeWaiting).toHaveBeenCalledWith(undefined, [], memoryMisses);
@@ -111,14 +118,26 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     const firstPrep = await node.prep(shared);
-    const firstExec = await node.exec(firstPrep);
-    const firstTransition = await node.post(shared, firstPrep, firstExec);
+    const firstTransition = await withTestRunContext(
+      services.runtimeHost,
+      'test-stream',
+      async () => {
+        const firstExec = await node.exec(firstPrep);
+        return node.post(shared, firstPrep, firstExec);
+      },
+    );
     expect(firstTransition).toBe(FlowTransition.CONTINUE);
     expect(shared.deliveredToOrchestrator).toBe(true);
 
     const secondPrep = await node.prep(shared);
-    const secondExec = await node.exec(secondPrep);
-    const secondTransition = await node.post(shared, secondPrep, secondExec);
+    const secondTransition = await withTestRunContext(
+      services.runtimeHost,
+      'test-stream',
+      async () => {
+        const secondExec = await node.exec(secondPrep);
+        return node.post(shared, secondPrep, secondExec);
+      },
+    );
 
     expect(onBeforeWaiting).toHaveBeenCalledTimes(2);
     expect(secondTransition).toBe(FlowTransition.COMPLETE);
@@ -152,8 +171,14 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     const prep = await node.prep(shared);
-    const exec = await node.exec(prep);
-    const transition = await node.post(shared, prep, exec);
+    const transition = await withTestRunContext(
+      services.runtimeHost,
+      'test-stream',
+      async () => {
+        const exec = await node.exec(prep);
+        return node.post(shared, prep, exec);
+      },
+    );
 
     expect(onBeforeWaiting).not.toHaveBeenCalled();
     expect(transition).toBe(FlowTransition.COMPLETE);
@@ -189,24 +214,29 @@ describe('ToolUseWaitNode', () => {
     } as unknown as ToolUseServices;
 
     const node = new ToolUseWaitNode().setServices(services);
-    const transition = await node.post(
-      shared,
-      {
-        afterError: false,
-        lastResponse: undefined,
-        previouslyDeliveredToOrchestrator: false,
-        touchedFiles: [],
-      },
-      {
-        followUps: [
+    const transition = await withTestRunContext(
+      services.runtimeHost,
+      'test-stream',
+      () =>
+        node.post(
+          shared,
           {
-            text: 'please inspect this figure',
-            mediaFiles: ['/tmp/figure.png'],
-            origin: 'user',
+            afterError: false,
+            lastResponse: undefined,
+            previouslyDeliveredToOrchestrator: false,
+            touchedFiles: [],
           },
-        ],
-        kind: 'continue',
-      },
+          {
+            followUps: [
+              {
+                text: 'please inspect this figure',
+                mediaFiles: ['/tmp/figure.png'],
+                origin: 'user',
+              },
+            ],
+            kind: 'continue',
+          },
+        ),
     );
 
     expect(transition).toBe(FlowTransition.CONTINUE);
@@ -248,12 +278,14 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      const exec = await node.exec({
-        afterError: true,
-        lastResponse: undefined,
-        previouslyDeliveredToOrchestrator: false,
-        touchedFiles: [],
-      });
+      const exec = await withTestRunContext(runtimeHost, streamId, () =>
+        node.exec({
+          afterError: true,
+          lastResponse: undefined,
+          previouslyDeliveredToOrchestrator: false,
+          touchedFiles: [],
+        }),
+      );
 
       const goal = GoalStore.getForStream(streamId);
       expect(exec.kind).toBe('stop');
@@ -318,7 +350,11 @@ describe('ToolUseWaitNode', () => {
 
     try {
       const prep = await node.prep(shared);
-      const exec = await node.exec(prep);
+      const exec = await withTestRunContext(
+        services.runtimeHost,
+        streamId,
+        () => node.exec(prep),
+      );
 
       expect(exec.kind).toBe('continue');
       if (exec.kind !== 'continue') return;
@@ -332,7 +368,11 @@ describe('ToolUseWaitNode', () => {
       expect(waitForFollowUp).not.toHaveBeenCalled();
       expect(streamStatus.get(streamId)).toBeUndefined();
 
-      const transition = await node.post(shared, prep, exec);
+      const transition = await withTestRunContext(
+        services.runtimeHost,
+        streamId,
+        () => node.post(shared, prep, exec),
+      );
 
       expect(transition).toBe(FlowTransition.CONTINUE);
       expect(onFollowUpConsumed).not.toHaveBeenCalled();
@@ -402,7 +442,11 @@ describe('ToolUseWaitNode', () => {
         (_, index) => index,
       )) {
         const prep = await node.prep(shared);
-        const exec = await node.exec(prep);
+        const exec = await withTestRunContext(
+          services.runtimeHost,
+          streamId,
+          () => node.exec(prep),
+        );
 
         expect(exec.kind).toBe('continue');
         if (exec.kind !== 'continue') return;
@@ -411,7 +455,11 @@ describe('ToolUseWaitNode', () => {
           'Keep solving the hard problem until verification is complete.',
         );
 
-        const transition = await node.post(shared, prep, exec);
+        const transition = await withTestRunContext(
+          services.runtimeHost,
+          streamId,
+          () => node.post(shared, prep, exec),
+        );
         expect(transition).toBe(FlowTransition.CONTINUE);
         expect(createUserFollowUpMessages).toHaveBeenCalledTimes(cycle + 1);
       }
@@ -425,7 +473,11 @@ describe('ToolUseWaitNode', () => {
       await GoalStore.setStatus(streamId, 'paused');
 
       const prep = await node.prep(shared);
-      const exec = await node.exec(prep);
+      const exec = await withTestRunContext(
+        services.runtimeHost,
+        streamId,
+        () => node.exec(prep),
+      );
 
       expect(waitForFollowUp).toHaveBeenCalledOnce();
       expect(exec.kind).toBe('stop');
@@ -460,12 +512,17 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      const exec = await node.exec({
-        afterError: false,
-        lastResponse: undefined,
-        previouslyDeliveredToOrchestrator: false,
-        touchedFiles: [],
-      });
+      const exec = await withTestRunContext(
+        services.runtimeHost,
+        streamId,
+        () =>
+          node.exec({
+            afterError: false,
+            lastResponse: undefined,
+            previouslyDeliveredToOrchestrator: false,
+            touchedFiles: [],
+          }),
+      );
 
       expect(waitForFollowUp).toHaveBeenCalledOnce();
       expect(exec).toEqual({
@@ -502,12 +559,17 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      const exec = await node.exec({
-        afterError: false,
-        lastResponse: undefined,
-        previouslyDeliveredToOrchestrator: false,
-        touchedFiles: [],
-      });
+      const exec = await withTestRunContext(
+        services.runtimeHost,
+        streamId,
+        () =>
+          node.exec({
+            afterError: false,
+            lastResponse: undefined,
+            previouslyDeliveredToOrchestrator: false,
+            touchedFiles: [],
+          }),
+      );
 
       expect(waitForFollowUp).toHaveBeenCalledOnce();
       expect(exec.kind).toBe('stop');
@@ -553,11 +615,17 @@ describe('ToolUseWaitNode', () => {
       });
 
       const prep = await node.prep(shared);
-      const exec = await node.exec(prep);
+      const exec = await withTestRunContext(
+        services.runtimeHost,
+        streamId,
+        () => node.exec(prep),
+      );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.WAITING);
       expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
 
-      await node.post(shared, prep, exec);
+      await withTestRunContext(services.runtimeHost, streamId, () =>
+        node.post(shared, prep, exec),
+      );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
       expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
       expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
@@ -613,8 +681,14 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     const prep = await node.prep(shared);
-    const exec = await node.exec(prep);
-    const transition = await node.post(shared, prep, exec);
+    const transition = await withTestRunContext(
+      runtimeHost,
+      'test-stream',
+      async () => {
+        const exec = await node.exec(prep);
+        return node.post(shared, prep, exec);
+      },
+    );
 
     expect(transition).toBe(FlowTransition.CONTINUE);
     expect(runtimeHost.emit).toHaveBeenCalledWith(

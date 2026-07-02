@@ -80,6 +80,14 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
       ...NO_TOOL_AVAILABILITY_HOST,
       ...services.toolAvailability,
     },
+    // Neither Node host has a UI surface for these yet (linter diagnostics,
+    // inline criticism, tool-missing/unavailable toasts) — explicit no-ops
+    // here, in the one place both hosts share, rather than an invisible
+    // per-module default.
+    linter: async () => [],
+    addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
+    toolMissingHandler: () => {},
+    toolNotificationHandler: () => {},
   };
 }
 

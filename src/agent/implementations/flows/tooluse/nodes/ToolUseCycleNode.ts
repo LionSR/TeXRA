@@ -1,5 +1,6 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   createToolUseRoundFlow,
@@ -50,14 +51,8 @@ export class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
-    const {
-      streamId,
-      setting,
-      resolvedTools,
-      modelHandler,
-      config,
-      runtimeHost,
-    } = this.services;
+    const { setting, resolvedTools, modelHandler, config } = this.services;
+    const { streamId, runtimeHost } = useLaunchRunContext();
 
     if (prepRes.shouldSkip) {
       const { todos, plan } = prepRes.workspaceState.workPlan;

@@ -758,6 +758,10 @@ export function createFakePlatform(
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeStream: async () => false },
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,
+    linter: async () => [],
+    addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
+    toolMissingHandler: () => {},
+    toolNotificationHandler: () => {},
     ...overrides,
   };
 }

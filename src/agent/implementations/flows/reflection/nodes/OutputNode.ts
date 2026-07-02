@@ -1,4 +1,5 @@
 import { Node } from '@agent/node';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { CompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
@@ -81,7 +82,7 @@ export class OutputNode<C = unknown> extends Node<
     // stats all see the same base locations (see snapshotResolution).
     const diffBaseFiles = await resolveBaseFilesForDiff(
       baseFiles,
-      this.services.executionId,
+      useLaunchRunContext().executionId,
     );
 
     let mapping: RoundFileMapping | undefined;
@@ -243,8 +244,8 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { streamId, outputState, runtimeHost, workflowOutputPolicy } =
-      this.services;
+    const { outputState, workflowOutputPolicy } = this.services;
+    const { streamId, runtimeHost } = useLaunchRunContext();
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary, roundOutput } = execRes;
 

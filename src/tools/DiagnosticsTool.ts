@@ -2,13 +2,13 @@
 import { toJSONSchema, z } from 'zod';
 
 // Internal imports
+import { platform } from '@platform/platform';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
-import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import {
   countBySeverity,
   formatCounts,
@@ -20,49 +20,6 @@ import { defineTool } from './core/define';
 
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);
-
-type LinterProvider = (path: string) => Promise<GenericDiagnostic[]>;
-let linterProvider: LinterProvider = async () => [];
-/** Inject the VS Code linter diagnostics provider. Default: returns empty. */
-export function setLinterProvider(provider: LinterProvider): void {
-  linterProvider = provider;
-}
-
-/**
- * Host-resolved shape for a single criticism entry pushed by the `add`
- * command. The tool resolves the input `path` against the active working
- * directory before handing the entry to the host as `absolutePath`.
- */
-export interface ManualCriticismEntry {
-  /** Absolute path resolved by the tool. */
-  absolutePath: string;
-  /** 1-based line number. */
-  line: number;
-  message: string;
-  /** 0–5; mapped to DiagnosticSeverity by the host. */
-  severity: number;
-  /** 1–5; appended to the message as `(S/C)`. */
-  confidence: number;
-}
-
-/**
- * Sink injected by the extension host for the `add` command. Returns
- * `accepted: false` when the experimental setting is disabled so the tool can
- * surface that to the agent.
- */
-export type AddCriticismSink = (input: ManualCriticismEntry) => {
-  accepted: boolean;
-  resolvedPath: string;
-};
-
-let criticismSink: AddCriticismSink = () => ({
-  accepted: false,
-  resolvedPath: '',
-});
-
-export function setAddCriticismSink(provider: AddCriticismSink): void {
-  criticismSink = provider;
-}
 
 const DiagnosticsPathSchema = z
   .string()
@@ -156,7 +113,7 @@ export class DiagnosticsTool extends defineTool({
     const diagnosticsPath = this.resolveAbsolutePath(path);
 
     try {
-      const messages = await linterProvider(diagnosticsPath);
+      const messages = await platform().linter(diagnosticsPath);
       const counts = countBySeverity(messages);
       const header = `${diagnosticsPath}: ${formatCounts(counts)}`;
       const summary = `Diagnostics ${command} for ${diagnosticsPath}`;
@@ -203,7 +160,7 @@ export class DiagnosticsTool extends defineTool({
 
     try {
       const absolutePath = this.resolveAbsolutePath(path);
-      const result = criticismSink({
+      const result = platform().addCriticismSink({
         absolutePath,
         line,
         message,
