@@ -87,11 +87,11 @@ export function nextSelectHighlightIndex<T>({
     items.every((item) => item.disabled) ||
     items.every((item) => !item.disabled)
   ) {
-    return direction === 1
-      ? (clampedHighlight + 1) % items.length
-      : clampedHighlight <= 0
-        ? items.length - 1
-        : clampedHighlight - 1;
+    return nextWrappingHighlightIndex({
+      direction,
+      highlight: clampedHighlight,
+      itemCount: items.length,
+    });
   }
 
   for (
@@ -102,6 +102,24 @@ export function nextSelectHighlightIndex<T>({
     if (!items[next]?.disabled) return next;
   }
   return clampedHighlight;
+}
+
+export function nextWrappingHighlightIndex({
+  direction,
+  highlight,
+  itemCount,
+}: {
+  readonly direction: -1 | 1;
+  readonly highlight: number;
+  readonly itemCount: number;
+}): number {
+  if (itemCount <= 0) return 0;
+  const clampedHighlight = clampIndex(highlight, itemCount);
+  return direction === 1
+    ? (clampedHighlight + 1) % itemCount
+    : clampedHighlight <= 0
+      ? itemCount - 1
+      : clampedHighlight - 1;
 }
 
 export function visibleSelectRange({

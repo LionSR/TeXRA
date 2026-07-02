@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  nextSlashPaletteHighlight,
   slashPaletteCommandLabelWidth,
   slashPaletteEnterHintAction,
   slashPaletteWindow,
 } from '@cli/chat/tui/commands/SlashPalette';
+import { nextWrappingHighlightIndex } from '@cli/chat/tui/ui/Select';
 
 describe('SlashPalette navigation', () => {
   it('continues down into commands hidden behind the overflow marker', () => {
@@ -23,7 +23,7 @@ describe('SlashPalette navigation', () => {
       hiddenAfter: 7,
     });
 
-    const next = nextSlashPaletteHighlight({
+    const next = nextWrappingHighlightIndex({
       direction: 1,
       highlight: 7,
       itemCount,
@@ -46,14 +46,14 @@ describe('SlashPalette navigation', () => {
 
   it('wraps navigation across the full match list', () => {
     expect(
-      nextSlashPaletteHighlight({
+      nextWrappingHighlightIndex({
         direction: 1,
         highlight: 14,
         itemCount: 15,
       }),
     ).toBe(0);
     expect(
-      nextSlashPaletteHighlight({
+      nextWrappingHighlightIndex({
         direction: -1,
         highlight: 0,
         itemCount: 15,
