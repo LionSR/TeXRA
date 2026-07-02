@@ -42,8 +42,7 @@ export async function buildLimitedAttachments(
     return { attachments: [], limitedPaths: [], limitReached: false };
   }
 
-  const limitCount = Math.min(paths.length, limit);
-  const limitedPaths = paths.slice(0, limitCount);
+  const limitedPaths = paths.slice(0, limit);
   const attachments = await Promise.all(
     limitedPaths.map((filePath) =>
       buildFileAttachment({
@@ -57,6 +56,6 @@ export async function buildLimitedAttachments(
   return {
     attachments,
     limitedPaths,
-    limitReached: paths.length > limitCount,
+    limitReached: paths.length > limit,
   };
 }

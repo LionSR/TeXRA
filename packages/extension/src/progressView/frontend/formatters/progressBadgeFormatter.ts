@@ -1,5 +1,4 @@
-import { html, type TemplateResult } from 'lit';
-import { nothing } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import type { ConversationProgress } from '@shared/schemas';
 
 /**

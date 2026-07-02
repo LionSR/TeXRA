@@ -95,7 +95,7 @@ export async function computeAndWriteWorkflowDiffs(
   outputs: OutputFileSummary[],
 ): Promise<Map<string, DiffFileInfo>> {
   const results = new Map<string, DiffFileInfo>();
-  const diffsToWrite: Array<{ diffRelPath: string; content: string }> = [];
+  const diffsToWrite: { diffRelPath: string; content: string }[] = [];
 
   // First pass: compute diffs and decide which to write.
   await Promise.all(

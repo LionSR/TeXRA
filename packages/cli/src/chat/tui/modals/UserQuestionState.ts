@@ -16,7 +16,7 @@ export function updateUserQuestionAnswers(
 }
 
 export function toggleUserQuestionSelection(
-  selected: ReadonlyArray<string>,
+  selected: readonly string[],
   label: string,
 ): string[] {
   return selected.includes(label)

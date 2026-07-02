@@ -44,10 +44,6 @@ function createMonitorWithEvents() {
   return { monitor, events };
 }
 
-function createMonitor(): UsageMonitor {
-  return createMonitorWithEvents().monitor;
-}
-
 describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
   beforeAll(async () => {
     const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
@@ -58,7 +54,7 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
   });
 
   it('is undefined before any round and caches the totals after recordUsage', async () => {
-    const monitor = createMonitor();
+    const { monitor } = createMonitorWithEvents();
     expect(monitor.lastTotals()).toBeUndefined();
 
     const state = AgentRunStateSnapshotSchema.parse({});

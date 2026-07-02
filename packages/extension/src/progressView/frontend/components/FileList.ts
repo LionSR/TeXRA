@@ -85,7 +85,6 @@ const STORAGE_HINT_DISMISS_KEY = 'generatedFilesStorageHint.dismissed';
 interface ParsedPath {
   dir: string;
   basename: string;
-  normalized: string;
 }
 
 /** Parse a path into directory and basename components */
@@ -95,7 +94,6 @@ function parsePath(path: string): ParsedPath {
   return {
     dir: lastSlash >= 0 ? normalized.slice(0, lastSlash + 1) : '',
     basename: lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized,
-    normalized,
   };
 }
 

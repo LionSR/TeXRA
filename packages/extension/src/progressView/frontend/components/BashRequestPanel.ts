@@ -24,8 +24,6 @@ import { buildCodeBlock } from '../formatters/htmlBuilders';
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
-// Local imports - shared schemas
-
 @customElement('bash-request-panel')
 export class BashRequestPanel extends BaseFeedbackPanel {
   static override styles = [

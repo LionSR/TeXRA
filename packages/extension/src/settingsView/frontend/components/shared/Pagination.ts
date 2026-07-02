@@ -35,7 +35,7 @@ export function paginate<T>(
   const safePage = clamp(page, 0, totalPages - 1);
   const start = safePage * pageSize;
   return {
-    paged: items.slice(start, start + pageSize) as T[],
+    paged: items.slice(start, start + pageSize),
     totalPages,
   };
 }

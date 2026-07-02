@@ -12,15 +12,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
 // Local imports - progress view
-import {
-  firstStreamId,
-  getStreamState,
-  isToolUseState,
-  type ProgressState,
-  type StreamFilter,
-  type StreamLogs,
-  type StreamState,
-} from './store';
+import { firstStreamId, getStreamState, isToolUseState } from './store';
 import { addResolvedProposalId, removePrompt } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
@@ -241,9 +233,16 @@ export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
   ctx: MessageHandlerContext,
 ): void {
-  const { permission, action, feedback, modelOverride, agentOverride, answer } =
-    event.detail;
-  const { answers, sessionLinks } = event.detail;
+  const {
+    permission,
+    action,
+    feedback,
+    modelOverride,
+    agentOverride,
+    answer,
+    answers,
+    sessionLinks,
+  } = event.detail;
 
   switch (permission.kind) {
     case PERMISSION_KIND.TOOL_EDIT:

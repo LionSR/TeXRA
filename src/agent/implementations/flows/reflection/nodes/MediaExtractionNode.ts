@@ -94,7 +94,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
   ): Promise<string | undefined> {
     shared.workspaceSnapshot = prepRes.workspaceState.toSnapshot();
 
-    if (mediaFiles && mediaFiles.length > 0 && shared.context) {
+    if (mediaFiles?.length && shared.context) {
       await this.services.modelHandler.addMediaToUserMessage(
         shared.context.messages,
         mediaFiles,

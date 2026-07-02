@@ -10,7 +10,5 @@ export const LATEX_FORBIDDEN_REPLACEMENTS: ReplacementCategory = {
   description:
     'Removes LaTeX commands that should never appear, such as section endings',
   isRegex: false,
-  patterns: {
-    ...generateInvalidSectionEndingFixes(SECTION_TYPES),
-  },
+  patterns: generateInvalidSectionEndingFixes(SECTION_TYPES),
 };

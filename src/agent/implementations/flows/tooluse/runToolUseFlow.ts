@@ -385,8 +385,7 @@ export async function runToolUseFlow<C = unknown>(
       shared.lastResponse ||
       undefined;
     totalCostUsd =
-      shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost ??
-      undefined;
+      shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost;
     const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
     touchedFiles = extractedTouchedFiles.length
       ? extractedTouchedFiles

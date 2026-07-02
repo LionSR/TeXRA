@@ -33,7 +33,7 @@ export async function selectAgentInMainView(
     source = 'remote',
   } = options;
 
-  const agentValue = createKey(source as AgentSource, agentName);
+  const agentValue = createKey(source, agentName);
 
   // Focus main view first - triggers initialization if needed
   await vscode.commands.executeCommand('texra.showMainView');

@@ -247,10 +247,6 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     const loggedResults: Array<Array<{ path: string; ok: boolean }>> = [];
 
     class RecordingHandler extends ModelHandlerGoogleGenAI {
-      constructor(config: ModelConfig) {
-        super(config);
-      }
-
       override async getClient(): Promise<any> {
         throw new Error('getClient should not be called in this test');
       }

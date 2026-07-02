@@ -388,12 +388,9 @@ export class ZoteroAddTool extends defineTool({
     const errorCount = results.length - successCount;
 
     const output = results
-      .map((r) => {
-        if (r.status === 'success') {
-          return `✓ ${r.item}`;
-        }
-        return `✗ ${r.item}: ${r.message}`;
-      })
+      .map((r) =>
+        r.status === 'success' ? `✓ ${r.item}` : `✗ ${r.item}: ${r.message}`,
+      )
       .join('\n');
 
     // Throw ToolError if all items failed

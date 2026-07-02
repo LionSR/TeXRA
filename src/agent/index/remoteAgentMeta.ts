@@ -25,11 +25,7 @@ export function persistRemoteAgentMeta(
   agentName: string,
   meta: { tools?: string[]; defaultOutputFiles?: string[] },
 ): void {
-  const stored =
-    platform().globalState.get<RemoteAgentMetaCache>(
-      GlobalStateKey.REMOTE_AGENT_META_CACHE,
-      {},
-    ) ?? {};
+  const stored = getPersistedRemoteAgentMeta();
   stored[agentName] = { ...stored[agentName], ...meta };
   void platform().globalState.update(
     GlobalStateKey.REMOTE_AGENT_META_CACHE,

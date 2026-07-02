@@ -8,10 +8,6 @@ import {
 const EQUATION_ENVIRONMENT_PATTERN =
   '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|eqnarray\\*?|split\\*?)';
 
-function getSafeString(value: string | undefined): string {
-  return typeof value === 'string' ? value : '';
-}
-
 const convertFencedLatexBlock: ReplacementFunction = (
   match,
   leadingBreak,
@@ -21,10 +17,10 @@ const convertFencedLatexBlock: ReplacementFunction = (
   inlineBody,
 ) => {
   const newline = match.includes('\r\n') ? '\r\n' : '\n';
-  const safeLeadingBreak = getSafeString(leadingBreak);
-  const safeIndent = getSafeString(indent);
-  const safeEnvironment = getSafeString(environment);
-  const safeBody = getSafeString(multilineBody) || getSafeString(inlineBody);
+  const safeLeadingBreak = leadingBreak ?? '';
+  const safeIndent = indent ?? '';
+  const safeEnvironment = environment ?? '';
+  const safeBody = multilineBody || inlineBody || '';
 
   let bodyWithTrailingBreak = '';
   if (safeBody !== '') {

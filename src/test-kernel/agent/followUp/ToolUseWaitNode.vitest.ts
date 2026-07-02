@@ -437,10 +437,7 @@ describe('ToolUseWaitNode', () => {
 
     try {
       const continuationCycles = 25;
-      for (const cycle of Array.from(
-        { length: continuationCycles },
-        (_, index) => index,
-      )) {
+      for (let cycle = 0; cycle < continuationCycles; cycle += 1) {
         const prep = await node.prep(shared);
         const exec = await withTestRunContext(
           services.runtimeHost,

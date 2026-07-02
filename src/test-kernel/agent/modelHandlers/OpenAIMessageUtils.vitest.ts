@@ -2,10 +2,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-// Standard library imports
-
-// (none needed)
-
 // Local imports - agent
 import { normalizeOpenAIMessageContent } from '@agent/modelHandlers/openai/openAIMessageUtils';
 

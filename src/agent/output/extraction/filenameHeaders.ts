@@ -96,11 +96,7 @@ function makeUniquePercentHeaderName(
   reservedFinalPaths: Set<string>,
   roundDir: string,
 ): string {
-  const normalized = source.replaceAll('\\', '/');
-  const safeName = getSafeDocumentRelativePath(normalized).replaceAll(
-    '\\',
-    '/',
-  );
+  const safeName = safeDocumentName(source);
   let candidate = safeName;
   let suffix = 2;
 

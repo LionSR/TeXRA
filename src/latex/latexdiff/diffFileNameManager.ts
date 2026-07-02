@@ -79,10 +79,10 @@ export function detectGeneratedLatexdiffArtifact(
   const parsed = path.parse(filePath);
   if (parsed.ext.toLowerCase() !== '.tex') return null;
 
-  const patterns: Array<{
+  const patterns: {
     kind: GeneratedLatexdiffArtifactKind;
     regex: RegExp;
-  }> = [
+  }[] = [
     { kind: 'versionControlDiff', regex: /^(.+)-diff[0-9a-f]{6,40}$/i },
     { kind: 'betweenRoundDiff', regex: /^(.+)_diffr\d+r\d+$/i },
     { kind: 'workspaceDiff', regex: /^(.+)_diff$/i },
