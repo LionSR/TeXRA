@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  nextSlashPaletteHighlight,
   slashPaletteCommandLabelWidth,
   slashPaletteEnterHintAction,
   slashPaletteWindow,
 } from '@cli/chat/tui/commands/SlashPalette';
+import { nextSelectHighlightIndex } from '@cli/chat/tui/ui/Select';
+
+function itemsOfLength(itemCount: number): { value: number; label: string }[] {
+  return Array.from({ length: itemCount }, (_, i) => ({
+    value: i,
+    label: String(i),
+  }));
+}
 
 describe('SlashPalette navigation', () => {
   it('continues down into commands hidden behind the overflow marker', () => {
@@ -23,10 +30,10 @@ describe('SlashPalette navigation', () => {
       hiddenAfter: 7,
     });
 
-    const next = nextSlashPaletteHighlight({
+    const next = nextSelectHighlightIndex({
       direction: 1,
       highlight: 7,
-      itemCount,
+      items: itemsOfLength(itemCount),
     });
 
     expect(next).toBe(8);
@@ -46,17 +53,17 @@ describe('SlashPalette navigation', () => {
 
   it('wraps navigation across the full match list', () => {
     expect(
-      nextSlashPaletteHighlight({
+      nextSelectHighlightIndex({
         direction: 1,
         highlight: 14,
-        itemCount: 15,
+        items: itemsOfLength(15),
       }),
     ).toBe(0);
     expect(
-      nextSlashPaletteHighlight({
+      nextSelectHighlightIndex({
         direction: -1,
         highlight: 0,
-        itemCount: 15,
+        items: itemsOfLength(15),
       }),
     ).toBe(14);
   });
