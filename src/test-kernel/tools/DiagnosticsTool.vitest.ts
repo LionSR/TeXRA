@@ -1,16 +1,33 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import {
-  DiagnosticsTool,
-  setAddCriticismSink,
-  setLinterProvider,
-} from '@tools/DiagnosticsTool';
+import { DiagnosticsTool } from '@tools/DiagnosticsTool';
+import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import { createFakePlatform } from '../support/FakePlatform';
+import type { AddCriticismSink } from '@platform/interfaces/criticism';
 
-afterEach(() => {
-  setLinterProvider(async () => []);
-  setAddCriticismSink(() => ({ accepted: false, resolvedPath: '' }));
+async function installPlatform(
+  overrides: Parameters<typeof createFakePlatform>[1] = {},
+): Promise<void> {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({}, overrides));
+}
+
+afterEach(async () => {
+  await installPlatform();
 });
+
+function installLinter(
+  linter: (path: string) => Promise<GenericDiagnostic[]>,
+): Promise<void> {
+  return installPlatform({ linter });
+}
+
+function installAddCriticismSink(
+  addCriticismSink: AddCriticismSink,
+): Promise<void> {
+  return installPlatform({ addCriticismSink });
+}
 
 function worktreeContext() {
   return createRunContext({
@@ -22,7 +39,7 @@ function worktreeContext() {
 describe('DiagnosticsTool', () => {
   it('reads diagnostics from the active working directory root', async () => {
     const paths: string[] = [];
-    setLinterProvider(async (path) => {
+    await installLinter(async (path) => {
       paths.push(path);
       return [];
     });
@@ -50,7 +67,7 @@ describe('DiagnosticsTool', () => {
   });
 
   it('reports when the criticism sink does not accept (feature disabled)', async () => {
-    setAddCriticismSink(() => ({ accepted: false, resolvedPath: '' }));
+    await installAddCriticismSink(() => ({ accepted: false, resolvedPath: '' }));
 
     const result = await withRunContext(worktreeContext(), () =>
       new DiagnosticsTool().call({
@@ -68,7 +85,7 @@ describe('DiagnosticsTool', () => {
 
   it('resolves the path and summarizes an accepted criticism', async () => {
     const entries: unknown[] = [];
-    setAddCriticismSink((entry) => {
+    await installAddCriticismSink((entry) => {
       entries.push(entry);
       return { accepted: true, resolvedPath: entry.absolutePath };
     });

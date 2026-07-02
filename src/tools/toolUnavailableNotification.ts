@@ -2,38 +2,14 @@
  * Notification for unavailable external tools.
  *
  * Separated from the tool-use flow so the flow runner stays decoupled from
- * the host UI layer. The notification callback is injected at activation.
+ * the host UI layer. The notification handler is injected via `platform()`.
  */
 
+import { platform } from '@platform/platform';
 import { mapToolNamesToGroups } from '@tools/toolAvailability';
 
 /** Groups already surfaced in a notification this session — avoids repeat popups. */
 const notifiedGroups = new Set<string>();
-
-/**
- * Pluggable notification handler for unavailable tools.
- * Set by the extension host at activation; defaults to no-op.
- *
- * `actionCommand` and `actionLabel` let a notification funnel the user to the
- * right tab — e.g. the Git tab for the GitHub token rather than the generic
- * Tools dashboard.
- */
-let notificationHandler: (
-  message: string,
-  actionCommand?: string,
-  actionLabel?: string,
-) => void = () => {};
-
-/** Register a platform-specific notification handler. */
-export function setToolNotificationHandler(
-  handler: (
-    message: string,
-    actionCommand?: string,
-    actionLabel?: string,
-  ) => void,
-): void {
-  notificationHandler = handler;
-}
 
 const DEFAULT_ACTION_COMMAND = 'texra.showTools';
 const DEFAULT_ACTION_LABEL = 'Open Tools Dashboard';
@@ -68,7 +44,7 @@ export function notifyUnavailableTools(excludedToolNames: string[]): void {
   const hiddenGroups = fresh.filter((g) => g.hideFromDashboard);
   if (hiddenGroups.length > 0) {
     const label = formatGroupLabel(hiddenGroups.map((g) => g.name));
-    notificationHandler(
+    platform().toolNotificationHandler(
       `${label} excluded — external dependencies not installed.`,
     );
   }
@@ -89,7 +65,7 @@ export function notifyUnavailableTools(excludedToolNames: string[]): void {
   for (const [bucketKey, bucket] of byAction) {
     const [cmd, label] = bucketKey.split('\0');
     const names = formatGroupLabel(bucket.map((g) => g.name));
-    notificationHandler(
+    platform().toolNotificationHandler(
       `${names} excluded — external dependencies not installed.`,
       cmd,
       label,
