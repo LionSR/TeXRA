@@ -958,7 +958,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const reduction = tokensBefore - tokensAfter;
       const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
 
-      // Log context management event with structured data
+      // NOTE: tokensAfter comes from estimateTokenCount() on the actual
+      // compacted messages, so it is a precise count — no "~" prefix needed.
+      // Contrast with ModelHandler.ts, which uses the summarize() function's
+      // approximate output token count and adds "~" to indicate it.
       logContextManagementEvent(
         this.logger,
         `Compacted conversation: ${tokensBefore.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,

@@ -937,6 +937,12 @@ export abstract class ModelHandler<
       const reductionPercent =
         tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
 
+      // NOTE: estimatedTokensAfter comes from the summarize() function's
+      // output token count — it approximates the size of the summary text,
+      // not the exact token count when re-submitting compacted messages.
+      // The "~" prefix reflects this approximate nature. Contrast with the
+      // OpenAI Responses API path in modelHandlerOpenAIResponse.ts, which
+      // re-counts tokens precisely via estimateTokenCount() and omits "~".
       logContextManagementEvent(
         this.logger,
         `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
