@@ -1879,4 +1879,18 @@ describe('assignByContentSimilarity', () => {
     expect(assigned[0]?.name).toBe('f.tex');
     expect(assigned[1]).toBeNull();
   });
+
+  it('can assign a candidate after another block resolves its initial tie', () => {
+    const assigned = assignByContentSimilarity(
+      ['common common common', 'AAA weak'],
+      [
+        { name: 'a.tex', content: 'AAA common common common' },
+        { name: 'b.tex', content: 'BBB common common common' },
+      ],
+    );
+
+    expect(assigned.filter(Boolean)).toHaveLength(2);
+    expect(assigned[0]?.name).toBe('b.tex');
+    expect(assigned[1]?.name).toBe('a.tex');
+  });
 });

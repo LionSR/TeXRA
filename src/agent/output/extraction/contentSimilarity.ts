@@ -134,23 +134,29 @@ export function assignByContentSimilarity(
   const takenCandidates = new Set<number>();
   const takenFiles = new Set<number>();
   const nameByCandidate = new Map<number, string>();
-  for (const { c, f, score } of scored) {
-    if (score < minSimilarity) break;
-    if (takenCandidates.has(c) || takenFiles.has(f)) continue;
-    takenCandidates.add(c);
-    // An exact score tie against another still-free file means there is no
-    // evidence which file this block belongs to — leave it unmatched rather
-    // than routing by declaration order.
-    const ambiguous = scored.some(
-      (other) =>
-        other.c === c &&
-        other.f !== f &&
-        !takenFiles.has(other.f) &&
-        other.score === score,
-    );
-    if (ambiguous) continue;
-    takenFiles.add(f);
-    nameByCandidate.set(c, files[f].name);
+  let madeProgress = true;
+  while (madeProgress) {
+    madeProgress = false;
+    for (const { c, f, score } of scored) {
+      if (score < minSimilarity) break;
+      if (takenCandidates.has(c) || takenFiles.has(f)) continue;
+      // An exact score tie against another still-free file means there is no
+      // evidence which file this block belongs to yet. Leave it for a later
+      // pass: another candidate may claim one of the tied files, making this
+      // candidate's remaining match unambiguous.
+      const ambiguous = scored.some(
+        (other) =>
+          other.c === c &&
+          other.f !== f &&
+          !takenFiles.has(other.f) &&
+          other.score === score,
+      );
+      if (ambiguous) continue;
+      takenCandidates.add(c);
+      takenFiles.add(f);
+      nameByCandidate.set(c, files[f].name);
+      madeProgress = true;
+    }
   }
 
   return candidates.map((content, idx) => {
