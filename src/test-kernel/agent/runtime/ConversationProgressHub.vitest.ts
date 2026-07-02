@@ -45,4 +45,24 @@ describe('attachConversationProgressHub (F-1b)', () => {
     logConversationProgress(trace, { conversationTurns: 1, toolCallCount: 0 });
     expect(events).toHaveLength(0);
   });
+
+  it('drops a conversationProgress event with missing or malformed data instead of forwarding it', () => {
+    const trace = new TraceEmitter();
+    const { events, host } = createRecordingHost();
+    const streamId = 'stream:hub-test-3' as StreamTabId;
+    const detach = attachConversationProgressHub(trace, host, streamId);
+
+    try {
+      trace.domain({ key: 'conversationProgress', data: undefined });
+      trace.domain({
+        key: 'conversationProgress',
+        data: { conversationTurns: 1 },
+      });
+      trace.domain({ key: 'conversationProgress', data: 'not an object' });
+
+      expect(events).toHaveLength(0);
+    } finally {
+      detach();
+    }
+  });
 });

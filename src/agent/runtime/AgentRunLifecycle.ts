@@ -18,6 +18,7 @@ import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,
   STREAM_STATUS,
+  toRetryErrorInfo,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
@@ -234,9 +235,12 @@ export async function runFlowWithLifecycle(
     // normalizeProviderError recovers the structured shape attached at the
     // flow-exit rethrows (T2-2) when one was attached, or formats a fresh one
     // otherwise; either way sdkMsg is unchanged from the prior getSdkErrorMessage
-    // call (it reads the same .message).
-    const { message: sdkMsg, ...providerErrorInfo } =
-      normalizeProviderError(err);
+    // call (it reads the same .message). toRetryErrorInfo strips rawErrorBody —
+    // the ResultEvent.error type omits it (bulky, not worth persisting) and a
+    // bare object spread would silently smuggle it through past the type check.
+    const { message: sdkMsg, ...providerErrorInfo } = toRetryErrorInfo(
+      normalizeProviderError(err),
+    );
     const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
 
     // Root-agent failures are surfaced in the stream log. Subagent failures

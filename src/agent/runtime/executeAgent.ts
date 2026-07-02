@@ -154,7 +154,7 @@ function buildToolUseFlowResult(
 /** Create an onRoundCompleted callback that feeds progress into the execution registry and orchestrator. */
 function createRoundProgressCallback(
   executionId: ExecutionId,
-  logger: AgentTrace,
+  trace: AgentTrace,
   onProgress?: (update: SubagentProgressUpdate) => void,
 ): (
   roundIndex: number,
@@ -175,7 +175,7 @@ function createRoundProgressCallback(
     // Single producer emission (F-1b): the conversationProgressHub attached in
     // AgentLaunchContext derives the host `updateConversationProgress` event
     // from this instead of emitting to the runtimeHost directly.
-    logConversationProgress(logger, {
+    logConversationProgress(trace, {
       conversationTurns: roundIndex + 1,
       toolCallCount: 0,
     });

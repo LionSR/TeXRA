@@ -10,8 +10,22 @@
  */
 import type { AgentTrace } from '@agent/trace';
 import type { ConversationProgress, StreamTabId } from '@shared/schemas';
+import { isObject } from '@utils/core';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
+
+/** Narrows a domain event's untyped `data` to the shape `logConversationProgress`
+ *  always sends. `DomainEvent.data` is `unknown` because the channel is a
+ *  general escape hatch shared by every domain key; only this hub's own
+ *  producer emits `conversationProgress`, but the check keeps a malformed or
+ *  missing payload from forwarding `undefined`/partial data to the host. */
+function isConversationProgress(data: unknown): data is ConversationProgress {
+  return (
+    isObject(data) &&
+    typeof data.conversationTurns === 'number' &&
+    typeof data.toolCallCount === 'number'
+  );
+}
 
 /** Returns a detach disposer; callers bundle it into the run's trace teardown. */
 export function attachConversationProgressHub(
@@ -23,9 +37,10 @@ export function attachConversationProgressHub(
     if (event.type !== 'domain' || event.key !== 'conversationProgress') {
       return;
     }
+    if (!isConversationProgress(event.data)) return;
     runtimeHost.emit('updateConversationProgress', {
       streamId,
-      progress: event.data as ConversationProgress,
+      progress: event.data,
     });
   });
 }

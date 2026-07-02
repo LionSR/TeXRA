@@ -161,10 +161,12 @@ export interface DomainEvent extends StageStamp {
  * is a sibling of `failed` (a user interrupt is not a failure). `error.kind` is
  * the classified terminal-error discriminant; the rest of `error` is the
  * `RetryErrorInfo` normalized at the same boundary (statusCode, provider,
- * isCredentialExhausted, partialText, …) — present whenever `normalizeProviderError`
- * recovers a structured shape, absent (beyond `kind`/`message`) for kinds that
- * never carry one (e.g. `missing-api-key`, `disk-full`). `usage` is the run
- * totals (present once at least one round recorded usage, including on failures).
+ * isCredentialExhausted, partialText, …). `normalizeProviderError` always
+ * returns a structured shape, so baseline fields like `userRetryable`/
+ * `isRelayError` are present for every kind, including `missing-api-key` and
+ * `disk-full` — only genuine SDK/provider failures also populate `statusCode`/
+ * `provider`/`requestId`/`partialText`. `usage` is the run totals (present
+ * once at least one round recorded usage, including on failures).
  */
 export interface ResultEvent extends StageStamp {
   readonly type: 'result';
