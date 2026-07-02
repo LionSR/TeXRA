@@ -2,8 +2,17 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { platform } from '@platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import {
+  API_PROVIDERS,
+  apiKeyExists as resolvedApiKeyExists,
+  apiKeyEnvName,
+  apiKeySecretName,
+  getApiKey as requireApiKey,
+  lookupApiKey,
+  type ApiProvider,
+} from '@model/apiProviders';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   getGitHubEnvToken,
@@ -48,7 +57,7 @@ export class SecretManager {
   public static readonly GITHUB_TOKEN_KEY = GITHUB_TOKEN_STORAGE_KEY;
 
   public static getApiKeySecretName(provider: ApiProvider): string {
-    return `apiKey.${provider}`;
+    return apiKeySecretName(provider);
   }
 
   public static async listKeys(): Promise<readonly string[]> {
@@ -69,24 +78,21 @@ export class SecretManager {
     return 'none';
   }
 
-  /**
-   * Lookup API key from secret storage or environment variable.
-   */
-  private static async lookupApiKey(
-    provider: ApiProvider,
-  ): Promise<string | undefined> {
-    const secretKey = await this.get(this.getApiKeySecretName(provider));
-    return secretKey ?? process.env[`${provider.toUpperCase()}_API_KEY`];
-  }
-
   public static async getApiKey(provider: ApiProvider): Promise<string> {
-    const key = await this.lookupApiKey(provider);
-    if (!key) {
+    try {
+      return await requireApiKey(platform().secrets, provider);
+    } catch (err) {
+      if (
+        !(err instanceof Error) ||
+        !err.message.startsWith(`No API key found for ${provider}.`)
+      ) {
+        throw err;
+      }
       throw new Error(
-        `No API key found for ${provider}. Please set it using the "Set API Key" command or ${provider.toUpperCase()}_API_KEY environment variable.`,
+        `No API key found for ${provider}. Please set it using the "Set API Key" command or ${apiKeyEnvName(provider)} environment variable.`,
+        { cause: err },
       );
     }
-    return key;
   }
 
   public static async anyApiKeyExists(): Promise<boolean> {
@@ -100,20 +106,17 @@ export class SecretManager {
   }
 
   public static async apiKeyExists(provider: ApiProvider): Promise<boolean> {
-    const key = await this.lookupApiKey(provider);
-    return key !== undefined;
+    return resolvedApiKeyExists(platform().secrets, provider);
   }
 
   /**
-   * Like `apiKeyExists` but rejects empty / whitespace-only values. A
-   * stale `PROVIDER_API_KEY=""` env var is "present" but not usable at
-   * launch — every runtime auth path falls over on a blank key. Callers
-   * that gate on "can this credential actually authenticate?" (the
-   * setup flow, per-provider probes, preflight checks) must use this
-   * helper rather than the looser `apiKeyExists`.
+   * Like `apiKeyExists` but also rejects whitespace-only values from any
+   * resolved credential. The canonical resolver already treats empty env vars
+   * as missing; this helper is for launch checks that need an actually usable
+   * authentication value.
    */
   public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
-    const key = await this.lookupApiKey(provider);
+    const key = await lookupApiKey(platform().secrets, provider);
     return isNonEmptyString(key);
   }
 
