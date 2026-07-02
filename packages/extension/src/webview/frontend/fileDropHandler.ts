@@ -70,7 +70,7 @@ export function hasDroppedFilePayload(
   dataTransfer: DataTransfer | null,
 ): boolean {
   if (!dataTransfer) return false;
-  const types = dataTransfer.types ?? [];
+  const types = [...(dataTransfer.types ?? [])];
   return (
     types.includes('Files') ||
     types.includes('application/vnd.code.tree.resource') ||
