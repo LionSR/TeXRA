@@ -162,7 +162,7 @@ describe('CLI orchestration items', () => {
       headerLines: ORCHESTRATION_TEST_HEADER_LINES,
       statusLines: [],
       footerHints: [
-        'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
+        'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
         'Researcher Access sign-in may unlock more remote team agents.',
       ],
     });
@@ -178,7 +178,7 @@ describe('CLI orchestration items', () => {
   it('keeps launcher status lines before advisory footer text', () => {
     const statusLines = ['auth: signed out'];
     const footerHints = [
-      'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
+      'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
     ];
 
     const layout = orchestrationLauncherLayout({
@@ -481,13 +481,13 @@ describe('CLI orchestration items', () => {
       toolUseAgents: [],
     });
 
-    expect(items.find((item) => item.label === 'Team Physicist')).toEqual(
+    expect(items.find((item) => item.label === 'Team physicist')).toEqual(
       expect.objectContaining({
         value: expect.objectContaining({
           kind: 'preset',
           preset: 'physicist',
         }),
-        description: 'ready; 1 workflow; 2 tools',
+        description: 'ready; 1 workflow; 2 tools; Physicist',
         disabled: false,
       }),
     );
@@ -506,9 +506,9 @@ describe('CLI orchestration items', () => {
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
-      'Team Lean Project',
-      'Team Physicist',
-      'Team Mathematician',
+      'Team lean-project',
+      'Team physicist',
+      'Team mathematician',
       'Help',
     ]);
   });
@@ -532,12 +532,12 @@ describe('CLI orchestration items', () => {
       toolUseAgents: [],
     });
 
-    expect(items.find((item) => item.label === 'Team Lean Project')).toEqual(
+    expect(items.find((item) => item.label === 'Team lean-project')).toEqual(
       expect.objectContaining({
         disabled: true,
-        description: 'unavailable; no team root; 1/2 tools',
+        description: 'unavailable; no team root; 1/2 tools; Lean Project',
         footerHints: [
-          'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
+          'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
           'Researcher Access sign-in may unlock more remote team agents.',
         ],
       }),
@@ -555,7 +555,7 @@ describe('CLI orchestration items', () => {
     });
 
     expect(orchestrationFooterHints(items)).toEqual([
-      'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
+      'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
       'Researcher Access sign-in may unlock more remote team agents.',
     ]);
   });
@@ -569,7 +569,7 @@ describe('CLI orchestration items', () => {
     });
 
     expect(orchestrationFooterHints(items)).toEqual([
-      'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
+      'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
     ]);
   });
 
@@ -581,7 +581,7 @@ describe('CLI orchestration items', () => {
     });
 
     expect(
-      items.find((item) => item.label === 'Team Physicist')?.value,
+      items.find((item) => item.label === 'Team physicist')?.value,
     ).toEqual({
       kind: 'preset',
       preset: 'physicist',
@@ -610,7 +610,7 @@ describe('CLI orchestration items', () => {
     expect(disabledLabels).toEqual([
       'New chat',
       'Chat with review',
-      'Team Physicist',
+      'Team physicist',
     ]);
     expect(
       view.items.find((item) => item.label === 'Resume aaaaaaaaaaaa'),
@@ -651,10 +651,10 @@ describe('CLI orchestration items', () => {
       description: 'No personal API-key models are runnable',
     });
     expect(
-      view.items.find((item) => item.label === 'Team Lean Project'),
+      view.items.find((item) => item.label === 'Team lean-project'),
     ).toMatchObject({
       disabled: true,
-      description: 'unavailable; no team root; 1/2 tools',
+      description: 'unavailable; no team root; 1/2 tools; Lean Project',
     });
   });
 

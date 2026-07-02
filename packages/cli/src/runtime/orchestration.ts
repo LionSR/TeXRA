@@ -185,8 +185,11 @@ function presetItems(
 ): CliOrchestrationItem[] {
   return plans.map((plan) => ({
     value: { kind: 'preset', preset: plan.preset.id },
-    label: `Team ${plan.preset.name}`,
-    description: formatCliMultiAgentPresetLauncherSummary(plan),
+    label: `Team ${plan.preset.id}`,
+    description: [
+      formatCliMultiAgentPresetLauncherSummary(plan),
+      plan.preset.name,
+    ].join('; '),
     disabled: !cliMultiAgentPresetCanLaunchTeam(plan),
     footerHints: formatCliMultiAgentPresetLauncherHints(plan, {
       includeLoginHint: options.includeLoginHint,
