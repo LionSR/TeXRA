@@ -146,6 +146,13 @@ export class SettingsAgentCatalogController {
     return [...names].sort();
   }
 
+  getPresetToolUseRoot(toolUseAgents: string[]): string | undefined {
+    const orchestratorNames = new Set(this.getOrchestratorAgentNames());
+    return toolUseAgents.find(
+      (name) => orchestratorNames.has(name) || isOrchestratorLikeName(name),
+    );
+  }
+
   async applyPreset(presetId: string): Promise<SettingsAgentPresetApplyResult> {
     const preset = this.getPreset(presetId);
     if (!preset) return { ok: false, reason: 'unknownPreset' };
@@ -226,4 +233,8 @@ export class SettingsAgentCatalogController {
       AGENT_MODE_PRESETS_BY_ID.get(presetId) ?? this.getCustomPreset(presetId)
     );
   }
+}
+
+function isOrchestratorLikeName(name: string): boolean {
+  return name.toLowerCase().endsWith('orchestrator');
 }

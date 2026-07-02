@@ -187,8 +187,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       deleteSecret: (key) => SecretManager.delete(key),
       refreshAfterKeyChange: () => this.refreshAfterKeyChange(),
     });
-    this.agentHandlers = new AgentHandlers(ctx, () =>
-      this.refreshAfterAgentMutation(),
+    this.agentHandlers = new AgentHandlers(ctx, (selectedToolUseAgent) =>
+      this.refreshAfterAgentMutation(selectedToolUseAgent),
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.historyHandlers = new HistoryHandlers(ctx);
@@ -903,12 +903,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
-  private async refreshAfterAgentMutation(): Promise<void> {
+  private async refreshAfterAgentMutation(
+    selectedToolUseAgent?: string,
+  ): Promise<void> {
     await Promise.all([
       this.withActiveWebview((w) =>
         this.agentHandlers.sendAgentSelectionData(w),
       ),
-      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+      safeExecuteCommand(
+        'texra.refreshAllOptions',
+        selectedToolUseAgent ? [{ selectedToolUseAgent }] : [],
+        this.viewName,
+      ),
     ]);
   }
 
