@@ -947,7 +947,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
           if (resolvedMediaType !== 'image/png') {
             this.logger.warn(
               'Unsupported image media type, defaulting to image/png',
-              { data: { mediaType: resolvedMediaType, fileName: media.file_name } },
+              {
+                data: {
+                  mediaType: resolvedMediaType,
+                  fileName: media.file_name,
+                },
+              },
             );
           }
           imageMediaType = 'image/png';
@@ -1684,12 +1689,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         lastUserMsg.content.unshift(...formattedMedia);
       }
     } catch (err) {
-      logSdkError(
-        this.logger,
-        'Error adding media to user message',
-        err,
-        { operation: 'add media to user message' },
-      );
+      logSdkError(this.logger, 'Error adding media to user message', err, {
+        operation: 'add media to user message',
+      });
     }
   }
 }

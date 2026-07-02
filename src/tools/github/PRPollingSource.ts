@@ -795,9 +795,12 @@ export class PRPollingSource extends PollingSourceBase<
         return true;
       }
       if (err instanceof GitHubAuthError) {
-        this.logger.warn(`Annotations for check ${run.id} forbidden; dropping.`, {
-          data: err,
-        });
+        this.logger.warn(
+          `Annotations for check ${run.id} forbidden; dropping.`,
+          {
+            data: err,
+          },
+        );
         this.removePendingAnnotationRun(state, run.id);
         return true;
       }

@@ -47,8 +47,10 @@ function createPlatformAgentDirectories(
         ),
     },
     logger: {
-      debug: (message, data) => logger.debug(options.channel, message, { data }),
-      error: (message, data) => logger.error(options.channel, message, { data }),
+      debug: (message, data) =>
+        logger.debug(options.channel, message, { data }),
+      error: (message, data) =>
+        logger.error(options.channel, message, { data }),
     },
   });
 }

@@ -281,13 +281,15 @@ export class AIAgentsTab extends LitElement {
         <span class="ai-agents-status-stat ai-agents-status-available">
           ${waIcon('check')} ${available} available
         </span>
-        ${missing > 0
-          ? html`
-              <span class="ai-agents-status-stat ai-agents-status-missing">
-                ${waIcon('warning')} ${missing} need setup
-              </span>
-            `
-          : nothing}
+        ${
+          missing > 0
+            ? html`
+                <span class="ai-agents-status-stat ai-agents-status-missing">
+                  ${waIcon('warning')} ${missing} need setup
+                </span>
+              `
+            : nothing
+        }
       </div>
     `;
   }

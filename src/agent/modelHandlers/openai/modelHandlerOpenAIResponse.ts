@@ -530,9 +530,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Check the status of the retrieved response
     if (this.isBackgroundPending(pendingResponse)) {
       // Still processing - resume polling
-      this.logger.debug('Pending background response still processing, resuming poll', {
-        data: { responseId: pendingId, status: pendingResponse.status },
-      });
+      this.logger.debug(
+        'Pending background response still processing, resuming poll',
+        {
+          data: { responseId: pendingId, status: pendingResponse.status },
+        },
+      );
       const response = await this.waitForBackgroundCompletion(
         client,
         pendingResponse,
@@ -636,18 +639,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } else {
       const errorDetail =
         response.error?.message ?? response.incomplete_details?.reason;
-      this.logger.debug(
-        'Response not safe for chaining',
-        {
-          data: {
-            responseId: response.id,
-            status: response.status,
-            hasUsage: !!response.usage,
-            hasInputTokens,
-            errorDetail,
-          },
+      this.logger.debug('Response not safe for chaining', {
+        data: {
+          responseId: response.id,
+          status: response.status,
+          hasUsage: !!response.usage,
+          hasInputTokens,
+          errorDetail,
         },
-      );
+      });
       // Rejecting the chain anchor invalidates the client-side bookkeeping:
       // sentMessages counts against server-side history that we're now
       // refusing to reference, so slicing from it on the next turn would
@@ -692,23 +692,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           response.usage.output_tokens_details?.reasoning_tokens ?? 0;
         const outputTokens = response.usage.output_tokens ?? 0;
 
-        this.logger.debug(
-          '[TOKEN_DIAG] Actual vs pre-flight',
-          {
-            data: {
-              actualInputTokens: actualTokens,
-              preFlightTokens: this._diagPreFlightTokens,
-              difference: diff,
-              differencePercent: diffPercent,
-              outputTokens,
-              reasoningTokens,
-              totalTokens: response.usage.total_tokens,
-              contextWindow: this.getEffectiveContextWindow(),
-              utilizationActual:
-                (actualTokens / this.getEffectiveContextWindow()) * 100,
-            },
+        this.logger.debug('[TOKEN_DIAG] Actual vs pre-flight', {
+          data: {
+            actualInputTokens: actualTokens,
+            preFlightTokens: this._diagPreFlightTokens,
+            difference: diff,
+            differencePercent: diffPercent,
+            outputTokens,
+            reasoningTokens,
+            totalTokens: response.usage.total_tokens,
+            contextWindow: this.getEffectiveContextWindow(),
+            utilizationActual:
+              (actualTokens / this.getEffectiveContextWindow()) * 100,
           },
-        );
+        });
         this._diagPreFlightTokens = null; // Clear for next request
       }
     } else {
@@ -950,7 +947,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // post-compaction token estimate is visible rather than silent.
         this.logger.debug(
           'Post-compaction token counting failed; falling back to output_tokens',
-          { data: buildErrorLogData(err, { operation: 'post-compaction token counting' }) },
+          {
+            data: buildErrorLogData(err, {
+              operation: 'post-compaction token counting',
+            }),
+          },
         );
         // NOTE: It's unclear what output_tokens represents exactly for the compact
         // endpoint — it may be the generation cost rather than the reusable content
@@ -1555,24 +1556,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const utilizationEstimate =
           (inputTokens / this.getEffectiveContextWindow()) * 100;
         this._diagPreFlightTokens = inputTokens; // Compared in finalizeResponse
-        this.logger.debug(
-          '[TOKEN_DIAG] Pre-flight count',
-          {
-            data: {
-              preFlightTokens: inputTokens,
-              utilizationEstimate,
-              prevCumulativeTokens: prevCumulative,
-              delta: inputTokens - prevCumulative,
-              newMessagesCount: newMessages.length,
-              totalMessagesCount: effectiveMessages.length,
-              hasPreviousResponseId: !!this.previousResponseId,
-              hasTools: !!convertedTools?.length,
-              toolCount: convertedTools?.length ?? 0,
-              contextWindow: this.getEffectiveContextWindow(),
-              maxOutputTokens,
-            },
+        this.logger.debug('[TOKEN_DIAG] Pre-flight count', {
+          data: {
+            preFlightTokens: inputTokens,
+            utilizationEstimate,
+            prevCumulativeTokens: prevCumulative,
+            delta: inputTokens - prevCumulative,
+            newMessagesCount: newMessages.length,
+            totalMessagesCount: effectiveMessages.length,
+            hasPreviousResponseId: !!this.previousResponseId,
+            hasTools: !!convertedTools?.length,
+            toolCount: convertedTools?.length ?? 0,
+            contextWindow: this.getEffectiveContextWindow(),
+            maxOutputTokens,
           },
-        );
+        });
       },
       onCountFailure: (err) => {
         this.logger.debug('Token counting failed; applying fallback cap', {
@@ -1781,9 +1779,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Safety net: handle unexpected pending status (shouldn't happen without background mode)
     if (this.isBackgroundPending(response)) {
-      this.logger.debug('WebSocket response ended with pending status — polling for completion', {
-        data: { responseId: response.id, status: response.status },
-      });
+      this.logger.debug(
+        'WebSocket response ended with pending status — polling for completion',
+        {
+          data: { responseId: response.id, status: response.status },
+        },
+      );
       response = await this.waitForBackgroundCompletion(
         client,
         response,
@@ -1948,9 +1949,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // during slow GPT-5 requests), poll until it finishes instead of silently
       // returning an incomplete response.
       if (this.isBackgroundPending(response)) {
-        this.logger.debug('Streaming response ended with pending status - polling for completion', {
-          data: { responseId: response.id, status: response.status },
-        });
+        this.logger.debug(
+          'Streaming response ended with pending status - polling for completion',
+          {
+            data: { responseId: response.id, status: response.status },
+          },
+        );
         response = await this.waitForBackgroundCompletion(
           client,
           response,
@@ -2298,19 +2302,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Terminal failure — the background response ended with a non-completed,
     // non-pending status (failed / cancelled / incomplete).
-    this.logger.error(
-      'Background response ended with a non-completed status',
-      {
-        data: {
-          responseId: polled.id,
-          status: polled.status,
-          pollCount: pollStats?.pollCount,
-          elapsedMs: pollStats?.elapsedMs,
-          error: polled.error ?? undefined,
-          incomplete: polled.incomplete_details ?? undefined,
-        },
+    this.logger.error('Background response ended with a non-completed status', {
+      data: {
+        responseId: polled.id,
+        status: polled.status,
+        pollCount: pollStats?.pollCount,
+        elapsedMs: pollStats?.elapsedMs,
+        error: polled.error ?? undefined,
+        incomplete: polled.incomplete_details ?? undefined,
       },
-    );
+    });
     throw createOpenAIBackgroundTerminalError(polled, this.config.provider);
   }
 

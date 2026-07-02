@@ -33,10 +33,7 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
       );
       break;
     case 'missingParams':
-      void showLoggedMessage(
-        CHANNEL,
-        'Missing required parameters for clean',
-      );
+      void showLoggedMessage(CHANNEL, 'Missing required parameters for clean');
       break;
     case 'error':
       void showLoggedMessage(CHANNEL, `Error during cleanup: ${result.error}`);

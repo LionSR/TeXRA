@@ -92,10 +92,12 @@ export function parseDelegationToolInput(
   const spread = isObject(input) ? input : {};
 
   if (category === AgentCategory.ToolUse) {
-    return LenientToolUseProposalSchema.nullable().catch(null).parse({
-      agentCategory: AgentCategory.ToolUse,
-      ...spread,
-    });
+    return LenientToolUseProposalSchema.nullable()
+      .catch(null)
+      .parse({
+        agentCategory: AgentCategory.ToolUse,
+        ...spread,
+      });
   }
 
   // Workflow: migrate legacy file fields, then map extraction shorthand flags.
@@ -103,9 +105,11 @@ export function parseDelegationToolInput(
     string,
     unknown
   >;
-  return LenientWorkflowProposalSchema.nullable().catch(null).parse({
-    agentCategory: AgentCategory.Workflow,
-    ...migrated,
-    toolConfig: extractionShorthandToolConfig(migrated),
-  });
+  return LenientWorkflowProposalSchema.nullable()
+    .catch(null)
+    .parse({
+      agentCategory: AgentCategory.Workflow,
+      ...migrated,
+      toolConfig: extractionShorthandToolConfig(migrated),
+    });
 }

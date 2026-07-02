@@ -579,15 +579,18 @@ export class ModelHandlerOpenAI<
           data: { inputTokens: this.lastKnownInputTokens },
         });
       } else {
-        this.logger.debug('Compacting conversation (token threshold exceeded)', {
-          data: {
-            inputTokens: this.lastKnownInputTokens,
-            thresholdPercent: threshold,
-            thresholdTokens: Math.floor(
-              (threshold / 100) * this.config.contextWindow,
-            ),
+        this.logger.debug(
+          'Compacting conversation (token threshold exceeded)',
+          {
+            data: {
+              inputTokens: this.lastKnownInputTokens,
+              thresholdPercent: threshold,
+              thresholdTokens: Math.floor(
+                (threshold / 100) * this.config.contextWindow,
+              ),
+            },
           },
-        });
+        );
       }
 
       const { compactedMessages, didCompact } = await this.compactConversation(

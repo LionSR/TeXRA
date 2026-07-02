@@ -966,10 +966,9 @@ export abstract class ModelHandler<
 
       return { compactedMessages, didCompact: true };
     } catch (err) {
-      this.logger.warn(
-        'Compaction failed, continuing with original messages',
-        { data: err },
-      );
+      this.logger.warn('Compaction failed, continuing with original messages', {
+        data: err,
+      });
       return { compactedMessages: messages, didCompact: false };
     }
   }

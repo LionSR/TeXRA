@@ -951,12 +951,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         (lastUserMsg.content as ChatContentItems[]).unshift(...formattedMedia);
       }
     } catch (err) {
-      logSdkError(
-        this.logger,
-        'Error adding media to user message',
-        err,
-        { operation: 'add media to user message' },
-      );
+      logSdkError(this.logger, 'Error adding media to user message', err, {
+        operation: 'add media to user message',
+      });
     }
   }
 }

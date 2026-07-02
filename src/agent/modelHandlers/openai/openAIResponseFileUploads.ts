@@ -167,9 +167,12 @@ export async function uploadToolAttachments(
     try {
       buffer = await loadAttachmentBuffer(attachment);
     } catch (err) {
-      logger.warn(`Unable to read attachment ${attachment.path ?? 'attachment'}`, {
-        data: buildErrorLogData(err, { operation: 'read attachment' }),
-      });
+      logger.warn(
+        `Unable to read attachment ${attachment.path ?? 'attachment'}`,
+        {
+          data: buildErrorLogData(err, { operation: 'read attachment' }),
+        },
+      );
       continue;
     }
 
@@ -262,9 +265,12 @@ export async function buildInlineAttachmentParts(
       }
       inlined.push(attachment);
     } catch (err) {
-      logger.debug(`Unable to inline attachment ${attachment.path ?? 'attachment'}`, {
-        data: buildErrorLogData(err, { operation: 'inline attachment' }),
-      });
+      logger.debug(
+        `Unable to inline attachment ${attachment.path ?? 'attachment'}`,
+        {
+          data: buildErrorLogData(err, { operation: 'inline attachment' }),
+        },
+      );
       skipped.push(attachment);
     } finally {
       buffer = wipeBuffer(buffer);
