@@ -37,7 +37,7 @@ additionally calls `@auth/SupabaseClient` directly for relay-401 token
 refresh — the same pattern `@agent/modelHandlers` already uses, not a
 `core`-specific exception. None of this pulls in `vscode` or `packages/*`;
 it's still host-agnostic, just not self-contained within `core`'s own module
-boundaries. Don't read the diagram above as "flows never imports outside
+boundaries. Don't read the diagram above as "flow files never import outside
 `core`."
 
 Files kept at the `core/` root are limited infrastructure helpers or shared
