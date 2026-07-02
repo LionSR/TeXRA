@@ -9,12 +9,13 @@
 export type MarkdownFence = {
   marker: '`' | '~';
   length: number;
+  info: string;
 };
 
 export function parseMarkdownFenceDelimiter(
   line: string,
 ): MarkdownFence | null {
-  const match = /^(`{3,}|~{3,})(?:\s*\S.*)?\s*$/.exec(line.trim());
+  const match = /^(`{3,}|~{3,})(?:\s*(.*?))?\s*$/.exec(line.trim());
   if (!match) {
     return null;
   }
@@ -22,7 +23,12 @@ export function parseMarkdownFenceDelimiter(
   return {
     marker: delimiter[0] as '`' | '~',
     length: delimiter.length,
+    info: (match[2] ?? '').trim(),
   };
+}
+
+export function isLatexMarkdownFence(fence: MarkdownFence): boolean {
+  return fence.info === '' || /^(?:latex|tex)$/i.test(fence.info);
 }
 
 function isMarkdownFenceDelimiter(line: string): boolean {

@@ -22,6 +22,9 @@ const LATEX_FENCE_OPEN_REGEX = /^(`{3,}|~{3,})\s*(?:latex|tex)\s*$/i;
 export function collectLatexFencedBlocks(
   content: string,
   thinkingTag: string,
+  options: {
+    onUnclosedFence?: (lineCount: number) => void;
+  } = {},
 ): string[] {
   const lines = responseLines(content, thinkingTag);
 
@@ -45,6 +48,9 @@ export function collectLatexFencedBlocks(
       continue;
     }
     current.push(line);
+  }
+  if (openFence && current.some((line) => line.trim() !== '')) {
+    options.onUnclosedFence?.(current.length);
   }
   return blocks;
 }

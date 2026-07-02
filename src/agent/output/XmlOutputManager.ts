@@ -31,7 +31,7 @@ import {
 
 import {
   assignByContentSimilarity,
-  collectLatexFencedBlocks,
+  collectLatexFencedBlocks as collectLatexFencedBlocksFromResponse,
 } from './extraction/contentSimilarity';
 import { extractFilenameHeaderDocuments } from './extraction/filenameHeaders';
 
@@ -134,6 +134,44 @@ export class XmlOutputManager {
     });
   }
 
+  private warnMissingExpectedFiles(
+    outputLocation: FileLocation,
+    expectedFiles: readonly string[],
+    documents: ReadonlyArray<{ name: string }>,
+  ): void {
+    const recoveredNames = new Set(
+      documents.map((doc) => this.normalizeExpectedFileName(doc.name)),
+    );
+    const missing = expectedFiles.filter(
+      (name) => !recoveredNames.has(this.normalizeExpectedFileName(name)),
+    );
+    if (missing.length === 0) return;
+
+    logMissingOutputs(this.logger, {
+      missing,
+      xmlFile: outputLocation.absolutePath,
+      documentTag: this.agentSetting.documentTag,
+    });
+  }
+
+  private normalizeExpectedFileName(name: string): string {
+    return name.replaceAll('\\', '/').replace(/^(?:\.\/)+/, '');
+  }
+
+  private collectLatexFencedBlocks(
+    outputContent: string,
+    thinkingTag: string,
+  ): string[] {
+    return collectLatexFencedBlocksFromResponse(outputContent, thinkingTag, {
+      onUnclosedFence: (lineCount) => {
+        debugInternal(
+          this.logger,
+          `Dropped unclosed LaTeX fence with ${formatResultCount(lineCount, 'line')} during fallback extraction`,
+        );
+      },
+    });
+  }
+
   /**
    * Last-resort recovery for multi-input agents that returned fenced
    * ```latex/```tex blocks with no filename header at all (neither the
@@ -148,7 +186,7 @@ export class XmlOutputManager {
     thinkingTag: string,
     baseFiles: readonly FileLocation[],
   ): Promise<Array<{ content: string; name: string }> | null> {
-    const blocks = collectLatexFencedBlocks(outputContent, thinkingTag);
+    const blocks = this.collectLatexFencedBlocks(outputContent, thinkingTag);
     if (blocks.length === 0) return null;
 
     const inputFiles = this.agentConfig.inputFiles;
@@ -265,6 +303,33 @@ export class XmlOutputManager {
         logInternal(
           this.logger,
           `Recovered ${this.agentSetting.documentTag} from filename headers (${formatResultCount(documents.length, 'document')})`,
+        );
+        if (expectedFiles.length > 1) {
+          this.warnMissingExpectedFiles(
+            outputLocation,
+            expectedFiles,
+            documents,
+          );
+        }
+      }
+    }
+
+    if (!documents && soleExpectedFile) {
+      const fencedBlocks = this.collectLatexFencedBlocks(
+        rawOutputContent,
+        thinkingTag,
+      );
+      if (fencedBlocks.length > 1) {
+        documents = [
+          {
+            name: soleExpectedFile,
+            content: fencedBlocks.join('\n\n'),
+          },
+        ];
+        logInternal(
+          this.logger,
+          `Recovered ${this.agentSetting.documentTag} by concatenating ` +
+            `unlabeled fenced blocks under ${soleExpectedFile} (${formatResultCount(fencedBlocks.length, 'block')})`,
         );
       }
     }

@@ -23,6 +23,7 @@ import {
 } from './latexHeuristics';
 import {
   isClosingMarkdownFence,
+  isLatexMarkdownFence,
   type MarkdownFence,
   parseMarkdownFenceDelimiter,
   stripSurroundingMarkdownFence,
@@ -179,6 +180,14 @@ export function extractFilenameHeaderDocuments(
         pendingPrefacedMarkdownFence = fence;
       }
       ignoreProseUntilNextHeader = false;
+      continue;
+    }
+
+    if (
+      !currentName &&
+      pendingPrefacedMarkdownFence &&
+      !isLatexMarkdownFence(pendingPrefacedMarkdownFence)
+    ) {
       continue;
     }
 

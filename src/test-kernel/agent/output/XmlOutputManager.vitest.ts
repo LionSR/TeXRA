@@ -33,6 +33,10 @@ async function initFakePlatform(files: Record<string, string> = {}) {
 function createXmlManager(
   documentTag = 'document',
   inputFiles: string[] = ['paper.tex'],
+  options: {
+    outputFiles?: string[];
+    logger?: AgentTrace;
+  } = {},
 ): XmlOutputManager {
   return new XmlOutputManager(
     {
@@ -51,13 +55,14 @@ function createXmlManager(
     },
     {
       inputFiles,
-      outputFiles: [],
+      outputFiles: options.outputFiles ?? [],
     } as unknown as AgentConfig,
-    {
-      debug: vi.fn(),
-      info: vi.fn(),
-      domain: vi.fn(),
-    } as unknown as AgentTrace,
+    options.logger ??
+      ({
+        debug: vi.fn(),
+        info: vi.fn(),
+        domain: vi.fn(),
+      } as unknown as AgentTrace),
     new TaskRunFileService(),
   );
 }
@@ -1230,6 +1235,33 @@ Appendix.
     );
   });
 
+  it('ignores bare labels inside pre-output example fences', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'Here is the label format:',
+        '```text',
+        'main.tex:',
+        'example body',
+        '```',
+        '',
+        'main.tex:',
+        '```latex',
+        'Real output.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['main.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Real output.\n',
+    );
+    await expect(AbsoluteFS.exists('/tmp/run/main-2.tex')).resolves.toBe(false);
+  });
+
   it('drops a bare label that triggers single-input prefix synthesis', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
@@ -1464,6 +1496,37 @@ Appendix.
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
       'Transcribed content.\n',
+    );
+  });
+
+  it('concatenates multiple unlabeled fences under the sole declared output', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'page1.png:',
+        '```latex',
+        'Page one transcription.',
+        '```',
+        '',
+        'page2.png:',
+        '```latex',
+        'Page two transcription.',
+        '```',
+      ].join('\n'),
+    );
+
+    const outputs =
+      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
+        createExternalLocation('/tmp/run/output.xml'),
+        'documents',
+        0,
+        'scratchpad',
+        [createExternalLocation('/tmp/run/ocr_result.tex')],
+      );
+
+    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
+      'Page one transcription.\n\nPage two transcription.\n',
     );
   });
 
@@ -1702,6 +1765,76 @@ Appendix.
     );
 
     expect(outputs.map((output) => output.source)).toEqual(['cost.tex']);
+  });
+
+  it('reports expected files left unmatched by filename-header recovery', async () => {
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      domain: vi.fn(),
+    } as unknown as AgentTrace;
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'main.tex:',
+        '```latex',
+        'Main body.',
+        '```',
+        '',
+        '```latex',
+        'Appendix body with no label.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager(
+      'documents',
+      ['main.tex', 'appendix.tex'],
+      { logger },
+    );
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    expect(logger.domain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'missingOutputs',
+        data: expect.objectContaining({ missing: ['appendix.tex'] }),
+      }),
+    );
+  });
+
+  it('logs discarded unclosed latex fences during similarity recovery', async () => {
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      domain: vi.fn(),
+    } as unknown as AgentTrace;
+    await AbsoluteFS.write('/tmp/run/a.tex', 'Original A.');
+    await AbsoluteFS.write('/tmp/run/b.tex', 'Original B.');
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['```latex', 'Unclosed revised content.'].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['a.tex', 'b.tex'], {
+      logger,
+    });
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+      'scratchpad',
+      [
+        createExternalLocation('/tmp/run/a.tex'),
+        createExternalLocation('/tmp/run/b.tex'),
+      ],
+    );
+
+    expect(outputs).toEqual([]);
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('Dropped unclosed LaTeX fence'),
+      expect.anything(),
+    );
   });
 });
 
