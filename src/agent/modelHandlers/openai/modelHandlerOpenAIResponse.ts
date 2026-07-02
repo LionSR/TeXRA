@@ -1,5 +1,5 @@
 // Third-party imports
-import OpenAI from 'openai';
+import OpenAI, { OpenAIError } from 'openai';
 // Exported by openai@6.x via the package's ./lib/* subpath; keep typecheck
 // coverage around SDK upgrades because this is not a top-level public helper.
 import { addOutputText } from 'openai/lib/ResponsesParser';
@@ -118,6 +118,7 @@ import type {
   ResponseCreateParamsBase,
   ResponseCreateParamsNonStreaming,
   ResponseReasoningItem,
+  ResponseRetrieveParamsNonStreaming,
   ResponseFunctionToolCall,
   ResponseInputItem,
   ResponseInputContent,
@@ -185,6 +186,29 @@ function collectWebSearchPairedBlocks(
     blocks.push(item);
   }
   return blocks;
+}
+
+/**
+ * The SDK's response-stream accumulator (`client.responses.stream()`) throws
+ * on any event `type` outside its typed union — including heartbeat/keepalive
+ * frames a long-running or background response can emit that predate this SDK
+ * release adding support for them. That's a transport-level signal, not a
+ * failed response, so callers holding a response id should poll by id instead
+ * of failing the turn.
+ */
+function isUnhandledStreamEventError(error: unknown): boolean {
+  // The SDK currently exposes this accumulator failure only through its
+  // message; keep the prefix check narrow until it publishes a stable code.
+  return (
+    error instanceof OpenAIError &&
+    error.message.startsWith('Unhandled response stream event')
+  );
+}
+
+function responseRetrieveParamsFor(
+  params: ResponseCreateParamsBase,
+): ResponseRetrieveParamsNonStreaming | undefined {
+  return params.include ? { include: params.include } : undefined;
 }
 
 function responseOutputItemKey(item: ResponseOutputItem): string | undefined {
@@ -346,6 +370,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Do not share a handler instance across concurrent agent invocations.
    */
   private pendingBackgroundResponseId: string | null = null;
+  private pendingBackgroundRetrieveParams:
+    | ResponseRetrieveParamsNonStreaming
+    | undefined;
 
   /**
    * Guards against concurrent createResponse() calls on the same handler.
@@ -362,6 +389,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Clears the pending background response ID. Single point of mutation. */
   private clearPendingBackgroundResponse(): void {
     this.pendingBackgroundResponseId = null;
+    this.pendingBackgroundRetrieveParams = undefined;
+  }
+
+  private rememberPendingBackgroundResponse(
+    responseId: string,
+    retrieveParams?: ResponseRetrieveParamsNonStreaming,
+  ): void {
+    this.pendingBackgroundResponseId = responseId;
+    this.pendingBackgroundRetrieveParams = retrieveParams;
   }
 
   // =========================================================================
@@ -441,6 +477,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!pendingId) {
       return null;
     }
+    const retrieveParams = this.pendingBackgroundRetrieveParams;
 
     this.logger.debug(
       `Resuming polling for pending background response ${pendingId}`,
@@ -450,7 +487,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     try {
       pendingResponse = await client.responses.retrieve(
         pendingId,
-        undefined,
+        retrieveParams,
         signal ? { signal } : undefined,
       );
     } catch (err) {
@@ -500,6 +537,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         client,
         pendingResponse,
         signal,
+        retrieveParams,
       );
       // Note: clearPendingBackgroundResponse() called by finalizeResponse() in caller
       return response;
@@ -1325,11 +1363,36 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   protected override async createResponseImpl(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
-    // Clear any stale compaction result from previous attempts (ensures clean state on retries)
-    this.compactionResult = undefined;
-
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
+
+    if (this.pendingBackgroundResponseId) {
+      const resumeContext: ResponseFinalizeContext = {
+        effectiveMessagesLength:
+          this.compactionResult?.compactedMessages.length ?? messages.length,
+        compactedThisCall: this.compactionResult !== undefined,
+        compactedMessages: this.compactionResult?.compactedMessages,
+      };
+      try {
+        const resumed = await this.tryResumeBackgroundIfPending(
+          client,
+          signal,
+          resumeContext,
+        );
+        if (resumed) return resumed;
+      } catch (error) {
+        return await this.handleCreateResponseError(
+          error,
+          options,
+          resumeContext.compactedThisCall,
+        );
+      }
+    }
+
+    // Clear any stale compaction result from previous attempts. A retained
+    // pending response is handled above before this state can be discarded.
+    this.compactionResult = undefined;
+
     // Route through isBackgroundModeActive() so subclass overrides (e.g. the
     // Codex subscription handler) actually gate the request, not just the
     // predicate.
@@ -1588,18 +1651,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Wrap execution in a try/catch so the error handler can recover from an
     // invalid/expired previous_response_id or a context-window overflow.
     try {
-      // Try to resume a pending background response (retry after connection error)
-      if (useBackgroundResponses && this.pendingBackgroundResponseId) {
-        const resumed = await this.tryResumeBackgroundIfPending(
-          client,
-          signal,
-          finalizeContext,
-        );
-        // Null means nothing to resume (or it failed remotely) — fall through
-        // to create a fresh request.
-        if (resumed) return resumed;
-      }
-
       // WebSocket transport: persistent connection for lower-latency tool-use loops
       if (useWebSocket) {
         return await this.executeWebSocketPath(
@@ -1730,6 +1781,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         client,
         response,
         signal,
+        responseRetrieveParamsFor(params),
       );
     }
 
@@ -1784,9 +1836,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       streamConnected = true;
     };
     let removeConnectListener: (() => void) | undefined;
+    // Captured from `response.created` so a stream event outside the SDK's
+    // typed union (see isUnhandledStreamEventError) can fall back to polling
+    // by id instead of failing an otherwise-healthy turn.
+    let responseId: string | undefined;
     try {
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
+      const retrieveParams = responseRetrieveParamsFor(params);
       const stream = await client.responses.stream(streamParams, { signal });
       if (typeof stream.on === 'function') {
         stream.on('connect', onConnect);
@@ -1799,17 +1856,70 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // GPT can: think → web_search → think more → web_search → text
       processor = this.createStreamProcessor();
 
-      for await (const event of stream) {
-        streamEventObserved = true;
-        processor.process(event);
-        if (event.type === 'response.output_text.delta') {
-          streamedText += event.delta;
-        } else if (event.type === 'response.output_item.done') {
-          streamedItems.push(event.item);
+      const retrieveAfterUnhandledStreamEvent = async (
+        streamError: unknown,
+      ): Promise<Response> => {
+        if (!responseId || !isUnhandledStreamEventError(streamError)) {
+          throw streamError;
         }
+        if (!this.storesResponsesServerSide) {
+          this.logger.debug(
+            `OpenAI stream emitted an event outside the SDK's typed union for stateless response ${responseId}; polling fallback is unavailable: ${getSdkErrorMessage(streamError)}`,
+          );
+          throw streamError;
+        }
+        this.logger.debug(
+          `OpenAI stream emitted an event outside the SDK's typed union for response ${responseId} — falling back to polling: ${getSdkErrorMessage(streamError)}`,
+        );
+        this.rememberPendingBackgroundResponse(responseId, retrieveParams);
+        try {
+          return await client.responses.retrieve(
+            responseId,
+            retrieveParams,
+            signal ? { signal } : undefined,
+          );
+        } catch (err) {
+          tagOpenAISdkError(err, this.config.provider);
+          if (isUserAbort(err)) {
+            this.clearPendingBackgroundResponse();
+            throw err;
+          }
+          const { shouldRetainPendingResponse } =
+            classifyOpenAIBackgroundResumeError(err, this.config.provider);
+          if (!shouldRetainPendingResponse) {
+            this.clearPendingBackgroundResponse();
+          } else {
+            attachFlowAutoRetryRequired(err);
+          }
+          throw err;
+        }
+      };
+
+      let response: Response | undefined;
+      try {
+        for await (const event of stream) {
+          streamEventObserved = true;
+          if (event.type === 'response.created') {
+            responseId = event.response.id;
+          }
+          processor.process(event);
+          if (event.type === 'response.output_text.delta') {
+            streamedText += event.delta;
+          } else if (event.type === 'response.output_item.done') {
+            streamedItems.push(event.item);
+          }
+        }
+      } catch (streamError) {
+        response = await retrieveAfterUnhandledStreamEvent(streamError);
       }
 
-      let response = await stream.finalResponse();
+      if (!response) {
+        try {
+          response = await stream.finalResponse();
+        } catch (streamError) {
+          response = await retrieveAfterUnhandledStreamEvent(streamError);
+        }
+      }
 
       // If the stream ended before the response completed (e.g., relay timeout
       // during slow GPT-5 requests), poll until it finishes instead of silently
@@ -1822,6 +1932,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           client,
           response,
           signal,
+          retrieveParams,
         );
       }
 
@@ -1901,6 +2012,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         client,
         response,
         signal,
+        responseRetrieveParamsFor(params),
       );
     }
 
@@ -2079,6 +2191,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     client: OpenAI,
     initialResponse: T,
     signal?: AbortSignal,
+    retrieveParams?: ResponseRetrieveParamsNonStreaming,
   ): Promise<T> {
     if (!initialResponse.id) {
       return initialResponse;
@@ -2086,7 +2199,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Track which response is being polled so retry logic can resume via
     // tryResumeBackgroundResponse instead of creating a new request.
-    this.pendingBackgroundResponseId = initialResponse.id;
+    this.rememberPendingBackgroundResponse(initialResponse.id, retrieveParams);
 
     let pollStats: BackgroundPollStats | undefined;
     let polled: T;
@@ -2097,7 +2210,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           try {
             return (await client.responses.retrieve(
               responseId,
-              undefined,
+              retrieveParams,
               sig ? { signal: sig } : undefined,
             )) as T;
           } catch (err) {
