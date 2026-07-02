@@ -360,13 +360,15 @@ function shellTemplate(): TemplateResult {
             data-pane="launcher"
             ?hidden=${showConversation}
           >
-            ${hasWorkspace
-              ? html`
-                  <section class="desktop-launcher-surface">
-                    ${mainView}
-                  </section>
-                `
-              : noWorkspacePlaceholder}
+            ${
+              hasWorkspace
+                ? html`
+                    <section class="desktop-launcher-surface">
+                      ${mainView}
+                    </section>
+                  `
+                : noWorkspacePlaceholder
+            }
           </section>
           <section
             class="desktop-pane"

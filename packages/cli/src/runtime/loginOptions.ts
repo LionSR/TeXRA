@@ -29,8 +29,7 @@ export interface CliChatGptLoginSlashArgs {
 }
 
 export type CliLoginSlashArgs =
-  | CliTexraLoginSlashArgs
-  | CliChatGptLoginSlashArgs;
+  CliTexraLoginSlashArgs | CliChatGptLoginSlashArgs;
 
 const CHATGPT_LOGIN_TARGETS = new Set(['chatgpt', 'codex', 'subscription']);
 

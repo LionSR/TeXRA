@@ -267,28 +267,34 @@ export class AIAgentsTab extends LitElement {
           </wa-button>
         </div>
 
-        ${items.length === 0
-          ? html`<div class="ai-agents-empty">No integrations registered.</div>`
-          : html`
-              <div class="category-section">
-                ${repeat(
-                  items,
-                  (item) => item.id,
-                  (item) => {
-                    const inlineSettings = this.renderInlineSettingsFor(
-                      item.id,
-                    );
-                    return html`
-                      <tool-card .item=${item}>
-                        ${inlineSettings
-                          ? html`<div slot="details">${inlineSettings}</div>`
-                          : nothing}
-                      </tool-card>
-                    `;
-                  },
-                )}
-              </div>
-            `}
+        ${
+          items.length === 0
+            ? html`<div class="ai-agents-empty">
+                No integrations registered.
+              </div>`
+            : html`
+                <div class="category-section">
+                  ${repeat(
+                    items,
+                    (item) => item.id,
+                    (item) => {
+                      const inlineSettings = this.renderInlineSettingsFor(
+                        item.id,
+                      );
+                      return html`
+                        <tool-card .item=${item}>
+                          ${
+                          inlineSettings
+                            ? html`<div slot="details">${inlineSettings}</div>`
+                            : nothing
+                        }
+                        </tool-card>
+                      `;
+                    },
+                  )}
+                </div>
+              `
+        }
       </div>
     `;
   }

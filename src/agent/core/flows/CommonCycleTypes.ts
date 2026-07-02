@@ -32,8 +32,7 @@ export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 
 /** Result type for nodes that can be skipped based on flow state. */
 export type SkippableNodeResult<T> =
-  | { kind: 'skipped' }
-  | { kind: 'success'; value: T };
+  { kind: 'skipped' } | { kind: 'success'; value: T };
 
 /** Reset cycle state to initial values, plus any flow-specific fields to undefined. */
 export function resetCycleState<T extends BaseCycleFields>(

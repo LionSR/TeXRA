@@ -296,36 +296,40 @@ export class MultiAgentTab extends LitElement {
         <div class="preset-card-header">
           ${waIcon(preset.icon, { className: 'preset-card-icon' })}
           <span class="preset-card-name">${preset.name}</span>
-          ${isActive
-            ? html`<wa-tag
-                class="preset-active-badge"
-                variant="brand"
-                size="small"
-              >
-                ${waIcon('check')} Active
-              </wa-tag>`
-            : nothing}
+          ${
+            isActive
+              ? html`<wa-tag
+                  class="preset-active-badge"
+                  variant="brand"
+                  size="small"
+                >
+                  ${waIcon('check')} Active
+                </wa-tag>`
+              : nothing
+          }
         </div>
         <p class="preset-card-description">${preset.description}</p>
-        ${orchestratorAgents.length > 0
-          ? html`<div class="preset-card-orchestrators">
-              ${orchestratorAgents.map(
-                (name) => html`
-                  <wa-tag
-                    class="preset-agent-badge preset-agent-badge--orchestrator"
-                    variant="brand"
-                    size="small"
-                    title="${name} is the orchestrator for this team"
-                  >
-                    <span class="preset-orchestrator-icon" aria-hidden="true"
-                      >${waIcon('bullseye')}</span
+        ${
+          orchestratorAgents.length > 0
+            ? html`<div class="preset-card-orchestrators">
+                ${orchestratorAgents.map(
+                  (name) => html`
+                    <wa-tag
+                      class="preset-agent-badge preset-agent-badge--orchestrator"
+                      variant="brand"
+                      size="small"
+                      title="${name} is the orchestrator for this team"
                     >
-                    ${name}
-                  </wa-tag>
-                `,
-              )}
-            </div>`
-          : nothing}
+                      <span class="preset-orchestrator-icon" aria-hidden="true"
+                        >${waIcon('bullseye')}</span
+                      >
+                      ${name}
+                    </wa-tag>
+                  `,
+                )}
+              </div>`
+            : nothing
+        }
         <div class="preset-card-agents">
           ${teammateAgents.map(
             (name) =>
@@ -337,19 +341,21 @@ export class MultiAgentTab extends LitElement {
               >`,
           )}
         </div>
-        ${deletable
-          ? html`<wa-button
-              class="preset-delete-btn"
-              appearance="plain"
-              variant="neutral"
-              size="small"
-              @click=${(e: Event) => this.handleDeletePreset(e, preset)}
-              title="Delete team"
-              aria-label="Delete team"
-            >
-              ${waIcon('trash')}
-            </wa-button>`
-          : nothing}
+        ${
+          deletable
+            ? html`<wa-button
+                class="preset-delete-btn"
+                appearance="plain"
+                variant="neutral"
+                size="small"
+                @click=${(e: Event) => this.handleDeletePreset(e, preset)}
+                title="Delete team"
+                aria-label="Delete team"
+              >
+                ${waIcon('trash')}
+              </wa-button>`
+            : nothing
+        }
       </div>
     `;
   }

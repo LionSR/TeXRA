@@ -6,10 +6,7 @@ import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import { isCompactFormRows } from './_shared/selectWindow';
 
 export type LoginFormValue =
-  | 'texra'
-  | 'chatgpt'
-  | 'texra --device'
-  | 'chatgpt --device';
+  'texra' | 'chatgpt' | 'texra --device' | 'chatgpt --device';
 
 export interface LoginFormProps {
   readonly availableRows?: number;

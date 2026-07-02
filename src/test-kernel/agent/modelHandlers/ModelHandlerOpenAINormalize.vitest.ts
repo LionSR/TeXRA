@@ -120,9 +120,7 @@ function buildConfig(
 }
 
 type NormalizingHandler =
-  | ModelHandlerDeepSeek
-  | ModelHandlerKimi
-  | ModelHandlerDashScope;
+  ModelHandlerDeepSeek | ModelHandlerKimi | ModelHandlerDashScope;
 
 async function runNormalize(handler: NormalizingHandler) {
   const loggerStub = createLoggerStub();

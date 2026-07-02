@@ -83,7 +83,10 @@ import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
-import { readGitAuthorSettingsFromState } from '@utils/system/gitAuthorSettings';
+import {
+  buildGitAuthorSettingsMessage,
+  readGitAuthorSettingsFromState,
+} from '@utils/system/gitAuthorSettings';
 import { setToolUseMemoryEnabled } from '@utils/config/constants';
 import {
   setGlobalStreaming,
@@ -674,10 +677,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     webview: vscode.Webview,
     settings?: ReturnType<typeof readGitAuthorSettings>,
   ): Promise<void> {
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      ...(settings ?? readGitAuthorSettingsFromState(workspaceSM)),
-    });
+    await webview.postMessage(
+      buildGitAuthorSettingsMessage(
+        settings ?? readGitAuthorSettingsFromState(workspaceSM),
+      ),
+    );
   }
 
   private async updateGitAuthorSetting(

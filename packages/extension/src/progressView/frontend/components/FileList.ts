@@ -326,26 +326,28 @@ export class FileList extends LitElement {
             ([round, files]) => this.renderRound(round, files),
           )}
         </div>
-        ${this.failureByPath.size > 0
-          ? html`
-              <div class="compile-actions">
-                <wa-button
-                  appearance="filled"
-                  variant="brand"
-                  size="small"
-                  @click=${this.runLatexFixer}
-                >
-                  <wa-icon
-                    slot="start"
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="tools"
-                    aria-hidden="true"
-                  ></wa-icon>
-                  Run latexFixer
-                </wa-button>
-              </div>
-            `
-          : nothing}
+        ${
+          this.failureByPath.size > 0
+            ? html`
+                <div class="compile-actions">
+                  <wa-button
+                    appearance="filled"
+                    variant="brand"
+                    size="small"
+                    @click=${this.runLatexFixer}
+                  >
+                    <wa-icon
+                      slot="start"
+                      library=${TEXRA_ICON_LIBRARY}
+                      name="tools"
+                      aria-hidden="true"
+                    ></wa-icon>
+                    Run latexFixer
+                  </wa-button>
+                </div>
+              `
+            : nothing
+        }
       </wa-details>
     `;
   }
@@ -463,15 +465,17 @@ export class FileList extends LitElement {
 
     return html`
       <div class="file-item">
-        ${failure
-          ? html`<wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="warning"
-              class="compile-warning"
-              title="Compile check failed"
-              aria-label="Compile check failed"
-            ></wa-icon>`
-          : nothing}
+        ${
+          failure
+            ? html`<wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="warning"
+                class="compile-warning"
+                title="Compile check failed"
+                aria-label="Compile check failed"
+              ></wa-icon>`
+            : nothing
+        }
         <span class="file-name">
           <span
             class="file-path clickable-link"
@@ -487,17 +491,19 @@ export class FileList extends LitElement {
         </span>
         ${diffStats}
         <div class="file-actions">
-          ${failure
-            ? renderFileActionButton({
-                icon: 'output',
-                label: 'Open compile log',
-                title: `Open compile log (${failure.logRelativePath})`,
-                className: '',
-                command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
-                file: failure.log.absolutePath,
-                idPrefix,
-              })
-            : nothing}
+          ${
+            failure
+              ? renderFileActionButton({
+                  icon: 'output',
+                  label: 'Open compile log',
+                  title: `Open compile log (${failure.logRelativePath})`,
+                  className: '',
+                  command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
+                  file: failure.log.absolutePath,
+                  idPrefix,
+                })
+              : nothing
+          }
           ${baseActions} ${previousAction}
         </div>
       </div>

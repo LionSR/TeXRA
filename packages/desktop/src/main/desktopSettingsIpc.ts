@@ -75,12 +75,19 @@ import {
   buildSuperYoloMessage,
   setNestedDelegationMaxDepth,
 } from '@shared/settingsView/handlers/superYoloHandlers';
+import {
+  buildAgentSelectionMessage,
+  buildCustomAgentDirMessage,
+  buildAgentModePresetsMessage,
+} from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
+  buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
 import { BinaryResolver } from '@utils/system/binaryResolver';
@@ -267,23 +274,15 @@ export function createDesktopSettingsIpc(
   function postGitAuthorSettings(
     settings = readCurrentGitAuthorSettings(),
   ): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      ...settings,
-    });
-  }
-
-  function readLatexConfigValues() {
-    return latexConfigPersistenceController.buildConfigValues((key) =>
-      workspaceState.get(key),
-    );
+    options.postToRenderer(buildGitAuthorSettingsMessage(settings));
   }
 
   function postLatexConfigValues(): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values: readLatexConfigValues(),
-    });
+    options.postToRenderer(
+      latexConfigPersistenceController.buildConfigMessage((key) =>
+        workspaceState.get(key),
+      ),
+    );
   }
 
   function getAgentDirectory(source: AgentSource): Promise<string | undefined> {
@@ -300,13 +299,12 @@ export function createDesktopSettingsIpc(
   }
 
   async function postAgentSelectionData(): Promise<void> {
-    await loadAgentRegistry();
-    const { workflow, toolUse } = agentCatalogController.buildSelectionItems();
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      workflow,
-      toolUse,
-    });
+    options.postToRenderer(
+      await buildAgentSelectionMessage({
+        loadAgents: loadAgentRegistry,
+        buildSelectionItems: () => agentCatalogController.buildSelectionItems(),
+      }),
+    );
   }
 
   async function postModelSelectionData(): Promise<void> {
@@ -347,11 +345,11 @@ export function createDesktopSettingsIpc(
   }
 
   async function postCustomAgentDir(): Promise<void> {
-    const status = await agentDirectoryController.getCustomDirStatus();
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-      ...status,
-    });
+    options.postToRenderer(
+      await buildCustomAgentDirMessage({
+        getCustomDirStatus: () => agentDirectoryController.getCustomDirStatus(),
+      }),
+    );
   }
 
   // Desktop has no VS Code settings, so `getProviderVscodeSettings` returns [];
@@ -384,10 +382,9 @@ export function createDesktopSettingsIpc(
   }
 
   async function postChatGptAuthStatus(): Promise<void> {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      status: await getChatGptAuthStatus(),
-    });
+    options.postToRenderer(
+      await buildChatGptAuthStatusMessage(getChatGptAuthStatus),
+    );
   }
 
   async function postMemoryData(): Promise<void> {
@@ -532,11 +529,13 @@ export function createDesktopSettingsIpc(
   }
 
   function postAgentModePresets(): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      customPresets: agentCatalogController.getCustomPresets(),
-      orchestratorAgents: agentCatalogController.getOrchestratorAgentNames(),
-    });
+    options.postToRenderer(
+      buildAgentModePresetsMessage({
+        getCustomPresets: () => agentCatalogController.getCustomPresets(),
+        getOrchestratorAgentNames: () =>
+          agentCatalogController.getOrchestratorAgentNames(),
+      }),
+    );
   }
 
   function postApprovalSettings(): void {

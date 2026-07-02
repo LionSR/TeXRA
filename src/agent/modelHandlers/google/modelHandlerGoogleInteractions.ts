@@ -2143,13 +2143,11 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * chat `toGoogleTools` wrapper (`[{ functionDeclarations }]`) is NOT reused.
    */
   private toInteractionsTools(defs: ToolDefinition[]): FunctionT[] {
-    return defs.map(
-      (d): FunctionT => ({
-        type: 'function',
-        name: d.name,
-        description: d.description,
-        parameters: convertToolSchema(d) ?? undefined,
-      }),
-    );
+    return defs.map((d): FunctionT => ({
+      type: 'function',
+      name: d.name,
+      description: d.description,
+      parameters: convertToolSchema(d) ?? undefined,
+    }));
   }
 }

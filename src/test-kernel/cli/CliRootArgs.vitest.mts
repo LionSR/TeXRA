@@ -1173,8 +1173,7 @@ describe('runCli usage output stream routing', () => {
       .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
         stdout += String(chunk);
         const cb = rest.find((arg) => typeof arg === 'function') as
-          | ((err?: Error | null) => void)
-          | undefined;
+          ((err?: Error | null) => void) | undefined;
         cb?.(null);
         return true;
       }) as unknown as ReturnType<typeof vi.spyOn>;
@@ -1183,8 +1182,7 @@ describe('runCli usage output stream routing', () => {
       .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
         stderr += String(chunk);
         const cb = rest.find((arg) => typeof arg === 'function') as
-          | ((err?: Error | null) => void)
-          | undefined;
+          ((err?: Error | null) => void) | undefined;
         cb?.(null);
         return true;
       }) as unknown as ReturnType<typeof vi.spyOn>;

@@ -258,29 +258,34 @@ export class UserMessage extends LitElement {
               className: `user-message-copy ${copyState.copied ? copyState.successClass : ''}`,
               onClick: () => this.copyController.copy(displayText),
             })}
-            ${hasRawMessage
-              ? renderIconActionButton({
-                  id: 'user-message-raw-copy-button',
-                  icon: 'code',
-                  label: rawMessageCopyState.ariaLabel,
-                  tooltip: rawMessageCopyState.title,
-                  className: `user-message-copy ${rawMessageCopyState.copied ? rawMessageCopyState.successClass : ''}`,
-                  onClick: () => this.rawMessageCopyController.copy(this.text),
-                })
-              : nothing}
+            ${
+              hasRawMessage
+                ? renderIconActionButton({
+                    id: 'user-message-raw-copy-button',
+                    icon: 'code',
+                    label: rawMessageCopyState.ariaLabel,
+                    tooltip: rawMessageCopyState.title,
+                    className: `user-message-copy ${rawMessageCopyState.copied ? rawMessageCopyState.successClass : ''}`,
+                    onClick: () =>
+                      this.rawMessageCopyController.copy(this.text),
+                  })
+                : nothing
+            }
           </div>
-          ${isStructuredDelivery
-            ? html`<div
-                class="user-message-content markdown-content"
-                data-log-id=${this.logId}
-              >
-                ${unsafeHTML(structuredMarkdownHtml)}
-              </div>`
-            : html`<div
-                class="user-message-content"
-                data-log-id=${this.logId}
-                .textContent=${displayText}
-              ></div>`}
+          ${
+            isStructuredDelivery
+              ? html`<div
+                  class="user-message-content markdown-content"
+                  data-log-id=${this.logId}
+                >
+                  ${unsafeHTML(structuredMarkdownHtml)}
+                </div>`
+              : html`<div
+                  class="user-message-content"
+                  data-log-id=${this.logId}
+                  .textContent=${displayText}
+                ></div>`
+          }
         </div>
       </div>
     `;

@@ -4,11 +4,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { css, html, type CSSResult, type TemplateResult } from 'lit';
 
 export type WaTagVariant =
-  | 'brand'
-  | 'neutral'
-  | 'success'
-  | 'warning'
-  | 'danger';
+  'brand' | 'neutral' | 'success' | 'warning' | 'danger';
 
 export interface SetStatusFallback {
   readonly label: string;

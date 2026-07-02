@@ -50,7 +50,7 @@ export async function detectUnknownCliCommand(
   let cmd = rootCommand;
   const pathParts = ['texra'];
 
-  for (let i = 0; i < rawArgs.length; ) {
+  for (let i = 0; i < rawArgs.length;) {
     const token = rawArgs[i];
     if (token === undefined || token === '--') break;
 

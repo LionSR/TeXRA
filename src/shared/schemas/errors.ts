@@ -118,9 +118,7 @@ export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
  *  so the predicate stays the one place that owns the verdict. */
 export function isChatGptSubscriptionLimitError(
   errorDetails:
-    | Pick<ProviderError, 'isChatGptSubscriptionLimited'>
-    | undefined
-    | null,
+    Pick<ProviderError, 'isChatGptSubscriptionLimited'> | undefined | null,
 ): boolean {
   return errorDetails?.isChatGptSubscriptionLimited === true;
 }

@@ -45,14 +45,18 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
       data-remote=${opt.isRemote ? 'true' : nothing}
       data-custom=${opt.isCustom ? 'true' : nothing}
     >
-      ${opt.isOrchestrator
-        ? html`<span class="agent-icon">${waIcon('bullseye')} </span>`
-        : nothing}${opt.label}
-      ${opt.isRemote
-        ? html`<span class="agent-icon">
-            ${waIcon(AGENT_DECORATORS.properties.remote.icon)}</span
-          >`
-        : nothing}
+      ${
+        opt.isOrchestrator
+          ? html`<span class="agent-icon">${waIcon('bullseye')} </span>`
+          : nothing
+      }${opt.label}
+      ${
+        opt.isRemote
+          ? html`<span class="agent-icon">
+              ${waIcon(AGENT_DECORATORS.properties.remote.icon)}</span
+            >`
+          : nothing
+      }
     </wa-option>
   `;
 }
@@ -67,16 +71,18 @@ export function renderAgentOptions(
       (opt) => opt.value,
       (opt) => renderAgentOption(opt),
     )}
-    ${includeBrowseAll
-      ? html`
-          <wa-option
-            value=${BROWSE_ALL_AGENTS_OPTION_VALUE}
-            title="Open Settings → Agents to browse the full catalog"
-          >
-            Browse all agents…
-          </wa-option>
-        `
-      : nothing}
+    ${
+      includeBrowseAll
+        ? html`
+            <wa-option
+              value=${BROWSE_ALL_AGENTS_OPTION_VALUE}
+              title="Open Settings → Agents to browse the full catalog"
+            >
+              Browse all agents…
+            </wa-option>
+          `
+        : nothing
+    }
   `;
 }
 
@@ -115,14 +121,18 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
       data-cost=${opt.cost || nothing}
       data-availability=${availability || nothing}
       data-requires-key=${opt.requiresKey ? 'true' : nothing}
-      aria-label=${availabilityLabel
-        ? `${opt.label} (${availabilityLabel})`
-        : opt.label}
+      aria-label=${
+        availabilityLabel ? `${opt.label} (${availabilityLabel})` : opt.label
+      }
     >
       ${display}
-      ${opt.disabled
-        ? html`<span class="model-option-status"> ${availabilityLabel} </span>`
-        : nothing}
+      ${
+        opt.disabled
+          ? html`<span class="model-option-status">
+              ${availabilityLabel}
+            </span>`
+          : nothing
+      }
     </wa-option>
   `;
 }

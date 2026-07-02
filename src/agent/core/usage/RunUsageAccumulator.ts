@@ -71,21 +71,19 @@ const LegacyRunUsageAccumulatorSchema = z
         .catch({ usage: null }),
     ),
   })
-  .transform(
-    (legacy): RunUsageAccumulatorJSON => ({
-      totals: legacy.totals,
-      // Key-presence, not value-nullish: a hybrid payload carrying both an
-      // explicit `latestUsage` (even `null`, an already-migrated state) and
-      // snapshots must keep the canonical value. `.nullish()` parses an absent
-      // key as `undefined` and an explicit `null` as `null`, so `!== undefined`
-      // keeps an explicit null and only an absent key falls back to the latest
-      // snapshot. Matches the prior `'latestUsage' in raw` preprocess guard.
-      latestUsage:
-        legacy.latestUsage !== undefined
-          ? legacy.latestUsage
-          : (legacy.normalizedSnapshots.at(-1)?.usage ?? null),
-    }),
-  );
+  .transform((legacy): RunUsageAccumulatorJSON => ({
+    totals: legacy.totals,
+    // Key-presence, not value-nullish: a hybrid payload carrying both an
+    // explicit `latestUsage` (even `null`, an already-migrated state) and
+    // snapshots must keep the canonical value. `.nullish()` parses an absent
+    // key as `undefined` and an explicit `null` as `null`, so `!== undefined`
+    // keeps an explicit null and only an absent key falls back to the latest
+    // snapshot. Matches the prior `'latestUsage' in raw` preprocess guard.
+    latestUsage:
+      legacy.latestUsage !== undefined
+        ? legacy.latestUsage
+        : (legacy.normalizedSnapshots.at(-1)?.usage ?? null),
+  }));
 
 /**
  * Entry schema handling both formats in one place (per the backward-compat

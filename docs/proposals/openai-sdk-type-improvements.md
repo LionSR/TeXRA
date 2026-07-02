@@ -101,8 +101,7 @@ interface ChatCompletionCreateParamsBase {
 ```typescript
 // Native union type for tool calls
 type ChatCompletionMessageToolCall =
-  | ChatCompletionMessageFunctionToolCall
-  | ChatCompletionMessageCustomToolCall;
+  ChatCompletionMessageFunctionToolCall | ChatCompletionMessageCustomToolCall;
 
 // Each has a discriminant 'type' field:
 interface ChatCompletionMessageFunctionToolCall {

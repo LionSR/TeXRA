@@ -310,13 +310,15 @@ export class BackgroundTasksPanel extends LitElement {
             aria-hidden="true"
           ></wa-icon>
           <span
-            >Inquiries${openCount
-              ? html` &middot; ${openCount} open`
-              : nothing}${answeredCount
-              ? html` &middot; ${answeredCount} answered`
-              : nothing}${droppedCount
-              ? html` &middot; ${droppedCount} dropped`
-              : nothing}</span
+            >Inquiries${
+              openCount ? html` &middot; ${openCount} open` : nothing
+            }${
+              answeredCount
+                ? html` &middot; ${answeredCount} answered`
+                : nothing
+            }${
+              droppedCount ? html` &middot; ${droppedCount} dropped` : nothing
+            }</span
           >
         </div>
         <div class="section-content">
@@ -384,26 +386,30 @@ export class BackgroundTasksPanel extends LitElement {
             aria-hidden="true"
           ></wa-icon>
           <span
-            >${label}${hasActive
-              ? html` &middot; ${active.length} active`
-              : nothing}${hasFinished
-              ? html` &middot; ${finishedCount} done`
-              : nothing}</span
+            >${label}${
+              hasActive ? html` &middot; ${active.length} active` : nothing
+            }${
+              hasFinished ? html` &middot; ${finishedCount} done` : nothing
+            }</span
           >
         </div>
         <div class="section-content">
-          ${hasActive
-            ? repeat(
-                active,
-                (c) => c.executionId,
-                (c) => this.renderTaskItem(c, kind),
-              )
-            : nothing}
-          ${!hasActive && hasFinished
-            ? html`<div class="empty-message">
-                All ${finishedCount} ${label.toLowerCase()} completed
-              </div>`
-            : nothing}
+          ${
+            hasActive
+              ? repeat(
+                  active,
+                  (c) => c.executionId,
+                  (c) => this.renderTaskItem(c, kind),
+                )
+              : nothing
+          }
+          ${
+            !hasActive && hasFinished
+              ? html`<div class="empty-message">
+                  All ${finishedCount} ${label.toLowerCase()} completed
+                </div>`
+              : nothing
+          }
         </div>
       </wa-details>
     `;
@@ -442,27 +448,35 @@ export class BackgroundTasksPanel extends LitElement {
             title=${isClickable ? `Go to ${child.agentName}` : child.agentName}
             role=${isClickable ? 'link' : 'text'}
             tabindex=${isClickable ? '0' : '-1'}
-            @click=${isClickable
-              ? () => this.navigateToStream(child.childStreamId!)
-              : nothing}
-            @keydown=${isClickable
-              ? (e: KeyboardEvent) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    this.navigateToStream(child.childStreamId!);
+            @click=${
+              isClickable
+                ? () => this.navigateToStream(child.childStreamId!)
+                : nothing
+            }
+            @keydown=${
+              isClickable
+                ? (e: KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      this.navigateToStream(child.childStreamId!);
+                    }
                   }
-                }
-              : nothing}
+                : nothing
+            }
             >${child.agentName}</span
           >
-          ${description
-            ? html`<span class="task-description" title=${description}
-                >(${description})</span
-              >`
-            : nothing}
-          ${child.elapsed
-            ? html`<span class="task-elapsed">(${child.elapsed})</span>`
-            : nothing}
+          ${
+            description
+              ? html`<span class="task-description" title=${description}
+                  >(${description})</span
+                >`
+              : nothing
+          }
+          ${
+            child.elapsed
+              ? html`<span class="task-elapsed">(${child.elapsed})</span>`
+              : nothing
+          }
           <wa-badge
             class="task-status"
             variant=${waiting ? 'neutral' : 'warning'}
@@ -470,12 +484,16 @@ export class BackgroundTasksPanel extends LitElement {
             >${waiting ? 'waiting' : 'running'}</wa-badge
           >
         </div>
-        ${entry?.stdout
-          ? this.renderOutputStream('stdout', entry.stdout)
-          : nothing}
-        ${entry?.stderr
-          ? this.renderOutputStream('stderr', entry.stderr)
-          : nothing}
+        ${
+          entry?.stdout
+            ? this.renderOutputStream('stdout', entry.stdout)
+            : nothing
+        }
+        ${
+          entry?.stderr
+            ? this.renderOutputStream('stderr', entry.stderr)
+            : nothing
+        }
       </div>
     `;
   }

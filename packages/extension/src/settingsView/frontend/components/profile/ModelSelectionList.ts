@@ -190,12 +190,14 @@ export class ModelSelectionList extends LitElement {
           `,
         )}
       </wa-select>
-      ${includedAccessCap
-        ? waIcon('warning', {
-            className: 'model-row-icon model-row-icon--warning',
-            title,
-          })
-        : nothing}
+      ${
+        includedAccessCap
+          ? waIcon('warning', {
+              className: 'model-row-icon model-row-icon--warning',
+              title,
+            })
+          : nothing
+      }
     `;
   }
 
@@ -237,18 +239,22 @@ export class ModelSelectionList extends LitElement {
           <span class="model-name">${model.label}</span>
           <span class="model-shortname">(${model.name})</span>
           ${this.renderAvailabilityIcon(model)}
-          ${isExpensiveModel(model.provider, model.name)
-            ? waIcon('warning', {
-                className: 'model-row-icon model-row-icon--warning',
-                title: EXPENSIVE_MODEL_HINT,
-              })
-            : nothing}
+          ${
+            isExpensiveModel(model.provider, model.name)
+              ? waIcon('warning', {
+                  className: 'model-row-icon model-row-icon--warning',
+                  title: EXPENSIVE_MODEL_HINT,
+                })
+              : nothing
+          }
         </wa-checkbox>
         ${this.renderReasoningDropdown(model)}
         <span class="model-metadata">
-          ${model.contextWindow
-            ? html`<span>${model.contextWindow}</span>`
-            : nothing}
+          ${
+            model.contextWindow
+              ? html`<span>${model.contextWindow}</span>`
+              : nothing
+          }
           ${model.cost ? html`<span>${model.cost}</span>` : nothing}
         </span>
       </div>
@@ -299,16 +305,20 @@ export class ModelSelectionList extends LitElement {
           </wa-button>
           <div class="provider-group-actions">${providerKeyStatus}</div>
         </div>
-        ${isExpanded
-          ? html`
-              <div class="provider-group-content">
-                ${group.current.map((m) => this.renderModelRow(m))}
-                ${group.deprecated.length > 0
-                  ? this.renderDeprecatedToggle(group)
-                  : nothing}
-              </div>
-            `
-          : nothing}
+        ${
+          isExpanded
+            ? html`
+                <div class="provider-group-content">
+                  ${group.current.map((m) => this.renderModelRow(m))}
+                  ${
+                    group.deprecated.length > 0
+                      ? this.renderDeprecatedToggle(group)
+                      : nothing
+                  }
+                </div>
+              `
+            : nothing
+        }
       </div>
     `;
   }
@@ -330,11 +340,13 @@ export class ModelSelectionList extends LitElement {
         })}
         ${group.deprecated.length} deprecated
       </wa-button>
-      ${isOpen
-        ? html`<div class="deprecated-models">
-            ${group.deprecated.map((m) => this.renderModelRow(m))}
-          </div>`
-        : nothing}
+      ${
+        isOpen
+          ? html`<div class="deprecated-models">
+              ${group.deprecated.map((m) => this.renderModelRow(m))}
+            </div>`
+          : nothing
+      }
     `;
   }
 

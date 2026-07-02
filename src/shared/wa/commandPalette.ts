@@ -31,8 +31,7 @@ export interface CommandPaletteEntry {
 }
 
 export type CommandPaletteEntrySource =
-  | readonly CommandPaletteEntry[]
-  | (() => readonly CommandPaletteEntry[]);
+  readonly CommandPaletteEntry[] | (() => readonly CommandPaletteEntry[]);
 
 export interface CommandPaletteOptions {
   readonly document: Document;
@@ -227,11 +226,13 @@ export function createCommandPalette({
           @keydown=${handleFilterKeydown}
         ></wa-input>
         <div class=${classes?.list ?? ''} role="listbox">
-          ${visibleEntries.length === 0
-            ? html`<div class=${classes?.empty ?? ''} role="status">
-                No matching commands
-              </div>`
-            : nothing}
+          ${
+            visibleEntries.length === 0
+              ? html`<div class=${classes?.empty ?? ''} role="status">
+                  No matching commands
+                </div>`
+              : nothing
+          }
           ${repeat(
             visibleEntries,
             (entry) => entry.id,

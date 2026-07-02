@@ -41,11 +41,13 @@ export class BashRequestPanel extends BaseFeedbackPanel {
     return this.renderRequestShell({
       prefix: 'bash-approval-request',
       details: html`
-        ${data.cwd
-          ? html`<div class="bash-approval-request__cwd">
-              Directory: <span>${data.cwd}</span>
-            </div>`
-          : ''}
+        ${
+          data.cwd
+            ? html`<div class="bash-approval-request__cwd">
+                Directory: <span>${data.cwd}</span>
+              </div>`
+            : ''
+        }
         <div class="bash-approval-request__command">
           ${buildCodeBlock(data.command ?? '', { language: 'bash' })}
         </div>
