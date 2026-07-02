@@ -25,7 +25,7 @@ interface RunContextCommon {
   readonly stopAfterCycle?: boolean;
 }
 
-interface LaunchRunContext extends RunContextCommon {
+export interface LaunchRunContext extends RunContextCommon {
   readonly kind: 'launch';
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId;
@@ -189,4 +189,24 @@ export function useRunContext(): RunContext {
 /** Return the active run context when called from a run, otherwise undefined. */
 export function tryUseRunContext(): RunContext | undefined {
   return runContextScope.getStore();
+}
+
+/**
+ * Return the active run context, asserting it is a `launch` context (i.e.
+ * `streamId`/`executionId`/`runtimeHost` are guaranteed present).
+ *
+ * Flow nodes only ever execute inside `withExecutionRunContext` (in
+ * `AgentLaunchContext.ts`), which always projects a `launch` context — the
+ * `bare` variant of `createRunContext` is exclusively for manually
+ * constructed test/one-shot tool contexts. Use this instead of re-deriving
+ * these fields on the flow-service bag.
+ */
+export function useLaunchRunContext(): LaunchRunContext {
+  const context = useRunContext();
+  if (context.kind !== 'launch') {
+    throw new Error(
+      'useLaunchRunContext() called outside a launch RunContext',
+    );
+  }
+  return context;
 }

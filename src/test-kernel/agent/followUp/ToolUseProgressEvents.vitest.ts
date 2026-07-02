@@ -11,7 +11,7 @@ import type {
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import { MESSAGE_TYPES, type Plan, type TodoItem } from '@shared/schemas';
-import { createRecordingHost } from '../progressTestUtils';
+import { createRecordingHost, withTestRunContext } from '../progressTestUtils';
 
 const todo: TodoItem = {
   content: 'Wire progress events through runtime host',
@@ -53,7 +53,11 @@ describe('tool-use progress events', () => {
       resolvedTools: [],
     } as unknown as ToolUseServices);
 
-    const result = await node.exec(createPrepResult(workspaceState));
+    const result = await withTestRunContext(
+      host,
+      'stream:tool-use-cycle',
+      () => node.exec(createPrepResult(workspaceState)),
+    );
 
     expect(result).toEqual({ outcome: 'skipped' });
     expect(events).toEqual([
