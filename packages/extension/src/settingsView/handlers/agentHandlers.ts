@@ -50,7 +50,9 @@ export class AgentHandlers {
 
   constructor(
     private readonly ctx: SettingsHandlerContext,
-    private readonly refreshAfterAgentMutation: () => Promise<void>,
+    private readonly refreshAfterAgentMutation: (
+      selectedToolUseAgent?: string,
+    ) => Promise<void>,
   ) {
     const controllers = createSettingsAgentControllers({
       workspaceState: workspaceSM,
@@ -406,7 +408,9 @@ export class AgentHandlers {
         return;
       }
 
-      await this.refreshAfterAgentMutation();
+      await this.refreshAfterAgentMutation(
+        this.getPresetToolUseRoot(result.preset.toolUseAgents),
+      );
 
       void vscode.window.showInformationMessage(
         `Applied "${result.preset.name}" team`,
@@ -445,6 +449,17 @@ export class AgentHandlers {
         error,
       );
     }
+  }
+
+  private getPresetToolUseRoot(toolUseAgents: string[]): string | undefined {
+    const orchestratorNames = new Set(
+      this.catalogController.getOrchestratorAgentNames(),
+    );
+    return toolUseAgents.find(
+      (name) =>
+        orchestratorNames.has(name) ||
+        name.toLowerCase().includes('orchestrator'),
+    );
   }
 
   async handleDeleteAgentModePreset(
