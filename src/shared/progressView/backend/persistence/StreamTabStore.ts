@@ -11,6 +11,7 @@
  */
 
 import * as path from 'node:path';
+import { LRUCache } from 'lru-cache';
 import pMap from 'p-map';
 
 import {
@@ -123,9 +124,8 @@ class StreamTabKVStore extends KVStore {
 // Factory with LRU cache
 // ============================================================================
 
-const MAX_STORE_CACHE_SIZE = 50;
 export const STREAM_TAB_IO_CONCURRENCY = 8;
-const storeCache = new Map<StreamTabId, StreamTabKVStore>();
+const storeCache = new LRUCache<StreamTabId, StreamTabKVStore>({ max: 50 });
 
 export function mapStreamTabStorage<T>(
   streamIds: readonly StreamTabId[],
@@ -136,16 +136,7 @@ export function mapStreamTabStorage<T>(
 
 export function getStreamTabStore(streamTabId: StreamTabId): StreamTabKVStore {
   const cached = storeCache.get(streamTabId);
-  if (cached) {
-    storeCache.delete(streamTabId);
-    storeCache.set(streamTabId, cached);
-    return cached;
-  }
-
-  if (storeCache.size >= MAX_STORE_CACHE_SIZE) {
-    const oldest = storeCache.keys().next().value;
-    if (oldest !== undefined) storeCache.delete(oldest);
-  }
+  if (cached) return cached;
 
   const store = new StreamTabKVStore(streamTabId);
   storeCache.set(streamTabId, store);

@@ -11,6 +11,7 @@
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 
+import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -58,7 +59,6 @@ interface ToolEditApprovalActionPayload {
   feedback?: string;
 }
 
-let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
 const diffViewHost: DiffViewHost = new VscodeDiffViewHost();
 let storageDirectory: string | undefined;
@@ -137,8 +137,7 @@ async function nativeRequestApproval(
     streamId,
   } = request;
 
-  approvalCounter += 1;
-  const requestId = `approval-${Date.now().toString(36)}-${approvalCounter}`;
+  const requestId = `approval-${nanoid()}`;
   const directory = await ensureStorageDir();
   const {
     originalPath,

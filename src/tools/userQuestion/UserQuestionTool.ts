@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid';
 import pDefer, { type DeferredPromise } from 'p-defer';
 import { z } from 'zod';
 
@@ -44,7 +45,6 @@ type PendingQuestion = {
   deferred: DeferredPromise<UserQuestionResult>;
 };
 
-let questionCounter = 0;
 const pendingQuestions = new Map<string, PendingQuestion>();
 
 /** Resolve (as declined) every pending question matching `predicate`. */
@@ -136,7 +136,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
     const context = tryUseRunContext();
     const runtimeHost = requireRuntimeHost('ask_user_question', context);
     const streamId = context?.streamId;
-    const requestId = `user-question-${Date.now().toString(36)}-${++questionCounter}`;
+    const requestId = `user-question-${nanoid()}`;
 
     logger.info(
       `User question requested: ${input.questions[0]?.question.slice(0, 100) ?? ''}`,

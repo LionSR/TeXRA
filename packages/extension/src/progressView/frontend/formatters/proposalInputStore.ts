@@ -10,12 +10,13 @@
  * the same message produces the same ID — no memory leak on stream switches.
  */
 
+import { LRUCache } from 'lru-cache';
+
 import { parseDelegationToolInput, type AgentProposal } from '@shared/schemas';
 
 import { hashString } from './hashUtils';
 
-const MAX_STORE_SIZE = 500;
-const proposalInputStore = new Map<string, AgentProposal>();
+const proposalInputStore = new LRUCache<string, AgentProposal>({ max: 500 });
 
 /**
  * Register proposal input and return a stable ID for lookup.
@@ -30,11 +31,6 @@ export function registerProposalInput(
   const serialized = JSON.stringify(proposal);
   const id = `proposal:${serialized.length}:${hashString(serialized)}`;
   if (!proposalInputStore.has(id)) {
-    if (proposalInputStore.size >= MAX_STORE_SIZE) {
-      // Evict oldest entry (first key in insertion order).
-      const oldest = proposalInputStore.keys().next().value;
-      if (oldest !== undefined) proposalInputStore.delete(oldest);
-    }
     proposalInputStore.set(id, proposal);
   }
   return id;
