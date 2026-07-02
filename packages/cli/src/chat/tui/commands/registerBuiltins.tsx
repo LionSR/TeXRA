@@ -81,10 +81,15 @@ function runFormSelection<T>({
     onDone(value);
   }
 
-  // Starting from a resolved promise routes both a synchronous throw and an
-  // async rejection from `action` through the single `.catch`.
-  void Promise.resolve()
-    .then(action)
+  const runAction = (): Promise<void> => {
+    try {
+      return Promise.resolve(action());
+    } catch (error: unknown) {
+      return Promise.reject(error);
+    }
+  };
+
+  void runAction()
     .catch((error: unknown) => onError?.(error))
     .finally(() => {
       if (completion === 'afterAction') {
