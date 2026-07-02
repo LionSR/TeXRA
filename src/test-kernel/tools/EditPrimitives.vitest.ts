@@ -53,6 +53,10 @@ describe('editPrimitives literal replacement', () => {
     );
   });
 
+  it('replaceFirstLiteral rejects an empty search string', () => {
+    expect(() => replaceFirstLiteral('abc', '', 'x')).toThrow(ToolError);
+  });
+
   it('replaceAllLiteral rejects an empty search string', () => {
     expect(() => replaceAllLiteral('abc', '', 'x')).toThrow(ToolError);
   });
@@ -66,5 +70,9 @@ describe('findOccurrenceLineNumbers', () => {
 
   it('returns an empty array when the needle is absent', () => {
     expect(findOccurrenceLineNumbers('a\nb\nc', 'zzz')).toEqual([]);
+  });
+
+  it('returns an empty array for an empty needle', () => {
+    expect(findOccurrenceLineNumbers('a\nb\nc', '')).toEqual([]);
   });
 });

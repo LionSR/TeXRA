@@ -426,6 +426,12 @@ export class TextEditorTool extends defineTool({
       const expandedOldStr = oldStr.replaceAll('\t', '    ');
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
+      if (expandedOldStr.length === 0) {
+        throw new ToolError(
+          `old_str must not be empty for ${displayPath}. Provide the exact text to replace.`,
+        );
+      }
+
       const occurrences = countOccurrences(expandedFileContent, expandedOldStr);
 
       if (occurrences === 0) {

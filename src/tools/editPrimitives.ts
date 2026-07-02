@@ -17,13 +17,18 @@ import { ToolError } from '@shared/schemas/toolResult';
  *
  * `newStr` is inserted verbatim — replacement patterns are NOT interpreted.
  * Returns the content unchanged when `oldStr` does not occur; callers that
- * require a match should validate occurrences first (see {@link countOccurrences}).
+ * require a match should validate occurrences first with `countOccurrences`.
  */
 export function replaceFirstLiteral(
   content: string,
   oldStr: string,
   newStr: string,
 ): string {
+  if (oldStr.length === 0) {
+    throw new ToolError(
+      'replaceFirstLiteral requires a non-empty search string.',
+    );
+  }
   const idx = content.indexOf(oldStr);
   if (idx === -1) {
     return content;
@@ -60,6 +65,9 @@ export function findOccurrenceLineNumbers(
   content: string,
   needle: string,
 ): number[] {
+  if (needle.length === 0) {
+    return [];
+  }
   return content
     .split('\n')
     .flatMap((line, index) => (line.includes(needle) ? [index + 1] : []));
