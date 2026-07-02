@@ -103,7 +103,7 @@ describe('CLI StatusBar display model', () => {
 
   it('uses clear compact labels for API access mode', () => {
     expect(shortCliApiMode('included')).toBe('relay');
-    expect(shortCliApiMode('personal')).toBe('byok');
+    expect(shortCliApiMode('personal')).toBe('personal');
   });
 
   it('surfaces non-default approval policies in the durable status row', () => {
@@ -230,6 +230,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
+        taskControlsAvailable: false,
         model: 'gpt54',
         width: 80,
       }),
@@ -240,13 +241,14 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('does not let setup bindings hide the transcript viewer', () => {
+  it('does not let setup bindings hide the transcript viewer when it fits', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
+        taskControlsAvailable: false,
         model: 'gpt54',
         transcriptAvailable: true,
-        width: 80,
+        width: 100,
       }),
     );
 
@@ -254,10 +256,45 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('[/agent]agents');
   });
 
+  it('keeps model and API controls visible after local-command transcript rows', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        agentSelectionAvailable: true,
+        taskControlsAvailable: false,
+        transcriptAvailable: true,
+        width: 80,
+      }),
+    );
+
+    expect(display.bindings).toBe(
+      '[/agent]agents  [/model]models  [/api]api  [Ctrl-C]exit',
+    );
+  });
+
+  it('keeps child controls ahead of setup bindings after a root run completes', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        agentSelectionAvailable: true,
+        taskControlsAvailable: true,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        transcriptAvailable: true,
+        width: 80,
+      }),
+    );
+
+    expect(display.bindings).toContain('[Tab]streams');
+    expect(display.bindings).toContain('[Alt-p]tasks');
+    expect(display.bindings).toContain('[Alt-s]subagents');
+    expect(display.bindings).not.toContain('[/model]models');
+    expect(display.bindings).not.toContain('[/api]api');
+  });
+
   it('keeps root agent selection visible when setup bindings get narrow', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
+        taskControlsAvailable: false,
         model: 'gpt54',
         width: 50,
       }),
@@ -433,7 +470,7 @@ describe('CLI StatusBar display model', () => {
         subagentControlsAvailable: true,
         hasMultipleStreams: true,
         ctrlCAction: 'stop',
-        width: 30,
+        width: 34,
         shortcutsActive: false,
       }),
     );
@@ -1013,7 +1050,7 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_STATUS.RUNNING,
         bypass: { bash: false, superYolo: true, toolEdit: true },
         queuedFollowUpMessages: ['Keep the proof under one page.'],
-        width: 61,
+        width: 65,
       }),
     );
 
