@@ -83,6 +83,12 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
     executeCommand(['git', 'status', '--porcelain'], opts),
   ]);
 
+  // Unlike a non-zero exit (e.g. detached HEAD), a timeout means we couldn't
+  // determine dirty/branch state at all — report unknown (null) rather than
+  // silently defaulting `dirty` to false, which would misreport a repo as
+  // clean when `git status` merely timed out.
+  if (branchResult.timedOut || statusResult.timedOut) return null;
+
   const branch = branchResult.success ? branchResult.stdout : null;
   const dirty = statusResult.success && statusResult.stdout !== null;
 
