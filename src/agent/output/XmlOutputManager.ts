@@ -269,20 +269,21 @@ export class XmlOutputManager {
       }
     }
 
-    if (!documents) {
+    if (!documents && soleExpectedFile) {
       // Agents expected to write exactly one file whose model regressed to a
       // legacy single-doc shape (<latex_document>, ```latex fence, or bare
       // \documentclass) can still be recovered: pass that filename so the
       // fallback can synthesize a named document. Agents with several
       // expected files cannot safely recover — without per-document names
-      // there's no way to route content.
+      // there's no way to route content (and without a preferredName this
+      // call would just repeat the earlier one).
       // Keep the relative path verbatim — getExtractedDocOutputFileName
       // preserves subdirectories so `Draft/Draft1.tex` lands at the right
       // workspace location instead of collapsing to the round root.
       documents = this.extractMultipleDocumentsByRegex(
         cdataWrapped,
         documentTag,
-        soleExpectedFile ?? undefined,
+        soleExpectedFile,
       );
     }
 

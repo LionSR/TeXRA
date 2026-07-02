@@ -1172,6 +1172,64 @@ Appendix.
     );
   });
 
+  it('matches bare labels with leading underscores and emphasis decoration', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '_macros.tex:',
+        '```latex',
+        'Macro definitions.',
+        '```',
+        '',
+        '**_helpers.tex**:',
+        '```latex',
+        'Helper macros.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', [
+      '_macros.tex',
+      '_helpers.tex',
+    ]);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      '_macros.tex',
+      '_helpers.tex',
+    ]);
+  });
+
+  it('keeps a bare label inside a verbatim block instead of splitting the fragment', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'main.tex:',
+        '\\section{Listing}',
+        '\\begin{verbatim}',
+        'appendix.tex:',
+        '\\end{verbatim}',
+        'Tail.',
+        'appendix.tex:',
+        'Appendix content.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['main.tex', 'appendix.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main.tex',
+      'appendix.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      '\\section{Listing}\n\\begin{verbatim}\nappendix.tex:\n\\end{verbatim}\nTail.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
+      'Appendix content.\n',
+    );
+  });
+
   it('drops a bare label that triggers single-input prefix synthesis', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',

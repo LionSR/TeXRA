@@ -80,3 +80,25 @@ export function shouldKeepPercentHeaderAsLatexComment(
 export function hasLikelyLatexContent(lines: readonly string[]): boolean {
   return lines.some((line) => LIKELY_LATEX_CONTENT_REGEX.test(line.trim()));
 }
+
+const LITERAL_ENV_BOUNDARY_REGEX =
+  /\\(begin|end)\s*\{\s*(?:verbatim\*?|lstlisting|minted|Verbatim)\s*\}/g;
+
+/**
+ * Whether the last of these lines sits inside an unclosed verbatim-style
+ * environment, whose content is literal text — a filename-looking line
+ * there is part of the listing, not a document header.
+ */
+export function isInsideLiteralEnvironment(lines: readonly string[]): boolean {
+  let depth = 0;
+  for (const line of lines) {
+    for (const match of line.matchAll(LITERAL_ENV_BOUNDARY_REGEX)) {
+      if (match[1] === 'begin') {
+        depth += 1;
+      } else if (depth > 0) {
+        depth -= 1;
+      }
+    }
+  }
+  return depth > 0;
+}

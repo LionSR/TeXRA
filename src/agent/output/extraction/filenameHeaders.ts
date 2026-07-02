@@ -18,6 +18,7 @@ import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import {
   getLatexDocumentContext,
   hasLikelyLatexContent,
+  isInsideLiteralEnvironment,
   shouldKeepPercentHeaderAsLatexComment,
 } from './latexHeuristics';
 import {
@@ -30,22 +31,17 @@ import { responseLines } from './responseText';
 
 const PERCENT_FILENAME_HEADER_REGEX =
   /^%\s+((?:\.[/\\])*[A-Za-z0-9_][A-Za-z0-9._/\\-]*\.[A-Za-z0-9]+)\s*$/;
-/** Strip markdown emphasis/label punctuation a model might wrap a bare filename in. */
-const BARE_LABEL_DECORATION_REGEX = /^[*_`]+|[*_`:]+$/g;
+/** Trailing label punctuation after a bare filename (`Draft3.tex:`). */
+const TRAILING_COLON_REGEX = /:+$/;
+/** Markdown decoration that is never part of a filename (`**x**`, `` `x` ``). */
+const SAFE_DECORATION_REGEX = /^[*`]+|[*`:]+$/g;
+/** Full decoration strip, including emphasis underscores (`_x_`). */
+const FULL_DECORATION_REGEX = /^[*_`]+|[*_`:]+$/g;
 
-/**
- * Recognize a header line that names one of the agent's known files directly,
- * without the `%` comment prefix (e.g. `Draft/Draft3.tex:` or
- * `**Draft3.tex**`). Unlike the percent-header form, a bare line like this is
- * never valid LaTeX on its own, so the only ambiguity risk is a coincidental
- * match — guarded against by only ever matching against the agent's own
- * known files rather than any path-shaped string.
- */
-function matchKnownFileLabel(
-  line: string,
+function matchNormalizedCandidate(
+  stripped: string,
   knownFiles: readonly string[],
 ): string | null {
-  const stripped = line.trim().replaceAll(BARE_LABEL_DECORATION_REGEX, '');
   if (!stripped) return null;
   const candidate = normalizeFilePath(stripped).replace(/^(?:\.\/)+/, '');
   const exact = knownFiles.find((f) => normalizeFilePath(f) === candidate);
@@ -57,6 +53,34 @@ function matchKnownFileLabel(
     (f) => getBasename(f) === candidate,
   );
   return basenameMatches.length === 1 ? basenameMatches[0] : null;
+}
+
+/**
+ * Recognize a header line that names one of the agent's known files directly,
+ * without the `%` comment prefix (e.g. `Draft/Draft3.tex:` or
+ * `**Draft3.tex**`). Unlike the percent-header form, a bare line like this is
+ * never valid LaTeX on its own, so the only ambiguity risk is a coincidental
+ * match — guarded against by only ever matching against the agent's own
+ * known files rather than any path-shaped string.
+ *
+ * Decoration is stripped progressively because an underscore is both markdown
+ * emphasis and a legal filename character: `_macros.tex:` must keep its
+ * underscore, while `_paper.tex_` must lose both.
+ */
+function matchKnownFileLabel(
+  line: string,
+  knownFiles: readonly string[],
+): string | null {
+  const trimmed = line.trim();
+  for (const stripped of [
+    trimmed.replace(TRAILING_COLON_REGEX, ''),
+    trimmed.replaceAll(SAFE_DECORATION_REGEX, ''),
+    trimmed.replaceAll(FULL_DECORATION_REGEX, ''),
+  ]) {
+    const match = matchNormalizedCandidate(stripped, knownFiles);
+    if (match) return match;
+  }
+  return null;
 }
 
 function makeUniquePercentHeaderName(
@@ -179,8 +203,10 @@ export function extractFilenameHeaderDocuments(
       percentHeaderName ?? matchKnownFileLabel(line, labelFiles);
     if (headerName && synthesizedSingleInputFromPrefix) {
       // A `%` header is a valid LaTeX comment and can stay in the
-      // synthesized document's body; a bare label is not LaTeX, so drop it.
-      if (percentHeaderName) {
+      // synthesized document's body, as can a filename-looking line inside
+      // a verbatim-style environment; a bare label elsewhere is not LaTeX,
+      // so drop it.
+      if (percentHeaderName || isInsideLiteralEnvironment(currentLines)) {
         currentLines.push(line);
       }
       continue;
@@ -189,13 +215,15 @@ export function extractFilenameHeaderDocuments(
     const linesBeforeHeader = currentName ? currentLines : preHeaderLines;
     // The keep-as-comment heuristic exists because a `%` header is
     // indistinguishable from a genuine LaTeX comment. A bare label is never
-    // valid LaTeX, so for it only the inside-document-body check applies
-    // (a filename-looking line in a verbatim example stays content); the
-    // preamble lookahead must not swallow a label that separates a
-    // preamble-only file from the next document.
+    // valid LaTeX, so for it only literal contexts apply — inside a
+    // \begin{document} body or an unclosed verbatim-style environment, a
+    // filename-looking line stays content. The preamble lookahead must not
+    // swallow a label that separates a preamble-only file from the next
+    // document.
     const keepHeaderAsContent = percentHeaderName
       ? shouldKeepPercentHeaderAsLatexComment(linesBeforeHeader, lines, index)
-      : getLatexDocumentContext(linesBeforeHeader).insideDocumentBody;
+      : getLatexDocumentContext(linesBeforeHeader).insideDocumentBody ||
+        isInsideLiteralEnvironment(linesBeforeHeader);
     if (headerName && !keepHeaderAsContent) {
       if (!currentName && hasLikelyLatexContent(preHeaderLines)) {
         if (synthesisName !== null) {
