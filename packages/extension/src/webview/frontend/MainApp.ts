@@ -882,16 +882,7 @@ export class MainApp extends MainAppBase {
           ),
       );
       if (selectedToolUseAgent) {
-        this.swapModeInstruction(
-          this.sessionType.get(),
-          SESSION_TYPES.TOOL_USE,
-        );
-        this.sessionType.set(SESSION_TYPES.TOOL_USE);
-        this.outputFilesActive.set(false);
-        this.updateMultiFiles('outputFiles', []);
-        this.refreshModelSelectionForActiveSession();
-        this.refreshInstructionPlaceholder();
-        this.saveState();
+        this.enterToolUseSession();
       }
     }
   }
@@ -932,6 +923,19 @@ export class MainApp extends MainAppBase {
     if (exact) return exact.value;
     const name = agentName(candidate);
     return options.find((opt) => agentName(opt.value) === name)?.value;
+  }
+
+  private enterToolUseSession(): void {
+    if (this.sessionType.get() !== SESSION_TYPES.TOOL_USE) {
+      this.swapModeInstruction(this.sessionType.get(), SESSION_TYPES.TOOL_USE);
+      this.sessionType.set(SESSION_TYPES.TOOL_USE);
+      this.fileSelectionOpen.set(false);
+      this.outputFilesActive.set(false);
+      this.updateMultiFiles('outputFiles', []);
+      this.refreshModelSelectionForActiveSession();
+    }
+    this.refreshInstructionPlaceholder();
+    this.saveState();
   }
 
   private handleSetEditedFileOptions(
