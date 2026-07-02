@@ -982,7 +982,7 @@ const SCENARIOS = [
   {
     name: 'approval-policy-status-bar',
     env: { HARNESS_APPROVAL_POLICY: 'never', HARNESS_ENTRIES: '4' },
-    expect: ['byok', 'deny', '[/status]details'],
+    expect: ['personal', 'deny', '[/status]details'],
     unexpect: ['keys deny', 'approval: deny privileged actions'],
   },
   {
@@ -2531,8 +2531,8 @@ const SCENARIOS = [
     bootExpect: 'TeXRA',
     keys: [ESC + 's'], // Esc/Alt-s
     frame: 'tail',
-    expect: ['◆ running 1m 15s byok 3 sub'],
-    unexpect: ['◆running', 'byok3', '3 sub 1 proc'],
+    expect: ['◆ running 1m', 'personal'],
+    unexpect: ['◆running', 'personal3', '3 sub 1 proc'],
   },
   {
     name: 'tiny-task-subworkflow-detail',
@@ -2868,7 +2868,7 @@ const SCENARIOS = [
     expect: [
       'Harness interrupt requested.',
       '[main](stopped)',
-      '◆ stopped byok',
+      '◆ stopped personal',
       '[Ctrl-C]exit',
     ],
     unexpect: ['[Ctrl-C]stop'],
