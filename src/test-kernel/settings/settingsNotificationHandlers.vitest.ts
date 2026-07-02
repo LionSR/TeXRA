@@ -1,0 +1,116 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  buildAgentSelectionMessage,
+  buildCustomAgentDirMessage,
+  buildAgentModePresetsMessage,
+} from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
+import {
+  buildGitAuthorSettingsMessage,
+  type GitAuthorSettings,
+} from '@utils/system/gitAuthorSettings';
+import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+
+// Regression guard for the settingsView host consolidation: both the
+// extension and desktop hosts now call these shared builders instead of
+// hand-rolling the outbound message shape. These tests pin the exact shape
+// both hosts previously built by hand.
+describe('settingsView notification message builders', () => {
+  it('buildAgentSelectionMessage loads agents then wraps the selection items', async () => {
+    const loadAgents = vi.fn().mockResolvedValue(undefined);
+    const buildSelectionItems = vi.fn().mockReturnValue({
+      workflow: [{ name: 'a', enabled: true }],
+      toolUse: [{ name: 'b', enabled: false }],
+    });
+
+    const message = await buildAgentSelectionMessage({
+      loadAgents,
+      buildSelectionItems,
+    });
+
+    expect(loadAgents).toHaveBeenCalledOnce();
+    expect(message).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      workflow: [{ name: 'a', enabled: true }],
+      toolUse: [{ name: 'b', enabled: false }],
+    });
+  });
+
+  it('buildCustomAgentDirMessage wraps the resolved status', async () => {
+    const getCustomDirStatus = vi
+      .fn()
+      .mockResolvedValue({ path: '/some/dir', isDefault: false });
+
+    const message = await buildCustomAgentDirMessage({ getCustomDirStatus });
+
+    expect(message).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
+      path: '/some/dir',
+      isDefault: false,
+    });
+  });
+
+  it('buildAgentModePresetsMessage wraps presets and orchestrator names', () => {
+    const message = buildAgentModePresetsMessage({
+      getCustomPresets: () => [],
+      getOrchestratorAgentNames: () => ['orchestrator-agent'],
+    });
+
+    expect(message).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+      customPresets: [],
+      orchestratorAgents: ['orchestrator-agent'],
+    });
+  });
+
+  it('buildChatGptAuthStatusMessage wraps the resolved status', async () => {
+    const status = {
+      signedIn: true,
+      email: 'user@example.com',
+      accountId: 'acct-1',
+      preferSubscription: true,
+      subscriptionToolUseOnly: false,
+    };
+    const getStatus = vi.fn().mockResolvedValue(status);
+
+    const message = await buildChatGptAuthStatusMessage(getStatus);
+
+    expect(message).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+      status,
+    });
+  });
+
+  it('buildGitAuthorSettingsMessage wraps the settings object', () => {
+    const settings: GitAuthorSettings = {
+      markCommits: true,
+      authorName: 'Ada Lovelace',
+      authorEmail: 'ada@example.com',
+      worktreeSupport: false,
+    };
+
+    const message = buildGitAuthorSettingsMessage(settings);
+
+    expect(message).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
+      ...settings,
+    });
+  });
+
+  it('LatexConfigPersistenceController.buildConfigMessage wraps buildConfigValues', () => {
+    const controller = new LatexConfigPersistenceController();
+    const stored = new Map<WorkspaceStateKey, unknown>([
+      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, true],
+    ]);
+
+    const message = controller.buildConfigMessage((key) => stored.get(key));
+
+    expect(message).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+      values: controller.buildConfigValues((key) => stored.get(key)),
+    });
+  });
+});

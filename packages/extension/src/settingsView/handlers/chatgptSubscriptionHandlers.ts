@@ -16,7 +16,7 @@ import {
 } from '@auth/codex';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
@@ -28,10 +28,9 @@ export class ChatGptSubscriptionHandlers {
   ) {}
 
   async sendChatGptAuthStatus(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      status: await getChatGptAuthStatus(),
-    });
+    await webview.postMessage(
+      await buildChatGptAuthStatusMessage(getChatGptAuthStatus),
+    );
   }
 
   private async refreshChatGptState(): Promise<void> {

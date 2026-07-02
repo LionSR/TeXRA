@@ -5,6 +5,8 @@ import {
   DEFAULT_GIT_MARK_COMMITS,
   DEFAULT_GIT_WORKTREE_SUPPORT,
 } from '@shared/constants/git';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import type { UpdateGitAuthorSettingsMessage } from '@shared/schemas/settingsViewMessages';
 import { setWorktreeSupportEnabled } from '@tools/worktreeConfig';
 import { setGitAuthorEnv } from './gitAuthorEnv';
 import type { StateStore } from '@platform/interfaces/state';
@@ -53,4 +55,14 @@ export function applyGitAuthorSettings(
   }
   setWorktreeSupportEnabled(settings.worktreeSupport);
   return settings;
+}
+
+/** Wraps git author settings into the outbound settings-view message shape. */
+export function buildGitAuthorSettingsMessage(
+  settings: GitAuthorSettings,
+): UpdateGitAuthorSettingsMessage {
+  return {
+    command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
+    ...settings,
+  };
 }
