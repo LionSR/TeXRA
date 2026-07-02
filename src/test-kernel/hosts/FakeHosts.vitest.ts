@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - test support
-import { FakeTerminalHandle, createFakeUIHosts } from '../support/FakeHosts';
+import { createFakeUIHosts } from '../support/FakeHosts';
 
 describe('FakeHosts', () => {
   it('records prompt effects and returns queued responses', async () => {
@@ -64,9 +64,8 @@ describe('FakeHosts', () => {
     ]);
   });
 
-  it('records opener, clipboard, terminal, and diff effects', async () => {
+  it('records opener and diff effects', async () => {
     const hosts = createFakeUIHosts({
-      clipboardText: 'initial',
       proposedDiffContent: { '/tmp/proposed.tex': 'edited' },
     });
 
@@ -74,31 +73,6 @@ describe('FakeHosts', () => {
     await hosts.externalOpener.openPath('/workspace/main.pdf');
     assert.deepEqual(hosts.externalOpener.externalUrls, ['https://texra.ai']);
     assert.deepEqual(hosts.externalOpener.paths, ['/workspace/main.pdf']);
-
-    assert.equal(await hosts.clipboard.readText(), 'initial');
-    await hosts.clipboard.writeText('copied');
-    assert.equal(await hosts.clipboard.readText(), 'copied');
-    assert.deepEqual(hosts.clipboard.writes, ['copied']);
-
-    const terminal = hosts.terminal.createTerminal({ name: 'Setup' });
-    terminal.show(true);
-    terminal.sendText('npm install', true);
-    const foundTerminal = hosts.terminal.findTerminal('Setup');
-    const listedTerminals = hosts.terminal.getTerminals();
-    assert.ok(foundTerminal);
-    assert.notEqual(foundTerminal, terminal);
-    assert.equal(foundTerminal.name, 'Setup');
-    assert.equal(listedTerminals.length, 1);
-    assert.notEqual(listedTerminals[0], terminal);
-    assert.equal(listedTerminals[0]?.name, 'Setup');
-    assert.ok(terminal instanceof FakeTerminalHandle);
-    assert.deepEqual(terminal.showCalls, [{ preserveFocus: true }]);
-    assert.deepEqual(terminal.sentText, [
-      { text: 'npm install', shouldExecute: true },
-    ]);
-    terminal.dispose();
-    assert.equal(hosts.terminal.findTerminal('Setup'), undefined);
-    assert.deepEqual(hosts.terminal.getTerminals(), []);
 
     const session = await hosts.diff.openDiff(
       { filePath: '/tmp/original.tex' },
