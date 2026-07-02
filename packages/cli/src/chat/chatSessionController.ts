@@ -199,6 +199,18 @@ export function createChatSessionController(
     });
   };
 
+  // Shared tail of the run/resume `.catch()` handlers: surface the error to
+  // the local transcript unless the run was stopped intentionally, and set
+  // the exit code accordingly.
+  const reportRunFailure = (error: unknown): void => {
+    if (!session.stopRequested) {
+      appendLocalErrorTranscript(toErrorMessage(error));
+    }
+    session.runExitCode = session.stopRequested
+      ? CliExitCode.Success
+      : CliExitCode.AgentError;
+  };
+
   // Build the wrapped runtime host shared by start and resume: attach the
   // terminal-result toast and the TUI approval pipeline, and return a
   // `finalize` teardown that both run promises invoke from their `.finally`.
@@ -302,12 +314,7 @@ export function createChatSessionController(
           executionRegistered,
           agentSettled,
         });
-        if (!session.stopRequested) {
-          appendLocalErrorTranscript(toErrorMessage(error));
-        }
-        session.runExitCode = session.stopRequested
-          ? CliExitCode.Success
-          : CliExitCode.AgentError;
+        reportRunFailure(error);
       })
       .finally(finalize);
     markChatTuiRunPending(session, runPromise, wrapped);
@@ -389,14 +396,7 @@ export function createChatSessionController(
         session.runExitCode = CliExitCode.Success;
         notify({ kind: 'agentFinished' });
       })
-      .catch((error: unknown) => {
-        if (!session.stopRequested) {
-          appendLocalErrorTranscript(toErrorMessage(error));
-        }
-        session.runExitCode = session.stopRequested
-          ? CliExitCode.Success
-          : CliExitCode.AgentError;
-      })
+      .catch(reportRunFailure)
       .finally(finalize);
     publishChatTuiRootRunStartAvailability(session);
   };

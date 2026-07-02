@@ -14,7 +14,7 @@ import { z } from 'zod';
 // Local imports - agent
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
-import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 
 // Local imports - tools
@@ -25,11 +25,11 @@ import {
   ToolUseAgentProposalSchema,
   type WorkflowAgentProposal,
   type ToolUseAgentProposal,
-  type StreamTabId,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatFollowUpInstruction } from '@tools/subagentResults';
 import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
+import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
@@ -54,19 +54,6 @@ import {
 
 export { rejectOversizedBibAttachments } from './delegation/inputFields';
 export type { WorkflowAgentInput };
-
-/** Get required context fields, throwing if unavailable. */
-function getRequiredContext(): RunContext & {
-  streamId: StreamTabId;
-} {
-  const ctx = tryUseRunContext();
-  if (!ctx?.streamId) {
-    throw new Error(
-      'Tool context unavailable. Cannot create proposal without active stream.',
-    );
-  }
-  return ctx as RunContext & { streamId: StreamTabId };
-}
 
 // ============================================================================
 // delegate_workflow tool - for document processing agents
@@ -96,11 +83,11 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
     const agent = requireVisibleAgent('workflow', input.agent);
     const agentName = agent.name;
-    const ctx = getRequiredContext();
+    const { streamId, context } = requireRunStream('delegate_workflow');
 
     const model = await resolveAvailableDelegationModel({
       requestedModel: input.model,
-      parentModel: ctx.model,
+      parentModel: context.model,
       agentCategory: AgentCategory.Workflow,
     });
 
@@ -153,7 +140,7 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
-    return proposeAndExecute(proposal, agentName, ctx.streamId);
+    return proposeAndExecute(proposal, agentName, streamId);
   }
 }
 
@@ -236,11 +223,11 @@ Git worktree support: resolved from the active workspace at runtime.`,
     const agent = requireVisibleAgent('toolUse', input.agent);
     const agentName = agent.name;
 
-    const ctx = getRequiredContext();
+    const { streamId, context } = requireRunStream('delegate_agent');
 
     const model = await resolveAvailableDelegationModel({
       requestedModel: input.model,
-      parentModel: ctx.model,
+      parentModel: context.model,
       agentCategory: AgentCategory.ToolUse,
     });
 
@@ -255,7 +242,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
 
-    return proposeAndExecute(proposal, agentName, ctx.streamId);
+    return proposeAndExecute(proposal, agentName, streamId);
   }
 
   /** Queue follow-up instructions for a tool-use subagent. */
