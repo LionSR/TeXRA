@@ -1,18 +1,35 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
-import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
+import { AgentCategory, AGENT_SOURCE } from '@shared/schemas/agent';
+import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import {
   buildGitAuthorSettingsMessage,
   type GitAuthorSettings,
 } from '@utils/system/gitAuthorSettings';
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+
+const workflowItem: AgentSelectionItem = {
+  name: 'a',
+  category: AgentCategory.Workflow,
+  source: AGENT_SOURCE.BUILT_IN_WORKFLOW,
+  hasPath: true,
+  enabled: true,
+};
+const toolUseItem: AgentSelectionItem = {
+  name: 'b',
+  category: AgentCategory.ToolUse,
+  source: AGENT_SOURCE.CUSTOM,
+  hasPath: false,
+  enabled: false,
+};
 
 // Regression guard for the settingsView host consolidation: both the
 // extension and desktop hosts now call these shared builders instead of
@@ -22,8 +39,8 @@ describe('settingsView notification message builders', () => {
   it('buildAgentSelectionMessage loads agents then wraps the selection items', async () => {
     const loadAgents = vi.fn().mockResolvedValue(undefined);
     const buildSelectionItems = vi.fn().mockReturnValue({
-      workflow: [{ name: 'a', enabled: true }],
-      toolUse: [{ name: 'b', enabled: false }],
+      workflow: [workflowItem],
+      toolUse: [toolUseItem],
     });
 
     const message = await buildAgentSelectionMessage({
@@ -32,10 +49,11 @@ describe('settingsView notification message builders', () => {
     });
 
     expect(loadAgents).toHaveBeenCalledOnce();
+    expect(buildSelectionItems).toHaveBeenCalledOnce();
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      workflow: [{ name: 'a', enabled: true }],
-      toolUse: [{ name: 'b', enabled: false }],
+      workflow: [workflowItem],
+      toolUse: [toolUseItem],
     });
   });
 
