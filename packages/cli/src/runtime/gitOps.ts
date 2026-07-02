@@ -17,7 +17,7 @@ function run(
   const result = executeCommandSync([command, ...args], { cwd });
   return {
     ok: result.success,
-    status: result.exitCode,
+    status: result.exitCode ?? null,
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? '',
   };

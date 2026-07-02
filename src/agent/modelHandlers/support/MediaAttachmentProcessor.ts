@@ -8,8 +8,6 @@ import pMap from 'p-map';
 // Local imports - agent utils
 import { logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
-import { toErrorMessage } from '@common/errors';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import type { FileLocation } from '@shared/schemas';
 
 // Local imports - utils
@@ -82,9 +80,9 @@ export class MediaAttachmentProcessor {
       }
 
       if (this.capabilities.supportsNativePdf) {
-        this.logger.debug(
-          `Using native PDF for ${mediaFile}. Page count: ${pageCount}`,
-        );
+        this.logger.debug('Using native PDF', {
+          data: { mediaFile, pageCount },
+        });
         mediaType = 'application/pdf';
         mediaData = await getBase64EncodedMedia(mediaFile);
         return { kind: 'image', mediaType, data: mediaData };
@@ -101,9 +99,9 @@ export class MediaAttachmentProcessor {
       const mimeType = getMimeType(mediaFile);
       if (mimeType?.startsWith('image/')) {
         mediaType = mimeType;
-        this.logger.debug(
-          `Processing as image: ${mediaFile}, type: ${mediaType}`,
-        );
+        this.logger.debug('Processing as image', {
+          data: { mediaFile, mediaType },
+        });
         mediaData = await getBase64EncodedMedia(mediaFile);
       } else {
         throw new Error(
@@ -129,7 +127,7 @@ export class MediaAttachmentProcessor {
       );
     }
 
-    this.logger.debug(`Processing as audio: ${mediaFile}, type: ${mimeType}`);
+    this.logger.debug('Processing as audio', { data: { mediaFile, mimeType } });
     let mediaData = await getBase64EncodedMedia(mediaFile);
     if (Array.isArray(mediaData)) {
       this.logger.warn(
@@ -188,10 +186,9 @@ export class MediaAttachmentProcessor {
       } else {
         const { location, reason } = loadResult;
         const displayPath = getShortDisplayPath(location);
-        this.logger.error(
-          `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(reason)}`,
-          { data: reason },
-        );
+        this.logger.error('Failed to load media entry', {
+          data: { path: displayPath, error: reason },
+        });
         results.push({ path: displayPath, ok: false });
       }
     }
@@ -228,10 +225,9 @@ export class MediaAttachmentProcessor {
       const stats = await AbsoluteFS.stat(absolutePath);
       fileSize = stats.size;
     } catch (err) {
-      const message = toErrorMessage(err);
-      this.logger.error(
-        `Unable to read file info for ${displayPath}: ${message}`,
-      );
+      this.logger.error('Unable to read file info', {
+        data: { path: displayPath, error: err },
+      });
       return { result: { path: displayPath, ok: false } };
     }
 
@@ -247,9 +243,13 @@ export class MediaAttachmentProcessor {
       const processed = this.isAudio(fileExtension)
         ? await this.processAudio(absolutePath, fileExtension)
         : await this.processImage(absolutePath, fileExtension);
-      this.logger.debug(
-        `Processed ${processed.kind}: ${displayPath}, type: ${processed.mediaType}`,
-      );
+      this.logger.debug('Processed media', {
+        data: {
+          kind: processed.kind,
+          path: displayPath,
+          mediaType: processed.mediaType,
+        },
+      });
 
       const entry = this.createEntriesForProcessedMedia(
         displayPath,
@@ -263,10 +263,9 @@ export class MediaAttachmentProcessor {
         result: { path: displayPath, ok: true },
       };
     } catch (err) {
-      this.logger.error(
-        `Failed to process media ${displayPath}: ${getSdkErrorMessage(err)}`,
-        { data: err },
-      );
+      this.logger.error('Failed to process media', {
+        data: { path: displayPath, error: err },
+      });
       return { result: { path: displayPath, ok: false } };
     }
   }

@@ -5,7 +5,6 @@ import pMap from 'p-map';
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 
-import { toErrorMessage } from '@common/errors';
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas/toolConfig';
 import { TaskRunFileService, flexibleFS, pathToLocation } from '@utils/files';

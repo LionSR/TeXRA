@@ -17,6 +17,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
+  buildErrorLogData,
   detectStatusCode,
   getSdkErrorMessage,
   isContextWindowError,
@@ -557,11 +558,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       pendingResponse.incomplete_details?.reason ??
       'no additional details';
     this.logger.warn(
-      `OpenAI background response ended remotely (${pendingResponse.status}: ${errorDetail}); starting a new request.`,
+      'OpenAI background response ended remotely; starting a new request.',
       {
         data: {
           responseId: pendingId,
           status: pendingResponse.status,
+          errorDetail,
           error: pendingResponse.error ?? undefined,
           incompleteDetails: pendingResponse.incomplete_details ?? undefined,
         },
@@ -635,7 +637,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const errorDetail =
         response.error?.message ?? response.incomplete_details?.reason;
       this.logger.debug(
-        `Response ${response.id} not safe for chaining (status="${response.status}", hasInputTokens=${hasInputTokens})`,
+        'Response not safe for chaining',
         {
           data: {
             responseId: response.id,
@@ -691,7 +693,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const outputTokens = response.usage.output_tokens ?? 0;
 
         this.logger.debug(
-          `[TOKEN_DIAG] Actual vs pre-flight: ${actualTokens} vs ${this._diagPreFlightTokens} (diff: ${diff > 0 ? '+' : ''}${diff}, ${diffPercent}%)`,
+          '[TOKEN_DIAG] Actual vs pre-flight',
           {
             data: {
               actualInputTokens: actualTokens,
@@ -859,9 +861,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       Math.floor(maxOutputTokens * CHAINED_RESPONSE_MAX_OUTPUT_FACTOR),
     );
     if (budgeted !== maxOutputTokens) {
-      this.logger.debug(
-        `Applied chained max_output_tokens budget: ${maxOutputTokens} -> ${budgeted}`,
-      );
+      this.logger.debug('Applied chained max_output_tokens budget', {
+        data: { before: maxOutputTokens, after: budgeted },
+      });
     }
     return budgeted;
   }
@@ -895,9 +897,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       contextWindow,
     );
 
-    this.logger.debug(
-      `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${contextWindow} context window)`,
-    );
+    this.logger.debug('Compacting conversation', {
+      data: {
+        inputTokens: tokensBefore,
+        utilizationPercent: utilizationBefore,
+        contextWindow,
+      },
+    });
 
     const compactParams: ResponseCompactParams = {
       model: this.config.fullName,
@@ -943,7 +949,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // Fall back to output_tokens if token counting fails. Log so a degraded
         // post-compaction token estimate is visible rather than silent.
         this.logger.debug(
-          `Post-compaction token counting failed; falling back to output_tokens: ${getSdkErrorMessage(err)}`,
+          'Post-compaction token counting failed; falling back to output_tokens',
+          { data: buildErrorLogData(err, { operation: 'post-compaction token counting' }) },
         );
         // NOTE: It's unclear what output_tokens represents exactly for the compact
         // endpoint — it may be the generation cost rather than the reusable content
@@ -980,9 +987,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       return compactedMessages;
     } catch (err) {
-      this.logger.warn(
-        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
-      );
+      this.logger.warn('Compaction failed, continuing with original messages', {
+        data: buildErrorLogData(err, { operation: 'compact conversation' }),
+      });
       this.compactionResult = undefined;
       return messages;
     }
@@ -1300,9 +1307,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
 
-    this.logger.debug(
-      `Fallback: max_output_tokens ${maxOutputTokens} → ${capped} (estimate: ${inputEstimate})`,
-    );
+    this.logger.debug('Fallback: adjusting max_output_tokens', {
+      data: { before: maxOutputTokens, after: capped, inputEstimate },
+    });
     logContextManagementEvent(
       this.logger,
       `Estimated token count (${inputEstimate}) + max output tokens (${maxOutputTokens}) exceeds context window (${contextWindow}). Reducing to ${capped}.`,
@@ -1549,10 +1556,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           (inputTokens / this.getEffectiveContextWindow()) * 100;
         this._diagPreFlightTokens = inputTokens; // Compared in finalizeResponse
         this.logger.debug(
-          `[TOKEN_DIAG] Pre-flight count: ${inputTokens} (${utilizationEstimate.toFixed(1)}% of ${this.getEffectiveContextWindow()})`,
+          '[TOKEN_DIAG] Pre-flight count',
           {
             data: {
               preFlightTokens: inputTokens,
+              utilizationEstimate,
               prevCumulativeTokens: prevCumulative,
               delta: inputTokens - prevCumulative,
               newMessagesCount: newMessages.length,
@@ -1567,9 +1575,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       },
       onCountFailure: (err) => {
-        this.logger.debug(
-          `Token counting failed: ${getSdkErrorMessage(err)}. Applying fallback cap.`,
-        );
+        this.logger.debug('Token counting failed; applying fallback cap', {
+          data: buildErrorLogData(err, { operation: 'token counting' }),
+        });
         maxOutputTokens = this.applyTokenCountFailureFallback(maxOutputTokens);
       },
     });
@@ -1773,9 +1781,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Safety net: handle unexpected pending status (shouldn't happen without background mode)
     if (this.isBackgroundPending(response)) {
-      this.logger.debug(
-        `WebSocket response ${response.id} ended with pending status "${response.status}" — polling for completion`,
-      );
+      this.logger.debug('WebSocket response ended with pending status — polling for completion', {
+        data: { responseId: response.id, status: response.status },
+      });
       response = await this.waitForBackgroundCompletion(
         client,
         response,
@@ -1863,12 +1871,28 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         }
         if (!this.storesResponsesServerSide) {
           this.logger.debug(
-            `OpenAI stream emitted an event outside the SDK's typed union for stateless response ${responseId}; polling fallback is unavailable: ${getSdkErrorMessage(streamError)}`,
+            "OpenAI stream emitted an event outside the SDK's typed union for a stateless response; polling fallback is unavailable",
+            {
+              data: {
+                responseId,
+                ...buildErrorLogData(streamError, {
+                  operation: 'unhandled stream event',
+                }),
+              },
+            },
           );
           throw streamError;
         }
         this.logger.debug(
-          `OpenAI stream emitted an event outside the SDK's typed union for response ${responseId} — falling back to polling: ${getSdkErrorMessage(streamError)}`,
+          "OpenAI stream emitted an event outside the SDK's typed union — falling back to polling",
+          {
+            data: {
+              responseId,
+              ...buildErrorLogData(streamError, {
+                operation: 'unhandled stream event',
+              }),
+            },
+          },
         );
         this.rememberPendingBackgroundResponse(responseId, retrieveParams);
         try {
@@ -1924,9 +1948,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // during slow GPT-5 requests), poll until it finishes instead of silently
       // returning an incomplete response.
       if (this.isBackgroundPending(response)) {
-        this.logger.debug(
-          `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
-        );
+        this.logger.debug('Streaming response ended with pending status - polling for completion', {
+          data: { responseId: response.id, status: response.status },
+        });
         response = await this.waitForBackgroundCompletion(
           client,
           response,
@@ -1997,7 +2021,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       } else {
         this.logger.debug(
-          `Response ${response.id} returned with pending status "${response.status}" despite non-background mode; polling for completion`,
+          'Response returned with pending status despite non-background mode; polling for completion',
           {
             data: {
               responseId: response.id,
