@@ -80,7 +80,7 @@ reviewed-train class (ranked by value/effort); none is unattended-safe.
    `packages/extension/src/commands/tests/connectionTests.ts`. Collapsing the
    production path to the helper-model call and dropping the direct-SDK twins
    would remove direct `openai` / `@anthropic-ai/sdk` client construction from
-   the runtime module. *Deferred:* not pure dead code — removal drops the
+   the runtime module. _Deferred:_ not pure dead code — removal drops the
    connection-test command's coverage; needs a reviewer's call on keeping or
    repointing that test.
 
@@ -104,24 +104,24 @@ reviewed-train class (ranked by value/effort); none is unattended-safe.
    _(MEDIUM surface)_. `agentRegistry.ts` exports `getAgent` (`:350`),
    `resolveAgent` (`:428`), `resolveAgentForLaunch` (`:627`), `resolveAgentKey`
    (`:488`), and `findAgentByIdentifier` (`:538`) — five ways to turn an
-   identifier into an agent, each with TSDoc explaining when *not* to use the
+   identifier into an agent, each with TSDoc explaining when _not_ to use the
    others. `resolveAgent` is `getAgent` + `toResolvedAgent`, and `toResolvedAgent`
    (`:433`) is a near-identity spread (the trivial-factory pattern CLAUDE.md
    discourages); `resolveAgentKey` is `getAgent` + `agentKeyOf`. Verified caller
    counts: `resolveAgentKey` 2, `findAgentByIdentifier` 3, `resolveAgentForLaunch`
    4 external callers — so a collapse to one options-driven
    `resolveAgent(id, { category?, forLaunch?, source? })` is a real multi-site
-   refactor, not a deletion. *Deferred:* reviewed surface-curation track (same
+   refactor, not a deletion. _Deferred:_ reviewed surface-curation track (same
    class as #6841).
 
 5. **`agentDirectoriesRegistry` — a second composition-root global** _(MEDIUM)_.
    `agentDirectoriesRegistry.ts:8-22` (`let agentDirectories`, `set/get`) is a
    second global-injection singleton alongside `platform()`, even though
-   `platformAgentDirectories.ts:24-54` already *builds* the
+   `platformAgentDirectories.ts:24-54` already _builds_ the
    `AgentDirectoryService` entirely out of `platform().fs` + `GlobalStorageFS`.
    Folding agent directories into a `platform()` port (or the per-session handle)
-   removes the separate global. *Ties directly to the standing backlog item
-   "relocate the remaining module-global registries onto the per-session handle"*
+   removes the separate global. _Ties directly to the standing backlog item
+   "relocate the remaining module-global registries onto the per-session handle"_
    — record here as the concrete second instance of that item.
 
 6. **Per-service `Logger` sub-interfaces in the directory layer** _(LOW)_.
@@ -143,8 +143,8 @@ reviewed-train class (ranked by value/effort); none is unattended-safe.
    are provider identity/behavior sitting one layer too high. **Note — do not
    re-file as dead code:** the detailed audit (§ `agent-sdk-readiness-audit.md`
    line 2940) already ruled the "`isOReasoningModel`/`isGrokReasoningModel` are
-   unused dead getters" claim **VERIFIED FALSE** (they are used). The *new,
-   weaker* angle here is placement: push the XAI/DeepSeek/Kimi/MiniMax branches
+   unused dead getters" claim **VERIFIED FALSE** (they are used). The _new,
+   weaker_ angle here is placement: push the XAI/DeepSeek/Kimi/MiniMax branches
    down into the owning subclass (or a capability flag) so the shared base stops
    carrying provider enums. Reviewed-train, low priority.
 
@@ -153,18 +153,18 @@ reviewed-train class (ranked by value/effort); none is unattended-safe.
 The uninformed audit raised, and the standing rulings correctly filter, all of
 the following. No change.
 
-| Re-surfaced candidate | Ruling |
-| --- | --- |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler` | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing; removal breaks `tsc`. |
-| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table | **Trap** — each carries ~12 real per-provider override points. |
-| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger` | **Keep** — each layer is a real override seam. |
-| Collapse `runAgent` / `runAgentStream` dual entry | **Trap** — Step-6 deliberate naming; facade merge hits a real type wall. |
-| Add a `src/agent/runtime/index.ts` public barrel | **Trap** — `@texra/core` **is** the curated barrel. |
-| Inline the cycle-wrapper nodes / `createXCycleFlow` factories | **Keep** — this *is* the mandated `Node.exec → createFlow → flow.run` shape. |
-| `@logger` not routed through `platform()` | **Intentional, documented** — logging is its own host-injected subsystem. |
-| Two logging idioms (`logUtils` vs `createChannelTrace`) are "redundant" | **Known / tracked** — the run-scope vs module-singleton split is targeted by `docs/prds/2026-05-17-logger-surface-cleanup.md`; not a new finding. |
-| `isOReasoningModel` / `isGrokReasoningModel` are "dead getters" | **VERIFIED FALSE** (detailed audit line 2940) — they are used; see new candidate #7 for the distinct layering angle. |
-| Sweep knip's "unused exports" | **Trap** — dominated by dynamically-wired false positives (string-registered commands, webview signals, channel IDs, test helpers). |
+| Re-surfaced candidate                                                               | Ruling                                                                                                                                            |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                           | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing; removal breaks `tsc`.             |
+| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table | **Trap** — each carries ~12 real per-provider override points.                                                                                    |
+| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger`                  | **Keep** — each layer is a real override seam.                                                                                                    |
+| Collapse `runAgent` / `runAgentStream` dual entry                                   | **Trap** — Step-6 deliberate naming; facade merge hits a real type wall.                                                                          |
+| Add a `src/agent/runtime/index.ts` public barrel                                    | **Trap** — `@texra/core` **is** the curated barrel.                                                                                               |
+| Inline the cycle-wrapper nodes / `createXCycleFlow` factories                       | **Keep** — this _is_ the mandated `Node.exec → createFlow → flow.run` shape.                                                                      |
+| `@logger` not routed through `platform()`                                           | **Intentional, documented** — logging is its own host-injected subsystem.                                                                         |
+| Two logging idioms (`logUtils` vs `createChannelTrace`) are "redundant"             | **Known / tracked** — the run-scope vs module-singleton split is targeted by `docs/prds/2026-05-17-logger-surface-cleanup.md`; not a new finding. |
+| `isOReasoningModel` / `isGrokReasoningModel` are "dead getters"                     | **VERIFIED FALSE** (detailed audit line 2940) — they are used; see new candidate #7 for the distinct layering angle.                              |
+| Sweep knip's "unused exports"                                                       | **Trap** — dominated by dynamically-wired false positives (string-registered commands, webview signals, channel IDs, test helpers).               |
 
 ## Carried backlog — re-confirmed at HEAD
 
@@ -181,7 +181,7 @@ All still stand; all reviewed-train class (signature/type/surface decisions).
   and its own parameter use (`:57`).
 - **`ModelClientServices` 2-field contract restated inline** — re-confirmed at
   `ModelInvocationNode.ts:41` (`InvocationServices` restates `{ client,
-  refreshClient? }`). Have it extend `ModelClientServices<unknown>`.
+refreshClient? }`). Have it extend `ModelClientServices<unknown>`.
 - **Three public `is*` provider booleans on the port** — `isOpenai`/`isAnthropic`
   (`IModelHandler.ts:206-207`), `isGoogle` (`:243`); real external readers, kept.
 - **Two oversized handlers as split candidates** — re-measured this pass:
@@ -246,4 +246,4 @@ unattended sweep. Do not re-open the adjudicated traps.
 - Carried backlog re-confirmed at HEAD (line refs above).
 - `npm run typecheck` — **exit 0** across all projects at HEAD `0fac656` (tree
   green; this checkpoint is a docs-only change, no source touched).
-</content>
+  </content>
