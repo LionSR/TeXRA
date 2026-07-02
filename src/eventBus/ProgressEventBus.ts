@@ -158,9 +158,9 @@ export interface ProgressEventPayloads {
   inquiryThreadUpdated: InquiryThreadUpdatedEvent;
   showUserQuestion: UserQuestionPermission;
   resolveUserQuestion: { requestId: string };
+  // ── Run/stream progress (part 2) ──
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
-  // ── Run/stream progress (part 2) ──
   updateConversationProgress: {
     streamId: StreamTabId;
     progress: ConversationProgress;
