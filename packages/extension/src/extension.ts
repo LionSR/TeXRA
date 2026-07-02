@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
-import { initPlatform } from '@platform/platform';
+import { initPlatform, platform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
   SHUTDOWN_PHASE,
@@ -88,6 +88,12 @@ import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
+import {
+  apiKeyExists,
+  apiKeySecretName,
+  lookupApiKey,
+  type ApiProvider,
+} from '@model/apiProviders';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { type StreamStatus, type TokenUsageStats } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -104,6 +110,7 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { isNonEmptyString } from '@utils/core';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 // Local imports - components
@@ -528,19 +535,19 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     }
   };
+  const hasResolvedUsableApiKey = async (provider: ApiProvider) =>
+    isNonEmptyString(await lookupApiKey(platform().secrets, provider));
   setSetupPlatform({
     secrets: {
       providers: SecretManager.API_PROVIDERS,
       setApiKey: (provider, key) =>
-        SecretManager.set(SecretManager.getApiKeySecretName(provider), key),
+        platform().secrets.set(apiKeySecretName(provider), key),
       deleteApiKey: (provider) =>
-        SecretManager.delete(SecretManager.getApiKeySecretName(provider)),
-      apiKeyExists: (provider) => SecretManager.apiKeyExists(provider),
-      hasUsableApiKey: (provider) => SecretManager.hasUsableApiKey(provider),
+        platform().secrets.delete(apiKeySecretName(provider)),
+      apiKeyExists: (provider) => apiKeyExists(platform().secrets, provider),
+      hasUsableApiKey: hasResolvedUsableApiKey,
       storedApiKeyExists: async (provider) => {
-        const stored = await SecretManager.get(
-          SecretManager.getApiKeySecretName(provider),
-        );
+        const stored = await SecretManager.get(apiKeySecretName(provider));
         return stored !== undefined;
       },
       anyUsableCredentialExists: () => hasAnyUsableSetupCredential(),

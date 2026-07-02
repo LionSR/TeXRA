@@ -2,8 +2,16 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { platform } from '@platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import {
+  API_PROVIDERS,
+  apiKeyExists as resolvedApiKeyExists,
+  apiKeySecretName,
+  getApiKey as requireApiKey,
+  lookupApiKey,
+  type ApiProvider,
+} from '@model/apiProviders';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   getGitHubEnvToken,
@@ -48,7 +56,7 @@ export class SecretManager {
   public static readonly GITHUB_TOKEN_KEY = GITHUB_TOKEN_STORAGE_KEY;
 
   public static getApiKeySecretName(provider: ApiProvider): string {
-    return `apiKey.${provider}`;
+    return apiKeySecretName(provider);
   }
 
   public static async listKeys(): Promise<readonly string[]> {
@@ -69,24 +77,8 @@ export class SecretManager {
     return 'none';
   }
 
-  /**
-   * Lookup API key from secret storage or environment variable.
-   */
-  private static async lookupApiKey(
-    provider: ApiProvider,
-  ): Promise<string | undefined> {
-    const secretKey = await this.get(this.getApiKeySecretName(provider));
-    return secretKey ?? process.env[`${provider.toUpperCase()}_API_KEY`];
-  }
-
   public static async getApiKey(provider: ApiProvider): Promise<string> {
-    const key = await this.lookupApiKey(provider);
-    if (!key) {
-      throw new Error(
-        `No API key found for ${provider}. Please set it using the "Set API Key" command or ${provider.toUpperCase()}_API_KEY environment variable.`,
-      );
-    }
-    return key;
+    return requireApiKey(platform().secrets, provider);
   }
 
   public static async anyApiKeyExists(): Promise<boolean> {
@@ -100,8 +92,7 @@ export class SecretManager {
   }
 
   public static async apiKeyExists(provider: ApiProvider): Promise<boolean> {
-    const key = await this.lookupApiKey(provider);
-    return key !== undefined;
+    return resolvedApiKeyExists(platform().secrets, provider);
   }
 
   /**
@@ -113,7 +104,7 @@ export class SecretManager {
    * helper rather than the looser `apiKeyExists`.
    */
   public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
-    const key = await this.lookupApiKey(provider);
+    const key = await lookupApiKey(platform().secrets, provider);
     return isNonEmptyString(key);
   }
 
