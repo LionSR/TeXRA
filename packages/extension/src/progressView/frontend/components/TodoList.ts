@@ -165,14 +165,16 @@ export class TodoList extends LitElement {
           'todo-item--completed': status === TODO_STATUS.COMPLETED,
         })}
       >
-        ${isInProgress
-          ? html`<wa-spinner class="todo-item__icon"></wa-spinner>`
-          : html`<wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name=${icon}
-              class="todo-item__icon"
-              aria-hidden="true"
-            ></wa-icon>`}
+        ${
+          isInProgress
+            ? html`<wa-spinner class="todo-item__icon"></wa-spinner>`
+            : html`<wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name=${icon}
+                class="todo-item__icon"
+                aria-hidden="true"
+              ></wa-icon>`
+        }
         <span class="todo-item__content">${content}</span>
       </div>
     `;

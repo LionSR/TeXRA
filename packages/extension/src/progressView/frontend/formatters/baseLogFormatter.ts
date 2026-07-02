@@ -10,8 +10,7 @@ export type FormatOptions = {
 
 /** Result of safeFormat - either success with value or failure with error. */
 export type SafeFormatResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string };
+  { ok: true; value: T } | { ok: false; error: string };
 
 /** Safely execute a formatting function with error handling. */
 export function safeFormat<T>(

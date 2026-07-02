@@ -30,8 +30,7 @@ import {
 } from '../desktopCommandSurface.js';
 
 export type DesktopShellIpcOptions =
-  | DesktopShellActionFactoryOptions
-  | DesktopShellActionInstanceOptions;
+  DesktopShellActionFactoryOptions | DesktopShellActionInstanceOptions;
 
 export interface DesktopShellActionFactoryOptions {
   actions?: never;

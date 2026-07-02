@@ -11,9 +11,11 @@ export function renderProgressBadgeContent(
 ): TemplateResult | typeof nothing {
   if (!progress?.conversationTurns) return nothing;
   return html`${progress.conversationTurns}
-  turns${progress.toolCallCount > 0
-    ? html`, ${progress.toolCallCount} tool calls`
-    : nothing}`;
+  turns${
+    progress.toolCallCount > 0
+      ? html`, ${progress.toolCallCount} tool calls`
+      : nothing
+  }`;
 }
 
 export function getProgressBadgeTitle(

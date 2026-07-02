@@ -282,14 +282,14 @@ export class ToolsTab extends LitElement {
               Enable native crash reporting
             </wa-switch>
             <wa-tag
-              variant=${this.desktopCrashReportingConfigured
-                ? 'success'
-                : 'warning'}
+              variant=${
+                this.desktopCrashReportingConfigured ? 'success' : 'warning'
+              }
               size="small"
             >
-              ${this.desktopCrashReportingConfigured
-                ? 'DSN set'
-                : 'DSN missing'}
+              ${
+                this.desktopCrashReportingConfigured ? 'DSN set' : 'DSN missing'
+              }
             </wa-tag>
             <wa-button
               appearance="outlined"
@@ -298,9 +298,9 @@ export class ToolsTab extends LitElement {
               @click=${this.handleSetDesktopCrashReportingDsn}
             >
               ${waIcon('key', { slot: 'start' })}
-              ${this.desktopCrashReportingConfigured
-                ? 'Replace DSN'
-                : 'Set DSN'}
+              ${
+                this.desktopCrashReportingConfigured ? 'Replace DSN' : 'Set DSN'
+              }
             </wa-button>
           </div>
         </div>
@@ -360,29 +360,33 @@ export class ToolsTab extends LitElement {
               stroke-dasharray="${circ}"
               stroke-dashoffset="${availOffset}"
             />
-            ${missing > 0
-              ? html`<circle
-                  class="tools-health-ring__missing"
-                  cx="18"
-                  cy="18"
-                  r="${r}"
-                  stroke-dasharray="${circ}"
-                  stroke-dashoffset="${missOffset}"
-                  style=${styleMap({ transform: `rotate(${missRotation}deg)` })}
-                />`
-              : nothing}
+            ${
+              missing > 0
+                ? html`<circle
+                    class="tools-health-ring__missing"
+                    cx="18"
+                    cy="18"
+                    r="${r}"
+                    stroke-dasharray="${circ}"
+                    stroke-dashoffset="${missOffset}"
+                    style=${styleMap({ transform: `rotate(${missRotation}deg)` })}
+                  />`
+                : nothing
+            }
           </svg>
           <div class="tools-health-labels">
             <span class="tools-summary-stat tools-stat-available">
               ${waIcon('check')} ${available} available
             </span>
-            ${missing > 0
-              ? html`
-                  <span class="tools-summary-stat tools-stat-missing">
-                    ${waIcon('warning')} ${missing} need setup
-                  </span>
-                `
-              : nothing}
+            ${
+              missing > 0
+                ? html`
+                    <span class="tools-summary-stat tools-stat-missing">
+                      ${waIcon('warning')} ${missing} need setup
+                    </span>
+                  `
+                : nothing
+            }
           </div>
         </div>
       </div>

@@ -121,10 +121,7 @@ export function chatTuiCanSelectModel(input: {
 }
 
 export type ChatTuiSigintAction =
-  | 'clean-exit'
-  | 'force-exit'
-  | 'preserve-exit'
-  | 'interrupt-and-arm-exit';
+  'clean-exit' | 'force-exit' | 'preserve-exit' | 'interrupt-and-arm-exit';
 
 export function chatTuiSigintAction(input: {
   readonly exitArmed: boolean;

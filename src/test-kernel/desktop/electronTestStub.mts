@@ -7,10 +7,7 @@ import { join } from 'node:path';
 import { repoPath } from './desktopTestPaths.mjs';
 
 type SafeStorageBackend =
-  | 'basic_text'
-  | 'gnome_libsecret'
-  | 'kwallet'
-  | 'os_crypt';
+  'basic_text' | 'gnome_libsecret' | 'kwallet' | 'os_crypt';
 
 type MessageBoxOptions = { message: string; type?: string };
 

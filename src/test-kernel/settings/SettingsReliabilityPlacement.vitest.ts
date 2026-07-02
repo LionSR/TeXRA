@@ -85,8 +85,7 @@ describe('settings reliability placement', () => {
     const section = await getReliabilitySection(tab);
 
     const input = section?.shadowRoot?.querySelector('wa-input') as
-      | (HTMLElement & { value: string })
-      | null;
+      (HTMLElement & { value: string }) | null;
     expect(input).not.toBeNull();
     input!.value = '101';
     input!.dispatchEvent(

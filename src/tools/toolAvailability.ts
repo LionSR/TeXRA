@@ -148,8 +148,7 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
 
 async function resolveOptionalStatus(
   getStatus:
-    | ((probeResult?: unknown) => Promise<string | undefined>)
-    | undefined,
+    ((probeResult?: unknown) => Promise<string | undefined>) | undefined,
   probeResult: unknown,
 ): Promise<string | undefined> {
   if (!getStatus) return undefined;

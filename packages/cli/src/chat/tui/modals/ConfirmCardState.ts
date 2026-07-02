@@ -2,11 +2,7 @@ import { KEY_HINT_SEPARATOR } from '../ui/KeyHints';
 import { isEscapeInput } from '../input/inputKeys';
 
 export type ConfirmCardKeyAction =
-  | 'approve'
-  | 'reject'
-  | 'approveAlways'
-  | 'feedback'
-  | 'ignore';
+  'approve' | 'reject' | 'approveAlways' | 'feedback' | 'ignore';
 
 export interface ConfirmCardKey {
   readonly escape?: boolean;

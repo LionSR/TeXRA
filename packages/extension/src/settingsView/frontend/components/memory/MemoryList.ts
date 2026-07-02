@@ -63,8 +63,7 @@ export class MemoryList extends LitElement {
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (changedProperties.has('items')) {
       const previous = changedProperties.get('items') as
-        | MemoryViewItem[]
-        | undefined;
+        MemoryViewItem[] | undefined;
       if (!hasSameMemoryOrder(previous, this.items)) {
         this.page = 0;
       }

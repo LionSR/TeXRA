@@ -104,8 +104,7 @@ describe('desktop main-view IPC', () => {
 
   it('pushes theme and debug state over the fixed host bridge channel', async () => {
     let rendererListener:
-      | ((event: { sender: unknown }, message: unknown) => void)
-      | undefined;
+      ((event: { sender: unknown }, message: unknown) => void) | undefined;
     let themeListener: (() => void) | undefined;
     const ipcMain = {
       on: vi.fn((channel, listener) => {
@@ -399,8 +398,7 @@ describe('desktop main-view IPC', () => {
 
   it('uses desktop auth status when posting main-view startup login state', async () => {
     let rendererListener:
-      | ((event: { sender: unknown }, message: unknown) => void)
-      | undefined;
+      ((event: { sender: unknown }, message: unknown) => void) | undefined;
     const ipcMain = {
       on: vi.fn((channel, listener) => {
         rendererListener = listener;
@@ -471,8 +469,7 @@ describe('desktop main-view IPC', () => {
 
   it('waits for desktop model-list refresh before posting main-view model options', async () => {
     let rendererListener:
-      | ((event: { sender: unknown }, message: unknown) => void)
-      | undefined;
+      ((event: { sender: unknown }, message: unknown) => void) | undefined;
     const ipcMain = {
       on: vi.fn((channel, listener) => {
         rendererListener = listener;

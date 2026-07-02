@@ -212,8 +212,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       for (const block of extractDocumentBlocks(contentBlocks)) {
         const source = block.source as
-          | { type: string; file_id?: string }
-          | undefined;
+          { type: string; file_id?: string } | undefined;
         if (source?.type === 'file' && source.file_id) {
           liveFileIds.add(source.file_id);
         }
@@ -1253,8 +1252,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       );
       content.push(
         ...(thinkingBlocks as (
-          | ThinkingBlockParam
-          | RedactedThinkingBlockParam
+          ThinkingBlockParam | RedactedThinkingBlockParam
         )[]),
       );
       workspaceState.resetReasoning();
@@ -1453,8 +1451,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ) {
         content.push(
           ...(workspaceState.reasoning.thinkingBlocks as (
-            | ThinkingBlockParam
-            | RedactedThinkingBlockParam
+            ThinkingBlockParam | RedactedThinkingBlockParam
           )[]),
         );
         workspaceState.resetReasoning();

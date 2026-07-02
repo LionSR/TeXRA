@@ -144,21 +144,23 @@ export class ContextManagement extends LitElement {
               </span>
             `,
           )}
-          ${this.summary
-            ? html`
-                <div class="summary-block">
-                  <div class="summary-title">
-                    <wa-icon
-                      library=${TEXRA_ICON_LIBRARY}
-                      name="note"
-                      aria-hidden="true"
-                    ></wa-icon>
-                    Compaction summary
+          ${
+            this.summary
+              ? html`
+                  <div class="summary-block">
+                    <div class="summary-title">
+                      <wa-icon
+                        library=${TEXRA_ICON_LIBRARY}
+                        name="note"
+                        aria-hidden="true"
+                      ></wa-icon>
+                      Compaction summary
+                    </div>
+                    <pre class="summary-text">${this.summary}</pre>
                   </div>
-                  <pre class="summary-text">${this.summary}</pre>
-                </div>
-              `
-            : nothing}
+                `
+              : nothing
+          }
         </div>
       </wa-details>
     `;

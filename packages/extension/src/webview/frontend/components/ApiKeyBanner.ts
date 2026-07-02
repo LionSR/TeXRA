@@ -32,9 +32,11 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
       id: 'apiKeyBanner',
       body: html`
         <span>
-          ${provider
-            ? html`<strong>${providerLabel}</strong> API key missing.`
-            : 'TeXRA requires an API key to run.'}
+          ${
+            provider
+              ? html`<strong>${providerLabel}</strong> API key missing.`
+              : 'TeXRA requires an API key to run.'
+          }
         </span>
         <div class="actions">
           <wa-button

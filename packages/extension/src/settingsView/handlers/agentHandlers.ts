@@ -21,7 +21,11 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  buildAgentSelectionMessage,
+  buildCustomAgentDirMessage,
+  buildAgentModePresetsMessage,
+} from '@shared/settingsView/handlers/agentSelectionHandlers';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -68,13 +72,12 @@ export class AgentHandlers {
   // ── Agent selection data ──
 
   async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
-    await loadAgents();
-    const { workflow, toolUse } = this.catalogController.buildSelectionItems();
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      workflow,
-      toolUse,
-    });
+    await webview.postMessage(
+      await buildAgentSelectionMessage({
+        loadAgents,
+        buildSelectionItems: () => this.catalogController.buildSelectionItems(),
+      }),
+    );
   }
 
   // ── Agent selection handlers ──
@@ -353,11 +356,11 @@ export class AgentHandlers {
   // ── Custom agent directory handlers ──
 
   async sendCustomAgentDir(webview: vscode.Webview): Promise<void> {
-    const status = await this.directoryController.getCustomDirStatus();
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-      ...status,
-    });
+    await webview.postMessage(
+      await buildCustomAgentDirMessage({
+        getCustomDirStatus: () => this.directoryController.getCustomDirStatus(),
+      }),
+    );
   }
 
   async handleSetCustomAgentDir(): Promise<void> {
@@ -390,11 +393,13 @@ export class AgentHandlers {
   // ── Agent team handlers ──
 
   async sendAgentModePresets(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      customPresets: this.catalogController.getCustomPresets(),
-      orchestratorAgents: this.catalogController.getOrchestratorAgentNames(),
-    });
+    await webview.postMessage(
+      buildAgentModePresetsMessage({
+        getCustomPresets: () => this.catalogController.getCustomPresets(),
+        getOrchestratorAgentNames: () =>
+          this.catalogController.getOrchestratorAgentNames(),
+      }),
+    );
   }
 
   async handleApplyAgentModePreset(

@@ -170,8 +170,7 @@ export class MemoryItem extends LitElement {
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('item')) return;
     const previous = changedProperties.get('item') as
-      | MemoryViewItem
-      | undefined;
+      MemoryViewItem | undefined;
     if (previous?.storagePath === this.item?.storagePath) {
       if (previous !== this.item && this.item?.preview === undefined) {
         this.requestedPreviewFor = null;
@@ -293,11 +292,13 @@ export class MemoryItem extends LitElement {
           @wa-show=${this.handleContentsShow}
           @wa-hide=${this.handleContentsHide}
         >
-          ${this.contentsOpened
-            ? html`<div class="memory-preview">
-                ${this.renderPreviewBody(this.item)}
-              </div>`
-            : nothing}
+          ${
+            this.contentsOpened
+              ? html`<div class="memory-preview">
+                  ${this.renderPreviewBody(this.item)}
+                </div>`
+              : nothing
+          }
         </wa-details>
       </div>
     `;

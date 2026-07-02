@@ -27,9 +27,7 @@ import type { DiffProgressReporter, DiffRunOutcome } from './types';
 
 /** How the round outputs fed to the diff engine were resolved. */
 export type LatexdiffOutputsSource =
-  | 'metadata'
-  | 'run-dir-scan'
-  | 'workspace-scan';
+  'metadata' | 'run-dir-scan' | 'workspace-scan';
 
 export interface RunLatexdiffForExecutionParams {
   readonly agent: string;

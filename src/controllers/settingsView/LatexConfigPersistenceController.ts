@@ -8,9 +8,11 @@ import {
 } from '@shared/constants/latex';
 
 // Local imports - shared schemas
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import {
   LatexConfigValuesSchema,
   type LatexConfigValues,
+  type UpdateLatexConfigValuesMessage,
 } from '@shared/schemas/settingsViewMessages';
 
 export type LatexConfigPersistenceUpdatePlan =
@@ -45,6 +47,16 @@ export class LatexConfigPersistenceController {
     }
 
     return values as LatexConfigValues;
+  }
+
+  /** Wraps the current config values into the outbound settings-view message shape. */
+  buildConfigMessage(
+    readStoredValue: (key: WorkspaceStateKey) => unknown,
+  ): UpdateLatexConfigValuesMessage {
+    return {
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+      values: this.buildConfigValues(readStoredValue),
+    };
   }
 
   planUpdate(input: {

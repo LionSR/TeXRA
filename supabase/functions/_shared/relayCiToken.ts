@@ -37,8 +37,7 @@ export async function sha256Hex(value: string): Promise<string> {
 }
 
 export type CiTokenAuthResult =
-  | { ok: true; userId: string }
-  | { ok: false; status: number; message: string };
+  { ok: true; userId: string } | { ok: false; status: number; message: string };
 
 /**
  * Validate a CI relay token: hash lookup, revocation, expiry, and scope.

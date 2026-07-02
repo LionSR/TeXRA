@@ -20,7 +20,7 @@ function stripAnsiSgrChunk(text: string, state: SgrStripState): string {
   state.pending = '';
 
   let output = '';
-  for (let index = 0; index < input.length; ) {
+  for (let index = 0; index < input.length;) {
     if (input[index] !== ANSI_ESCAPE_START) {
       output += input[index];
       index += 1;

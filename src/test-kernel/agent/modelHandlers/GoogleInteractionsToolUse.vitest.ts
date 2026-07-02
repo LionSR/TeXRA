@@ -555,8 +555,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
 
     // --- Turn 2: capture exactly what the handler sends. ---
     let captured:
-      | Interactions.CreateModelInteractionParamsStreaming
-      | undefined;
+      Interactions.CreateModelInteractionParamsStreaming | undefined;
     const capturingClient = {
       interactions: {
         create: async (

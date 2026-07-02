@@ -371,8 +371,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   private pendingBackgroundResponseId: string | null = null;
   private pendingBackgroundRetrieveParams:
-    | ResponseRetrieveParamsNonStreaming
-    | undefined;
+    ResponseRetrieveParamsNonStreaming | undefined;
 
   /**
    * Guards against concurrent createResponse() calls on the same handler.

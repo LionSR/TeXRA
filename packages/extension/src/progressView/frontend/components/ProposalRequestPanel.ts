@@ -86,9 +86,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
     super.willUpdate(changed);
     if (!changed.has('permission')) return;
     const previous = changed.get('permission') as
-      | PermissionState
-      | null
-      | undefined;
+      PermissionState | null | undefined;
     if (proposalIdOf(previous) !== proposalIdOf(this.permission)) {
       this.selectedModel = null;
       this.selectedAgent = null;
@@ -153,42 +151,50 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           >
             ${categoryLabel}
           </wa-badge>
-          ${hasAgentOptions
-            ? html`
-                <div class="workflow-proposal__agent-select">
-                  <wa-icon
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="sparkle"
-                    aria-hidden="true"
-                  ></wa-icon>
-                  <wa-select
-                    class="proposal-agent-dropdown"
-                    .value=${currentAgent}
-                    @change=${this.handleAgentSelectChange}
-                  >
-                    ${renderAgentOptions(agentOptions)}
-                  </wa-select>
-                </div>
-              `
-            : html`<span class="workflow-proposal__agent">${data.agent}</span>`}
-          ${hasModelOptions
-            ? html`
-                <div class="workflow-proposal__model-select">
-                  <wa-icon
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="robot"
-                    aria-hidden="true"
-                  ></wa-icon>
-                  <wa-select
-                    class="proposal-model-dropdown"
-                    .value=${currentModel}
-                    @change=${this.handleSelectChange}
-                  >
-                    ${renderModelOptions(modelOptions)}
-                  </wa-select>
-                </div>
-              `
-            : html`<span class="workflow-proposal__model">${data.model}</span>`}
+          ${
+            hasAgentOptions
+              ? html`
+                  <div class="workflow-proposal__agent-select">
+                    <wa-icon
+                      library=${TEXRA_ICON_LIBRARY}
+                      name="sparkle"
+                      aria-hidden="true"
+                    ></wa-icon>
+                    <wa-select
+                      class="proposal-agent-dropdown"
+                      .value=${currentAgent}
+                      @change=${this.handleAgentSelectChange}
+                    >
+                      ${renderAgentOptions(agentOptions)}
+                    </wa-select>
+                  </div>
+                `
+              : html`<span class="workflow-proposal__agent"
+                  >${data.agent}</span
+                >`
+          }
+          ${
+            hasModelOptions
+              ? html`
+                  <div class="workflow-proposal__model-select">
+                    <wa-icon
+                      library=${TEXRA_ICON_LIBRARY}
+                      name="robot"
+                      aria-hidden="true"
+                    ></wa-icon>
+                    <wa-select
+                      class="proposal-model-dropdown"
+                      .value=${currentModel}
+                      @change=${this.handleSelectChange}
+                    >
+                      ${renderModelOptions(modelOptions)}
+                    </wa-select>
+                  </div>
+                `
+              : html`<span class="workflow-proposal__model"
+                  >${data.model}</span
+                >`
+          }
         </div>
         ${this.renderInstruction(data.instruction)}
         ${isWorkflow ? this.renderExtractFlags(data) : nothing}
@@ -277,9 +283,9 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           (file) => file,
           (file, i) =>
             html`${i > 0 ? ', ' : ''}<span
-                class="workflow-proposal__file-name${clickable
-                  ? ''
-                  : ' workflow-proposal__file-name--readonly'}"
+                class="workflow-proposal__file-name${
+                  clickable ? '' : ' workflow-proposal__file-name--readonly'
+                }"
                 title=${file}
                 data-file=${ifDefined(clickable ? file : undefined)}
                 >${getBasename(file)}</span

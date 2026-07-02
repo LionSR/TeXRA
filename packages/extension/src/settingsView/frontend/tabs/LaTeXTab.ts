@@ -304,60 +304,66 @@ export class LaTeXTab extends LitElement {
               (p) => html`<div class="dependency-path">${p}</div>`,
             )}
           </div>
-          ${installed
-            ? nothing
-            : dep.actionEvent
-              ? html`
+          ${
+            installed
+              ? nothing
+              : dep.actionEvent
+                ? html`
+                    <wa-button
+                      appearance="outlined"
+                      variant="neutral"
+                      size="small"
+                      title="${dep.actionLabel ?? 'Install'}"
+                      @click=${() =>
+                        this.dispatchEvent(
+                          new CustomEvent(dep.actionEvent!, {
+                            bubbles: true,
+                            composed: true,
+                          }),
+                        )}
+                    >
+                      ${waIcon('cloud-download', { slot: 'start' })}
+                      ${dep.actionLabel ?? 'Install'}
+                    </wa-button>
+                  `
+                : html`<wa-tag
+                    class="setting-badge"
+                    variant="neutral"
+                    size="small"
+                    >Not found</wa-tag
+                  >`
+          }
+        </div>
+        ${
+          !installed && installCmd
+            ? html`
+                <div class="dependency-install-actions">
+                  <wa-copy-button value=${installCmd.command}></wa-copy-button>
                   <wa-button
                     appearance="outlined"
                     variant="neutral"
                     size="small"
-                    title="${dep.actionLabel ?? 'Install'}"
-                    @click=${() =>
-                      this.dispatchEvent(
-                        new CustomEvent(dep.actionEvent!, {
-                          bubbles: true,
-                          composed: true,
-                        }),
-                      )}
+                    title="Run: ${installCmd.command}"
+                    @click=${() => this.handleRunInTerminal(installCmd.command)}
                   >
-                    ${waIcon('cloud-download', { slot: 'start' })}
-                    ${dep.actionLabel ?? 'Install'}
+                    ${waIcon('terminal', { slot: 'start' })} Run in Terminal
                   </wa-button>
-                `
-              : html`<wa-tag
-                  class="setting-badge"
-                  variant="neutral"
-                  size="small"
-                  >Not found</wa-tag
-                >`}
-        </div>
-        ${!installed && installCmd
-          ? html`
-              <div class="dependency-install-actions">
-                <wa-copy-button value=${installCmd.command}></wa-copy-button>
-                <wa-button
-                  appearance="outlined"
-                  variant="neutral"
-                  size="small"
-                  title="Run: ${installCmd.command}"
-                  @click=${() => this.handleRunInTerminal(installCmd.command)}
+                </div>
+              `
+            : nothing
+        }
+        ${
+          !installed && guideText
+            ? html`
+                <wa-details
+                  class="collapsible-quiet dependency-guide-details"
+                  summary="Installation Guide"
                 >
-                  ${waIcon('terminal', { slot: 'start' })} Run in Terminal
-                </wa-button>
-              </div>
-            `
-          : nothing}
-        ${!installed && guideText
-          ? html`
-              <wa-details
-                class="collapsible-quiet dependency-guide-details"
-                summary="Installation Guide"
-              >
-                <div class="dependency-guide">${guideText}</div>
-              </wa-details>
-            `
-          : nothing}
+                  <div class="dependency-guide">${guideText}</div>
+                </wa-details>
+              `
+            : nothing
+        }
       </div>
     `;
   }
@@ -412,9 +418,11 @@ export class LaTeXTab extends LitElement {
             appearance="outlined"
             variant="neutral"
             size="small"
-            title=${this.desktopHost
-              ? `Run ${pmName} installer`
-              : `Run ${pmName} installer in VS Code terminal`}
+            title=${
+              this.desktopHost
+                ? `Run ${pmName} installer`
+                : `Run ${pmName} installer in VS Code terminal`
+            }
             @click=${() => this.handleRunInTerminal(installCommand)}
           >
             ${waIcon('terminal', { slot: 'start' })} Run in Terminal
@@ -449,29 +457,31 @@ export class LaTeXTab extends LitElement {
           <div class="setting-value">${info.value}</div>
           <div class="setting-description">${info.description}</div>
         </div>
-        ${isSet
-          ? html`
-              <wa-button
-                appearance="outlined"
-                variant="neutral"
-                size="small"
-                title="Reset this setting to default"
-                @click=${() => this.handleApply(info.key, true)}
-              >
-                ${waIcon('discard', { slot: 'start' })} Reset
-              </wa-button>
-            `
-          : html`
-              <wa-button
-                appearance="outlined"
-                variant="neutral"
-                size="small"
-                title="Apply this setting"
-                @click=${() => this.handleApply(info.key)}
-              >
-                ${waIcon('check', { slot: 'start' })} Apply
-              </wa-button>
-            `}
+        ${
+          isSet
+            ? html`
+                <wa-button
+                  appearance="outlined"
+                  variant="neutral"
+                  size="small"
+                  title="Reset this setting to default"
+                  @click=${() => this.handleApply(info.key, true)}
+                >
+                  ${waIcon('discard', { slot: 'start' })} Reset
+                </wa-button>
+              `
+            : html`
+                <wa-button
+                  appearance="outlined"
+                  variant="neutral"
+                  size="small"
+                  title="Apply this setting"
+                  @click=${() => this.handleApply(info.key)}
+                >
+                  ${waIcon('check', { slot: 'start' })} Apply
+                </wa-button>
+              `
+        }
       </div>
     `;
   }
@@ -487,39 +497,43 @@ export class LaTeXTab extends LitElement {
 
     return html`
       <div class="tab-content-container">
-        ${!this.desktopHost && !this.allSettingsSet()
-          ? html`
-              <div class="latex-header">
-                <wa-button
-                  appearance="outlined"
-                  variant="neutral"
-                  size="small"
-                  title="Apply all recommended settings"
-                  @click=${() => this.handleApply()}
-                >
-                  ${waIcon('check-all', { slot: 'start' })} Apply All
-                </wa-button>
-              </div>
-            `
-          : nothing}
+        ${
+          !this.desktopHost && !this.allSettingsSet()
+            ? html`
+                <div class="latex-header">
+                  <wa-button
+                    appearance="outlined"
+                    variant="neutral"
+                    size="small"
+                    title="Apply all recommended settings"
+                    @click=${() => this.handleApply()}
+                  >
+                    ${waIcon('check-all', { slot: 'start' })} Apply All
+                  </wa-button>
+                </div>
+              `
+            : nothing
+        }
         ${this.renderDependencies()}
-        ${this.desktopHost
-          ? nothing
-          : html`
-              <div class="section-header spaced">
-                ${waIcon('settings-gear')} Recommended Settings
-              </div>
+        ${
+          this.desktopHost
+            ? nothing
+            : html`
+                <div class="section-header spaced">
+                  ${waIcon('settings-gear')} Recommended Settings
+                </div>
 
-              <div class="latex-description">
-                Agents create temporary files during compilation. The following
-                VS Code settings are recommended to keep your workspace tidy and
-                avoid distracting sidebar activity.
-              </div>
+                <div class="latex-description">
+                  Agents create temporary files during compilation. The
+                  following VS Code settings are recommended to keep your
+                  workspace tidy and avoid distracting sidebar activity.
+                </div>
 
-              ${RECOMMENDED_SETTINGS.map((info) =>
-                this.renderSettingCard(info),
-              )}
-            `}
+                ${RECOMMENDED_SETTINGS.map((info) =>
+                  this.renderSettingCard(info),
+                )}
+              `
+        }
         ${this.renderInlineCriticismSetting()}
         ${this.renderCompileDiffSettings()}
       </div>
@@ -688,9 +702,14 @@ export class LaTeXTab extends LitElement {
           }}
           title="Toggle"
         ></wa-switch>
-        ${isCustom
-          ? this.renderResetButton(opts.field, opts.defaultValue ? 'On' : 'Off')
-          : nothing}
+        ${
+          isCustom
+            ? this.renderResetButton(
+                opts.field,
+                opts.defaultValue ? 'On' : 'Off',
+              )
+            : nothing
+        }
       </div>
     `;
   }
@@ -765,9 +784,11 @@ export class LaTeXTab extends LitElement {
             class="setting-number-input"
           ></wa-input>
         </div>
-        ${isCustom
-          ? this.renderResetButton(opts.field, String(opts.defaultValue))
-          : nothing}
+        ${
+          isCustom
+            ? this.renderResetButton(opts.field, String(opts.defaultValue))
+            : nothing
+        }
       </div>
     `;
   }
@@ -805,9 +826,11 @@ export class LaTeXTab extends LitElement {
             )}
           </wa-select>
         </div>
-        ${isCustom
-          ? this.renderResetButton(opts.field, String(opts.defaultValue))
-          : nothing}
+        ${
+          isCustom
+            ? this.renderResetButton(opts.field, String(opts.defaultValue))
+            : nothing
+        }
       </div>
     `;
   }

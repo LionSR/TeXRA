@@ -5,10 +5,7 @@ import { isDiskFullError } from './errorPredicates';
 import { isUserAbort } from './sdkErrorUtils';
 
 export type AgentErrorKind =
-  | 'abort'
-  | 'disk-full'
-  | 'missing-api-key'
-  | 'unexpected';
+  'abort' | 'disk-full' | 'missing-api-key' | 'unexpected';
 
 /**
  * Canonical outcome of a run terminated by a thrown error, per error kind.

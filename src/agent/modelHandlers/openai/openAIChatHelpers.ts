@@ -14,8 +14,7 @@ function extractReasoningText(content: ReasoningContent | undefined): string {
 /** Extracts `reasoning_content` from a streaming chunk delta. */
 export function extractReasoningDelta(chunk: ChatCompletionChunk): string {
   const delta = chunk.choices[0]?.delta as
-    | { reasoning_content?: ReasoningContent }
-    | undefined;
+    { reasoning_content?: ReasoningContent } | undefined;
   if (!delta || !('reasoning_content' in delta)) return '';
   return extractReasoningText(delta.reasoning_content);
 }
