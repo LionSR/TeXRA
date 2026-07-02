@@ -35,6 +35,7 @@ import { postMessage } from '@shared/hostBridge';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { webviewStorage } from '../webviewStorage';
+import { getComposedPathElement } from '../utils';
 
 // Local imports - progress view contexts
 import {
@@ -255,7 +256,7 @@ export class LogList extends LitElement {
     if (this.activateLinkFromEvent(event)) return;
 
     // Handle copy buttons - content is stored in the copy registry
-    const copyButton = this.findTargetInPath<HTMLElement>(
+    const copyButton = getComposedPathElement<HTMLElement>(
       event,
       '[data-copy-id]',
     );
@@ -288,7 +289,7 @@ export class LogList extends LitElement {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     if (event.defaultPrevented) return;
     if (
-      !this.findTargetInPath<Element>(
+      !getComposedPathElement<Element>(
         event,
         '.file-link, .latex-ref, .proposal-restore-link',
       )
@@ -304,7 +305,7 @@ export class LogList extends LitElement {
    * click or keydown event. Returns true when one was handled.
    */
   private activateLinkFromEvent(event: Event): boolean {
-    const fileLink = this.findTargetInPath<HTMLElement>(event, '.file-link');
+    const fileLink = getComposedPathElement<HTMLElement>(event, '.file-link');
     if (fileLink?.dataset.file) {
       postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, {
         file: fileLink.dataset.file,
@@ -315,7 +316,7 @@ export class LogList extends LitElement {
       return true;
     }
 
-    const latexRef = this.findTargetInPath<HTMLElement>(event, '.latex-ref');
+    const latexRef = getComposedPathElement<HTMLElement>(event, '.latex-ref');
     if (latexRef?.dataset.label) {
       postMessage(PROGRESS_VIEW_COMMANDS.OPEN_LABEL, {
         label: latexRef.dataset.label,
@@ -324,7 +325,7 @@ export class LogList extends LitElement {
     }
 
     // Handle proposal restore links (may be inside <summary>, so prevent toggle)
-    const proposalLink = this.findTargetInPath<HTMLElement>(
+    const proposalLink = getComposedPathElement<HTMLElement>(
       event,
       '.proposal-restore-link',
     );
@@ -339,18 +340,6 @@ export class LogList extends LitElement {
       return true;
     }
     return false;
-  }
-
-  private findTargetInPath<T extends Element>(
-    event: Event,
-    selector: string,
-  ): T | null {
-    for (const node of event.composedPath()) {
-      if (node instanceof Element && node.matches(selector)) {
-        return node as T;
-      }
-    }
-    return null;
   }
 
   /** Handle file-click events from Shadow DOM components. */
