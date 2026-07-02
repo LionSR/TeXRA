@@ -236,6 +236,5 @@ export class SettingsAgentCatalogController {
 }
 
 function isOrchestratorLikeName(name: string): boolean {
-  const lowerName = name.toLowerCase();
-  return lowerName === 'orchestrator' || lowerName.endsWith('orchestrator');
+  return name.toLowerCase().endsWith('orchestrator');
 }

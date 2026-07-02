@@ -189,6 +189,50 @@ describe('agent registry legacy aliases', () => {
     }
   });
 
+  it('includes remote agents in launcher options after pending local-only startup load', async () => {
+    const originalEnabledToolUseAgents = platform().workspaceState.get<
+      string[]
+    >(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS);
+
+    let releaseBuiltInToolUseDir: (() => void) | undefined;
+    const waitForBuiltInToolUseDir = new Promise<void>((resolveWait) => {
+      releaseBuiltInToolUseDir = resolveWait;
+    });
+
+    try {
+      await platform().workspaceState.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        ['orchestrator', 'research', 'review'],
+      );
+      useAgentDirectories({
+        builtInToolUse: async () => {
+          await waitForBuiltInToolUseDir;
+          return BUILTIN_TOOL_USE_AGENTS_DIR;
+        },
+      });
+
+      const pendingRefresh = refresh({ includeRemote: false });
+      await new Promise((resolveNextTick) => setTimeout(resolveNextTick, 0));
+      const optionsPromise = computeAgentOptionsData();
+
+      releaseBuiltInToolUseDir?.();
+      await pendingRefresh;
+      const options = await optionsPromise;
+
+      expect(options.toolUse.map((option) => option.label)).toContain(
+        'orchestrator',
+      );
+    } finally {
+      releaseBuiltInToolUseDir?.();
+      await platform().workspaceState.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        originalEnabledToolUseAgents,
+      );
+      useAgentDirectories();
+      await refresh({ includeRemote: false });
+    }
+  });
+
   it('migrates persisted legacy keys at load time', () => {
     // Stale chat keys would desync the Agents settings UI (which matches
     // keys literally) from picker visibility — loadAgents rewrites them.
