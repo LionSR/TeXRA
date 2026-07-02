@@ -147,14 +147,14 @@ export function ConversationPane(
   // stealing rows reserved for the footer chrome.
   return (
     <Box flexDirection="column" height={visibleRows} overflowY="hidden">
-      {visibleEntries.entries.map((entry) => {
-        return renderConversationPaneEntry({
+      {visibleEntries.entries.map((entry) =>
+        renderConversationPaneEntry({
           colorEnabled: props.colorEnabled,
           entry,
           rowLimit: visibleEntries.rowLimits.get(entry.id),
           width: props.width,
-        });
-      })}
+        }),
+      )}
       {showThinking ? <ThinkingRow /> : null}
     </Box>
   );

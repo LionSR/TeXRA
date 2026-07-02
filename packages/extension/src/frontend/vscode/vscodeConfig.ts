@@ -26,10 +26,6 @@ function workspaceConfiguration(
   return vscode.workspace.getConfiguration(section, null);
 }
 
-function inspectKey<T>(key: string): VscodeConfigInspection<T> | undefined {
-  return workspaceConfiguration().inspect<T>(key);
-}
-
 function toConfigurationTarget(
   target: ConfigTarget,
 ): vscode.ConfigurationTarget {
@@ -91,7 +87,7 @@ export class VscodeConfigProvider implements ConfigProvider {
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
     const inspection = configKeys(key)
-      .map((item) => inspectKey<T>(item))
+      .map((item) => workspaceConfiguration().inspect<T>(item))
       .find((item) => item !== undefined);
     return normalizeInspection(inspection, this.get<T>(key));
   }

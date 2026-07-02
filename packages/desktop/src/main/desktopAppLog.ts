@@ -20,12 +20,11 @@ import { redactSecrets, type LogRedactionOptions } from '@logger/redaction';
 
 import type { DesktopLogSnapshot } from '../desktopLogMessages.js';
 
-type ConsoleLevel = 'debug' | 'error' | 'info' | 'log' | 'warn';
-
 const LOG_FILE_NAME = 'texra-desktop.log';
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 const MAX_VIEWER_LOG_BYTES = 160 * 1024;
 const CONSOLE_LEVELS = ['debug', 'error', 'info', 'log', 'warn'] as const;
+type ConsoleLevel = (typeof CONSOLE_LEVELS)[number];
 
 let logFilePath: string | undefined;
 let consoleInstalled = false;

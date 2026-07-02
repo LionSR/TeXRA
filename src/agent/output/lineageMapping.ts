@@ -76,7 +76,7 @@ function findMatchingBaseFile(
 ): FileLocation | undefined {
   const src = computePathKeys(source);
 
-  const matchers: Array<(entry: BaseEntry) => boolean> = [
+  const matchers: ((entry: BaseEntry) => boolean)[] = [
     (entry) => entry.relativePath === src.relativePath,
     (entry) => entry.relativePathNoExt === src.relativePathNoExt,
     (entry) => entry.baseName === src.relativePath,

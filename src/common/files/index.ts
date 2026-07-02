@@ -1,6 +1,6 @@
 // Barrel export for common file utilities
 export {
-  ExtensionCategory,
+  type ExtensionCategory,
   EXTENSION_CATEGORIES,
   getFilterExtensions,
   getIncludedExtensions,

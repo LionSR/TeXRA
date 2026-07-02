@@ -39,16 +39,12 @@ export interface LoadedCliConfig {
 }
 
 export function isKnownCliModel(model: string): boolean {
-  return isCliSupportedModelId(model);
+  const config = MODEL_CONFIGS[model];
+  return config != null && config.provider !== ModelProvider.COPILOT;
 }
 
 export function knownCliModelIds(): string[] {
-  return Object.keys(MODEL_CONFIGS).filter(isCliSupportedModelId);
-}
-
-function isCliSupportedModelId(model: string): boolean {
-  const config = MODEL_CONFIGS[model];
-  return config != null && config.provider !== ModelProvider.COPILOT;
+  return Object.keys(MODEL_CONFIGS).filter(isKnownCliModel);
 }
 
 function normalizeCliModelLookupKey(value: string): string {
@@ -68,7 +64,7 @@ function modelLookupKeys(id: string): string[] {
 export function resolveKnownCliModelId(model: string): string | undefined {
   const trimmed = model.trim();
   if (!trimmed) return undefined;
-  if (isCliSupportedModelId(trimmed)) return trimmed;
+  if (isKnownCliModel(trimmed)) return trimmed;
 
   const lower = trimmed.toLowerCase();
   const ids = knownCliModelIds();

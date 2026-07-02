@@ -284,7 +284,7 @@ export class MessageIndex {
       if (!('msg' in item)) continue;
       const fresh = this.ungroupedById.get(item.key);
       if (fresh && fresh !== item.msg) {
-        (item as { msg: LogMessageData }).msg = fresh;
+        item.msg = fresh;
       }
     }
   }

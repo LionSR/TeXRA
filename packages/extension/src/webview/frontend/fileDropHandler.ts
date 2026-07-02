@@ -70,12 +70,13 @@ export function hasDroppedFilePayload(
   dataTransfer: DataTransfer | null,
 ): boolean {
   if (!dataTransfer) return false;
-  const types = [...(dataTransfer.types ?? [])];
-  if (types.includes('Files')) return true;
-  if (types.includes('application/vnd.code.tree.resource')) return true;
-  return types.includes('text/uri-list')
-    ? hasFileUri(dataTransfer, 'text/uri-list')
-    : false;
+  const types = dataTransfer.types ?? [];
+  return (
+    types.includes('Files') ||
+    types.includes('application/vnd.code.tree.resource') ||
+    (types.includes('text/uri-list') &&
+      hasFileUri(dataTransfer, 'text/uri-list'))
+  );
 }
 
 /** Extract absolute paths or file URIs from a drop payload. */

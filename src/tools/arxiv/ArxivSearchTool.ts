@@ -75,7 +75,7 @@ export class ArxivSearchTool extends defineTool({
       author: authorQuery,
       title: titleQuery,
       abstract: abstractQuery,
-      all: all,
+      all,
     } as const;
     const fieldQueryFn = fieldQueryFns[input.field];
 
@@ -107,7 +107,6 @@ export class ArxivSearchTool extends defineTool({
               `Ignoring invalid arxiv category filter "${trimmed}"`,
               { data: error },
             );
-            continue;
           }
         }
       }

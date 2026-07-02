@@ -3,7 +3,7 @@ import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 import type { ChatCompletionSnapshot } from 'openai/lib/ChatCompletionStream';
 
 // Reasoning content type for DeepSeek, o1 models (not in SDK)
-type ReasoningContent = string | Array<{ type: string; text?: string }>;
+type ReasoningContent = string | { type: string; text?: string }[];
 
 function extractReasoningText(content: ReasoningContent | undefined): string {
   if (!content) return '';

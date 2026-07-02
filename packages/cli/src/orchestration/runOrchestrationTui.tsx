@@ -71,13 +71,7 @@ export function orchestrationBlockRowCost(
   columns: number,
 ): number {
   if (lines.length === 0) return 0;
-  return (
-    1 +
-    lines.reduce(
-      (rows, line) => rows + orchestrationWrappedLineRows(line, columns),
-      0,
-    )
-  );
+  return 1 + orchestrationLinesRowCost(lines, columns);
 }
 
 export interface OrchestrationLauncherLayout {

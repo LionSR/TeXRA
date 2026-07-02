@@ -106,28 +106,27 @@ export function createDesktopAuthCallbackState(
     await store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state);
   };
 
+  // True only while a non-expired sign-in attempt is pending; clears and
+  // best-effort persists the reset once the stored attempt has expired.
+  const hasValidPendingState = (): boolean => {
+    if (!pendingState) return false;
+    if (isPendingOAuthStateExpired(pendingState)) {
+      pendingState = null;
+      void persistPendingState(null).catch(() => {});
+      return false;
+    }
+    return true;
+  };
+
   return {
-    hasPendingSignIn: () => {
-      if (!pendingState) return false;
-      if (isPendingOAuthStateExpired(pendingState)) {
-        pendingState = null;
-        void persistPendingState(null).catch(() => {});
-        return false;
-      }
-      return true;
-    },
+    hasPendingSignIn: hasValidPendingState,
     async beginAuthAttempt(nonce: string) {
       pendingState = { createdAt: Date.now(), nonce };
       await persistPendingState(pendingState);
     },
     matchesPendingNonce: (nonce: string | undefined) => {
-      if (!nonce || !pendingState) return false;
-      if (isPendingOAuthStateExpired(pendingState)) {
-        pendingState = null;
-        void persistPendingState(null).catch(() => {});
-        return false;
-      }
-      return pendingState.nonce === nonce;
+      if (!nonce) return false;
+      return hasValidPendingState() && pendingState?.nonce === nonce;
     },
     async clearAwaitingCallback() {
       pendingState = null;

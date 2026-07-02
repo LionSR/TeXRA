@@ -98,12 +98,6 @@ export function createWalkthroughDialog({
     dialog.open = false;
   };
 
-  const headerClass = classes?.header;
-  const iconClass = classes?.icon;
-  const stepsClass = classes?.steps;
-  const stepIndexClass = classes?.stepIndex;
-  const actionsClass = classes?.actions;
-
   const actionTemplate = (action: WalkthroughAction): TemplateResult => html`
     <wa-button
       class=${action.className ?? ''}
@@ -121,18 +115,18 @@ export function createWalkthroughDialog({
 
   render(
     html`
-      <header class=${headerClass ?? ''}>
-        ${waIcon(icon, { className: iconClass })}
+      <header class=${classes?.header ?? ''}>
+        ${waIcon(icon, { className: classes?.icon })}
         <div>
           <h1 id=${titleId}>${title}</h1>
           <p>${description}</p>
         </div>
       </header>
-      <ol class=${stepsClass ?? ''}>
+      <ol class=${classes?.steps ?? ''}>
         ${steps.map(
           (step) => html`
             <li>
-              <span class=${stepIndexClass ?? ''}>${step.index}</span>
+              <span class=${classes?.stepIndex ?? ''}>${step.index}</span>
               <div>
                 <strong>${step.title}</strong>
                 <span>${step.body}</span>
@@ -144,7 +138,7 @@ export function createWalkthroughDialog({
       ${
         actions.length > 0
           ? html`
-              <div slot="footer" class=${actionsClass ?? ''}>
+              <div slot="footer" class=${classes?.actions ?? ''}>
                 ${actions.map(actionTemplate)}
               </div>
             `

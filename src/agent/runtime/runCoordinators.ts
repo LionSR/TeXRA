@@ -211,7 +211,7 @@ interface CoordinatorRequest {
 function matchingRequests(
   requests: ReadonlyMap<string, CoordinatorRequest>,
   streamId: string,
-): Array<[string, CoordinatorRequest]> {
+): [string, CoordinatorRequest][] {
   return [...requests.entries()].filter(
     ([, entry]) => entry.streamId === streamId,
   );

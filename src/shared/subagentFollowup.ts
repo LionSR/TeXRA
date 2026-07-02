@@ -147,8 +147,9 @@ function resultResponsePreview(response: string): string {
 
   if (!lineLimited && !charLimited) return decoded;
 
+  const extraLines = lines.length - RESULT_RESPONSE_PREVIEW_LINES;
   const hidden = lineLimited
-    ? `${lines.length - RESULT_RESPONSE_PREVIEW_LINES} more line${lines.length - RESULT_RESPONSE_PREVIEW_LINES === 1 ? '' : 's'}`
+    ? `${extraLines} more line${extraLines === 1 ? '' : 's'}`
     : 'more text';
   return `${preview}\n… ${hidden}; open the subagent transcript for the full response`;
 }

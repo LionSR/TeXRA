@@ -432,7 +432,7 @@ export class AnthropicStreamHandler {
       this.state.pendingSearches,
       this.state.pendingFetches,
     ]) {
-      for (const [, data] of pendingMap) {
+      for (const data of pendingMap.values()) {
         if (data.index === blockIndex) {
           if (data.input.length < MAX_SERVER_TOOL_INPUT_SIZE) {
             const remaining = MAX_SERVER_TOOL_INPUT_SIZE - data.input.length;

@@ -21,9 +21,9 @@ import {
 import type { ProviderErrorPartial, RetryPermission } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
-import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - base class
+import { BaseRequestPanel } from './BaseRequestPanel';
 
 @customElement('retry-request-panel')
 export class RetryRequestPanel extends BaseRequestPanel {
@@ -163,7 +163,7 @@ export class RetryRequestPanel extends BaseRequestPanel {
       const maxTailChars = 1024;
       const isTruncated = partialText.length > maxTailChars;
       const tail = isTruncated
-        ? '…' + partialText.slice(partialText.length - maxTailChars)
+        ? '…' + partialText.slice(-maxTailChars)
         : partialText;
       const header = isTruncated
         ? `--- Partial Output (last ${maxTailChars} of ${partialText.length} chars) ---`

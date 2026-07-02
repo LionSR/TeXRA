@@ -179,17 +179,9 @@ export const logHandlers: HandlerRegistry = {
         const updatedMessageIndices = new Set<number>();
         const updatedMessageBaseGeneration = streamLogs.generation;
 
-        for (const entry of entries) {
-          const existingIndex = streamLogs.logIndex.get(entry.id);
-          const changed = applyEntry(entry, streamLogs, streamState);
-          logChanged ||= changed.logChanged;
-          stateChanged ||= changed.stateChanged;
-          if (changed.logChanged && existingIndex !== undefined) {
-            updatedMessageIndices.add(existingIndex);
-          }
-        }
-
-        for (const entry of updates) {
+        // `entries` (appends/upserts) and `updates` (in-place edits) get
+        // identical treatment; process them in order in a single pass.
+        for (const entry of [...entries, ...updates]) {
           const existingIndex = streamLogs.logIndex.get(entry.id);
           const changed = applyEntry(entry, streamLogs, streamState);
           logChanged ||= changed.logChanged;

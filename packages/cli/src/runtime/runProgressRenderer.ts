@@ -338,8 +338,8 @@ function formatActiveChildren(
   const first = namedChildren[0];
   if (!first) return undefined;
 
-  const label =
-    namedChildren.length === 1 ? kind : kind === 'tool' ? 'tools' : 'subagents';
+  const plural = kind === 'tool' ? 'tools' : 'subagents';
+  const label = namedChildren.length === 1 ? kind : plural;
   const suffix =
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
   return `${label}: ${first}${suffix}`;

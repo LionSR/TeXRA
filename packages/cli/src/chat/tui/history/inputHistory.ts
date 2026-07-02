@@ -77,10 +77,7 @@ export async function loadInputHistory(): Promise<InputHistory> {
     async push(line: string) {
       const trimmed = line.trim();
       if (!trimmed) return;
-      const stored =
-        trimmed.length > MAX_LINE_CHARS
-          ? trimmed.slice(0, MAX_LINE_CHARS)
-          : trimmed;
+      const stored = trimmed.slice(0, MAX_LINE_CHARS);
       if (entries.at(-1) === stored) return;
       const record: HistoryRecord = { t: Date.now(), v: stored };
       entries.push(stored);

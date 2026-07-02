@@ -115,16 +115,24 @@ function createRoundDataStore() {
   return { roundData, ensureRoundData, setRoundOutputs };
 }
 
+function createOutputNode(
+  streamId: string,
+  host: ReturnType<typeof createRecordingHost>['host'],
+  workflowOutputPolicy: typeof defaultWorkflowOutputPolicy = defaultWorkflowOutputPolicy,
+): OutputNode {
+  return new OutputNode().setServices({
+    streamId,
+    logger: { warn: () => {} },
+    outputState: createOutputState(),
+    runtimeHost: host,
+    workflowOutputPolicy,
+  } as unknown as ReflectionServices);
+}
+
 describe('output progress events', () => {
   it('publishes reflection output-node events through the runtime host', async () => {
     const { events, host } = createRecordingHost();
-    const outputNode = new OutputNode().setServices({
-      streamId: 'stream:output-node',
-      logger: { warn: () => {} },
-      outputState: createOutputState(),
-      runtimeHost: host,
-      workflowOutputPolicy: defaultWorkflowOutputPolicy,
-    } as unknown as ReflectionServices);
+    const outputNode = createOutputNode('stream:output-node', host);
     const outputLocation = createAgentLocation('/tmp/output.xml');
     const openedLocation = createLocation('/tmp/rendered.tex');
     const fileInfo: OutputFileInfo = {
@@ -188,13 +196,7 @@ describe('output progress events', () => {
 
   it('stores compile failure context for the next reflection round', async () => {
     const { host } = createRecordingHost();
-    const outputNode = new OutputNode().setServices({
-      streamId: 'stream:compile-context',
-      logger: { warn: () => {} },
-      outputState: createOutputState(),
-      runtimeHost: host,
-      workflowOutputPolicy: defaultWorkflowOutputPolicy,
-    } as unknown as ReflectionServices);
+    const outputNode = createOutputNode('stream:compile-context', host);
     const {
       outputLocation,
       compileFailure,
@@ -232,16 +234,10 @@ describe('output progress events', () => {
 
   it('honors disabled compile-failure repair context setting', async () => {
     const { host } = createRecordingHost();
-    const outputNode = new OutputNode().setServices({
-      streamId: 'stream:compile-context-disabled',
-      logger: { warn: () => {} },
-      outputState: createOutputState(),
-      runtimeHost: host,
-      workflowOutputPolicy: {
-        ...defaultWorkflowOutputPolicy,
-        shouldRejectOnCompileFailure: () => false,
-      },
-    } as unknown as ReflectionServices);
+    const outputNode = createOutputNode('stream:compile-context-disabled', host, {
+      ...defaultWorkflowOutputPolicy,
+      shouldRejectOnCompileFailure: () => false,
+    });
     const {
       outputLocation,
       compileFailure,
@@ -276,13 +272,7 @@ describe('output progress events', () => {
 
   it('clears stale compile failure context after a successful compile result', async () => {
     const { host } = createRecordingHost();
-    const outputNode = new OutputNode().setServices({
-      streamId: 'stream:compile-context-ok',
-      logger: { warn: () => {} },
-      outputState: createOutputState(),
-      runtimeHost: host,
-      workflowOutputPolicy: defaultWorkflowOutputPolicy,
-    } as unknown as ReflectionServices);
+    const outputNode = createOutputNode('stream:compile-context-ok', host);
     const { outputLocation, roundOutput, summary } =
       createCompileFailureFixture();
     const compileResult: CompileResult = { status: 'ok', round: 1 };

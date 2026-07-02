@@ -99,7 +99,7 @@ export async function ghGet<T>(
         request: { signal },
       },
     );
-    const newEtag = (res.headers.etag as string | undefined) ?? undefined;
+    const newEtag = res.headers.etag as string | undefined;
     return { status: 200, data: res.data as T, etag: newEtag };
   } catch (err) {
     if (err instanceof RequestError) {

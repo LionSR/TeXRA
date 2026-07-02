@@ -207,15 +207,14 @@ export class ZoteroCollectionsTool extends defineTool({
       outputParts.push(...formatTree(tree));
     }
 
+    const context = query ? ` matching "${query}"` : '';
     if (outputParts.length === 0) {
-      const context = query ? ` matching "${query}"` : '';
       return {
         summary: `No collections found${context}.`,
         output: `No collections found${context}.`,
       };
     }
 
-    const context = query ? ` matching "${query}"` : '';
     return {
       summary: `Found ${formatResultCount(totalCollections, 'collection')}${context} across ${formatResultCount(librariesWithResults, 'library', 'libraries')}.`,
       output: outputParts.join('\n'),
