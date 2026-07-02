@@ -1282,7 +1282,9 @@ Appendix.
   // accepting several attached input files. runReflectionFlow.ts then builds
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].
-  function createSingleArtifactManager(): XmlOutputManager {
+  function createSingleArtifactManager(
+    inputFiles: string[] = ['page1.png', 'page2.png'],
+  ): XmlOutputManager {
     return new XmlOutputManager(
       {
         agentCategory: AgentCategory.Workflow,
@@ -1299,7 +1301,7 @@ Appendix.
         prefills: [],
       },
       {
-        inputFiles: ['page1.png', 'page2.png'],
+        inputFiles,
         outputFiles: ['ocr_result.tex'],
       } as unknown as AgentConfig,
       {
@@ -1312,9 +1314,11 @@ Appendix.
     );
   }
 
-  it('skips content-similarity matching for single-artifact-from-many-inputs agents', async () => {
-    // Content-similarity matching must not run in this shape, or it would
-    // label a block with the wrong name.
+  it('recovers an unlabeled fence under the declared output name for single-artifact agents', async () => {
+    // Content-similarity matching against inputFiles must not run in this
+    // shape (it would label the block with an input media name); instead the
+    // single-document recovery names the block after the sole declared
+    // output.
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
       ['```latex', 'Unlabeled recovered content.', '```'].join('\n'),
@@ -1329,12 +1333,17 @@ Appendix.
         [createExternalLocation('/tmp/run/ocr_result.tex')],
       );
 
-    expect(outputs).toEqual([]);
+    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
+      'Unlabeled recovered content.\n',
+    );
   });
 
   it('ignores bare labels naming an input when the agent declares outputFiles', async () => {
     // For single-artifact agents the inputs can be media files the response
-    // mentions in prose; a `page1.png:` line must not become a document.
+    // mentions in prose; a `page1.png:` line must never become a document
+    // named after the input. The fenced content is still recovered, but
+    // under the sole declared output name.
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
       ['page1.png:', '```latex', 'Transcribed content.', '```'].join('\n'),
@@ -1349,7 +1358,34 @@ Appendix.
         [createExternalLocation('/tmp/run/ocr_result.tex')],
       );
 
-    expect(outputs).toEqual([]);
+    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
+      'Transcribed content.\n',
+    );
+  });
+
+  it('synthesizes an unlabeled prefix under the declared output name, not the input', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['\\section{Transcription}', 'Intro.', 'ocr_result.tex:', 'More.'].join(
+        '\n',
+      ),
+    );
+
+    const outputs = await createSingleArtifactManager([
+      'paper.tex',
+    ]).splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+      'scratchpad',
+      [createExternalLocation('/tmp/run/ocr_result.tex')],
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
+      '\\section{Transcription}\nIntro.\nMore.\n',
+    );
   });
 
   it('recovers a bare label naming a declared output file', async () => {
@@ -1455,6 +1491,129 @@ Appendix.
     );
   });
 
+  it('matches later-round unlabeled fences against the previous round outputs', async () => {
+    // Round-0 originals are placeholders that no longer resemble the content
+    // being revised; only the previous round's outputs do. The similarity
+    // fallback must compare against those, or every later-round recovery
+    // would score below the threshold and drop the round.
+    await AbsoluteFS.ensureDir('/tmp/run/r0');
+    await AbsoluteFS.ensureDir('/tmp/run/r1');
+    await AbsoluteFS.write('/tmp/run/appendices.tex', 'placeholder A');
+    await AbsoluteFS.write('/tmp/run/cost_section.tex', 'placeholder B');
+    await AbsoluteFS.write(
+      '/tmp/run/r0/appendices.tex',
+      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with shared memory.\n',
+    );
+    await AbsoluteFS.write(
+      '/tmp/run/r0/cost_section.tex',
+      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the interactive logs.\n',
+    );
+    await AbsoluteFS.write(
+      '/tmp/run/r1/output.xml',
+      [
+        '```latex',
+        '% !TEX root = Draft3SM.tex',
+        '\\section{Computational cost}',
+        'Final numbers from the interactive logs.',
+        '```',
+        '',
+        '```latex',
+        '\\appendix',
+        '\\section{Agent architecture}',
+        'The formalization system uses a revised multi-agent architecture with shared memory.',
+        '```',
+      ].join('\n'),
+    );
+
+    const manager = createXmlManager('documents', [
+      'appendices.tex',
+      'cost_section.tex',
+    ]);
+    const roundDataByRound = new Map<number, RoundOutput>();
+    const ensureRound = (round: number): RoundOutput => {
+      const existing = roundDataByRound.get(round);
+      if (existing) return existing;
+      const data: RoundOutput = {
+        round,
+        rawOutput: null,
+        outputs: [],
+        compileFailures: [],
+        xmlSummary: {
+          tagContents: {},
+          documents: [],
+          singleOutputFile: null,
+          sourceLocation: null,
+        },
+      };
+      roundDataByRound.set(round, data);
+      return data;
+    };
+    ensureRound(0).outputs = [
+      {
+        source: 'appendices.tex',
+        round: 0,
+        location: createExternalLocation('/tmp/run/r0/appendices.tex'),
+        lineage: null,
+        diff: null,
+      },
+      {
+        source: 'cost_section.tex',
+        round: 0,
+        location: createExternalLocation('/tmp/run/r0/cost_section.tex'),
+        lineage: null,
+        diff: null,
+      },
+    ];
+    let roundOutputs: OutputFileInfo[] = [];
+    const processor = new OutputFileProcessor({
+      agentSetting: {
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'documents',
+        endTag: '</documents>',
+        temperature: 0,
+        requiredFiles: {},
+        requiredFilesInternal: {},
+        defaultOutputFiles: [],
+        filePatternsContain: [],
+        tools: [],
+        isRewrite: true,
+        rounds: 2,
+        prefills: [],
+      },
+      baseFiles: [
+        createExternalLocation('/tmp/run/appendices.tex'),
+        createExternalLocation('/tmp/run/cost_section.tex'),
+      ],
+      streamId: 'stream',
+      runtimeHost: { emit: vi.fn() } as unknown as AgentRuntimeHost,
+      logger: {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        domain: vi.fn(),
+      } as unknown as AgentTrace,
+      xmlManager: manager,
+      setRoundOutputs: (_round, outputs) => {
+        roundOutputs = outputs;
+      },
+      ensureRoundData: ensureRound,
+    });
+
+    await processor.processMultipleOutputs(
+      createExternalLocation('/tmp/run/r1/output.xml'),
+      1,
+      createExternalLocation('/tmp/run/r1/output.xml'),
+    );
+
+    expect(roundOutputs.map((output) => output.source).sort()).toEqual([
+      'appendices.tex',
+      'cost_section.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/r1/cost_section.tex')).resolves.toBe(
+      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nFinal numbers from the interactive logs.\n',
+    );
+  });
+
   it('reports input files left unmatched by content-similarity recovery', async () => {
     const costOriginal =
       '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n';
@@ -1510,5 +1669,23 @@ describe('assignByContentSimilarity', () => {
     // above the threshold through the shared boilerplate).
     expect(assigned[1]?.name).toBe('cost.tex');
     expect(assigned[0]).toBeNull();
+  });
+
+  it('keeps an exact unchanged output over a weak stray snippet', () => {
+    const original =
+      'line one shared\nline two original content here\nline three original content here';
+    const snippet =
+      'line one shared\nwholly different discussion\nabout unrelated things';
+
+    const assigned = assignByContentSimilarity(
+      [original, snippet],
+      [{ name: 'f.tex', content: `${original}\n` }],
+    );
+
+    // The snippet clears the routing threshold but is far too dissimilar to
+    // be a credible revision, so it must not displace the exact copy (a
+    // legitimately unchanged output) from its file.
+    expect(assigned[0]?.name).toBe('f.tex');
+    expect(assigned[1]).toBeNull();
   });
 });

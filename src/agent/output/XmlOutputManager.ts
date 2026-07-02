@@ -240,23 +240,26 @@ export class XmlOutputManager {
       );
     }
 
+    // The files this agent is expected to write: the declared outputFiles
+    // when present (single-artifact agents like ocr / paper2slide, whose
+    // inputs can be media files a response might mention in prose),
+    // otherwise the inputs (workflow edit agents reuse the input names as
+    // output names). Bare labels may only name these, and single-document
+    // synthesis may only use one of these — never an input name when the
+    // agent declares a different output.
+    const expectedFiles =
+      this.agentConfig.outputFiles.length > 0
+        ? this.agentConfig.outputFiles
+        : this.agentConfig.inputFiles;
+    const soleExpectedFile =
+      expectedFiles.length === 1 ? expectedFiles[0] : null;
+
     if (!documents) {
       documents = extractFilenameHeaderDocuments(rawOutputContent, {
         thinkingTag,
         roundDir: getFileDirectory(outputLocation),
-        // Bare labels may only name files this agent is expected to write:
-        // the declared outputFiles when present (single-artifact agents like
-        // ocr / paper2slide, whose inputs can be media files a response might
-        // mention in prose), otherwise the inputs (workflow edit agents reuse
-        // the input names as output names).
-        labelFiles:
-          this.agentConfig.outputFiles.length > 0
-            ? this.agentConfig.outputFiles
-            : this.agentConfig.inputFiles,
-        singleInputName:
-          this.agentConfig.inputFiles.length === 1
-            ? this.agentConfig.inputFiles[0]
-            : null,
+        labelFiles: expectedFiles,
+        synthesisName: soleExpectedFile,
       });
       if (documents) {
         logInternal(
@@ -267,20 +270,19 @@ export class XmlOutputManager {
     }
 
     if (!documents) {
-      // Single-input agents whose model regressed to a legacy single-doc shape
-      // (<latex_document>, ```latex fence, or bare \documentclass) can still
-      // be recovered: pass the primary input filename so the fallback can
-      // synthesize a named document. Multi-input agents cannot safely recover
-      // — without per-document names there's no way to route content.
-      const inputFiles = this.agentConfig.inputFiles;
+      // Agents expected to write exactly one file whose model regressed to a
+      // legacy single-doc shape (<latex_document>, ```latex fence, or bare
+      // \documentclass) can still be recovered: pass that filename so the
+      // fallback can synthesize a named document. Agents with several
+      // expected files cannot safely recover — without per-document names
+      // there's no way to route content.
       // Keep the relative path verbatim — getExtractedDocOutputFileName
       // preserves subdirectories so `Draft/Draft1.tex` lands at the right
       // workspace location instead of collapsing to the round root.
-      const preferredName = inputFiles.length === 1 ? inputFiles[0] : undefined;
       documents = this.extractMultipleDocumentsByRegex(
         cdataWrapped,
         documentTag,
-        preferredName,
+        soleExpectedFile ?? undefined,
       );
     }
 

@@ -6,6 +6,7 @@ import {
   type OutputFileInfo,
   type RoundOutput,
 } from '@shared/schemas';
+import { normalizeFilePath } from '@shared/utils/path';
 import { flexibleFS, replaceInputCommands } from '@utils/files';
 import {
   extractMultipleTextFromTag,
@@ -49,7 +50,7 @@ export class OutputFileProcessor {
             this.ctx.agentSetting.documentTag,
             currRound,
             'scratchpad',
-            this.ctx.baseFiles,
+            this.similarityBaseFiles(currRound),
           );
 
         if (processedPairs.length === 0) {
@@ -75,6 +76,40 @@ export class OutputFileProcessor {
           this.handleNoOutputs(currRound, outputLocation, rawLocation),
       },
     );
+  }
+
+  /**
+   * Base files for the unlabeled-fence similarity fallback. Rounds after the
+   * first revise the previous round's outputs, so compare against those, not
+   * the originals the content may have diverged from. Positional order is
+   * preserved (the fallback zips base files with the agent's inputFiles by
+   * index); a file the previous round did not produce keeps its original
+   * location.
+   */
+  private similarityBaseFiles(currRound: number): FileLocation[] {
+    const { baseFiles } = this.ctx;
+    if (currRound === 0) return baseFiles;
+    const previousOutputs = this.ctx.ensureRoundData(currRound - 1).outputs;
+    if (previousOutputs.length === 0) return baseFiles;
+
+    // An output's source is the workspace-relative document name; a base
+    // file is workspace-relative too, except external locations, which only
+    // carry an absolute path — hence the suffix comparison.
+    const matchesSource = (location: FileLocation, source: string): boolean => {
+      const path = normalizeFilePath(
+        location.kind === 'external'
+          ? location.absolutePath
+          : location.relativePath,
+      );
+      const normalizedSource = normalizeFilePath(source);
+      return path === normalizedSource || path.endsWith(`/${normalizedSource}`);
+    };
+    return baseFiles.map((location) => {
+      const previous = previousOutputs.find((output) =>
+        matchesSource(location, output.source),
+      );
+      return previous?.location ?? location;
+    });
   }
 
   /** Signal a missing/empty round, then persist the empty round summary. */

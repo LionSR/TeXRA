@@ -99,11 +99,15 @@ export function extractFilenameHeaderDocuments(
     roundDir: string;
     /** Names a bare label may resolve to (declared outputs, else inputs). */
     labelFiles: readonly string[];
-    /** The single input name used to synthesize a document from an unlabeled LaTeX prefix, or null for multi-input agents. */
-    singleInputName: string | null;
+    /**
+     * The name for a document synthesized from an unlabeled LaTeX prefix.
+     * Null when the agent may write more than one file, which disables
+     * prefix synthesis (there is no way to pick the right name).
+     */
+    synthesisName: string | null;
   },
 ): Array<{ content: string; name: string }> | null {
-  const { thinkingTag, roundDir, labelFiles, singleInputName } = options;
+  const { thinkingTag, roundDir, labelFiles, synthesisName } = options;
   const documents: Array<{ content: string; name: string }> = [];
   const reservedFinalPaths = new Set<string>();
   let currentName: string | null = null;
@@ -194,8 +198,8 @@ export function extractFilenameHeaderDocuments(
       : getLatexDocumentContext(linesBeforeHeader).insideDocumentBody;
     if (headerName && !keepHeaderAsContent) {
       if (!currentName && hasLikelyLatexContent(preHeaderLines)) {
-        if (singleInputName !== null) {
-          currentName = singleInputName;
+        if (synthesisName !== null) {
+          currentName = synthesisName;
           // Keep the triggering `%` header as an in-document comment, but a
           // bare label is not LaTeX and must not enter the synthesized body.
           currentLines = percentHeaderName

@@ -85,7 +85,7 @@ export function assignByContentSimilarity(
   const scores = candidates.map((candidate) =>
     files.map((file) => documentSimilarity(dmp, candidate, file.content)),
   );
-  const bestFileOf = scores.map((row) => row.indexOf(Math.max(...row)));
+  const bestScoreOf = scores.map((row) => Math.max(...row));
 
   // A block that echoes a base file verbatim (modulo surrounding whitespace —
   // fenced blocks arrive trimmed) while some other block's best match is that
@@ -93,14 +93,22 @@ export function assignByContentSimilarity(
   // the original before its revision). Such a block is excluded from
   // assignment entirely: letting it fall back to a different, merely-similar
   // file would write one file's stale content over another.
+  //
+  // The competing block must clear a higher bar than the routing threshold:
+  // a genuine rewrite stays broadly similar to the file it revises, and
+  // dropping an exact copy (a legitimately unchanged output) for a weak
+  // stray snippet would lose real content.
+  const ECHO_DISPLACEMENT_MIN_SIMILARITY = 0.5;
   const trimmedFileContents = files.map((file) => file.content.trim());
   const isDisplacedEcho = (c: number, f: number): boolean =>
     candidates[c].trim() === trimmedFileContents[f] &&
     candidates.some(
       (_, other) =>
         other !== c &&
-        bestFileOf[other] === f &&
-        scores[other][f] >= minSimilarity,
+        // Best-match check by score, not argmax index, so a revision tied
+        // across several files displaces the echo of each of them.
+        scores[other][f] === bestScoreOf[other] &&
+        scores[other][f] >= ECHO_DISPLACEMENT_MIN_SIMILARITY,
     );
   const quotedOriginals = new Set(
     [...candidates.keys()].filter((c) =>
