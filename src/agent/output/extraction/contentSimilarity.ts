@@ -111,6 +111,7 @@ export function assignByContentSimilarity(
     candidates.some(
       (_, other) =>
         other !== c &&
+        candidates[other].trim() !== trimmedFileContents[f] &&
         // Best-match check by score, not argmax index, so a revision tied
         // across several files displaces the echo of each of them.
         scores[other][f] === bestScoreOf[other] &&

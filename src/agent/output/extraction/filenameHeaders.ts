@@ -9,6 +9,8 @@
 
 import * as path from 'node:path';
 
+import escapeRegExp from 'escape-string-regexp';
+
 import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
@@ -40,8 +42,6 @@ const SAFE_DECORATION_REGEX = /^[*`]+|[*`:]+$/g;
 const TRAILING_EMPHASIS_DECORATION_REGEX = /^[*`]+|[*_`:]+$/g;
 /** Full decoration strip, including emphasis underscores (`_x_`). */
 const FULL_DECORATION_REGEX = /^[*_`]+|[*_`:]+$/g;
-const DOCUMENTS_OPEN_REGEX = /^<documents\b[^>]*>\s*$/i;
-const DOCUMENTS_CLOSE_REGEX = /^<\/documents>\s*$/i;
 const FILE_LIKE_LABEL_REGEX =
   /^\s*(?:\.[/\\])*[A-Za-z0-9_][A-Za-z0-9._/\\-]*\.[A-Za-z0-9]+:+\s*$/;
 
@@ -134,15 +134,25 @@ function sameNormalizedPath(a: string, b: string): boolean {
   );
 }
 
-function stripDocumentsEnvelope(lines: readonly string[]): string[] {
+function stripDocumentsEnvelope(
+  lines: readonly string[],
+  wrapperTag: string,
+): string[] {
+  const trimmedTag = wrapperTag.trim();
+  if (!trimmedTag) return [...lines];
+  const openRegex = new RegExp(
+    `^<${escapeRegExp(trimmedTag)}\\b[^>]*>\\s*$`,
+    'i',
+  );
+  const closeRegex = new RegExp(`^<\\/${escapeRegExp(trimmedTag)}>\\s*$`, 'i');
   const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
   const lastContentIndex = lines.findLastIndex((line) => line.trim() !== '');
   if (
     firstContentIndex !== -1 &&
     lastContentIndex !== -1 &&
     firstContentIndex < lastContentIndex &&
-    DOCUMENTS_OPEN_REGEX.test(lines[firstContentIndex].trim()) &&
-    DOCUMENTS_CLOSE_REGEX.test(lines[lastContentIndex].trim())
+    openRegex.test(lines[firstContentIndex].trim()) &&
+    closeRegex.test(lines[lastContentIndex].trim())
   ) {
     return [
       ...lines.slice(0, firstContentIndex),
@@ -184,14 +194,12 @@ function shouldParseHeaderInsideNonLatexFence(
   if (closingIndex === -1) return true;
 
   const bodyLines = lines.slice(headerIndex + 1, closingIndex);
+  const linesAfterFence = lines.slice(closingIndex + 1);
   return (
     hasLikelyLatexContent(bodyLines) ||
-    bodyLines.some((line) => matchHeaderName(line, labelFiles) !== null)
+    bodyLines.some((line) => matchHeaderName(line, labelFiles) !== null) ||
+    !linesAfterFence.some((line) => matchHeaderName(line, labelFiles) !== null)
   );
-}
-
-function canIntroduceSoleOutputChunk(line: string): boolean {
-  return FILE_LIKE_LABEL_REGEX.test(line);
 }
 
 /**
@@ -217,6 +225,7 @@ export function extractFilenameHeaderDocuments(
      * target; multi-file and in-place edits still keep duplicate names unique.
      */
     coalesceRepeatedName?: string | null;
+    wrapperTag: string;
   },
 ): Array<{ content: string; name: string }> | null {
   const {
@@ -225,6 +234,7 @@ export function extractFilenameHeaderDocuments(
     labelFiles,
     synthesisName,
     coalesceRepeatedName = null,
+    wrapperTag,
   } = options;
   const documents: Array<{ content: string; name: string }> = [];
   const reservedFinalPaths = new Set<string>();
@@ -293,8 +303,12 @@ export function extractFilenameHeaderDocuments(
   const lines = stripSurroundingMarkdownFence(
     stripDocumentsEnvelope(
       stripSurroundingMarkdownFence(
-        stripDocumentsEnvelope(responseLines(outputContent, thinkingTag)),
+        stripDocumentsEnvelope(
+          responseLines(outputContent, thinkingTag),
+          wrapperTag,
+        ),
       ),
+      wrapperTag,
     ),
   );
   for (const [index, line] of lines.entries()) {
@@ -450,7 +464,7 @@ export function extractFilenameHeaderDocuments(
     } else if (
       coalesceRepeatedName &&
       coalescedOutput() &&
-      canIntroduceSoleOutputChunk(line)
+      FILE_LIKE_LABEL_REGEX.test(line)
     ) {
       sawSoleOutputChunkLabel = true;
     } else {

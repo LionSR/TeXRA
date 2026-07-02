@@ -300,6 +300,7 @@ export class XmlOutputManager {
         synthesisName: soleExpectedFile,
         coalesceRepeatedName:
           this.agentConfig.outputFiles.length === 1 ? soleExpectedFile : null,
+        wrapperTag: documentTag,
       });
       if (documents) {
         logInternal(
@@ -321,6 +322,9 @@ export class XmlOutputManager {
       this.agentConfig.outputFiles.length === 1 &&
       soleExpectedFile
     ) {
+      // This fully unlabeled tier is intentionally stricter than
+      // filename-header recovery: without a trusted file label, only fences
+      // explicitly marked latex/tex are treated as output.
       const fencedBlocks = this.collectLatexFencedBlocks(
         rawOutputContent,
         thinkingTag,

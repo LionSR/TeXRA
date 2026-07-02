@@ -1367,6 +1367,27 @@ Appendix.
     );
   });
 
+  it('recovers a single plain output inside a prefaced text fence', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'Here is the file:',
+        '```text',
+        'main.tex:',
+        'A plain paragraph with no command-looking LaTeX.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['main.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'A plain paragraph with no command-looking LaTeX.\n',
+    );
+  });
+
   it('keeps inner fence delimiters inside fenced LaTeX fragments', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
@@ -1422,6 +1443,30 @@ Appendix.
     const manager = createXmlManager('documents', ['main.tex']);
 
     const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Recovered body.\n',
+    );
+  });
+
+  it('strips the configured outer wrapper before filename-label recovery', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '<latex_documents>',
+        'main.tex:',
+        'Recovered body.',
+        '</latex_documents>',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('latex_documents', ['main.tex']);
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'latex_documents',
+      0,
+    );
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -2160,9 +2205,8 @@ describe('assignByContentSimilarity', () => {
       [{ name: 'f.tex', content: `${original}\n` }],
     );
 
-    // The snippet clears the routing threshold but is far too dissimilar to
-    // be a credible revision, so it must not displace the exact copy (a
-    // legitimately unchanged output) from its file.
+    // The snippet is too weak to be a credible revision, so it must not
+    // displace the exact copy (a legitimately unchanged output) from its file.
     expect(assigned[0]?.name).toBe('f.tex');
     expect(assigned[1]).toBeNull();
   });
@@ -2197,6 +2241,20 @@ describe('assignByContentSimilarity', () => {
       ],
     );
 
+    expect(assigned[0]?.name).toBe('main.tex');
+    expect(assigned[1]).toBeNull();
+  });
+
+  it('keeps one exact copy when unchanged output is repeated', () => {
+    const original =
+      '\\documentclass{article}\n\\begin{document}\nUnchanged.\n\\end{document}';
+
+    const assigned = assignByContentSimilarity(
+      [original, original],
+      [{ name: 'main.tex', content: original }],
+    );
+
+    expect(assigned.filter(Boolean)).toHaveLength(1);
     expect(assigned[0]?.name).toBe('main.tex');
     expect(assigned[1]).toBeNull();
   });
