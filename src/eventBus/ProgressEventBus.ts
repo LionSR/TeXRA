@@ -76,7 +76,20 @@ export const INSTRUCTION_ACTION = {
 export type InstructionAction =
   (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
 
+/**
+ * Every payload this bus carries, grouped below by what it actually reports —
+ * not one channel with one owner. It mixes run/stream progress facts, approval
+ * request/resolve RPC pairs, app-lifecycle and integration signals, and
+ * host-presentation requests, with delivery depending on which host
+ * re-published a given event rather than on what kind of event it is. This is
+ * a known, tracked shape, not an oversight: see `docs/proposals/
+ * error-pipeline-and-ownership.md` (Map 3) for the audit and the planned
+ * run-scoped/app-scoped split gated on SDK Step 7d. Until that split lands,
+ * treat the section comments below as the de facto ownership boundaries when
+ * deciding where a new event belongs.
+ */
 export interface ProgressEventPayloads {
+  // ── Run/stream progress (part 1) ──
   setActiveStream: SetActiveStreamPayload;
   updateStreamStatus: {
     streamId: StreamTabId;
@@ -116,6 +129,7 @@ export interface ProgressEventPayloads {
   updateStreamUsage: UsageScopedPayload & {
     usage: TokenUsageStats;
   };
+  // ── Approval / permission RPC (show*/resolve* request-response pairs) ──
   showRetryRequest: RetryPermission;
   resolveRetryRequest: { streamId: StreamTabId };
   showToolEditPermission: ToolEditPermission;
@@ -144,6 +158,7 @@ export interface ProgressEventPayloads {
   inquiryThreadUpdated: InquiryThreadUpdatedEvent;
   showUserQuestion: UserQuestionPermission;
   resolveUserQuestion: { requestId: string };
+  // ── Run/stream progress (part 2) ──
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
   updateConversationProgress: {
@@ -194,6 +209,7 @@ export interface ProgressEventPayloads {
    *  back to the UI. */
   goalStateChanged: { streamId: StreamTabId };
 
+  // ── App/session lifecycle + integration signals ──
   extensionDeactivating: undefined;
 
   /**
