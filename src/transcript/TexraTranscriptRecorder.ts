@@ -340,6 +340,10 @@ export function attachTranscriptRecorder(
 
       case 'domain': {
         // Subscribers that care about specific keys can switch on event.key.
+        // conversationProgress is a UI-only signal consumed by the host's
+        // conversationProgressHub (F-1b) — it fires on every round/turn and
+        // would spam a transcript row per tick, so it adds none here.
+        if (event.key === 'conversationProgress') return;
         // filesLoaded has a richer payload shape; format the text accordingly.
         if (event.key === 'filesLoaded') {
           const payload = event.data as
