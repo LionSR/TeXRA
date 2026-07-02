@@ -354,10 +354,10 @@ export class GitTab extends LitElement {
                               >${subscription.key}</code
                             >
                             ${
-                            subscription.owners.length > 0
-                              ? html`
-                                  <div class="subscription-owners">
-                                    ${subscription.owners.map(
+                              subscription.owners.length > 0
+                                ? html`
+                                    <div class="subscription-owners">
+                                      ${subscription.owners.map(
                                       (owner) => html`
                                         <div class="subscription-owner-row">
                                           <span class="subscription-owner-label"
@@ -368,34 +368,34 @@ export class GitTab extends LitElement {
                                             variant="neutral"
                                             size="small"
                                             @click=${() =>
-                                            this.handleOpenPRSubscriptionStream(
-                                              owner.streamId,
-                                            )}
+                                              this.handleOpenPRSubscriptionStream(
+                                                owner.streamId,
+                                              )}
                                           >
                                             ${waIcon('comment-discussion', {
-                                            slot: 'start',
-                                          })}
+                                              slot: 'start',
+                                            })}
                                             Jump to agent
                                           </wa-button>
                                         </div>
                                       `,
                                     )}
-                                  </div>
-                                `
-                              : html`
-                                  <p class="subscription-owner-placeholder">
-                                    Started by an agent that is no longer
-                                    active.
-                                  </p>
-                                `
-                          }
+                                    </div>
+                                  `
+                                : html`
+                                    <p class="subscription-owner-placeholder">
+                                      Started by an agent that is no longer
+                                      active.
+                                    </p>
+                                  `
+                            }
                           </div>
                           <wa-button
                             appearance="outlined"
                             variant="neutral"
                             size="small"
                             @click=${() =>
-                            this.handleUnsubscribePR(subscription.key)}
+                              this.handleUnsubscribePR(subscription.key)}
                           >
                             ${waIcon('debug-stop', { slot: 'start' })} Stop
                           </wa-button>
