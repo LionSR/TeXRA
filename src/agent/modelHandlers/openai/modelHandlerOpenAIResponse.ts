@@ -513,7 +513,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         throw err;
       }
       this.logger.warn(
-        `Couldn't resume the pending OpenAI response; will start a new request. (${providerError.message})`,
+        "Couldn't resume the pending OpenAI response; will start a new request.",
         {
           data: {
             responseId: pendingId,
@@ -529,9 +529,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Check the status of the retrieved response
     if (this.isBackgroundPending(pendingResponse)) {
       // Still processing - resume polling
-      this.logger.debug(
-        `Pending background response ${pendingId} still processing (status: ${pendingResponse.status}), resuming poll`,
-      );
+      this.logger.debug('Pending background response still processing, resuming poll', {
+        data: { responseId: pendingId, status: pendingResponse.status },
+      });
       const response = await this.waitForBackgroundCompletion(
         client,
         pendingResponse,
