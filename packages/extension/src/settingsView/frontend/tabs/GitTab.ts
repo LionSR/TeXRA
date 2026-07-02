@@ -366,18 +366,18 @@ export class GitTab extends LitElement {
                                             >
                                             <wa-button
                                               appearance="outlined"
-                                            variant="neutral"
-                                            size="small"
-                                            @click=${() =>
-                                              this.handleOpenPRSubscriptionStream(
-                                                owner.streamId,
-                                              )}
-                                          >
-                                            ${waIcon('comment-discussion', {
-                                              slot: 'start',
-                                            })}
-                                            Jump to agent
-                                          </wa-button>
+                                              variant="neutral"
+                                              size="small"
+                                              @click=${() =>
+                                                this.handleOpenPRSubscriptionStream(
+                                                  owner.streamId,
+                                                )}
+                                            >
+                                              ${waIcon('comment-discussion', {
+                                                slot: 'start',
+                                              })}
+                                              Jump to agent
+                                            </wa-button>
                                           </div>
                                         `,
                                       )}
