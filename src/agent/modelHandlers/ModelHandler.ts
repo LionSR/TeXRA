@@ -371,58 +371,81 @@ export abstract class ModelHandler<
       ? await serverSideKeyService.canUseServerSideKeys()
       : false;
 
-    const relayQuotaExhausted =
-      useIncludedAccess && serverSideKeyService.wasQuotaAutoSwitched();
-    if (relayQuotaExhausted) {
-      throw new Error(
-        `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +
-          `Switch to "Use My Own Keys" via the TeXRA Profile panel, or wait for the next quota period.`,
-      );
-    }
+    const rules: readonly {
+      readonly reason: string;
+      readonly matches: () => boolean;
+      readonly resolve: () => Promise<string>;
+    }[] = [
+      {
+        reason:
+          'Quota auto-switch means the relay was selected but is no longer usable.',
+        matches: () =>
+          useIncludedAccess && serverSideKeyService.wasQuotaAutoSwitched(),
+        resolve: () => {
+          throw new Error(
+            `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +
+              `Switch to "Use My Own Keys" via the TeXRA Profile panel, or wait for the next quota period.`,
+          );
+        },
+      },
+      {
+        reason: 'Server-side keys authenticate with the Supabase relay token.',
+        matches: () => this.shouldUseServerSideKeys(),
+        resolve: async () => {
+          const accessToken = await SupabaseClient.getRelayAccessToken();
+          if (accessToken) {
+            this.logger.debug(
+              `Using server-side API keys via relay for ${this.config.provider}`,
+            );
+            return accessToken;
+          }
+          throw new Error(
+            'Unable to authenticate with server. Please sign out and sign back in, or switch to personal API keys.',
+          );
+        },
+      },
+      {
+        reason:
+          'OpenRouter routing always uses the OpenRouter key, not direct-provider relay access.',
+        matches: () => shouldUseOpenRouter(this.config),
+        resolve: () =>
+          this.fetchApiKeyOrThrow(
+            'openRouter',
+            'Missing API key for OpenRouter. Set your OpenRouter API key to continue.',
+          ),
+      },
+      {
+        reason:
+          'Included access is enabled and authenticated, but this model is outside the tier.',
+        matches: () => useIncludedAccess && hasServerAccess,
+        resolve: () => {
+          this.logger.debug(
+            `Model "${this.config.name}" not available for tier, useIncludedAccess=true`,
+          );
+          throw new Error(
+            `Model "${this.config.name}" is not available with your current subscription tier. ` +
+              `Switch to personal API keys, or select a model included in your tier.`,
+          );
+        },
+      },
+      {
+        reason: 'Personal-key mode uses the configured provider key.',
+        matches: () => true,
+        resolve: () =>
+          this.fetchApiKeyOrThrow(
+            this.config.provider.toLowerCase() as ApiProvider,
+            `Missing API key for ${this.config.provider}. Set your ${this.config.provider} API key to continue.`,
+          ),
+      },
+    ];
 
-    // Use centralized check to ensure consistency with getBaseUrl()
-    if (this.shouldUseServerSideKeys()) {
-      const accessToken = await SupabaseClient.getRelayAccessToken();
-      if (accessToken) {
-        this.logger.debug(
-          `Using server-side API keys via relay for ${this.config.provider}`,
-        );
-        return accessToken;
-      }
-      // No access token available - shouldUseServerSideKeys() returned true, meaning isEnabled()
-      // returned true. Don't fall back to personal keys - throw an actionable error.
-      throw new Error(
-        'Unable to authenticate with server. Please sign out and sign back in, or switch to personal API keys.',
-      );
+    for (const rule of rules) {
+      if (!rule.matches()) continue;
+      this.logger.debug(`Resolving API key: ${rule.reason}`);
+      return rule.resolve();
     }
-
-    // Models routing through OpenRouter always need the OpenRouter key — included access
-    // is a direct-provider relay path and does not apply here.
-    if (shouldUseOpenRouter(this.config)) {
-      return this.fetchApiKeyOrThrow(
-        'openRouter',
-        'Missing API key for OpenRouter. Set your OpenRouter API key to continue.',
-      );
-    }
-
-    if (useIncludedAccess && hasServerAccess) {
-      // User is authenticated with "Use Included Access" but model is not available for their tier.
-      // Don't fall back to personal API keys - throw an error to match dropdown behavior.
-      // Note: We check hasServerAccess to avoid blocking unauthenticated users who have the
-      // default useIncludedAccess=true setting but should fall through to personal API keys.
-      this.logger.debug(
-        `Model "${this.config.name}" not available for tier, useIncludedAccess=true`,
-      );
-      throw new Error(
-        `Model "${this.config.name}" is not available with your current subscription tier. ` +
-          `Switch to personal API keys, or select a model included in your tier.`,
-      );
-    }
-
-    return this.fetchApiKeyOrThrow(
-      this.config.provider.toLowerCase() as ApiProvider,
-      `Missing API key for ${this.config.provider}. Set your ${this.config.provider} API key to continue.`,
-    );
+    // Defensive only: the final personal-key rule is exhaustive.
+    throw new Error('No API key resolution rule matched.');
   }
 
   /**
