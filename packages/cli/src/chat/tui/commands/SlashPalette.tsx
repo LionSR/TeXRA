@@ -15,7 +15,7 @@ import {
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
-import { nextSelectHighlightIndex } from '../ui/Select';
+import { nextWrappingHighlightIndex } from '../ui/Select';
 
 export interface SlashPaletteProps {
   /** The current input value (excluding the leading `/`, after the slash). */
@@ -37,9 +37,7 @@ export interface SlashPaletteWindow {
   readonly hiddenAfter: number;
 }
 
-// Wrap-around highlight stepping is shared with `ui/Select.tsx` — slash
-// commands never carry a `disabled` flag, so `nextSelectHighlightIndex`
-// degenerates to the same plain wraparound this palette needs. The window
+// Wraparound highlight stepping is shared with `ui/Select.tsx`. The window
 // below stays local: scrolling through the middle of a long list shows one
 // fewer row than at the edges, on purpose, so both overflow markers ("… N
 // earlier" / "… N more") can be visible at once — unlike `Select`'s simple
@@ -121,12 +119,6 @@ export function SlashPalette(
   const matches = matchSlashCommands(props.query);
   const [highlight, setHighlight] = useState(0);
   const matchCount = matches.length;
-  // Slash commands have no `disabled` concept, so this is just enough shape
-  // to drive `nextSelectHighlightIndex`'s shared wraparound stepping.
-  const highlightItems = matches.map((cmd) => ({
-    value: cmd,
-    label: cmd.name,
-  }));
 
   // Whenever the match list resizes (user kept typing), clamp the cursor
   // so it doesn't point past the end.
@@ -148,20 +140,20 @@ export function SlashPalette(
       }
       if (key.upArrow) {
         setHighlight((h) =>
-          nextSelectHighlightIndex({
+          nextWrappingHighlightIndex({
             direction: -1,
             highlight: h,
-            items: highlightItems,
+            itemCount: matchCount,
           }),
         );
         return;
       }
       if (key.downArrow) {
         setHighlight((h) =>
-          nextSelectHighlightIndex({
+          nextWrappingHighlightIndex({
             direction: 1,
             highlight: h,
-            items: highlightItems,
+            itemCount: matchCount,
           }),
         );
         return;
