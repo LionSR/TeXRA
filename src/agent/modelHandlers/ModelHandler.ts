@@ -55,6 +55,7 @@ import {
   getGlobalStreaming,
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
+import { computeUtilizationPercent } from './support/contextUtilization';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,
@@ -921,9 +922,12 @@ export abstract class ModelHandler<
           tokensBefore,
           tokensAfter: estimatedTokensAfter,
           contextWindow,
-          utilizationBefore: roundTo((tokensBefore / contextWindow) * 100, 1),
+          utilizationBefore: roundTo(
+            computeUtilizationPercent(tokensBefore, contextWindow),
+            1,
+          ),
           utilizationAfter: roundTo(
-            (estimatedTokensAfter / contextWindow) * 100,
+            computeUtilizationPercent(estimatedTokensAfter, contextWindow),
             1,
           ),
           details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
@@ -1158,7 +1162,10 @@ export abstract class ModelHandler<
       );
     }
 
-    const utilizationPercent = (inputTokens / contextWindow) * 100;
+    const utilizationPercent = computeUtilizationPercent(
+      inputTokens,
+      contextWindow,
+    );
     const availableTokens = contextWindow - inputTokens;
 
     if (availableTokens >= maxTokens) {
@@ -1256,7 +1263,7 @@ export abstract class ModelHandler<
             contextWindow,
             utilizationBefore:
               validation.utilizationPercent ??
-              (inputTokens / contextWindow) * 100,
+              computeUtilizationPercent(inputTokens, contextWindow),
             originalMaxTokens: currentMaxTokens,
             reducedMaxTokens: validation.adjustedMaxTokens,
             details: detailLabel,
