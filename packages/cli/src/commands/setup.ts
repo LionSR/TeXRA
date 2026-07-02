@@ -18,7 +18,10 @@ import {
   INTERACTIVE_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-import type { CliContext } from '../runtime/cliContext';
+import {
+  resolveCliStdoutColorEnabled,
+  type CliContext,
+} from '../runtime/cliContext';
 
 /** Exported for the test kernel — the command's `run` is the only other caller. */
 export async function runSetup(context: CliContext): Promise<number> {
@@ -42,7 +45,7 @@ export async function runSetup(context: CliContext): Promise<number> {
   if (!(await hasCliCredentialForApiMode(undefined).catch(() => false))) {
     const { runCliOnboarding } = await import('../onboarding/runOnboarding');
     const result = await runCliOnboarding(
-      context.stdoutColorEnabled ?? context.colorEnabled,
+      resolveCliStdoutColorEnabled(context),
     );
     // Skipped or abandoned the picker: exit cleanly (the skip summary already
     // printed) — there is no credential for the setup agent to run on.

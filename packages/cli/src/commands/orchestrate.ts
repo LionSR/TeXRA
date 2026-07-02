@@ -45,7 +45,10 @@ import {
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
 import { runResumeExecution } from '../runtime/resumeExecution';
-import type { CliContext } from '../runtime/cliContext';
+import {
+  resolveCliStdoutColorEnabled,
+  type CliContext,
+} from '../runtime/cliContext';
 
 async function canLaunchWithDefaultModel(
   context: CliContext,
@@ -157,7 +160,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     version: context.version,
     statusLines,
     allowDefaultModelLaunch,
-    colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,
+    colorEnabled: resolveCliStdoutColorEnabled(context),
   });
 
   switch (action.kind) {
