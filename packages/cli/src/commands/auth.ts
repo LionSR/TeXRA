@@ -28,8 +28,8 @@ import {
   formatCliManualAuthUrlMessage,
   getCliAuthProfile,
   getCliSessionAccessToken,
-  getCliSessionTier,
   relayTokenStillActiveNotice,
+  resolveCliUsageTier,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
   signOutCliSupabase,
@@ -44,7 +44,11 @@ import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';
 import { authTokenCommand } from './relayTokens';
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import {
+  CliUsageError,
+  resolveCliStdoutColorEnabled,
+  type CliContext,
+} from '../runtime/cliContext';
 
 interface LoginCommandArgs {
   readonly provider?: string;
@@ -250,7 +254,7 @@ async function runLoginCommand(
 
   const { promptForLoginProvider } = await import('./loginProviderPicker');
   const choice = await promptForLoginProvider(
-    context.stdoutColorEnabled ?? context.colorEnabled,
+    resolveCliStdoutColorEnabled(context),
   );
   if (!choice) {
     writeTextStderr('Cancelled. No sign-in started.');
@@ -364,13 +368,7 @@ const usageCommand = defineCliCommand({
         );
         return CliExitCode.ModelOrNetworkError;
       }
-      // The usage rows belong to the session account, so the spending limit
-      // must use that account's tier — profile.tier may describe a configured
-      // env token's account instead.
-      const tier =
-        profile.credentialSource === 'relayToken'
-          ? await getCliSessionTier()
-          : (profile.tier ?? 'free');
+      const tier = (await resolveCliUsageTier(profile)) ?? 'free';
       summary = await fetchRelayUsageSummary({ tier, month });
     } catch (error) {
       writeErrorStderr(error);
