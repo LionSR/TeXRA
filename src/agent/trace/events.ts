@@ -10,7 +10,7 @@
  */
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentErrorKind } from '@common/errors';
-import type { EndGroupStatus } from '@shared/schemas';
+import type { EndGroupStatus, RetryErrorInfo } from '@shared/schemas';
 
 /** Status assigned to a tool call when it completes. */
 export type ToolStatus = 'completed' | 'failed' | 'in_progress';
@@ -159,10 +159,12 @@ export interface DomainEvent extends StageStamp {
  * Terminal run outcome as data — emitted exactly once at the run-lifecycle
  * boundary (`runFlowWithLifecycle`), never from flows or the bus. `cancelled`
  * is a sibling of `failed` (a user interrupt is not a failure). `error.kind` is
- * the classified terminal-error discriminant; the optional `RetryErrorInfo`
- * enrichment is deferred to the error-pipeline T2-2 work, so the shape carries
- * only what is genuinely populated today. `usage` is the run totals (present
- * once at least one round recorded usage, including on failures).
+ * the classified terminal-error discriminant; the rest of `error` is the
+ * `RetryErrorInfo` normalized at the same boundary (statusCode, provider,
+ * isCredentialExhausted, partialText, …) — present whenever `normalizeProviderError`
+ * recovers a structured shape, absent (beyond `kind`/`message`) for kinds that
+ * never carry one (e.g. `missing-api-key`, `disk-full`). `usage` is the run
+ * totals (present once at least one round recorded usage, including on failures).
  */
 export interface ResultEvent extends StageStamp {
   readonly type: 'result';
@@ -172,7 +174,10 @@ export interface ResultEvent extends StageStamp {
   readonly agentName: string;
   readonly category: 'toolUse' | 'workflow';
   readonly isSubagent: boolean;
-  readonly error?: { readonly kind: AgentErrorKind; readonly message?: string };
+  readonly error?: Readonly<Partial<Omit<RetryErrorInfo, 'message'>>> & {
+    readonly kind: AgentErrorKind;
+    readonly message?: string;
+  };
   readonly usage?: RunUsageTotals;
 }
 

@@ -35,6 +35,7 @@ export {
   logInternal,
   debugInternal,
   logContextManagementEvent,
+  logConversationProgress,
   logWebSearch,
   logWebFetch,
   logLatexdiff,

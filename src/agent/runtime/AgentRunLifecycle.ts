@@ -11,7 +11,7 @@ import {
   AgentError,
   classifyAgentError,
   getSdkErrorMessage,
-  type AgentErrorKind,
+  normalizeProviderError,
 } from '@common/errors';
 import { projectRunOutcome } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
@@ -65,7 +65,7 @@ function emitRunResult(
   category: 'toolUse' | 'workflow',
   outcome: ResultEvent['outcome'],
   isSubagent: boolean,
-  error?: { kind: AgentErrorKind; message?: string },
+  error?: ResultEvent['error'],
 ): ResultEvent {
   const usage = ctx.usageMonitor.lastTotals();
   const event: ResultEvent = {
@@ -231,7 +231,11 @@ export async function runFlowWithLifecycle(
       ctx.executionId,
       projection.executionStatus,
     ).catch(() => {});
-    const sdkMsg = getSdkErrorMessage(err);
+    // normalizeProviderError recovers the structured shape attached at the
+    // flow-exit rethrows (T2-2) when one was attached, or formats a fresh one
+    // otherwise; either way sdkMsg is unchanged from the prior getSdkErrorMessage
+    // call (it reads the same .message).
+    const { message: sdkMsg, ...providerErrorInfo } = normalizeProviderError(err);
     const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
 
     // Root-agent failures are surfaced in the stream log. Subagent failures
@@ -259,7 +263,11 @@ export async function runFlowWithLifecycle(
           category,
           toResultOutcome(outcome),
           options?.isSubagent ?? false,
-          { kind, message: kind === 'unexpected' ? errorMsg : sdkMsg },
+          {
+            kind,
+            message: kind === 'unexpected' ? errorMsg : sdkMsg,
+            ...providerErrorInfo,
+          },
         ),
       );
     }
