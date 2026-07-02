@@ -452,6 +452,11 @@ function statusBarBindingsText(
     ? '[Shift-Enter]newline'
     : '[Ctrl-J]newline';
   const ctrlC = `[Ctrl-C]${ctrlCAction}`;
+  const setupControlsOnly =
+    agentSelectionAvailable &&
+    !taskControlsAvailable &&
+    !subagentControlsAvailable &&
+    !hasMultipleStreams;
   const candidates = [
     // Stream cycling / numeric focus only do something when there is more
     // than one stream — hide the hints in a plain single-stream chat.
@@ -468,8 +473,9 @@ function statusBarBindingsText(
       newline,
       ctrlC,
     ]),
-    agentSelectionAvailable &&
+    setupControlsOnly &&
       statusBarBindingRow([transcript, agent, model, api, newline, ctrlC]),
+    setupControlsOnly && statusBarBindingRow([agent, model, api, ctrlC]),
     statusBarBindingRow([
       streamTabs,
       transcript,
