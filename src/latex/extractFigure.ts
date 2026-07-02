@@ -5,7 +5,11 @@ import type { FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 import { joinLatexPath } from '@utils/core/pathCore';
 
-import { findExistingLatexPath, resolveLatexDir } from './latexParsingUtils';
+import {
+  findExistingLatexPath,
+  resolveLatexDir,
+  stripLatexComments,
+} from './latexParsingUtils';
 
 const FIGURE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
 
@@ -85,17 +89,15 @@ export async function extractFigurePathsFromLatex(
     graphicspaths.push(joinLatexPath(latexDir, p));
   }
 
-  // Pre-process content to remove commented lines
-  const processedLines = content
-    .split('\n')
-    .filter((line) => !/^\s*%/.test(line)) // Remove lines that start with whitespace + %
-    .join('\n');
+  // Pre-process content to remove commented-out text (including inline
+  // comments and escaped `\%`, unlike a naive whole-line strip).
+  const processedContent = stripLatexComments(content);
 
   // Find all matches in the processed content for both patterns
   const discovered = new Set<string>();
 
   for (const pattern of figurePatterns) {
-    for (const match of processedLines.matchAll(pattern)) {
+    for (const match of processedContent.matchAll(pattern)) {
       const resolved = await resolveFigurePath(
         match[1],
         graphicspaths,

@@ -3,17 +3,14 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import { isObject } from '@utils/core/typeGuards';
 import {
   ModelHandlerCompatibilityKeySchema,
   type ModelHandlerCompatibilityKey,
 } from './modelHandlerCompatibilityKey';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function isGoogleGenAIContentMessage(message: ProviderMessage): boolean {
-  if (!isRecord(message)) return false;
+  if (!isObject(message)) return false;
   const record = message as Record<string, unknown>;
   if ('type' in record) return false;
   const role = record.role;
@@ -24,7 +21,7 @@ function isGoogleGenAIContentMessage(message: ProviderMessage): boolean {
 }
 
 function isGoogleInteractionsStepMessage(message: ProviderMessage): boolean {
-  if (!isRecord(message)) return false;
+  if (!isObject(message)) return false;
   const type = (message as Record<string, unknown>).type;
   return (
     type === 'user_input' ||
@@ -36,7 +33,7 @@ function isGoogleInteractionsStepMessage(message: ProviderMessage): boolean {
 }
 
 function isOpenRouterChatMessage(message: ProviderMessage): boolean {
-  if (!isRecord(message)) return false;
+  if (!isObject(message)) return false;
   const record = message as Record<string, unknown>;
   if ('type' in record || 'parts' in record) return false;
   const role = record.role;
@@ -78,20 +75,20 @@ function currentModelFromRawSharedState(
   shared: Record<string, unknown>,
 ): string | undefined {
   const stateSlices = shared.stateSlices;
-  if (!isRecord(stateSlices)) return undefined;
+  if (!isObject(stateSlices)) return undefined;
   const userChannels = stateSlices.userChannels;
-  if (!isRecord(userChannels)) return undefined;
+  if (!isObject(userChannels)) return undefined;
   const transient = userChannels.transient;
   const input = userChannels.input;
   return (
-    (isRecord(transient) ? stringValue(transient.MODEL) : undefined) ??
-    (isRecord(input) ? stringValue(input.MODEL) : undefined)
+    (isObject(transient) ? stringValue(transient.MODEL) : undefined) ??
+    (isObject(input) ? stringValue(input.MODEL) : undefined)
   );
 }
 
 function unwrapSharedState(shared: unknown): Record<string, unknown> | null {
-  if (!isRecord(shared)) return null;
-  return isRecord(shared.state)
+  if (!isObject(shared)) return null;
+  return isObject(shared.state)
     ? (shared.state as Record<string, unknown>)
     : shared;
 }
