@@ -172,33 +172,6 @@ export class XmlOutputManager {
     });
   }
 
-  private coalesceSoleOutputFencedBlocks(
-    documents: Array<{ content: string; name: string }>,
-    outputContent: string,
-    thinkingTag: string,
-    soleExpectedFile: string,
-  ): void {
-    const target = documents.find(
-      (document) =>
-        this.normalizeExpectedFileName(document.name) ===
-        this.normalizeExpectedFileName(soleExpectedFile),
-    );
-    if (!target) return;
-
-    const existingContent = target.content.trim();
-    const additionalBlocks = this.collectLatexFencedBlocks(
-      outputContent,
-      thinkingTag,
-    ).filter((block) => !existingContent.includes(block.trim()));
-    if (additionalBlocks.length === 0) return;
-
-    target.content = [target.content.trim(), ...additionalBlocks].join('\n\n');
-    logInternal(
-      this.logger,
-      `Coalesced ${formatResultCount(additionalBlocks.length, 'additional fenced block')} into ${soleExpectedFile}`,
-    );
-  }
-
   /**
    * Last-resort recovery for multi-input agents that returned fenced
    * ```latex/```tex blocks with no filename header at all (neither the
@@ -329,14 +302,6 @@ export class XmlOutputManager {
           this.agentConfig.outputFiles.length === 1 ? soleExpectedFile : null,
       });
       if (documents) {
-        if (this.agentConfig.outputFiles.length === 1 && soleExpectedFile) {
-          this.coalesceSoleOutputFencedBlocks(
-            documents,
-            rawOutputContent,
-            thinkingTag,
-            soleExpectedFile,
-          );
-        }
         logInternal(
           this.logger,
           `Recovered ${this.agentSetting.documentTag} from filename headers (${formatResultCount(documents.length, 'document')})`,

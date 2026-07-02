@@ -36,10 +36,14 @@ const PERCENT_FILENAME_HEADER_REGEX =
 const TRAILING_COLON_REGEX = /:+$/;
 /** Markdown decoration that is never part of a filename (`**x**`, `` `x` ``). */
 const SAFE_DECORATION_REGEX = /^[*`]+|[*`:]+$/g;
+/** Strip trailing emphasis without stripping a filename's leading underscore. */
+const TRAILING_EMPHASIS_DECORATION_REGEX = /^[*`]+|[*_`:]+$/g;
 /** Full decoration strip, including emphasis underscores (`_x_`). */
 const FULL_DECORATION_REGEX = /^[*_`]+|[*_`:]+$/g;
 const DOCUMENTS_OPEN_REGEX = /^<documents\b[^>]*>\s*$/i;
 const DOCUMENTS_CLOSE_REGEX = /^<\/documents>\s*$/i;
+const FILE_LIKE_LABEL_REGEX =
+  /^\s*(?:\.[/\\])*[A-Za-z0-9_][A-Za-z0-9._/\\-]*\.[A-Za-z0-9]+:+\s*$/;
 
 function matchNormalizedCandidate(
   stripped: string,
@@ -78,6 +82,7 @@ function matchKnownFileLabel(
   for (const stripped of [
     trimmed.replace(TRAILING_COLON_REGEX, ''),
     trimmed.replaceAll(SAFE_DECORATION_REGEX, ''),
+    trimmed.replaceAll(TRAILING_EMPHASIS_DECORATION_REGEX, ''),
     trimmed.replaceAll(FULL_DECORATION_REGEX, ''),
   ]) {
     const match = matchNormalizedCandidate(stripped, knownFiles);
@@ -185,6 +190,10 @@ function shouldParseHeaderInsideNonLatexFence(
   );
 }
 
+function canIntroduceSoleOutputChunk(line: string): boolean {
+  return FILE_LIKE_LABEL_REGEX.test(line);
+}
+
 /**
  * Recover named documents from filename headers in a raw response. Returns
  * the recovered documents in response order, or null when none were found.
@@ -226,6 +235,31 @@ export function extractFilenameHeaderDocuments(
   let currentMarkdownFence: MarkdownFence | null = null;
   let ignoreProseUntilNextHeader = false;
   let synthesizedSingleInputFromPrefix = false;
+  let pendingSoleOutputChunk: { fence: MarkdownFence; lines: string[] } | null =
+    null;
+  let mayStartAdjacentSoleOutputChunk = false;
+  let sawSoleOutputChunkLabel = false;
+
+  const coalescedOutputName = coalesceRepeatedName
+    ? safeDocumentName(coalesceRepeatedName)
+    : null;
+  const coalescedOutput = () =>
+    coalescedOutputName
+      ? documents.find((document) => document.name === coalescedOutputName)
+      : undefined;
+
+  const appendCoalescedContent = (source: string, content: string): void => {
+    const name = safeDocumentName(source);
+    const existing = documents.find((document) => document.name === name);
+    if (existing) {
+      existing.content = `${existing.content.trim()}\n\n${content}`;
+    } else {
+      reservedFinalPaths.add(
+        getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/'),
+      );
+      documents.push({ name, content });
+    }
+  };
 
   const flushCurrent = (): MarkdownFence | null => {
     if (!currentName) return null;
@@ -238,16 +272,8 @@ export function extractFilenameHeaderDocuments(
         coalesceRepeatedName &&
         sameNormalizedPath(currentName, coalesceRepeatedName)
       ) {
-        const name = safeDocumentName(currentName);
-        const existing = documents.find((document) => document.name === name);
-        if (existing) {
-          existing.content = `${existing.content}\n\n${content}`;
-        } else {
-          reservedFinalPaths.add(
-            getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/'),
-          );
-          documents.push({ name, content });
-        }
+        appendCoalescedContent(currentName, content);
+        mayStartAdjacentSoleOutputChunk = true;
       } else {
         documents.push({
           name: makeUniquePercentHeaderName(
@@ -265,7 +291,11 @@ export function extractFilenameHeaderDocuments(
   };
 
   const lines = stripSurroundingMarkdownFence(
-    stripDocumentsEnvelope(responseLines(outputContent, thinkingTag)),
+    stripDocumentsEnvelope(
+      stripSurroundingMarkdownFence(
+        stripDocumentsEnvelope(responseLines(outputContent, thinkingTag)),
+      ),
+    ),
   );
   for (const [index, line] of lines.entries()) {
     const fence = parseMarkdownFenceDelimiter(line);
@@ -274,7 +304,32 @@ export function extractFilenameHeaderDocuments(
     const headerName =
       percentHeaderName ?? matchKnownFileLabel(line, labelFiles);
 
+    if (pendingSoleOutputChunk) {
+      if (isClosingMarkdownFence(line, pendingSoleOutputChunk.fence)) {
+        const content = pendingSoleOutputChunk.lines.join('\n').trim();
+        if (content && coalesceRepeatedName) {
+          appendCoalescedContent(coalesceRepeatedName, content);
+          mayStartAdjacentSoleOutputChunk = true;
+        }
+        pendingSoleOutputChunk = null;
+        ignoreProseUntilNextHeader = true;
+        continue;
+      }
+      pendingSoleOutputChunk.lines.push(line);
+      continue;
+    }
+
     if (!currentName && fence) {
+      if (
+        coalesceRepeatedName &&
+        coalescedOutput() &&
+        isLatexMarkdownFence(fence) &&
+        (mayStartAdjacentSoleOutputChunk || sawSoleOutputChunkLabel)
+      ) {
+        pendingSoleOutputChunk = { fence, lines: [] };
+        sawSoleOutputChunkLabel = false;
+        continue;
+      }
       if (
         pendingPrefacedMarkdownFence &&
         isClosingMarkdownFence(line, pendingPrefacedMarkdownFence)
@@ -370,6 +425,8 @@ export function extractFilenameHeaderDocuments(
       preHeaderLines = [];
       ignoreProseUntilNextHeader = false;
       synthesizedSingleInputFromPrefix = false;
+      mayStartAdjacentSoleOutputChunk = false;
+      sawSoleOutputChunkLabel = false;
       continue;
     }
 
@@ -385,6 +442,20 @@ export function extractFilenameHeaderDocuments(
       currentLines.push(line);
     } else if (!ignoreProseUntilNextHeader) {
       preHeaderLines.push(line);
+      mayStartAdjacentSoleOutputChunk = line.trim() === '';
+      sawSoleOutputChunkLabel = false;
+    } else if (line.trim() === '') {
+      // Keep mayStartAdjacentSoleOutputChunk as-is: a chunk may follow the
+      // previous one after blank separation.
+    } else if (
+      coalesceRepeatedName &&
+      coalescedOutput() &&
+      canIntroduceSoleOutputChunk(line)
+    ) {
+      sawSoleOutputChunkLabel = true;
+    } else {
+      mayStartAdjacentSoleOutputChunk = false;
+      sawSoleOutputChunkLabel = false;
     }
   }
   flushCurrent();

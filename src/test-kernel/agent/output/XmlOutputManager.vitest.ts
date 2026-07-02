@@ -1186,7 +1186,7 @@ Appendix.
         'Macro definitions.',
         '```',
         '',
-        '**_helpers.tex**:',
+        '**_helpers.tex_**:',
         '```latex',
         'Helper macros.',
         '```',
@@ -1396,6 +1396,28 @@ Appendix.
       ['<documents>', 'main.tex:', 'Recovered body.', '</documents>'].join(
         '\n',
       ),
+    );
+    const manager = createXmlManager('documents', ['main.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Recovered body.\n',
+    );
+  });
+
+  it('strips an outer documents envelope inside a markdown wrapper', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '```xml',
+        '<documents>',
+        'main.tex:',
+        'Recovered body.',
+        '</documents>',
+        '```',
+      ].join('\n'),
     );
     const manager = createXmlManager('documents', ['main.tex']);
 
@@ -1706,6 +1728,37 @@ Appendix.
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
       'Page one transcription.\n\nPage two transcription.\n',
+    );
+  });
+
+  it('does not coalesce explanatory fences after a sole-output header chunk', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'ocr_result.tex:',
+        '```latex',
+        'Page one transcription.',
+        '```',
+        '',
+        'Explanation:',
+        '```latex',
+        '\\LaTeX{} example, not output.',
+        '```',
+      ].join('\n'),
+    );
+
+    const outputs =
+      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
+        createExternalLocation('/tmp/run/output.xml'),
+        'documents',
+        0,
+        'scratchpad',
+        [createExternalLocation('/tmp/run/ocr_result.tex')],
+      );
+
+    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
+      'Page one transcription.\n',
     );
   });
 
