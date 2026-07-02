@@ -6,7 +6,15 @@ import { showSettingsView } from '@commands/settings';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { toErrorMessage } from '@common/errors';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
+import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
+
+const CHANNEL = 'authCommands';
+logger.initialize(CHANNEL);
 
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
@@ -97,7 +105,8 @@ export async function signIn(): Promise<boolean> {
       const reason = initError
         ? initError.message
         : 'Authentication service not initialized';
-      void vscode.window.showErrorMessage(
+      void showLoggedMessage(
+        CHANNEL,
         `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
       );
       return false;
@@ -136,9 +145,7 @@ export async function signIn(): Promise<boolean> {
     }
     return false;
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Sign in failed: ${toErrorMessage(error)}`,
-    );
+    void showLoggedErrorMessage(CHANNEL, 'Sign in failed', error);
     return false;
   }
 }

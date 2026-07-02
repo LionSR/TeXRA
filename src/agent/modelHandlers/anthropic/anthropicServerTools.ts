@@ -117,8 +117,13 @@ export function buildAnthropicAssistantContent(
 
   if (orphanedIds.length > 0) {
     logger.debug(
-      `Stripping ${orphanedIds.length} orphaned server_tool_use block(s) without matching result: ${orphanedIds.join(', ')}. ` +
-        `Response content types: [${responseObject.content.map((b) => b.type).join(', ')}]`,
+      'Stripping orphaned server_tool_use block(s) without matching result',
+      {
+        data: {
+          orphanedIds,
+          contentTypes: responseObject.content.map((b) => b.type),
+        },
+      },
     );
   }
 

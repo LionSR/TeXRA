@@ -20,7 +20,6 @@ import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { toErrorMessage } from '@common/errors';
 import {
   deriveRunOutcome,
   projectRunOutcome,
@@ -324,15 +323,21 @@ export class BashTool extends defineTool({
       );
       if (result.status === 'no_session') {
         logger.debug(
-          `Background bash follow-up dropped: parent stream ${parentStreamId} has no active session (${result.streamStatus ?? 'unknown'}).`,
+          'Background bash follow-up dropped: parent stream has no active session.',
+          {
+            data: {
+              parentStreamId,
+              streamStatus: result.streamStatus ?? 'unknown',
+            },
+          },
         );
       }
     };
 
     const logBackgroundFailure = (action: string, err: unknown): void => {
-      logger.error(
-        `Failed to ${action} background bash result: ${toErrorMessage(err)}`,
-      );
+      logger.error(`Failed to ${action} background bash result`, {
+        data: err,
+      });
     };
 
     const deliverAndFinalize = async (

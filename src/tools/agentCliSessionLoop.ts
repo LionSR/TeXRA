@@ -192,9 +192,9 @@ async function persistReportBestEffort(
   try {
     await getExecutionStore(executionId).writeReport(msg);
   } catch (storageErr) {
-    logger.warn(
-      `Failed to persist report for ${executionId}: ${toErrorMessage(storageErr)}`,
-    );
+    logger.warn(`Failed to persist report for ${executionId}`, {
+      data: storageErr,
+    });
   }
 }
 
@@ -289,13 +289,21 @@ export function runAgentCliSession<TTurn>(
         );
         if (delivery.status === 'no_session') {
           logger.warn(
-            `Turn result for ${executionId} not delivered: parent stream ${parentStreamId} has no active session (status: ${delivery.streamStatus ?? 'unknown'}). The result remains in the execution report.`,
+            'Turn result not delivered: parent stream has no active session. The result remains in the execution report.',
+            {
+              data: {
+                executionId,
+                parentStreamId,
+                streamStatus: delivery.streamStatus ?? 'unknown',
+              },
+            },
           );
         } else if (
           !(await wakeOrReleaseQueuedStream(parentStreamId, delivery))
         ) {
           logger.warn(
-            `Turn result for ${executionId} dropped: parent stream ${parentStreamId} is gone and could not be resumed. The result remains in the execution report.`,
+            'Turn result dropped: parent stream is gone and could not be resumed. The result remains in the execution report.',
+            { data: { executionId, parentStreamId } },
           );
         }
 

@@ -1,5 +1,5 @@
-// Standard library imports
-import { spawn, type ChildProcess } from 'node:child_process';
+// Internal imports
+import { executeCommand } from '@utils/system/execUtils';
 
 export interface BrowserLaunchCommand {
   readonly command: string;
@@ -39,37 +39,14 @@ export function resolveBrowserLaunch(
   }
 }
 
-function launchBrowser(url: string): Promise<void> {
+async function launchBrowser(url: string): Promise<void> {
   const launch = resolveBrowserLaunch(url);
-  return new Promise((resolve, reject) => {
-    let child: ChildProcess;
-    try {
-      child = spawn(launch.command, launch.args, {
-        stdio: 'ignore',
-        windowsVerbatimArguments: launch.windowsVerbatimArguments,
-      });
-    } catch (error) {
-      rejectBrowserLaunch(error);
-      return;
-    }
-
-    child.once('close', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      rejectBrowserLaunch(
-        new Error(`${launch.command} exited with code ${code ?? 'unknown'}`),
-      );
-    });
-    child.once('error', rejectBrowserLaunch);
-
-    function rejectBrowserLaunch(error: unknown): void {
-      const message =
-        error instanceof Error ? error.message : 'unknown browser launch error';
-      reject(new Error(`Could not open the browser automatically: ${message}`));
-    }
-  });
+  const result = await executeCommand([launch.command, ...launch.args]);
+  if (result.exitCode === 0) return;
+  const message = result.stderr ?? `exited with code ${result.exitCode}`;
+  throw new Error(
+    `Could not open the browser automatically: ${launch.command} ${message}`,
+  );
 }
 
 export function openBrowser(

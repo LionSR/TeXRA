@@ -4,7 +4,6 @@ import { platform } from '@platform/platform';
 import type { StageHandle } from '@agent/trace';
 import { logLatexdiff, type AgentTrace } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import { toErrorMessage } from '@common/errors';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import {
@@ -103,20 +102,22 @@ export class LatexDiffManager {
     operation: string = 'latexdiff',
   ): void {
     if (result.success) {
-      this.logger.debug(
-        `Successfully generated ${operation} file: ${result.diffFileName}`,
-      );
+      this.logger.debug('Successfully generated diff file', {
+        data: { operation, diffFileName: result.diffFileName },
+      });
       return;
     }
 
     if (result.message?.includes('document environment')) {
-      this.logger.debug(`Skipping ${operation}: ${result.message}`, {
+      this.logger.debug(`Skipping ${operation}`, {
+        data: result.message,
         messageType: MESSAGE_TYPES.INTERNAL,
       });
       return;
     }
 
-    this.logger.warn(`Failed to generate ${operation}: ${result.message}`, {
+    this.logger.warn(`Failed to generate ${operation}`, {
+      data: result.message,
       messageType: MESSAGE_TYPES.INTERNAL,
     });
   }
@@ -135,10 +136,10 @@ export class LatexDiffManager {
     try {
       await this.fileService.mirrorWorkspaceFile(targetLocation);
     } catch (error) {
-      this.logger.warn(
-        `Unable to mirror workspace dependency ${targetLocation.absolutePath}: ${toErrorMessage(error)}`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
-      );
+      this.logger.warn('Unable to mirror workspace dependency', {
+        data: { path: targetLocation.absolutePath, error },
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
     }
   }
 
@@ -185,12 +186,12 @@ export class LatexDiffManager {
       outputFiles.map((f) => [getComparablePath(f.location), f]),
     );
 
-    this.logger.debug(
-      `Base files: ${this.baseFiles.map((f) => f.absolutePath).join(', ')}`,
-    );
-    this.logger.debug(
-      `r${currRound} output files: ${outputFiles.map((f) => f.location.absolutePath)}`,
-    );
+    this.logger.debug('Base files', {
+      data: this.baseFiles.map((f) => f.absolutePath),
+    });
+    this.logger.debug(`r${currRound} output files`, {
+      data: outputFiles.map((f) => f.location.absolutePath),
+    });
 
     const aggregated: DiffResult[] = [];
     const artifacts: CompiledPdfArtifact[] = [];
@@ -294,14 +295,12 @@ export class LatexDiffManager {
     description: string,
   ): void {
     if (pairs.length > 0) {
-      this.logger.debug(
-        `Matched ${description}: ${pairs
-          .map(
-            ([outputPath, loc]) =>
-              `${this.getDisplayLabel(loc)} -> ${path.basename(outputPath)}`,
-          )
-          .join(', ')}`,
-      );
+      this.logger.debug(`Matched ${description}`, {
+        data: pairs.map(
+          ([outputPath, loc]) =>
+            `${this.getDisplayLabel(loc)} -> ${path.basename(outputPath)}`,
+        ),
+      });
     } else if (this.baseFiles.length > 0) {
       this.logger.debug(`No ${description.split(' to ')[0]} mappings found`);
     }

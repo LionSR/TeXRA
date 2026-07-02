@@ -11,6 +11,9 @@
 // MediaAttachmentProcessor path as the extension webview, so no model-layer
 // code is duplicated.
 
+// Linux reads raw PNG bytes off stdout (`encoding: 'buffer'`), which
+// executeCommand's string-only output doesn't support, so that path alone
+// keeps a direct child_process.execFile call.
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { platform as osPlatform, tmpdir } from 'node:os';
@@ -19,6 +22,7 @@ import { promisify } from 'node:util';
 
 import { isFileNotFoundError } from '@common/errors';
 import { generatePastedImageName } from '@shared/files/pastedImageConstants';
+import { executeCommand } from '@utils/system/execUtils';
 import { savePastedImageBuffer } from '@utils/files/pastedImageUtils';
 
 const execFileAsync = promisify(execFile);
@@ -53,22 +57,21 @@ function isMaxBufferError(err: unknown): boolean {
 }
 
 async function readClipboardPngMac(outFile: string): Promise<ClipboardRead> {
-  try {
-    // osascript ships with macOS — no external dependency. The first statement
-    // throws when the clipboard holds no image, which lands us in the catch.
-    await execFileAsync('osascript', [
-      '-e',
-      'set png_data to (the clipboard as «class PNGf»)',
-      '-e',
-      `set fp to open for access POSIX file "${outFile}" with write permission`,
-      '-e',
-      'write png_data to fp',
-      '-e',
-      'close access fp',
-    ]);
-  } catch {
-    return 'none';
-  }
+  // osascript ships with macOS — no external dependency. The first statement
+  // fails when the clipboard holds no image, which lands us in the !success
+  // branch below.
+  const result = await executeCommand([
+    'osascript',
+    '-e',
+    'set png_data to (the clipboard as «class PNGf»)',
+    '-e',
+    `set fp to open for access POSIX file "${outFile}" with write permission`,
+    '-e',
+    'write png_data to fp',
+    '-e',
+    'close access fp',
+  ]);
+  if (!result.success) return 'none';
   return readPngFileWithinLimit(outFile);
 }
 

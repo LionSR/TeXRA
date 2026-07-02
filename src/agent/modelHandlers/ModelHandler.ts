@@ -29,10 +29,7 @@ import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER, FREE_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import {
-  getSdkErrorMessage,
-  isContextWindowError,
-} from '@common/errors/sdkErrorUtils';
+import { isContextWindowError } from '@common/errors/sdkErrorUtils';
 
 // Local imports - platform
 
@@ -666,9 +663,13 @@ export abstract class ModelHandler<
     );
 
     if (maxOutputTokensExceeded) {
-      this.logger.warn(
-        `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens (total: ${totals.totalOutputTokens}, first input: ${totals.firstInputTokens})`,
-      );
+      this.logger.warn('Output tokens exceed input token multiplier', {
+        data: {
+          maxOutputTokensFactor: this.maxOutputTokensFactor,
+          totalOutputTokens: totals.totalOutputTokens,
+          firstInputTokens: totals.firstInputTokens,
+        },
+      });
     }
 
     const shouldStop =
@@ -677,9 +678,15 @@ export abstract class ModelHandler<
       inputTokenLimitExceeded;
 
     if (shouldStop) {
-      this.logger.debug(
-        `StopFlags: endTurn: ${endTurn} encounterDocumentTag: ${encounterDocumentTag} continuation_limit: ${continuationLimitExceeded} inputTokenLimit: ${inputTokenLimitExceeded} maxOutputTokens: ${maxOutputTokensExceeded}`,
-      );
+      this.logger.debug('StopFlags', {
+        data: {
+          endTurn,
+          encounterDocumentTag,
+          continuationLimitExceeded,
+          inputTokenLimitExceeded,
+          maxOutputTokensExceeded,
+        },
+      });
     }
 
     return { endTurn, shouldStop };
@@ -960,7 +967,8 @@ export abstract class ModelHandler<
       return { compactedMessages, didCompact: true };
     } catch (err) {
       this.logger.warn(
-        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
+        'Compaction failed, continuing with original messages',
+        { data: err },
       );
       return { compactedMessages: messages, didCompact: false };
     }
@@ -1305,7 +1313,8 @@ export abstract class ModelHandler<
         onCountFailure(err);
       } else {
         this.logger.debug(
-          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+          'Token counting failed. Proceeding without token adjustment.',
+          { data: err },
         );
       }
     }

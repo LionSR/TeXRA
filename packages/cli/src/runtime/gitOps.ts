@@ -1,8 +1,6 @@
 // Thin wrappers over `git` and `gh` for the `install-github-action` command.
-// Mirrors the CLI's existing subprocess style (node:child_process spawnSync,
-// see runtime/pager.ts) so no extra dependency is needed. Every call captures
-// output and never throws — callers branch on `ok`.
-import { spawnSync } from 'node:child_process';
+// Every call captures output and never throws — callers branch on `ok`.
+import { executeCommandSync } from '@utils/system/execUtils';
 
 export interface CommandResult {
   readonly ok: boolean;
@@ -16,24 +14,12 @@ function run(
   args: readonly string[],
   cwd: string,
 ): CommandResult {
-  const result = spawnSync(command, [...args], {
-    cwd,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  if (result.error) {
-    return {
-      ok: false,
-      status: null,
-      stdout: '',
-      stderr: result.error.message,
-    };
-  }
+  const result = executeCommandSync([command, ...args], { cwd });
   return {
-    ok: result.status === 0,
-    status: result.status,
-    stdout: (result.stdout ?? '').trim(),
-    stderr: (result.stderr ?? '').trim(),
+    ok: result.success,
+    status: result.exitCode,
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
   };
 }
 

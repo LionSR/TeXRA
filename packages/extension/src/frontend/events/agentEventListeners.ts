@@ -19,6 +19,7 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
@@ -103,7 +104,7 @@ async function handleShowAgentConfigBanner(
 function handleRequestShowError({
   message,
 }: ProgressEventPayloads['requestShowError']): void {
-  void vscode.window.showErrorMessage(message);
+  void showLoggedMessage(CHANNEL, message);
 }
 
 async function handleRequestEnsureProgressView(

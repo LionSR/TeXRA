@@ -5,7 +5,6 @@ import { toFile } from '@anthropic-ai/sdk';
 
 // Local imports - common
 import type { AgentTrace } from '@agent/trace';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Type imports - agent and tools
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
@@ -86,9 +85,9 @@ export async function uploadToolAttachments(
     try {
       buffer = await loadAttachmentBuffer(attachment);
     } catch (err) {
-      logger.warn(
-        `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
-      );
+      logger.warn('Unable to read attachment', {
+        data: { path: attachment.path ?? 'attachment', error: err },
+      });
       unsupported.push(attachment);
       continue;
     }
@@ -132,9 +131,9 @@ export async function uploadToolAttachments(
     } catch (err) {
       // Upload failed — degrade to unsupported, but log so a dropped
       // attachment isn't silently omitted from the request.
-      logger.warn(
-        `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
-      );
+      logger.warn('Failed to upload attachment', {
+        data: { path: attachment.path ?? 'attachment', error: err },
+      });
       unsupported.push(attachment);
     } finally {
       buffer = wipeBuffer(buffer);

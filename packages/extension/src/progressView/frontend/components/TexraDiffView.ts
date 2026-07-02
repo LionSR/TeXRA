@@ -3,6 +3,9 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 
+// Local imports - errors
+import { toErrorMessage } from '@common/errors';
+
 // Local imports - shared modules
 import { themeContext } from '@shared/BaseWebviewApp';
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -227,8 +230,7 @@ export class TexraDiffView extends LitElement {
       this.syncModels();
       this.observeResize(container);
     } catch (error) {
-      this.errorMessage =
-        error instanceof Error ? error.message : 'Failed to load diff editor.';
+      this.errorMessage = toErrorMessage(error);
     } finally {
       if (generation === this.loadGeneration) this.loading = false;
     }

@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
@@ -80,7 +81,7 @@ export async function openBuildDisplayIfTex(
 
   const exists = await AbsoluteFS.exists(absolutePath);
   if (!exists) {
-    vscode.window.showErrorMessage(`File not found: ${absolutePath}`);
+    void showLoggedMessage(CHANNEL, `File not found: ${absolutePath}`);
     return;
   }
 
