@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 
-import escapeRegExp from 'escape-string-regexp';
 import { XMLParser } from 'fast-xml-parser';
 
 import {
@@ -11,10 +10,7 @@ import {
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import {
-  getExtractedDocOutputFileName,
-  getSafeDocumentRelativePath,
-} from '@agent/utils/outputFileUtils';
+import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
@@ -32,6 +28,12 @@ import {
   extractContentFromXMLbyTagMultiple,
   extractDocuments,
 } from '@utils/text/xmlUtils';
+
+import {
+  assignByContentSimilarity,
+  collectLatexFencedBlocks as collectLatexFencedBlocksFromResponse,
+} from './extraction/contentSimilarity';
+import { extractFilenameHeaderDocuments } from './extraction/filenameHeaders';
 
 /** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
 async function writeRoundOutput(
@@ -67,151 +69,6 @@ const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
   latex: 'from \\documentclass block',
 };
 
-const PERCENT_FILENAME_HEADER_REGEX =
-  /^%\s+((?:\.[/\\])*[A-Za-z0-9_][A-Za-z0-9._/\\-]*\.[A-Za-z0-9]+)\s*$/;
-const LATEX_DOCUMENTCLASS_REGEX = /\\documentclass\b/;
-const LATEX_DOCUMENT_BEGIN_REGEX = /\\begin\s*\{\s*document\s*\}/;
-const LATEX_DOCUMENT_END_REGEX = /\\end\s*\{\s*document\s*\}/;
-const LIKELY_LATEX_CONTENT_REGEX =
-  /^\\(?:chapter|section|subsection|subsubsection|paragraph|begin|end|input|include|documentclass|usepackage|newcommand|renewcommand|[([])/;
-
-type MarkdownFence = {
-  marker: '`' | '~';
-  length: number;
-};
-
-function parseMarkdownFenceDelimiter(line: string): MarkdownFence | null {
-  const match = /^(`{3,}|~{3,})(?:\s*\S.*)?\s*$/.exec(line.trim());
-  if (!match) {
-    return null;
-  }
-  const delimiter = match[1];
-  return {
-    marker: delimiter[0] as '`' | '~',
-    length: delimiter.length,
-  };
-}
-
-function isMarkdownFenceDelimiter(line: string): boolean {
-  return parseMarkdownFenceDelimiter(line) !== null;
-}
-
-function isClosingMarkdownFence(
-  line: string,
-  openingFence: MarkdownFence,
-): boolean {
-  const closingFence = parseMarkdownFenceDelimiter(line);
-  return (
-    closingFence !== null &&
-    closingFence.marker === openingFence.marker &&
-    closingFence.length >= openingFence.length
-  );
-}
-
-function stripSurroundingMarkdownFence(lines: readonly string[]): string[] {
-  const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
-  if (firstContentIndex === -1) {
-    return [];
-  }
-
-  const lastContentIndex = lines.findLastIndex((line) => line.trim() !== '');
-  if (
-    firstContentIndex < lastContentIndex &&
-    isMarkdownFenceDelimiter(lines[firstContentIndex]) &&
-    isMarkdownFenceDelimiter(lines[lastContentIndex])
-  ) {
-    return [
-      ...lines.slice(0, firstContentIndex),
-      ...lines.slice(firstContentIndex + 1, lastContentIndex),
-      ...lines.slice(lastContentIndex + 1),
-    ];
-  }
-
-  return [...lines];
-}
-
-function getLatexDocumentContext(lines: readonly string[]): {
-  insideDocumentBody: boolean;
-  inDocumentPreamble: boolean;
-} {
-  let depth = 0;
-  let sawDocumentclassWithoutBody = false;
-  for (const line of lines) {
-    if (line.trim().startsWith('%')) {
-      continue;
-    }
-    if (LATEX_DOCUMENTCLASS_REGEX.test(line)) {
-      sawDocumentclassWithoutBody = true;
-    }
-    if (LATEX_DOCUMENT_BEGIN_REGEX.test(line)) {
-      depth += 1;
-      sawDocumentclassWithoutBody = false;
-    }
-    if (LATEX_DOCUMENT_END_REGEX.test(line) && depth > 0) {
-      depth -= 1;
-      if (depth === 0) {
-        sawDocumentclassWithoutBody = false;
-      }
-    }
-  }
-  return {
-    insideDocumentBody: depth > 0,
-    inDocumentPreamble: sawDocumentclassWithoutBody,
-  };
-}
-
-function hasDocumentBeginInCurrentPreamble(
-  lines: readonly string[],
-  startIndex: number,
-): boolean {
-  for (const line of lines.slice(startIndex + 1)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('%')) {
-      continue;
-    }
-    if (LATEX_DOCUMENTCLASS_REGEX.test(line)) {
-      return false;
-    }
-    if (LATEX_DOCUMENT_BEGIN_REGEX.test(line)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function shouldKeepPercentHeaderAsLatexComment(
-  linesBeforeHeader: readonly string[],
-  allLines: readonly string[],
-  headerIndex: number,
-): boolean {
-  const context = getLatexDocumentContext(linesBeforeHeader);
-  if (context.insideDocumentBody) {
-    return true;
-  }
-  return (
-    context.inDocumentPreamble &&
-    hasDocumentBeginInCurrentPreamble(allLines, headerIndex)
-  );
-}
-
-function hasLikelyLatexContent(lines: readonly string[]): boolean {
-  return lines.some((line) => LIKELY_LATEX_CONTENT_REGEX.test(line.trim()));
-}
-
-function stripXmlTagBlocks(content: string, tagName: string): string {
-  const trimmedTag = tagName.trim();
-  if (!trimmedTag) {
-    return content;
-  }
-  return content.replaceAll(
-    new RegExp(
-      `<${escapeRegExp(trimmedTag)}\\b[^>]*>[\\s\\S]*?<\\/${escapeRegExp(trimmedTag)}>`,
-      'gi',
-    ),
-    '',
-  );
-}
-
 export class XmlOutputManager {
   constructor(
     private readonly agentSetting: AgentSetting,
@@ -227,7 +84,7 @@ export class XmlOutputManager {
     return applyReplacements(normalized, FENCED_LATEX_BLOCK_REPLACEMENTS);
   }
 
-  private extractMultipleDocumentsbyRegex(
+  private extractMultipleDocumentsByRegex(
     outputContent: string,
     documentTag: string,
     preferredName?: string,
@@ -277,164 +134,103 @@ export class XmlOutputManager {
     });
   }
 
-  private makeUniquePercentHeaderName(
-    source: string,
-    reservedFinalPaths: Set<string>,
-    roundDir: string,
-  ): string {
-    const normalized = source.replaceAll('\\', '/');
-    const safeName = getSafeDocumentRelativePath(normalized).replaceAll(
-      '\\',
-      '/',
+  private warnMissingExpectedFiles(
+    outputLocation: FileLocation,
+    expectedFiles: readonly string[],
+    documents: ReadonlyArray<{ name: string }>,
+  ): void {
+    const recoveredNames = new Set(
+      documents.map((doc) => this.normalizeExpectedFileName(doc.name)),
     );
-    let candidate = safeName;
-    let suffix = 2;
+    const missing = expectedFiles.filter(
+      (name) => !recoveredNames.has(this.normalizeExpectedFileName(name)),
+    );
+    if (missing.length === 0) return;
 
-    const finalPathKey = (name: string) =>
-      getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/');
-
-    while (reservedFinalPaths.has(finalPathKey(candidate))) {
-      const parsed = path.posix.parse(safeName);
-      candidate = path.posix.join(
-        parsed.dir,
-        `${parsed.name}-${suffix}${parsed.ext}`,
-      );
-      suffix += 1;
-    }
-
-    reservedFinalPaths.add(finalPathKey(candidate));
-    return candidate;
+    logMissingOutputs(this.logger, {
+      missing,
+      xmlFile: outputLocation.absolutePath,
+      documentTag: this.agentSetting.documentTag,
+    });
   }
 
-  private extractPercentHeaderDocuments(
+  private normalizeExpectedFileName(name: string): string {
+    return name.replaceAll('\\', '/').replace(/^(?:\.\/)+/, '');
+  }
+
+  private collectLatexFencedBlocks(
     outputContent: string,
-    roundDir: string,
     thinkingTag: string,
-  ): Array<{ content: string; name: string }> | null {
-    const documents: Array<{ content: string; name: string }> = [];
-    const reservedFinalPaths = new Set<string>();
-    let currentName: string | null = null;
-    let currentLines: string[] = [];
-    let preHeaderLines: string[] = [];
-    let pendingPrefacedMarkdownFence: MarkdownFence | null = null;
-    let currentMarkdownFence: MarkdownFence | null = null;
-    let ignoreProseUntilNextHeader = false;
-    let synthesizedSingleInputFromPrefix = false;
+  ): string[] {
+    return collectLatexFencedBlocksFromResponse(outputContent, thinkingTag, {
+      onUnclosedFence: (lineCount) => {
+        debugInternal(
+          this.logger,
+          `Dropped unclosed LaTeX fence with ${formatResultCount(lineCount, 'line')} during fallback extraction`,
+        );
+      },
+    });
+  }
 
-    const flushCurrent = (): MarkdownFence | null => {
-      if (!currentName) return null;
-      const content = stripSurroundingMarkdownFence(currentLines)
-        .join('\n')
-        .trim();
-      const carriedFence = content ? null : currentMarkdownFence;
-      if (content) {
-        documents.push({
-          name: this.makeUniquePercentHeaderName(
-            currentName,
-            reservedFinalPaths,
-            roundDir,
-          ),
-          content,
-        });
-      }
-      currentLines = [];
-      currentMarkdownFence = null;
-      return carriedFence;
-    };
+  /**
+   * Last-resort recovery for multi-input agents that returned fenced
+   * ```latex/```tex blocks with no filename header at all (neither the
+   * `%`-comment nor bare-label forms `extractFilenameHeaderDocuments`
+   * recognizes). Matches each fenced block against the agent's original
+   * input files by content similarity rather than guessing from response
+   * order, since a model can reorder or drop files in its response.
+   */
+  private async extractDocumentsByContentSimilarity(
+    outputContent: string,
+    outputLocation: FileLocation,
+    thinkingTag: string,
+    baseFiles: readonly FileLocation[],
+  ): Promise<Array<{ content: string; name: string }> | null> {
+    const blocks = this.collectLatexFencedBlocks(outputContent, thinkingTag);
+    if (blocks.length === 0) return null;
 
-    const lines = stripSurroundingMarkdownFence(
-      stripXmlTagBlocks(outputContent, thinkingTag)
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n')
-        .split('\n'),
+    const inputFiles = this.agentConfig.inputFiles;
+    const files = await Promise.all(
+      baseFiles.slice(0, inputFiles.length).map(async (loc, idx) => ({
+        name: inputFiles[idx],
+        // An unreadable base file becomes '': it will score near-zero
+        // similarity against any real fenced block rather than aborting the
+        // whole recovery pass.
+        content: await AbsoluteFS.read(loc.absolutePath).catch(() => ''),
+      })),
     );
-    for (const [index, line] of lines.entries()) {
-      const fence = parseMarkdownFenceDelimiter(line);
+    if (files.length === 0) return null;
 
-      if (!currentName && fence) {
-        if (
-          pendingPrefacedMarkdownFence &&
-          isClosingMarkdownFence(line, pendingPrefacedMarkdownFence)
-        ) {
-          pendingPrefacedMarkdownFence = null;
-        } else {
-          pendingPrefacedMarkdownFence = fence;
-        }
-        ignoreProseUntilNextHeader = false;
-        continue;
-      }
-
-      if (
-        currentName &&
-        currentMarkdownFence &&
-        isClosingMarkdownFence(line, currentMarkdownFence) &&
-        !getLatexDocumentContext(currentLines).insideDocumentBody
-      ) {
-        flushCurrent();
-        currentName = null;
-        preHeaderLines = [];
-        pendingPrefacedMarkdownFence = null;
-        ignoreProseUntilNextHeader = true;
-        synthesizedSingleInputFromPrefix = false;
-        continue;
-      }
-
-      const match = PERCENT_FILENAME_HEADER_REGEX.exec(line.trim());
-      if (match && synthesizedSingleInputFromPrefix) {
-        currentLines.push(line);
-        continue;
-      }
-
-      const linesBeforeHeader = currentName ? currentLines : preHeaderLines;
-      if (
-        match &&
-        !shouldKeepPercentHeaderAsLatexComment(linesBeforeHeader, lines, index)
-      ) {
-        if (!currentName && hasLikelyLatexContent(preHeaderLines)) {
-          if (this.agentConfig.inputFiles.length === 1) {
-            currentName = this.agentConfig.inputFiles[0];
-            currentLines = [...preHeaderLines, line];
-            currentMarkdownFence = pendingPrefacedMarkdownFence;
-            pendingPrefacedMarkdownFence = null;
-            preHeaderLines = [];
-            ignoreProseUntilNextHeader = false;
-            synthesizedSingleInputFromPrefix = true;
-            continue;
-          }
-          preHeaderLines = [];
-        }
-        const carriedFence = flushCurrent();
-        currentName = match[1];
-        currentMarkdownFence = pendingPrefacedMarkdownFence ?? carriedFence;
-        pendingPrefacedMarkdownFence = null;
-        preHeaderLines = [];
-        ignoreProseUntilNextHeader = false;
-        synthesizedSingleInputFromPrefix = false;
-        continue;
-      }
-
-      if (currentName) {
-        if (
-          fence &&
-          !currentMarkdownFence &&
-          !currentLines.some((currentLine) => currentLine.trim() !== '')
-        ) {
-          currentMarkdownFence = fence;
-          continue;
-        }
-        currentLines.push(line);
-      } else if (!ignoreProseUntilNextHeader) {
-        preHeaderLines.push(line);
-      }
-    }
-    flushCurrent();
-
+    const documents = assignByContentSimilarity(blocks, files).filter(
+      (d): d is { content: string; name: string } => d !== null,
+    );
     if (documents.length === 0) return null;
 
     logInternal(
       this.logger,
-      `Recovered ${this.agentSetting.documentTag} from % filename headers (${formatResultCount(documents.length, 'document')})`,
+      `Recovered ${this.agentSetting.documentTag} by matching unlabeled fenced ` +
+        `blocks against the original input files (${formatResultCount(documents.length, 'document')})`,
     );
+
+    // Recovery is best-effort per block: surface what stayed unmatched so a
+    // partially recovered round never silently reads as a complete one.
+    const matchedNames = new Set(documents.map((doc) => doc.name));
+    const unmatchedFiles = files
+      .map((file) => file.name)
+      .filter((name) => !matchedNames.has(name));
+    if (unmatchedFiles.length > 0) {
+      logMissingOutputs(this.logger, {
+        missing: unmatchedFiles,
+        xmlFile: outputLocation.absolutePath,
+        documentTag: this.agentSetting.documentTag,
+      });
+    }
+    if (documents.length < blocks.length) {
+      debugInternal(
+        this.logger,
+        `${blocks.length - documents.length} of ${formatResultCount(blocks.length, 'fenced block')} matched no input file and were dropped`,
+      );
+    }
     return documents;
   }
 
@@ -443,19 +239,24 @@ export class XmlOutputManager {
     documentTag: string,
     round: number,
     thinkingTag: string = 'scratchpad',
+    baseFiles: readonly FileLocation[] = [],
   ): Promise<OutputFileInfo[]> {
     const rawOutputContent = await AbsoluteFS.read(outputLocation.absolutePath);
-    let outputContent = rawOutputContent;
-    const expectedDocumentCount = this.countDocumentTags(outputContent);
+    const expectedDocumentCount = this.countDocumentTags(rawOutputContent);
 
-    const tagsToWrap = [thinkingTag, 'document'];
-    outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
+    // The XML-parse and regex tiers read the CDATA-wrapped variant (so the
+    // parser treats thinking/document bodies as opaque text); the header and
+    // similarity tiers below read the raw response instead.
+    const cdataWrapped = addCdataToTagsMultiple(rawOutputContent, [
+      thinkingTag,
+      'document',
+    ]);
 
     let documents: Array<{ content: string; name: string }> | null = null;
 
     try {
       const parser = new XMLParser(XML_PARSER_OPTIONS);
-      const root = parser.parse(outputContent);
+      const root = parser.parse(cdataWrapped);
       documents = extractContentFromXMLbyTagMultiple(root, documentTag);
       if (!documents) {
         debugInternal(
@@ -471,35 +272,114 @@ export class XmlOutputManager {
     }
 
     if (!documents) {
-      documents = this.extractMultipleDocumentsbyRegex(
-        outputContent,
+      documents = this.extractMultipleDocumentsByRegex(
+        cdataWrapped,
         documentTag,
       );
     }
 
-    if (!documents) {
-      documents = this.extractPercentHeaderDocuments(
-        rawOutputContent,
-        getFileDirectory(outputLocation),
-        thinkingTag,
-      );
-    }
+    // The files this agent is expected to write: the declared outputFiles
+    // when present (single-artifact agents like ocr / paper2slide, whose
+    // inputs can be media files a response might mention in prose),
+    // otherwise the inputs (workflow edit agents reuse the input names as
+    // output names). Bare labels may only name these, and single-document
+    // synthesis may only use one of these — never an input name when the
+    // agent declares a different output.
+    const expectedFiles =
+      this.agentConfig.outputFiles.length > 0
+        ? this.agentConfig.outputFiles
+        : this.agentConfig.inputFiles;
+    const soleExpectedFile =
+      expectedFiles.length === 1 ? expectedFiles[0] : null;
 
     if (!documents) {
-      // Single-input agents whose model regressed to a legacy single-doc shape
-      // (<latex_document>, ```latex fence, or bare \documentclass) can still
-      // be recovered: pass the primary input filename so the fallback can
-      // synthesize a named document. Multi-input agents cannot safely recover
-      // — without per-document names there's no way to route content.
-      const inputFiles = this.agentConfig.inputFiles;
+      documents = extractFilenameHeaderDocuments(rawOutputContent, {
+        thinkingTag,
+        roundDir: getFileDirectory(outputLocation),
+        labelFiles: expectedFiles,
+        synthesisName: soleExpectedFile,
+        coalesceRepeatedName:
+          this.agentConfig.outputFiles.length === 1 ? soleExpectedFile : null,
+        wrapperTag: documentTag,
+      });
+      if (documents) {
+        logInternal(
+          this.logger,
+          `Recovered ${this.agentSetting.documentTag} from filename headers (${formatResultCount(documents.length, 'document')})`,
+        );
+        if (expectedFiles.length > 1) {
+          this.warnMissingExpectedFiles(
+            outputLocation,
+            expectedFiles,
+            documents,
+          );
+        }
+      }
+    }
+
+    if (
+      !documents &&
+      this.agentConfig.outputFiles.length === 1 &&
+      soleExpectedFile
+    ) {
+      // This fully unlabeled tier is intentionally stricter than
+      // filename-header recovery: without a trusted file label, only fences
+      // explicitly marked latex/tex are treated as output.
+      const fencedBlocks = this.collectLatexFencedBlocks(
+        rawOutputContent,
+        thinkingTag,
+      );
+      if (fencedBlocks.length > 1) {
+        documents = [
+          {
+            name: soleExpectedFile,
+            content: fencedBlocks.join('\n\n'),
+          },
+        ];
+        logInternal(
+          this.logger,
+          `Recovered ${this.agentSetting.documentTag} by concatenating ` +
+            `unlabeled fenced blocks under ${soleExpectedFile} (${formatResultCount(fencedBlocks.length, 'block')})`,
+        );
+      }
+    }
+
+    if (!documents && soleExpectedFile) {
+      // Agents expected to write exactly one file whose model regressed to a
+      // legacy single-doc shape (<latex_document>, ```latex fence, or bare
+      // \documentclass) can still be recovered: pass that filename so the
+      // fallback can synthesize a named document. Agents with several
+      // expected files cannot safely recover — without per-document names
+      // there's no way to route content (and without a preferredName this
+      // call would just repeat the earlier one).
       // Keep the relative path verbatim — getExtractedDocOutputFileName
       // preserves subdirectories so `Draft/Draft1.tex` lands at the right
       // workspace location instead of collapsing to the round root.
-      const preferredName = inputFiles.length === 1 ? inputFiles[0] : undefined;
-      documents = this.extractMultipleDocumentsbyRegex(
-        outputContent,
+      documents = this.extractMultipleDocumentsByRegex(
+        cdataWrapped,
         documentTag,
-        preferredName,
+        soleExpectedFile,
+      );
+    }
+
+    if (
+      !documents &&
+      this.agentConfig.inputFiles.length > 1 &&
+      this.agentConfig.outputFiles.length === 0
+    ) {
+      // Multi-input agents have no name to synthesize a single-document
+      // recovery from, but an unlabeled fenced block can still be routed by
+      // comparing it against each original input file's content. Only valid
+      // when baseFiles really is the input files: runReflectionFlow.ts
+      // substitutes config.outputFiles for baseFiles whenever the agent
+      // declares any (single-artifact-from-many-inputs agents like ocr/
+      // paper2slide), so zipping baseFiles[i] with inputFiles[i] there would
+      // label a matched block with the wrong input filename.
+      documents = await this.extractDocumentsByContentSimilarity(
+        rawOutputContent,
+        outputLocation,
+        thinkingTag,
+        baseFiles,
       );
     }
 

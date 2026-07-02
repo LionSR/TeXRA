@@ -1,0 +1,478 @@
+/**
+ * Filename-header document recovery for fallback output extraction.
+ *
+ * Splits a raw model response into named documents by recognizing
+ * `% path/file.ext` comment headers and bare known-file labels, handling
+ * markdown fences around each document and the ambiguity of `%` headers
+ * that are really LaTeX comments.
+ */
+
+import * as path from 'node:path';
+
+import escapeRegExp from 'escape-string-regexp';
+
+import {
+  getExtractedDocOutputFileName,
+  getSafeDocumentRelativePath,
+} from '@agent/utils/outputFileUtils';
+import { getBasename, normalizeFilePath } from '@shared/utils/path';
+
+import {
+  getLatexDocumentContext,
+  hasLikelyLatexContent,
+  isInsideLiteralEnvironment,
+  shouldKeepPercentHeaderAsLatexComment,
+} from './latexHeuristics';
+import {
+  isClosingMarkdownFence,
+  isLatexMarkdownFence,
+  type MarkdownFence,
+  parseMarkdownFenceDelimiter,
+  stripSurroundingMarkdownFence,
+} from './markdownFences';
+import { responseLines } from './responseText';
+
+const PERCENT_FILENAME_HEADER_REGEX =
+  /^%\s+((?:\.[/\\])*[A-Za-z0-9_][A-Za-z0-9._/\\-]*\.[A-Za-z0-9]+)\s*$/;
+/** Trailing label punctuation after a bare filename (`Draft3.tex:`). */
+const TRAILING_COLON_REGEX = /:+$/;
+/** Markdown decoration that is never part of a filename (`**x**`, `` `x` ``). */
+const SAFE_DECORATION_REGEX = /^[*`]+|[*`:]+$/g;
+/** Strip trailing emphasis without stripping a filename's leading underscore. */
+const TRAILING_EMPHASIS_DECORATION_REGEX = /^[*`]+|[*_`:]+$/g;
+/** Full decoration strip, including emphasis underscores (`_x_`). */
+const FULL_DECORATION_REGEX = /^[*_`]+|[*_`:]+$/g;
+const FILE_LIKE_LABEL_REGEX =
+  /^\s*(?:\.[/\\])*[A-Za-z0-9_][A-Za-z0-9._/\\-]*\.[A-Za-z0-9]+:+\s*$/;
+
+function matchNormalizedCandidate(
+  stripped: string,
+  knownFiles: readonly string[],
+): string | null {
+  if (!stripped) return null;
+  const candidate = normalizeFilePath(stripped).replace(/^(?:\.\/)+/, '');
+  const exact = knownFiles.find((f) => normalizeFilePath(f) === candidate);
+  if (exact) return exact;
+
+  // Fall back to a basename match when the model dropped the leading
+  // directories, but only when it resolves unambiguously.
+  const basenameMatches = knownFiles.filter(
+    (f) => getBasename(f) === candidate,
+  );
+  return basenameMatches.length === 1 ? basenameMatches[0] : null;
+}
+
+/**
+ * Recognize a header line that names one of the agent's known files directly,
+ * without the `%` comment prefix (e.g. `Draft/Draft3.tex:` or
+ * `**Draft3.tex**`). Unlike the percent-header form, a bare line like this is
+ * never valid LaTeX on its own, so the only ambiguity risk is a coincidental
+ * match — guarded against by only ever matching against the agent's own
+ * known files rather than any path-shaped string.
+ *
+ * Decoration is stripped progressively because an underscore is both markdown
+ * emphasis and a legal filename character: `_macros.tex:` must keep its
+ * underscore, while `_paper.tex_` must lose both.
+ */
+function matchKnownFileLabel(
+  line: string,
+  knownFiles: readonly string[],
+): string | null {
+  const trimmed = line.trim();
+  for (const stripped of [
+    trimmed.replace(TRAILING_COLON_REGEX, ''),
+    trimmed.replaceAll(SAFE_DECORATION_REGEX, ''),
+    trimmed.replaceAll(TRAILING_EMPHASIS_DECORATION_REGEX, ''),
+    trimmed.replaceAll(FULL_DECORATION_REGEX, ''),
+  ]) {
+    const match = matchNormalizedCandidate(stripped, knownFiles);
+    if (match) return match;
+  }
+  return null;
+}
+
+function makeUniquePercentHeaderName(
+  source: string,
+  reservedFinalPaths: Set<string>,
+  roundDir: string,
+): string {
+  const normalized = source.replaceAll('\\', '/');
+  const safeName = getSafeDocumentRelativePath(normalized).replaceAll(
+    '\\',
+    '/',
+  );
+  let candidate = safeName;
+  let suffix = 2;
+
+  const finalPathKey = (name: string) =>
+    getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/');
+
+  while (reservedFinalPaths.has(finalPathKey(candidate))) {
+    const parsed = path.posix.parse(safeName);
+    candidate = path.posix.join(
+      parsed.dir,
+      `${parsed.name}-${suffix}${parsed.ext}`,
+    );
+    suffix += 1;
+  }
+
+  reservedFinalPaths.add(finalPathKey(candidate));
+  return candidate;
+}
+
+function safeDocumentName(source: string): string {
+  return getSafeDocumentRelativePath(source.replaceAll('\\', '/')).replaceAll(
+    '\\',
+    '/',
+  );
+}
+
+function sameNormalizedPath(a: string, b: string): boolean {
+  return (
+    normalizeFilePath(a).replace(/^(?:\.\/)+/, '') ===
+    normalizeFilePath(b).replace(/^(?:\.\/)+/, '')
+  );
+}
+
+function stripDocumentsEnvelope(
+  lines: readonly string[],
+  wrapperTag: string,
+): string[] {
+  const trimmedTag = wrapperTag.trim();
+  if (!trimmedTag) return [...lines];
+  const openRegex = new RegExp(
+    `^<${escapeRegExp(trimmedTag)}\\b[^>]*>\\s*$`,
+    'i',
+  );
+  const closeRegex = new RegExp(`^<\\/${escapeRegExp(trimmedTag)}>\\s*$`, 'i');
+  const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
+  const lastContentIndex = lines.findLastIndex((line) => line.trim() !== '');
+  if (
+    firstContentIndex !== -1 &&
+    lastContentIndex !== -1 &&
+    firstContentIndex < lastContentIndex &&
+    openRegex.test(lines[firstContentIndex].trim()) &&
+    closeRegex.test(lines[lastContentIndex].trim())
+  ) {
+    return [
+      ...lines.slice(0, firstContentIndex),
+      ...lines.slice(firstContentIndex + 1, lastContentIndex),
+      ...lines.slice(lastContentIndex + 1),
+    ];
+  }
+  return [...lines];
+}
+
+function matchHeaderName(
+  line: string,
+  labelFiles: readonly string[],
+): string | null {
+  return (
+    PERCENT_FILENAME_HEADER_REGEX.exec(line.trim())?.[1] ??
+    matchKnownFileLabel(line, labelFiles)
+  );
+}
+
+function findClosingFenceIndex(
+  lines: readonly string[],
+  startIndex: number,
+  openingFence: MarkdownFence,
+): number {
+  return lines.findIndex(
+    (line, index) =>
+      index >= startIndex && isClosingMarkdownFence(line, openingFence),
+  );
+}
+
+function shouldParseHeaderInsideNonLatexFence(
+  lines: readonly string[],
+  headerIndex: number,
+  openingFence: MarkdownFence,
+  labelFiles: readonly string[],
+): boolean {
+  const closingIndex = findClosingFenceIndex(lines, headerIndex, openingFence);
+  if (closingIndex === -1) return true;
+
+  const bodyLines = lines.slice(headerIndex + 1, closingIndex);
+  const linesAfterFence = lines.slice(closingIndex + 1);
+  return (
+    hasLikelyLatexContent(bodyLines) ||
+    bodyLines.some((line) => matchHeaderName(line, labelFiles) !== null) ||
+    !linesAfterFence.some((line) => matchHeaderName(line, labelFiles) !== null)
+  );
+}
+
+/**
+ * Recover named documents from filename headers in a raw response. Returns
+ * the recovered documents in response order, or null when none were found.
+ */
+export function extractFilenameHeaderDocuments(
+  outputContent: string,
+  options: {
+    thinkingTag: string;
+    roundDir: string;
+    /** Names a bare label may resolve to (declared outputs, else inputs). */
+    labelFiles: readonly string[];
+    /**
+     * The name for a document synthesized from an unlabeled LaTeX prefix.
+     * Null when the agent may write more than one file, which disables
+     * prefix synthesis (there is no way to pick the right name).
+     */
+    synthesisName: string | null;
+    /**
+     * When an agent declares one generated output, models often repeat that
+     * same output label for chunks of one artifact. Coalesce only that exact
+     * target; multi-file and in-place edits still keep duplicate names unique.
+     */
+    coalesceRepeatedName?: string | null;
+    wrapperTag: string;
+  },
+): Array<{ content: string; name: string }> | null {
+  const {
+    thinkingTag,
+    roundDir,
+    labelFiles,
+    synthesisName,
+    coalesceRepeatedName = null,
+    wrapperTag,
+  } = options;
+  const documents: Array<{ content: string; name: string }> = [];
+  const reservedFinalPaths = new Set<string>();
+  let currentName: string | null = null;
+  let currentLines: string[] = [];
+  let preHeaderLines: string[] = [];
+  let pendingPrefacedMarkdownFence: MarkdownFence | null = null;
+  let currentMarkdownFence: MarkdownFence | null = null;
+  let ignoreProseUntilNextHeader = false;
+  let synthesizedSingleInputFromPrefix = false;
+  let pendingSoleOutputChunk: { fence: MarkdownFence; lines: string[] } | null =
+    null;
+  let mayStartAdjacentSoleOutputChunk = false;
+  let sawSoleOutputChunkLabel = false;
+
+  const coalescedOutputName = coalesceRepeatedName
+    ? safeDocumentName(coalesceRepeatedName)
+    : null;
+  const coalescedOutput = () =>
+    coalescedOutputName
+      ? documents.find((document) => document.name === coalescedOutputName)
+      : undefined;
+
+  const appendCoalescedContent = (source: string, content: string): void => {
+    const name = safeDocumentName(source);
+    const existing = documents.find((document) => document.name === name);
+    if (existing) {
+      existing.content = `${existing.content.trim()}\n\n${content}`;
+    } else {
+      reservedFinalPaths.add(
+        getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/'),
+      );
+      documents.push({ name, content });
+    }
+  };
+
+  const flushCurrent = (): MarkdownFence | null => {
+    if (!currentName) return null;
+    const content = stripSurroundingMarkdownFence(currentLines)
+      .join('\n')
+      .trim();
+    const carriedFence = currentMarkdownFence;
+    if (content) {
+      if (
+        coalesceRepeatedName &&
+        sameNormalizedPath(currentName, coalesceRepeatedName)
+      ) {
+        appendCoalescedContent(currentName, content);
+        mayStartAdjacentSoleOutputChunk = true;
+      } else {
+        documents.push({
+          name: makeUniquePercentHeaderName(
+            currentName,
+            reservedFinalPaths,
+            roundDir,
+          ),
+          content,
+        });
+      }
+    }
+    currentLines = [];
+    currentMarkdownFence = null;
+    return carriedFence;
+  };
+
+  const lines = stripSurroundingMarkdownFence(
+    stripDocumentsEnvelope(
+      stripSurroundingMarkdownFence(
+        stripDocumentsEnvelope(
+          responseLines(outputContent, thinkingTag),
+          wrapperTag,
+        ),
+      ),
+      wrapperTag,
+    ),
+  );
+  for (const [index, line] of lines.entries()) {
+    const fence = parseMarkdownFenceDelimiter(line);
+    const percentHeaderName =
+      PERCENT_FILENAME_HEADER_REGEX.exec(line.trim())?.[1] ?? null;
+    const headerName =
+      percentHeaderName ?? matchKnownFileLabel(line, labelFiles);
+
+    if (pendingSoleOutputChunk) {
+      if (isClosingMarkdownFence(line, pendingSoleOutputChunk.fence)) {
+        const content = pendingSoleOutputChunk.lines.join('\n').trim();
+        if (content && coalesceRepeatedName) {
+          appendCoalescedContent(coalesceRepeatedName, content);
+          mayStartAdjacentSoleOutputChunk = true;
+        }
+        pendingSoleOutputChunk = null;
+        ignoreProseUntilNextHeader = true;
+        continue;
+      }
+      pendingSoleOutputChunk.lines.push(line);
+      continue;
+    }
+
+    if (!currentName && fence) {
+      if (
+        coalesceRepeatedName &&
+        coalescedOutput() &&
+        isLatexMarkdownFence(fence) &&
+        (mayStartAdjacentSoleOutputChunk || sawSoleOutputChunkLabel)
+      ) {
+        pendingSoleOutputChunk = { fence, lines: [] };
+        sawSoleOutputChunkLabel = false;
+        continue;
+      }
+      if (
+        pendingPrefacedMarkdownFence &&
+        isClosingMarkdownFence(line, pendingPrefacedMarkdownFence)
+      ) {
+        pendingPrefacedMarkdownFence = null;
+      } else {
+        pendingPrefacedMarkdownFence = fence;
+      }
+      ignoreProseUntilNextHeader = false;
+      continue;
+    }
+
+    if (
+      !currentName &&
+      pendingPrefacedMarkdownFence &&
+      !isLatexMarkdownFence(pendingPrefacedMarkdownFence)
+    ) {
+      const openExampleFence = pendingPrefacedMarkdownFence;
+      if (
+        !headerName ||
+        !shouldParseHeaderInsideNonLatexFence(
+          lines,
+          index,
+          openExampleFence,
+          labelFiles,
+        )
+      ) {
+        continue;
+      }
+    }
+
+    if (
+      currentName &&
+      currentMarkdownFence &&
+      isClosingMarkdownFence(line, currentMarkdownFence) &&
+      !getLatexDocumentContext(currentLines).insideDocumentBody &&
+      !isInsideLiteralEnvironment(currentLines)
+    ) {
+      flushCurrent();
+      currentName = null;
+      preHeaderLines = [];
+      pendingPrefacedMarkdownFence = null;
+      ignoreProseUntilNextHeader = true;
+      synthesizedSingleInputFromPrefix = false;
+      continue;
+    }
+
+    if (headerName && synthesizedSingleInputFromPrefix) {
+      // A `%` header is a valid LaTeX comment and can stay in the
+      // synthesized document's body, as can a filename-looking line inside
+      // a verbatim-style environment; a bare label elsewhere is not LaTeX,
+      // so drop it.
+      if (percentHeaderName || isInsideLiteralEnvironment(currentLines)) {
+        currentLines.push(line);
+      }
+      continue;
+    }
+
+    const linesBeforeHeader = currentName ? currentLines : preHeaderLines;
+    // The keep-as-comment heuristic exists because a `%` header is
+    // indistinguishable from a genuine LaTeX comment. A bare label is never
+    // valid LaTeX, so for it only literal contexts apply — inside a
+    // \begin{document} body or an unclosed verbatim-style environment, a
+    // filename-looking line stays content. The preamble lookahead must not
+    // swallow a label that separates a preamble-only file from the next
+    // document.
+    const keepHeaderAsContent = percentHeaderName
+      ? shouldKeepPercentHeaderAsLatexComment(linesBeforeHeader, lines, index)
+      : getLatexDocumentContext(linesBeforeHeader).insideDocumentBody ||
+        isInsideLiteralEnvironment(linesBeforeHeader);
+    if (headerName && !keepHeaderAsContent) {
+      if (!currentName && hasLikelyLatexContent(preHeaderLines)) {
+        if (synthesisName !== null) {
+          currentName = synthesisName;
+          // Keep the triggering `%` header as an in-document comment, but a
+          // bare label is not LaTeX and must not enter the synthesized body.
+          currentLines = percentHeaderName
+            ? [...preHeaderLines, line]
+            : [...preHeaderLines];
+          currentMarkdownFence = pendingPrefacedMarkdownFence;
+          pendingPrefacedMarkdownFence = null;
+          preHeaderLines = [];
+          ignoreProseUntilNextHeader = false;
+          synthesizedSingleInputFromPrefix = true;
+          continue;
+        }
+        preHeaderLines = [];
+      }
+      const carriedFence = flushCurrent();
+      currentName = headerName;
+      currentMarkdownFence = pendingPrefacedMarkdownFence ?? carriedFence;
+      pendingPrefacedMarkdownFence = null;
+      preHeaderLines = [];
+      ignoreProseUntilNextHeader = false;
+      synthesizedSingleInputFromPrefix = false;
+      mayStartAdjacentSoleOutputChunk = false;
+      sawSoleOutputChunkLabel = false;
+      continue;
+    }
+
+    if (currentName) {
+      if (
+        fence &&
+        !currentMarkdownFence &&
+        !currentLines.some((currentLine) => currentLine.trim() !== '')
+      ) {
+        currentMarkdownFence = fence;
+        continue;
+      }
+      currentLines.push(line);
+    } else if (!ignoreProseUntilNextHeader) {
+      preHeaderLines.push(line);
+      mayStartAdjacentSoleOutputChunk = line.trim() === '';
+      sawSoleOutputChunkLabel = false;
+    } else if (line.trim() === '') {
+      // Keep mayStartAdjacentSoleOutputChunk as-is: a chunk may follow the
+      // previous one after blank separation.
+    } else if (
+      coalesceRepeatedName &&
+      coalescedOutput() &&
+      FILE_LIKE_LABEL_REGEX.test(line)
+    ) {
+      sawSoleOutputChunkLabel = true;
+    } else {
+      mayStartAdjacentSoleOutputChunk = false;
+      sawSoleOutputChunkLabel = false;
+    }
+  }
+  flushCurrent();
+
+  return documents.length === 0 ? null : documents;
+}
