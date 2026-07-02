@@ -336,10 +336,13 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  async function postMainAgentOptionsData(): Promise<void> {
+  async function postMainAgentOptionsData(
+    selectedToolUseAgent?: string,
+  ): Promise<void> {
     options.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData: await loadAgentOptionsData(),
+      ...(selectedToolUseAgent ? { selectedToolUseAgent } : {}),
     });
   }
 
@@ -1030,7 +1033,14 @@ export function createDesktopSettingsIpc(
       await options.showErrorMessage?.(`Unknown team: ${presetId}`);
       return;
     }
-    await Promise.all([postAgentSelectionData(), postMainAgentOptionsData()]);
+    await Promise.all([
+      postAgentSelectionData(),
+      postMainAgentOptionsData(
+        agentCatalogController.getPresetToolUseRoot(
+          result.preset.toolUseAgents,
+        ),
+      ),
+    ]);
     await options.showInfoMessage?.(`Applied "${result.preset.name}" team`);
   }
 

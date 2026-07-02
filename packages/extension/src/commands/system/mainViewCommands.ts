@@ -27,6 +27,9 @@ type ModelOptionsByCategory = Awaited<
   ReturnType<typeof loadMainViewModelOptions>
 >;
 type AgentOptionsData = Awaited<ReturnType<typeof computeAgentOptionsData>>;
+interface RefreshAllOptionsArgs {
+  readonly selectedToolUseAgent?: string;
+}
 
 function postModelOptions(
   webview: vscode.WebviewView,
@@ -42,10 +45,12 @@ function postModelOptions(
 function postAgentOptions(
   webview: vscode.WebviewView,
   optionsData: AgentOptionsData,
+  selectedToolUseAgent?: string,
 ): void {
   webview.webview.postMessage({
     command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
     optionsData,
+    ...(selectedToolUseAgent && { selectedToolUseAgent }),
   });
 }
 
@@ -90,7 +95,7 @@ export function registerMainViewCommands(
     },
     {
       id: mainViewCommands.refreshAllOptions,
-      handler: () =>
+      handler: (args?: RefreshAllOptionsArgs) =>
         runRefresh('options', async (webview) => {
           await refresh();
           const [modelOptionsByCategory, agentOptionsData] = await Promise.all([
@@ -98,7 +103,11 @@ export function registerMainViewCommands(
             computeAgentOptionsData(),
           ]);
           postModelOptions(webview, modelOptionsByCategory);
-          postAgentOptions(webview, agentOptionsData);
+          postAgentOptions(
+            webview,
+            agentOptionsData,
+            args?.selectedToolUseAgent,
+          );
         }),
     },
   ]);

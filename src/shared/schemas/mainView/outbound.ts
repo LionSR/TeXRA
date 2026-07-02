@@ -37,6 +37,7 @@ export const SetAgentOptionsMessageSchema = z.object({
       toolUse: z.array(AgentOptionDataSchema).optional(),
     })
     .optional(),
+  selectedToolUseAgent: z.string().optional(),
 });
 
 export const SetEditedFileMessageSchema = withFilesArray(
