@@ -6,10 +6,9 @@ import { computeAgentOptionsData, refresh } from '@agent/index';
 import { arXivCommands } from '@commands/latex';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { gitCommands } from '@commands/git/gitCommands';
-import { toErrorMessage } from '@common/errors';
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { getMainWebview } from '@frontend/system/commandUtils';
-import * as logger from '@logger/logUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 import { sampleProjectCommands } from './sampleProjectCommands';
@@ -60,9 +59,7 @@ async function runRefresh(
   try {
     await apply(webview);
   } catch (error) {
-    const message = toErrorMessage(error);
-    logger.error(CHANNEL, `Failed to refresh ${label}: ${message}`);
-    vscode.window.showErrorMessage(`Failed to refresh ${label}: ${message}`);
+    await showLoggedErrorMessage(CHANNEL, `Failed to refresh ${label}`, error);
   }
 }
 

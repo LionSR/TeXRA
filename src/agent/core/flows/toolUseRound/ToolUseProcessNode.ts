@@ -13,7 +13,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Local imports - logging
 import { MESSAGE_TYPES } from '@shared/schemas';
-import { isNonEmptyString } from '@utils/core';
+import { isNonEmptyString, isObject } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -24,20 +24,16 @@ import type { ToolUseRoundShared } from './roundShared';
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function hasToolResultContent(value: unknown): boolean {
   if (!Array.isArray(value)) return false;
   return value.some((item) => {
-    if (!isRecord(item)) return false;
-    return item.type === 'tool_result' || isRecord(item.functionResponse);
+    if (!isObject(item)) return false;
+    return item.type === 'tool_result' || isObject(item.functionResponse);
   });
 }
 
 function isToolResultMessage(message: ProviderMessage | undefined): boolean {
-  if (!isRecord(message)) return false;
+  if (!isObject(message)) return false;
   const record: Record<string, unknown> = message;
 
   if (

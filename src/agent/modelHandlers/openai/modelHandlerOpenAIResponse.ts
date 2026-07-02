@@ -38,6 +38,7 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { clamp, filterNotNullish, roundTo } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
+import { computeUtilizationPercent } from '../support/contextUtilization';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import {
@@ -852,7 +853,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     const tokensBefore = this.conversationState.cumulativeInputTokens;
     const contextWindow = this.getEffectiveContextWindow();
-    const utilizationBefore = (tokensBefore / contextWindow) * 100;
+    const utilizationBefore = computeUtilizationPercent(
+      tokensBefore,
+      contextWindow,
+    );
 
     this.logger.debug(
       `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${contextWindow} context window)`,
@@ -910,7 +914,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         tokensAfter = compactedResponse.usage.output_tokens;
       }
 
-      const utilizationAfter = (tokensAfter / contextWindow) * 100;
+      const utilizationAfter = computeUtilizationPercent(
+        tokensAfter,
+        contextWindow,
+      );
       const reduction = tokensBefore - tokensAfter;
       const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
 
@@ -1268,7 +1275,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         contextWindow,
         utilizationBefore:
           validation.utilizationPercent ??
-          (inputEstimate / contextWindow) * 100,
+          computeUtilizationPercent(inputEstimate, contextWindow),
         originalMaxTokens: maxOutputTokens,
         reducedMaxTokens: capped,
         details:
