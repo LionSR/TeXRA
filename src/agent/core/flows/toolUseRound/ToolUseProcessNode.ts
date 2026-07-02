@@ -13,8 +13,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Local imports - logging
 import { MESSAGE_TYPES } from '@shared/schemas';
-import { isNonEmptyString } from '@utils/core';
-import { isObject } from '@utils/core/typeGuards';
+import { isNonEmptyString, isObject } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports

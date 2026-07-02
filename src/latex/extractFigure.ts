@@ -83,15 +83,15 @@ export async function extractFigurePathsFromLatex(
 
   const content = await flexibleFS.read(latexFileLocation);
 
-  // Parse graphicspaths
-  const paths = parseGraphicspath(content);
-  for (const p of paths) {
-    graphicspaths.push(joinLatexPath(latexDir, p));
-  }
-
   // Pre-process content to remove commented-out text (including inline
   // comments and escaped `\%`, unlike a naive whole-line strip).
   const processedContent = stripLatexComments(content);
+
+  // Parse graphicspaths
+  const paths = parseGraphicspath(processedContent);
+  for (const p of paths) {
+    graphicspaths.push(joinLatexPath(latexDir, p));
+  }
 
   // Find all matches in the processed content for both patterns
   const discovered = new Set<string>();
