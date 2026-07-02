@@ -94,20 +94,29 @@ export class OutputFileProcessor {
 
     // An output's source is the workspace-relative document name; a base
     // file is workspace-relative too, except external locations, which only
-    // carry an absolute path — hence the suffix comparison.
-    const matchesSource = (location: FileLocation, source: string): boolean => {
-      const path = normalizeFilePath(
+    // carry an absolute path — hence the suffix comparison. A suffix match
+    // only counts when it is unambiguous: a basename-only source (e.g. from
+    // a `% main.tex` header) must not map onto several same-named base
+    // files in different directories.
+    const pathOf = (location: FileLocation): string =>
+      normalizeFilePath(
         location.kind === 'external'
           ? location.absolutePath
           : location.relativePath,
       );
-      const normalizedSource = normalizeFilePath(source);
-      return path === normalizedSource || path.endsWith(`/${normalizedSource}`);
-    };
+    const basesMatching = (source: string): number =>
+      baseFiles.filter((base) => {
+        const path = pathOf(base);
+        return path === source || path.endsWith(`/${source}`);
+      }).length;
+
     return baseFiles.map((location) => {
-      const previous = previousOutputs.find((output) =>
-        matchesSource(location, output.source),
-      );
+      const path = pathOf(location);
+      const previous = previousOutputs.find((output) => {
+        const source = normalizeFilePath(output.source);
+        if (source === path) return true;
+        return path.endsWith(`/${source}`) && basesMatching(source) === 1;
+      });
       return previous?.location ?? location;
     });
   }
