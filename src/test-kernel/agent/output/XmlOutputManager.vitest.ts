@@ -51,8 +51,12 @@ function createXmlManager(
     {
       inputFiles,
       outputFiles: [],
-    } as AgentConfig,
-    { debug: vi.fn(), info: vi.fn() } as unknown as AgentTrace,
+    } as unknown as AgentConfig,
+    {
+      debug: vi.fn(),
+      info: vi.fn(),
+      domain: vi.fn(),
+    } as unknown as AgentTrace,
     new TaskRunFileService(),
   );
 }
@@ -1115,6 +1119,58 @@ Appendix.
     ]);
   });
 
+  it('matches a bare label whose path uses Windows separators or a ./ prefix', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'Draft\\LeanMPSPaper\\Draft3.tex:',
+        '```latex',
+        'Body via backslashes.',
+        '```',
+        '',
+        './Draft/LeanMPSPaper/endmatter.tex:',
+        '```latex',
+        'Body via dot-slash.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', [
+      'Draft/LeanMPSPaper/Draft3.tex',
+      'Draft/LeanMPSPaper/endmatter.tex',
+    ]);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'Draft/LeanMPSPaper/Draft3.tex',
+      'Draft/LeanMPSPaper/endmatter.tex',
+    ]);
+  });
+
+  it('drops a bare label line inside a synthesized single-input document body', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '\\section{Intro}',
+        'Text.',
+        '% paper.tex',
+        'More text.',
+        'paper.tex:',
+        'Final text.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['paper.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
+    // The % header stays (it is a valid LaTeX comment); the bare label is
+    // not LaTeX and must not leak into the recovered document.
+    await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
+      '\\section{Intro}\nText.\n% paper.tex\nMore text.\nFinal text.\n',
+    );
+  });
+
   it('falls back to content-similarity matching for unlabeled fenced blocks against the original inputs', async () => {
     const appendicesOriginal =
       '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n';
@@ -1174,17 +1230,12 @@ Appendix.
     );
   });
 
-  it('skips content-similarity matching for single-artifact-from-many-inputs agents', async () => {
-    // Agents like ocr/paper2slide declare one defaultOutputFiles entry while
-    // accepting several attached input files. runReflectionFlow.ts then
-    // builds baseFiles from outputFiles, not inputFiles, so baseFiles[i] no
-    // longer corresponds to inputFiles[i] — content-similarity matching must
-    // not run in this shape, or it would label a block with the wrong name.
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
-      ['```latex', 'Unlabeled recovered content.', '```'].join('\n'),
-    );
-    const manager = new XmlOutputManager(
+  // Agents like ocr/paper2slide declare one defaultOutputFiles entry while
+  // accepting several attached input files. runReflectionFlow.ts then builds
+  // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
+  // corresponds to inputFiles[i].
+  function createSingleArtifactManager(): XmlOutputManager {
+    return new XmlOutputManager(
       {
         agentCategory: AgentCategory.Workflow,
         documentTag: 'documents',
@@ -1202,19 +1253,189 @@ Appendix.
       {
         inputFiles: ['page1.png', 'page2.png'],
         outputFiles: ['ocr_result.tex'],
-      } as AgentConfig,
-      { debug: vi.fn(), info: vi.fn(), warn: vi.fn() } as unknown as AgentTrace,
+      } as unknown as AgentConfig,
+      {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        domain: vi.fn(),
+      } as unknown as AgentTrace,
       new TaskRunFileService(),
     );
+  }
+
+  it('skips content-similarity matching for single-artifact-from-many-inputs agents', async () => {
+    // Content-similarity matching must not run in this shape, or it would
+    // label a block with the wrong name.
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['```latex', 'Unlabeled recovered content.', '```'].join('\n'),
+    );
+
+    const outputs =
+      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
+        createExternalLocation('/tmp/run/output.xml'),
+        'documents',
+        0,
+        'scratchpad',
+        [createExternalLocation('/tmp/run/ocr_result.tex')],
+      );
+
+    expect(outputs).toEqual([]);
+  });
+
+  it('ignores bare labels naming an input when the agent declares outputFiles', async () => {
+    // For single-artifact agents the inputs can be media files the response
+    // mentions in prose; a `page1.png:` line must not become a document.
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['page1.png:', '```latex', 'Transcribed content.', '```'].join('\n'),
+    );
+
+    const outputs =
+      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
+        createExternalLocation('/tmp/run/output.xml'),
+        'documents',
+        0,
+        'scratchpad',
+        [createExternalLocation('/tmp/run/ocr_result.tex')],
+      );
+
+    expect(outputs).toEqual([]);
+  });
+
+  it('recovers a bare label naming a declared output file', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['ocr_result.tex:', '```latex', 'Transcribed content.', '```'].join('\n'),
+    );
+
+    const outputs =
+      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
+        createExternalLocation('/tmp/run/output.xml'),
+        'documents',
+        0,
+        'scratchpad',
+        [createExternalLocation('/tmp/run/ocr_result.tex')],
+      );
+
+    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
+      'Transcribed content.\n',
+    );
+  });
+
+  it('leaves an unlabeled block unmatched when identical base files make the match ambiguous', async () => {
+    const stub = '\\section{Stub}\nShared template content.\n';
+    await AbsoluteFS.write('/tmp/run/a.tex', stub);
+    await AbsoluteFS.write('/tmp/run/b.tex', stub);
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '```latex',
+        '\\section{Stub}',
+        'Shared template content, revised.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['a.tex', 'b.tex']);
 
     const outputs = await manager.splitScratchpadMultipleOutputXml(
       createExternalLocation('/tmp/run/output.xml'),
       'documents',
       0,
       'scratchpad',
-      [createExternalLocation('/tmp/run/ocr_result.tex')],
+      [
+        createExternalLocation('/tmp/run/a.tex'),
+        createExternalLocation('/tmp/run/b.tex'),
+      ],
     );
 
+    // Both base files score identically, so there is no evidence which one
+    // the block revises — refusing to guess beats corrupting one of them.
     expect(outputs).toEqual([]);
+  });
+
+  it('routes the revision, not the echoed original, when the model quotes both', async () => {
+    const costOriginal =
+      '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n';
+    const archOriginal =
+      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n';
+    await AbsoluteFS.write('/tmp/run/cost.tex', costOriginal);
+    await AbsoluteFS.write('/tmp/run/arch.tex', archOriginal);
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'The original cost section for reference:',
+        '```latex',
+        '\\section{Computational cost}',
+        'Preliminary numbers from the local interactive logs.',
+        '```',
+        '',
+        'And my revision:',
+        '```latex',
+        '\\section{Computational cost}',
+        'Final numbers from the local interactive logs.',
+        '```',
+        '',
+        '```latex',
+        '\\appendix',
+        '\\section{Agent architecture}',
+        'The formalization system uses a revised multi-agent architecture.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['cost.tex', 'arch.tex']);
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+      'scratchpad',
+      [
+        createExternalLocation('/tmp/run/cost.tex'),
+        createExternalLocation('/tmp/run/arch.tex'),
+      ],
+    );
+
+    expect(outputs.map((output) => output.source).sort()).toEqual([
+      'arch.tex',
+      'cost.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/cost.tex')).resolves.toBe(
+      '\\section{Computational cost}\nFinal numbers from the local interactive logs.\n',
+    );
+  });
+
+  it('reports input files left unmatched by content-similarity recovery', async () => {
+    const costOriginal =
+      '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n';
+    const archOriginal =
+      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n';
+    await AbsoluteFS.write('/tmp/run/cost.tex', costOriginal);
+    await AbsoluteFS.write('/tmp/run/arch.tex', archOriginal);
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '```latex',
+        '\\section{Computational cost}',
+        'Final numbers from the local interactive logs.',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['cost.tex', 'arch.tex']);
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+      'scratchpad',
+      [
+        createExternalLocation('/tmp/run/cost.tex'),
+        createExternalLocation('/tmp/run/arch.tex'),
+      ],
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual(['cost.tex']);
   });
 });

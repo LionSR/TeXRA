@@ -75,27 +75,26 @@ const PERCENT_FILENAME_HEADER_REGEX =
 const BARE_LABEL_DECORATION_REGEX = /^[*_`]+|[*_`:]+$/g;
 
 /**
- * Recognize a header line that names one of the agent's known input files
- * directly, without the `%` comment prefix (e.g. `Draft/Draft3.tex:` or
+ * Recognize a header line that names one of the agent's known files directly,
+ * without the `%` comment prefix (e.g. `Draft/Draft3.tex:` or
  * `**Draft3.tex**`). Unlike the percent-header form, a bare line like this is
  * never valid LaTeX on its own, so the only ambiguity risk is a coincidental
  * match — guarded against by only ever matching against the agent's own
- * declared input files rather than any path-shaped string.
+ * known files rather than any path-shaped string.
  */
-function matchKnownInputFileLabel(
+function matchKnownFileLabel(
   line: string,
-  inputFiles: readonly string[],
+  knownFiles: readonly string[],
 ): string | null {
-  const candidate = line.trim().replaceAll(BARE_LABEL_DECORATION_REGEX, '');
-  if (!candidate) return null;
-  const exact = inputFiles.find(
-    (f) => normalizeFilePath(f) === normalizeFilePath(candidate),
-  );
+  const stripped = line.trim().replaceAll(BARE_LABEL_DECORATION_REGEX, '');
+  if (!stripped) return null;
+  const candidate = normalizeFilePath(stripped).replace(/^(?:\.\/)+/, '');
+  const exact = knownFiles.find((f) => normalizeFilePath(f) === candidate);
   if (exact) return exact;
 
   // Fall back to a basename match when the model dropped the leading
   // directories, but only when it resolves unambiguously.
-  const basenameMatches = inputFiles.filter(
+  const basenameMatches = knownFiles.filter(
     (f) => getBasename(f) === candidate,
   );
   return basenameMatches.length === 1 ? basenameMatches[0] : null;
@@ -267,10 +266,12 @@ function collectLatexFencedBlocks(
 }
 
 /**
- * Similarity in [0, 1] between two documents via a line-mode Myers diff
- * (`diff-match-patch`, already a project dependency): 1 minus the edit
- * distance implied by the diff, normalized by the longer document's length.
- * Line mode keeps this cheap even for large, mostly-unchanged documents.
+ * Similarity in [0, 1] between two documents via a `diff-match-patch` Myers
+ * diff (with the line-mode speedup enabled, which keeps this cheap for
+ * large, mostly-unchanged documents): 1 minus the diff's edit distance,
+ * normalized by the longer document's length. Clamped at 0 because
+ * `diff_levenshtein` counts a substitution as delete-plus-insert, which can
+ * exceed the longer length for very different documents.
  */
 function documentSimilarity(
   dmp: InstanceType<typeof diff_match_patch>,
@@ -280,15 +281,16 @@ function documentSimilarity(
   if (a === b) return 1;
   const maxLength = Math.max(a.length, b.length, 1);
   const diffs = dmp.diff_main(a, b, true);
-  return 1 - dmp.diff_levenshtein(diffs) / maxLength;
+  return Math.max(0, 1 - dmp.diff_levenshtein(diffs) / maxLength);
 }
 
 /**
  * Greedily pair each candidate document with the base file it most closely
  * resembles, highest-confidence pairs first, so an unambiguous match never
- * gets displaced by a later tie. Candidates/files below `minSimilarity`, or
- * left over once the other side is exhausted, come back unmatched rather
- * than being guessed.
+ * gets displaced by a later tie. Never guesses: candidates below
+ * `minSimilarity`, candidates whose best remaining files tie exactly (e.g.
+ * identical template stubs), and leftovers once the other side is exhausted
+ * all come back unmatched.
  */
 function assignByContentSimilarity(
   candidates: readonly string[],
@@ -296,14 +298,31 @@ function assignByContentSimilarity(
   minSimilarity = 0.15,
 ): Array<{ content: string; name: string } | null> {
   const dmp = new diff_match_patch();
+  const scores = candidates.map((candidate) =>
+    files.map((file) => documentSimilarity(dmp, candidate, file.content)),
+  );
+  const bestFileOf = scores.map((row) => row.indexOf(Math.max(...row)));
+
+  // A block that echoes a base file verbatim (modulo surrounding whitespace —
+  // fenced blocks arrive trimmed) is a quote of the original, not a revision.
+  // When some other block's best match is that same file (the model quoted
+  // the original before its revision), drop the verbatim pair so the
+  // revision can claim the file.
+  const trimmedFileContents = files.map((file) => file.content.trim());
+  const isDisplacedEcho = (c: number, f: number): boolean =>
+    candidates[c].trim() === trimmedFileContents[f] &&
+    candidates.some(
+      (_, other) =>
+        other !== c &&
+        bestFileOf[other] === f &&
+        scores[other][f] >= minSimilarity,
+    );
+
   const scored: Array<{ c: number; f: number; score: number }> = [];
-  for (const [c, candidate] of candidates.entries()) {
-    for (const [f, file] of files.entries()) {
-      scored.push({
-        c,
-        f,
-        score: documentSimilarity(dmp, candidate, file.content),
-      });
+  for (const c of candidates.keys()) {
+    for (const f of files.keys()) {
+      if (isDisplacedEcho(c, f)) continue;
+      scored.push({ c, f, score: scores[c][f] });
     }
   }
   scored.sort((a, b) => b.score - a.score);
@@ -315,6 +334,17 @@ function assignByContentSimilarity(
     if (score < minSimilarity) break;
     if (takenCandidates.has(c) || takenFiles.has(f)) continue;
     takenCandidates.add(c);
+    // An exact score tie against another still-free file means there is no
+    // evidence which file this block belongs to — leave it unmatched rather
+    // than routing by declaration order.
+    const ambiguous = scored.some(
+      (other) =>
+        other.c === c &&
+        other.f !== f &&
+        !takenFiles.has(other.f) &&
+        other.score === score,
+    );
+    if (ambiguous) continue;
     takenFiles.add(f);
     nameByCandidate.set(c, files[f].name);
   }
@@ -448,6 +478,16 @@ export class XmlOutputManager {
     let ignoreProseUntilNextHeader = false;
     let synthesizedSingleInputFromPrefix = false;
 
+    // Bare labels may only name files this agent is expected to write: the
+    // declared outputFiles when present (single-artifact agents like ocr /
+    // paper2slide, whose inputs can be media files a response might mention
+    // in prose), otherwise the inputs (workflow edit agents reuse the input
+    // names as output names).
+    const labelFiles =
+      this.agentConfig.outputFiles.length > 0
+        ? this.agentConfig.outputFiles
+        : this.agentConfig.inputFiles;
+
     const flushCurrent = (): MarkdownFence | null => {
       if (!currentName) return null;
       const content = stripSurroundingMarkdownFence(currentLines)
@@ -506,11 +546,16 @@ export class XmlOutputManager {
         continue;
       }
 
+      const percentHeaderName =
+        PERCENT_FILENAME_HEADER_REGEX.exec(line.trim())?.[1] ?? null;
       const headerName =
-        PERCENT_FILENAME_HEADER_REGEX.exec(line.trim())?.[1] ??
-        matchKnownInputFileLabel(line, this.agentConfig.inputFiles);
+        percentHeaderName ?? matchKnownFileLabel(line, labelFiles);
       if (headerName && synthesizedSingleInputFromPrefix) {
-        currentLines.push(line);
+        // A `%` header is a valid LaTeX comment and can stay in the
+        // synthesized document's body; a bare label is not LaTeX, so drop it.
+        if (percentHeaderName) {
+          currentLines.push(line);
+        }
         continue;
       }
 
@@ -577,6 +622,7 @@ export class XmlOutputManager {
    */
   private async extractDocumentsByContentSimilarity(
     outputContent: string,
+    outputLocation: FileLocation,
     thinkingTag: string,
     baseFiles: readonly FileLocation[],
   ): Promise<Array<{ content: string; name: string }> | null> {
@@ -605,6 +651,26 @@ export class XmlOutputManager {
       `Recovered ${this.agentSetting.documentTag} by matching unlabeled fenced ` +
         `blocks against the original input files (${formatResultCount(documents.length, 'document')})`,
     );
+
+    // Recovery is best-effort per block: surface what stayed unmatched so a
+    // partially recovered round never silently reads as a complete one.
+    const matchedNames = new Set(documents.map((doc) => doc.name));
+    const unmatchedFiles = files
+      .map((file) => file.name)
+      .filter((name) => !matchedNames.has(name));
+    if (unmatchedFiles.length > 0) {
+      logMissingOutputs(this.logger, {
+        missing: unmatchedFiles,
+        xmlFile: outputLocation.absolutePath,
+        documentTag: this.agentSetting.documentTag,
+      });
+    }
+    if (documents.length < blocks.length) {
+      debugInternal(
+        this.logger,
+        `${blocks.length - documents.length} of ${formatResultCount(blocks.length, 'fenced block')} matched no input file and were dropped`,
+      );
+    }
     return documents;
   }
 
@@ -689,6 +755,7 @@ export class XmlOutputManager {
       // label a matched block with the wrong input filename.
       documents = await this.extractDocumentsByContentSimilarity(
         rawOutputContent,
+        outputLocation,
         thinkingTag,
         baseFiles,
       );
