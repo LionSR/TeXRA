@@ -124,6 +124,9 @@ export const UpdateAgentSelectionMessageSchema = z.object({
   workflow: z.array(AgentSelectionItemSchema),
   toolUse: z.array(AgentSelectionItemSchema),
 });
+export type UpdateAgentSelectionMessage = z.infer<
+  typeof UpdateAgentSelectionMessageSchema
+>;
 
 // ============================================================
 // Model selection data schema
@@ -201,6 +204,9 @@ export const UpdateCustomAgentDirMessageSchema = z.object({
   path: z.string(),
   isDefault: z.boolean(),
 });
+export type UpdateCustomAgentDirMessage = z.infer<
+  typeof UpdateCustomAgentDirMessageSchema
+>;
 
 // ============================================================
 // Super YOLO enabled data schema
@@ -238,6 +244,9 @@ export const UpdateAgentModePresetsMessageSchema = z.object({
    */
   orchestratorAgents: z.array(z.string()).prefault([]),
 });
+export type UpdateAgentModePresetsMessage = z.infer<
+  typeof UpdateAgentModePresetsMessageSchema
+>;
 
 // ============================================================
 // Tool dashboard data schemas
@@ -333,6 +342,9 @@ export const UpdateGitAuthorSettingsMessageSchema = z.object({
   authorEmail: z.string(),
   worktreeSupport: z.boolean(),
 });
+export type UpdateGitAuthorSettingsMessage = z.infer<
+  typeof UpdateGitAuthorSettingsMessageSchema
+>;
 
 /** Outbound: backend → frontend GitHub token status. */
 export const UpdateGitHubTokenStatusMessageSchema = z.object({
@@ -355,6 +367,9 @@ export const UpdateChatGptAuthStatusMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS),
   status: ChatGptAuthStatusSchema,
 });
+export type UpdateChatGptAuthStatusMessage = z.infer<
+  typeof UpdateChatGptAuthStatusMessageSchema
+>;
 
 /** Outbound: backend → frontend desktop crash reporting status. */
 export const UpdateDesktopCrashReportingMessageSchema = z.object({
@@ -473,6 +488,9 @@ export const UpdateLatexConfigValuesMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES),
   values: LatexConfigValuesSchema,
 });
+export type UpdateLatexConfigValuesMessage = z.infer<
+  typeof UpdateLatexConfigValuesMessageSchema
+>;
 
 /** Outbound: backend → frontend inline criticism toggle state */
 export const UpdateInlineCriticismEnabledMessageSchema = z.object({

@@ -11,9 +11,7 @@ export interface PanelOptions {
   column?: vscode.ViewColumn;
   retainContextWhenHidden?: boolean;
   iconPath?:
-    | vscode.ThemeIcon
-    | vscode.Uri
-    | { light: vscode.Uri; dark: vscode.Uri };
+    vscode.ThemeIcon | vscode.Uri | { light: vscode.Uri; dark: vscode.Uri };
 }
 
 /**

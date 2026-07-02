@@ -32,9 +32,11 @@ export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState
       id: 'agentConfigBanner',
       body: html`
         <span>
-          ${this.state.agentName
-            ? `Agent file for "${this.state.agentName}" is missing.`
-            : 'Agent configuration is missing.'}
+          ${
+            this.state.agentName
+              ? `Agent file for "${this.state.agentName}" is missing.`
+              : 'Agent configuration is missing.'
+          }
         </span>
         <div class="actions">
           <wa-button

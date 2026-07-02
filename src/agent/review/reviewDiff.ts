@@ -70,8 +70,7 @@ export interface ReviewDiff {
 }
 
 export type CollectReviewDiffResult =
-  | { ok: true; value: ReviewDiff }
-  | { ok: false; reason: string };
+  { ok: true; value: ReviewDiff } | { ok: false; reason: string };
 
 function makeGit(cwd: string): SimpleGit {
   // makeMachineGitEnv() strips helper-invoking env keys and extends PATH so

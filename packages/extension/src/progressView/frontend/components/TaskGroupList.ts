@@ -84,8 +84,7 @@ export class TaskGroupList extends LitElement {
    * to reference scans.
    */
   @property({ attribute: false }) updatedMessageIndices:
-    | readonly number[]
-    | null = null;
+    readonly number[] | null = null;
 
   /** Generation immediately before updatedMessageIndices was collected. */
   @property({ attribute: false }) updatedMessageBaseGeneration = 0;
@@ -175,8 +174,7 @@ export class TaskGroupList extends LitElement {
     if (this.terminal) {
       const fullText = (): string => this.messages.map((m) => m.text).join('');
       const prevMsgs = changedProperties.get('messages') as
-        | LogMessageData[]
-        | undefined;
+        LogMessageData[] | undefined;
       const prevCount = prevMsgs?.length ?? 0;
       if (changedProperties.has('terminal')) {
         this.terminalBuffer.rebuild(fullText());
@@ -356,15 +354,17 @@ export class TaskGroupList extends LitElement {
     const visibleMessages =
       hiddenCount > 0 ? messages.slice(hiddenCount) : messages;
 
-    return html`${hiddenCount > 0
-      ? this.renderRevealButton({
-          hiddenCount,
-          step: GROUP_MESSAGE_WINDOW_STEP,
-          scope,
-          kind: 'messages',
-          label: 'message',
-        })
-      : nothing}${repeat(
+    return html`${
+      hiddenCount > 0
+        ? this.renderRevealButton({
+            hiddenCount,
+            step: GROUP_MESSAGE_WINDOW_STEP,
+            scope,
+            kind: 'messages',
+            label: 'message',
+          })
+        : nothing
+    }${repeat(
       visibleMessages,
       (m) => m.id,
       (m) => guard([m], () => formatLogEntry(m)),
@@ -455,13 +455,15 @@ export class TaskGroupList extends LitElement {
     const statusIcon = getStatusIcon(group.status);
     return html`
       <span class="group-status-icon">
-        ${statusIcon
-          ? html`<wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name=${statusIcon}
-              aria-hidden="true"
-            ></wa-icon>`
-          : html`<wa-spinner></wa-spinner>`}
+        ${
+          statusIcon
+            ? html`<wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name=${statusIcon}
+                aria-hidden="true"
+              ></wa-icon>`
+            : html`<wa-spinner></wa-spinner>`
+        }
       </span>
       <span class="group-title">${group.name}</span>
       <span class="group-time">
@@ -473,9 +475,11 @@ export class TaskGroupList extends LitElement {
           ></wa-icon>
           ${formattedStartTime}
         </span>
-        ${durationText
-          ? html`<span class="group-duration">${durationText}</span>`
-          : nothing}
+        ${
+          durationText
+            ? html`<span class="group-duration">${durationText}</span>`
+            : nothing
+        }
       </span>
     `;
   }
@@ -535,16 +539,18 @@ export class TaskGroupList extends LitElement {
           ${this.renderGroupHeader(group)}
         </div>
         <div id=${contentId} class="log-group-content">
-          ${expanded
-            ? html`${this.renderMessageEntries(
-                messages,
-                this.groupMessageScope(group.id),
-              )}${repeat(
-                children,
-                (c) => c.group.id,
-                (c) => this.renderGroupNode(c),
-              )}`
-            : nothing}
+          ${
+            expanded
+              ? html`${this.renderMessageEntries(
+                  messages,
+                  this.groupMessageScope(group.id),
+                )}${repeat(
+                  children,
+                  (c) => c.group.id,
+                  (c) => this.renderGroupNode(c),
+                )}`
+              : nothing
+          }
         </div>
       </wa-details>
     `;
@@ -630,9 +636,11 @@ export class TaskGroupList extends LitElement {
           @scroll=${this.handleScroll}
         >
           <div class="log-placeholder">
-            ${active
-              ? 'Run is starting. Progress updates will appear here.'
-              : 'No log output for this stream yet.'}
+            ${
+              active
+                ? 'Run is starting. Progress updates will appear here.'
+                : 'No log output for this stream yet.'
+            }
           </div>
         </div>
       `;
@@ -664,15 +672,17 @@ export class TaskGroupList extends LitElement {
         class="log-container"
         @scroll=${this.handleScroll}
       >
-        ${hiddenTimelineCount > 0
-          ? this.renderRevealButton({
-              hiddenCount: hiddenTimelineCount,
-              step: TIMELINE_ITEM_WINDOW_STEP,
-              scope: 'timeline',
-              kind: 'timeline',
-              label: 'item',
-            })
-          : nothing}
+        ${
+          hiddenTimelineCount > 0
+            ? this.renderRevealButton({
+                hiddenCount: hiddenTimelineCount,
+                step: TIMELINE_ITEM_WINDOW_STEP,
+                scope: 'timeline',
+                kind: 'timeline',
+                label: 'item',
+              })
+            : nothing
+        }
         ${repeat(
           visibleTimeline,
           (item) => item.key,

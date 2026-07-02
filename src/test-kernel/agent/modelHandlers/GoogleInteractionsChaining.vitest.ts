@@ -61,10 +61,7 @@ function capturingClient(
 function completedEvents(
   id: string,
   status:
-    | 'completed'
-    | 'incomplete'
-    | 'failed'
-    | 'requires_action' = 'completed',
+    'completed' | 'incomplete' | 'failed' | 'requires_action' = 'completed',
   text = 'ok',
 ): SSEEvent[] {
   return [

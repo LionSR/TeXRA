@@ -180,8 +180,7 @@ const VALID_TOOL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
  * Object form must have a name and can include optional description/parameters.
  */
 export type RawToolConfig =
-  | string
-  | (Partial<ToolDefinition> & { name: string });
+  string | (Partial<ToolDefinition> & { name: string });
 
 /**
  * Resolve raw tool configurations to ToolDefinition objects.

@@ -144,20 +144,19 @@ describe('TierService', () => {
   });
 
   it('clears the synchronous snapshots on clearCache', async () => {
-    const fetchMock = vi.fn(
-      (): Promise<Response> =>
-        Promise.resolve(
-          jsonResponse(
-            tierConfig({
-              spendingStatus: {
-                currentSpend: 100,
-                limit: 300,
-                remaining: 200,
-                percentUsed: 33,
-              },
-            }),
-          ),
+    const fetchMock = vi.fn((): Promise<Response> =>
+      Promise.resolve(
+        jsonResponse(
+          tierConfig({
+            spendingStatus: {
+              currentSpend: 100,
+              limit: 300,
+              remaining: 200,
+              percentUsed: 33,
+            },
+          }),
         ),
+      ),
     );
     vi.stubGlobal('fetch', fetchMock);
 

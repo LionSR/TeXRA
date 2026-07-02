@@ -113,8 +113,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     super.willUpdate(changed);
     if (changed.has('permission')) {
       const previousPermission = changed.get('permission') as
-        | PermissionState
-        | undefined;
+        PermissionState | undefined;
       if (previousPermission) this.flushDraft(previousPermission);
       this.answerText = '';
       this.sessionLinksText = '';
@@ -244,9 +243,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           ${this.renderTranscript(data.transcript ?? [])}
           ${this.renderQuestion(data.question)}
           ${data.suggestSearch ? this.renderSearchHint() : nothing}
-          ${data.attachFiles?.length
-            ? this.renderAttachFiles(data.attachFiles)
-            : nothing}
+          ${
+            data.attachFiles?.length
+              ? this.renderAttachFiles(data.attachFiles)
+              : nothing
+          }
           ${this.renderSessionLinks(data.sessionLinks ?? [])}
           ${this.renderAnswerArea()}
           ${this.renderFeedbackSection(
@@ -313,13 +314,15 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
         <div class="external-inquiry-request__transcript-turn-header">
           Turn ${turn.turnIndex}
         </div>
-        ${turn.context
-          ? html`
-              <div class="external-inquiry-request__transcript-context">
-                ${turn.context}
-              </div>
-            `
-          : nothing}
+        ${
+          turn.context
+            ? html`
+                <div class="external-inquiry-request__transcript-context">
+                  ${turn.context}
+                </div>
+              `
+            : nothing
+        }
         <div class="external-inquiry-request__transcript-label">Q</div>
         <div class="external-inquiry-request__transcript-text">
           ${turn.question}
@@ -328,15 +331,17 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
         <div class="external-inquiry-request__transcript-text">
           ${turn.answer}
         </div>
-        ${turn.sessionLinks?.length
-          ? html`
-              <div class="external-inquiry-request__transcript-links">
-                ${turn.sessionLinks.map((link) =>
-                  this.renderKnownSessionLink(link),
-                )}
-              </div>
-            `
-          : nothing}
+        ${
+          turn.sessionLinks?.length
+            ? html`
+                <div class="external-inquiry-request__transcript-links">
+                  ${turn.sessionLinks.map((link) =>
+                    this.renderKnownSessionLink(link),
+                  )}
+                </div>
+              `
+            : nothing
+        }
       </section>
     `;
   }
@@ -428,22 +433,24 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   private renderSessionLinks(sessionLinks: string[]): TemplateResult {
     return html`
       <div class="external-inquiry-request__session-links">
-        ${sessionLinks.length
-          ? html`
-              <div class="external-inquiry-request__session-links-known">
-                <div class="external-inquiry-request__session-links-label">
-                  Known external session links:
+        ${
+          sessionLinks.length
+            ? html`
+                <div class="external-inquiry-request__session-links-known">
+                  <div class="external-inquiry-request__session-links-label">
+                    Known external session links:
+                  </div>
+                  <div class="external-inquiry-request__session-links-list">
+                    ${repeat(
+                      sessionLinks,
+                      (link) => link,
+                      (link) => this.renderKnownSessionLink(link),
+                    )}
+                  </div>
                 </div>
-                <div class="external-inquiry-request__session-links-list">
-                  ${repeat(
-                    sessionLinks,
-                    (link) => link,
-                    (link) => this.renderKnownSessionLink(link),
-                  )}
-                </div>
-              </div>
-            `
-          : nothing}
+              `
+            : nothing
+        }
         <div class="external-inquiry-request__session-links-input-group">
           <div class="external-inquiry-request__session-links-label">
             Save external session link for follow-ups:

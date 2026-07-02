@@ -900,11 +900,14 @@ export class SettingsApp extends SettingsAppBase {
 
         <wa-tab-group
           class="settings-tabs"
-          .active=${SETTINGS_TAB_PANEL_NAMES[this.selectedTabIndex.get()] ??
-          'memory'}
+          .active=${
+            SETTINGS_TAB_PANEL_NAMES[this.selectedTabIndex.get()] ?? 'memory'
+          }
           @wa-tab-show=${this.handleTabShow}
         >
-          ${SETTINGS_TABS.map(
+          ${SETTINGS_TABS.filter(
+            (tab) => tab.panel !== 'goal' || !desktopHost,
+          ).map(
             (tab) =>
               html`<wa-tab panel=${tab.panel}
                 >${waIcon(tab.icon, { className: 'settings-tab-icon' })}
@@ -928,9 +931,15 @@ export class SettingsApp extends SettingsAppBase {
             ></memory-tab>
           </wa-tab-panel>
 
-          <wa-tab-panel name="goal">
-            <goal-tab .items=${this.goalItems.get()}></goal-tab>
-          </wa-tab-panel>
+          ${
+            desktopHost
+              ? nothing
+              : html`
+                  <wa-tab-panel name="goal">
+                    <goal-tab .items=${this.goalItems.get()}></goal-tab>
+                  </wa-tab-panel>
+                `
+          }
 
           <wa-tab-panel name="history">
             <history-tab
@@ -960,20 +969,24 @@ export class SettingsApp extends SettingsAppBase {
               @provider-streaming-set=${this.handleSetProviderStreaming}
               @provider-endpoint-set=${this.handleSetProviderEndpoint}
               @provider-global-streaming-set=${this.handleSetGlobalStreaming}
-              @provider-vscode-setting-set=${this
-                .handleSetProviderVscodeSetting}
+              @provider-vscode-setting-set=${
+                this.handleSetProviderVscodeSetting
+              }
               @provider-open-url=${this.handleOpenUrl}
               @model-enabled-set=${this.handleSetModelEnabled}
               @helper-model-set=${this.handleSetHelperModel}
               @model-reasoning-level-set=${this.handleSetReasoningLevel}
-              @prefer-short-model-names-set=${this
-                .handleSetPreferShortModelNames}
+              @prefer-short-model-names-set=${
+                this.handleSetPreferShortModelNames
+              }
               @chatgpt-sign-in=${this.handleChatGptSignIn}
               @chatgpt-sign-out=${this.handleChatGptSignOut}
-              @chatgpt-prefer-subscription-set=${this
-                .handleSetChatGptPreferSubscription}
-              @chatgpt-subscription-tool-use-only-set=${this
-                .handleSetChatGptSubscriptionToolUseOnly}
+              @chatgpt-prefer-subscription-set=${
+                this.handleSetChatGptPreferSubscription
+              }
+              @chatgpt-subscription-tool-use-only-set=${
+                this.handleSetChatGptSubscriptionToolUseOnly
+              }
             ></models-tab>
           </wa-tab-panel>
 
@@ -1009,13 +1022,16 @@ export class SettingsApp extends SettingsAppBase {
               .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
               .worktreeSupport=${this.gitWorktreeSupport.get()}
               .nestedDelegationMaxDepth=${this.nestedDelegationMaxDepth.get()}
-              @allow-orchestrator-kill-toggle=${this
-                .handleAllowOrchestratorKillToggle}
-              @detach-subagents-on-stop-toggle=${this
-                .handleDetachSubagentsOnStopToggle}
+              @allow-orchestrator-kill-toggle=${
+                this.handleAllowOrchestratorKillToggle
+              }
+              @detach-subagents-on-stop-toggle=${
+                this.handleDetachSubagentsOnStopToggle
+              }
               @worktree-support-toggle=${this.handleWorktreeSupportToggle}
-              @nested-delegation-max-depth-change=${this
-                .handleNestedDelegationMaxDepthChange}
+              @nested-delegation-max-depth-change=${
+                this.handleNestedDelegationMaxDepthChange
+              }
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
             ></multi-agent-tab>
@@ -1035,10 +1051,12 @@ export class SettingsApp extends SettingsAppBase {
               @tool-recheck=${this.handleToolRecheck}
               @tool-toggle=${this.handleToolToggle}
               @bash-approval-toggle=${this.handleBashApprovalToggle}
-              @desktop-crash-reporting-toggle=${this
-                .handleDesktopCrashReportingToggle}
-              @desktop-crash-reporting-dsn-set=${this
-                .handleDesktopCrashReportingDsnSet}
+              @desktop-crash-reporting-toggle=${
+                this.handleDesktopCrashReportingToggle
+              }
+              @desktop-crash-reporting-dsn-set=${
+                this.handleDesktopCrashReportingDsnSet
+              }
             ></tools-tab>
           </wa-tab-panel>
 
@@ -1058,13 +1076,16 @@ export class SettingsApp extends SettingsAppBase {
               @tool-recheck=${this.handleToolRecheck}
               @tool-toggle=${this.handleToolToggle}
               @codex-sandbox-mode-change=${this.handleCodexSandboxModeChange}
-              @codex-reasoning-effort-change=${this
-                .handleCodexReasoningEffortChange}
-              @codex-approval-policy-change=${this
-                .handleCodexApprovalPolicyChange}
+              @codex-reasoning-effort-change=${
+                this.handleCodexReasoningEffortChange
+              }
+              @codex-approval-policy-change=${
+                this.handleCodexApprovalPolicyChange
+              }
               @claude-agent-model-change=${this.handleClaudeAgentModelChange}
-              @claude-agent-permission-mode-change=${this
-                .handleClaudeAgentPermissionModeChange}
+              @claude-agent-permission-mode-change=${
+                this.handleClaudeAgentPermissionModeChange
+              }
               @claude-agent-effort-change=${this.handleClaudeAgentEffortChange}
             ></ai-agents-tab>
           </wa-tab-panel>
@@ -1083,8 +1104,9 @@ export class SettingsApp extends SettingsAppBase {
               @github-token-remove=${this.handleGitHubTokenRemove}
               @github-token-open-url=${this.handleGitHubTokenOpenUrl}
               @unsubscribe-pr=${this.handleUnsubscribePR}
-              @open-pr-subscription-stream=${this
-                .handleOpenPRSubscriptionStream}
+              @open-pr-subscription-stream=${
+                this.handleOpenPRSubscriptionStream
+              }
               .githubTokenStatus=${this.githubTokenStatus.get()}
               .prSubscriptions=${this.prSubscriptions.get()}
             ></git-tab>

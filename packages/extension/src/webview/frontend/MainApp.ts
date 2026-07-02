@@ -1764,8 +1764,9 @@ export class MainApp extends MainAppBase {
               @welcome-chatgpt=${this.onWelcomeChatGpt}
               @welcome-api-key=${this.onWelcomeApiKey}
               @welcome-skip=${this.onWelcomeSkip}
-              @onboarding-open-getting-started=${this
-                .onOnboardingOpenGettingStarted}
+              @onboarding-open-getting-started=${
+                this.onOnboardingOpenGettingStarted
+              }
             ></onboarding-welcome-card>
           </div>
         </div>
@@ -1793,14 +1794,17 @@ export class MainApp extends MainAppBase {
         ${this.renderViewHeader()}
 
         <div class="main-content">
-          ${onboardingState === 'setup'
-            ? html`<onboarding-setup-card
-                @onboarding-run-setup=${this.onOnboardingRunSetup}
-                @onboarding-open-getting-started=${this
-                  .onOnboardingOpenGettingStarted}
-                @onboarding-skip-setup=${this.onOnboardingSkipSetup}
-              ></onboarding-setup-card>`
-            : nothing}
+          ${
+            onboardingState === 'setup'
+              ? html`<onboarding-setup-card
+                  @onboarding-run-setup=${this.onOnboardingRunSetup}
+                  @onboarding-open-getting-started=${
+                    this.onOnboardingOpenGettingStarted
+                  }
+                  @onboarding-skip-setup=${this.onOnboardingSkipSetup}
+                ></onboarding-setup-card>`
+              : nothing
+          }
 
           <instruction-panel
             .showSessionHint=${!this.sessionHintDismissed.get()}
@@ -1822,8 +1826,10 @@ export class MainApp extends MainAppBase {
             .apiKeyBanner=${akb}
             .agentConfigBanner=${acb}
             .dependencyBanner=${db}
-            .gettingStartedVisible=${this.gettingStartedVisible.get() &&
-            !this.gettingStartedDismissed.get()}
+            .gettingStartedVisible=${
+              this.gettingStartedVisible.get() &&
+              !this.gettingStartedDismissed.get()
+            }
             .loginBannerVisible=${this.loginBannerVisible.get()}
             @api-key-action=${this.onApiKeyAction}
             @agent-config-action=${this.onAgentConfigAction}
@@ -1879,29 +1885,31 @@ export class MainApp extends MainAppBase {
           </wa-details>
         </div>
 
-        ${this.isDesktopHost
-          ? nothing
-          : html`
-              <latexdiffs-section
-                .visible=${this.latexdiffsVisible.get()}
-                .baseFile=${sf.baseFile}
-                .baseFileOptions=${fo.baseFile ?? []}
-                .editedFile=${sf.editedFile}
-                .editedFileOptions=${fo.editedFile ?? []}
-                .commit=${this.commit.get()}
-                .commitOptions=${fo.commit ?? []}
-                .isGitRepo=${this.isGitRepo.get()}
-                @latexdiffs-toggle=${this.onLatexDiffsToggle}
-                @latexdiffs-action=${this.onLatexDiffsAction}
-                @base-file-change=${this.onBaseFileChange}
-                @edited-file-change=${this.onEditedFileChange}
-                @get-current-file=${this.onLatexdiffGetCurrentFile}
-                @empty-file=${this.onLatexdiffEmptyFile}
-                @refresh-edited-files=${this.onRefreshEditedFiles}
-                @commit-change=${this.onCommitChange}
-                @refresh-commits=${this.onRefreshCommits}
-              ></latexdiffs-section>
-            `}
+        ${
+          this.isDesktopHost
+            ? nothing
+            : html`
+                <latexdiffs-section
+                  .visible=${this.latexdiffsVisible.get()}
+                  .baseFile=${sf.baseFile}
+                  .baseFileOptions=${fo.baseFile ?? []}
+                  .editedFile=${sf.editedFile}
+                  .editedFileOptions=${fo.editedFile ?? []}
+                  .commit=${this.commit.get()}
+                  .commitOptions=${fo.commit ?? []}
+                  .isGitRepo=${this.isGitRepo.get()}
+                  @latexdiffs-toggle=${this.onLatexDiffsToggle}
+                  @latexdiffs-action=${this.onLatexDiffsAction}
+                  @base-file-change=${this.onBaseFileChange}
+                  @edited-file-change=${this.onEditedFileChange}
+                  @get-current-file=${this.onLatexdiffGetCurrentFile}
+                  @empty-file=${this.onLatexdiffEmptyFile}
+                  @refresh-edited-files=${this.onRefreshEditedFiles}
+                  @commit-change=${this.onCommitChange}
+                  @refresh-commits=${this.onRefreshCommits}
+                ></latexdiffs-section>
+              `
+        }
       </div>
     `;
   }

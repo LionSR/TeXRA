@@ -137,23 +137,25 @@ export class StreamTab extends LitElement {
           'has-pending-approval': this.hasPendingApproval,
         })}
       >
-        ${hasChildren
-          ? html`<button
-              class="tab-expand"
-              data-stream=${stream.name}
-              data-action="toggle-children"
-              title=${this.expanded
-                ? 'Collapse child streams'
-                : childStreamLabel}
-              aria-expanded=${this.expanded ? 'true' : 'false'}
-            >
-              <wa-icon
-                library=${TEXRA_ICON_LIBRARY}
-                name="chevron-right"
-                aria-hidden="true"
-              ></wa-icon>
-            </button>`
-          : nothing}
+        ${
+          hasChildren
+            ? html`<button
+                class="tab-expand"
+                data-stream=${stream.name}
+                data-action="toggle-children"
+                title=${
+                  this.expanded ? 'Collapse child streams' : childStreamLabel
+                }
+                aria-expanded=${this.expanded ? 'true' : 'false'}
+              >
+                <wa-icon
+                  library=${TEXRA_ICON_LIBRARY}
+                  name="chevron-right"
+                  aria-hidden="true"
+                ></wa-icon>
+              </button>`
+            : nothing
+        }
         <button
           class="tab"
           data-stream=${stream.name}
@@ -162,66 +164,79 @@ export class StreamTab extends LitElement {
         >
           <div class="tab-header">
             <span class="tab-title"
-              >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
-              stream.name}</span
+              >${stream.parentStreamId ? '↳ ' : ''}${
+                stream.label || stream.name
+              }</span
             >
-            ${this.childCount > 0 && this.compact
-              ? html`<wa-icon
-                  library=${TEXRA_ICON_LIBRARY}
-                  name="chevron-right"
-                  class="compact-subagent-hint"
-                  role="img"
-                  aria-label=${childStreamLabel}
-                  title=${childStreamLabel}
-                ></wa-icon>`
-              : nothing}
-          </div>
-          ${this.compact
-            ? nothing
-            : html`
-                ${stream.description
-                  ? html`<div class="tab-description">
-                      ${stream.description}
-                    </div>`
-                  : nothing}
-                ${stream.worktree
-                  ? html`<div class="worktree-chip-row">
-                      <worktree-chip .info=${stream.worktree}></worktree-chip>
-                    </div>`
-                  : nothing}
-                <div class="tab-meta">
-                  ${this.lastTimestamp
-                    ? html`<wa-relative-time
-                        class="last-active"
-                        .date=${new Date(this.lastTimestamp)}
-                        format="narrow"
-                        sync
-                      ></wa-relative-time>`
-                    : nothing}
-                  <span class="model"
-                    >${stream.modelLabel ?? stream.model ?? ''}</span
-                  >
-                  <wa-icon
+            ${
+              this.childCount > 0 && this.compact
+                ? html`<wa-icon
                     library=${TEXRA_ICON_LIBRARY}
-                    name=${agentDecorator.icon}
-                    class="agent-category"
-                    aria-hidden="true"
-                    title=${`Category: ${agentDecorator.label}`}
-                  ></wa-icon>
-                  ${when(
-                    stream.isRemote,
-                    () => html`
-                      <wa-icon
-                        library=${TEXRA_ICON_LIBRARY}
-                        name=${AGENT_DECORATORS.properties.remote.icon}
-                        class="remote-agent"
-                        aria-hidden="true"
-                        title=${AGENT_DECORATORS.properties.remote.hint}
-                      ></wa-icon>
-                    `,
-                  )}
-                </div>
-              `}
+                    name="chevron-right"
+                    class="compact-subagent-hint"
+                    role="img"
+                    aria-label=${childStreamLabel}
+                    title=${childStreamLabel}
+                  ></wa-icon>`
+                : nothing
+            }
+          </div>
+          ${
+            this.compact
+              ? nothing
+              : html`
+                  ${
+                    stream.description
+                      ? html`<div class="tab-description">
+                          ${stream.description}
+                        </div>`
+                      : nothing
+                  }
+                  ${
+                    stream.worktree
+                      ? html`<div class="worktree-chip-row">
+                          <worktree-chip
+                            .info=${stream.worktree}
+                          ></worktree-chip>
+                        </div>`
+                      : nothing
+                  }
+                  <div class="tab-meta">
+                    ${
+                      this.lastTimestamp
+                        ? html`<wa-relative-time
+                            class="last-active"
+                            .date=${new Date(this.lastTimestamp)}
+                            format="narrow"
+                            sync
+                          ></wa-relative-time>`
+                        : nothing
+                    }
+                    <span class="model"
+                      >${stream.modelLabel ?? stream.model ?? ''}</span
+                    >
+                    <wa-icon
+                      library=${TEXRA_ICON_LIBRARY}
+                      name=${agentDecorator.icon}
+                      class="agent-category"
+                      aria-hidden="true"
+                      title=${`Category: ${agentDecorator.label}`}
+                    ></wa-icon>
+                    ${when(
+                      stream.isRemote,
+                      () => html`
+                        <wa-icon
+                          library=${TEXRA_ICON_LIBRARY}
+                          name=${AGENT_DECORATORS.properties.remote.icon}
+                          class="remote-agent"
+                          aria-hidden="true"
+                          title=${AGENT_DECORATORS.properties.remote.hint}
+                        ></wa-icon>
+                      `,
+                    )}
+                  </div>
+                `
+          }
         </button>
         <wa-button
           id="stream-tab-delete-button"
@@ -359,30 +374,34 @@ export class StreamTabs extends LitElement {
         .childCount=${childCount}
         ?expanded=${expanded}
       ></stream-tab>
-      ${!options.compact && childCount > 0
-        ? html`<div class="child-streams" ?hidden=${!expanded}>
-            ${repeat(
-              children,
-              (child) => child.name,
-              (child) =>
-                this.renderStreamNode(child, {
-                  compact: false,
-                  visited: nextVisited,
-                }),
-            )}
-          </div>`
-        : nothing}
+      ${
+        !options.compact && childCount > 0
+          ? html`<div class="child-streams" ?hidden=${!expanded}>
+              ${repeat(
+                children,
+                (child) => child.name,
+                (child) =>
+                  this.renderStreamNode(child, {
+                    compact: false,
+                    visited: nextVisited,
+                  }),
+              )}
+            </div>`
+          : nothing
+      }
     `;
   }
 
   override render(): TemplateResult {
     return html`
       <div class="tabs">
-        ${this.heading && !this.compact
-          ? html`<header class="stream-tabs-header" part="header">
-              <span class="stream-tabs-title">${this.heading}</span>
-            </header>`
-          : nothing}
+        ${
+          this.heading && !this.compact
+            ? html`<header class="stream-tabs-header" part="header">
+                <span class="stream-tabs-title">${this.heading}</span>
+              </header>`
+            : nothing
+        }
         <div class="tabs-content">
           <div id=${ELEMENT_IDS.STREAM_TABS} @click=${this.handleTabClick}>
             ${repeat(
@@ -403,43 +422,45 @@ export class StreamTabs extends LitElement {
               </div>`,
           )}
         </div>
-        ${this.compact || (this.streams.length === 0 && this.filter === 'all')
-          ? nothing
-          : html`<div class="stream-list-footer">
-              <div class="stream-list-controls">
-                <wa-radio-group
-                  id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
-                  class="agent-filter-group"
-                  .value=${this.filter}
-                  @change=${this.handleFilterChange}
-                >
-                  ${repeat(
-                    FILTER_BUTTONS,
-                    (btn) => btn.id,
-                    (btn) => html`
-                      <wa-radio
-                        id=${btn.id}
-                        value=${btn.filter}
-                        ?checked=${this.filter === btn.filter}
-                      >
-                        ${btn.label}
-                      </wa-radio>
-                    `,
-                  )}
-                </wa-radio-group>
+        ${
+          this.compact || (this.streams.length === 0 && this.filter === 'all')
+            ? nothing
+            : html`<div class="stream-list-footer">
+                <div class="stream-list-controls">
+                  <wa-radio-group
+                    id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
+                    class="agent-filter-group"
+                    .value=${this.filter}
+                    @change=${this.handleFilterChange}
+                  >
+                    ${repeat(
+                      FILTER_BUTTONS,
+                      (btn) => btn.id,
+                      (btn) => html`
+                        <wa-radio
+                          id=${btn.id}
+                          value=${btn.filter}
+                          ?checked=${this.filter === btn.filter}
+                        >
+                          ${btn.label}
+                        </wa-radio>
+                      `,
+                    )}
+                  </wa-radio-group>
 
-                <div class="stream-list-actions">
-                  ${renderIconActionButton({
-                    id: ELEMENT_IDS.DELETE_ALL_BTN,
-                    icon: 'trash',
-                    label: 'Clear all streams',
-                    tooltip: 'Clear all streams',
-                    className: 'delete-all-streams',
-                    onClick: this.handleDeleteAll,
-                  })}
+                  <div class="stream-list-actions">
+                    ${renderIconActionButton({
+                      id: ELEMENT_IDS.DELETE_ALL_BTN,
+                      icon: 'trash',
+                      label: 'Clear all streams',
+                      tooltip: 'Clear all streams',
+                      className: 'delete-all-streams',
+                      onClick: this.handleDeleteAll,
+                    })}
+                  </div>
                 </div>
-              </div>
-            </div>`}
+              </div>`
+        }
       </div>
     `;
   }

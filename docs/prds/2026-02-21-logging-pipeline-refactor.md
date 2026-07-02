@@ -612,8 +612,9 @@ export function runWithGroupContext<T>(
 - All call sites in `executeAgent.ts`, `RoundPersistedFlow`, `ToolUseCycleFlow` — no changes needed
 
 **Files modified:**
-| File | Change |
-|------|--------|
+
+| File                     | Change                                                                                                                                                                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/logger/logUtils.ts` | Replace `pushGroup`/`popGroup`/`enterWith` with `contextStorage.run()` in `runWithGroupContext`. Remove `pushGroup`, `popGroup` functions. `startGroup` calls `runWithGroupContext` internally instead of raw `pushGroup`. |
 
 **Risk**: Low. The external API (`runWithGroupContext`, `getActiveGroupId`, `startGroup`, `endGroup`) is unchanged. Only the internal scoping mechanism changes. The `stage.within()` / `stage.run()` usage patterns in all call sites remain identical.
@@ -629,10 +630,11 @@ export function runWithGroupContext<T>(
 Implement `StreamLog`, `StreamLogStore`, and `WebviewBridge`. No existing code modified or removed.
 
 **Files created:**
-| File | Purpose |
-|------|---------|
-| `src/logger/StreamLog.ts` | Append-only store with seqNo, dirty tracking, delta reads |
-| `src/logger/StreamLogStore.ts` | Per-stream StreamLog manager with persistence |
+
+| File                                         | Purpose                                                     |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| `src/logger/StreamLog.ts`                    | Append-only store with seqNo, dirty tracking, delta reads   |
+| `src/logger/StreamLogStore.ts`               | Per-stream StreamLog manager with persistence               |
 | `src/progressView/managers/WebviewBridge.ts` | Batched IPC with cursor tracking + dirty set, 16ms throttle |
 
 **Rollback**: Delete new files.
@@ -642,9 +644,10 @@ Implement `StreamLog`, `StreamLogStore`, and `WebviewBridge`. No existing code m
 `AgentLogger` writes to **both** old Winston path AND new store. Both paths active. This lets us verify the store captures every entry the old path does.
 
 **Files modified:**
-| File | Change |
-|------|--------|
-| `src/logger/AgentLogger.ts` | Add store writes alongside existing Winston/bus calls. Add `emit*` methods for structured events (initially calling both old + new paths). `createStream` writes to both old bus.emit and new store.update(). |
+
+| File                                       | Change                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/logger/AgentLogger.ts`                | Add store writes alongside existing Winston/bus calls. Add `emit*` methods for structured events (initially calling both old + new paths). `createStream` writes to both old bus.emit and new store.update().                                                                                               |
 | `src/agent/core/flows/ToolUseCycleFlow.ts` | Route tool output through `options.logger.updateToolUse()` instead of direct `bus.emit('updateLogMessage')`. Removes the 500ms `STREAM_THROTTLE_MS` — bridge's 16ms frame cap handles rate limiting. Keeps `STREAM_BUFFER_MAX` truncation at call site (tool-output-specific, not a generic store concern). |
 
 **Rollback**: Remove store write calls from AgentLogger.
@@ -654,10 +657,11 @@ Implement `StreamLog`, `StreamLogStore`, and `WebviewBridge`. No existing code m
 Frontend receives `LOG_DELTA` alongside old `APPEND_LOG` / `UPDATE_LOG`. Verify parity — same entries appear in both paths.
 
 **Files modified:**
-| File | Change |
-|------|--------|
-| `src/progressView/frontend/slices/logSlice.ts` | Add `LOG_DELTA` handler (existing handlers stay for now) |
-| `src/progressView/events/ProgressEventHandler.ts` | Wire `WebviewBridge` into event handler lifecycle |
+
+| File                                              | Change                                                   |
+| ------------------------------------------------- | -------------------------------------------------------- |
+| `src/progressView/frontend/slices/logSlice.ts`    | Add `LOG_DELTA` handler (existing handlers stay for now) |
+| `src/progressView/events/ProgressEventHandler.ts` | Wire `WebviewBridge` into event handler lifecycle        |
 
 **Rollback**: Disable bridge, revert to old handlers only.
 
@@ -668,18 +672,20 @@ Remove old log path. Winston, VSCodeTransport, old bus emits, and old frontend l
 **Task group bridging**: `startGroup()` / `endGroup()` keep temporary direct `bus.emit('addTaskGroup')` / `bus.emit('updateTaskGroup')` calls (moved from deleted VSCodeTransport into AgentLogger). These stay until Phase 3 replaces them with store entries. Without this, task groups disappear from the UI between Phase 1 (VSCodeTransport deleted) and Phase 3 (store entries replace bus events).
 
 **Files modified:**
-| File | Change |
-|------|--------|
-| `src/logger/AgentLogger.ts` | Remove Winston delegation. Remove `createStream` 100ms throttle. Remove `startGroup` 50ms `delay()`. `emitContextState` replaces `logContextState`. Add temporary `bus.emit('addTaskGroup')` / `bus.emit('updateTaskGroup')` in `startGroup()` / `endGroup()` (removed in Phase 3). Remove `addLogMessage` / `updateLogMessage` bus imports. |
-| `src/progressView/events/ProgressEventHandler.ts` | Remove inline `addLogMessage`, `updateLogMessage`, `updateContextState` handlers from the unified `registerHandlers` call. `WebviewUpdater` retained for non-log messages. |
-| `src/eventBus/ProgressEventBus.ts` | Remove `addLogMessage` / `updateLogMessage` / `updateContextState` event types |
-| `src/progressView/managers/WebviewUpdater.ts` | Remove `appendLogMessage` / `updateLogMessage` / `updateContextState` methods. Strip log fields from `sendSyncStreamContent`. Keep all non-log methods. |
+
+| File                                              | Change                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/logger/AgentLogger.ts`                       | Remove Winston delegation. Remove `createStream` 100ms throttle. Remove `startGroup` 50ms `delay()`. `emitContextState` replaces `logContextState`. Add temporary `bus.emit('addTaskGroup')` / `bus.emit('updateTaskGroup')` in `startGroup()` / `endGroup()` (removed in Phase 3). Remove `addLogMessage` / `updateLogMessage` bus imports. |
+| `src/progressView/events/ProgressEventHandler.ts` | Remove inline `addLogMessage`, `updateLogMessage`, `updateContextState` handlers from the unified `registerHandlers` call. `WebviewUpdater` retained for non-log messages.                                                                                                                                                                   |
+| `src/eventBus/ProgressEventBus.ts`                | Remove `addLogMessage` / `updateLogMessage` / `updateContextState` event types                                                                                                                                                                                                                                                               |
+| `src/progressView/managers/WebviewUpdater.ts`     | Remove `appendLogMessage` / `updateLogMessage` / `updateContextState` methods. Strip log fields from `sendSyncStreamContent`. Keep all non-log methods.                                                                                                                                                                                      |
 
 **Files removed:**
-| File | Reason |
-|------|--------|
+
+| File                                       | Reason                                          |
+| ------------------------------------------ | ----------------------------------------------- |
 | `src/logger/transports/VSCodeTransport.ts` | Replaced by direct OutputChannel + store writes |
-| `src/logger/LogChannelRegistry.ts` | Winston logger registry no longer needed |
+| `src/logger/LogChannelRegistry.ts`         | Winston logger registry no longer needed        |
 
 **Rollback**: Revert to dual-write (Phase 1b) — old path still works.
 
@@ -693,10 +699,11 @@ Remove old log path. Winston, VSCodeTransport, old bus emits, and old frontend l
 4. Remove `SYNC_STREAM_CONTENT` handler (WebviewBridge.syncStream handles hydration)
 
 **Files modified:**
-| File | Change |
-|------|--------|
-| `src/progressView/frontend/slices/logSlice.ts` | Remove old `APPEND_LOG` / `UPDATE_LOG` handlers, `pendingLogUpdates` Map, `clearPendingLogUpdatesForStream`/`clearAllPendingLogUpdates` helpers, and `applyLogUpdate` shared function |
-| `src/progressView/frontend/store.ts` | Add `generation` to `StreamLogs`, remove array spread |
+
+| File                                            | Change                                                                                                                                                                                 |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/progressView/frontend/slices/logSlice.ts`  | Remove old `APPEND_LOG` / `UPDATE_LOG` handlers, `pendingLogUpdates` Map, `clearPendingLogUpdatesForStream`/`clearAllPendingLogUpdates` helpers, and `applyLogUpdate` shared function  |
+| `src/progressView/frontend/store.ts`            | Add `generation` to `StreamLogs`, remove array spread                                                                                                                                  |
 | `src/progressView/frontend/slices/syncSlice.ts` | Rewrite — `SYNC_STREAM_CONTENT` no longer delegates to `applyLogUpdate`; WebviewBridge.syncStream handles log hydration, sync handler only handles todos/follow-ups/instruction/badges |
 
 ### Phase 3: Task Groups as Store Entries
@@ -710,12 +717,13 @@ Remove old log path. Winston, VSCodeTransport, old bus emits, and old frontend l
 5. Frontend derives task group tree from log entries (filter by `type: 'group-start' | 'group-end'`)
 
 **Files modified/removed:**
-| File | Change |
-|------|--------|
-| `src/eventBus/StreamEventQueue.ts` | Remove entirely |
-| `src/eventBus/ProgressEventBus.ts` | Remove task group event types |
+
+| File                                              | Change                                                                                                                                                                                                                                  |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/eventBus/StreamEventQueue.ts`                | Remove entirely                                                                                                                                                                                                                         |
+| `src/eventBus/ProgressEventBus.ts`                | Remove task group event types                                                                                                                                                                                                           |
 | `src/progressView/events/ProgressEventHandler.ts` | Remove inline `addTaskGroup` / `updateTaskGroup` handlers, `pendingTaskGroups` buffer, `bufferTaskGroupForReplay`/`replayPendingTaskGroups`/`clearPendingTaskGroups`/`clearAllPendingTaskGroups` methods, and `streamEventQueue` import |
-| `src/progressView/frontend/slices/taskSlice.ts` | Remove `ADD_TASK_GROUP` / `UPDATE_TASK_GROUP` handlers (task groups now derived from `LOG_DELTA` entries) |
+| `src/progressView/frontend/slices/taskSlice.ts`   | Remove `ADD_TASK_GROUP` / `UPDATE_TASK_GROUP` handlers (task groups now derived from `LOG_DELTA` entries)                                                                                                                               |
 
 ### Phase 4: Cleanup
 

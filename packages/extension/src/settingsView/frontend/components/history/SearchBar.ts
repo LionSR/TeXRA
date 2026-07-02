@@ -91,16 +91,18 @@ export class SearchBar extends LitElement {
             onClick: this.handleNext,
           })}
           <span class="match-count">${this.matchCount}</span>
-          ${this.canClearHistory
-            ? renderIconActionButton({
-                id: 'history-search-clear-button',
-                icon: 'trash',
-                label: 'Clear history',
-                tooltip: 'Clear all history',
-                action: 'clear-history',
-                onClick: this.handleClearHistory,
-              })
-            : ''}
+          ${
+            this.canClearHistory
+              ? renderIconActionButton({
+                  id: 'history-search-clear-button',
+                  icon: 'trash',
+                  label: 'Clear history',
+                  tooltip: 'Clear all history',
+                  action: 'clear-history',
+                  onClick: this.handleClearHistory,
+                })
+              : ''
+          }
         </div>
       </div>
     `;

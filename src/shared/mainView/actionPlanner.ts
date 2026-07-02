@@ -141,8 +141,7 @@ export type ComparePayload = {
 };
 
 export type CompareActionResult =
-  | CommandSuccess<ComparePayload>
-  | ActionValidationError;
+  CommandSuccess<ComparePayload> | ActionValidationError;
 
 export function planCompare(
   state: CompareState,

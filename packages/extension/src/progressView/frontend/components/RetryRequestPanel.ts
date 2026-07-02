@@ -83,18 +83,20 @@ export class RetryRequestPanel extends BaseRequestPanel {
                 ${data.errorMessage}
               </div>`,
           )}
-          ${detailsText
-            ? html`
-                <wa-details
-                  class="retry-request__error-details collapsible-quiet"
-                >
-                  <span slot="summary" class="retry-request__error-summary">
-                    Error details
-                  </span>
-                  <div class="retry-request__error-body">${detailsText}</div>
-                </wa-details>
-              `
-            : nothing}
+          ${
+            detailsText
+              ? html`
+                  <wa-details
+                    class="retry-request__error-details collapsible-quiet"
+                  >
+                    <span slot="summary" class="retry-request__error-summary">
+                      Error details
+                    </span>
+                    <div class="retry-request__error-body">${detailsText}</div>
+                  </wa-details>
+                `
+              : nothing
+          }
         </div>
         <div class="retry-request__actions">
           ${when(isCredentialExhausted, () =>

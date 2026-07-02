@@ -275,14 +275,16 @@ export class HistoryList extends LitElement {
     }
 
     return html`
-      ${this.paginated
-        ? html`<list-pagination
-            .page=${this.page}
-            .totalItems=${this.items.length}
-            .pageSize=${HISTORY_PAGE_SIZE}
-            @page-change=${this.handlePageChange}
-          ></list-pagination>`
-        : ''}
+      ${
+        this.paginated
+          ? html`<list-pagination
+              .page=${this.page}
+              .totalItems=${this.items.length}
+              .pageSize=${HISTORY_PAGE_SIZE}
+              @page-change=${this.handlePageChange}
+            ></list-pagination>`
+          : ''
+      }
       <div class="history-container">
         ${repeat(
           displayItems,
@@ -290,22 +292,25 @@ export class HistoryList extends LitElement {
           (item) => html`
             <history-item
               .item=${item}
-              .open=${forceOpen ||
-              Boolean(this.state?.toggleStates.get(item.id))}
+              .open=${
+                forceOpen || Boolean(this.state?.toggleStates.get(item.id))
+              }
               .highlightedMatchIndex=${this.getHighlightedMatchIndex(item.id)}
               @history-toggle=${this.handleToggle}
             ></history-item>
           `,
         )}
       </div>
-      ${this.paginated
-        ? html`<list-pagination
-            .page=${this.page}
-            .totalItems=${this.items.length}
-            .pageSize=${HISTORY_PAGE_SIZE}
-            @page-change=${this.handlePageChange}
-          ></list-pagination>`
-        : ''}
+      ${
+        this.paginated
+          ? html`<list-pagination
+              .page=${this.page}
+              .totalItems=${this.items.length}
+              .pageSize=${HISTORY_PAGE_SIZE}
+              @page-change=${this.handlePageChange}
+            ></list-pagination>`
+          : ''
+      }
     `;
   }
 }

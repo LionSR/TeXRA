@@ -240,29 +240,31 @@ export class AgentsTab extends LitElement {
             >
               ${waIcon('save', { slot: 'start' })} Save Team
             </wa-button>
-            ${this.desktopHost
-              ? nothing
-              : html`
-                  <wa-button
-                    appearance="outlined"
-                    variant="neutral"
-                    size="small"
-                    title="Create a new agent from a blank YAML template"
-                    @click=${this.handleCreateFromTemplate}
-                  >
-                    ${waIcon('new-file', { slot: 'start' })} From Template
-                  </wa-button>
-                  <wa-button
-                    class="agents-create-btn"
-                    appearance="outlined"
-                    variant="neutral"
-                    size="small"
-                    title="Create a new agent with AI"
-                    @click=${this.handleCreateAgent}
-                  >
-                    ${waIcon('add', { slot: 'start' })} New Agent
-                  </wa-button>
-                `}
+            ${
+              this.desktopHost
+                ? nothing
+                : html`
+                    <wa-button
+                      appearance="outlined"
+                      variant="neutral"
+                      size="small"
+                      title="Create a new agent from a blank YAML template"
+                      @click=${this.handleCreateFromTemplate}
+                    >
+                      ${waIcon('new-file', { slot: 'start' })} From Template
+                    </wa-button>
+                    <wa-button
+                      class="agents-create-btn"
+                      appearance="outlined"
+                      variant="neutral"
+                      size="small"
+                      title="Create a new agent with AI"
+                      @click=${this.handleCreateAgent}
+                    >
+                      ${waIcon('add', { slot: 'start' })} New Agent
+                    </wa-button>
+                  `
+            }
           </div>
         </div>
 
@@ -273,14 +275,16 @@ export class AgentsTab extends LitElement {
           <span class="agents-dir-path" title=${this.customAgentDir}
             >${this.customAgentDir}</span
           >
-          ${this.customAgentDirIsDefault
-            ? html`<wa-tag
-                class="agents-dir-default-badge"
-                variant="neutral"
-                size="small"
-                >default</wa-tag
-              >`
-            : nothing}
+          ${
+            this.customAgentDirIsDefault
+              ? html`<wa-tag
+                  class="agents-dir-default-badge"
+                  variant="neutral"
+                  size="small"
+                  >default</wa-tag
+                >`
+              : nothing
+          }
           <div class="agents-dir-actions">
             <wa-button
               class="action-icon-button"
@@ -302,17 +306,19 @@ export class AgentsTab extends LitElement {
             >
               Change
             </wa-button>
-            ${!this.customAgentDirIsDefault
-              ? html`<wa-button
-                  appearance="outlined"
-                  variant="neutral"
-                  size="small"
-                  title="Reset to default directory"
-                  @click=${this.handleResetCustomDir}
-                >
-                  Reset
-                </wa-button>`
-              : nothing}
+            ${
+              !this.customAgentDirIsDefault
+                ? html`<wa-button
+                    appearance="outlined"
+                    variant="neutral"
+                    size="small"
+                    title="Reset to default directory"
+                    @click=${this.handleResetCustomDir}
+                  >
+                    Reset
+                  </wa-button>`
+                : nothing
+            }
           </div>
         </div>
 

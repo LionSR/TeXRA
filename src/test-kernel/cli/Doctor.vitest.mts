@@ -81,8 +81,7 @@ function captureDoctorStdout(
     .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
       stdout += String(chunk);
       const cb = rest.find((arg) => typeof arg === 'function') as
-        | ((error?: Error | null) => void)
-        | undefined;
+        ((error?: Error | null) => void) | undefined;
       cb?.(null);
       return true;
     }) as unknown as ReturnType<typeof vi.spyOn>;

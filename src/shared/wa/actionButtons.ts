@@ -109,12 +109,14 @@ function renderActionButtonBase({
   return html`
     <span class="action-icon-busy">
       ${button}
-      ${busy
-        ? html`<wa-spinner
-            class="action-busy-spinner"
-            aria-hidden="true"
-          ></wa-spinner>`
-        : nothing}
+      ${
+        busy
+          ? html`<wa-spinner
+              class="action-busy-spinner"
+              aria-hidden="true"
+            ></wa-spinner>`
+          : nothing
+      }
     </span>
     ${tooltipTemplate}
   `;

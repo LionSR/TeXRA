@@ -139,7 +139,7 @@ function validateShortFlag(
 }
 
 function helpTargetRawArgs(rawArgs: readonly string[]): readonly string[] {
-  for (let i = 0; i < rawArgs.length; ) {
+  for (let i = 0; i < rawArgs.length;) {
     const token = rawArgs[i];
     if (token === undefined || token === '--') break;
     if (token.startsWith('-')) {

@@ -81,16 +81,14 @@ const LegacyManifestSchema = z
     updatedAt: z.string().min(1),
     turns: z.array(ExternalInquiryTurnRecordSchema),
   })
-  .transform(
-    (raw): ExternalInquiryThreadManifest => ({
-      threadId: raw.threadId,
-      parentStreamId: null,
-      status: 'answered' as const,
-      createdAt: raw.createdAt,
-      updatedAt: raw.updatedAt,
-      turns: raw.turns,
-    }),
-  );
+  .transform((raw): ExternalInquiryThreadManifest => ({
+    threadId: raw.threadId,
+    parentStreamId: null,
+    status: 'answered' as const,
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
+    turns: raw.turns,
+  }));
 
 /**
  * Entry-point schema: try canonical (new format) first, then legacy.

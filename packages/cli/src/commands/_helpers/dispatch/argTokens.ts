@@ -62,7 +62,7 @@ export function collectLeadingGlobalFlags(
 export function firstPositionalIndex(
   rawArgs: readonly string[],
 ): number | undefined {
-  for (let i = 0; i < rawArgs.length; ) {
+  for (let i = 0; i < rawArgs.length;) {
     const arg = rawArgs[i];
     if (arg === undefined || arg === '--') return undefined;
     if (!arg.startsWith('-')) return i;

@@ -95,37 +95,39 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
           className: 'diff-main-button',
           onClick: this.handleDiffAction,
         })}
-        ${showDropdown
-          ? html`
-              <wa-dropdown
-                class="diff-dropdown-menu"
-                placement="bottom-end"
-                @wa-select=${this.handleMenuSelect}
-              >
-                <wa-button
-                  id="tool-edit-diff-dropdown-trigger"
-                  slot="trigger"
-                  class="diff-dropdown-trigger"
-                  appearance="plain"
-                  variant="neutral"
-                  size="small"
-                  type="button"
-                  aria-label="More diff actions"
+        ${
+          showDropdown
+            ? html`
+                <wa-dropdown
+                  class="diff-dropdown-menu"
+                  placement="bottom-end"
+                  @wa-select=${this.handleMenuSelect}
                 >
-                  ${waIcon('chevron-down')}
-                </wa-button>
-                <wa-dropdown-item value="previewProposed">
-                  Preview
-                </wa-dropdown-item>
-                <wa-dropdown-item value="showLatexdiff">
-                  LaTeXdiff
-                </wa-dropdown-item>
-              </wa-dropdown>
-              <wa-tooltip for="tool-edit-diff-dropdown-trigger">
-                More diff actions
-              </wa-tooltip>
-            `
-          : nothing}
+                  <wa-button
+                    id="tool-edit-diff-dropdown-trigger"
+                    slot="trigger"
+                    class="diff-dropdown-trigger"
+                    appearance="plain"
+                    variant="neutral"
+                    size="small"
+                    type="button"
+                    aria-label="More diff actions"
+                  >
+                    ${waIcon('chevron-down')}
+                  </wa-button>
+                  <wa-dropdown-item value="previewProposed">
+                    Preview
+                  </wa-dropdown-item>
+                  <wa-dropdown-item value="showLatexdiff">
+                    LaTeXdiff
+                  </wa-dropdown-item>
+                </wa-dropdown>
+                <wa-tooltip for="tool-edit-diff-dropdown-trigger">
+                  More diff actions
+                </wa-tooltip>
+              `
+            : nothing
+        }
       </div>
     `;
   }

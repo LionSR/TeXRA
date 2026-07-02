@@ -42,11 +42,13 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
 
     return html`
       <div class="user-question-request">
-        ${data.context
-          ? html`<div class="user-question-request__context">
-              ${data.context}
-            </div>`
-          : nothing}
+        ${
+          data.context
+            ? html`<div class="user-question-request__context">
+                ${data.context}
+              </div>`
+            : nothing
+        }
         <div class="user-question-request__questions">
           ${repeat(
             data.questions,
@@ -99,11 +101,13 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
     return html`
       <section class="user-question-request__question">
         <div class="user-question-request__heading">
-          ${question.header
-            ? html`<span class="user-question-request__header">
-                ${question.header}
-              </span>`
-            : nothing}
+          ${
+            question.header
+              ? html`<span class="user-question-request__header">
+                  ${question.header}
+                </span>`
+              : nothing
+          }
           <span>${question.question}</span>
         </div>
         <div class="user-question-request__options">
@@ -121,24 +125,28 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
                 />
                 <span>
                   <strong>${option.label}</strong>
-                  ${option.description
-                    ? html`<small>${option.description}</small>`
-                    : nothing}
+                  ${
+                    option.description
+                      ? html`<small>${option.description}</small>`
+                      : nothing
+                  }
                 </span>
               </label>
             `,
           )}
         </div>
-        ${question.allowFreeText
-          ? html`<wa-textarea
-              class="user-question-request__free-text"
-              placeholder="Type another answer"
-              rows="2"
-              .value=${this.freeText[question.question] ?? ''}
-              @input=${(event: Event) =>
-                this.updateFreeText(question.question, event)}
-            ></wa-textarea>`
-          : nothing}
+        ${
+          question.allowFreeText
+            ? html`<wa-textarea
+                class="user-question-request__free-text"
+                placeholder="Type another answer"
+                rows="2"
+                .value=${this.freeText[question.question] ?? ''}
+                @input=${(event: Event) =>
+                  this.updateFreeText(question.question, event)}
+              ></wa-textarea>`
+            : nothing
+        }
       </section>
     `;
   }
