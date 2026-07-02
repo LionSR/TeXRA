@@ -212,6 +212,28 @@ describe('SettingsAgentCatalogController', () => {
     ]);
   });
 
+  it('selects preset roots without matching arbitrary orchestrator substrings', () => {
+    const { controller } = createController({
+      builtInOrchestratorAgentNames: ['engineer'],
+    });
+
+    assert.equal(
+      controller.getPresetToolUseRoot([
+        'nonOrchestratorHelper',
+        'engineer',
+        'leanOrchestrator',
+      ]),
+      'engineer',
+    );
+    assert.equal(
+      controller.getPresetToolUseRoot([
+        'nonOrchestratorHelper',
+        'leanOrchestrator',
+      ]),
+      'leanOrchestrator',
+    );
+  });
+
   it('drops only invalid custom presets', () => {
     const { controller } = createController({
       customPresets: [
