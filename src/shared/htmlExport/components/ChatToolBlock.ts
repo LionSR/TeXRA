@@ -18,11 +18,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { bubbleFrame } from '../styles/tokens';
 
 export type ToolBlockKind =
-  | 'call'
-  | 'result'
-  | 'web-search'
-  | 'web-results'
-  | 'web-fetch';
+  'call' | 'result' | 'web-search' | 'web-results' | 'web-fetch';
 
 const ROLE_LABELS: Record<ToolBlockKind, string> = {
   call: 'Tool call',
@@ -73,9 +69,11 @@ export class ChatToolBlock extends LitElement {
     return html`
       <div class="frame">
         <div class="role">${label}</div>
-        ${this.name
-          ? html`<div class="tool-name">tool <code>${this.name}</code></div>`
-          : nothing}
+        ${
+          this.name
+            ? html`<div class="tool-name">tool <code>${this.name}</code></div>`
+            : nothing
+        }
         <div class="body"><slot></slot></div>
       </div>
     `;

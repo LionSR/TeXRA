@@ -150,9 +150,11 @@ export class GoalTab extends LitElement {
       <div
         class=${'goal-row' + (inFlight ? ' is-clickable' : '')}
         @click=${inFlight ? () => this.handleReveal(item.streamId) : null}
-        @keydown=${inFlight
-          ? (e: KeyboardEvent) => this.handleRowKey(e, item.streamId)
-          : null}
+        @keydown=${
+          inFlight
+            ? (e: KeyboardEvent) => this.handleRowKey(e, item.streamId)
+            : null
+        }
         role=${inFlight ? 'button' : 'group'}
         tabindex=${inFlight ? 0 : -1}
       >
@@ -177,20 +179,22 @@ export class GoalTab extends LitElement {
     return html`
       <div class="tab-content-container">
         ${this.renderReminder()}
-        ${this.items.length === 0
-          ? html`<div class="empty-state">
-              ${waIcon('compass')}
-              <p>No Goals yet.</p>
-            </div>`
-          : html`
-              <div class="goal-list">
-                ${repeat(
+        ${
+          this.items.length === 0
+            ? html`<div class="empty-state">
+                ${waIcon('compass')}
+                <p>No Goals yet.</p>
+              </div>`
+            : html`
+                <div class="goal-list">
+                  ${repeat(
                   this.items,
                   (it) => it.goalId,
                   (it) => this.renderRow(it),
                 )}
-              </div>
-            `}
+                </div>
+              `
+        }
       </div>
     `;
   }

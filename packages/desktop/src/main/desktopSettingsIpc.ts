@@ -302,8 +302,7 @@ export function createDesktopSettingsIpc(
     options.postToRenderer(
       await buildAgentSelectionMessage({
         loadAgents: loadAgentRegistry,
-        buildSelectionItems: () =>
-          agentCatalogController.buildSelectionItems(),
+        buildSelectionItems: () => agentCatalogController.buildSelectionItems(),
       }),
     );
   }

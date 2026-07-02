@@ -2,8 +2,7 @@ import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 
 type CliUnavailableTool =
-  | RegisteredToolName
-  | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
+  RegisteredToolName | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
 
 /**
  * Tools hidden from every `texra` CLI run — both the headless command paths

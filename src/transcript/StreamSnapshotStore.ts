@@ -73,9 +73,7 @@ const SEED_IO_CONCURRENCY = 8;
 
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 type UsageUpdateResult =
-  | TokenUsageStats
-  | undefined
-  | Promise<TokenUsageStats | undefined>;
+  TokenUsageStats | undefined | Promise<TokenUsageStats | undefined>;
 
 /**
  * Round-keyed delta shape carried by the `addOutputFiles` /

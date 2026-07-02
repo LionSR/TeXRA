@@ -95,8 +95,7 @@ import {
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 type DesktopUnavailableTool =
-  | RegisteredToolName
-  | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
+  RegisteredToolName | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
 
 const DESKTOP_UNAVAILABLE_TOOLS: readonly DesktopUnavailableTool[] = [
   'list_api_keys',

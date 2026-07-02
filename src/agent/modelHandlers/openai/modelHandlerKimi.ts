@@ -45,8 +45,7 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
   protected override readonly convertContentToStringUnlessVision = true;
 
   protected override getThinkingParameter():
-    | { type: 'enabled' | 'disabled' }
-    | undefined {
+    { type: 'enabled' | 'disabled' } | undefined {
     // Kimi K2.5 has thinking enabled by default on the Moonshot API.
     // Explicitly disable it for non-thinking variants.
     if (

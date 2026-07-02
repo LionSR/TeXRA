@@ -84,8 +84,7 @@ export class PersistedFlow<
    * Errors are swallowed — the authoritative flow blob is already written.
    */
   private projection:
-    | ((shared: S, kv: ExecutionKVStore) => Promise<void>)
-    | null = null;
+    ((shared: S, kv: ExecutionKVStore) => Promise<void>) | null = null;
 
   /**
    * Create a new PersistedFlow.

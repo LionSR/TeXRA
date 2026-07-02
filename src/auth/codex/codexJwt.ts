@@ -45,15 +45,13 @@ const CodexJwtClaimsSchema = z
       .catch(undefined),
     email: NonEmptyClaim,
   })
-  .transform(
-    (claims): CodexJwtClaims => ({
-      accountId:
-        claims.chatgpt_account_id ??
-        claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ??
-        claims.organizations?.[0]?.id,
-      email: claims.email,
-    }),
-  );
+  .transform((claims): CodexJwtClaims => ({
+    accountId:
+      claims.chatgpt_account_id ??
+      claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ??
+      claims.organizations?.[0]?.id,
+    email: claims.email,
+  }));
 
 /**
  * Decode + validate a JWT's claims (the middle base64url segment). Returns empty

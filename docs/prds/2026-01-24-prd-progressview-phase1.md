@@ -672,9 +672,9 @@ export class StreamTabs extends LitElement {
         ${this.streams.map(
           (stream) => html`
             <div
-              class="stream-tab ${stream.name === this.activeStream
-                ? 'is-active'
-                : ''}"
+              class="stream-tab ${
+                stream.name === this.activeStream ? 'is-active' : ''
+              }"
               @click=${() => this.handleStreamClick(stream.name)}
             >
               <span class="tab-title">${stream.label}</span>

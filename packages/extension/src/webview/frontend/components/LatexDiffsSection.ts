@@ -275,9 +275,7 @@ export class LatexDiffsSection extends LitElement {
     if (!fileButton) return;
     const fileAction = fileButton.dataset.fileAction;
     const fileType = fileButton.dataset.fileType as
-      | 'base'
-      | 'edited'
-      | undefined;
+      'base' | 'edited' | undefined;
     if (!fileType) return;
     if (fileAction === 'current') {
       this.dispatchEvent(MainViewEvents.getCurrentFile({ type: fileType }));

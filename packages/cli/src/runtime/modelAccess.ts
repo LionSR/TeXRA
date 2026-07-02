@@ -29,13 +29,7 @@ export interface CliRunnableModelResolution {
 type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
 
 export type CliModelSelectionSource =
-  | 'override'
-  | 'env'
-  | 'config'
-  | 'workspace'
-  | 'user'
-  | 'history'
-  | 'builtin';
+  'override' | 'env' | 'config' | 'workspace' | 'user' | 'history' | 'builtin';
 
 const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
   override: 'reject',

@@ -440,18 +440,19 @@ LaTeX settings (formatter, latexdiff, TikZ, replacements) and advanced settings 
 ```
 
 **Settings Mapping (for future implementation):**
-| UI Element | Storage |
-|------------|---------|
-| Auto-show remote agents | `globalState.autoShowRemoteAgents` |
-| Agent visibility | `workspaceState.enabledAgents`, `workspaceState.enabledToolUseAgents` |
-| Custom agents directory | `globalState.customAgentDir` |
-| Storage mode dropdown | `texra.agentOutputs.storageMode` (VS Code config) |
-| Require approval checkbox | `texra.toolUse.requireEditApproval` (VS Code config) |
-| Persist sessions checkbox | `texra.toolUse.persistence.enabled` (VS Code config) |
-| Session retention dropdown | `texra.toolUse.persistence.ttlHours` (VS Code config) |
-| Compaction threshold | `texra.model.compactionThresholdPercent` (VS Code config) |
-| Max attempts | `texra.model.retry.maxAttempts` (VS Code config) |
-| Backoff delay | `texra.model.retry.backoffMs` (VS Code config) |
+
+| UI Element                 | Storage                                                               |
+| -------------------------- | --------------------------------------------------------------------- |
+| Auto-show remote agents    | `globalState.autoShowRemoteAgents`                                    |
+| Agent visibility           | `workspaceState.enabledAgents`, `workspaceState.enabledToolUseAgents` |
+| Custom agents directory    | `globalState.customAgentDir`                                          |
+| Storage mode dropdown      | `texra.agentOutputs.storageMode` (VS Code config)                     |
+| Require approval checkbox  | `texra.toolUse.requireEditApproval` (VS Code config)                  |
+| Persist sessions checkbox  | `texra.toolUse.persistence.enabled` (VS Code config)                  |
+| Session retention dropdown | `texra.toolUse.persistence.ttlHours` (VS Code config)                 |
+| Compaction threshold       | `texra.model.compactionThresholdPercent` (VS Code config)             |
+| Max attempts               | `texra.model.retry.maxAttempts` (VS Code config)                      |
+| Backoff delay              | `texra.model.retry.backoffMs` (VS Code config)                        |
 
 **Storage:** State managers for agent settings, VS Code configuration for remaining settings
 
@@ -498,14 +499,15 @@ await config.update('agents', enabledAgents, ConfigurationTarget.Workspace);
 ```
 
 **Setting Scopes:**
-| Setting | ConfigurationTarget | Reason |
-|---------|---------------------|--------|
-| `texra.models` | Global | Same models everywhere |
-| Provider endpoints | Global | Same API setup everywhere |
-| Agent visibility | Workspace | Different projects need different agents |
-| `texra.agentOutputs.storageMode` | Workspace | Project-specific output location |
-| `texra.toolUse.*` | Global | Consistent behavior |
-| `texra.latex.*` | Global/Workspace | User choice |
+
+| Setting                          | ConfigurationTarget | Reason                                   |
+| -------------------------------- | ------------------- | ---------------------------------------- |
+| `texra.models`                   | Global              | Same models everywhere                   |
+| Provider endpoints               | Global              | Same API setup everywhere                |
+| Agent visibility                 | Workspace           | Different projects need different agents |
+| `texra.agentOutputs.storageMode` | Workspace           | Project-specific output location         |
+| `texra.toolUse.*`                | Global              | Consistent behavior                      |
+| `texra.latex.*`                  | Global/Workspace    | User choice                              |
 
 ### Secret Storage (`context.secrets`)
 

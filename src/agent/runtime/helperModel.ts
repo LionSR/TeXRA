@@ -24,8 +24,7 @@ export interface HelperModelKit {
 }
 
 export type HelperModelResult =
-  | { kit: HelperModelKit }
-  | { kit: undefined; reason: string };
+  { kit: HelperModelKit } | { kit: undefined; reason: string };
 
 /** Resolve the configured helper model, create a non-streaming handler, and obtain a client. */
 export async function createHelperModelKit(): Promise<HelperModelResult> {

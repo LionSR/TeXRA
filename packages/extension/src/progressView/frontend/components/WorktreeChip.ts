@@ -200,14 +200,16 @@ export class WorktreeChip extends LitElement {
     return html`<span class="branch" title=${tooltip}>
       ${waIcon('code-branch')}
       <span class="branch-name">${branch}</span>
-      ${this.info.dirty
-        ? html`<span
-              class="dirty-dot"
-              role="img"
-              aria-label="uncommitted changes"
-            ></span>
-            <span class="sr-only">uncommitted changes</span>`
-        : nothing}
+      ${
+        this.info.dirty
+          ? html`<span
+                class="dirty-dot"
+                role="img"
+                aria-label="uncommitted changes"
+              ></span>
+              <span class="sr-only">uncommitted changes</span>`
+          : nothing
+      }
     </span>`;
   }
 
@@ -223,28 +225,38 @@ export class WorktreeChip extends LitElement {
     const showStats = pr.additions != null || pr.deletions != null;
     return html`
       <span class="pr-number" title=${titleAttr}>#${pr.number}</span>
-      ${pr.title
-        ? html`<span class="pr-title" title=${pr.title}>${pr.title}</span>`
-        : nothing}
-      ${showStats
-        ? html`<span class="diff-stats" title="Lines changed">
-            ${pr.additions != null
-              ? html`<span class="diff-added">+${pr.additions}</span>`
-              : nothing}
-            ${pr.deletions != null
-              ? html`<span class="diff-removed">−${pr.deletions}</span>`
-              : nothing}
-          </span>`
-        : nothing}
-      ${pr.ciState
-        ? html`<wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name=${CI_ICON[ci]}
-            class=${classMap({ 'ci-icon': true, [`ci-${ci}`]: true })}
-            title=${CI_LABEL[ci]}
-            aria-label=${CI_LABEL[ci]}
-          ></wa-icon>`
-        : nothing}
+      ${
+        pr.title
+          ? html`<span class="pr-title" title=${pr.title}>${pr.title}</span>`
+          : nothing
+      }
+      ${
+        showStats
+          ? html`<span class="diff-stats" title="Lines changed">
+              ${
+              pr.additions != null
+                ? html`<span class="diff-added">+${pr.additions}</span>`
+                : nothing
+            }
+              ${
+              pr.deletions != null
+                ? html`<span class="diff-removed">−${pr.deletions}</span>`
+                : nothing
+            }
+            </span>`
+          : nothing
+      }
+      ${
+        pr.ciState
+          ? html`<wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name=${CI_ICON[ci]}
+              class=${classMap({ 'ci-icon': true, [`ci-${ci}`]: true })}
+              title=${CI_LABEL[ci]}
+              aria-label=${CI_LABEL[ci]}
+            ></wa-icon>`
+          : nothing
+      }
     `;
   }
 }

@@ -49,8 +49,7 @@ export function createDispatcher<TMessage extends CommandMessage>(
 
     const message = parseResult.data;
     const handler = handlers[message.command as TMessage['command']] as
-      | MessageHandler<typeof message>
-      | undefined;
+      MessageHandler<typeof message> | undefined;
 
     if (!handler) {
       return false;

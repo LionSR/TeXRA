@@ -28,10 +28,7 @@ export type RequestBodyReadResult =
   | (RequestBodySizeCheck & { allowed: false; body: null });
 
 export type RequestBodyForSizeCheck =
-  | string
-  | ArrayBuffer
-  | ArrayBufferView
-  | null;
+  string | ArrayBuffer | ArrayBufferView | null;
 
 function requestBodyByteLength(body: RequestBodyForSizeCheck): number {
   if (body == null) return 0;

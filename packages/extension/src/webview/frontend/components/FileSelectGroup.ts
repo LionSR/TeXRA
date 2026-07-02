@@ -142,8 +142,7 @@ export class FileSelectGroup extends LitElement {
   ): void => {
     event.preventDefault();
     const item = event.detail?.item as
-      | (HTMLElement & { value?: string; checked?: boolean })
-      | undefined;
+      (HTMLElement & { value?: string; checked?: boolean }) | undefined;
     const id = item?.value;
     if (!id) return;
     this.handleCheckboxChange(id, Boolean(item?.checked));
@@ -255,11 +254,13 @@ export class FileSelectGroup extends LitElement {
             <div class="file-item" data-path=${file} title=${file}>
               <span class="file-name">
                 <span class="file-name-main">${display.name}</span>
-                ${display.folder
-                  ? html`<span class="file-folder">
-                      ${waIcon('folder')} ${display.folder}
-                    </span>`
-                  : nothing}
+                ${
+                  display.folder
+                    ? html`<span class="file-folder">
+                        ${waIcon('folder')} ${display.folder}
+                      </span>`
+                    : nothing
+                }
               </span>
               <wa-button
                 id=${removeButtonId}
@@ -316,17 +317,25 @@ export class FileSelectGroup extends LitElement {
             </span>
             <label id="${this.listId}Label">${config.label}</label>
             <wa-tooltip for="${this.listId}Label">${config.tooltip}</wa-tooltip>
-            ${config.toolConfig === 'tool'
-              ? this.renderToolConfigMenu()
-              : nothing}
-            ${config.toolConfig === 'autoExtract'
-              ? this.renderAutoExtractMenu()
-              : nothing}
-            ${config.description
-              ? html`<span class="file-select-hint" title=${config.description}
-                  >${config.description}</span
-                >`
-              : nothing}
+            ${
+              config.toolConfig === 'tool'
+                ? this.renderToolConfigMenu()
+                : nothing
+            }
+            ${
+              config.toolConfig === 'autoExtract'
+                ? this.renderAutoExtractMenu()
+                : nothing
+            }
+            ${
+              config.description
+                ? html`<span
+                    class="file-select-hint"
+                    title=${config.description}
+                    >${config.description}</span
+                  >`
+                : nothing
+            }
           </div>
           <div class="file-select-actions">
             ${renderIconActionButton({

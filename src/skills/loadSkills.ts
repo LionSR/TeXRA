@@ -29,11 +29,7 @@ export interface DiscoverSkillsResult {
 }
 
 export type SkillSourceScope =
-  | 'bundled'
-  | 'user'
-  | 'project'
-  | 'interop'
-  | 'custom';
+  'bundled' | 'user' | 'project' | 'interop' | 'custom';
 
 export interface SkillSource {
   scope: SkillSourceScope;

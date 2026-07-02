@@ -61,11 +61,7 @@ export type CodexDeviceToken = z.infer<typeof CodexDeviceTokenSchema>;
  * - `pending`   — device-code authorization not completed yet.
  */
 export type CodexAuthErrorKind =
-  | 'fatal'
-  | 'expired'
-  | 'transient'
-  | 'config'
-  | 'pending';
+  'fatal' | 'expired' | 'transient' | 'config' | 'pending';
 
 export class CodexAuthError extends Error {
   readonly kind: CodexAuthErrorKind;
