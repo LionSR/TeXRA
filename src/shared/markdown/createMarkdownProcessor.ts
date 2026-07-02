@@ -226,8 +226,7 @@ export function createMarkdownProcessor(
     const rendered = renderWithEnv.call(config.renderer, formatted, {
       restoreProtectedLatex,
     });
-    let result = rendered;
-    result = restoreProtectedLatex(result);
+    const result = restoreProtectedLatex(rendered);
 
     // lru-cache's `sizeCalculation` rejects zero, so skip caching the empty
     // render (e.g. content that's only a link-reference definition).

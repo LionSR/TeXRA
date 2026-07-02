@@ -209,7 +209,6 @@ describe('InquiryStorage', () => {
       parentStreamId: STREAM_A,
       question: 'Q2',
     });
-    void t2;
 
     const t3 = await recordOpenQuestion({
       parentStreamId: STREAM_B,

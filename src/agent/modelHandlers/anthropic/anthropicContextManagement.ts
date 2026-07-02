@@ -79,9 +79,7 @@ export function ensureBeta(
   options: MessageCreateParams,
   beta: AnthropicBeta,
 ): void {
-  if (!options.betas) {
-    options.betas = [];
-  }
+  options.betas ??= [];
   if (!options.betas.includes(beta)) {
     options.betas.push(beta);
   }
@@ -255,7 +253,7 @@ export function enforceCacheControlLimit(
     MAX_CACHE_BREAKPOINT_SLOTS - reservedSlots,
   );
   const excess = Math.max(0, compactionBlocks.length - availableSlots);
-  for (let idx = 0; idx < excess; idx += 1) {
-    delete compactionBlocks[idx].cache_control;
+  for (const block of compactionBlocks.slice(0, excess)) {
+    delete block.cache_control;
   }
 }

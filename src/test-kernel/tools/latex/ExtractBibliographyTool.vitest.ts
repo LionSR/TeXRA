@@ -2,8 +2,6 @@
 import * as assert from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
 
-// Node.js built-in imports
-
 // Local imports - tests
 import { createFakePlatform } from '@test/support/FakePlatform';
 

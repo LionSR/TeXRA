@@ -698,15 +698,14 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     // Running process: read live output from ephemeral temp files
     const handle = currentSession().executions.getHandle(executionId);
     if (handle instanceof ProcessExecutionHandle && handle.outputPaths) {
+      const readText = (filePath: string): Promise<string> =>
+        platform()
+          .fs.readFile(filePath)
+          .then((bytes) => Buffer.from(bytes).toString('utf8'))
+          .catch(() => '');
       const [stdout, stderr] = await Promise.all([
-        platform()
-          .fs.readFile(handle.outputPaths.stdout)
-          .then((bytes) => Buffer.from(bytes).toString('utf8'))
-          .catch(() => ''),
-        platform()
-          .fs.readFile(handle.outputPaths.stderr)
-          .then((bytes) => Buffer.from(bytes).toString('utf8'))
-          .catch(() => ''),
+        readText(handle.outputPaths.stdout),
+        readText(handle.outputPaths.stderr),
       ]);
       const sections: string[] = [`Output for ${executionId}:`];
       if (stdout) sections.push('', '<stdout>', stdout, '</stdout>');

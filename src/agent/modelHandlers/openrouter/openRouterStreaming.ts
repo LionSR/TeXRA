@@ -81,9 +81,7 @@ export class OpenRouterStreamAggregator {
     // Reasoning - try reasoningDetails first, then reasoning string
     let reasoningDelta = '';
     if (delta.reasoningDetails?.length) {
-      for (const detail of delta.reasoningDetails) {
-        this.reasoningDetails.push(detail);
-      }
+      this.reasoningDetails.push(...delta.reasoningDetails);
       reasoningDelta = extractTextFromReasoningDetails(delta.reasoningDetails);
     } else if (delta.reasoning) {
       reasoningDelta = delta.reasoning;

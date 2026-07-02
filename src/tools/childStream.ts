@@ -183,13 +183,17 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   const requestedStatus =
     options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY);
   const currentStatus = session.executions.getStatus(handle).status;
-  const finalStatus =
+  let finalStatus: ChildStreamTerminalStatus;
+  if (
     currentStatus === STREAM_STATUS.STOPPED ||
     requestedStatus === STREAM_STATUS.STOPPED
-      ? STREAM_STATUS.STOPPED
-      : hasError
-        ? STREAM_STATUS.ERROR
-        : requestedStatus;
+  ) {
+    finalStatus = STREAM_STATUS.STOPPED;
+  } else if (hasError) {
+    finalStatus = STREAM_STATUS.ERROR;
+  } else {
+    finalStatus = requestedStatus;
+  }
   const outcome = deriveRunOutcome({
     failed: finalStatus === STREAM_STATUS.ERROR,
     cancelled: finalStatus === STREAM_STATUS.STOPPED,

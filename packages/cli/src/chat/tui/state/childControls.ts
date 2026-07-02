@@ -417,18 +417,10 @@ export function liveChildExecutionElapsedKey(
 ): string | undefined {
   if (slice === undefined) return undefined;
 
-  const liveKeys: string[] = [];
-  for (const child of slice.activeSubagents) {
-    if (hasLiveChildElapsed(child)) {
-      liveKeys.push(`${child.executionId}:${child.startedAt}`);
-    }
-  }
-  for (const child of slice.activeProcesses) {
-    if (hasLiveChildElapsed(child)) {
-      liveKeys.push(`${child.executionId}:${child.startedAt}`);
-    }
-  }
-  liveKeys.sort();
+  const liveKeys = [...slice.activeSubagents, ...slice.activeProcesses]
+    .filter(hasLiveChildElapsed)
+    .map((child) => `${child.executionId}:${child.startedAt}`)
+    .sort();
   return liveKeys.length > 0 ? liveKeys.join(',') : undefined;
 }
 

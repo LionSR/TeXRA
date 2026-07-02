@@ -140,16 +140,12 @@ export function createDesktopFileSelection(
   }
 
   async function updateEditedFiles(baseFile?: string) {
-    if (!baseFile) {
-      postFileList('edited', []);
-      return;
-    }
     const workspacePath = getWorkspacePath();
-    const config = getEditedFileListConfig(loadFileListSettings(getConfig));
-    if (!workspacePath) {
+    if (!baseFile || !workspacePath) {
       postFileList('edited', []);
       return;
     }
+    const config = getEditedFileListConfig(loadFileListSettings(getConfig));
     const files = (await listFiles(workspacePath, config)).filter((file) =>
       matchesEditedFile(file, baseFile),
     );

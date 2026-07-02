@@ -266,13 +266,8 @@ export function ExternalInquiry(
     questionScrollable,
   });
 
-  function scrollQuestion(
-    next: number | ((currentOffset: number) => number),
-  ): void {
-    setQuestionOffset((current) => {
-      const requested = typeof next === 'function' ? next(current) : next;
-      return clamp(requested, 0, maxQuestionOffset);
-    });
+  function scrollQuestion(next: (currentOffset: number) => number): void {
+    setQuestionOffset((current) => clamp(next(current), 0, maxQuestionOffset));
   }
 
   async function copyQuestion(): Promise<void> {

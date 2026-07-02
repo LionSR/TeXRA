@@ -245,6 +245,16 @@ export class HistoryList extends LitElement {
     this.page = event.detail.page;
   }
 
+  private renderPagination(): TemplateResult | string {
+    if (!this.paginated) return '';
+    return html`<list-pagination
+      .page=${this.page}
+      .totalItems=${this.items.length}
+      .pageSize=${HISTORY_PAGE_SIZE}
+      @page-change=${this.handlePageChange}
+    ></list-pagination>`;
+  }
+
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
@@ -275,16 +285,7 @@ export class HistoryList extends LitElement {
     }
 
     return html`
-      ${
-        this.paginated
-          ? html`<list-pagination
-              .page=${this.page}
-              .totalItems=${this.items.length}
-              .pageSize=${HISTORY_PAGE_SIZE}
-              @page-change=${this.handlePageChange}
-            ></list-pagination>`
-          : ''
-      }
+      ${this.renderPagination()}
       <div class="history-container">
         ${repeat(
           displayItems,
@@ -301,16 +302,7 @@ export class HistoryList extends LitElement {
           `,
         )}
       </div>
-      ${
-        this.paginated
-          ? html`<list-pagination
-              .page=${this.page}
-              .totalItems=${this.items.length}
-              .pageSize=${HISTORY_PAGE_SIZE}
-              @page-change=${this.handlePageChange}
-            ></list-pagination>`
-          : ''
-      }
+      ${this.renderPagination()}
     `;
   }
 }

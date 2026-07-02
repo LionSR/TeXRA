@@ -12,7 +12,7 @@ function makePair(): {
   serverIn: PassThrough;
   serverOut: PassThrough;
   serverSends: (json: unknown) => void;
-  collectClientFrames: () => Promise<Array<Record<string, unknown>>>;
+  collectClientFrames: () => Promise<Record<string, unknown>[]>;
 } {
   const serverIn = new PassThrough(); // what the client writes (i.e. the server reads)
   const serverOut = new PassThrough(); // what the server writes (i.e. the client reads)
@@ -28,7 +28,7 @@ function makePair(): {
   /** Wait until serverIn has data, then parse and return all LSP frames. */
   const collectClientFrames = () =>
     vi.waitFor(
-      (): Array<Record<string, unknown>> => {
+      (): Record<string, unknown>[] => {
         let raw = serverIn.read() as Buffer | string | null;
         while (raw) {
           clientFrameBuffer += Buffer.isBuffer(raw)
@@ -37,7 +37,7 @@ function makePair(): {
           raw = serverIn.read() as Buffer | string | null;
         }
         if (!clientFrameBuffer) throw new Error('no data in serverIn yet');
-        const frames: Array<Record<string, unknown>> = [];
+        const frames: Record<string, unknown>[] = [];
         let offset = 0;
         while (offset < clientFrameBuffer.length) {
           const headerEnd = clientFrameBuffer.indexOf('\r\n\r\n', offset);

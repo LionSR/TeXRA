@@ -92,11 +92,16 @@ export class SettingsModelSelectionController {
     enabled: boolean;
   }): Promise<void> {
     const current = this.getVisibleModels();
-    const updated = input.enabled
-      ? current.includes(input.modelName)
-        ? current
-        : [...current, input.modelName]
-      : current.filter((modelName) => modelName !== input.modelName);
+
+    let updated: string[];
+    if (!input.enabled) {
+      updated = current.filter((modelName) => modelName !== input.modelName);
+    } else if (current.includes(input.modelName)) {
+      updated = current;
+    } else {
+      updated = [...current, input.modelName];
+    }
+
     const wasHelper =
       !input.enabled &&
       this.getEffectiveHelperModel(current) === input.modelName;

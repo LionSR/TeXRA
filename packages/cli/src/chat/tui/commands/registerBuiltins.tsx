@@ -77,6 +77,10 @@ function runFormSelection<T>({
   readonly onError?: ErrorHandler;
   readonly completion?: SelectionCompletion;
 }): void {
+  if (completion === 'beforeAction') {
+    onDone(value);
+  }
+
   const runAction = (): Promise<void> => {
     try {
       return Promise.resolve(action());
@@ -84,10 +88,6 @@ function runFormSelection<T>({
       return Promise.reject(error);
     }
   };
-
-  if (completion === 'beforeAction') {
-    onDone(value);
-  }
 
   void runAction()
     .catch((error: unknown) => onError?.(error))

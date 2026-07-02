@@ -16,9 +16,7 @@ type DiffMatchPatch = InstanceType<typeof diff_match_patch>;
 let dmpInstance: DiffMatchPatch | null = null;
 
 function getDmp(): DiffMatchPatch {
-  if (!dmpInstance) {
-    dmpInstance = new diff_match_patch();
-  }
+  dmpInstance ??= new diff_match_patch();
   return dmpInstance;
 }
 

@@ -15,7 +15,7 @@ type MessageLike = {
   reasoning_content?: unknown;
 };
 
-type ContentArray = Array<Record<string, unknown>>;
+type ContentArray = Record<string, unknown>[];
 
 /** Type guard for text content items in message content arrays. */
 function isTextContentItem(
@@ -173,7 +173,7 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
     for (const message of working) {
       if (Array.isArray(message.content)) {
         // Extract text from content array items and join with newlines
-        message.content = (message.content as Array<unknown>)
+        message.content = (message.content as unknown[])
           .filter(isTextContentItem)
           .map((item) => item.text)
           .join('\n');

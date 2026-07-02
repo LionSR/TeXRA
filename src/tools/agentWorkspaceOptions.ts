@@ -30,11 +30,14 @@ export function buildAgentWorkspaceOptions(
     return trimmed ? { workingDirectory: trimmed } : {};
   }
 
-  const workingDirectory = trimmed
-    ? path.isAbsolute(trimmed)
-      ? trimmed
-      : path.resolve(workspacePath, trimmed)
-    : workspacePath;
+  let workingDirectory: string;
+  if (!trimmed) {
+    workingDirectory = workspacePath;
+  } else if (path.isAbsolute(trimmed)) {
+    workingDirectory = trimmed;
+  } else {
+    workingDirectory = path.resolve(workspacePath, trimmed);
+  }
 
   const resolvedWorkspacePath = path.resolve(workspacePath);
   const resolvedWorkingDirectory = path.resolve(workingDirectory);
