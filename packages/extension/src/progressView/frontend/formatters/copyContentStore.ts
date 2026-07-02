@@ -4,10 +4,11 @@
  * Stores copyable content by ID to avoid duplicating large strings in DOM attributes.
  */
 
+import { LRUCache } from 'lru-cache';
+
 import { hashString } from './hashUtils';
 
-const MAX_STORE_SIZE = 1000;
-const copyContentStore = new Map<string, string>();
+const copyContentStore = new LRUCache<string, string>({ max: 1000 });
 
 /**
  * Register copy content and return a stable ID for lookup.
@@ -19,10 +20,6 @@ export function registerCopyContent(
   const id = contentId ?? `auto:${content.length}:${hashString(content)}`;
   const existing = copyContentStore.get(id);
   if (existing !== content) {
-    if (existing === undefined && copyContentStore.size >= MAX_STORE_SIZE) {
-      const oldest = copyContentStore.keys().next().value;
-      if (oldest !== undefined) copyContentStore.delete(oldest);
-    }
     copyContentStore.set(id, content);
   }
   return id;
