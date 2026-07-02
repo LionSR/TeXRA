@@ -82,6 +82,12 @@ export class SecretManager {
     try {
       return await requireApiKey(platform().secrets, provider);
     } catch (err) {
+      if (
+        !(err instanceof Error) ||
+        !err.message.startsWith(`No API key found for ${provider}.`)
+      ) {
+        throw err;
+      }
       throw new Error(
         `No API key found for ${provider}. Please set it using the "Set API Key" command or ${apiKeyEnvName(provider)} environment variable.`,
         { cause: err },
@@ -104,12 +110,10 @@ export class SecretManager {
   }
 
   /**
-   * Like `apiKeyExists` but rejects empty / whitespace-only values. A
-   * stale `PROVIDER_API_KEY=""` env var is "present" but not usable at
-   * launch — every runtime auth path falls over on a blank key. Callers
-   * that gate on "can this credential actually authenticate?" (the
-   * setup flow, per-provider probes, preflight checks) must use this
-   * helper rather than the looser `apiKeyExists`.
+   * Like `apiKeyExists` but also rejects whitespace-only values from any
+   * resolved credential. The canonical resolver already treats empty env vars
+   * as missing; this helper is for launch checks that need an actually usable
+   * authentication value.
    */
   public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
     const key = await lookupApiKey(platform().secrets, provider);
