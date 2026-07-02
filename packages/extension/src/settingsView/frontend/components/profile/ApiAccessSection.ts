@@ -60,26 +60,28 @@ export class ApiAccessSection extends LitElement {
             `,
           )}
         </wa-radio-group>
-        ${this.mode === 'included'
-          ? html`
-              <div class="api-access-support">
-                ${waIcon('heart', { className: 'api-access-support-icon' })}
-                <span class="api-access-support-copy">
-                  ${PROMO_NOTICE_LONG.supportLead}<a
-                    href=${PROMO_NOTICE_LONG.supportSponsorsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    >${PROMO_NOTICE_LONG.supportSponsorsLabel}</a
-                  >${PROMO_NOTICE_LONG.supportMiddle}<a
-                    href=${PROMO_NOTICE_LONG.supportCoffeeUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    >${PROMO_NOTICE_LONG.supportCoffeeLabel}</a
-                  >${PROMO_NOTICE_LONG.supportTail}
-                </span>
-              </div>
-            `
-          : nothing}
+        ${
+          this.mode === 'included'
+            ? html`
+                <div class="api-access-support">
+                  ${waIcon('heart', { className: 'api-access-support-icon' })}
+                  <span class="api-access-support-copy">
+                    ${PROMO_NOTICE_LONG.supportLead}<a
+                      href=${PROMO_NOTICE_LONG.supportSponsorsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >${PROMO_NOTICE_LONG.supportSponsorsLabel}</a
+                    >${PROMO_NOTICE_LONG.supportMiddle}<a
+                      href=${PROMO_NOTICE_LONG.supportCoffeeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >${PROMO_NOTICE_LONG.supportCoffeeLabel}</a
+                    >${PROMO_NOTICE_LONG.supportTail}
+                  </span>
+                </div>
+              `
+            : nothing
+        }
       </div>
     `;
   }

@@ -228,9 +228,7 @@ function runtimeNarrowToolDefinition(
 function annotateDelegationTool(
   tool: ToolDefinition,
   availableModelNames:
-    | ReadonlyMap<AgentCategory, readonly string[]>
-    | null
-    | undefined,
+    ReadonlyMap<AgentCategory, readonly string[]> | null | undefined,
 ): ToolDefinition {
   const category = DELEGATION_TOOL_CATEGORY[tool.name];
   if (!category) return tool;

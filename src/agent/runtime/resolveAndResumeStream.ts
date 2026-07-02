@@ -40,9 +40,7 @@ export interface ResumeStreamPorts {
     config: AgentConfig,
     executionId: ExecutionId | undefined,
     modelHandlerCompatibilityKey:
-      | ModelHandlerCompatibilityKey
-      | null
-      | undefined,
+      ModelHandlerCompatibilityKey | null | undefined,
   ): Promise<void>;
   /**
    * Surface "this run has no resumable session state" when retrieval succeeds

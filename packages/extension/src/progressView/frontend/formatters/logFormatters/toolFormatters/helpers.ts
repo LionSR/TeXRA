@@ -104,9 +104,9 @@ export function truncateHeaderSummary(text: string, maxLength: number): string {
 export function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
   return html`${sections.map(
     (section, i) =>
-      html`${section}${i < sections.length - 1
-        ? html`<wa-divider></wa-divider>`
-        : ''}`,
+      html`${section}${
+        i < sections.length - 1 ? html`<wa-divider></wa-divider>` : ''
+      }`,
   )}`;
 }
 

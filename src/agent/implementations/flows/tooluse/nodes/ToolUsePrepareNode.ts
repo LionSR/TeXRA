@@ -11,8 +11,7 @@ import type { ToolUseServices } from '../ToolUseServices';
 import type { ToolUseRunShared, PrepareResult } from './types';
 
 type PrepareExecResult =
-  | { kind: 'success'; result: PrepareResult }
-  | { kind: 'error'; error: Error };
+  { kind: 'success'; result: PrepareResult } | { kind: 'error'; error: Error };
 
 /**
  * Session-init node: runs **once per tool-use session** to build the initial

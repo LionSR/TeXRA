@@ -1169,19 +1169,19 @@ Round 1 above defined the CLI as a thin Node shell over an already host-neutral 
 
 Round 2 lands six concrete deltas plus one cross-cutting kernel refactor that all three hosts (extension, desktop, CLI) benefit from. None of these change the round-1 LOC band by more than ~600 lines combined; most are about replacing ad-hoc patterns with the kernel-shaped abstractions the audit revealed are already partially in place.
 
-| Delta                                                                         | Round 1 status                                       | Round 2 position                                                                                                                                                                                           | New §      |
+| Delta | Round 1 status | Round 2 position | New § |
 | ----------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---- | ----- | ---------------------------------------------------------------------------------------------------------------------------- | --- |
-| Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work                               | **Promoted to standalone PRD — see [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md). CLI v1.0 consumes Phase 1; v1.1 consumes Phase 2 (gates concurrent MCP sessions).** | §22 (stub) |
-| Structured logger with explicit context, no module globals                    | Hand-waved as "consoleLog plus filter wrapper"       | **Promoted to standalone PRD — see [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md). CLI installs four sinks (stderr text, NDJSON stdout, Ink, MCP).**                                       | §23 (stub) |
-| `texra mcp serve` (callable from Claude Code, Codex, opencode)                | Listed as v1.1 future                                | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)**                                                                                                              | §24        |
-| Hook system (SessionStart, PreToolUse, PostToolUse, …)                        | Not mentioned                                        | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner**                                                                                                      | §25        |
-| Approval policy revisited (no 2D sandbox axis)                                | 1D `never                                            | ask                                                                                                                                                                                                        | auto-edits | auto | yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
-| Session transcripts as JSONL under project-hash sharding                      | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics**                                                                                                                            | §27        |
-| GitHub Action: composite + Bun (not JS Action)                                | §12 picked JS Action                                 | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in**                                                                                                 | §28        |
-| Cross-platform shared structure refactor (kernel side)                        | Implicit                                             | **Promoted into [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md) §8 (three-ring kernel structure). CLI-side consumption details retained here.**                         | §29 (stub) |
-| Container / GitHub-runner target matrix (slim, alpine, texlive)               | Sketched in §12.3                                    | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues**                                                                                            | §30        |
-| Phase plan delta + LOC delta                                                  | —                                                    | **Aggregated**                                                                                                                                                                                             | §31        |
-| Parking lot — unified agent-SDK / message-SDK / context compaction            | —                                                    | **Out of v1; sized in §32 for visibility**                                                                                                                                                                 | §32        |
+| Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work | **Promoted to standalone PRD — see [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md). CLI v1.0 consumes Phase 1; v1.1 consumes Phase 2 (gates concurrent MCP sessions).** | §22 (stub) |
+| Structured logger with explicit context, no module globals | Hand-waved as "consoleLog plus filter wrapper" | **Promoted to standalone PRD — see [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md). CLI installs four sinks (stderr text, NDJSON stdout, Ink, MCP).** | §23 (stub) |
+| `texra mcp serve` (callable from Claude Code, Codex, opencode) | Listed as v1.1 future | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)** | §24 |
+| Hook system (SessionStart, PreToolUse, PostToolUse, …) | Not mentioned | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner** | §25 |
+| Approval policy revisited (no 2D sandbox axis) | 1D `never                                            | ask                                                                                                                                                                                                        | auto-edits | auto | yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
+| Session transcripts as JSONL under project-hash sharding | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics** | §27 |
+| GitHub Action: composite + Bun (not JS Action) | §12 picked JS Action | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in** | §28 |
+| Cross-platform shared structure refactor (kernel side) | Implicit | **Promoted into [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md) §8 (three-ring kernel structure). CLI-side consumption details retained here.** | §29 (stub) |
+| Container / GitHub-runner target matrix (slim, alpine, texlive) | Sketched in §12.3 | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues** | §30 |
+| Phase plan delta + LOC delta | — | **Aggregated** | §31 |
+| Parking lot — unified agent-SDK / message-SDK / context compaction | — | **Out of v1; sized in §32 for visibility** | §32 |
 
 The rest of round 2 is the spec for these deltas, in dependency order: §22 → §23 unblock §24 (an MCP server can't safely host concurrent sessions until the kernel's ambient state is gone); §24 + §25 + §26 are independent hosts on the new context; §27 + §28 + §29 + §30 are deployment / packaging concerns that don't gate kernel work.
 
@@ -1225,12 +1225,12 @@ The kernel work is sized in `2026-05-06-prd-runcontext-refactor.md` §7 (~6.5 en
 
 ### 23.1 What the CLI installs
 
-| Mode                                 | Sink              | What it does                                                                                           |
+| Mode | Sink | What it does |
 | ------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Headless text (`--print` or non-TTY) | `StderrTextSink`  | picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`; copies to `--log-file` if passed. |
-| JSON / NDJSON (`--output-format json | ndjson`)          | `NdjsonStdoutSink`                                                                                     | One `RunStreamEvent` per line on stdout (the same union the §11.2 progress stream uses). |
-| Interactive (Ink TUI)                | `InkLogSink`      | Routes records to the `<StreamPane />` component as `event === "log"` rows alongside progress events.  |
-| MCP server (`texra mcp serve`)       | `McpProgressSink` | Records become `notifications/progress` payloads bound to the request's progress token.                |
+| Headless text (`--print` or non-TTY) | `StderrTextSink` | picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`; copies to `--log-file` if passed. |
+| JSON / NDJSON (`--output-format json | ndjson`) | `NdjsonStdoutSink` | One `RunStreamEvent` per line on stdout (the same union the §11.2 progress stream uses). |
+| Interactive (Ink TUI) | `InkLogSink` | Routes records to the `<StreamPane />` component as `event === "log"` rows alongside progress events. |
+| MCP server (`texra mcp serve`) | `McpProgressSink` | Records become `notifications/progress` payloads bound to the request's progress token. |
 
 All four CLI-side sinks live in `packages/cli/src/render/sinks/`. `BootstrapLogger` is constructed in `cli/src/bin/texra.ts` immediately and threaded through config-load, secret resolution, agent-directory bootstrap, and mode selection — its buffer flushes through whichever sink the resolved mode picks.
 
@@ -1377,17 +1377,17 @@ Hook contracts are easy to bolt on later in theory and a nightmare in practice �
 
 ### 25.3 Where hooks fire
 
-| Event                        | Fires from                                                                          | RunContext field                                     |
+| Event | Fires from | RunContext field |
 | ---------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- | ------ | ------ | ---------- | -------- |
-| `SessionStart`               | `executeAgent.ts` after `buildAgentLaunchContext`                                   | `runId`, `streamId`, `cwd`                           |
-| `UserPromptSubmit`           | Tool-use REPL on each user submit                                                   | `runId`, `instruction`                               |
-| `PreToolUse`                 | `requestToolEditApproval`, `requestBashApproval`, generic tool dispatch             | `runId`, `tool.name`, `tool.input`                   |
-| `PostToolUse`                | Tool dispatch after result                                                          | `runId`, `tool.name`, `tool.result.summary`          |
-| `Stop`                       | `executeAgent` finalizer                                                            | `runId`, `result.status`                             |
-| `SubagentStop`               | Delegation child completion                                                         | `runId`, `parentStreamId`, `childStreamId`, `result` |
-| `Notification`               | Any `requestShowError` / `requestShowInstruction` emission                          | `runId`, `message`                                   |
-| `PreCompact` / `PostCompact` | (Future, §32 — context compaction)                                                  | `runId`, `compactionStats`                           |
-| `PermissionRequest`          | The same gate `PreToolUse` covers, but specifically for the approval gates §9 lists | Same as `PreToolUse` plus `gate: "edit"              | "bash" | "plan" | "proposal" | "retry"` |
+| `SessionStart` | `executeAgent.ts` after `buildAgentLaunchContext` | `runId`, `streamId`, `cwd` |
+| `UserPromptSubmit` | Tool-use REPL on each user submit | `runId`, `instruction` |
+| `PreToolUse` | `requestToolEditApproval`, `requestBashApproval`, generic tool dispatch | `runId`, `tool.name`, `tool.input` |
+| `PostToolUse` | Tool dispatch after result | `runId`, `tool.name`, `tool.result.summary` |
+| `Stop` | `executeAgent` finalizer | `runId`, `result.status` |
+| `SubagentStop` | Delegation child completion | `runId`, `parentStreamId`, `childStreamId`, `result` |
+| `Notification` | Any `requestShowError` / `requestShowInstruction` emission | `runId`, `message` |
+| `PreCompact` / `PostCompact` | (Future, §32 — context compaction) | `runId`, `compactionStats` |
+| `PermissionRequest` | The same gate `PreToolUse` covers, but specifically for the approval gates §9 lists | Same as `PreToolUse` plus `gate: "edit"              | "bash" | "plan" | "proposal" | "retry"` |
 
 ### 25.4 Configuration
 

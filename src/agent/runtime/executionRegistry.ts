@@ -91,9 +91,7 @@ interface TerminateOptions {
 }
 
 export type ToolUseFollowUpQueueReason =
-  | 'resuming'
-  | 'waiting'
-  | 'children_running';
+  'resuming' | 'waiting' | 'children_running';
 
 export type ToolUseFollowUpTarget =
   | {

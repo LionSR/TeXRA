@@ -42,9 +42,7 @@ import { StorageFS, pathToLocation } from '@utils/files';
 
 /** Outcome of loading execution data for export. */
 export type ExportInputStatus =
-  | 'ok'
-  | 'config_missing'
-  | 'conversation_missing';
+  'ok' | 'config_missing' | 'conversation_missing';
 
 export type ExportInputResult =
   | { readonly status: 'ok'; readonly exportInput: ChatExportInput }

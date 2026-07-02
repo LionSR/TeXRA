@@ -116,9 +116,7 @@ export class ModelsTab extends LitElement {
 
   private scrollToSection(
     selector:
-      | 'api-access-section'
-      | 'provider-key-list'
-      | '#chatgpt-subscription',
+      'api-access-section' | 'provider-key-list' | '#chatgpt-subscription',
   ): void {
     const el = this.shadowRoot?.querySelector(selector);
     if (el instanceof HTMLElement) {
@@ -281,26 +279,28 @@ export class ModelsTab extends LitElement {
             Use subscription for tool-use agents only
           </wa-switch>
         </div>
-        ${signedIn
-          ? html`<div class="chatgpt-subscription__row">
-              <span class="chatgpt-subscription__account">
-                ${waIcon('circle-check')} Signed in as ${account}
-              </span>
-              <wa-button
-                appearance="outlined"
+        ${
+          signedIn
+            ? html`<div class="chatgpt-subscription__row">
+                <span class="chatgpt-subscription__account">
+                  ${waIcon('circle-check')} Signed in as ${account}
+                </span>
+                <wa-button
+                  appearance="outlined"
+                  size="small"
+                  @click=${() => this.dispatchEvent(ChatGptAuthEvents.signOut())}
+                >
+                  Sign out
+                </wa-button>
+              </div>`
+            : html`<wa-button
+                variant="brand"
                 size="small"
-                @click=${() => this.dispatchEvent(ChatGptAuthEvents.signOut())}
+                @click=${() => this.dispatchEvent(ChatGptAuthEvents.signIn())}
               >
-                Sign out
-              </wa-button>
-            </div>`
-          : html`<wa-button
-              variant="brand"
-              size="small"
-              @click=${() => this.dispatchEvent(ChatGptAuthEvents.signIn())}
-            >
-              Sign in with ChatGPT
-            </wa-button>`}
+                Sign in with ChatGPT
+              </wa-button>`
+        }
       </section>
     `;
   }

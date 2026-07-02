@@ -1124,8 +1124,7 @@ describe('desktop settings IPC', () => {
             toggleable: true,
             enabled: !(
               globalState.values.get(GlobalStateKey.DISABLED_TOOLS) as
-                | string[]
-                | undefined
+                string[] | undefined
             )?.includes('zotero'),
           },
         ];

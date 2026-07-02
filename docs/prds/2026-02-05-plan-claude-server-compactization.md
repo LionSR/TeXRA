@@ -333,8 +333,7 @@ if (compactionBlock) {
 
   // Get pre-compaction tokens from iterations array
   const iterations = (response.usage as any).iterations as
-    | Array<{ type: string; input_tokens: number }>
-    | undefined;
+    Array<{ type: string; input_tokens: number }> | undefined;
   const compactionIteration = iterations?.find((i) => i.type === 'compaction');
   const tokensBefore = compactionIteration?.input_tokens ?? totalInputTokens;
 

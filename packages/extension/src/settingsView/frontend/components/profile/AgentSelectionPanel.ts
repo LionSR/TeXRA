@@ -260,22 +260,28 @@ export class AgentSelectionPanel extends LitElement {
             e.stopPropagation();
             this.handleToggleEnabled(agent);
           }}
-          title=${agent.enabled
-            ? 'Hide from agent selector'
-            : 'Show in agent selector'}
+          title=${
+            agent.enabled
+              ? 'Hide from agent selector'
+              : 'Show in agent selector'
+          }
         ></wa-checkbox>
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
-          ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<span title="Remote agent"
-                >${waIcon('cloud', { label: 'Remote agent' })}</span
-              >`
-            : nothing}
-          ${agent.source === AGENT_SOURCE.CUSTOM
-            ? html`<span title="Custom agent"
-                >${waIcon('star', { label: 'Custom agent' })}</span
-              >`
-            : nothing}
+          ${
+            agent.source === AGENT_SOURCE.REMOTE
+              ? html`<span title="Remote agent"
+                  >${waIcon('cloud', { label: 'Remote agent' })}</span
+                >`
+              : nothing
+          }
+          ${
+            agent.source === AGENT_SOURCE.CUSTOM
+              ? html`<span title="Custom agent"
+                  >${waIcon('star', { label: 'Custom agent' })}</span
+                >`
+              : nothing
+          }
         </span>
       </div>
     `;
@@ -302,28 +308,32 @@ export class AgentSelectionPanel extends LitElement {
             <div class="agent-list-section-header">
               <span>${sourceName}</span>
               <span class="agent-list-section-actions">
-                ${enabledInGroup < agents.length
-                  ? html`<wa-button
-                      class="agent-count-link"
-                      appearance="plain"
-                      size="small"
-                      @click=${() => this.handleSetAllEnabled(source, true)}
-                      title="Show all ${sourceName} agents"
-                    >
-                      All
-                    </wa-button>`
-                  : nothing}
-                ${enabledInGroup > 0
-                  ? html`<wa-button
-                      class="agent-count-link"
-                      appearance="plain"
-                      size="small"
-                      @click=${() => this.handleSetAllEnabled(source, false)}
-                      title="Hide all ${sourceName} agents"
-                    >
-                      None
-                    </wa-button>`
-                  : nothing}
+                ${
+                  enabledInGroup < agents.length
+                    ? html`<wa-button
+                        class="agent-count-link"
+                        appearance="plain"
+                        size="small"
+                        @click=${() => this.handleSetAllEnabled(source, true)}
+                        title="Show all ${sourceName} agents"
+                      >
+                        All
+                      </wa-button>`
+                    : nothing
+                }
+                ${
+                  enabledInGroup > 0
+                    ? html`<wa-button
+                        class="agent-count-link"
+                        appearance="plain"
+                        size="small"
+                        @click=${() => this.handleSetAllEnabled(source, false)}
+                        title="Hide all ${sourceName} agents"
+                      >
+                        None
+                      </wa-button>`
+                    : nothing
+                }
               </span>
             </div>
             ${agents.map((a) => this.renderListItem(a))}
@@ -353,31 +363,41 @@ export class AgentSelectionPanel extends LitElement {
       <div class="agent-detail-pane">
         <div class="agent-detail-header">
           <span class="agent-detail-name">${agent.name}</span>
-          ${builtIn
-            ? html`<wa-tag variant="neutral" size="small">Built-in</wa-tag>`
-            : nothing}
-          ${isCustom
-            ? html`<wa-tag variant="neutral" size="small" title="Custom agent"
-                >${waIcon('star')} Custom</wa-tag
-              >`
-            : nothing}
-          ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<wa-tag variant="neutral" size="small" title="Remote agent"
-                >${waIcon('cloud')} Remote</wa-tag
-              >`
-            : nothing}
+          ${
+            builtIn
+              ? html`<wa-tag variant="neutral" size="small">Built-in</wa-tag>`
+              : nothing
+          }
+          ${
+            isCustom
+              ? html`<wa-tag variant="neutral" size="small" title="Custom agent"
+                  >${waIcon('star')} Custom</wa-tag
+                >`
+              : nothing
+          }
+          ${
+            agent.source === AGENT_SOURCE.REMOTE
+              ? html`<wa-tag variant="neutral" size="small" title="Remote agent"
+                  >${waIcon('cloud')} Remote</wa-tag
+                >`
+              : nothing
+          }
         </div>
 
-        ${agent.description
-          ? html`<div class="agent-detail-description">
-              ${agent.description}
-            </div>`
-          : nothing}
-        ${agent.filePath
-          ? html`<div class="agent-detail-path" title=${agent.filePath}>
-              ${agent.filePath.split(/[/\\]/).pop() ?? agent.filePath}
-            </div>`
-          : nothing}
+        ${
+          agent.description
+            ? html`<div class="agent-detail-description">
+                ${agent.description}
+              </div>`
+            : nothing
+        }
+        ${
+          agent.filePath
+            ? html`<div class="agent-detail-path" title=${agent.filePath}>
+                ${agent.filePath.split(/[/\\]/).pop() ?? agent.filePath}
+              </div>`
+            : nothing
+        }
 
         <div class="agent-detail-meta">
           <span class="agent-detail-meta-label">Available</span>
@@ -385,118 +405,133 @@ export class AgentSelectionPanel extends LitElement {
             ${agent.enabled ? 'Yes' : 'No'}
           </span>
 
-          ${agent.tools && agent.tools.length > 0
-            ? html`
-                <span class="agent-detail-meta-label">Tools</span>
-                <div class="agent-detail-meta-value">
-                  <div class="agent-detail-tools">
-                    ${agent.tools.map(
-                      (t) =>
-                        html`<wa-tag
-                          class="agent-tool-badge"
-                          variant="neutral"
-                          size="small"
-                          >${t}</wa-tag
-                        >`,
-                    )}
+          ${
+            agent.tools && agent.tools.length > 0
+              ? html`
+                  <span class="agent-detail-meta-label">Tools</span>
+                  <div class="agent-detail-meta-value">
+                    <div class="agent-detail-tools">
+                      ${agent.tools.map(
+                        (t) =>
+                          html`<wa-tag
+                            class="agent-tool-badge"
+                            variant="neutral"
+                            size="small"
+                            >${t}</wa-tag
+                          >`,
+                      )}
+                    </div>
                   </div>
-                </div>
-              `
-            : nothing}
+                `
+              : nothing
+          }
         </div>
 
         <div class="agent-detail-actions">
-          ${agent.hasPath
-            ? html`
-                ${renderLabeledActionButton({
-                  icon: 'file-lines',
-                  text: 'Open YAML',
-                  label: 'Open agent YAML definition',
-                  className: 'agent-action-btn',
-                  onClick: () => this.handleOpenYaml(agent),
-                })}
-              `
-            : nothing}
-          ${agent.source === AGENT_SOURCE.REMOTE &&
-          this.userTier === 'Ultra' &&
-          !agent.hasPath &&
-          !this.desktopHost
-            ? html`
-                ${renderLabeledActionButton({
-                  icon: 'file-lines',
-                  text: 'View Prompt',
-                  label: "View the remote agent's prompt definition",
-                  title:
-                    "View the remote agent's prompt definition (read-only)",
-                  className: 'agent-action-btn',
-                  onClick: () => this.handleViewRemotePrompt(agent),
-                })}
-              `
-            : nothing}
-          ${agent.hasPath
-            ? html`
-                ${renderLabeledActionButton({
-                  icon: 'folder-open',
-                  text: 'Reveal in File Explorer',
-                  title: 'Show this file in your system file explorer',
-                  className: 'agent-action-btn',
-                  onClick: () => this.handleRevealAgentFile(agent),
-                })}
-              `
-            : nothing}
-          ${builtIn && !this.desktopHost
-            ? html`
-                ${renderLabeledActionButton({
-                  icon: 'pencil',
-                  text: 'Customize',
-                  label: 'Customize agent',
-                  title: 'Create an editable copy in your custom agents folder',
-                  className: 'agent-action-btn',
-                  appearance: 'filled',
-                  variant: 'brand',
-                  onClick: () => this.handleCustomizeAgent(agent),
-                })}
-              `
-            : nothing}
-          ${isCustom && !this.desktopHost
-            ? html`
-                ${renderLabeledActionButton({
-                  icon: 'trash',
-                  text: 'Delete',
-                  label: 'Delete custom agent',
-                  title: 'Delete this custom agent',
-                  className: 'agent-action-btn agent-action-btn--danger',
-                  onClick: () => this.handleDeleteCustomAgent(agent),
-                })}
-              `
-            : nothing}
-        </div>
-
-        ${showDeleteConfirm
-          ? html`
-              <div class="agent-delete-confirm">
-                <span class="agent-delete-confirm-text">
-                  Delete custom agent "${agent.name}"? This cannot be undone.
-                </span>
-                <div class="agent-delete-confirm-actions">
+          ${
+            agent.hasPath
+              ? html`
+                  ${renderLabeledActionButton({
+                    icon: 'file-lines',
+                    text: 'Open YAML',
+                    label: 'Open agent YAML definition',
+                    className: 'agent-action-btn',
+                    onClick: () => this.handleOpenYaml(agent),
+                  })}
+                `
+              : nothing
+          }
+          ${
+            agent.source === AGENT_SOURCE.REMOTE &&
+            this.userTier === 'Ultra' &&
+            !agent.hasPath &&
+            !this.desktopHost
+              ? html`
+                  ${renderLabeledActionButton({
+                    icon: 'file-lines',
+                    text: 'View Prompt',
+                    label: "View the remote agent's prompt definition",
+                    title:
+                      "View the remote agent's prompt definition (read-only)",
+                    className: 'agent-action-btn',
+                    onClick: () => this.handleViewRemotePrompt(agent),
+                  })}
+                `
+              : nothing
+          }
+          ${
+            agent.hasPath
+              ? html`
+                  ${renderLabeledActionButton({
+                    icon: 'folder-open',
+                    text: 'Reveal in File Explorer',
+                    title: 'Show this file in your system file explorer',
+                    className: 'agent-action-btn',
+                    onClick: () => this.handleRevealAgentFile(agent),
+                  })}
+                `
+              : nothing
+          }
+          ${
+            builtIn && !this.desktopHost
+              ? html`
+                  ${renderLabeledActionButton({
+                    icon: 'pencil',
+                    text: 'Customize',
+                    label: 'Customize agent',
+                    title:
+                      'Create an editable copy in your custom agents folder',
+                    className: 'agent-action-btn',
+                    appearance: 'filled',
+                    variant: 'brand',
+                    onClick: () => this.handleCustomizeAgent(agent),
+                  })}
+                `
+              : nothing
+          }
+          ${
+            isCustom && !this.desktopHost
+              ? html`
                   ${renderLabeledActionButton({
                     icon: 'trash',
                     text: 'Delete',
-                    label: 'Confirm delete custom agent',
+                    label: 'Delete custom agent',
+                    title: 'Delete this custom agent',
                     className: 'agent-action-btn agent-action-btn--danger',
                     onClick: () => this.handleDeleteCustomAgent(agent),
                   })}
-                  ${renderLabeledActionButton({
-                    icon: 'xmark',
-                    text: 'Cancel',
-                    label: 'Cancel delete custom agent',
-                    className: 'agent-action-btn',
-                    onClick: () => this.cancelDelete(),
-                  })}
+                `
+              : nothing
+          }
+        </div>
+
+        ${
+          showDeleteConfirm
+            ? html`
+                <div class="agent-delete-confirm">
+                  <span class="agent-delete-confirm-text">
+                    Delete custom agent "${agent.name}"? This cannot be undone.
+                  </span>
+                  <div class="agent-delete-confirm-actions">
+                    ${renderLabeledActionButton({
+                      icon: 'trash',
+                      text: 'Delete',
+                      label: 'Confirm delete custom agent',
+                      className: 'agent-action-btn agent-action-btn--danger',
+                      onClick: () => this.handleDeleteCustomAgent(agent),
+                    })}
+                    ${renderLabeledActionButton({
+                      icon: 'xmark',
+                      text: 'Cancel',
+                      label: 'Cancel delete custom agent',
+                      className: 'agent-action-btn',
+                      onClick: () => this.cancelDelete(),
+                    })}
+                  </div>
                 </div>
-              </div>
-            `
-          : nothing}
+              `
+            : nothing
+        }
       </div>
     `;
   }

@@ -279,8 +279,7 @@ export function normalizeConversationForExport(
 
     // OpenAI Response API: top-level function_call items (not wrapped in a message)
     const responseToolCall = item as unknown as
-      | ResponseFunctionToolCallItem
-      | undefined;
+      ResponseFunctionToolCallItem | undefined;
     if (isResponseFunctionToolCallItem(responseToolCall)) {
       const args =
         typeof responseToolCall.arguments === 'string'

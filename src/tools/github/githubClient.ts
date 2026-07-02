@@ -18,8 +18,7 @@ const API_VERSION = '2022-11-28';
 const TIMEOUT_MS = 15_000;
 
 export type ConditionalResponse<T> =
-  | { status: 200; data: T; etag: string | undefined }
-  | { status: 304 };
+  { status: 200; data: T; etag: string | undefined } | { status: 304 };
 
 export class GitHubAuthError extends Error {
   constructor(message = 'GitHub authentication failed') {

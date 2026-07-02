@@ -359,42 +359,48 @@ export class HistoryItemElement extends LitElement {
               tooltip: 'Rerun this task',
               action: 'rerun',
             })}
-            ${isToolUse
-              ? html`
-                  ${renderIconActionButton({
-                    id: 'history-export-md-button',
-                    icon: 'file-lines',
-                    label: 'Export Markdown',
-                    tooltip: 'Export as Markdown',
-                    action: 'export-md',
-                  })}
-                  ${renderIconActionButton({
-                    id: 'history-export-pdf-button',
-                    icon: 'file-pdf',
-                    label: 'Export PDF',
-                    tooltip: 'Export as LaTeX/PDF',
-                    action: 'export-tex',
-                  })}
-                  ${renderIconActionButton({
-                    id: 'history-export-html-button',
-                    icon: 'globe',
-                    label: 'Export HTML',
-                    tooltip: 'Export as shareable HTML webpage',
-                    action: 'export-html',
-                  })}
-                `
-              : nothing}
+            ${
+              isToolUse
+                ? html`
+                    ${renderIconActionButton({
+                      id: 'history-export-md-button',
+                      icon: 'file-lines',
+                      label: 'Export Markdown',
+                      tooltip: 'Export as Markdown',
+                      action: 'export-md',
+                    })}
+                    ${renderIconActionButton({
+                      id: 'history-export-pdf-button',
+                      icon: 'file-pdf',
+                      label: 'Export PDF',
+                      tooltip: 'Export as LaTeX/PDF',
+                      action: 'export-tex',
+                    })}
+                    ${renderIconActionButton({
+                      id: 'history-export-html-button',
+                      icon: 'globe',
+                      label: 'Export HTML',
+                      tooltip: 'Export as shareable HTML webpage',
+                      action: 'export-html',
+                    })}
+                  `
+                : nothing
+            }
           </div>
         </div>
         ${this.renderInstructionBlock(instructionText, titleText)}
-        ${summaryText
-          ? html`<div class="history-description">${summaryText}</div>`
-          : nothing}
-        ${extraDetails.length
-          ? html`<div class="history-details extra-details">
-              ${extraDetails}
-            </div>`
-          : nothing}
+        ${
+          summaryText
+            ? html`<div class="history-description">${summaryText}</div>`
+            : nothing
+        }
+        ${
+          extraDetails.length
+            ? html`<div class="history-details extra-details">
+                ${extraDetails}
+              </div>`
+            : nothing
+        }
       </div>
     `;
   }

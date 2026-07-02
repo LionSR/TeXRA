@@ -231,47 +231,49 @@ export class ProgressApp extends ProgressAppBase {
           </wa-button>
         </div>
 
-        ${hasAnyStreams
-          ? html`
-              <div class="split-container">
-                <wa-split-panel .position=${splitPosition}>
-                  <stream-conversation
-                    slot="start"
-                    @stream-switch=${this.onStreamSwitch}
-                    @toolbar-command=${this.onToolbarCommand}
-                    @permission-action=${this.onPermissionAction}
-                    @file-action=${handleFileAction}
-                    @compile-fixer-run=${this.onCompileFixerRun}
-                    @getting-started-action=${handleGettingStartedAction}
-                    @followup-request-options=${this.onFollowupRequestOptions}
-                    @followup-setup=${this.onFollowupSetup}
-                    @followup-run=${this.onFollowupRun}
-                    @followup-change=${this.onFollowUpChange}
-                    @followup-send=${this.onFollowUpSend}
-                    @followup-polish=${this.onFollowUpPolish}
-                    @followup-clear=${this.onFollowUpClear}
-                    @followup-focus-complete=${this.onFollowUpFocusComplete}
-                  ></stream-conversation>
+        ${
+          hasAnyStreams
+            ? html`
+                <div class="split-container">
+                  <wa-split-panel .position=${splitPosition}>
+                    <stream-conversation
+                      slot="start"
+                      @stream-switch=${this.onStreamSwitch}
+                      @toolbar-command=${this.onToolbarCommand}
+                      @permission-action=${this.onPermissionAction}
+                      @file-action=${handleFileAction}
+                      @compile-fixer-run=${this.onCompileFixerRun}
+                      @getting-started-action=${handleGettingStartedAction}
+                      @followup-request-options=${this.onFollowupRequestOptions}
+                      @followup-setup=${this.onFollowupSetup}
+                      @followup-run=${this.onFollowupRun}
+                      @followup-change=${this.onFollowUpChange}
+                      @followup-send=${this.onFollowUpSend}
+                      @followup-polish=${this.onFollowUpPolish}
+                      @followup-clear=${this.onFollowUpClear}
+                      @followup-focus-complete=${this.onFollowUpFocusComplete}
+                    ></stream-conversation>
 
-                  <stream-tabs
-                    slot="end"
-                    .heading=${compactTabs ? '' : 'Sessions'}
-                    .compact=${compactTabs}
-                    .streams=${tabStreams$.get()}
-                    .activeStreamId=${activeStreamId$.get()}
-                    .filter=${streamFilter$.get()}
-                    .streamStates=${streamStates$.get()}
-                    .pendingApprovalStreamIds=${pendingApprovalIds$.get()}
-                    .childStreamsByParent=${childStreamsByParent$.get()}
-                    @stream-switch=${this.onStreamSwitch}
-                    @stream-delete=${this.onStreamDelete}
-                    @filter-change=${this.onFilterChange}
-                    @delete-all=${handleDeleteAll}
-                  ></stream-tabs>
-                </wa-split-panel>
-              </div>
-            `
-          : this.renderEmptyState()}
+                    <stream-tabs
+                      slot="end"
+                      .heading=${compactTabs ? '' : 'Sessions'}
+                      .compact=${compactTabs}
+                      .streams=${tabStreams$.get()}
+                      .activeStreamId=${activeStreamId$.get()}
+                      .filter=${streamFilter$.get()}
+                      .streamStates=${streamStates$.get()}
+                      .pendingApprovalStreamIds=${pendingApprovalIds$.get()}
+                      .childStreamsByParent=${childStreamsByParent$.get()}
+                      @stream-switch=${this.onStreamSwitch}
+                      @stream-delete=${this.onStreamDelete}
+                      @filter-change=${this.onFilterChange}
+                      @delete-all=${handleDeleteAll}
+                    ></stream-tabs>
+                  </wa-split-panel>
+                </div>
+              `
+            : this.renderEmptyState()
+        }
       </div>
     `;
   }

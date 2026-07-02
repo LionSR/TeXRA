@@ -362,25 +362,27 @@ export class InstructionPanel extends LitElement {
             class="instruction-header-actions"
             @click=${this.handleActionClick}
           >
-            ${session.debugMode
-              ? html`
-                  ${renderIconActionButton({
-                    id: 'packButton',
-                    icon: 'archive',
-                    label: 'Pack output to History',
-                    tooltip:
-                      'Pack the output for this agent into the History folder',
-                    action: 'pack',
-                  })}
-                  ${renderIconActionButton({
-                    id: 'cleanButton',
-                    icon: 'trash',
-                    label: 'Clean output',
-                    tooltip: 'Clean the output for this agent',
-                    action: 'clean',
-                  })}
-                `
-              : nothing}
+            ${
+              session.debugMode
+                ? html`
+                    ${renderIconActionButton({
+                      id: 'packButton',
+                      icon: 'archive',
+                      label: 'Pack output to History',
+                      tooltip:
+                        'Pack the output for this agent into the History folder',
+                      action: 'pack',
+                    })}
+                    ${renderIconActionButton({
+                      id: 'cleanButton',
+                      icon: 'trash',
+                      label: 'Clean output',
+                      tooltip: 'Clean the output for this agent',
+                      action: 'clean',
+                    })}
+                  `
+                : nothing
+            }
             ${renderIconActionButton({
               id: 'magicPolishButton',
               icon: 'sparkle',
@@ -450,10 +452,10 @@ export class InstructionPanel extends LitElement {
                 placement="top"
                 aria-label="Model"
                 placeholder="Select model…"
-                title=${this.getModelTooltip(
-                  session.modelOptions,
-                  session.model,
-                ) || nothing}
+                title=${
+                  this.getModelTooltip(session.modelOptions, session.model) ||
+                  nothing
+                }
                 .value=${session.model}
                 @focus=${this.handleModelFocus}
                 @change=${this.handleModelChange}

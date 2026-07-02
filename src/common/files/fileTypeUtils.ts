@@ -16,11 +16,7 @@ import { hasExtension } from '@utils/core/pathCore';
  * which defines UI file input field types.
  */
 export type ExtensionCategory =
-  | 'input'
-  | 'context'
-  | 'media'
-  | 'audio'
-  | 'edited';
+  'input' | 'context' | 'media' | 'audio' | 'edited';
 
 const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   input: 'texra.files.included.inputExtensions',

@@ -141,13 +141,15 @@ export function createWalkthroughDialog({
           `,
         )}
       </ol>
-      ${actions.length > 0
-        ? html`
-            <div slot="footer" class=${actionsClass ?? ''}>
-              ${actions.map(actionTemplate)}
-            </div>
-          `
-        : nothing}
+      ${
+        actions.length > 0
+          ? html`
+              <div slot="footer" class=${actionsClass ?? ''}>
+                ${actions.map(actionTemplate)}
+              </div>
+            `
+          : nothing
+      }
     `,
     dialog,
   );

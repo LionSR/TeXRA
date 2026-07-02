@@ -241,8 +241,7 @@ export class ModelHandlerOpenAI<
    * @returns The thinking parameter object, or undefined to not send the parameter.
    */
   protected getThinkingParameter():
-    | { type: 'enabled' | 'disabled' }
-    | undefined {
+    { type: 'enabled' | 'disabled' } | undefined {
     return undefined;
   }
 
@@ -531,8 +530,7 @@ export class ModelHandlerOpenAI<
    * @returns Normalization options, or undefined to skip normalization
    */
   protected getMessageNormalizationOptions():
-    | NormalizeOpenAIMessageContentOptions
-    | undefined {
+    NormalizeOpenAIMessageContentOptions | undefined {
     const convertContentToString =
       this.convertContentToString ||
       (this.convertContentToStringUnlessVision &&

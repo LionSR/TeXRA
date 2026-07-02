@@ -11,9 +11,7 @@ const tools: ToolDefinition[] = [
   {
     name: 'searchWeb',
     description: 'Perform a web search',
-    parameters: {
-      /* JSON schema */
-    },
+    parameters: {/* JSON schema */},
   },
 ];
 ```

@@ -61,8 +61,7 @@ export function dispatchMessage(
   ctx: MessageHandlerContext,
 ): void {
   const handler = handlers[message.command] as
-    | TypedHandler<typeof message>
-    | undefined;
+    TypedHandler<typeof message> | undefined;
 
   handler?.(message, ctx);
 }

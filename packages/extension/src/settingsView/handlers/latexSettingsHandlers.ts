@@ -175,13 +175,11 @@ export class LatexSettingsHandlers {
    * and the migration helper.
    */
   async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
-    const values = this.configPersistenceController.buildConfigValues((key) =>
-      workspaceSM.get(key),
+    await webview.postMessage(
+      this.configPersistenceController.buildConfigMessage((key) =>
+        workspaceSM.get(key),
+      ),
     );
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values,
-    });
   }
 
   /**
