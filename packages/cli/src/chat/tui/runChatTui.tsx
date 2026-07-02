@@ -703,7 +703,7 @@ export async function runChat(
     });
   };
 
-  const stdoutColorEnabled = resolveCliStdoutColorEnabled(context);
+  const stdoutColorEnabled = resolveCliStdoutColorEnabled(context) ?? true;
   const inkRef: { current?: InkInstance } = {};
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
