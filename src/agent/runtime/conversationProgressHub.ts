@@ -22,8 +22,8 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 function isConversationProgress(data: unknown): data is ConversationProgress {
   return (
     isObject(data) &&
-    typeof data.conversationTurns === 'number' &&
-    typeof data.toolCallCount === 'number'
+    Number.isFinite(data.conversationTurns) &&
+    Number.isFinite(data.toolCallCount)
   );
 }
 
