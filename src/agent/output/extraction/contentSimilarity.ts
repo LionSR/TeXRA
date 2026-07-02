@@ -88,10 +88,11 @@ export function assignByContentSimilarity(
   const bestFileOf = scores.map((row) => row.indexOf(Math.max(...row)));
 
   // A block that echoes a base file verbatim (modulo surrounding whitespace —
-  // fenced blocks arrive trimmed) is a quote of the original, not a revision.
-  // When some other block's best match is that same file (the model quoted
-  // the original before its revision), drop the verbatim pair so the
-  // revision can claim the file.
+  // fenced blocks arrive trimmed) while some other block's best match is that
+  // same file is a quote of the original, not a revision (the model quoted
+  // the original before its revision). Such a block is excluded from
+  // assignment entirely: letting it fall back to a different, merely-similar
+  // file would write one file's stale content over another.
   const trimmedFileContents = files.map((file) => file.content.trim());
   const isDisplacedEcho = (c: number, f: number): boolean =>
     candidates[c].trim() === trimmedFileContents[f] &&
@@ -101,11 +102,16 @@ export function assignByContentSimilarity(
         bestFileOf[other] === f &&
         scores[other][f] >= minSimilarity,
     );
+  const quotedOriginals = new Set(
+    [...candidates.keys()].filter((c) =>
+      [...files.keys()].some((f) => isDisplacedEcho(c, f)),
+    ),
+  );
 
   const scored: Array<{ c: number; f: number; score: number }> = [];
   for (const c of candidates.keys()) {
+    if (quotedOriginals.has(c)) continue;
     for (const f of files.keys()) {
-      if (isDisplacedEcho(c, f)) continue;
       scored.push({ c, f, score: scores[c][f] });
     }
   }

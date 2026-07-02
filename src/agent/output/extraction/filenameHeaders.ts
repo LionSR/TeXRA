@@ -183,14 +183,24 @@ export function extractFilenameHeaderDocuments(
     }
 
     const linesBeforeHeader = currentName ? currentLines : preHeaderLines;
-    if (
-      headerName &&
-      !shouldKeepPercentHeaderAsLatexComment(linesBeforeHeader, lines, index)
-    ) {
+    // The keep-as-comment heuristic exists because a `%` header is
+    // indistinguishable from a genuine LaTeX comment. A bare label is never
+    // valid LaTeX, so for it only the inside-document-body check applies
+    // (a filename-looking line in a verbatim example stays content); the
+    // preamble lookahead must not swallow a label that separates a
+    // preamble-only file from the next document.
+    const keepHeaderAsContent = percentHeaderName
+      ? shouldKeepPercentHeaderAsLatexComment(linesBeforeHeader, lines, index)
+      : getLatexDocumentContext(linesBeforeHeader).insideDocumentBody;
+    if (headerName && !keepHeaderAsContent) {
       if (!currentName && hasLikelyLatexContent(preHeaderLines)) {
         if (singleInputName !== null) {
           currentName = singleInputName;
-          currentLines = [...preHeaderLines, line];
+          // Keep the triggering `%` header as an in-document comment, but a
+          // bare label is not LaTeX and must not enter the synthesized body.
+          currentLines = percentHeaderName
+            ? [...preHeaderLines, line]
+            : [...preHeaderLines];
           currentMarkdownFence = pendingPrefacedMarkdownFence;
           pendingPrefacedMarkdownFence = null;
           preHeaderLines = [];

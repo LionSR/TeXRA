@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
 import { OutputFileProcessor } from '@agent/output/OutputFileProcessor';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -1171,6 +1172,53 @@ Appendix.
     );
   });
 
+  it('drops a bare label that triggers single-input prefix synthesis', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['\\section{Intro}', 'Text.', 'paper.tex:', 'More text.'].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['paper.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
+      '\\section{Intro}\nText.\nMore text.\n',
+    );
+  });
+
+  it('splits on a bare label even after preamble-only content', async () => {
+    // Unlike a % header, a bare label is never a LaTeX comment, so the
+    // "maybe this is a preamble comment" lookahead must not swallow the
+    // label separating a preamble-only file from the next document.
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'main.tex:',
+        '\\documentclass{article}',
+        '\\usepackage{amsmath}',
+        'body.tex:',
+        '\\begin{document}',
+        'Hi.',
+        '\\end{document}',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents', ['main.tex', 'body.tex']);
+
+    const outputs = await splitDocuments(manager);
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main.tex',
+      'body.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      '\\documentclass{article}\n\\usepackage{amsmath}\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/body.tex')).resolves.toBe(
+      '\\begin{document}\nHi.\n\\end{document}\n',
+    );
+  });
+
   it('falls back to content-similarity matching for unlabeled fenced blocks against the original inputs', async () => {
     const appendicesOriginal =
       '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n';
@@ -1437,5 +1485,30 @@ Appendix.
     );
 
     expect(outputs.map((output) => output.source)).toEqual(['cost.tex']);
+  });
+});
+
+describe('assignByContentSimilarity', () => {
+  it('never routes a quoted original to a different, merely-similar file', () => {
+    const costOriginal =
+      'shared preamble line\ncontent about cost analysis\nshared footer line';
+    const archOriginal =
+      'shared preamble line\ncontent about system architecture\nshared footer line';
+    const costRevision =
+      'shared preamble line\ncontent about revised cost analysis\nshared footer line';
+
+    const assigned = assignByContentSimilarity(
+      [costOriginal, costRevision],
+      [
+        { name: 'cost.tex', content: `${costOriginal}\n` },
+        { name: 'arch.tex', content: `${archOriginal}\n` },
+      ],
+    );
+
+    // The revision claims cost.tex; the verbatim quote of cost.tex must stay
+    // unmatched instead of falling back to arch.tex (which it resembles well
+    // above the threshold through the shared boilerplate).
+    expect(assigned[1]?.name).toBe('cost.tex');
+    expect(assigned[0]).toBeNull();
   });
 });
