@@ -294,50 +294,99 @@ stop/kill. Changes:
 
 **`StreamStatusMachine`** replaces the shared `StreamStatusService` with a
 session-owned machine whose API is transitions-with-causes, not a settable
-map:
+map — and whose vocabulary is the **trimmed** one from the status census
+below, so the machine ships with 5 public values instead of inheriting
+today's 7:
 
 ```ts
+/** Public per-stream phase. Absence (undefined) = idle/no stream. */
+type StreamPhase = 'running' | 'waiting' | RunOutcome;
+//                                         ^ 'completed' | 'cancelled' | 'failed'
+//   Terminal phases ARE the outcome — no terminalStatus side-channel.
+
+/** Display-only refinement of 'running'; never branched on by logic. */
+type StreamSubstate = 'starting' | 'resuming';
+
 type TransitionCause =
-  | 'lifecycle' // runFlowWithLifecycle: RUNNING, terminal projection
+  | 'lifecycle' // runFlowWithLifecycle: running, terminal outcome
   | 'wait'
   | 'resume' // ToolUseWaitNode, resumeQueuedToolUse
-  | 'user-stop' // RunTable stop path *requests*; machine writes
-  | 'restart-repair' // host recovery: RUNNING→WAITING/ERROR after reload
-  | 'admission' // tryAcquire / releaseIfInitializing (launch saga)
+  | 'user-stop' // RunTable stop path *requests*; machine writes 'cancelled'
+  | 'restart-repair' // host recovery: running→waiting/failed after reload
   | 'clear'; // tab delete / delete-all (this session only)
 
 interface StreamStatusMachine {
   transition(
     streamId: StreamTabId,
-    to: StreamStatus,
+    to: StreamPhase,
     cause: TransitionCause,
-    terminalStatus?: ExecutionStatus,
-  ): boolean; // false = rejected by rules
-  get(streamId: StreamTabId): StreamStatus | undefined;
-  tryAcquire(streamId: StreamTabId): boolean; // admission lock, unchanged
+    substate?: StreamSubstate,
+  ): boolean; // false = rejected by the transition table
+  get(streamId: StreamTabId): StreamPhase | undefined;
+  /** Admission lock: reserves the stream (internal state, not a phase).
+   *  Surfaces to the UI as running+substate:'starting'. */
+  tryAcquire(streamId: StreamTabId): boolean;
+  releaseIfReserved(streamId: StreamTabId): void;
 }
 ```
 
-- **The rules move inside**: STOPPED-wins, `shouldPreserveOnCompletion`,
-  stale-handle guards become the machine's transition table instead of
-  call-site checks in the registry and lifecycle. Illegal transitions return
-  `false`; today's scattered guards are deleted.
+- **The rules move inside**: cancelled-wins (today's STOPPED-wins),
+  `shouldPreserveOnCompletion`, stale-handle guards become the machine's
+  transition table instead of call-site checks in the registry and
+  lifecycle. Illegal transitions return `false`; today's scattered guards
+  are deleted.
 - **The `emit:false` backdoor becomes a named cause.** Restart repair and
   ghost hydration are legitimate host-authored transitions — the current
   design just has no vocabulary for them. `cause: 'restart-repair'` gives the
   UI backend its voice _through the front door_, and every transition emits a
   `status` event on the session hub (no silent writes, no split between
   "emitting" and "non-emitting" mutations).
-- **One writer for STOPPED**: the RunTable stop path calls
-  `transition(…, 'user-stop')`; the lifecycle calls
-  `transition(…, 'lifecycle')`; the machine arbitrates. The dual-write
-  coordination problem becomes one function.
+- **One writer for cancellation**: the RunTable stop path calls
+  `transition(…, 'cancelled', 'user-stop')`; the lifecycle calls
+  `transition(…, outcome, 'lifecycle')`; the machine arbitrates. The
+  dual-write coordination problem becomes one function — and because the
+  stop path must now _name_ the outcome, the census-discovered bug where
+  direct stops emit STOPPED with no `terminalStatus` (leaving CLI history
+  entries `unknown`/mis-resumable) becomes unrepresentable.
 - **Session-scoped, with explicit aggregation**: cross-session reads (the only
   legitimate use of today's sharing) go through the existing
   `liveSessions`-style aggregation, mirroring `getAllActiveExecutionIds()`.
   One window's delete-all can no longer sweep another window's streams (L3);
   the RunTable subscribes to _its own session's_ machine, so window A's
   status changes stop firing window B's waiters.
+
+### Status model: two axes, five public values (census-backed trim)
+
+A value-level census of every producer and non-display consumer of the 7
+`StreamStatus` values, plus a census of the sibling vocabularies, showed the
+run-status cluster needs exactly **two axes**: _liveness_ (`running`,
+`waiting`) and _outcome_ (`completed`, `cancelled`, `failed`). Everything
+else is a projection, a sentinel, or a display hint:
+
+| Today                                                              | Census verdict                                                                                                                                                                                          | In the new model                                                                                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `RUNNING`                                                          | Load-bearing (restart recovery, thinking indicator, pills)                                                                                                                                              | `running`                                                                                                                                |
+| `WAITING`                                                          | Load-bearing — irreducible `terminal ∧ inFlight` oddball (follow-up routing, eviction, `shouldSkipWait`, focus/notify)                                                                                  | `waiting`                                                                                                                                |
+| `STOPPED`                                                          | Two outcomes in one value; split carried out-of-band by `terminalStatus`, which the dominant direct-stop paths **omit** (`executionRegistry.ts:622,740,761`, `RetryState.ts:288`)                       | `completed` \| `cancelled` — outcome is the phase                                                                                        |
+| `ERROR`                                                            | Load-bearing (sole injective terminal)                                                                                                                                                                  | `failed`                                                                                                                                 |
+| `RESUMING`                                                         | Redundant-with-RUNNING: one producer, and its only value-specific branch (`executionRegistry.ts:416`) has downstream behavior identical to the WAITING branch; all guards go through the `active` trait | `running` + `substate:'resuming'`                                                                                                        |
+| `INITIALIZING`                                                     | Internal lock: one producer (`tryAcquire`), one consumer (its own compensating release); nothing else branches on it                                                                                    | machine-internal reservation, shown as `running` + `substate:'starting'`                                                                 |
+| `READY`                                                            | Equals `undefined` — the service deletes the map key; no registry consumer can ever read it; survives only as the emitted "cleared" signal and frontend default props                                   | deleted; `clear` emits an explicit cleared event; frontends default on `undefined`                                                       |
+| `ExecutionStatus` (`completed/interrupted/error`)                  | Strict bijection of `RunOutcome`; kept alive only as the on-disk `terminalStatus` encoding (already a permissive `z.string()` with defensive readers)                                                   | deleted; write `RunOutcome`, read-shim legacy `interrupted→cancelled`, `error→failed`                                                    |
+| `EndGroupStatus` (`error/stopped`)                                 | Byte-identical to the terminal `StreamStatus` projection; no consumer needs a third value; completed groups already render as neutral "stopped"                                                         | deleted as a stored vocabulary; derived helper `failed→'error'`, else `'stopped'` where the 2-value shape must survive (CLI JSON compat) |
+| `TaskGroupStatus`                                                  | Named `StreamStatus` subset                                                                                                                                                                             | derived from `StreamPhase`                                                                                                               |
+| `ActiveChildInfo.status` / `ExecutionStatusInfo.status` (stringly) | `StreamStatus` widened to `string` for badge wire format + process-exit text                                                                                                                            | `StreamPhase \| string` (exit text), documented                                                                                          |
+| `TaskState`                                                        | **Not a status** — agent config (model, category, files); misnamed                                                                                                                                      | rename to `TaskConfig` when touched                                                                                                      |
+| `ToolStatus`, `GoalStatus`, PR/CI states, `LogLevel`               | Orthogonal subjects (tool call, user goal, GitHub, severity)                                                                                                                                            | unchanged                                                                                                                                |
+
+The `STREAM_STATUS_TRAITS` table collapses into four derived predicates over
+5 values (`isActive = running`, `isInFlight = running \|\| waiting`,
+`isTerminal = outcome ∈ RunOutcome \|\| waiting` — with WAITING's deliberate
+`terminal ∧ inFlight` oddball preserved as today, `isLiveElapsed = running`),
+and `RUN_OUTCOME_PROJECTION` shrinks from a three-column table to the single
+derived group-end helper. The machine's transition table over 5 phases × 6
+causes is small enough to be exhaustively unit-tested, which was the point
+of the trim.
 
 **Bag/context unification** (the split-brain fix, mechanical per the DI
 audit): the launch context builds one frozen `RunScope` — identity
@@ -379,23 +428,173 @@ interruptible if discoverable; a status transition always has a cause and is
 always observed; a run's transcript always lands in its session's store; one
 window's actions never mutate another window's runtime state.
 
-## 4. Migration (each stage shippable; extension byte-identical throughout)
+## 4. Surface contracts: where the vocabulary and events cross boundaries
+
+A surface census (persisted formats, IPC schemas, SDK exports, display
+tables) ranked where the current vocabulary is pinned. The redesign tiers
+the surfaces so each has one canonical source and an explicit compatibility
+posture:
+
+**Tier 0 — canonical schemas (one source).** `RunOutcomeSchema` and a new
+`StreamPhaseSchema` in `@shared/schemas` are the only definitions.
+`ResultEvent.outcome` is today a **hand-inlined literal** that must track
+`RunOutcome` by hand (`events.ts:173`) — it becomes schema-derived.
+`StageEndEvent.status` drops `EndGroupStatus` for `'ok' | 'error'` (the only
+distinction any group renderer consumes).
+
+**Tier 1 — SDK (`@texra/core` / `AgentEvent`).** `StreamStatus` does not
+leak into the SDK today (verified) — keep it that way: the SDK speaks
+`RunOutcome`, `StreamPhase`, and the `AgentEvent` union only.
+`ExecutionListingEntry.terminalStatus` (re-exported as free `string`)
+switches to `outcome?: RunOutcome` with the read shim. The union gaining
+`status`/`child.activity`/`process.output` arms is deliberately breaking for
+exhaustive-switch subscribers — that is the union's documented design, and it
+is free **only while the package is `private: true`**: the event-surface work
+must land before the SDK ships.
+
+**Tier 2 — host IPC (webview/renderer).** The protocol stays
+stream-addressed; the census confirmed no message is session-scoped and all
+scoped messages compose one schema (`StreamScopedBaseSchema`, `data.ts:29`),
+so if a session dimension is ever needed it is a one-file change. Two
+outbound message types carry status (`UPDATE_STREAM_STATUS`,
+`UPDATE_STREAMS`); they carry `phase` + `substate` after the trim. This
+**removes a today's asymmetry**: `terminalStatus` is stripped from webview
+IPC, so only the CLI can render "done" vs "interrupted" — with outcome as
+the phase, the webview gains the distinction for free (a deliberate,
+user-visible improvement, not byte-identical). Frontends consume the raw
+vocabulary (label table, `is-*` CSS selectors, per-status button-enable
+sets), so the trim touches ~7 display sites — all keyed on 5 values + a
+substate afterwards.
+
+**Tier 3 — persisted formats (compatibility posture per file).**
+
+| Format                                              | Pin strength                                                                                       | Posture                                                                                                                                              |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `executions/{id}/meta.json` `terminalStatus`        | Soft — stored as free `z.string()`, defensive readers                                              | Write `RunOutcome` values; read-shim maps legacy `interrupted/error`; no version bump needed                                                         |
+| Desktop `streams.json` `lastKnownStatus`            | **Hard — the only required on-disk enum** (`streamRestoration.ts:44`); a rename discards old rails | The repo's canonical `z.union` + `.transform` shim (the pattern `PersistedStreamLogEntrySchema` already uses) mapping old 7-value statuses to phases |
+| `StreamSnapshot.status`                             | Soft — optional, advisory, log-derived, schema-versioned                                           | Recomputed on load; nothing to migrate                                                                                                               |
+| StreamLog group-end rows                            | Opaque (`data: z.unknown()`) but display code pattern-matches `status:'error'`                     | Tolerant reader accepting both old and new literals; writer switches                                                                                 |
+| CLI history JSON (`resumable`/`unknown` synthetics) | CLI-invented, CLI-consumed                                                                         | Derive from `outcome`; `cancelled`/absent stay resumable                                                                                             |
+
+**Tier 4 — external contracts (frozen projections).** The CLI headless JSON
+(`CliRunResult`) is the widest external pin: it exposes **all three** legacy
+terminal vocabularies simultaneously (`outcome` + `status`/`terminalStatus` +
+`endGroupStatus`) to scripts, behind a deliberately loose NDJSON schema that
+would not catch renames. Per clig future-proofing (changes stay additive),
+those legacy fields are **not removed**: they become frozen projections
+derived from `outcome` (`terminalStatus` via the legacy mapping,
+`endGroupStatus` via the 2-value helper), documented as deprecated, with
+`outcome` as the supported field. Headless output stays byte-identical.
+
+**Display tier.** `streamStatusDisplay.ts` and the CSS/button tables key on
+`(phase, substate)`: `starting…`/`resuming` come from the substate,
+`completed`/`cancelled` finally get distinct labels everywhere (today the
+extension shows both as "Stopped"), and the tables shrink with the enum.
+
+## 5. Holistic review: interactions and side effects across everything proposed
+
+Taking the whole program together (audit Parts A/B, the three planes, the
+status trim, the surface tiers), these are the cross-cutting effects and the
+ordering they force:
+
+**Sequencing constraints (do these in this order or pay twice):**
+
+1. **Vocabulary before machine.** The `StreamStatusMachine` ships speaking
+   `StreamPhase`; building it on the 7-value enum and trimming later would
+   migrate every surface twice. (Legacy values live only in the tier-3/4
+   shims from day one.)
+2. **Test infra first.** The `memfs`/global-setup change (audit A4) touches
+   the same 75 `initPlatform` sites and singleton-bound suites that every
+   session-scoping stage churns; landing it first cuts total churn.
+3. **Host-adapter factories (A2) and the interactions port share files**
+   (`desktopAgentExecution.ts`, both message handlers). Run them as one
+   sequenced track, not parallel PRs into the same 1,000-line files.
+4. **`requestRetry` must be co-designed with the error-pipeline plan** —
+   `error-pipeline-and-ownership.md` T2 names a single retry owner; the
+   interactions port is that owner's request surface, not a competitor.
+5. **SDK-breaking event work before publishing `@texra/core`.** All
+   `AgentEvent` arm additions and the `StageEndEvent.status` change are free
+   now, expensive the day the package has external consumers.
+
+**Deliberate behavior changes (visible, and intended):**
+
+- The extension webview starts distinguishing completed/cancelled (today
+  both render "Stopped"; only the CLI decodes `terminalStatus`). This
+  intentionally breaks the "extension byte-identical" rule for one
+  user-facing improvement — flagged, not smuggled.
+- Approval serialization narrows from process-wide to per-session
+  one-at-a-time (multi-window can prompt concurrently).
+- Un-attributed stop paths must name an outcome (`cancelled`), which
+  _changes_ CLI history for future runs from `unknown` to `interrupted`-
+  equivalent — a bug fix wearing a behavior change.
+
+**Risks and their mitigations:**
+
+- **Chunk traffic on the hub.** `stream.chunk` never reaches the bus today;
+  forwarding whole traces into the session hub puts per-token events in
+  front of every hub subscriber, and `StreamSnapshotStore`'s debounced
+  persistence must not see them. The hub API therefore takes a subscription
+  filter (`subscribe(sub, { types?, scope? })`) so projectors and stores
+  opt into event classes; the transcript recorder keeps its direct trace
+  subscription.
+- **Buffer removal converts a runtime crutch into an activation invariant.**
+  The extension's scattered frontend consumers (`fileDecorations`,
+  `inlineCriticism`, status bar) attach at different points during
+  activation and lean on bus replay today. Post-hub, "all session
+  subscribers attach before startup-resume runs launch" must be an explicit,
+  asserted activation ordering — otherwise early events are silently lost
+  where today they replayed. Stage 1 adds that assertion before anything
+  depends on it.
+- **CLI headless parity is a hard gate.** `texra run`/`--print`/JSON output
+  must be byte-identical through the renderer's move to hub subscription
+  (both paths are synchronous, so ordering holds) and through tier 4's
+  frozen projections. Each stage that touches the CLI lands with the parity
+  test, not an assumption.
+- **Migration-window event ordering.** While some run-facts are projected
+  trace→bus and others still emit directly, relative order between two
+  related facts can invert. Stages therefore migrate whole fact _clusters_
+  (e.g. status+result together), never half of a causally-linked pair.
+- **Multi-window desktop reality check.** L1–L3's "live bug" severity
+  assumes >1 `DesktopAgentExecution` per process actually ships. The
+  per-window session comments say yes, but verify before paying stages 3–5;
+  if single-window, those stages are pre-payment for a planned feature and
+  should be re-prioritized honestly.
+- **Collision with the active PR train.** This branch was force-updated
+  mid-audit by concurrent maintainer work; the program only works as small,
+  independently shippable PRs per stage — a long-lived refactor branch
+  across these files would conflict constantly.
+- **What deliberately does NOT change:** `subagentDeliveryRegistry` and
+  `toolInjectionRegistry` stay process-global (documented decisions);
+  WAITING keeps its `terminal ∧ inFlight` oddball semantics; the
+  `StreamLogStore`/`StreamSnapshotStore` format split stays (facade only,
+  per audit A6); headless output bytes; the PocketFlow flow contracts.
+
+## 6. Migration (each stage shippable; extension byte-identical throughout, except the flagged completed/cancelled display improvement)
 
 The `defaultSession()` aliasing strategy from the 7d migration carries every
 stage: the extension keeps one default session, so wiring changes are
 invisible to it while desktop/CLI gain correctness.
 
-1. **Hub + projection of the easy seven.** Add `SessionEventHub` +
-   `attachRunTrace` generalization (attach before first emit). Project the
-   seven drop-in run-facts (`updateTodos`, `updatePlan`, `updateStreamUsage`
-   single-emit, `addOutputFiles`, `updateMissingOutputs`,
-   `updateCompileFailures`, `goalPaused`) via the `conversationProgressHub`
-   pattern onto the bus. Nothing downstream changes.
-2. **Status machine.** Introduce `StreamStatusMachine` per session wrapping
-   the shared instance's data; move guards into the transition table; convert
-   `emit:false` writers to `restart-repair`/`clear` causes; add the `status`
-   trace arm and make `updateStreamStatus` a projection. RunTable stop path
-   switches from writing to requesting.
+0. **Vocabulary + shims.** Land `StreamPhaseSchema`, the tier-3 read shims
+   (desktop `streams.json` union+transform, `terminalStatus` legacy mapping),
+   the tier-4 frozen CLI projections, and the display-table re-keying —
+   while the old service still runs. Pure schema/shim work, independently
+   revertable, and it forces the outcome-naming fix onto the direct stop
+   paths (per §5 sequencing rule 1: vocabulary before machine).
+1. **Hub + projection of the easy seven.** Add `SessionEventHub` (with
+   subscription filters, see §5 chunk risk) + the `attachRunTrace`
+   generalization (attach before first emit, with the activation-ordering
+   assertion). Project the seven drop-in run-facts (`updateTodos`,
+   `updatePlan`, `updateStreamUsage` single-emit, `addOutputFiles`,
+   `updateMissingOutputs`, `updateCompileFailures`, `goalPaused`) via the
+   `conversationProgressHub` pattern onto the bus. Nothing downstream
+   changes.
+2. **Status machine.** Introduce `StreamStatusMachine` per session (speaking
+   `StreamPhase` from day one) wrapping the shared instance's data; move
+   guards into the transition table; convert `emit:false` writers to
+   `restart-repair`/`clear` causes; add the `status` trace arm and make
+   `updateStreamStatus` a projection. RunTable stop path switches from
+   writing to requesting `cancelled`.
 3. **Session facts + registry facts.** `SessionFact` channel for the non-run
    emitters; `child.activity`/`process.output` arms; `session.transcripts`
    and `session.followUps` instances (fixes L1; deletes the static queue and
@@ -412,11 +611,11 @@ invisible to it while desktop/CLI gain correctness.
    `emitRuntimeEvent`'s fallback chain, `InterruptRegistry`, and the
    `RunContext`/bag field copies (RunScope lands here or with 2).
 
-Stages 1–2 are low-risk and deliver the single-writer status + single-emit
-facts immediately; 3–4 are where multi-window desktop becomes actually
-correct; 5 is the payoff deletion.
+Stages 0–2 are low-risk and deliver the trimmed vocabulary, single-writer
+status, and single-emit facts immediately; 3–4 are where multi-window
+desktop becomes actually correct; 5 is the payoff deletion.
 
-## 5. Rejected alternatives
+## 7. Rejected alternatives
 
 - **Collapse the bus into the trace** (the naive fix): rejected — 22 keys are
   bidirectional RPC and 10 are app-scoped; a trace has no reply channel and
