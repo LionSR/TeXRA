@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Mutex } from 'async-mutex';
 
 import { platform, tryWorkspaceState } from '@platform/platform';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
@@ -27,6 +28,7 @@ const LEGACY_INDEX_KEY = 'odysseys:index';
 // Stream index growth is user-driven (one entry per stream that ever had
 // a Goal). `forget()` removes entries; callers that delete a stream
 // without calling `forget()` leave dangling entries until next manual cleanup.
+const indexMutex = new Mutex();
 
 function streamKey(streamId: StreamTabId): string {
   return `${STREAM_KEY_PREFIX}${streamId}`;
@@ -107,9 +109,9 @@ function readIndex(): StreamTabId[] {
 }
 
 async function addToIndex(streamId: StreamTabId): Promise<void> {
-  const index = readIndex();
-  if (index.includes(streamId)) return;
-  await platform().workspaceState.update(INDEX_KEY, [...index, streamId]);
+  await mutateIndex((index) =>
+    index.includes(streamId) ? index : [...index, streamId],
+  );
 }
 
 /**
@@ -134,12 +136,20 @@ function buildIndexWriteOps(
 }
 
 async function removeFromIndex(streamId: StreamTabId): Promise<void> {
-  const state = tryWorkspaceState();
-  if (!state) return;
-  const hasLegacyIndex = state.get<unknown>(LEGACY_INDEX_KEY) != null;
-  const index = readIndex();
-  const next = index.filter((id) => id !== streamId);
-  await Promise.all(buildIndexWriteOps(state, index, next, hasLegacyIndex));
+  await mutateIndex((index) => index.filter((id) => id !== streamId));
+}
+
+async function mutateIndex(
+  mutate: (index: StreamTabId[]) => StreamTabId[],
+): Promise<void> {
+  await indexMutex.runExclusive(async () => {
+    const state = tryWorkspaceState();
+    if (!state) return;
+    const hasLegacyIndex = state.get<unknown>(LEGACY_INDEX_KEY) != null;
+    const index = readIndex();
+    const next = mutate(index);
+    await Promise.all(buildIndexWriteOps(state, index, next, hasLegacyIndex));
+  });
 }
 
 /**
@@ -306,14 +316,11 @@ export const GoalStore = {
         state.get<unknown>(legacyStreamKey(id)) != null,
     );
     if (toRemove.length === 0) return;
-    const hasLegacyIndex = state.get<unknown>(LEGACY_INDEX_KEY) != null;
-    const index = readIndex();
     const dropped = new Set(toRemove);
-    const nextIndex = index.filter((id) => !dropped.has(id));
     await Promise.all([
       ...toRemove.map((id) => state.update(streamKey(id), undefined)),
       ...toRemove.map((id) => state.update(legacyStreamKey(id), undefined)),
-      ...buildIndexWriteOps(state, index, nextIndex, hasLegacyIndex),
+      mutateIndex((index) => index.filter((id) => !dropped.has(id))),
     ]);
     for (const id of toRemove)
       emitRuntimeEvent('goalStateChanged', { streamId: id });
