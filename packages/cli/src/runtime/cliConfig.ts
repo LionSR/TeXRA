@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import { configKeyVariants } from '@shared/config/configKeys';
 import { isObject } from '@utils/core/typeGuards';
 
@@ -252,16 +253,17 @@ export async function loadWorkspaceCliConfig(
     };
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
+  const parseResult = safeParseJson(raw);
+  if (parseResult.isErr()) {
     return {
       path: filePath,
       values: {},
-      warnings: [`Could not parse ${filePath}: ${toErrorMessage(error)}`],
+      warnings: [
+        `Could not parse ${filePath}: ${toErrorMessage(parseResult.error)}`,
+      ],
     };
   }
+  const parsed = parseResult.value;
 
   if (!isObject(parsed)) {
     return {

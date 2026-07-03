@@ -16,6 +16,7 @@ import {
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { escapeHtml } from '@shared/utils/xmlEscape';
 
 const LOOPBACK_HOST = '127.0.0.1';
@@ -191,24 +192,16 @@ function parseCallbackBody(rawBody: string): {
   fragment?: string;
   nonce?: string;
 } {
-  let json: unknown;
-  try {
-    json = JSON.parse(rawBody);
-  } catch {
-    throw new RecoverableCallbackRequestError(
-      'Authentication callback request was malformed.',
-    );
-  }
-  const parsed = CallbackBodySchema.safeParse(json);
-  if (!parsed.success) {
+  const parsed = parseJsonWith(rawBody, CallbackBodySchema);
+  if (parsed.isErr()) {
     throw new RecoverableCallbackRequestError(
       'Authentication callback request was malformed.',
     );
   }
   return {
-    query: parsed.data.query ?? undefined,
-    fragment: parsed.data.fragment ?? undefined,
-    nonce: parsed.data.nonce ?? undefined,
+    query: parsed.value.query ?? undefined,
+    fragment: parsed.value.fragment ?? undefined,
+    nonce: parsed.value.nonce ?? undefined,
   };
 }
 
