@@ -988,9 +988,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       return compactedMessages;
     } catch (err) {
-      this.logger.warn('Compaction failed, continuing with original messages', {
-        data: buildErrorLogData(err, { operation: 'compact conversation' }),
-      });
+      this.logger.warn(
+        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
+        {
+          data: buildErrorLogData(err, { operation: 'compact conversation' }),
+        },
+      );
       this.compactionResult = undefined;
       return messages;
     }

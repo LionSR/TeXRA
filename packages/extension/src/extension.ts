@@ -94,7 +94,7 @@ import * as logger from '@logger/logUtils';
 import {
   apiKeyExists,
   apiKeySecretName,
-  lookupApiKey,
+  hasUsableApiKey,
 } from '@model/apiProviders';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { type StreamStatus, type TokenUsageStats } from '@shared/schemas';
@@ -112,7 +112,6 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { isNonEmptyString } from '@utils/core';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 // Local imports - components
@@ -436,10 +435,7 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     } else {
       const authProvider = new SupabaseAuthProvider(context, {
-        showError: (msg) => {
-          logger.error('SupabaseAuthProvider', msg);
-          void vscode.window.showErrorMessage(msg);
-        },
+        showError: (msg) => void vscode.window.showErrorMessage(msg),
         showInfo: (msg) => void vscode.window.showInformationMessage(msg),
         showSignInPrompt: async (reason) => {
           const message =
@@ -550,8 +546,8 @@ export async function activate(context: vscode.ExtensionContext) {
       deleteApiKey: (provider) =>
         platform().secrets.delete(apiKeySecretName(provider)),
       apiKeyExists: (provider) => apiKeyExists(platform().secrets, provider),
-      hasUsableApiKey: async (provider) =>
-        isNonEmptyString(await lookupApiKey(platform().secrets, provider)),
+      hasUsableApiKey: (provider) =>
+        hasUsableApiKey(platform().secrets, provider),
       storedApiKeyExists: async (provider) => {
         const stored = await SecretManager.get(apiKeySecretName(provider));
         return stored !== undefined;

@@ -69,7 +69,9 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
       void showLoggedMessage(CHANNEL, 'Missing required parameters for pack');
       break;
     case 'error':
-      void showLoggedMessage(CHANNEL, `Error during packing: ${result.error}`);
+      void vscode.window.showErrorMessage(
+        `Error during packing: ${result.error}`,
+      );
       break;
   }
 }

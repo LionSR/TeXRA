@@ -230,7 +230,10 @@ export class TexraDiffView extends LitElement {
       this.syncModels();
       this.observeResize(container);
     } catch (error) {
-      this.errorMessage = toErrorMessage(error);
+      this.errorMessage =
+        error instanceof Error
+          ? toErrorMessage(error)
+          : 'Failed to load diff editor.';
     } finally {
       if (generation === this.loadGeneration) this.loading = false;
     }

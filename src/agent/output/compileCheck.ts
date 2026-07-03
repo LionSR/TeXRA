@@ -150,9 +150,10 @@ export async function runCompileCheck(
       }
       if (result.artifact) artifacts.push(result.artifact);
     } catch (err) {
-      ctx.logger.warn(`Compile check: ${displayName} skipped`, {
-        data: err,
-      });
+      ctx.logger.warn(
+        `Compile check: ${displayName} skipped: ${toErrorMessage(err)}`,
+        { data: err },
+      );
     }
   }
 

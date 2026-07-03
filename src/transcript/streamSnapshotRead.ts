@@ -131,24 +131,41 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
   const flatten = async <T extends Map<number, unknown[]>>(
     key: string,
     schema: z.ZodType<T>,
+    fallback: () => T,
   ): Promise<T> => {
     const raw = await tryRead(kv, key);
-    if (raw === undefined) return new Map() as T;
+    if (raw === undefined) return fallback();
     const wasLegacy = isLegacyNested(raw);
     if (wasLegacy) legacyKeys.push(key);
-    return schema
-      .catch(new Map() as T)
-      .parse(wasLegacy ? flattenLegacyRuns(raw, activeRunId) : raw);
+    return (
+      schema
+        .nullable()
+        .catch(null)
+        .parse(wasLegacy ? flattenLegacyRuns(raw, activeRunId) : raw) ??
+      fallback()
+    );
   };
 
   const [outputFiles, missingOutputs, compileFailures] = await Promise.all([
-    flatten(STREAM_DATA_KEYS.OUTPUT_FILES, OutputFilesDataSchema),
-    flatten(STREAM_DATA_KEYS.MISSING_OUTPUTS, MissingOutputsDataSchema),
-    flatten(STREAM_DATA_KEYS.COMPILE_FAILURES, CompileFailuresDataSchema),
+    flatten(
+      STREAM_DATA_KEYS.OUTPUT_FILES,
+      OutputFilesDataSchema,
+      () => new Map<number, OutputFileInfo[]>(),
+    ),
+    flatten(
+      STREAM_DATA_KEYS.MISSING_OUTPUTS,
+      MissingOutputsDataSchema,
+      () => new Map<number, string[]>(),
+    ),
+    flatten(
+      STREAM_DATA_KEYS.COMPILE_FAILURES,
+      CompileFailuresDataSchema,
+      () => new Map<number, CompileFailure[]>(),
+    ),
   ]);
 
   const usageRaw = await tryRead(kv, STREAM_DATA_KEYS.USAGE_STATS);
-  const usage = UsageDataSchema.parse(usageRaw);
+  const usage = UsageDataSchema.catch(new Map()).parse(usageRaw);
 
   const workPlan = readPersistedWorkPlan(
     await tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN),

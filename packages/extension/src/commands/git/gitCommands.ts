@@ -281,8 +281,8 @@ async function checkClonePreconditions(
   try {
     entries = await WorkspaceFS.readDir(workspacePath);
   } catch (e) {
-    void showLoggedMessage(CHANNEL, 'Cannot read workspace folder.');
     logger.error(CHANNEL, `readDir failed: ${toErrorMessage(e)}`);
+    void vscode.window.showErrorMessage('Cannot read workspace folder.');
     return false;
   }
 
@@ -362,7 +362,6 @@ export async function cloneOverleafProject(
         ? (['Get New Token', 'How to get a token'] as const)
         : (['Retry'] as const);
       const authErrorMessage = `Clone failed: authentication error. ${detail}`;
-      logger.error(CHANNEL, authErrorMessage);
       const selected = await vscode.window.showErrorMessage(
         authErrorMessage,
         ...actions,
@@ -373,8 +372,7 @@ export async function cloneOverleafProject(
         void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL));
       }
     } else {
-      void showLoggedMessage(
-        CHANNEL,
+      void vscode.window.showErrorMessage(
         'Clone failed. Check credentials and connection.',
       );
     }

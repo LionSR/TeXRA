@@ -1,11 +1,9 @@
 // Standard library imports
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
 import { ZodError } from 'zod';
-
-// Local imports - platform
-import { platform } from '@platform/platform';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -178,8 +176,7 @@ export async function loadSkillDirectory(
   const skillPath = path.join(skillDir, 'SKILL.md');
 
   try {
-    const raw = await platform().fs.readFile(skillPath);
-    const content = Buffer.from(raw).toString('utf8');
+    const content = await fs.readFile(skillPath, 'utf8');
     const { frontmatter, body } = extractFrontmatter(content);
     if (!isObject(frontmatter)) {
       return {

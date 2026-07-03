@@ -8,7 +8,6 @@ import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerC
 import { runAgent } from '@agent/runtime/runAgent';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
-import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 
@@ -69,7 +68,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${z.prettifyError(error)}`;
       logger.warn(CHANNEL, message, { data: error });
-      void showLoggedMessage(CHANNEL, message);
+      void vscode.window.showErrorMessage(message);
       return;
     }
 

@@ -19,6 +19,7 @@ import { renderLoadingState } from '@shared/wa/loadingState';
 import { createEvent } from '@shared/utils/events';
 import type {
   ToolDashboardItem,
+  ToolStatus,
   CodexSandboxMode,
   CodexReasoningEffort,
   CodexApprovalPolicy,
@@ -124,6 +125,10 @@ export class AIAgentsTab extends LitElement {
 
       .ai-agents-status-missing {
         color: var(--color-status-error);
+      }
+
+      .ai-agents-status-neutral {
+        color: var(--wa-color-text-quiet);
       }
 
       .category-section {
@@ -269,23 +274,36 @@ export class AIAgentsTab extends LitElement {
   ): TemplateResult | typeof nothing {
     if (items.length === 0) return nothing;
 
-    let available = 0;
-    let missing = 0;
+    const counts: Record<ToolStatus, number> = {
+      available: 0,
+      'not-found': 0,
+      unknown: 0,
+      'coming-soon': 0,
+    };
     for (const item of items) {
-      if (item.status === 'available') available++;
-      else if (item.status === 'not-found') missing++;
+      counts[item.status] += 1;
     }
+    const pending = counts.unknown + counts['coming-soon'];
 
     return html`
       <div class="ai-agents-status">
         <span class="ai-agents-status-stat ai-agents-status-available">
-          ${waIcon('check')} ${available} available
+          ${waIcon('check')} ${counts.available} available
         </span>
         ${
-          missing > 0
+          counts['not-found'] > 0
             ? html`
                 <span class="ai-agents-status-stat ai-agents-status-missing">
-                  ${waIcon('warning')} ${missing} need setup
+                  ${waIcon('warning')} ${counts['not-found']} need setup
+                </span>
+              `
+            : nothing
+        }
+        ${
+          pending > 0
+            ? html`
+                <span class="ai-agents-status-stat ai-agents-status-neutral">
+                  ${waIcon('clock')} ${pending} pending
                 </span>
               `
             : nothing

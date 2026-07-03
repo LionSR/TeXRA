@@ -29,7 +29,10 @@ import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER, FREE_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { isContextWindowError } from '@common/errors/sdkErrorUtils';
+import {
+  getSdkErrorMessage,
+  isContextWindowError,
+} from '@common/errors/sdkErrorUtils';
 
 // Local imports - platform
 
@@ -966,9 +969,10 @@ export abstract class ModelHandler<
 
       return { compactedMessages, didCompact: true };
     } catch (err) {
-      this.logger.warn('Compaction failed, continuing with original messages', {
-        data: err,
-      });
+      this.logger.warn(
+        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
+        { data: err },
+      );
       return { compactedMessages: messages, didCompact: false };
     }
   }

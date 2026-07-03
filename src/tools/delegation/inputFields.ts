@@ -44,7 +44,10 @@ export const memoriesField = z
         ctx.addIssue({
           code: 'custom',
           path: [i],
-          message: toErrorMessage(e),
+          message:
+            e instanceof Error
+              ? toErrorMessage(e)
+              : `Invalid memory path: ${memory}`,
         });
       }
     }

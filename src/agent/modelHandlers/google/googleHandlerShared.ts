@@ -15,9 +15,9 @@ import type { FileLocation } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 
-import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
+import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 
 /**
  * Shared helpers for the two Google handlers (generateContent chat handler and
@@ -245,9 +245,15 @@ export async function uploadGoogleMediaEntries<T>(
   }
 
   if (summaries.some((summary) => !summary.ok)) {
-    logger.warn('Some media files failed to upload via Google GenAI SDK', {
-      data: failures,
-    });
+    const failureSummary = failures.join('; ');
+    logger.warn(
+      failureSummary
+        ? `Some media files failed to upload via Google GenAI SDK: ${failureSummary}`
+        : 'Some media files failed to upload via Google GenAI SDK',
+      {
+        data: failures,
+      },
+    );
   }
   return parts;
 }

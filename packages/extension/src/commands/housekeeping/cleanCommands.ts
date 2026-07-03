@@ -36,7 +36,9 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
       void showLoggedMessage(CHANNEL, 'Missing required parameters for clean');
       break;
     case 'error':
-      void showLoggedMessage(CHANNEL, `Error during cleanup: ${result.error}`);
+      void vscode.window.showErrorMessage(
+        `Error during cleanup: ${result.error}`,
+      );
       break;
   }
 }

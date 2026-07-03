@@ -80,7 +80,8 @@ export async function selectAgentInMainView(
       message: `Agent "${agentName}" selected successfully`,
     };
   } catch (error) {
-    const errorMessage = toErrorMessage(error);
+    const errorMessage =
+      error instanceof Error ? toErrorMessage(error) : 'Unknown error';
     logger.error(CHANNEL, `Failed to select agent: ${errorMessage}`);
     return handleFallback(
       agentName,

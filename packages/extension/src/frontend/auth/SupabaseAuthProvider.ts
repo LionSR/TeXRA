@@ -155,6 +155,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       if (!result.success) {
         if (result.isAuthError) {
+          logger.error(
+            'SupabaseAuthProvider',
+            `Sign-in failed: ${result.error}`,
+          );
           this.notifier.showError(`Sign-in failed: ${result.error}`);
         } else {
           // Log non-auth errors for debugging (e.g., missing tokens from non-auth callbacks)

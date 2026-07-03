@@ -27,7 +27,7 @@ export async function openMacTerminalCommand(
       '-e',
       'end tell',
     ],
-    { timeout: OPEN_TERMINAL_TIMEOUT_MS },
+    { cwd, timeout: OPEN_TERMINAL_TIMEOUT_MS, stdout: 'ignore' },
   );
 
   if (result.timedOut) {

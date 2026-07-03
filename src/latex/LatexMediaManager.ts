@@ -4,6 +4,7 @@ import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
+import { toErrorMessage } from '@common/errors';
 
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas/toolConfig';
@@ -131,9 +132,10 @@ export class LatexMediaManager {
           // Stat failures are noisier than other compile failures because an
           // existing-but-unreadable PDF likely indicates a permissions/IO bug.
           const stats = await flexibleFS.stat(pdfLocation).catch((err) => {
-            this.logger.error('Failed to stat compiled PDF', {
-              data: { path: pdfLocation.absolutePath, error: err },
-            });
+            this.logger.error(
+              `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
+              { data: { path: pdfLocation.absolutePath, error: err } },
+            );
             return undefined;
           });
           if (!stats) return undefined;

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   apiKeyExistsUncached,
   apiKeySecretName,
+  hasUsableApiKey,
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
   lookupApiKeyOrigin,
@@ -148,6 +149,20 @@ describe('API provider key caches', () => {
     const { secrets } = createSecrets({}, { OPENAI_API_KEY: '' });
 
     await expect(apiKeyExistsUncached(secrets, 'openai')).resolves.toBe(false);
+  });
+
+  it('checks usable keys through the canonical resolver', async () => {
+    const { secrets } = createSecrets(
+      { [apiKeySecretName('openai')]: '   ' },
+      { OPENAI_API_KEY: 'from-env' },
+    );
+
+    await expect(hasUsableApiKey(secrets, 'openai')).resolves.toBe(false);
+
+    invalidateApiKeyCache();
+    await secrets.delete(apiKeySecretName('openai'));
+
+    await expect(hasUsableApiKey(secrets, 'openai')).resolves.toBe(true);
   });
 
   it('set_api_key invalidates stale missing-key lookups', async () => {

@@ -185,6 +185,8 @@ export async function executeCommand(
     onPid?: (pid: number) => void;
     /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
     buffer?: boolean;
+    stdout?: Options['stdout'];
+    stderr?: Options['stderr'];
     /** Abort signal used to terminate the subprocess and any shell children. */
     signal?: AbortSignal;
   } = {},
@@ -219,6 +221,8 @@ export async function executeCommand(
       reject: false,
       input: options.stdin,
       buffer: options.buffer,
+      stdout: options.stdout,
+      stderr: options.stderr,
     };
 
     const logChannel = options.channel ?? CHANNEL;

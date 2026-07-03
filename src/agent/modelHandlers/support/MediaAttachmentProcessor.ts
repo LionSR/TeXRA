@@ -8,6 +8,7 @@ import pMap from 'p-map';
 // Local imports - agent utils
 import { logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
+import { getSdkErrorMessage } from '@common/errors';
 import type { FileLocation } from '@shared/schemas';
 
 // Local imports - utils
@@ -186,9 +187,12 @@ export class MediaAttachmentProcessor {
       } else {
         const { location, reason } = loadResult;
         const displayPath = getShortDisplayPath(location);
-        this.logger.error('Failed to load media entry', {
-          data: { path: displayPath, error: reason },
-        });
+        this.logger.error(
+          `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(reason)}`,
+          {
+            data: { path: displayPath, error: reason },
+          },
+        );
         results.push({ path: displayPath, ok: false });
       }
     }
@@ -225,9 +229,10 @@ export class MediaAttachmentProcessor {
       const stats = await AbsoluteFS.stat(absolutePath);
       fileSize = stats.size;
     } catch (err) {
-      this.logger.error('Unable to read file info', {
-        data: { path: displayPath, error: err },
-      });
+      this.logger.error(
+        `Unable to read file info for ${displayPath}: ${getSdkErrorMessage(err)}`,
+        { data: { path: displayPath, error: err } },
+      );
       return { result: { path: displayPath, ok: false } };
     }
 
@@ -263,9 +268,12 @@ export class MediaAttachmentProcessor {
         result: { path: displayPath, ok: true },
       };
     } catch (err) {
-      this.logger.error('Failed to process media', {
-        data: { path: displayPath, error: err },
-      });
+      this.logger.error(
+        `Failed to process media ${displayPath}: ${getSdkErrorMessage(err)}`,
+        {
+          data: { path: displayPath, error: err },
+        },
+      );
       return { result: { path: displayPath, ok: false } };
     }
   }

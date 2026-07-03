@@ -4,8 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { gt as semverGt, valid as semverValid } from 'semver';
 import { z } from 'zod';
 
-import { executeCommand } from '@utils/system/execUtils';
-
 import {
   cliEnvValue,
   readCliAmbientState,
@@ -173,10 +171,31 @@ async function readCommandStdout(
   args: readonly string[],
   timeoutMs: number,
 ): Promise<string | undefined> {
-  const result = await executeCommand([command, ...args], {
-    timeout: timeoutMs,
+  return new Promise<string | undefined>((resolve) => {
+    const child = spawn(command, args, {
+      shell: false,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    let stdout = '';
+    let settled = false;
+    const finish = (value: string | undefined): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(undefined);
+    }, timeoutMs);
+
+    child.stdout?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.on('error', () => finish(undefined));
+    child.on('close', (code) => finish(code === 0 ? stdout : undefined));
   });
-  return result.success ? (result.stdout ?? '') : undefined;
 }
 
 /**

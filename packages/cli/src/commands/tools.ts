@@ -94,15 +94,31 @@ async function toggleTool(
 // Not routed through executeCommand: install/auth guide commands are
 // interactive (they can prompt for input or open a browser), which needs true
 // stdio:'inherit' that executeCommand's buffered/streamed output can't
-// provide. `command` always comes from the static EXTERNAL_TOOL_DEFS
-// registry (src/tools/externalToolDefs.ts), never from user or LLM input;
-// parsing it into argv (instead of a shell string) still closes off shell
-// metacharacter injection as defense in depth.
+// provide. `command` always comes from the static EXTERNAL_TOOL_DEFS registry,
+// never from user or LLM input. POSIX commands run as argv; Windows uses the
+// shell so npm/gh `.cmd` shims resolve through PATHEXT.
 function shellRun(command: string): Promise<number> {
   return new Promise((resolve) => {
-    const [cmd, ...args] = shellParse(command).filter(
-      (arg): arg is string => typeof arg === 'string',
-    );
+    if (process.platform === 'win32') {
+      const child = spawn(command, { shell: true, stdio: 'inherit' });
+      child.on('error', () => resolve(CliExitCode.AgentError));
+      child.on('exit', (code) => resolve(code ?? CliExitCode.AgentError));
+      return;
+    }
+
+    let parts: string[];
+    try {
+      const parsed = shellParse(command);
+      if (!parsed.every((arg): arg is string => typeof arg === 'string')) {
+        resolve(CliExitCode.AgentError);
+        return;
+      }
+      parts = parsed;
+    } catch {
+      resolve(CliExitCode.AgentError);
+      return;
+    }
+    const [cmd, ...args] = parts;
     if (!cmd) {
       resolve(CliExitCode.AgentError);
       return;

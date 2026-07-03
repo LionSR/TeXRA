@@ -494,9 +494,24 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const errorWithResponse = error as Error & {
           response?: { promptFeedback?: unknown };
         };
-        this.logger.warn('Content blocked by safety filter.', {
-          data: errorWithResponse.response?.promptFeedback,
-        });
+        const promptFeedback = errorWithResponse.response?.promptFeedback;
+        const blockReason =
+          promptFeedback &&
+          typeof promptFeedback === 'object' &&
+          'blockReason' in promptFeedback
+            ? String((promptFeedback as { blockReason?: unknown }).blockReason)
+            : undefined;
+        const safetyDetail =
+          blockReason ??
+          (promptFeedback === undefined
+            ? undefined
+            : JSON.stringify(promptFeedback));
+        this.logger.warn(
+          `Content blocked by safety filter${safetyDetail ? `: ${safetyDetail}` : ''}.`,
+          {
+            data: promptFeedback,
+          },
+        );
       }
       // If the stream produced any text before failing, attach a tail to the
       // error so the retry UI can show progress and future continuation logic
@@ -639,7 +654,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (!responseObject.candidates || responseObject.candidates.length === 0) {
       if (responseObject?.promptFeedback?.blockReason) {
         const { blockReason, safetyRatings } = responseObject.promptFeedback;
-        this.logger.error('Request blocked.', {
+        this.logger.error(`Request blocked: ${blockReason}`, {
           data: { blockReason, safetyRatings },
         });
         return {
@@ -936,7 +951,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       );
     } catch (attachmentError) {
       this.logger.warn(
-        `Failed to encode attachment '${attachment.path}' for Google function response.`,
+        `Failed to encode attachment '${attachment.path}' for Google function response: ${getSdkErrorMessage(attachmentError)}`,
         { data: attachmentError },
       );
       return null;

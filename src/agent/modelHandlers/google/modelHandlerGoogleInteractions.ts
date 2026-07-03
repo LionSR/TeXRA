@@ -1380,7 +1380,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       } satisfies ImageContent;
     } catch (error) {
       this.logger.warn(
-        `Failed to encode attachment '${attachment.path}' for Interactions function result.`,
+        `Failed to encode attachment '${attachment.path}' for Interactions function result: ${getSdkErrorMessage(error)}`,
         { data: error },
       );
       return null;
