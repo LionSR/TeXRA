@@ -8,8 +8,6 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { historyStyles } from '@shared/styles/historyStyles';
-
-// Local imports - utils
 import { debounce } from '@utils/core';
 
 // Local imports - history view events
