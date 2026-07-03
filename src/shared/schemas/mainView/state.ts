@@ -186,6 +186,12 @@ export const MultiFilesSchema = z.object({
 });
 export type MultiFiles = z.infer<typeof MultiFilesSchema>;
 
+// Enumerates the four `MultiFiles` keys (`inputFiles` / `contextFiles` /
+// `mediaFiles` / `outputFiles`) so `listId` fields below are constrained to
+// valid `keyof MultiFiles` values instead of an unconstrained `z.string()`.
+export const MultiFilesKeySchema = MultiFilesSchema.keyof();
+export type MultiFilesKey = z.infer<typeof MultiFilesKeySchema>;
+
 export const FileStateContextSchema = z.object({
   sessionType: SessionTypeSchema,
   checkboxValues: CheckboxValuesSchema,
@@ -229,7 +235,7 @@ export const FileActionDetailSchema = z.object({
 export type FileActionDetail = z.infer<typeof FileActionDetailSchema>;
 
 export const MultipleFilesActionDetailSchema = z.object({
-  listId: z.string(),
+  listId: MultiFilesKeySchema,
 });
 export type MultipleFilesActionDetail = z.infer<
   typeof MultipleFilesActionDetailSchema
@@ -243,13 +249,13 @@ export type MultipleFilesTypeActionDetail = z.infer<
 >;
 
 export const RemoveFileDetailSchema = z.object({
-  listId: z.string(),
+  listId: MultiFilesKeySchema,
   file: z.string(),
 });
 export type RemoveFileDetail = z.infer<typeof RemoveFileDetailSchema>;
 
 export const ReorderFilesDetailSchema = z.object({
-  listId: z.string(),
+  listId: MultiFilesKeySchema,
   files: z.array(z.string()),
 });
 export type ReorderFilesDetail = z.infer<typeof ReorderFilesDetailSchema>;

@@ -23,6 +23,7 @@ import {
   type LatexdiffPackResult,
 } from '@housekeeping';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
+import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/commandConfig';
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
@@ -33,8 +34,7 @@ import { CHANNEL, service } from '@latex/latexdiff/service';
 import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
 import type { RunLatexdiffCommandConfig } from '@latex/latexdiff/types';
 import * as logger from '@logger/logUtils';
-import { RoundKeySchema } from '@shared/schemas';
-import type { FileLocation, OutputFileInfo } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
@@ -372,21 +372,9 @@ async function handleRunLatexdiff(
 
     const runId = config.runId ?? undefined;
 
-    let outputsByRound: Map<number, OutputFileInfo[]> | null = null;
-    if (config.outputsByRound) {
-      const roundMap = new Map<number, OutputFileInfo[]>();
-      for (const [roundKey, value] of Object.entries(config.outputsByRound)) {
-        const roundResult = RoundKeySchema.safeParse(roundKey);
-        if (roundResult.success && Array.isArray(value) && value.length > 0) {
-          roundMap.set(roundResult.data, value);
-        }
-      }
-      if (roundMap.size > 0) {
-        outputsByRound = new Map(
-          [...roundMap.entries()].sort((a, b) => a[0] - b[0]),
-        );
-      }
-    }
+    const outputsByRound = normalizeRunLatexdiffOutputsByRound(
+      config.outputsByRound,
+    );
 
     const { outcome } = await vscode.window.withProgress(
       {

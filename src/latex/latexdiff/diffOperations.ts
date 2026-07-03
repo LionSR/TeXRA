@@ -75,7 +75,7 @@ export async function executeDiffOperations(
         ? await service.runDiffForRound(
             operation.base,
             operation.revised,
-            operation.round ?? 0,
+            operation.round,
             mathMarkup,
             { cwd: operation.cwd },
           )

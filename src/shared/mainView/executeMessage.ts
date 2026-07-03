@@ -12,39 +12,52 @@ import type {
 import type { z } from 'zod';
 
 /**
- * Message shape from the main view for agent execution.
- * ToolConfig fields are sent flat from the UI form.
- *
- * Keep this aligned with prepareMainViewExecutionRequest. Agent-owned fields
- * such as agentCategory are derived there, not sent by the UI.
+ * File-selection fields sent from the main view's file pickers: the
+ * multi-file lists (input/context/media/output), their "active" UI toggles,
+ * and the single base/edited-file slots used by diff-oriented flows.
  */
-type MainViewExecuteFiles = {
+export type MainViewExecuteFiles = {
   readonly inputFiles?: string[];
   readonly contextFiles?: string[];
   readonly mediaFiles?: (string | null)[];
   readonly outputFiles?: string[];
   readonly editedFile?: string;
+  readonly editedFiles?: string[];
+  readonly baseFile?: string;
+  readonly inputFilesActive?: boolean;
+  readonly contextFilesActive?: boolean;
+  readonly mediaFilesActive?: boolean;
+  readonly outputFilesActive?: boolean;
 };
 
-export type MainViewExecuteMessage = MainViewExecuteFiles & {
+/** Session/run metadata that rides along with the execution request. */
+export type MainViewExecuteSession = {
+  readonly workingDirectory?: string | null;
+  readonly cliOutputFile?: string | null;
+  readonly cliMultiAgentPresetId?: string | null;
+};
+
+/**
+ * Message shape from the main view for agent execution. File selection,
+ * session metadata, and tool config are grouped into their own sub-objects
+ * (mirroring how `prepareMainViewExecutionRequest` consumes them) instead of
+ * one flat 26-field bag.
+ *
+ * Keep this aligned with prepareMainViewExecutionRequest. Agent-owned fields
+ * such as agentCategory are derived there, not sent by the UI.
+ */
+export type MainViewExecuteMessage = {
   readonly agent?: string;
   readonly model?: string;
   readonly instruction?: string;
   readonly displayInstruction?: string | null;
   /** UI toggle indicating tool-use vs workflow agent. */
   readonly isToolUseAgent?: boolean;
-  /** File used as the base/reference for diff-oriented flows. */
-  readonly baseFile?: string;
-  readonly inputFilesActive?: boolean;
-  readonly contextFilesActive?: boolean;
-  readonly mediaFilesActive?: boolean;
-  readonly outputFilesActive?: boolean;
-  readonly editedFiles?: string[];
   readonly memories?: string[];
-  readonly workingDirectory?: string | null;
-  readonly cliOutputFile?: string | null;
-  readonly cliMultiAgentPresetId?: string | null;
-} & z.input<typeof ToolConfigSchema>;
+  readonly files?: MainViewExecuteFiles;
+  readonly session?: MainViewExecuteSession;
+  readonly toolConfig?: z.input<typeof ToolConfigSchema>;
+};
 
 export interface MainViewExecutionFormState {
   readonly sessionType: SessionType;
@@ -68,10 +81,12 @@ export function buildMainViewExecuteMessage(
     model: state.model,
     instruction: state.instruction,
     isToolUseAgent,
-    editedFile: state.singleFiles.editedFile,
-    baseFile: state.singleFiles.baseFile,
-    ...buildMainViewMultipleFileSelections(state.multiFiles),
-    ...state.checkboxValues,
+    files: {
+      editedFile: state.singleFiles.editedFile,
+      baseFile: state.singleFiles.baseFile,
+      ...buildMainViewMultipleFileSelections(state.multiFiles),
+    },
+    toolConfig: state.checkboxValues,
   };
 }
 

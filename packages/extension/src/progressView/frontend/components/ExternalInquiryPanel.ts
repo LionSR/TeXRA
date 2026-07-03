@@ -92,7 +92,7 @@ export function clearInquiryDraft(requestId: string): void {
 // ── Component ──
 
 @customElement('external-inquiry-panel')
-export class ExternalInquiryPanel extends BaseFeedbackPanel {
+export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   @state() private answerText = '';
@@ -122,7 +122,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     // Restore draft once on first update (avoids the extra render from connectedCallback).
     if (!this.draftRestored) {
       this.draftRestored = true;
-      const data = this.permission.data as ExternalInquiryPermission;
+      const data = this.permission.data;
       const draft = draftCache.get(getRequestId(this.permission)) ?? data.draft;
       if (draft) {
         this.answerText = draft.answer;
@@ -228,7 +228,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   }
 
   override render(): TemplateResult {
-    const data = this.permission.data as ExternalInquiryPermission;
+    const data = this.permission.data;
 
     return html`
       <div

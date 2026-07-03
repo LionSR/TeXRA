@@ -30,20 +30,24 @@ describe('MainView execute message builder', () => {
       model: 'gpt-5.4',
       instruction: 'Solve a small enumeration problem.',
       isToolUseAgent: true,
-      baseFile: 'old.tex',
-      editedFile: 'new.tex',
-      inputFiles: ['main.tex'],
-      inputFilesActive: true,
-      contextFiles: ['refs.bib'],
-      contextFilesActive: true,
-      mediaFiles: ['figure.png'],
-      mediaFilesActive: true,
-      outputFiles: [],
-      outputFilesActive: false,
-      autoExtractFigure: true,
-      autoExtractTikzFigure: false,
-      autoCompileInputPdf: true,
-      attachTeXCount: false,
+      files: {
+        baseFile: 'old.tex',
+        editedFile: 'new.tex',
+        inputFiles: ['main.tex'],
+        inputFilesActive: true,
+        contextFiles: ['refs.bib'],
+        contextFilesActive: true,
+        mediaFiles: ['figure.png'],
+        mediaFilesActive: true,
+        outputFiles: [],
+        outputFilesActive: false,
+      },
+      toolConfig: {
+        autoExtractFigure: true,
+        autoExtractTikzFigure: false,
+        autoCompileInputPdf: true,
+        attachTeXCount: false,
+      },
     });
   });
 
@@ -71,6 +75,6 @@ describe('MainView execute message builder', () => {
 
     expect(message.agent).toBe('correct');
     expect(message.isToolUseAgent).toBe(false);
-    expect(message.inputFilesActive).toBe(false);
+    expect(message.files?.inputFilesActive).toBe(false);
   });
 });

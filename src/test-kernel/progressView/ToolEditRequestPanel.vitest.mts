@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
-import type { PermissionState } from '@progressView/frontend/permissionState';
 import type { ToolEditRequestPanel } from '@progressView/frontend/components/ToolEditRequestPanel';
 
 // Local imports - shared schemas
@@ -11,7 +10,9 @@ import type { ToolEditPermission } from '@shared/schemas';
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-function createPermission(data: Partial<ToolEditPermission>): PermissionState {
+function createPermission(
+  data: Partial<ToolEditPermission>,
+): ToolEditRequestPanel['permission'] {
   return {
     kind: 'toolEdit',
     data: {
@@ -30,7 +31,7 @@ function createPermission(data: Partial<ToolEditPermission>): PermissionState {
 }
 
 async function mountPanel(
-  permission: PermissionState,
+  permission: ToolEditRequestPanel['permission'],
 ): Promise<ToolEditRequestPanel> {
   const element = document.createElement(
     'tool-edit-request-panel',

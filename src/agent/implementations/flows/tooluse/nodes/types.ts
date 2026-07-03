@@ -49,14 +49,6 @@ export interface ToolUseRunShared {
   deliveredToOrchestrator?: boolean;
 }
 
-export interface PrepareResult {
-  runState: AgentRunStateSnapshot;
-  workspaceState: AgentWorkspaceState;
-  userChannels: UserVariableChannels;
-  messages: ProviderMessage[];
-  shouldSkipCycle: boolean;
-}
-
 export type WaitExecResult =
   | {
       kind: 'continue';
@@ -71,12 +63,18 @@ export type WaitExecResult =
     }
   | { kind: 'stop' };
 
+/**
+ * Prepared shared state needed to run one tool-use cycle: produced by
+ * `ToolUsePrepareNode`'s one-time session init and re-derived by
+ * `ToolUseCycleNode.prep()` from `shared.stateSlices` on every subsequent
+ * cycle.
+ */
 export interface CyclePrepResult {
   runState: AgentRunStateSnapshot;
   workspaceState: AgentWorkspaceState;
   userChannels: UserVariableChannels;
   messages: ProviderMessage[];
-  shouldSkip: boolean;
+  shouldSkipCycle: boolean;
 }
 
 export type PreparedShared = ToolUseRunShared & {

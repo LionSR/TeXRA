@@ -10,7 +10,11 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import { SortableController } from '@shared/litControllers';
 import { designTokens } from '@shared/styles';
-import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
+import type {
+  CheckboxValues,
+  DocumentFileType,
+  FileSelectConfig,
+} from '@shared/schemas';
 import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
@@ -80,7 +84,7 @@ export class FileSelectGroup extends LitElement {
     }
   }
 
-  private get listId(): string {
+  private get listId(): `${DocumentFileType}Files` {
     return `${this.config.type}Files`;
   }
 
@@ -122,8 +126,7 @@ export class FileSelectGroup extends LitElement {
   }
 
   private get currentFiles(): string[] {
-    const key = this.listId as keyof FileStateContextValue['multiFiles'];
-    return this.fileState?.multiFiles[key] ?? [];
+    return this.fileState?.multiFiles[this.listId] ?? [];
   }
 
   private get isFileInputDisabled(): boolean {

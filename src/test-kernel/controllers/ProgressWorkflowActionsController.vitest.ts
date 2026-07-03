@@ -87,7 +87,7 @@ describe('ProgressWorkflowActionsController', () => {
         outputFilesActive: false,
         streamId: 'stream-a',
         runId: 'exec-123',
-        outputsByRound: { 1: [output] },
+        outputsByRound: [[1, [output]]],
       },
     ]);
   });
