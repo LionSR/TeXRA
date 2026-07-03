@@ -21,11 +21,63 @@ import type { MainViewExecuteMessage } from '@shared/mainView';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { isNonEmptyString } from '@utils/core';
+// Used only by `resolveDesktopSetupModel` below — the shared
+// `resolveSetupModelExcludingOpenRouter` scan has no routing-flag dependency.
 import { getUseOpenRouter } from '@utils/config/providerConfig';
+import type { PlatformSecrets } from '@platform/secrets';
 
 /** Instruction handed to the setup agent when launched (mirrors the extension). */
 export const SETUP_INSTRUCTION =
   'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
+
+/**
+ * Pick a model from the user's non-OpenRouter credentials, in priority
+ * order: ChatGPT/Codex subscription, server-side keys for the default
+ * agent model, server-side keys for any per-provider setup model, then a
+ * direct provider API key. Returns `null` when none resolve.
+ *
+ * Named for what it excludes, not just "direct" keys: it also covers the
+ * ChatGPT subscription and server-side-key paths, which aren't
+ * secrets-lookup credentials either. The one thing every path here shares
+ * is that none of them need the OpenRouter routing flag.
+ *
+ * This is the credential-priority core shared by every host's setup-model
+ * resolution: the VS Code extension's `resolveLaunchModel`
+ * (`setupAssistantCommand.ts`) layers its interactive OpenRouter-flag flip
+ * on top of this, and `resolveDesktopSetupModel` below layers desktop's
+ * flag-only (non-interactive) OpenRouter handling on top of it. Keeping the
+ * priority order in one place means the two hosts can't silently drift on
+ * which credential wins.
+ */
+export async function resolveSetupModelExcludingOpenRouter(
+  secrets: PlatformSecrets,
+): Promise<string | null> {
+  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
+    return CHATGPT_SETUP_MODEL;
+  }
+
+  const serverKeys = getServerSideKeyService();
+  if (await serverKeys.canUseServerSideKeysForModel(DEFAULT_AGENT_MODEL)) {
+    return DEFAULT_AGENT_MODEL;
+  }
+  if (await serverKeys.canUseServerSideKeys()) {
+    for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
+      if (provider === 'openRouter') continue;
+      if (serverKeys.canUseModelSync(model)) return model;
+    }
+  }
+
+  for (const provider of API_PROVIDERS) {
+    if (provider === 'openRouter') continue;
+    const model = SETUP_MODEL_BY_PROVIDER[provider];
+    if (!model) continue;
+    if (isNonEmptyString(await lookupApiKey(secrets, provider))) {
+      return model;
+    }
+  }
+
+  return null;
+}
 
 /**
  * Pick a model the setup agent can actually call given the user's current
@@ -52,37 +104,13 @@ export async function resolveDesktopSetupModel(): Promise<string | null> {
     return null;
   }
 
-  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
-    return CHATGPT_SETUP_MODEL;
-  }
-
-  const serverKeys = getServerSideKeyService();
-  if (await serverKeys.canUseServerSideKeysForModel(DEFAULT_AGENT_MODEL)) {
-    return DEFAULT_AGENT_MODEL;
-  }
-  if (await serverKeys.canUseServerSideKeys()) {
-    for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
-      if (provider === 'openRouter') continue;
-      if (serverKeys.canUseModelSync(model)) return model;
-    }
-  }
-
-  for (const provider of API_PROVIDERS) {
-    if (provider === 'openRouter') continue;
-    const model = SETUP_MODEL_BY_PROVIDER[provider];
-    if (!model) continue;
-    if (isNonEmptyString(await lookupApiKey(secrets, provider))) {
-      return model;
-    }
-  }
-
   // OpenRouter is only a valid pick when `useOpenRouter` routing is on (handled
-  // at the top). A bare OpenRouter key with the flag off can't be used: the
-  // desktop launch passes only a model string to `handleExecute` and never flips
-  // the routing flag, so an OR model would run unrouted and fail at inference.
-  // Refuse instead (the caller surfaces "no runnable model"); the user enables
-  // OpenRouter routing or adds a directly-usable key.
-  return null;
+  // above). A bare OpenRouter key with the flag off can't be used: the desktop
+  // launch passes only a model string to `handleExecute` and never flips the
+  // routing flag, so an OR model would run unrouted and fail at inference.
+  // `resolveSetupModelExcludingOpenRouter` already skips the `openRouter`
+  // entry, so it naturally refuses instead of picking a doomed model.
+  return resolveSetupModelExcludingOpenRouter(secrets);
 }
 
 /**
