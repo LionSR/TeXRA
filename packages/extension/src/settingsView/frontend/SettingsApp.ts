@@ -24,7 +24,10 @@ import {
   type ModelSelectionItem,
   dispatchSettingsViewOutbound,
   SETTINGS_TAB,
+  SETTINGS_TAB_PANEL_BY_NAME,
   SETTINGS_TAB_ORDER,
+  SETTINGS_TAB_PANEL_NAMES,
+  type SettingsTabName,
   type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
@@ -93,25 +96,30 @@ const HISTORY_ACTION_COMMANDS: Record<string, string> = {
 
 const API_KEY_PROVIDER_SET = new Set<string>(API_KEY_PROVIDER_IDS);
 
-function toSettingsTabPanelName(name: string): string {
-  return name.toLowerCase().replaceAll('_', '-');
-}
+type SettingsTabMetadata = {
+  readonly icon: TeXRAIconName;
+  readonly label: string;
+};
 
-const SETTINGS_TAB_PANEL_NAMES = SETTINGS_TAB_ORDER.map(toSettingsTabPanelName);
+const SETTINGS_TAB_METADATA: Record<SettingsTabName, SettingsTabMetadata> = {
+  MEMORY: { icon: 'database', label: 'Memory' },
+  HISTORY: { icon: 'clock-rotate-left', label: 'History' },
+  MODELS: { icon: 'server', label: 'Models' },
+  AGENTS: { icon: 'robot', label: 'Agents' },
+  MULTI_AGENT: { icon: 'users', label: 'Multi-Agent' },
+  TOOLS: { icon: 'screwdriver-wrench', label: 'Tools' },
+  AI_AGENTS: { icon: 'robot', label: 'Integrations' },
+  GIT: { icon: 'code-branch', label: 'Git' },
+  LATEX: { icon: 'file-code', label: 'LaTeX' },
+  GOAL: { icon: 'compass', label: 'Goal' },
+};
 
 /** Header tab strip: panel name, icon, and label in display order. */
-const SETTINGS_TABS = [
-  { panel: 'memory', icon: 'database', label: 'Memory' },
-  { panel: 'history', icon: 'clock-rotate-left', label: 'History' },
-  { panel: 'models', icon: 'server', label: 'Models' },
-  { panel: 'agents', icon: 'robot', label: 'Agents' },
-  { panel: 'multi-agent', icon: 'users', label: 'Multi-Agent' },
-  { panel: 'tools', icon: 'screwdriver-wrench', label: 'Tools' },
-  { panel: 'ai-agents', icon: 'robot', label: 'Integrations' },
-  { panel: 'git', icon: 'code-branch', label: 'Git' },
-  { panel: 'latex', icon: 'file-code', label: 'LaTeX' },
-  { panel: 'goal', icon: 'compass', label: 'Goal' },
-] satisfies readonly { panel: string; icon: TeXRAIconName; label: string }[];
+const SETTINGS_TABS = SETTINGS_TAB_ORDER.map((name) => ({
+  name,
+  panel: SETTINGS_TAB_PANEL_BY_NAME[name],
+  ...SETTINGS_TAB_METADATA[name],
+}));
 
 /** Create an event handler that forwards event.detail to a postMessage command. */
 function forwardDetail<T extends Record<string, unknown>>(
