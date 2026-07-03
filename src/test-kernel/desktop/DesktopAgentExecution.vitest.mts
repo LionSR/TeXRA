@@ -17,6 +17,7 @@ import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { TaskStateSchema } from '@agent/core/state/TaskState';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 
 // Local imports - desktop test paths
@@ -108,6 +109,8 @@ type CreateBridgeOptions = {
   runAgent?: RunExecutionRequest;
   streamSnapshotStore?: TestDesktopStreamSnapshotStore;
   configureProgressSnapshotStore?: (store: ProgressSnapshotStore) => void;
+  detectWaitingStreams?: ReturnType<typeof vi.fn>;
+  activeExecutionIds?: readonly string[] | (() => readonly string[]);
 };
 
 type TestDesktopStreamSnapshotStore = {
@@ -164,6 +167,23 @@ async function createBridge(
   }));
   vi.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
+  }));
+  vi.doMock('@agent/runtime/SessionHandle', async () => {
+    const actual = await vi.importActual<
+      typeof import('@agent/runtime/SessionHandle')
+    >('@agent/runtime/SessionHandle');
+    return {
+      ...actual,
+      getAllActiveExecutionIds: vi.fn(() =>
+        typeof options.activeExecutionIds === 'function'
+          ? options.activeExecutionIds()
+          : (options.activeExecutionIds ?? []),
+      ),
+    };
+  });
+  vi.doMock('@agent/storage/detectWaitingStreams', () => ({
+    detectWaitingStreams:
+      options.detectWaitingStreams ?? vi.fn(async () => new Set()),
   }));
   vi.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
@@ -427,6 +447,7 @@ describe('DesktopProgressBridge', () => {
     vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
     vi.doUnmock('@agent/runtime/executeAgent');
     vi.doUnmock('@agent/runtime/runAgent');
+    vi.doUnmock('@agent/storage/detectWaitingStreams');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
     vi.doUnmock('@logger');
@@ -570,6 +591,386 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('repairs restored running streams after desktop startup', async () => {
+    const messages: unknown[] = [];
+    const detectWaitingStreams = vi.fn(
+      async (executionIds: ReadonlyMap<StreamTabId, string>) => {
+        expect([...executionIds.entries()].toSorted()).toEqual([
+          ['dead-stream', 'def456'],
+          ['waiting-stream', 'abc123'],
+        ]);
+        return new Set<StreamTabId>(['waiting-stream']);
+      },
+    );
+    const bridge = await createBridge(messages, {
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'waiting-stream',
+          executionId: 'abc123',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+        restoredSnapshot({
+          streamId: 'dead-stream',
+          executionId: 'def456',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+      ]),
+    });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      await vi.waitFor(() => {
+        expect(detectWaitingStreams).toHaveBeenCalledOnce();
+        expect(StreamStatusService.get('waiting-stream')).toBe(
+          STREAM_STATUS.WAITING,
+        );
+        expect(StreamStatusService.get('dead-stream')).toBe(
+          STREAM_STATUS.ERROR,
+        );
+      });
+
+      const streamSync = progressMessages(
+        messages,
+        PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      ).at(-1);
+      expect(streamSync?.streamStates?.['waiting-stream']).toMatchObject({
+        status: STREAM_STATUS.WAITING,
+      });
+      expect(streamSync?.streamStates?.['dead-stream']).toMatchObject({
+        status: STREAM_STATUS.ERROR,
+      });
+    } finally {
+      StreamStatusService.clear('waiting-stream', { emit: false });
+      StreamStatusService.clear('dead-stream', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('waits for desktop startup repair before starting a run', async () => {
+    let finishRepair!: (value: Set<StreamTabId>) => void;
+    const repairGate = new Promise<Set<StreamTabId>>((resolve) => {
+      finishRepair = resolve;
+    });
+    const detectWaitingStreams = vi.fn(async () => repairGate);
+    const runAgent = vi.fn(async () => {});
+    const bridge = await createBridge([], {
+      detectWaitingStreams,
+      runAgent,
+    });
+    const taskState = workflowTaskState();
+
+    try {
+      bridge.handleProgressEvent('setTaskState', {
+        streamId: 'stream-new',
+        executionId: 'abc123',
+        taskState,
+      });
+
+      const runNew =
+        bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW];
+      expect(runNew).toBeTypeOf('function');
+      const runPromise = runNew?.({
+        command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
+        stream: 'stream-new',
+      });
+
+      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
+      await settleProgressEvents();
+      expect(runAgent).not.toHaveBeenCalled();
+
+      finishRepair(new Set());
+      await runPromise;
+
+      expect(runAgent).toHaveBeenCalledOnce();
+    } finally {
+      finishRepair(new Set());
+      bridge.dispose();
+    }
+  });
+
+  it('marks restored running streams as errored when startup repair fails', async () => {
+    const detectWaitingStreams = vi.fn(async () => {
+      throw new Error('flow store unavailable');
+    });
+    const bridge = await createBridge([], {
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'broken-stream',
+          executionId: 'abc123',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+      ]),
+    });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      await vi.waitFor(() => {
+        expect(detectWaitingStreams).toHaveBeenCalledOnce();
+        expect(StreamStatusService.get('broken-stream')).toBe(
+          STREAM_STATUS.ERROR,
+        );
+      });
+    } finally {
+      StreamStatusService.clear('broken-stream', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('does not repair restored streams whose execution is active', async () => {
+    const detectWaitingStreams = vi.fn(
+      async (executionIds: ReadonlyMap<StreamTabId, string>) => {
+        expect([...executionIds.entries()]).toEqual([
+          ['dead-stream', 'def456'],
+        ]);
+        return new Set<StreamTabId>();
+      },
+    );
+    const bridge = await createBridge([], {
+      activeExecutionIds: ['abc123'],
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'active-stream',
+          executionId: 'abc123',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+        restoredSnapshot({
+          streamId: 'dead-stream',
+          executionId: 'def456',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+      ]),
+    });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      await vi.waitFor(() => {
+        expect(detectWaitingStreams).toHaveBeenCalledOnce();
+        expect(StreamStatusService.get('active-stream')).toBe(
+          STREAM_STATUS.RUNNING,
+        );
+        expect(StreamStatusService.get('dead-stream')).toBe(
+          STREAM_STATUS.ERROR,
+        );
+      });
+    } finally {
+      StreamStatusService.clear('active-stream', { emit: false });
+      StreamStatusService.clear('dead-stream', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('uses durable execution ids to keep active restored streams out of repair', async () => {
+    const detectWaitingStreams = vi.fn(
+      async (executionIds: ReadonlyMap<StreamTabId, string>) => {
+        expect([...executionIds.entries()]).toEqual([
+          ['dead-stream', 'def456'],
+        ]);
+        return new Set<StreamTabId>();
+      },
+    );
+    const bridge = await createBridge([], {
+      activeExecutionIds: ['abc123'],
+      configureProgressSnapshotStore: (store) => {
+        store.setTaskState(
+          'active-stream',
+          TaskStateSchema.parse(workflowTaskState()),
+          'abc123',
+        );
+      },
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'active-stream',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+        restoredSnapshot({
+          streamId: 'dead-stream',
+          executionId: 'def456',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+      ]),
+    });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      await vi.waitFor(() => {
+        expect(detectWaitingStreams).toHaveBeenCalledOnce();
+        expect(StreamStatusService.get('active-stream')).toBe(
+          STREAM_STATUS.RUNNING,
+        );
+        expect(StreamStatusService.get('dead-stream')).toBe(
+          STREAM_STATUS.ERROR,
+        );
+      });
+    } finally {
+      StreamStatusService.clear('active-stream', { emit: false });
+      StreamStatusService.clear('dead-stream', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('rechecks active executions after waiting detection before resetting streams', async () => {
+    let activeExecutionIds: readonly string[] = [];
+    let finishDetection!: (value: Set<StreamTabId>) => void;
+    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
+      finishDetection = resolve;
+    });
+    const detectWaitingStreams = vi.fn(async () => detectionGate);
+    const bridge = await createBridge([], {
+      activeExecutionIds: () => activeExecutionIds,
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'race-stream',
+          executionId: 'abc123',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+      ]),
+    });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
+      activeExecutionIds = ['abc123'];
+      finishDetection(new Set<StreamTabId>(['race-stream']));
+
+      await vi.waitFor(() => {
+        expect(StreamStatusService.get('race-stream')).toBe(
+          STREAM_STATUS.RUNNING,
+        );
+      });
+    } finally {
+      finishDetection(new Set());
+      StreamStatusService.clear('race-stream', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('closes running transcript groups for streams repaired to waiting', async () => {
+    let finishDetection!: (value: Set<StreamTabId>) => void;
+    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
+      finishDetection = resolve;
+    });
+    const detectWaitingStreams = vi.fn(async () => detectionGate);
+    const bridge = await createBridge([], {
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'waiting-stream',
+          executionId: 'abc123',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+      ]),
+    });
+    const streamLogs = bridge.streamLogs as typeof bridge.streamLogs & {
+      endRunningGroupsForStreams: (
+        streamIds: readonly StreamTabId[],
+        now?: number,
+      ) => Promise<StreamTabId[]>;
+    };
+    const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
+
+    try {
+      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
+      finishDetection(new Set<StreamTabId>(['waiting-stream']));
+
+      await vi.waitFor(() => {
+        expect(closeSpy).toHaveBeenCalledWith(
+          ['waiting-stream'],
+          expect.any(Number),
+        );
+      });
+    } finally {
+      finishDetection(new Set());
+      bridge.dispose();
+    }
+  });
+
+  it('keeps waiting repairs waiting when a later repair step fails', async () => {
+    let finishDetection!: (value: Set<StreamTabId>) => void;
+    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
+      finishDetection = resolve;
+    });
+    const detectWaitingStreams = vi.fn(async () => detectionGate);
+    const bridge = await createBridge([], {
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'waiting-stream',
+          executionId: 'abc123',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+      ]),
+    });
+    const streamLogs = bridge.streamLogs as typeof bridge.streamLogs & {
+      endRunningGroupsForStreams: (
+        streamIds: readonly StreamTabId[],
+        now?: number,
+      ) => Promise<StreamTabId[]>;
+    };
+    const closeSpy = vi
+      .spyOn(streamLogs, 'endRunningGroupsForStreams')
+      .mockRejectedValueOnce(new Error('group close failed'))
+      .mockResolvedValueOnce(['waiting-stream']);
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
+      finishDetection(new Set<StreamTabId>(['waiting-stream']));
+
+      await vi.waitFor(() => {
+        expect(StreamStatusService.get('waiting-stream')).toBe(
+          STREAM_STATUS.WAITING,
+        );
+        expect(closeSpy).toHaveBeenCalledTimes(2);
+        expect(closeSpy).toHaveBeenLastCalledWith(
+          ['waiting-stream'],
+          expect.any(Number),
+        );
+      });
+    } finally {
+      finishDetection(new Set());
+      StreamStatusService.clear('waiting-stream', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('marks restored running streams without execution ids as errored', async () => {
+    const detectWaitingStreams = vi.fn(async () => new Set<StreamTabId>());
+    const bridge = await createBridge([], {
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'no-execution-stream',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+      ]),
+    });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      await vi.waitFor(() => {
+        expect(detectWaitingStreams).toHaveBeenCalledWith(new Map());
+        expect(StreamStatusService.get('no-execution-stream')).toBe(
+          STREAM_STATUS.ERROR,
+        );
+      });
+    } finally {
+      StreamStatusService.clear('no-execution-stream', { emit: false });
+      bridge.dispose();
+    }
+  });
+
   it('ignores renderer switches to unknown streams', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
@@ -699,11 +1100,14 @@ describe('DesktopProgressBridge', () => {
 
   it('restores ghost display from the backend snapshot store', async () => {
     const messages: unknown[] = [];
-    const kvRead = vi.fn(async () => {
+    const kvRead = vi.fn(async (key: string) => {
+      if (key === 'meta') return undefined;
       throw new Error('unexpected sidecar disk read');
     });
+    const detectWaitingStreams = vi.fn(async () => new Set<StreamTabId>());
     const bridge = await createBridge(messages, {
       kvRead,
+      detectWaitingStreams,
       configureProgressSnapshotStore: (store) => {
         store.setTodos('ghost-stream', [
           {
@@ -719,10 +1123,10 @@ describe('DesktopProgressBridge', () => {
     });
 
     try {
+      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
       bridge.setActiveStream('ghost-stream');
       await settleProgressEvents();
 
-      expect(kvRead).not.toHaveBeenCalled();
       expect(
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS).at(-1),
       ).toMatchObject({

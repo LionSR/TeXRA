@@ -359,8 +359,38 @@ export class StreamLogStore {
       });
     }
 
+    const affected = this.endRunningGroupsInLoadedLogs(now);
+    if (affected.length > 0) {
+      void this.save();
+    }
+
+    return affected;
+  }
+
+  async endRunningGroupsForStreams(
+    streamIds: readonly StreamTabId[],
+    now: number = Date.now(),
+  ): Promise<StreamTabId[]> {
+    if (streamIds.length === 0) return [];
+    await pMap(streamIds, (id) => this.ensureLoaded(id), {
+      concurrency: STREAM_LOG_LOAD_CONCURRENCY,
+    });
+
+    const affected = this.endRunningGroupsInLoadedLogs(now, new Set(streamIds));
+    if (affected.length > 0) {
+      void this.save();
+    }
+
+    return affected;
+  }
+
+  private endRunningGroupsInLoadedLogs(
+    now: number,
+    streamIds?: ReadonlySet<StreamTabId>,
+  ): StreamTabId[] {
     const affected: StreamTabId[] = [];
     for (const [streamId, logInstance] of this.logs.entries()) {
+      if (streamIds && !streamIds.has(streamId)) continue;
       let updatedAny = false;
       for (const entry of logInstance.getRange(0, logInstance.head)) {
         if (!isRunningGroupEntry(entry)) continue;
@@ -378,10 +408,6 @@ export class StreamLogStore {
         this.markDirty(streamId);
         this.notify(streamId);
       }
-    }
-
-    if (affected.length > 0) {
-      void this.save();
     }
 
     return affected;

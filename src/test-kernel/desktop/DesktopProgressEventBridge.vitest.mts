@@ -246,6 +246,7 @@ describe('DesktopProgressEventBridge', () => {
             ensureStream,
             keys: () => [].values(),
             has: () => false,
+            getFirstTimestamp: () => undefined,
             getLastTimestamp: () => undefined,
             ensureLoaded: vi.fn(async () => {}),
           },
@@ -277,6 +278,77 @@ describe('DesktopProgressEventBridge', () => {
           parentStreamId: 'parent-456',
           description: 'A seeded ghost',
         });
+      } finally {
+        bridge.dispose();
+      }
+    });
+
+    it('does not resurrect streams that became live in this bridge', () => {
+      const ensureStream = vi.fn();
+      const bridge = createBridge({
+        state: makeMockState({
+          streamLogs: {
+            ensureStream,
+            keys: () => [].values(),
+            has: () => false,
+            getFirstTimestamp: () => undefined,
+            getLastTimestamp: () => undefined,
+            ensureLoaded: vi.fn(async () => {}),
+          },
+        }),
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [
+            createSnapshot({ streamId: 'live-stream' }),
+            createSnapshot({ streamId: 'ghost-stream' }),
+          ],
+        }),
+      });
+
+      try {
+        expect(bridge.hasRestoredStream('live-stream')).toBe(true);
+        bridge.onProgressEvent('updateStreamStatus', {
+          streamId: 'live-stream',
+          status: STREAM_STATUS.RUNNING,
+          previousStatus: STREAM_STATUS.STOPPED,
+        });
+        bridge.hydrateRestoredStreams();
+
+        expect(bridge.hasRestoredStream('live-stream')).toBe(false);
+        expect(bridge.hasRestoredStream('ghost-stream')).toBe(true);
+        expect(ensureStream).toHaveBeenCalledWith('ghost-stream');
+      } finally {
+        bridge.dispose();
+      }
+    });
+
+    it('forgets restored streams owned by active execution ids', () => {
+      const bridge = createBridge({
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [
+            createSnapshot({
+              streamId: 'active-ghost',
+              executionId: 'exec-active',
+            }),
+            createSnapshot({
+              streamId: 'inactive-ghost',
+              executionId: 'exec-inactive',
+            }),
+            createSnapshot({ streamId: 'mapped-active-ghost' }),
+            createSnapshot({ streamId: 'no-exec-ghost' }),
+          ],
+        }),
+      });
+
+      try {
+        bridge.forgetActiveRestoredStreams(
+          new Set(['exec-active', 'exec-mapped-active']),
+          new Map([['mapped-active-ghost', 'exec-mapped-active']]),
+        );
+
+        expect(bridge.hasRestoredStream('active-ghost')).toBe(false);
+        expect(bridge.hasRestoredStream('inactive-ghost')).toBe(true);
+        expect(bridge.hasRestoredStream('mapped-active-ghost')).toBe(false);
+        expect(bridge.hasRestoredStream('no-exec-ghost')).toBe(true);
       } finally {
         bridge.dispose();
       }
