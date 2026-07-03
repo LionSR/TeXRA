@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
   canUseServerSideKeys: vi.fn<() => Promise<boolean>>(),
   canUseServerSideKeysForModel: vi.fn<() => Promise<boolean>>(),
   canUseModelSync: vi.fn<(model: string) => boolean>(),
-  lookupApiKey: vi.fn<(secrets: unknown, provider: string) => Promise<string | undefined>>(),
+  lookupApiKey:
+    vi.fn<
+      (secrets: unknown, provider: string) => Promise<string | undefined>
+    >(),
   getUseOpenRouter: vi.fn<() => boolean>(),
 }));
 
@@ -43,10 +46,8 @@ vi.mock('@utils/config/providerConfig', () => ({
   getUseOpenRouter: mocks.getUseOpenRouter,
 }));
 
-const {
-  resolveSetupModelFromDirectCredentials,
-  resolveDesktopSetupModel,
-} = await import('@controllers/onboarding/setupLaunch');
+const { resolveSetupModelFromDirectCredentials, resolveDesktopSetupModel } =
+  await import('@controllers/onboarding/setupLaunch');
 
 describe('resolveSetupModelFromDirectCredentials', () => {
   beforeEach(() => {
@@ -63,9 +64,9 @@ describe('resolveSetupModelFromDirectCredentials', () => {
     mocks.canUseServerSideKeysForModel.mockResolvedValue(true);
     mocks.lookupApiKey.mockResolvedValue('sk-test');
 
-    await expect(resolveSetupModelFromDirectCredentials({} as never)).resolves.toBe(
-      'gpt55',
-    );
+    await expect(
+      resolveSetupModelFromDirectCredentials({} as never),
+    ).resolves.toBe('gpt55');
   });
 
   it('falls back to the default agent model when server-side keys cover it', async () => {
@@ -81,9 +82,9 @@ describe('resolveSetupModelFromDirectCredentials', () => {
     mocks.canUseServerSideKeys.mockResolvedValue(true);
     mocks.canUseModelSync.mockImplementation((model) => model === 'gemini31p');
 
-    await expect(resolveSetupModelFromDirectCredentials({} as never)).resolves.toBe(
-      'gemini31p',
-    );
+    await expect(
+      resolveSetupModelFromDirectCredentials({} as never),
+    ).resolves.toBe('gemini31p');
   });
 
   it('skips the openRouter entry when scanning per-provider server-side models', async () => {
@@ -102,9 +103,9 @@ describe('resolveSetupModelFromDirectCredentials', () => {
       provider === 'anthropic' ? 'sk-ant-test' : undefined,
     );
 
-    await expect(resolveSetupModelFromDirectCredentials({} as never)).resolves.toBe(
-      'opus48T',
-    );
+    await expect(
+      resolveSetupModelFromDirectCredentials({} as never),
+    ).resolves.toBe('opus48T');
     expect(mocks.lookupApiKey).not.toHaveBeenCalledWith(
       expect.anything(),
       'openRouter',
