@@ -76,8 +76,7 @@ class StreamTabKVStore extends KVStore {
   async readMeta(): Promise<StreamTabMeta | null> {
     const raw = await this.tryRead(STREAM_DATA_KEYS.META);
     if (!raw) return null;
-    const result = StreamTabMetaSchema.safeParse(raw);
-    return result.success ? result.data : null;
+    return StreamTabMetaSchema.nullable().catch(null).parse(raw);
   }
 
   // -- Legacy per-run instructions (preserved from pre-refactor memento) ---

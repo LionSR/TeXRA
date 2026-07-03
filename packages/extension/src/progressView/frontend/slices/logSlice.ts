@@ -30,8 +30,7 @@ function isTaskGroupStatus(
 }
 
 function asContextStateData(data: unknown): ContextStateData | undefined {
-  const result = ContextStateDataSchema.safeParse(data);
-  return result.success ? result.data : undefined;
+  return ContextStateDataSchema.optional().catch(undefined).parse(data);
 }
 
 function toLogMessage(entry: StreamLogEntry): LogMessageData {

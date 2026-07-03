@@ -219,8 +219,7 @@ async function readThreadManifest(
   const raw = await GlobalStorageFS.readJson<unknown>(
     threadManifestPath(threadId),
   ).catch(() => undefined);
-  const result = ExternalInquiryThreadManifestSchema.safeParse(raw);
-  return result.success ? result.data : null;
+  return ExternalInquiryThreadManifestSchema.nullable().catch(null).parse(raw);
 }
 
 async function writeThreadManifest(
