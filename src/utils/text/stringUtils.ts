@@ -247,7 +247,10 @@ export function tailWithEllipsis(text: string, maxLen: number): string {
  * UTC instead of passing through unstripped.
  */
 export function formatTimestamp(isoTimestamp: string): string {
-  const utcIso = new Date(isoTimestamp).toISOString();
+  const parsed = new Date(isoTimestamp);
+  const utcIso = Number.isFinite(parsed.getTime())
+    ? parsed.toISOString()
+    : isoTimestamp;
   return utcIso.replace('T', ' ').replace(/\.\d+Z$/, '');
 }
 
