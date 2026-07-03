@@ -43,6 +43,11 @@ export type FollowUpWakeResult =
   | { kind: 'queued_resume_failed' }
   | { kind: 'dropped' };
 
+export interface FollowUpResumePort {
+  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+  isResumeInFlight?(streamId: StreamTabId): boolean;
+}
+
 /** In-flight resume attempts per stream — see {@link wakeQueuedFollowUpStream}. */
 const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
 
@@ -60,6 +65,7 @@ const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
 export async function wakeQueuedFollowUpStream(
   streamId: StreamTabId,
   result: SendFollowUpResult,
+  resumePort?: FollowUpResumePort,
 ): Promise<FollowUpWakeResult> {
   if (
     result.status !== 'queued' ||
@@ -75,9 +81,9 @@ export async function wakeQueuedFollowUpStream(
   // outcome instead of re-poking the port and releasing the queue the
   // in-flight resume is about to drain.
   let attempt = wakeAttempts.get(streamId);
-  const resumePort = platform().agentResume;
+  const port = resumePort ?? platform().agentResume;
   if (!attempt) {
-    attempt = resumePort.tryResumeStream(streamId).finally(() => {
+    attempt = port.tryResumeStream(streamId).finally(() => {
       wakeAttempts.delete(streamId);
     });
     wakeAttempts.set(streamId, attempt);
@@ -86,7 +92,7 @@ export async function wakeQueuedFollowUpStream(
   if (resumed) {
     return { kind: 'resumed' };
   }
-  if (resumePort.isResumeInFlight?.(streamId) === true) {
+  if (port.isResumeInFlight?.(streamId) === true) {
     return { kind: 'resume_in_flight' };
   }
   if (StreamStatusService.isActiveOrResuming(streamId)) {

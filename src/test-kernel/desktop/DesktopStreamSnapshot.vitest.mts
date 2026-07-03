@@ -108,7 +108,7 @@ describe('DesktopStreamSnapshot', () => {
     expect(ids).toEqual(['toolUseAgent@2', 'workflowAgent@1']);
   });
 
-  it('normalises status to STOPPED on hydrate', async () => {
+  it('preserves RUNNING on hydrate for startup repair', async () => {
     const filePath = await tempFilePath();
 
     const writer = await openDesktopStreamSnapshotStore(filePath);
@@ -117,9 +117,31 @@ describe('DesktopStreamSnapshot', () => {
     );
 
     const reopened = await openDesktopStreamSnapshotStore(filePath);
-    expect(
-      reopened.hydrated.every((s) => s.lastKnownStatus === 'stopped'),
-    ).toBe(true);
+    expect(reopened.hydrated[0]?.lastKnownStatus).toBe(STREAM_STATUS.RUNNING);
+  });
+
+  it.each([
+    STREAM_STATUS.RESUMING,
+    STREAM_STATUS.INITIALIZING,
+    STREAM_STATUS.WAITING,
+  ])('preserves %s on hydrate for startup repair', async (status) => {
+    const filePath = await tempFilePath();
+
+    const writer = await openDesktopStreamSnapshotStore(filePath);
+    await writer.upsert(makeSnapshot({ lastKnownStatus: status }));
+
+    const reopened = await openDesktopStreamSnapshotStore(filePath);
+    expect(reopened.hydrated[0]?.lastKnownStatus).toBe(status);
+  });
+
+  it('normalises inactive statuses to STOPPED on hydrate', async () => {
+    const filePath = await tempFilePath();
+
+    const writer = await openDesktopStreamSnapshotStore(filePath);
+    await writer.upsert(makeSnapshot({ lastKnownStatus: STREAM_STATUS.ERROR }));
+
+    const reopened = await openDesktopStreamSnapshotStore(filePath);
+    expect(reopened.hydrated[0]?.lastKnownStatus).toBe(STREAM_STATUS.STOPPED);
   });
 
   it('preserves parent stream links on hydrate', async () => {

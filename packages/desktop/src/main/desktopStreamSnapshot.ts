@@ -26,19 +26,20 @@ import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   RestoredStreamsFileSchema,
   STREAM_STATUS,
+  streamStatusesWithTrait,
   type RestoredStreamSnapshot,
   type RestoredStreamsFile,
   type StreamTabId,
 } from '@shared/schemas';
 
 const STREAMS_KEY = 'restoredStreams';
+const RESTART_REPAIR_STATUSES = streamStatusesWithTrait('inFlight');
 
 export interface DesktopStreamSnapshotStore {
   /**
-   * All previously-persisted snapshots, with `lastKnownStatus`
-   * normalised to `stopped` because we cannot tell from cold start
-   * whether the agent actually finished — the renderer should treat
-   * them as inactive ghosts.
+   * All previously-persisted snapshots. Prior in-flight statuses are preserved
+   * only long enough for desktop startup repair to classify them as resumable
+   * (`waiting`) or dead (`error`); all other restored states are inert ghosts.
    */
   readonly hydrated: readonly RestoredStreamSnapshot[];
   /**
@@ -137,11 +138,12 @@ function parseHydrated(
     );
     return [];
   }
-  // Normalise status to "stopped" — we don't know if the agent
-  // actually finished, and we explicitly never want the rail to claim
-  // a run is still running just because it was running last time.
+  // Preserve in-flight states so startup repair can classify them. A finished
+  // or already-inert prior state remains an inactive ghost on the next launch.
   return parsed.data.streams.map((s) => ({
     ...s,
-    lastKnownStatus: STREAM_STATUS.STOPPED,
+    lastKnownStatus: RESTART_REPAIR_STATUSES.has(s.lastKnownStatus)
+      ? s.lastKnownStatus
+      : STREAM_STATUS.STOPPED,
   }));
 }
