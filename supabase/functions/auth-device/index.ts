@@ -73,19 +73,19 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
-const adminSupabase =
-  supabaseUrl && supabaseServiceKey
-    ? createClient<any>(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-    : null;
+/** Stateless server client (no token refresh, no persisted session). */
+function createEdgeClient(
+  url: string | undefined,
+  key: string | undefined,
+): SupabaseClient<any> | null {
+  if (!url || !key) return null;
+  return createClient<any>(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
-const anonSupabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient<any>(supabaseUrl, supabaseAnonKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-    : null;
+const adminSupabase = createEdgeClient(supabaseUrl, supabaseServiceKey);
+const anonSupabase = createEdgeClient(supabaseUrl, supabaseAnonKey);
 
 // =============================================================================
 // Hono App

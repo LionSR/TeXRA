@@ -165,6 +165,22 @@ function githubAppMetadata(
   };
 }
 
+/**
+ * Build the admin `updateUserById` payload that merges the fresh GitHub
+ * profile onto an existing user: GitHub fields win in user_metadata, and the
+ * github provider is recorded in app_metadata.
+ */
+function githubProfileUpdate(
+  existingUserMetadata: MetadataRecord | null | undefined,
+  existingAppMetadata: MetadataRecord | null | undefined,
+  githubUserMetadata: MetadataRecord,
+): MetadataRecord {
+  return {
+    user_metadata: { ...(existingUserMetadata ?? {}), ...githubUserMetadata },
+    app_metadata: githubAppMetadata(existingAppMetadata),
+  };
+}
+
 async function validateGitHubToken(
   token: string,
 ): Promise<{ user: GitHubUser; email: string } | { error: string }> {
@@ -288,13 +304,11 @@ app.post('/exchange', async (c) => {
         return errorResponse(c, 'Failed to load linked user', 500);
       }
       const storedEmail = userData.user.email?.trim();
-      const identityUpdate: MetadataRecord = {
-        user_metadata: {
-          ...userData.user.user_metadata,
-          ...githubUserMetadata,
-        },
-        app_metadata: githubAppMetadata(userData.user.app_metadata),
-      };
+      const identityUpdate: MetadataRecord = githubProfileUpdate(
+        userData.user.user_metadata,
+        userData.user.app_metadata,
+        githubUserMetadata,
+      );
       if (storedEmail) {
         userEmail = storedEmail;
       } else {
@@ -336,13 +350,11 @@ app.post('/exchange', async (c) => {
         userEmail = authUser.email ?? email;
         const { error: updateError } = await supabase.auth.admin.updateUserById(
           userId,
-          {
-            user_metadata: {
-              ...authUser.raw_user_meta_data,
-              ...githubUserMetadata,
-            },
-            app_metadata: githubAppMetadata(authUser.raw_app_meta_data),
-          },
+          githubProfileUpdate(
+            authUser.raw_user_meta_data,
+            authUser.raw_app_meta_data,
+            githubUserMetadata,
+          ),
         );
         if (updateError) {
           console.error(
