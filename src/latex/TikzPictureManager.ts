@@ -72,16 +72,21 @@ class TikzPictureManager {
   async extract(latexFile: FileLocation): Promise<[string, string[]][]> {
     const content = await flexibleFS.read(latexFile);
 
-    // Regular expressions to match figure environments and tikzpictures
+    // Match each figure block first, then inspect labels inside the block. This
+    // prevents an unlabeled figure from consuming a later figure's label.
     const figurePattern =
-      /\\begin{figure}.*?\\label\{(.*?)\}.*?\\end{figure}/gs;
+      /\\begin\{(figure\*?)\}(?:\[[^\]]*\])?([\s\S]*?)\\end\{\1\}/g;
+    const labelPattern = /\\label\{([^}]*)\}/;
     const tikzPattern = /\\begin{tikzpicture}.*?\\end{tikzpicture}/gs;
 
     const labeledTikzPictures: [string, string[]][] = [];
 
     for (const figureMatch of content.matchAll(figurePattern)) {
-      const figureContent = figureMatch[0];
-      const label = figureMatch[1];
+      const figureContent = figureMatch[2];
+      const label = labelPattern.exec(figureContent)?.[1];
+      if (!label) {
+        continue;
+      }
 
       // Find all tikzpictures in this figure
       const tikzMatches = [...figureContent.matchAll(tikzPattern)].map(

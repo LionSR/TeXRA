@@ -25,6 +25,9 @@ All notable changes to this project will be documented in this file.
   `message_start` are no longer misreported as pre-message-start failures.
 - **The text editor tool preserves dollar signs** — `str_replace` edits no
   longer corrupt replacement text containing `$` sequences.
+- **TikZ extraction handles wide and unlabeled figures correctly** — `figure*`
+  environments are now detected, and an unlabeled figure can no longer borrow a
+  later figure's label.
 - **Model and stream failures get clearer annotations** — stream failures,
   retry handoffs, and API-key status labels now report the relevant state more
   directly.
