@@ -21,7 +21,7 @@ concurrency:
 jobs:
   publish-extension:
     name: Publish VS Code extension (Marketplace + Open VSX)
-    if: ${{ startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
+    if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -41,16 +41,20 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Verify release tag matches extension package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          tag="${{ github.event.release.tag_name }}"
           version=$(node -p "require('./packages/extension/package.json').version")
-          if [ "$tag" != "v$version" ]; then
-            echo "::error::Release tag '$tag' does not match packages/extension/package.json version '$version' (expected 'v$version')"
+          if [ "$RELEASE_TAG" != "v$version" ]; then
+            echo "::error::Release tag '$RELEASE_TAG' does not match packages/extension/package.json version '$version' (expected 'v$version')"
             exit 1
           fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm run typecheck
 
       - name: Build extension VSIX
         run: pnpm --filter texra build:fast
@@ -84,7 +88,7 @@ jobs:
 
   publish-cli:
     name: Publish CLI to npm (Trusted Publishing)
-    if: ${{ startsWith(github.event.release.tag_name, 'cli-v') }}
+    if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'cli-v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -108,11 +112,12 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Verify release tag matches CLI package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          tag="${{ github.event.release.tag_name }}"
           version=$(node -p "require('./packages/cli/package.json').version")
-          if [ "$tag" != "cli-v$version" ]; then
-            echo "::error::Release tag '$tag' does not match packages/cli/package.json version '$version' (expected 'cli-v$version')"
+          if [ "$RELEASE_TAG" != "cli-v$version" ]; then
+            echo "::error::Release tag '$RELEASE_TAG' does not match packages/cli/package.json version '$version' (expected 'cli-v$version')"
             exit 1
           fi
 
@@ -124,4 +129,4 @@ jobs:
 
       - name: Publish @texra-ai/cli
         working-directory: packages/cli
-        run: npm publish --provenance
+        run: npm publish
