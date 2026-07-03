@@ -3,6 +3,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ProgressViewOutboundMessage,
   StreamLogEntry,
+  StreamLogTextDelta,
   StreamTabId,
 } from '@shared/schemas';
 
@@ -18,7 +19,12 @@ export interface ProgressLogSource {
   readonly head: number;
   getRange(fromSeq: number, toSeq: number): StreamLogEntry[];
   getDirtyUpdates(maxSeqInclusive: number): StreamLogEntry[];
+  getDirtyTextDeltas(maxSeqInclusive: number): StreamLogTextDelta[];
   ackDirtyUpdates(updates: readonly StreamLogEntry[]): void;
+  ackDirtyTextDeltas(
+    deltas: readonly StreamLogTextDelta[],
+    fullEntries: readonly StreamLogEntry[],
+  ): void;
 }
 
 export interface ProgressLogStore {
@@ -130,8 +136,13 @@ export class WebviewBridge {
     const nextCursor = log.head;
     const entries = log.getRange(cursor, nextCursor);
     const updates = log.getDirtyUpdates(cursor);
+    const textDeltas = log.getDirtyTextDeltas(cursor);
 
-    if (entries.length === 0 && updates.length === 0) {
+    if (
+      entries.length === 0 &&
+      updates.length === 0 &&
+      textDeltas.length === 0
+    ) {
       entry.dirty = false;
       return true;
     }
@@ -141,11 +152,13 @@ export class WebviewBridge {
       streamId: activeStream,
       entries,
       updates,
+      textDeltas,
     } as const;
 
     if (!(await this.deliver(payload))) return false;
 
     log.ackDirtyUpdates(updates);
+    log.ackDirtyTextDeltas(textDeltas, entries);
     entry.cursor = nextCursor;
     entry.dirty = this.flushRequested;
     return true;

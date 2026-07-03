@@ -9,6 +9,7 @@ import {
   type ContextStateData,
   type LogMessageData,
   type StreamLogEntry,
+  type StreamLogTextDelta,
 } from '@shared/schemas';
 
 import type { StreamLogs, StreamState } from '../store';
@@ -154,9 +155,27 @@ function applyEntry(
   return { logChanged: true, stateChanged };
 }
 
+function applyTextDelta(
+  delta: StreamLogTextDelta,
+  streamLogs: StreamLogs,
+): number | undefined {
+  const existingIndex = streamLogs.logIndex.get(delta.id);
+  if (existingIndex === undefined) return undefined;
+
+  const current = streamLogs.logs[existingIndex];
+  if (!current) return undefined;
+
+  streamLogs.logs[existingIndex] = {
+    ...current,
+    text: `${current.text}${delta.appendText}`,
+  };
+  return existingIndex;
+}
+
 export const logHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.LOG_DELTA]: (data, ctx) => {
     const { streamId, entries, updates } = data;
+    const textDeltas = data.textDeltas ?? [];
 
     ctx.setState((prev) =>
       create(prev, (draft) => {
@@ -193,6 +212,13 @@ export const logHandlers: HandlerRegistry = {
         // combined array in the streaming update path.
         for (const entry of entries) processEntry(entry);
         for (const entry of updates) processEntry(entry);
+        for (const delta of textDeltas) {
+          const existingIndex = applyTextDelta(delta, streamLogs);
+          if (existingIndex !== undefined) {
+            logChanged = true;
+            updatedMessageIndices.add(existingIndex);
+          }
+        }
 
         if (logChanged) {
           draft.streamLogs.set(streamId, {
