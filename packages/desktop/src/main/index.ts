@@ -14,6 +14,10 @@ import {
 
 import { platform } from '@platform/platform';
 import {
+  SHUTDOWN_PHASE,
+  type LifecycleHost,
+} from '@platform/interfaces/lifecycle';
+import {
   backfillFirstRunDone,
   hasAnyProviderApiKey,
 } from '@controllers/onboarding/onboardingFunnel';
@@ -263,6 +267,7 @@ function createWindow(options: {
   authCoordinator: DesktopAuthCoordinator;
   authCallbackState: DesktopAuthCallbackState;
   initializeCrashReporting: () => Promise<void>;
+  lifecycle: LifecycleHost;
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore: StreamSnapshotStore;
   /**
@@ -511,6 +516,7 @@ function createWindow(options: {
   };
   let agentExecution: DesktopAgentExecution | undefined;
   let agentExecutionLoad: Promise<DesktopAgentExecution> | undefined;
+  let agentExecutionShutdownRegistration: { dispose(): void } | undefined;
   let windowClosed = false;
   const getAgentExecution = async (): Promise<DesktopAgentExecution> => {
     if (agentExecution) return agentExecution;
@@ -529,6 +535,10 @@ function createWindow(options: {
             'Desktop window closed before agent execution finished loading.',
           );
         }
+        agentExecutionShutdownRegistration = options.lifecycle.onShutdown(
+          SHUTDOWN_PHASE.BEFORE,
+          () => created.flush(),
+        );
         agentExecution = created;
         return created;
       })
@@ -856,6 +866,8 @@ function createWindow(options: {
       mainWindow = null;
     }
     disposeAgentResumeHandler();
+    agentExecutionShutdownRegistration?.dispose();
+    agentExecutionShutdownRegistration = undefined;
     if (agentExecution) {
       agentExecution.dispose();
     } else {
@@ -956,6 +968,7 @@ if (protocolLifecycle.shouldContinue) {
           authCoordinator,
           authCallbackState,
           initializeCrashReporting,
+          lifecycle,
           streamSnapshotStore,
           progressSnapshotStore: platformInit.progressSnapshotStore,
           hasPriorInstall: platformInit.hasPriorInstall,
