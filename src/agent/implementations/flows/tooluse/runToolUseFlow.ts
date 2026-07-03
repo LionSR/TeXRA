@@ -10,6 +10,8 @@ import {
 } from '@agent/runtime/ModelFactory';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   PersistedFlow,
   flowKey,
@@ -112,7 +114,7 @@ export function getToolUseFlowErrorResult(
 export interface ToolUseFlowContext {
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: ToolUseServices['modelHandler'];
-  readonly runtimeHost: ToolUseServices['runtimeHost'];
+  readonly runtimeHost: AgentRuntimeHost;
   readonly model: string;
   interrupt(): void;
   requestImmediateCompaction(): void;
@@ -142,8 +144,8 @@ export async function runToolUseFlow<C = unknown>(
   toolRegistry?: IToolRegistry,
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
-  const { logger, runtimeHost, streamId, executionId, setting, onInterrupt } =
-    input;
+  const { logger, setting, onInterrupt } = input;
+  const { runtimeHost, streamId, executionId } = useLaunchRunContext();
   // Capture the run's session at setup (inside the run's ALS). The interrupt
   // closure below fires from the host thread outside the ALS, so it must use
   // this captured handle, not a fresh currentSession() lookup.
@@ -166,7 +168,6 @@ export async function runToolUseFlow<C = unknown>(
 
   const services: ToolUseServices<C> = {
     ...input,
-    runtimeHost,
     session: sessionLifecycle,
     resolvedTools,
     toolRegistry: registry,

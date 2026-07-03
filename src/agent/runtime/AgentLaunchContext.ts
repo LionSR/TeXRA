@@ -16,7 +16,10 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
+import type {
+  AgentCore,
+  AgentRunIdentity,
+} from '@agent/core/flows/BaseFlowServices';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -74,7 +77,7 @@ import { attachConversationProgressHub } from './conversationProgressHub';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
-export interface AgentLaunchContext extends AgentCore {
+export interface AgentLaunchContext extends AgentCore, AgentRunIdentity {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;

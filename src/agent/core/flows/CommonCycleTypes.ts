@@ -95,12 +95,13 @@ export async function saveCycleDebug(
   services: AgentCore,
   fileOptions: CycleDebugFileOptions,
 ): Promise<void> {
+  const { executionId } = useLaunchRunContext();
   await maybeSaveDebugObject({
     object,
     objectType,
     context: {
       logger: services.logger,
-      executionId: services.executionId,
+      executionId,
       modelName: services.config.model,
       isRemote: isRemoteAgent(services.config.agent),
     },

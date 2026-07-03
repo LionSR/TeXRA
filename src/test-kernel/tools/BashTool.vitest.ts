@@ -43,6 +43,7 @@ import type { ExecResult } from '@shared/schemas/opResults';
 import { BashTool } from '@tools/bash';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
+import { withTestRunContext } from '../agent/progressTestUtils';
 
 // Type imports
 import type OpenAI from 'openai';
@@ -163,15 +164,12 @@ function roundServices(opts: {
     } satisfies AgentPrompt,
     userVarChannels: { input: {}, transient: {} },
     logger: opts.logger,
-    runtimeHost: noopAgentRuntimeHost,
     streamStatus: new StreamStatusRegistry(),
     client: {} as OpenAI,
-    fileService: new TaskRunFileService('test-execution-id'),
+    fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,
     checkInterruption: opts.checkInterruption ?? (() => false),
     setAbortController: opts.setAbortController ?? (() => {}),
-    streamId: opts.streamId,
-    executionId: 'test-execution-id',
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
   };
@@ -249,7 +247,9 @@ describe('BashTool', () => {
     // Create and run the flow directly
     const flow = createToolUseRoundFlow();
     flow.setServices(options);
-    await flow.run(shared);
+    await withTestRunContext(noopAgentRuntimeHost, 'bash-tool', () =>
+      flow.run(shared),
+    );
 
     const toolOutputMessage = messages.find(
       (msg) => (msg as any).type === 'function_call_output',
@@ -301,25 +301,27 @@ describe('BashTool', () => {
 
       const node = new ToolUseDispatchNode<OpenAI>();
       node.setServices(options);
-      await node.post(
-        shared,
-        [call],
-        [
-          {
-            call,
-            result: {},
-            parsedInput: {},
-            extracted: {
-              attachments: [],
-              sanitizedResult: { status: 'executed' },
-            },
-            editedFiles: [],
-            logRef: {
-              logId: undefined,
-              groupId: runTrace.trace.activeStageId(),
-            },
-          } as any,
-        ],
+      await withTestRunContext(noopAgentRuntimeHost, 'tool-status-log', () =>
+        node.post(
+          shared,
+          [call],
+          [
+            {
+              call,
+              result: {},
+              parsedInput: {},
+              extracted: {
+                attachments: [],
+                sanitizedResult: { status: 'executed' },
+              },
+              editedFiles: [],
+              logRef: {
+                logId: undefined,
+                groupId: runTrace.trace.activeStageId(),
+              },
+            } as any,
+          ],
+        ),
       );
 
       const completedEvent = events.findLast(
@@ -411,7 +413,11 @@ describe('BashTool', () => {
 
     try {
       node.setServices(options);
-      const result = await node.exec(call);
+      const result = await withTestRunContext(
+        noopAgentRuntimeHost,
+        'bash-tool',
+        () => node.exec(call),
+      );
 
       assert.equal(result, null);
       assert.ok(receivedSignal, 'Bash command should receive an abort signal');
