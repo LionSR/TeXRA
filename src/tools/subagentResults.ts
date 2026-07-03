@@ -334,7 +334,7 @@ export function formatBashDelivery(
   const stdoutPreview = lastNLines(outputTail, OUTPUT_PREVIEW_LINES);
   const stderrPreview = lastNLines(stderrTail, OUTPUT_PREVIEW_LINES);
   const lines = [
-    `<background-result id="${executionId}" command="${escapeAttr(command)}">`,
+    `<background-result id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,
     `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
@@ -358,7 +358,7 @@ export function formatBashError(
 ): string {
   const message = toErrorMessage(err);
   return [
-    `<background-error id="${executionId}" command="${escapeAttr(command)}">`,
+    `<background-error id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,
     `<message>${escapeText(message)}</message>`,
     '</background-error>',
   ].join('\n');
