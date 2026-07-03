@@ -408,8 +408,10 @@ export async function executeAgent(
     session: options.session,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
   });
-  ctx.delegationDepth = options.delegationDepth ?? 0;
-  ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
+  ctx.delegation = {
+    delegationDepth: options.delegationDepth ?? 0,
+    approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+  };
   ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
   ctx.stopAfterCycle = options.stopAfterCycle;
   ctx.toolEditApprovalHandler = options.toolEditApprovalHandler;
@@ -509,10 +511,12 @@ export async function resumeToolUseFromSnapshot(
   // Recover delegation depth from the persisted parent-execution chain
   // so resumed subagents remain gated by the nested-delegation policy
   // instead of silently promoting to root.
-  ctx.delegationDepth = await computeDelegationDepthFromStorage(
-    snapshot.executionId,
-  );
-  ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
+  ctx.delegation = {
+    delegationDepth: await computeDelegationDepthFromStorage(
+      snapshot.executionId,
+    ),
+    approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+  };
   ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
   ctx.toolEditApprovalHandler = options.toolEditApprovalHandler;
   const { setting, streamId } = ctx;
@@ -524,7 +528,7 @@ export async function resumeToolUseFromSnapshot(
       );
     }
 
-    const isSubagent = (ctx.delegationDepth ?? 0) > 0;
+    const isSubagent = (ctx.delegation?.delegationDepth ?? 0) > 0;
     await runFlowWithLifecycle(
       ctx,
       async (handle) => {

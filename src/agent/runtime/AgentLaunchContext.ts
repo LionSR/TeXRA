@@ -81,8 +81,6 @@ export interface AgentLaunchContext extends AgentCore {
   streamStatus: StreamStatusRegistry;
   coordinators: RunCoordinators;
   attachedMemoryMisses: AttachedMemoryMiss[];
-  /** Whether approval or user prompts cannot be answered by the current host. */
-  approvalPromptsUnavailable?: boolean;
   /** Whether this tool-use run exits after one cycle instead of idling. */
   stopAfterCycle?: boolean;
   /**
@@ -161,8 +159,8 @@ function agentContextToRunContext(
     getModel: () => ctx.config.model,
     agentName: ctx.config.agent,
     workingDirectory: ctx.workingDirectory,
-    delegationDepth: ctx.delegationDepth,
-    approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
+    delegationDepth: ctx.delegation?.delegationDepth,
+    approvalPromptsUnavailable: ctx.delegation?.approvalPromptsUnavailable,
     runtimeUnavailableTools: ctx.runtimeUnavailableTools,
     stopAfterCycle: ctx.stopAfterCycle,
     session: ctx.session,
