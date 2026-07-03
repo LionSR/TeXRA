@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sendFollowUpMock = vi.hoisted(() =>
-  vi.fn(async () => ({ status: 'sent' as const })),
+  vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({
+    status: 'sent' as const,
+  })),
+);
+const wakeQueuedFollowUpStreamMock = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({
+    kind: 'not_required' as const,
+  })),
 );
 const getThreadSummaryMock = vi.hoisted(() => vi.fn());
 const listOpenThreadsForStreamMock = vi.hoisted(() => vi.fn(async () => []));
@@ -9,6 +16,7 @@ const readExternalInquiryThreadMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   sendFollowUp: sendFollowUpMock,
+  wakeQueuedFollowUpStream: wakeQueuedFollowUpStreamMock,
 }));
 
 vi.mock('@eventBus/ProgressEventBus', () => ({
@@ -61,6 +69,10 @@ function answeredManifest(): ExternalInquiryThreadManifest {
 describe('external inquiry continuation session routing', () => {
   beforeEach(() => {
     sendFollowUpMock.mockClear();
+    wakeQueuedFollowUpStreamMock.mockReset();
+    wakeQueuedFollowUpStreamMock.mockResolvedValue({
+      kind: 'not_required' as const,
+    });
     getThreadSummaryMock.mockResolvedValue({
       threadId: THREAD,
       parentStreamId: STREAM,
@@ -90,5 +102,46 @@ describe('external inquiry continuation session routing', () => {
       undefined,
       session,
     );
+    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(STREAM, {
+      status: 'sent',
+    });
+  });
+
+  it('delegates queued wake decisions to the follow-up owner', async () => {
+    sendFollowUpMock.mockResolvedValueOnce({
+      status: 'queued',
+      reason: 'waiting',
+    });
+    wakeQueuedFollowUpStreamMock.mockResolvedValueOnce({
+      kind: 'resumed' as const,
+    });
+
+    const outcome = await injectContinuationForAnsweredThread(
+      THREAD,
+      answeredManifest(),
+    );
+
+    expect(outcome).toBe('resumed');
+    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(STREAM, {
+      status: 'queued',
+      reason: 'waiting',
+    });
+  });
+
+  it('archives inquiries when the follow-up owner drops a stale queue', async () => {
+    sendFollowUpMock.mockResolvedValueOnce({
+      status: 'queued',
+      reason: 'children_running',
+    });
+    wakeQueuedFollowUpStreamMock.mockResolvedValueOnce({
+      kind: 'dropped' as const,
+    });
+
+    const outcome = await injectContinuationForAnsweredThread(
+      THREAD,
+      answeredManifest(),
+    );
+
+    expect(outcome).toBe('archived');
   });
 });

@@ -3,18 +3,20 @@
  *
  * Host-neutral. When the user submits an answer (or drops an open
  * inquiry), this module synthesizes the `[inquiry] …` continuation
- * text, hands it to `sendFollowUp` for the parent stream, and — for
- * the cases where the cycle has exited (WAITING / children_running) —
- * triggers `AgentResumePort.tryResumeStream` so the parent stream
- * picks the message up.
+ * text, hands it to `sendFollowUp` for the parent stream, and delegates
+ * queued-stream wake/release policy to the follow-up owner so exited
+ * cycles (WAITING / children_running) can pick the message up when the
+ * parent stream is still resumable.
  *
  * Returns an `InjectionOutcome` so the caller (action handler) can
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
 
-import { platform } from '@platform/platform';
-
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  sendFollowUp,
+  wakeQueuedFollowUpStream,
+  type FollowUpWakeResult,
+} from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
@@ -111,6 +113,30 @@ async function emitInquiryThreadUpdate(
   emitRuntimeEvent('inquiryThreadUpdated', { ...summary, ...extra }, session);
 }
 
+function mapWakeResultToInquiryOutcome(
+  result: FollowUpWakeResult,
+): InjectionOutcome {
+  switch (result.kind) {
+    case 'not_required':
+      return 'sent';
+    case 'resumed':
+      return 'resumed';
+    case 'dropped':
+      return 'archived';
+    case 'queued_without_wake':
+    case 'resume_in_flight':
+    case 'active_or_resuming':
+    case 'queued_resume_failed':
+      return 'queued';
+  }
+}
+
+function mapInjectionOutcomeToResumeOutcome(
+  outcome: InjectionOutcome,
+): InquiryResumeOutcome {
+  return outcome === 'archived' ? 'parent_finished' : outcome;
+}
+
 async function deliverContinuation(params: {
   parentStreamId: StreamTabId;
   text: string;
@@ -137,25 +163,13 @@ async function deliverContinuation(params: {
     return 'archived';
   }
 
-  // 'sent' resolves immediately. A 'queued' follow-up whose cycle has exited
-  // (waiting / children_running) is nudged via tryResumeStream so the parent
-  // stream actually picks the message up.
-  let outcome: 'sent' | 'queued' | 'resumed' = 'queued';
-  if (result.status === 'sent') {
-    outcome = 'sent';
-  } else if (
-    result.reason === 'waiting' ||
-    result.reason === 'children_running'
-  ) {
-    const resumed = await platform().agentResume.tryResumeStream(
-      params.parentStreamId,
-    );
-    outcome = resumed ? 'resumed' : 'queued';
-  }
+  const outcome = mapWakeResultToInquiryOutcome(
+    await wakeQueuedFollowUpStream(params.parentStreamId, result),
+  );
 
   await emitInquiryThreadUpdate(
     params.threadId,
-    { resumeOutcome: outcome },
+    { resumeOutcome: mapInjectionOutcomeToResumeOutcome(outcome) },
     params.session,
   );
   return outcome;
