@@ -7,6 +7,7 @@
 // Local imports - filesystem
 import { z } from 'zod';
 
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 const HISTORY_DIR = 'tui';
@@ -33,14 +34,7 @@ export interface InputHistory {
 }
 
 function parseRecord(raw: string): HistoryRecord | undefined {
-  let obj: unknown;
-  try {
-    obj = JSON.parse(raw);
-  } catch {
-    // ignore malformed line
-    return undefined;
-  }
-  return HistoryRecordSchema.optional().catch(undefined).parse(obj);
+  return parseJsonWith(raw, HistoryRecordSchema).unwrapOr(undefined);
 }
 
 /** Serialise the in-memory ring back to JSONL. Records keep their original

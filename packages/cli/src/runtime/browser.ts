@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 
-import { toErrorMessage } from '@common/errors';
+import { extractErrorMessage } from '@common/errors';
 
 export interface BrowserLaunchCommand {
   readonly command: string;
@@ -67,9 +67,7 @@ function launchBrowser(url: string): Promise<void> {
 
     function rejectBrowserLaunch(error: unknown): void {
       const message =
-        error instanceof Error
-          ? toErrorMessage(error)
-          : 'unknown browser launch error';
+        extractErrorMessage(error) ?? 'unknown browser launch error';
       reject(new Error(`Could not open the browser automatically: ${message}`));
     }
   });
@@ -82,9 +80,7 @@ export function openBrowser(
 ): Promise<void> {
   return launchBrowser(url).catch((error: unknown) => {
     const message =
-      error instanceof Error
-        ? toErrorMessage(error)
-        : 'unknown browser launch error';
+      extractErrorMessage(error) ?? 'unknown browser launch error';
     log?.debug('cli-auth', message);
     throw new Error(
       `${message}. Run ${manualBrowserHint} to open the sign-in URL manually.`,
