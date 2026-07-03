@@ -23,8 +23,10 @@ import {
   isContextWindowError,
   isPreviousResponseIdError,
   isUserAbort,
-  attachPartialText,
+  annotateStreamFailure,
   attachFlowAutoRetryRequired,
+  trackStreamConnect,
+  type StreamConnectTracker,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -1841,12 +1843,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Hoisted so the catch can finalize the progress streams on a mid-stream
     // failure (otherwise the progress view hangs in a loading state).
     let processor: ResponseStreamProcessor | undefined;
-    let streamConnected = false;
     let streamEventObserved = false;
-    const onConnect = (): void => {
-      streamConnected = true;
-    };
-    let removeConnectListener: (() => void) | undefined;
+    let connect: StreamConnectTracker | undefined;
     // Captured from `response.created` so a stream event outside the SDK's
     // typed union (see isUnhandledStreamEventError) can fall back to polling
     // by id instead of failing an otherwise-healthy turn.
@@ -1856,12 +1854,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
       const retrieveParams = responseRetrieveParamsFor(params);
       const stream = await client.responses.stream(streamParams, { signal });
-      if (typeof stream.on === 'function') {
-        stream.on('connect', onConnect);
-        if (typeof stream.off === 'function') {
-          removeConnectListener = () => stream.off('connect', onConnect);
-        }
-      }
+      connect = trackStreamConnect(stream);
 
       // Processor handles interleaved thinking and web search
       // GPT can: think → web_search → think more → web_search → text
@@ -1982,15 +1975,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       processor?.abort();
       // Attach a capped tail of any streamed text before it propagates so the
       // retry UI receives the same structured error shape downstream.
-      if (streamedText) {
-        attachPartialText(error, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
-      }
-      if (streamConnected || streamEventObserved || streamedText) {
-        attachFlowAutoRetryRequired(error);
-      }
+      annotateStreamFailure(
+        error,
+        streamedText ? takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX) : '',
+        (connect?.isConnected() ?? false) ||
+          streamEventObserved ||
+          streamedText.length > 0,
+      );
       throw error;
     } finally {
-      removeConnectListener?.();
+      connect?.cleanup();
     }
   }
 
