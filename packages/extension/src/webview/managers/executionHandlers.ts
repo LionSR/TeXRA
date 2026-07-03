@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 
@@ -24,6 +25,11 @@ export async function handleExecute(
 ): Promise<void> {
   const preparation = prepareMainViewExecutionRequest(message);
   if (!preparation.valid) {
+    logErrorMessage(
+      CHANNEL,
+      'AgentConfig validation failed',
+      preparation.message,
+    );
     if (preparation.docsCommand) {
       const openDocs = 'File Management Guide';
       const choice = await vscode.window.showErrorMessage(
@@ -39,10 +45,6 @@ export async function handleExecute(
     } else {
       vscode.window.showErrorMessage(preparation.message);
     }
-    logger.error(
-      CHANNEL,
-      `AgentConfig validation failed: ${preparation.message}`,
-    );
     return;
   }
 

@@ -7,6 +7,7 @@
 import { LRUCache } from 'lru-cache';
 
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
+import { isNonEmptyString } from '@utils/core';
 import type { PlatformSecrets } from '@platform/secrets';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
@@ -164,6 +165,18 @@ export async function apiKeyExists(
   provider: ApiProvider,
 ): Promise<boolean> {
   return (await lookupApiKey(secrets, provider)) !== undefined;
+}
+
+/**
+ * Check whether the resolved key is usable for authentication.
+ * This rejects whitespace-only SecretStorage values while still sharing the
+ * canonical secret → environment fallback and cache.
+ */
+export async function hasUsableApiKey(
+  secrets: PlatformSecrets,
+  provider: ApiProvider,
+): Promise<boolean> {
+  return isNonEmptyString(await lookupApiKey(secrets, provider));
 }
 
 /** Check if an API key exists without using the process-wide provider cache. */

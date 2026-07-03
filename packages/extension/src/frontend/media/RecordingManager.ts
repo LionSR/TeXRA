@@ -9,6 +9,7 @@ import {
   startRecording,
   stopRecordingAndTranscribe,
 } from '@frontend/media/audio';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'RecordingManager';
@@ -64,7 +65,7 @@ export class RecordingManager {
   }
 
   private notifyError(webview: vscode.Webview, message: string): void {
-    vscode.window.showErrorMessage(message);
+    void showLoggedMessage(CHANNEL, message);
     const payload = this.buildRecordingMessage('error', message);
     if (payload) webview.postMessage(payload);
   }

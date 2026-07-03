@@ -72,9 +72,12 @@ export class PrepareContextNode<C = unknown> extends Node<
       prefill = await promptBuilder.buildPrefill(currentRound);
     }
 
-    logger.debug(
-      `Prepared ${isFirstRound ? 'first' : `round ${currentRound}`} context with ${messages.length} messages`,
-    );
+    logger.debug('Prepared round context', {
+      data: {
+        round: isFirstRound ? 'first' : currentRound,
+        messageCount: messages.length,
+      },
+    });
 
     return {
       messages,

@@ -1,7 +1,10 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
+
+const CHANNEL = 'settingsCommands';
 
 let settingsViewProvider: SettingsViewProvider | null = null;
 
@@ -16,7 +19,8 @@ export function initializeSettingsViewProvider(
 
 export async function showSettingsView(): Promise<void> {
   if (!settingsViewProvider) {
-    void vscode.window.showErrorMessage(
+    void showLoggedMessage(
+      CHANNEL,
       'Settings view not initialized. Please reload the extension.',
     );
     return;

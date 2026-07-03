@@ -138,9 +138,9 @@ The tool returns a JSON object whose keys are the original question texts and wh
     const streamId = context?.streamId;
     const requestId = `user-question-${nanoid()}`;
 
-    logger.info(
-      `User question requested: ${input.questions[0]?.question.slice(0, 100) ?? ''}`,
-    );
+    logger.info('User question requested', {
+      data: input.questions[0]?.question.slice(0, 100) ?? '',
+    });
 
     try {
       const result = await awaitUserQuestionResponse({

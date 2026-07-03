@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 
 import { defineCommand } from 'citty';
+import { parse as shellParse } from 'shell-quote';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -90,12 +91,39 @@ async function toggleTool(
   return CliExitCode.Success;
 }
 
+// Not routed through executeCommand: install/auth guide commands are
+// interactive (they can prompt for input or open a browser), which needs true
+// stdio:'inherit' that executeCommand's buffered/streamed output can't
+// provide. `command` always comes from the static EXTERNAL_TOOL_DEFS registry,
+// never from user or LLM input. POSIX commands run as argv; Windows uses the
+// shell so npm/gh `.cmd` shims resolve through PATHEXT.
 function shellRun(command: string): Promise<number> {
   return new Promise((resolve) => {
-    const child = spawn(command, {
-      shell: true,
-      stdio: 'inherit',
-    });
+    if (process.platform === 'win32') {
+      const child = spawn(command, { shell: true, stdio: 'inherit' });
+      child.on('error', () => resolve(CliExitCode.AgentError));
+      child.on('exit', (code) => resolve(code ?? CliExitCode.AgentError));
+      return;
+    }
+
+    let parts: string[];
+    try {
+      const parsed = shellParse(command);
+      if (!parsed.every((arg): arg is string => typeof arg === 'string')) {
+        resolve(CliExitCode.AgentError);
+        return;
+      }
+      parts = parsed;
+    } catch {
+      resolve(CliExitCode.AgentError);
+      return;
+    }
+    const [cmd, ...args] = parts;
+    if (!cmd) {
+      resolve(CliExitCode.AgentError);
+      return;
+    }
+    const child = spawn(cmd, args, { stdio: 'inherit' });
     child.on('error', () => resolve(CliExitCode.AgentError));
     child.on('exit', (code) => resolve(code ?? CliExitCode.AgentError));
   });

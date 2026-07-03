@@ -16,7 +16,6 @@ import type {
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
 import type { FileLocation } from '@shared/schemas';
@@ -125,8 +124,8 @@ export class ToolUseDispatchNode<C> extends BatchNode<
           ),
         ];
         this.services.logger.debug(
-          `Deduplicated ${this._duplicateCallIds.size} parallel tool call(s) ` +
-            `with identical name and arguments: ${dupNames.join(', ')}`,
+          `Deduplicated ${this._duplicateCallIds.size} parallel tool call(s) with identical name and arguments`,
+          { data: dupNames },
         );
       }
     }
@@ -389,7 +388,8 @@ export class ToolUseDispatchNode<C> extends BatchNode<
           }
         } catch (err) {
           options.logger.debug(
-            `Skipping inaccessible media file: ${attachment.path} (${toErrorMessage(err)})`,
+            `Skipping inaccessible media file: ${attachment.path}`,
+            { data: err },
           );
         }
       }

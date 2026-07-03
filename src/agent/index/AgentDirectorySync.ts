@@ -54,8 +54,8 @@ export interface AgentDirectoryVersionStore {
 }
 
 export interface AgentDirectorySyncLogger {
-  info(message: string): void;
-  warn(message: string): void;
+  info(message: string, data?: unknown): void;
+  warn(message: string, data?: unknown): void;
 }
 
 export interface BundledAgentDirectorySyncOptions {
@@ -213,7 +213,8 @@ export class BundledAgentDirectorySync {
         this.options.logger.info(`Deleted legacy agent file: ${legacyFile}`);
       } catch (error) {
         this.options.logger.warn(
-          `Failed to delete legacy agent file ${legacyFile}: ${toErrorMessage(error)}`,
+          `Failed to delete legacy agent file ${legacyFile}`,
+          error,
         );
       }
     }

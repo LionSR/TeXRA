@@ -1,8 +1,8 @@
-// Node imports
-import { spawn } from 'node:child_process';
-
 // Third-party imports
 import { quote } from 'shell-quote';
+
+// Internal imports
+import { executeCommand } from '@utils/system/execUtils';
 
 const OPEN_TERMINAL_TIMEOUT_MS = 10_000;
 
@@ -15,9 +15,9 @@ export async function openMacTerminalCommand(
   cwd: string,
 ): Promise<void> {
   const terminalCommand = buildMacTerminalCommand(command, cwd);
-  const child = spawn(
-    'osascript',
+  const result = await executeCommand(
     [
+      'osascript',
       '-e',
       'tell application "Terminal"',
       '-e',
@@ -27,38 +27,18 @@ export async function openMacTerminalCommand(
       '-e',
       'end tell',
     ],
-    { stdio: ['ignore', 'ignore', 'pipe'] },
+    { cwd, timeout: OPEN_TERMINAL_TIMEOUT_MS, stdout: 'ignore' },
   );
 
-  await new Promise<void>((resolve, reject) => {
-    let stderr = '';
-    const timeoutId = setTimeout(() => {
-      child.kill();
-      reject(new Error('Timed out opening Terminal'));
-    }, OPEN_TERMINAL_TIMEOUT_MS);
-    const finish = (callback: () => void) => {
-      clearTimeout(timeoutId);
-      callback();
-    };
-    child.stderr?.on('data', (chunk: Buffer | string) => {
-      stderr += String(chunk);
-    });
-    child.on('error', (error) => finish(() => reject(error)));
-    child.on('close', (code) => {
-      if (code === 0) {
-        finish(resolve);
-        return;
-      }
-      finish(() =>
-        reject(
-          new Error(
-            stderr.trim() ||
-              `Could not open Terminal; osascript exited ${code}`,
-          ),
-        ),
-      );
-    });
-  });
+  if (result.timedOut) {
+    throw new Error('Timed out opening Terminal');
+  }
+  if (result.exitCode !== 0) {
+    throw new Error(
+      result.stderr?.trim() ||
+        `Could not open Terminal; osascript exited ${result.exitCode}`,
+    );
+  }
 }
 
 export function buildMacTerminalCommand(command: string, cwd: string): string {

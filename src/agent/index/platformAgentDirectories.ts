@@ -47,8 +47,10 @@ function createPlatformAgentDirectories(
         ),
     },
     logger: {
-      debug: (message) => logger.debug(options.channel, message),
-      error: (message) => logger.error(options.channel, message),
+      debug: (message, data) =>
+        logger.debug(options.channel, message, { data }),
+      error: (message, data) =>
+        logger.error(options.channel, message, { data }),
     },
   });
 }
@@ -61,8 +63,8 @@ export async function bootstrapPlatformAgentDirectories(
     storage: new GlobalStorageAgentDirectoryStorage(),
     versionStore: options.versionStore,
     logger: {
-      info: (message) => logger.info(options.channel, message),
-      warn: (message) => logger.warn(options.channel, message),
+      info: (message, data) => logger.info(options.channel, message, { data }),
+      warn: (message, data) => logger.warn(options.channel, message, { data }),
     },
   });
 

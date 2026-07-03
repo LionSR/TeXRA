@@ -141,10 +141,9 @@ async function replaceFileDataWithUpload(
 
     // The retry layer owns the visible failure row for this rethrow; keep
     // the upload diagnostics at debug to avoid a duplicate ERROR entry.
-    logger.debug(
-      `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
-      { data: buildErrorLogData(err, { operation: 'upload file' }) },
-    );
+    logger.debug(`Failed to upload file ${filename}`, {
+      data: buildErrorLogData(err, { operation: 'upload file' }),
+    });
     throw err;
   } finally {
     buffer = wipeBuffer(buffer);
@@ -171,8 +170,12 @@ export async function uploadToolAttachments(
     try {
       buffer = await loadAttachmentBuffer(attachment);
     } catch (err) {
+      const attachmentPath = attachment.path ?? 'attachment';
       logger.warn(
-        `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+        `Unable to read attachment ${attachmentPath}: ${getSdkErrorMessage(err)}`,
+        {
+          data: buildErrorLogData(err, { operation: 'read attachment' }),
+        },
       );
       continue;
     }
@@ -194,8 +197,12 @@ export async function uploadToolAttachments(
         isImage: mimeType.startsWith('image/'),
       });
     } catch (err) {
+      const attachmentPath = attachment.path ?? 'attachment';
       logger.warn(
-        `Failed to upload attachment to OpenAI: ${getSdkErrorMessage(err)}`,
+        `Failed to upload attachment ${attachmentPath} to OpenAI: ${getSdkErrorMessage(err)}`,
+        {
+          data: buildErrorLogData(err, { operation: 'upload attachment' }),
+        },
       );
     } finally {
       buffer = wipeBuffer(buffer);
@@ -267,7 +274,10 @@ export async function buildInlineAttachmentParts(
       inlined.push(attachment);
     } catch (err) {
       logger.debug(
-        `Unable to inline attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+        `Unable to inline attachment ${attachment.path ?? 'attachment'}`,
+        {
+          data: buildErrorLogData(err, { operation: 'inline attachment' }),
+        },
       );
       skipped.push(attachment);
     } finally {

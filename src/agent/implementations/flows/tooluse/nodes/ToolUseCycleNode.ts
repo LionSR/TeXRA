@@ -9,7 +9,7 @@ import {
 import { withModelClient } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import { normalizeProviderError, toErrorMessage } from '@common/errors';
+import { normalizeProviderError } from '@common/errors';
 import { MESSAGE_TYPES, toRetryErrorInfo } from '@shared/schemas';
 import type { RetryErrorInfo } from '@shared/schemas';
 
@@ -97,9 +97,9 @@ export class ToolUseCycleNode<C> extends Node<
             // Best-effort todo persistence — log so swallowed write failures
             // are diagnosable without disrupting the update stream.
             .catch((err: unknown) => {
-              this.services.logger.debug(
-                `Failed to persist todos: ${toErrorMessage(err)}`,
-              );
+              this.services.logger.debug('Failed to persist todos', {
+                data: err,
+              });
             });
         }
         onProgress?.({ kind: 'todos', todos });

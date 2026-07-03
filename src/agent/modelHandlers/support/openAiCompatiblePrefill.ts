@@ -60,7 +60,7 @@ export async function initializeOpenAiCompatibleOutputAndPrefill<
     }
     const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
     adapter.appendPseudoPrefill(messages, pseudoPrefillMsg);
-    adapter.logger.debug(`Added pseudo prefill: "${pseudoPrefillMsg}"`);
+    adapter.logger.debug('Added pseudo prefill', { data: pseudoPrefillMsg });
     return [false, messages];
   }
 

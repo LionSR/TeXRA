@@ -188,8 +188,9 @@ async function readCommandStdout(
       child.kill();
       finish(undefined);
     }, timeoutMs);
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
+
+    child.stdout?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk: string) => {
       stdout += chunk;
     });
     child.on('error', () => finish(undefined));
@@ -261,6 +262,9 @@ export async function fetchLatestHomebrewFormulaVersion(options?: {
 function runCliUpdate(method: InstallMethod): Promise<boolean> {
   const { command, args } = buildUpdateCommand(method);
   return new Promise<boolean>((resolve) => {
+    // Needs true stdio:'inherit' — the package manager may print an
+    // interactive prompt or password request, which executeCommand's
+    // buffered/streamed output cannot forward.
     const child = spawn(command, args, { stdio: 'inherit', shell: true });
     child.on('error', () => resolve(false));
     child.on('close', (code) => resolve(code === 0));

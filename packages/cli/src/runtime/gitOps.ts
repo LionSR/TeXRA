@@ -1,7 +1,5 @@
 // Thin wrappers over `git` and `gh` for the `install-github-action` command.
-// Mirrors the CLI's existing subprocess style (node:child_process spawnSync,
-// see runtime/pager.ts) so no extra dependency is needed. Every call captures
-// output and never throws — callers branch on `ok`.
+// Every call captures output and never throws — callers branch on `ok`.
 import { spawnSync } from 'node:child_process';
 
 export interface CommandResult {

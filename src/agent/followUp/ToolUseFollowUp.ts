@@ -136,9 +136,9 @@ export function notifyFollowUpSent(
     try {
       observer(streamId);
     } catch (err) {
-      logger.warn(
-        `Follow-up sent observer threw for stream ${streamId}: ${String(err)}`,
-      );
+      logger.warn(`Follow-up sent observer threw for stream ${streamId}`, {
+        data: err,
+      });
     }
   }
   runtimeHost?.emit('followUpSent', { streamId });

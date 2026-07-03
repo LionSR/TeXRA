@@ -18,8 +18,7 @@ function normalizeWorkPlanSnapshot(input: unknown): unknown {
   const record = isObject(input) ? input : {};
   // Legacy structured plans fail to parse and read back as "no plan";
   // their stored planSummary string still carries the one-line label.
-  const planResult = PlanSchema.safeParse(record.plan);
-  const plan = planResult.success ? planResult.data : null;
+  const plan = PlanSchema.nullable().catch(null).parse(record.plan);
   let planSummary: string | null = null;
   if (plan) {
     planSummary = planSummaryLine(plan.objective);

@@ -45,7 +45,9 @@ export const memoriesField = z
           code: 'custom',
           path: [i],
           message:
-            e instanceof Error ? e.message : `Invalid memory path: ${memory}`,
+            e instanceof Error
+              ? toErrorMessage(e)
+              : `Invalid memory path: ${memory}`,
         });
       }
     }

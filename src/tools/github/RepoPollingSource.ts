@@ -34,8 +34,6 @@
  * - **CI / check-run status and inline annotations.** Per-PR by design.
  */
 
-import { z } from 'zod';
-
 import { LRUCache } from 'lru-cache';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -239,7 +237,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       const parsed = GhIssueCommentArraySchema.safeParse(issueRes.data);
       if (!parsed.success) {
         this.logger.warn(
-          `Skipping ${owner}/${repo} tick: issue-comments payload failed validation: ${z.prettifyError(parsed.error)}`,
+          `Skipping ${owner}/${repo} tick: issue-comments payload failed validation`,
+          { data: parsed.error },
         );
         return;
       }
@@ -249,7 +248,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       const parsed = GhReviewCommentArraySchema.safeParse(reviewRes.data);
       if (!parsed.success) {
         this.logger.warn(
-          `Skipping ${owner}/${repo} tick: review-comments payload failed validation: ${z.prettifyError(parsed.error)}`,
+          `Skipping ${owner}/${repo} tick: review-comments payload failed validation`,
+          { data: parsed.error },
         );
         return;
       }
@@ -259,7 +259,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       const parsed = GhPullsListEntryArraySchema.safeParse(pullsRes.data);
       if (!parsed.success) {
         this.logger.warn(
-          `Skipping ${owner}/${repo} tick: pulls-list payload failed validation: ${z.prettifyError(parsed.error)}`,
+          `Skipping ${owner}/${repo} tick: pulls-list payload failed validation`,
+          { data: parsed.error },
         );
         return;
       }
@@ -422,7 +423,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
         const parsed = GhPullRequestSchema.safeParse(res.data);
         if (!parsed.success) {
           this.logger.warn(
-            `Skipping merge probe for ${state.owner}/${state.repo}#${pr.number}: payload failed validation: ${z.prettifyError(parsed.error)}`,
+            `Skipping merge probe for ${state.owner}/${state.repo}#${pr.number}: payload failed validation`,
+            { data: parsed.error },
           );
           return undefined;
         }

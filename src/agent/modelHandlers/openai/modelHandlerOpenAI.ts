@@ -15,6 +15,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
+  buildErrorLogData,
   getSdkErrorMessage,
   isMissingFinishReasonError,
   attachPartialText,
@@ -30,11 +31,7 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
-import {
-  extractMimeSubtype,
-  joinNonEmpty,
-  objectToLogString,
-} from '@utils/text/stringUtils';
+import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
@@ -151,9 +148,13 @@ export class ModelHandlerOpenAI<
       tokensBefore,
       this.config.contextWindow,
     );
-    this.logger.debug(
-      `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${this.config.contextWindow} context window)`,
-    );
+    this.logger.debug('Compacting conversation', {
+      data: {
+        inputTokens: tokensBefore,
+        utilizationPercent: utilizationBefore,
+        contextWindow: this.config.contextWindow,
+      },
+    });
 
     return this.runClientCompaction(
       messages,
@@ -409,9 +410,9 @@ export class ModelHandlerOpenAI<
         } catch (err) {
           // totalUsage() may fail if stream ended abnormally — leave usage
           // unset, but log so missing token accounting is traceable.
-          this.logger.debug(
-            `totalUsage() fallback failed; usage unavailable: ${getSdkErrorMessage(err)}`,
-          );
+          this.logger.debug('totalUsage() fallback failed; usage unavailable', {
+            data: buildErrorLogData(err, { operation: 'totalUsage fallback' }),
+          });
         }
       }
 
@@ -444,9 +445,9 @@ export class ModelHandlerOpenAI<
       }
       const isAbort = isUserAbort(streamError);
       if (!isAbort) {
-        this.logger.warn(`Stream failed: ${getSdkErrorMessage(streamError)}`, {
+        this.logger.warn('Stream failed', {
           data: {
-            model: this.config.fullName,
+            ...buildErrorLogData(streamError, { model: this.config.fullName }),
             partialTextLength: partialText.length,
           },
         });
@@ -574,12 +575,21 @@ export class ModelHandlerOpenAI<
 
       const threshold = this.getCompactionThresholdPercent();
       if (isManual) {
-        this.logger.debug(
-          `Compacting conversation (manually requested, ${this.lastKnownInputTokens} input tokens)`,
-        );
+        this.logger.debug('Compacting conversation (manually requested)', {
+          data: { inputTokens: this.lastKnownInputTokens },
+        });
       } else {
         this.logger.debug(
-          `Compacting conversation (${this.lastKnownInputTokens} tokens exceed ${threshold}% threshold of ${Math.floor((threshold / 100) * this.config.contextWindow)} tokens)`,
+          'Compacting conversation (token threshold exceeded)',
+          {
+            data: {
+              inputTokens: this.lastKnownInputTokens,
+              thresholdPercent: threshold,
+              thresholdTokens: Math.floor(
+                (threshold / 100) * this.config.contextWindow,
+              ),
+            },
+          },
         );
       }
 
@@ -656,9 +666,13 @@ export class ModelHandlerOpenAI<
       : messages;
 
     if (normalizedMessages.length !== messages.length) {
-      this.logger.debug(
-        `Preprocessed message array from ${messages.length} to ${normalizedMessages.length} messages for ${providerLabel} model compatibility`,
-      );
+      this.logger.debug('Preprocessed message array for model compatibility', {
+        data: {
+          beforeCount: messages.length,
+          afterCount: normalizedMessages.length,
+          providerLabel,
+        },
+      });
     }
 
     return normalizedMessages;
@@ -894,9 +908,7 @@ export class ModelHandlerOpenAI<
    */
   extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
     if (!responseObject.choices?.length) {
-      this.logger.debug(
-        `Response object: ${objectToLogString(responseObject)}`,
-      );
+      this.logger.debug('Response object', { data: responseObject });
 
       // Add fallback for streaming which returns content directly in responseObject
       if (responseObject.role && responseObject.content) {
@@ -932,9 +944,7 @@ export class ModelHandlerOpenAI<
 
       const errorMsg = 'Invalid response from API: missing choices';
       this.logger.error(errorMsg);
-      this.logger.error(
-        `Response object: ${objectToLogString(responseObject)}`,
-      );
+      this.logger.error('Response object', { data: responseObject });
       throw new Error(errorMsg);
     }
 
@@ -957,9 +967,7 @@ export class ModelHandlerOpenAI<
 
       this.logger.debug('Received tool call without message content');
     } else {
-      this.logger.error(
-        `Response object: ${objectToLogString(responseObject)}`,
-      );
+      this.logger.error('Response object', { data: responseObject });
       this.logger.error('content is empty');
     }
 
@@ -985,9 +993,9 @@ export class ModelHandlerOpenAI<
       agentSetting,
     );
 
-    this.logger.debug(
-      `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
-    );
+    this.logger.debug('Adding continuation message to conversation', {
+      data: { continuationMessage: userMessageContinuation },
+    });
 
     const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
     messages.push({
@@ -1212,9 +1220,9 @@ export class ModelHandlerOpenAI<
 
     this.applyStringReasoningToWorkspaceState(reasoning, workspaceState);
 
-    this.logger.debug(
-      `Reasoning content preview: ${reasoning.slice(0, K_SLICE)}...`,
-    );
+    this.logger.debug('Reasoning content preview', {
+      data: { preview: reasoning.slice(0, K_SLICE) },
+    });
     return reasoning;
   }
 
@@ -1224,9 +1232,9 @@ export class ModelHandlerOpenAI<
     try {
       return JSON.stringify(value);
     } catch (err) {
-      this.logger.warn(
-        `Failed to serialize tool arguments: ${getSdkErrorMessage(err)}`,
-      );
+      this.logger.warn('Failed to serialize tool arguments', {
+        data: buildErrorLogData(err, { operation: 'serialize tool arguments' }),
+      });
       return '{}';
     }
   }

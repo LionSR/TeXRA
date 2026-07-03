@@ -171,9 +171,12 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
   }
   if (options?.usage) {
-    logger.info(
-      `Tokens: ${options.usage.input_tokens} in / ${options.usage.output_tokens} out`,
-    );
+    logger.info('Tokens', {
+      data: {
+        input: options.usage.input_tokens,
+        output: options.usage.output_tokens,
+      },
+    });
   }
 
   // The terminal status the child finishes with — the single source of truth

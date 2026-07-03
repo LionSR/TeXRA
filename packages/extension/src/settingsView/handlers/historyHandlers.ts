@@ -30,7 +30,10 @@ import {
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
 import {
@@ -186,10 +189,11 @@ export class HistoryHandlers {
   ): void {
     switch (status) {
       case 'config_missing':
-        void vscode.window.showErrorMessage('History item not found');
+        void showLoggedMessage(this.ctx.channel, 'History item not found');
         return;
       case 'conversation_missing':
-        void vscode.window.showErrorMessage(
+        void showLoggedMessage(
+          this.ctx.channel,
           'No conversation data available for this execution',
         );
         return;
@@ -260,7 +264,7 @@ export class HistoryHandlers {
         historyId as ExecutionId,
       ).readConfig();
       if (!raw) {
-        await vscode.window.showErrorMessage('History item not found');
+        await showLoggedMessage(this.ctx.channel, 'History item not found');
         return;
       }
       const config = AgentConfigSchema.parse(raw);

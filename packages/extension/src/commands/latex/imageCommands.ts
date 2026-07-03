@@ -2,7 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - errors
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import * as dialogUtils from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import {
@@ -47,7 +50,7 @@ export async function handleCountPdfPages(): Promise<void> {
       return;
     }
 
-    vscode.window.showErrorMessage('Could not count pages in the PDF');
+    void showLoggedMessage(CHANNEL, 'Could not count pages in the PDF');
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'countPdfPages command failed', err);
   }
@@ -146,7 +149,7 @@ export async function handleConvertPdfToImages(): Promise<
       return result;
     }
 
-    vscode.window.showErrorMessage('Failed to convert PDF');
+    void showLoggedMessage(CHANNEL, 'Failed to convert PDF');
     return undefined;
   } catch (err) {
     await showLoggedErrorMessage(

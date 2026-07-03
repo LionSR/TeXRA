@@ -7,7 +7,6 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { toErrorMessage } from '@common/errors';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
@@ -203,9 +202,7 @@ export class UsageMonitor {
         usageRoute,
       });
     } catch (error) {
-      logger.error(
-        `Error printing ${runKind} statistics: ${toErrorMessage(error)}`,
-      );
+      logger.error(`Error printing ${runKind} statistics`, { data: error });
     }
   }
 
@@ -234,9 +231,9 @@ export class UsageMonitor {
     try {
       return this.usesRelayRoute() ? 'relay' : 'api-key';
     } catch (error) {
-      this.context.logger.debug(
-        `Usage route relay check failed: ${toErrorMessage(error)}`,
-      );
+      this.context.logger.debug('Usage route relay check failed', {
+        data: error,
+      });
       return undefined;
     }
   }
@@ -321,9 +318,9 @@ export class UsageMonitor {
         }
       }
     } catch (error) {
-      this.context.logger.debug(
-        `Backend usage logging failed: ${toErrorMessage(error)}`,
-      );
+      this.context.logger.debug('Backend usage logging failed', {
+        data: error,
+      });
     }
   }
 }

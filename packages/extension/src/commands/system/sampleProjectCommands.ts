@@ -6,7 +6,10 @@ import fsExtra from 'fs-extra';
 import * as vscode from 'vscode';
 
 // Local imports - fs
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
@@ -70,7 +73,8 @@ export async function createSampleProject(
 ): Promise<void> {
   try {
     if (!WorkspaceFS.getPath()) {
-      void vscode.window.showErrorMessage(
+      void showLoggedMessage(
+        CHANNEL,
         'Open a workspace to create the sample project.',
       );
       return;

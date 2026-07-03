@@ -5,7 +5,10 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { WorkspaceFS } from '@utils/files';
+
+const CHANNEL = 'dialogs';
 
 export interface FileDialogOptions {
   /** Whether multiple files can be selected */
@@ -42,7 +45,7 @@ export async function selectFiles(
 ): Promise<string[] | null> {
   const defaultUri = computeDefaultUri(options);
   if (!defaultUri) {
-    vscode.window.showErrorMessage('No workspace folder open');
+    void showLoggedMessage(CHANNEL, 'No workspace folder open');
     return null;
   }
 

@@ -224,14 +224,23 @@ export async function fetchAllCheckRuns(
   let totalPages = Math.max(1, Math.ceil(seedTotal / CHECK_RUNS_PAGE_SIZE));
   if (totalPages > MAX_CHECK_RUNS_PAGES) {
     logger.warn(
-      `Pagination cap hit for ${owner}/${repo}@${sha.slice(0, 7)} check-runs: ` +
-        `total_count=${seedTotal} would need ${totalPages} pages, capping at ${MAX_CHECK_RUNS_PAGES}.`,
+      `Pagination cap hit for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
+      {
+        data: {
+          totalCount: seedTotal,
+          neededPages: totalPages,
+          cappedAt: MAX_CHECK_RUNS_PAGES,
+        },
+      },
     );
     totalPages = MAX_CHECK_RUNS_PAGES;
   }
   if (totalPages > 1) {
     logger.info(
-      `Pagination: ${owner}/${repo}@${sha.slice(0, 7)} check-runs total_count=${seedTotal} → ${totalPages} pages`,
+      `Pagination for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
+      {
+        data: { totalCount: seedTotal, totalPages },
+      },
     );
   }
 
@@ -254,8 +263,14 @@ export async function fetchAllCheckRuns(
       );
       if (newTotalPages > MAX_CHECK_RUNS_PAGES) {
         logger.warn(
-          `Pagination cap hit mid-walk for ${owner}/${repo}@${sha.slice(0, 7)} check-runs: ` +
-            `total_count is ${latestTotal} (${newTotalPages} pages), capping at ${MAX_CHECK_RUNS_PAGES}.`,
+          `Pagination cap hit mid-walk for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
+          {
+            data: {
+              totalCount: latestTotal,
+              neededPages: newTotalPages,
+              cappedAt: MAX_CHECK_RUNS_PAGES,
+            },
+          },
         );
         totalPages = MAX_CHECK_RUNS_PAGES;
       } else {
