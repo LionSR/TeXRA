@@ -104,7 +104,7 @@ describe('Anthropic stream failure logging', () => {
 
     expect(logger.warn).not.toHaveBeenCalled();
     expect(logger.debug).toHaveBeenCalledWith(
-      expect.stringContaining('Stream failed:'),
+      'Stream failed',
       expect.objectContaining({
         data: expect.objectContaining({
           partialTextLength: 0,

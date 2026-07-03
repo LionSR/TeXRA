@@ -8,7 +8,10 @@
 import * as vscode from 'vscode';
 
 import { SecretManager } from '@frontend/secretManager';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import {
   getProgressStreamLabel,
@@ -147,7 +150,8 @@ export class GitHubSubscriptionHandlers {
   ): Promise<void> {
     const result = await revealProgressStream(data.streamId);
     if (result === 'unavailable') {
-      await vscode.window.showErrorMessage(
+      await showLoggedMessage(
+        this.ctx.channel,
         'Progress View is not available. Please try again.',
       );
       return;

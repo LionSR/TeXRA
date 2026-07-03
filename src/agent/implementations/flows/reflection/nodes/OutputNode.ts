@@ -26,6 +26,7 @@ import {
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { tryOperation } from '@agent/output/outputOperations';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
+import { toErrorMessage } from '@common/errors';
 import {
   MESSAGE_TYPES,
   type AgentFileLocation,
@@ -186,7 +187,7 @@ export class OutputNode<C = unknown> extends Node<
   ): Promise<OutputExecResult> {
     const { logger, outputState, setting } = this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
-    logger.warn(`Output processing failed: ${error.message}`);
+    logger.warn(`Output processing failed: ${error.message}`, { data: error });
 
     // Still summarize what we can for post() side effects
     let summary: RoundSummary;
@@ -202,11 +203,8 @@ export class OutputNode<C = unknown> extends Node<
       // Double-fault: summarizeRound failed during fallback, so we drop the
       // round's file infos. Log it so silently-missing output files are visible.
       logger.warn(
-        `Output fallback summary failed; output files may be dropped: ${
-          summaryError instanceof Error
-            ? summaryError.message
-            : String(summaryError)
-        }`,
+        `Output fallback summary failed; output files may be dropped: ${toErrorMessage(summaryError)}`,
+        { data: summaryError },
       );
       summary = {
         storageKey: getStorageKey(outputState),

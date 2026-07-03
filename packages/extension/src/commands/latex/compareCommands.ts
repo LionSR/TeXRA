@@ -11,6 +11,7 @@ import { registerCommands } from '@commands/_shared/registerCommands';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   showLoggedErrorMessage,
+  showLoggedMessage,
   toErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
@@ -39,7 +40,7 @@ function validateFileLocations(
 ): FileLocation | null {
   const fileToUseLocation = baseLocation ?? inputLocation;
   if (!fileToUseLocation || !editedLocation) {
-    vscode.window.showErrorMessage(errorMessage);
+    void showLoggedMessage(CHANNEL, errorMessage);
     return null;
   }
   return fileToUseLocation;
@@ -50,14 +51,16 @@ async function validateFilesExist(
   editedLocation: FileLocation,
 ): Promise<boolean> {
   if (!(await flexibleFS.exists(baseLocation))) {
-    vscode.window.showErrorMessage(
+    void showLoggedMessage(
+      CHANNEL,
       `Base file not found: ${baseLocation.absolutePath}`,
     );
     return false;
   }
 
   if (!(await flexibleFS.exists(editedLocation))) {
-    vscode.window.showErrorMessage(
+    void showLoggedMessage(
+      CHANNEL,
       `Edited file not found: ${editedLocation.absolutePath}`,
     );
     return false;

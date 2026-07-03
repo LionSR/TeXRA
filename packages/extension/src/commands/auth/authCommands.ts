@@ -4,9 +4,16 @@ import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
 import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from '@auth/constants';
 import { showSettingsView } from '@commands/settings';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
-import { toErrorMessage } from '@common/errors';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
+import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
+
+const CHANNEL = 'authCommands';
+logger.initialize(CHANNEL);
 
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
@@ -97,7 +104,8 @@ export async function signIn(): Promise<boolean> {
       const reason = initError
         ? initError.message
         : 'Authentication service not initialized';
-      void vscode.window.showErrorMessage(
+      void showLoggedMessage(
+        CHANNEL,
         `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
       );
       return false;
@@ -136,9 +144,7 @@ export async function signIn(): Promise<boolean> {
     }
     return false;
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Sign in failed: ${toErrorMessage(error)}`,
-    );
+    void showLoggedErrorMessage(CHANNEL, 'Sign in failed', error);
     return false;
   }
 }
@@ -172,9 +178,7 @@ async function signInWithEmail(): Promise<void> {
       `Magic link sent to ${email}. Click the link in your email - VS Code will sign you in automatically.`,
     );
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Failed to send magic link: ${toErrorMessage(error)}`,
-    );
+    void showLoggedErrorMessage(CHANNEL, 'Failed to send magic link', error);
   }
 }
 
@@ -198,14 +202,10 @@ export async function signOut(): Promise<void> {
       await authProvider.removeSession(session.id);
       void vscode.window.showInformationMessage('Signed out successfully');
     } else {
-      void vscode.window.showErrorMessage(
-        'Authentication provider not available',
-      );
+      void showLoggedMessage(CHANNEL, 'Authentication provider not available');
     }
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Sign out failed: ${toErrorMessage(error)}`,
-    );
+    void showLoggedErrorMessage(CHANNEL, 'Sign out failed', error);
   }
 }
 
@@ -213,9 +213,7 @@ export async function viewProfile(): Promise<void> {
   try {
     await showSettingsView();
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Failed to load profile: ${toErrorMessage(error)}`,
-    );
+    void showLoggedErrorMessage(CHANNEL, 'Failed to load profile', error);
   }
 }
 

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
+
+import { safeHomedir } from '@utils/system/platformPaths';
 
 import type { SkillSource } from './loadSkills';
 
@@ -78,7 +79,10 @@ export function defaultSkillSources(
   context: SkillSourceContext,
   options: SkillSourceOptions = {},
 ): SkillSource[] {
-  const home = os.homedir();
+  // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can raise
+  // UV_ENOENT in containers/CI); `/nonexistent` matches the fallback used by
+  // other agnostic-zone callers (e.g. `claudeAgentConfig.ts`).
+  const home = safeHomedir() ?? '/nonexistent';
   const sources: SkillSource[] = [];
 
   for (const candidate of options.additionalPaths ?? []) {

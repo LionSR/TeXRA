@@ -143,9 +143,9 @@ async function readFlowRecord(
   const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
 
   if (!flowRecord?.shared) {
-    logger.warn(
-      `No flow record found for ${agentType} execution: ${executionId}`,
-    );
+    logger.warn('No flow record found for execution', {
+      data: { agentType, executionId },
+    });
     return null;
   }
 
@@ -206,9 +206,9 @@ async function retrieveToolUseResumeData(
 
     const snapshotResult = ToolUseSessionSnapshotSchema.safeParse(rawSnapshot);
     if (!snapshotResult.success) {
-      logger.warn(
-        `Invalid snapshot structure for stream: ${streamId}: ${z.prettifyError(snapshotResult.error)}`,
-      );
+      logger.warn('Invalid snapshot structure for stream', {
+        data: { streamId, error: z.prettifyError(snapshotResult.error) },
+      });
       return null;
     }
 
@@ -251,9 +251,13 @@ async function retrieveWorkflowResumeData(
       return null;
     }
 
-    logger.debug(
-      `Retrieved workflow resume data for stream: ${streamId} (round ${parseResult.data.currentRound}/${parseResult.data.totalRounds})`,
-    );
+    logger.debug('Retrieved workflow resume data for stream', {
+      data: {
+        streamId,
+        currentRound: parseResult.data.currentRound,
+        totalRounds: parseResult.data.totalRounds,
+      },
+    });
     const modelHandlerCompatibilityKey =
       parseResult.data.modelHandlerCompatibilityKey ??
       inferPersistedModelHandlerCompatibilityKey(

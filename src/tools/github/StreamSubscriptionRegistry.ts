@@ -275,7 +275,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     try {
       d.dispose();
     } catch (err) {
-      this.logger.warn(`Disposer threw during ${context}: ${String(err)}`);
+      this.logger.warn(`Disposer threw during ${context}`, { data: err });
     }
   }
 

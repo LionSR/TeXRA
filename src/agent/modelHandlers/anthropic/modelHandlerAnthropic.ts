@@ -24,7 +24,6 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - common
 import {
-  getSdkErrorMessage,
   attachStreamDiagnostics,
   attachPartialText,
   attachFlowAutoRetryRequired,
@@ -42,7 +41,7 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
-import { joinNonEmpty, objectToLogString } from '@utils/text/stringUtils';
+import { joinNonEmpty } from '@utils/text/stringUtils';
 import {
   computeAnthropicPrice,
   normalizeAnthropicUsage,
@@ -485,13 +484,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
           ...options.output_config,
           ...thinkingConfig.outputConfig,
         };
-        this.logger.debug(
-          `Set adaptive thinking with effort: ${thinkingConfig.outputConfig?.effort} (max_tokens: ${options.max_tokens})`,
-        );
+        this.logger.debug('Set adaptive thinking', {
+          data: {
+            effort: thinkingConfig.outputConfig?.effort,
+            maxTokens: options.max_tokens,
+          },
+        });
       } else if (thinkingConfig.thinking.type === 'enabled') {
-        this.logger.debug(
-          `Set thinking budget: ${thinkingConfig.thinking.budget_tokens} tokens (max_tokens: ${options.max_tokens}, streaming: ${useStreaming})`,
-        );
+        this.logger.debug('Set thinking budget', {
+          data: {
+            budgetTokens: thinkingConfig.thinking.budget_tokens,
+            maxTokens: options.max_tokens,
+            streaming: useStreaming,
+          },
+        });
       }
 
       // Remove temperature for models that reject sampling parameters when
@@ -558,7 +564,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
           ) {
             const newBudget = Math.max(1024, options.max_tokens - 1024);
             this.logger.debug(
-              `Adjusted thinking budget from ${options.thinking.budget_tokens} to ${newBudget} due to reduced max_tokens`,
+              'Adjusted thinking budget due to reduced max_tokens',
+              {
+                data: {
+                  previousBudgetTokens: options.thinking.budget_tokens,
+                  newBudgetTokens: newBudget,
+                },
+              },
             );
             options.thinking.budget_tokens = newBudget;
           }
@@ -697,7 +709,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           (enrichedError as ErrorWithRequestId).request_id = requestId;
         }
 
-        const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}: ${getSdkErrorMessage(enrichedError)}`;
+        const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}`;
         const logData = {
           data: {
             isUsingRelay: this.shouldUseServerSideKeys(),
@@ -705,6 +717,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             model: this.config.fullName,
             streamDiagnostics: diagnostics,
             partialTextLength: partialText.length,
+            error: enrichedError,
           },
         };
         // The retry node owns user-facing failure reporting. Keep stream
@@ -812,7 +825,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       } catch (err) {
         logSdkError(
           this.logger,
-          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
+          'Error processing media files for follow-up round',
           err,
           { operation: 'process media files' },
         );
@@ -933,7 +946,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
         } else {
           if (resolvedMediaType !== 'image/png') {
             this.logger.warn(
-              `Unsupported image media type ${resolvedMediaType} for ${media.file_name}, defaulting to image/png`,
+              'Unsupported image media type, defaulting to image/png',
+              {
+                data: {
+                  mediaType: resolvedMediaType,
+                  fileName: media.file_name,
+                },
+              },
             );
           }
           imageMediaType = 'image/png';
@@ -974,10 +993,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Anthropic specific empty response check
       const errorMsg = 'No output generated - API returned empty response';
       this.logger.error(errorMsg);
-      this.logger.debug(`responseObject: ${objectToLogString(responseObject)}`);
-      this.logger.debug(
-        `responseObject.content: ${objectToLogString(responseObject.content)}`,
-      );
+      this.logger.debug('responseObject', { data: responseObject });
+      this.logger.debug('responseObject.content', {
+        data: responseObject.content,
+      });
       throw new Error(errorMsg);
     }
 
@@ -1015,9 +1034,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       agentSetting,
     );
 
-    this.logger.debug(
-      `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
-    );
+    this.logger.debug('Adding continuation message to conversation', {
+      data: userMessageContinuation,
+    });
     const content: ContentBlockParam[] = [
       { type: 'text', text: userMessageContinuation },
     ];
@@ -1044,7 +1063,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           );
           return [false, messages];
         }
-        this.logger.debug(`Adding prefill message:\n${prefill}`);
+        this.logger.debug('Adding prefill message', { data: prefill });
         workspaceState.assembly.accumulatedOutput = `${prefill}\n`;
         await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
         await flexibleFS.write(
@@ -1073,9 +1092,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
               text: pseudoPrefillText,
             } as ContentBlockParam);
           }
-          this.logger.debug(
-            `Added pseudo prefill message to messages:\n${pseudoPrefillText}`,
-          );
+          this.logger.debug('Added pseudo prefill message to messages', {
+            data: pseudoPrefillText,
+          });
         }
       }
       return [false, messages];
@@ -1670,12 +1689,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         lastUserMsg.content.unshift(...formattedMedia);
       }
     } catch (err) {
-      logSdkError(
-        this.logger,
-        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
-      );
+      logSdkError(this.logger, 'Error adding media to user message', err, {
+        operation: 'add media to user message',
+      });
     }
   }
 }

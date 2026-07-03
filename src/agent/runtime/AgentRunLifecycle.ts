@@ -92,9 +92,9 @@ function endParentStageSafely(
   try {
     ctx.parentStage.end(status);
   } catch (stageErr) {
-    logger.warn(
-      `Failed to end parent stage for ${agentIdentifier}: ${getSdkErrorMessage(stageErr)}`,
-    );
+    logger.warn('Failed to end parent stage', {
+      data: { agentIdentifier, error: stageErr },
+    });
   }
 }
 
@@ -136,14 +136,14 @@ export async function runFlowWithLifecycle(
     try {
       const maybePromise = options.onRun(handle);
       void Promise.resolve(maybePromise).catch((err: unknown) =>
-        logger.warn(
-          `onRun callback rejected for ${agentIdentifier}: ${String(err)}`,
-        ),
+        logger.warn('onRun callback rejected', {
+          data: { agentIdentifier, error: err },
+        }),
       );
     } catch (err) {
-      logger.warn(
-        `onRun callback threw for ${agentIdentifier}: ${String(err)}`,
-      );
+      logger.warn('onRun callback threw', {
+        data: { agentIdentifier, error: err },
+      });
     }
   }
   // Tracks whether the terminal `result` event has already been emitted, so a
@@ -200,9 +200,9 @@ export async function runFlowWithLifecycle(
     try {
       await options?.onCompleted?.(result);
     } catch (deliveryError) {
-      logger.warn(
-        `Completion hook failed for ${agentIdentifier}: ${getSdkErrorMessage(deliveryError)}`,
-      );
+      logger.warn('Completion hook failed', {
+        data: { agentIdentifier, error: deliveryError },
+      });
     }
 
     // The run has produced its canonical terminal result. Guard the terminal
@@ -218,9 +218,9 @@ export async function runFlowWithLifecycle(
         });
       }
     } catch (cleanupErr) {
-      logger.warn(
-        `Post-completion cleanup threw for ${agentIdentifier}: ${getSdkErrorMessage(cleanupErr)}`,
-      );
+      logger.warn('Post-completion cleanup threw', {
+        data: { agentIdentifier, error: cleanupErr },
+      });
     }
     logger.debug(`Task completed with outcome: ${result.outcome}`);
     return result;
@@ -282,9 +282,9 @@ export async function runFlowWithLifecycle(
         terminalStatus: projection.executionStatus,
       });
     } catch (statusErr) {
-      logger.warn(
-        `Failed to set terminal error status for ${agentIdentifier}: ${getSdkErrorMessage(statusErr)}`,
-      );
+      logger.warn('Failed to set terminal error status', {
+        data: { agentIdentifier, error: statusErr },
+      });
     }
     // Terminal-error toasts are no longer emitted here: hosts present them from
     // the `result` event via `session.onResult` + `terminalResultToast` (the
@@ -303,9 +303,9 @@ export async function runFlowWithLifecycle(
       try {
         await options.onError?.(err, result);
       } catch (deliveryError) {
-        logger.warn(
-          `Failed to deliver subagent error for ${agentIdentifier}: ${getSdkErrorMessage(deliveryError)}`,
-        );
+        logger.warn('Failed to deliver subagent error', {
+          data: { agentIdentifier, error: deliveryError },
+        });
       }
       session.executions.untrack(ctx.executionId);
       return result;

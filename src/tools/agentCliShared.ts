@@ -132,9 +132,12 @@ export function logTurnSummary(
 ): void {
   logger.info(`Turn completed in ${formatDuration(wallTimeMs)}`);
   if (usage) {
-    logger.info(
-      `Tokens: ${usage.input_tokens ?? 0} in / ${usage.output_tokens ?? 0} out`,
-    );
+    logger.info('Tokens', {
+      data: {
+        input: usage.input_tokens ?? 0,
+        output: usage.output_tokens ?? 0,
+      },
+    });
   }
 }
 

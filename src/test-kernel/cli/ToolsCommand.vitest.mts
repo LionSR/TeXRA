@@ -185,6 +185,28 @@ describe('CLI tools command', () => {
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
+  it('rejects POSIX guide commands with shell operators instead of dropping them', async () => {
+    mocks.readCliToolGuide.mockReturnValueOnce({
+      text: 'Install help',
+      command: 'echo install && echo second-step',
+    });
+
+    const result = await runCli([
+      'tools',
+      'install',
+      'codex',
+      '--run',
+      '--print',
+      '--api-mode',
+      'personal',
+      '--no-color',
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(stdout).toBe('Install help\n');
+    expect(mocks.spawn).not.toHaveBeenCalled();
+  });
+
   it('emits structured auth guides without launching the external login', async () => {
     mocks.readCliToolGuide.mockReturnValueOnce({
       text: 'Auth help',

@@ -67,9 +67,9 @@ export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
     const { logger, operation, errorMessage, model, timeoutMs, errorDetails } =
       options;
     this.loggers.set(streamId, logger);
-    logger.debug(
-      `Waiting for manual retry: ${errorMessage ?? 'unknown error'}`,
-    );
+    logger.debug('Waiting for manual retry', {
+      data: errorMessage ?? 'unknown error',
+    });
 
     return this.waitForUserAction(
       streamId,

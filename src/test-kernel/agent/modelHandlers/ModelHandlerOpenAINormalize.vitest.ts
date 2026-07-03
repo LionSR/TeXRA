@@ -16,18 +16,22 @@ import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 type LoggerStub = Partial<AgentTrace> & {
   streamId: string;
   debugMessages: string[];
+  debugLogs: Array<{ message: string; options: unknown }>;
   infoMessages: string[];
 };
 
 function createLoggerStub(): LoggerStub {
   const debugMessages: string[] = [];
+  const debugLogs: Array<{ message: string; options: unknown }> = [];
   const infoMessages: string[] = [];
   return {
     streamId: 'test-channel',
     debugMessages,
+    debugLogs,
     infoMessages,
-    debug: (message: string) => {
+    debug: (message: string, options?: unknown) => {
       debugMessages.push(message);
+      debugLogs.push({ message, options });
     },
     info: (message: string) => {
       infoMessages.push(message);
@@ -165,8 +169,16 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
       'assistant message should remain intact as string content',
     );
     assert.ok(
-      loggerStub.debugMessages.includes(
-        'Preprocessed message array from 3 to 2 messages for deepseek model compatibility',
+      loggerStub.debugLogs.some(
+        ({ message, options }) =>
+          message === 'Preprocessed message array for model compatibility' &&
+          typeof options === 'object' &&
+          options !== null &&
+          'data' in options &&
+          (options.data as Record<string, unknown>).beforeCount === 3 &&
+          (options.data as Record<string, unknown>).afterCount === 2 &&
+          (options.data as Record<string, unknown>).providerLabel ===
+            'deepseek',
       ),
     );
     assert.deepEqual(loggerStub.infoMessages, []);
@@ -205,8 +217,8 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
         { role: 'assistant', content: 'Assistant reply' },
       ]);
       assert.equal(
-        loggerStub.debugMessages.some((entry) =>
-          entry.startsWith('Preprocessed message array'),
+        loggerStub.debugLogs.some(({ message }) =>
+          message.startsWith('Preprocessed message array'),
         ),
         false,
         'message count is unchanged, so no preprocessing log expected',

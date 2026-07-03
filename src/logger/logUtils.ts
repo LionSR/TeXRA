@@ -123,14 +123,42 @@ function writeLine(
   if (data === null || data === undefined) return;
   if (!isDebugModeEnabled()) return;
 
+  const normalizedData = normalizeLogData(data);
   sink.appendLine(
-    typeof data === 'string' ? data : JSON.stringify(data, null, 2),
+    typeof normalizedData === 'string'
+      ? normalizedData
+      : JSON.stringify(normalizedData, null, 2),
   );
 }
 
 /** Errors don't survive `JSON.stringify`, so flatten them before emit. */
-function normalizeLogData(data: unknown): unknown {
-  return data instanceof Error ? serializeError(data) : data;
+function normalizeLogData(
+  data: unknown,
+  seen = new WeakSet<object>(),
+): unknown {
+  if (data instanceof Error) return serializeError(data);
+  if (Array.isArray(data)) {
+    if (seen.has(data)) return '[Circular]';
+    seen.add(data);
+    const result = data.map((item) => normalizeLogData(item, seen));
+    seen.delete(data);
+    return result;
+  }
+  if (typeof data !== 'object' || data === null) return data;
+
+  const prototype = Object.getPrototypeOf(data);
+  if (prototype !== Object.prototype && prototype !== null) return data;
+  if (seen.has(data)) return '[Circular]';
+  seen.add(data);
+
+  const result = Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [
+      key,
+      normalizeLogData(value, seen),
+    ]),
+  );
+  seen.delete(data);
+  return result;
 }
 
 function logAt(
@@ -142,13 +170,7 @@ function logAt(
   // Functional callers (housekeeping, utils, common) never write to the
   // per-stream agent channels — that's exclusively the trace subscriber
   // path via `attachChannelSubscriber`.
-  writeLine(
-    level,
-    channel,
-    /* isAgent */ false,
-    message,
-    normalizeLogData(options.data),
-  );
+  writeLine(level, channel, /* isAgent */ false, message, options.data);
 }
 
 export function initialize(channel: string, isAgent = false): void {
@@ -219,7 +241,7 @@ export function attachChannelSubscriber(
       options.channel,
       options.isAgent,
       event.message,
-      normalizeLogData(event.data),
+      event.data,
     );
   };
 

@@ -14,8 +14,6 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
-import { z } from 'zod';
-
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 import { shouldDropBotEvent } from './botFilter';
@@ -186,8 +184,8 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
         state.state = newState;
       } else {
         this.logger.warn(
-          `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: ` +
-            `malformed issue payload: ${z.prettifyError(parsedIssue.error)}`,
+          `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: malformed issue payload`,
+          { data: parsedIssue.error },
         );
       }
     }
@@ -205,8 +203,8 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
       );
       if (!parsedComments.success) {
         this.logger.warn(
-          `Skipping comments tick for ${state.slug}#${issue.issueNumber}: ` +
-            `malformed comments payload: ${z.prettifyError(parsedComments.error)}`,
+          `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,
+          { data: parsedComments.error },
         );
         return;
       }

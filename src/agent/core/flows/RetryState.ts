@@ -11,11 +11,7 @@ import {
 } from '@agent/runtime/RetryRequestCoordinator';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import {
-  ensureError,
-  normalizeProviderError,
-  toErrorMessage,
-} from '@common/errors';
+import { ensureError, normalizeProviderError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import {
   STREAM_STATUS,
@@ -79,9 +75,9 @@ async function tryRefreshClient(
     logger.debug(`Refreshed model client ${context}`);
     return true;
   } catch (refreshError) {
-    logger.warn(
-      `Failed to refresh model client ${context}: ${toErrorMessage(refreshError)}`,
-    );
+    logger.warn(`Failed to refresh model client ${context}`, {
+      data: refreshError,
+    });
     return false;
   }
 }
@@ -273,11 +269,7 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    logErrorData(
-      logger,
-      `${operationName} failed: ${formatted.message}`,
-      formatted,
-    );
+    logErrorData(logger, `${operationName} failed`, formatted);
 
     streamStatus.set(streamId, STREAM_STATUS.WAITING, {
       runtimeHost,
@@ -319,7 +311,7 @@ export abstract class RetryableInvocationNode<
     if (!formatted.userRetryable) {
       logErrorData(
         this.services.logger,
-        `${this.getOperationName()} failed (no retry available): ${formatted.message}`,
+        `${this.getOperationName()} failed (no retry available)`,
         formatted,
       );
     }

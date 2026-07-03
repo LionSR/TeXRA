@@ -8,7 +8,7 @@ import {
   API_PROVIDERS,
   apiKeyExists as resolvedApiKeyExists,
   apiKeySecretName,
-  lookupApiKey,
+  hasUsableApiKey as resolvedHasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
 import {
@@ -16,7 +16,6 @@ import {
   getGitHubEnvToken,
   normalizeGitHubToken,
 } from '@tools/github/githubAuth';
-import { isNonEmptyString } from '@utils/core';
 
 export type { ApiProvider };
 
@@ -97,8 +96,7 @@ export class SecretManager {
    * authentication value.
    */
   public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
-    const key = await lookupApiKey(platform().secrets, provider);
-    return isNonEmptyString(key);
+    return resolvedHasUsableApiKey(platform().secrets, provider);
   }
 
   public static async getApiProviderQuickPickItems(): Promise<

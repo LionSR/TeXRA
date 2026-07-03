@@ -67,8 +67,8 @@ export class AgentDirectoryManager {
           showLoggedMessageWithDocs(CHANNEL, message, docsId),
       },
       logger: {
-        debug: (message) => logger.debug(CHANNEL, message),
-        error: (message) => logger.error(CHANNEL, message),
+        debug: (message, data) => logger.debug(CHANNEL, message, { data }),
+        error: (message, data) => logger.error(CHANNEL, message, { data }),
       },
     });
   }

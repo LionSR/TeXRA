@@ -4,8 +4,8 @@ import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-
 import { toErrorMessage } from '@common/errors';
+
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas/toolConfig';
 import { TaskRunFileService, flexibleFS, pathToLocation } from '@utils/files';
@@ -91,10 +91,9 @@ export class LatexMediaManager {
             pathToLocation(absolutePath),
           );
         } catch (error) {
-          const message = toErrorMessage(error);
-          this.logger.debug(
-            `Unable to mirror figure dependency ${absolutePath}: ${message}`,
-          );
+          this.logger.debug('Unable to mirror figure dependency', {
+            data: { path: absolutePath, error },
+          });
         }
       },
       { concurrency: LATEX_CONCURRENCY, stopOnError: false },
@@ -135,20 +134,27 @@ export class LatexMediaManager {
           const stats = await flexibleFS.stat(pdfLocation).catch((err) => {
             this.logger.error(
               `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
+              { data: { path: pdfLocation.absolutePath, error: err } },
             );
             return undefined;
           });
           if (!stats) return undefined;
           if (stats.size === 0) {
-            this.logger.warn(
-              `Compiled PDF is empty for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
-            );
+            this.logger.warn('Compiled PDF is empty', {
+              data: {
+                sourceFile: file.absolutePath,
+                pdfFile: pdfLocation.absolutePath,
+              },
+            });
             return undefined;
           }
 
-          this.logger.info(
-            `Compiled PDF for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
-          );
+          this.logger.info('Compiled PDF', {
+            data: {
+              sourceFile: file.absolutePath,
+              pdfFile: pdfLocation.absolutePath,
+            },
+          });
           return pdfLocation;
         } catch {
           // Silent skip: pMap with stopOnError: false continues past
@@ -201,9 +207,9 @@ export class LatexMediaManager {
             await platform().fs.realPath(file.absolutePath),
           );
         } catch (error) {
-          this.logger.debug(
-            `Unable to resolve real path for ${file.absolutePath}: ${toErrorMessage(error)}`,
-          );
+          this.logger.debug('Unable to resolve real path', {
+            data: { path: file.absolutePath, error },
+          });
         }
         await this.mirrorProjectSiblings(siblingDir);
       },
@@ -231,16 +237,16 @@ export class LatexMediaManager {
               worklist.push(depLocation);
             }
           } catch (error) {
-            this.logger.debug(
-              `Unable to mirror LaTeX dependency ${absolutePath}: ${toErrorMessage(error)}`,
-            );
+            this.logger.debug('Unable to mirror LaTeX dependency', {
+              data: { path: absolutePath, error },
+            });
           }
         },
         { concurrency: LATEX_CONCURRENCY, stopOnError: false },
       );
-      this.logger.debug(
-        `Mirrored ${deps.length} LaTeX dependencies from ${file.absolutePath}`,
-      );
+      this.logger.debug('Mirrored LaTeX dependencies', {
+        data: { count: deps.length, from: file.absolutePath },
+      });
     }
   }
 
@@ -260,9 +266,9 @@ export class LatexMediaManager {
         found.add(abs);
       }
     } catch (error) {
-      this.logger.debug(
-        `Unable to extract LaTeX dependencies from ${latexFile.absolutePath}: ${toErrorMessage(error)}`,
-      );
+      this.logger.debug('Unable to extract LaTeX dependencies', {
+        data: { path: latexFile.absolutePath, error },
+      });
     }
 
     try {
@@ -287,9 +293,9 @@ export class LatexMediaManager {
         }
       }
     } catch (error) {
-      this.logger.debug(
-        `Unable to probe \\usepackage targets in ${latexFile.absolutePath}: ${toErrorMessage(error)}`,
-      );
+      this.logger.debug('Unable to probe \\usepackage targets', {
+        data: { path: latexFile.absolutePath, error },
+      });
     }
 
     return [...found];
@@ -309,9 +315,9 @@ export class LatexMediaManager {
         ([name]) => name,
       );
     } catch (error) {
-      this.logger.debug(
-        `Unable to scan project siblings in ${projectDir}: ${toErrorMessage(error)}`,
-      );
+      this.logger.debug('Unable to scan project siblings', {
+        data: { path: projectDir, error },
+      });
       return;
     }
 
@@ -338,9 +344,9 @@ export class LatexMediaManager {
             pathToLocation(absolutePath),
           );
         } catch (error) {
-          this.logger.debug(
-            `Unable to mirror project sibling ${absolutePath}: ${toErrorMessage(error)}`,
-          );
+          this.logger.debug('Unable to mirror project sibling', {
+            data: { path: absolutePath, error },
+          });
         }
       },
       { concurrency: LATEX_CONCURRENCY, stopOnError: false },
@@ -371,9 +377,9 @@ export class LatexMediaManager {
           if (figures.length === 0) return;
           await this.mirrorFigureDependencies(file, figures);
         } catch (error) {
-          this.logger.debug(
-            `Unable to mirror figures from ${file.absolutePath}: ${toErrorMessage(error)}`,
-          );
+          this.logger.debug('Unable to mirror figures', {
+            data: { path: file.absolutePath, error },
+          });
         }
       },
       { concurrency: LATEX_CONCURRENCY, stopOnError: false },
@@ -407,9 +413,9 @@ export class LatexMediaManager {
         continue;
       }
 
-      this.logger.debug(
-        `Extracted ${figures.length} figures from ${file.absolutePath}`,
-      );
+      this.logger.debug('Extracted figures', {
+        data: { count: figures.length, from: file.absolutePath },
+      });
 
       // Match the resolution in extractFigurePathsFromLatex so the returned
       // figure paths (relative to the real latexDir) map back to workspace
@@ -427,9 +433,9 @@ export class LatexMediaManager {
 
       for (const { loc, exists } of existenceChecks) {
         if (!exists) {
-          this.logger.debug(
-            `Extracted figure path does not exist: ${loc.absolutePath} (from ${file.absolutePath})`,
-          );
+          this.logger.debug('Extracted figure path does not exist', {
+            data: { figurePath: loc.absolutePath, from: file.absolutePath },
+          });
         }
       }
 

@@ -86,8 +86,12 @@ export async function uploadToolAttachments(
     try {
       buffer = await loadAttachmentBuffer(attachment);
     } catch (err) {
+      const attachmentPath = attachment.path ?? 'attachment';
       logger.warn(
-        `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+        `Unable to read attachment ${attachmentPath}: ${getSdkErrorMessage(err)}`,
+        {
+          data: { path: attachmentPath, error: err },
+        },
       );
       unsupported.push(attachment);
       continue;
@@ -132,8 +136,12 @@ export async function uploadToolAttachments(
     } catch (err) {
       // Upload failed — degrade to unsupported, but log so a dropped
       // attachment isn't silently omitted from the request.
+      const attachmentPath = attachment.path ?? 'attachment';
       logger.warn(
-        `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+        `Failed to upload attachment ${attachmentPath}: ${getSdkErrorMessage(err)}`,
+        {
+          data: { path: attachmentPath, error: err },
+        },
       );
       unsupported.push(attachment);
     } finally {
