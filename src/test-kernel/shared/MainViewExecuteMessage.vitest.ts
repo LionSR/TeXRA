@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildMainViewExecuteMessage } from '@shared/mainView';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  MainViewExecuteInboundMessageSchema,
+  MainViewExecuteMessageSchema,
+} from '@shared/schemas/mainView';
 
 describe('MainView execute message builder', () => {
   it('builds tool-use execute messages from form state', () => {
@@ -76,5 +81,49 @@ describe('MainView execute message builder', () => {
     expect(message.agent).toBe('correct');
     expect(message.isToolUseAgent).toBe(false);
     expect(message.files?.inputFilesActive).toBe(false);
+  });
+
+  it('derives execute payload validation from the shared schema', () => {
+    const message = buildMainViewExecuteMessage({
+      sessionType: 'toolUse',
+      workflowAgent: 'correct',
+      toolUseAgent: 'orchestrator',
+      model: 'gpt-5.4',
+      instruction: 'Search for a short proof.',
+      singleFiles: { baseFile: '', editedFile: '' },
+      multiFiles: {
+        inputFiles: [],
+        contextFiles: [],
+        mediaFiles: ['diagram.png'],
+        outputFiles: [],
+      },
+      checkboxValues: {
+        autoExtractFigure: false,
+        autoExtractTikzFigure: false,
+        autoCompileInputPdf: false,
+        attachTeXCount: false,
+      },
+    });
+
+    expect(MainViewExecuteMessageSchema.parse(message)).toEqual(message);
+    expect(
+      MainViewExecuteInboundMessageSchema.parse({
+        command: MAIN_VIEW_COMMANDS.EXECUTE,
+        ...message,
+      }),
+    ).toMatchObject({
+      command: MAIN_VIEW_COMMANDS.EXECUTE,
+      agent: 'orchestrator',
+      files: { mediaFiles: ['diagram.png'] },
+    });
+  });
+
+  it('rejects malformed nested execute payload fields', () => {
+    expect(
+      MainViewExecuteInboundMessageSchema.safeParse({
+        command: MAIN_VIEW_COMMANDS.EXECUTE,
+        files: { inputFiles: 'main.tex' },
+      }).success,
+    ).toBe(false);
   });
 });

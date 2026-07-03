@@ -423,6 +423,20 @@ describe('desktop IPC adapters', () => {
     await Promise.resolve();
     expect(executeAgent).toHaveBeenCalledWith(executeMessage);
 
+    const malformedError = vi.fn();
+    const malformedExecutionIpc = createDesktopExecutionIpc({
+      executeAgent,
+      onAsyncError: malformedError,
+    });
+    expect(
+      malformedExecutionIpc.handleMessage({
+        command: MAIN_VIEW_COMMANDS.EXECUTE,
+        files: { inputFiles: 'main.tex' },
+      }),
+    ).toBe(true);
+    expect(executeAgent).toHaveBeenCalledTimes(1);
+    expect(malformedError).toHaveBeenCalledWith(expect.any(Error));
+
     const error = new Error('execution failed');
     const onAsyncError = vi.fn();
     createDesktopExecutionIpc({
