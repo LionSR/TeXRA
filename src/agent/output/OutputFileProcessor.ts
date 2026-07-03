@@ -1,6 +1,7 @@
 import { logMissingOutputs, type AgentTrace } from '@agent/trace';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   type FileLocation,
   type OutputFileInfo,
@@ -159,7 +160,7 @@ export class OutputFileProcessor {
       xmlFile: outputLocation.absolutePath,
       documentTag: this.ctx.agentSetting.documentTag,
     });
-    this.ctx.runtimeHost.emit('updateMissingOutputs', {
+    emitRunFact(this.ctx.logger, 'updateMissingOutputs', {
       streamId: this.ctx.streamId,
       filesByRound: { [currRound]: [] },
     });

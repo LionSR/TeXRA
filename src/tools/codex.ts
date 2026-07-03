@@ -29,6 +29,7 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { emitRunFact } from '@agent/runtime/runFactEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type {
   StreamTabId,
@@ -153,9 +154,9 @@ type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 export function publishCodexTodos(
   childStreamId: StreamTabId,
   todos: TodoItem[],
-  runtimeHost: AgentRuntimeHost,
+  logger: AgentTrace,
 ): void {
-  runtimeHost.emit('updateTodos', { streamId: childStreamId, todos });
+  emitRunFact(logger, 'updateTodos', { streamId: childStreamId, todos });
 }
 
 function toProgressTodos(item: TodoListItem): TodoItem[] {
@@ -171,7 +172,6 @@ function logCodexItem(
   item: ThreadItem,
   childStreamId: StreamTabId,
   logger: AgentTrace,
-  runtimeHost: AgentRuntimeHost,
 ): void {
   switch (item.type) {
     case 'command_execution': {
@@ -200,7 +200,7 @@ function logCodexItem(
       publishCodexTodos(
         childStreamId,
         toProgressTodos(item as TodoListItem),
-        runtimeHost,
+        logger,
       );
       break;
     }
@@ -252,15 +252,14 @@ function publishCodexItemProgress(params: {
   childStreamId: StreamTabId;
   logger: AgentTrace;
   refs: Map<string, CodexToolLogRef>;
-  runtimeHost: AgentRuntimeHost;
 }): boolean {
-  const { item, status, childStreamId, logger, refs, runtimeHost } = params;
+  const { item, status, childStreamId, logger, refs } = params;
 
   if (item.type === 'todo_list') {
     publishCodexTodos(
       childStreamId,
       toProgressTodos(item as TodoListItem),
-      runtimeHost,
+      logger,
     );
   }
 
@@ -281,7 +280,6 @@ export async function runStreamedTurn(
   prompt: string,
   childStreamId: StreamTabId,
   logger: AgentTrace,
-  runtimeHost: AgentRuntimeHost,
   signal?: AbortSignal,
 ): Promise<RunResult> {
   logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
@@ -300,7 +298,6 @@ export async function runStreamedTurn(
           childStreamId,
           logger,
           refs: itemLogRefs,
-          runtimeHost,
         });
         break;
       case 'item.completed': {
@@ -311,10 +308,9 @@ export async function runStreamedTurn(
           childStreamId,
           logger,
           refs: itemLogRefs,
-          runtimeHost,
         });
         if (!wasRenderedAsProgress) {
-          logCodexItem(item, childStreamId, logger, runtimeHost);
+          logCodexItem(item, childStreamId, logger);
         }
         if (item.type === 'agent_message') {
           responseParts.push(item.text);
@@ -392,7 +388,6 @@ function startCodexLoop(params: {
         prompt,
         childStreamId,
         logger,
-        runtimeHost,
         abortController.signal,
       ),
     getUsage: (turn) => turn.usage,
@@ -403,7 +398,7 @@ function startCodexLoop(params: {
           childStreamId,
           executionId,
           buildCodexUsageStats(turn.usage),
-          runtimeHost,
+          logger,
         );
       }
     },

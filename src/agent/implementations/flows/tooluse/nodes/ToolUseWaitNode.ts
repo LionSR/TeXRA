@@ -3,6 +3,7 @@ import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
@@ -86,7 +87,7 @@ export class ToolUseWaitNode<C> extends Node<
       if (goal?.status === 'active') {
         await GoalStore.setStatus(streamId, 'paused');
         await setGoalSessionBashAutoApproval(streamId, false, runtimeHost);
-        runtimeHost.emit('goalPaused', { streamId });
+        emitRunFact(this.services.logger, 'goalPaused', { streamId });
       }
     } else {
       const delivered = await onBeforeWaiting?.(

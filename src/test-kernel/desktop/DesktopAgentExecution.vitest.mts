@@ -91,9 +91,12 @@ type RunExecutionRequest = (
     // This window's SessionHandle. The onboarding run-completion test drives a
     // terminal `result` event through it via `attachRunTrace`.
     session: {
-      attachRunTrace(trace: {
-        subscribe(fn: (event: unknown) => void): unknown;
-      }): () => void;
+      attachRunTrace(
+        trace: {
+          subscribe(fn: (event: unknown) => void): unknown;
+        },
+        streamId: string,
+      ): () => void;
     };
     runtimeUnavailableTools?: readonly string[];
   },
@@ -1800,7 +1803,7 @@ describe('DesktopProgressBridge', () => {
     // result — exactly what the lifecycle does after persisting firstRunDone.
     const runAgent = vi.fn(async (_request, options) => {
       const trace = makeFakeTrace();
-      options.session.attachRunTrace(trace);
+      options.session.attachRunTrace(trace, 'stream-1');
       trace.emit({
         type: 'result',
         outcome: RUN_OUTCOME.COMPLETED,
@@ -1836,7 +1839,7 @@ describe('DesktopProgressBridge', () => {
     const onRunCompleted = vi.fn();
     const runAgent = vi.fn(async (_request, options) => {
       const trace = makeFakeTrace();
-      options.session.attachRunTrace(trace);
+      options.session.attachRunTrace(trace, 'stream-2');
       trace.emit({
         type: 'result',
         outcome: RUN_OUTCOME.FAILED,

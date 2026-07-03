@@ -1,8 +1,9 @@
 # Session-scoped runtime architecture: facts, interactions, and status ownership
 
-> **Status:** Open proposal (2026-07-03; status refreshed 2026-07-04). Companion
-> to the diagnosis in `tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this
-> document is the target design. It covers the event/logger chain, the
+> **Status:** Partially landed proposal (Stages 0-1; status refreshed
+> 2026-07-04). Companion to the diagnosis in
+> `tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this document is the
+> target design. It covers the event/logger chain, the
 > approval/interaction RPC machinery, stream status, and the execution registries
 > — and how all of them couple to the UI backends.
 
