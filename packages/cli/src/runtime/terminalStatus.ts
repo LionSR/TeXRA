@@ -1,11 +1,14 @@
 import { getExecutionStore } from '@agent/storage';
 import { runAgent } from '@agent/runtime/runAgent';
 
-import { projectRunOutcome } from '@common/constants/streamStatus';
+import {
+  legacyEndGroupStatusForOutcome,
+  runOutcomeToExecutionStatus,
+} from '@common/constants/streamStatus';
 import {
   EXECUTION_STATUS,
-  ExecutionStatusSchema,
   type ExecutionStatus,
+  type RunOutcome,
 } from '@shared/schemas';
 
 import { hasCliApprovalDenied } from './approvalAdapter';
@@ -15,9 +18,11 @@ import type { CliContext } from './cliContext';
 export type ExecuteAgentResult = Awaited<ReturnType<typeof runAgent>>;
 
 type CliRunResultFor<T extends ExecuteAgentResult> = T & {
+  /** @deprecated Use `outcome`; this is a frozen projection for JSON-output compatibility. */
   status: ExecutionStatus;
-  /** Legacy 2-value projection kept for JSON-output compatibility. */
+  /** @deprecated Use `outcome`; this is a frozen 2-value projection for JSON-output compatibility. */
   endGroupStatus: 'error' | 'stopped';
+  /** @deprecated Use `outcome`; this is a frozen projection for JSON-output compatibility. */
   terminalStatus: ExecutionStatus;
   workingDirectory?: string;
   runDirectory?: string;
@@ -30,13 +35,6 @@ export type CliRunResult = ExecuteAgentResult extends infer T
     ? CliRunResultFor<T>
     : never
   : never;
-
-function isExecutionStatus(
-  value: string | undefined,
-): value is ExecutionStatus {
-  // Schema is the source of truth — no hand-maintained value list.
-  return ExecutionStatusSchema.safeParse(value).success;
-}
 
 export type CliToolUseRunResult = Extract<
   CliRunResult,
@@ -54,15 +52,13 @@ export function toolUseResultText(result: CliToolUseRunResult): string {
 
 export function cliTerminalStatus(
   result: ExecuteAgentResult,
-  storedTerminalStatus?: string,
+  storedOutcome?: RunOutcome,
 ): ExecutionStatus {
-  if (isExecutionStatus(storedTerminalStatus)) return storedTerminalStatus;
-  return projectRunOutcome(result.outcome).executionStatus;
+  return runOutcomeToExecutionStatus(storedOutcome ?? result.outcome);
 }
 
 export function createCliRunResult<T extends ExecuteAgentResult>(
   result: T,
-  terminalStatus: ExecutionStatus,
   extras: {
     readonly workingDirectory?: string;
     readonly runDirectory?: string;
@@ -70,10 +66,11 @@ export function createCliRunResult<T extends ExecuteAgentResult>(
     readonly copiedOutputs?: string[];
   } = {},
 ): T extends ExecuteAgentResult ? CliRunResultFor<T> : never {
+  const terminalStatus = runOutcomeToExecutionStatus(result.outcome);
   return {
     ...result,
     status: terminalStatus,
-    endGroupStatus: projectRunOutcome(result.outcome).endGroupStatus,
+    endGroupStatus: legacyEndGroupStatusForOutcome(result.outcome),
     terminalStatus,
     ...extras,
   } as T extends ExecuteAgentResult ? CliRunResultFor<T> : never;
@@ -102,5 +99,5 @@ export async function readCliTerminalStatus(
   const meta = await getExecutionStore(result.executionId)
     .readMeta()
     .catch(() => undefined);
-  return cliTerminalStatus(result, meta?.terminalStatus);
+  return cliTerminalStatus(result, meta?.outcome);
 }

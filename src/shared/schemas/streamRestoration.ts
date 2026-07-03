@@ -17,9 +17,18 @@ import { z } from 'zod';
 
 import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
-import { StreamStatusSchema } from './stream';
+import {
+  StreamPhaseSchema,
+  StreamStatusSchema,
+  streamStatusToPhase,
+} from './stream';
 
 export const RESTORED_STREAM_FILE_VERSION = 1;
+
+const PersistedLastKnownStreamPhaseSchema = z.union([
+  StreamPhaseSchema,
+  StreamStatusSchema.transform(streamStatusToPhase),
+]);
 
 /**
  * Slim subset of `StreamTabInfo` + `StreamMetadata` that's safe to
@@ -39,9 +48,8 @@ export const RestoredStreamSnapshotSchema = z.object({
   inputFile: z.string().optional(),
   /** Original instruction text — useful for "start fresh" fallback. */
   instruction: z.string().optional(),
-  /** Last known status before shutdown. We mark it explicitly stopped
-   * on hydrate so the UI doesn't claim the run is still running. */
-  lastKnownStatus: StreamStatusSchema,
+  /** Last known phase before shutdown. Kept under the legacy on-disk key. */
+  lastKnownStatus: PersistedLastKnownStreamPhaseSchema,
   /** AI-generated description, if any. */
   description: z.string().optional(),
   /** Execution id for storage lookup (powers resume / transcript view). */

@@ -145,6 +145,90 @@ export const RUN_OUTCOME = {
 export const RunOutcomeSchema = z.enum(RUN_OUTCOME);
 export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
 
+export const STREAM_PHASE = {
+  RUNNING: STREAM_STATUS.RUNNING,
+  WAITING: STREAM_STATUS.WAITING,
+  COMPLETED: RUN_OUTCOME.COMPLETED,
+  CANCELLED: RUN_OUTCOME.CANCELLED,
+  FAILED: RUN_OUTCOME.FAILED,
+} as const;
+
+export const StreamPhaseSchema = z.enum(STREAM_PHASE);
+export type StreamPhase = z.infer<typeof StreamPhaseSchema>;
+
+export const STREAM_SUBSTATE = {
+  STARTING: 'starting',
+  RESUMING: 'resuming',
+} as const;
+
+export const StreamSubstateSchema = z.enum(STREAM_SUBSTATE);
+export type StreamSubstate = z.infer<typeof StreamSubstateSchema>;
+
+export function isRunOutcome(value: string | undefined): value is RunOutcome {
+  return RunOutcomeSchema.safeParse(value).success;
+}
+
+export function executionStatusToRunOutcome(
+  status: string | undefined,
+): RunOutcome | undefined {
+  if (isRunOutcome(status)) return status;
+
+  const parsed = ExecutionStatusSchema.safeParse(status);
+  if (!parsed.success) return undefined;
+
+  switch (parsed.data) {
+    case EXECUTION_STATUS.COMPLETED:
+      return RUN_OUTCOME.COMPLETED;
+    case EXECUTION_STATUS.INTERRUPTED:
+      return RUN_OUTCOME.CANCELLED;
+    case EXECUTION_STATUS.ERROR:
+      return RUN_OUTCOME.FAILED;
+  }
+}
+
+export function streamStatusToPhase(status: StreamStatus): StreamPhase {
+  switch (status) {
+    case STREAM_STATUS.RUNNING:
+    case STREAM_STATUS.RESUMING:
+    case STREAM_STATUS.INITIALIZING:
+      return STREAM_PHASE.RUNNING;
+    case STREAM_STATUS.WAITING:
+      return STREAM_PHASE.WAITING;
+    case STREAM_STATUS.ERROR:
+      return STREAM_PHASE.FAILED;
+    case STREAM_STATUS.STOPPED:
+    case STREAM_STATUS.READY:
+      return STREAM_PHASE.COMPLETED;
+  }
+}
+
+export function streamStatusToSubstate(
+  status: StreamStatus,
+): StreamSubstate | undefined {
+  switch (status) {
+    case STREAM_STATUS.INITIALIZING:
+      return STREAM_SUBSTATE.STARTING;
+    case STREAM_STATUS.RESUMING:
+      return STREAM_SUBSTATE.RESUMING;
+    default:
+      return undefined;
+  }
+}
+
+export function streamPhaseToStreamStatus(phase: StreamPhase): StreamStatus {
+  switch (phase) {
+    case STREAM_PHASE.RUNNING:
+      return STREAM_STATUS.RUNNING;
+    case STREAM_PHASE.WAITING:
+      return STREAM_STATUS.WAITING;
+    case STREAM_PHASE.FAILED:
+      return STREAM_STATUS.ERROR;
+    case STREAM_PHASE.COMPLETED:
+    case STREAM_PHASE.CANCELLED:
+      return STREAM_STATUS.STOPPED;
+  }
+}
+
 export const WORKTREE_PR_STATE = {
   OPEN: 'open',
   MERGED: 'merged',

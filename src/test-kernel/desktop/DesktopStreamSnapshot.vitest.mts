@@ -7,7 +7,11 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - shared schemas
-import { STREAM_STATUS } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  STREAM_STATUS,
+  StreamPhaseSchema,
+} from '@shared/schemas';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -108,7 +112,7 @@ describe('DesktopStreamSnapshot', () => {
     expect(ids).toEqual(['toolUseAgent@2', 'workflowAgent@1']);
   });
 
-  it('preserves RUNNING on hydrate for startup repair', async () => {
+  it('preserves RUNNING phase on hydrate for startup repair', async () => {
     const filePath = await tempFilePath();
 
     const writer = await openDesktopStreamSnapshotStore(filePath);
@@ -117,32 +121,48 @@ describe('DesktopStreamSnapshot', () => {
     );
 
     const reopened = await openDesktopStreamSnapshotStore(filePath);
-    expect(reopened.hydrated[0]?.lastKnownStatus).toBe(STREAM_STATUS.RUNNING);
+    expect(reopened.hydrated[0]?.lastKnownStatus).toBe(STREAM_PHASE.RUNNING);
   });
 
   it.each([
-    STREAM_STATUS.RESUMING,
-    STREAM_STATUS.INITIALIZING,
-    STREAM_STATUS.WAITING,
-  ])('preserves %s on hydrate for startup repair', async (status) => {
+    [STREAM_STATUS.RESUMING, STREAM_PHASE.RUNNING],
+    [STREAM_STATUS.INITIALIZING, STREAM_PHASE.RUNNING],
+    [STREAM_STATUS.WAITING, STREAM_PHASE.WAITING],
+  ])('maps legacy %s to %s on hydrate', async (status, expectedPhase) => {
     const filePath = await tempFilePath();
 
     const writer = await openDesktopStreamSnapshotStore(filePath);
     await writer.upsert(makeSnapshot({ lastKnownStatus: status }));
 
     const reopened = await openDesktopStreamSnapshotStore(filePath);
-    expect(reopened.hydrated[0]?.lastKnownStatus).toBe(status);
+    expect(reopened.hydrated[0]?.lastKnownStatus).toBe(expectedPhase);
   });
 
-  it('normalises inactive statuses to STOPPED on hydrate', async () => {
+  it('normalises inactive phases to COMPLETED on hydrate', async () => {
     const filePath = await tempFilePath();
 
     const writer = await openDesktopStreamSnapshotStore(filePath);
     await writer.upsert(makeSnapshot({ lastKnownStatus: STREAM_STATUS.ERROR }));
 
     const reopened = await openDesktopStreamSnapshotStore(filePath);
-    expect(reopened.hydrated[0]?.lastKnownStatus).toBe(STREAM_STATUS.STOPPED);
+    expect(reopened.hydrated[0]?.lastKnownStatus).toBe(STREAM_PHASE.COMPLETED);
   });
+
+  it.each(Object.values(STREAM_STATUS))(
+    'read-shims legacy on-disk %s to a defined phase',
+    async (status) => {
+      const filePath = await tempFilePath();
+
+      const writer = await openDesktopStreamSnapshotStore(filePath);
+      await writer.upsert(makeSnapshot({ lastKnownStatus: status }));
+
+      const reopened = await openDesktopStreamSnapshotStore(filePath);
+      expect(
+        StreamPhaseSchema.safeParse(reopened.hydrated[0]?.lastKnownStatus)
+          .success,
+      ).toBe(true);
+    },
+  );
 
   it('preserves parent stream links on hydrate', async () => {
     const filePath = await tempFilePath();

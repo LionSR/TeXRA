@@ -13,7 +13,11 @@ import {
   getSdkErrorMessage,
   normalizeProviderError,
 } from '@common/errors';
-import { projectRunOutcome } from '@common/constants/streamStatus';
+import {
+  legacyEndGroupStatusForOutcome,
+  projectRunOutcome,
+  terminalStreamStatusForOutcome,
+} from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,
@@ -184,7 +188,11 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    endParentStageSafely(ctx, agentIdentifier, projection.endGroupStatus);
+    endParentStageSafely(
+      ctx,
+      agentIdentifier,
+      legacyEndGroupStatusForOutcome(result.outcome),
+    );
     // Emit the terminal result BEFORE untrack so the registry's terminal
     // listener event never precedes the result event, and settle the handle's
     // `result` promise with the same event (F-2: per-run control handle).
@@ -212,10 +220,14 @@ export async function runFlowWithLifecycle(
     try {
       session.executions.untrack(ctx.executionId);
       if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
-        ctx.streamStatus.set(streamId, projection.streamStatus, {
-          runtimeHost: ctx.runtimeHost,
-          terminalStatus: projection.executionStatus,
-        });
+        ctx.streamStatus.set(
+          streamId,
+          terminalStreamStatusForOutcome(result.outcome),
+          {
+            runtimeHost: ctx.runtimeHost,
+            terminalStatus: projection.executionStatus,
+          },
+        );
       }
     } catch (cleanupErr) {
       logger.warn('Post-completion cleanup threw', {
@@ -252,7 +264,11 @@ export async function runFlowWithLifecycle(
       });
     }
 
-    endParentStageSafely(ctx, agentIdentifier, projection.endGroupStatus);
+    endParentStageSafely(
+      ctx,
+      agentIdentifier,
+      legacyEndGroupStatusForOutcome(outcome),
+    );
     // One emission covers all three exits below (subagent / abort / throw);
     // untrack follows in each branch, preserving emit-before-untrack. Outcome
     // routes through the same canonical mapper as the success arm
@@ -277,7 +293,7 @@ export async function runFlowWithLifecycle(
       );
     }
     try {
-      ctx.streamStatus.set(streamId, projection.streamStatus, {
+      ctx.streamStatus.set(streamId, terminalStreamStatusForOutcome(outcome), {
         runtimeHost: ctx.runtimeHost,
         terminalStatus: projection.executionStatus,
       });
