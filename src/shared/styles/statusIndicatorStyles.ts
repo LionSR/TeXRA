@@ -16,12 +16,13 @@ export const statusIndicatorStyles: CSSResult = css`
     opacity: var(--opacity-full);
   }
 
-  .status-indicator.is-stopped {
+  .status-indicator.is-completed,
+  .status-indicator.is-cancelled {
     background-color: var(--wa-color-text-quiet);
     opacity: var(--opacity-subtle, 0.7);
   }
 
-  .status-indicator.is-error {
+  .status-indicator.is-failed {
     background-color: var(--color-error);
     opacity: var(--opacity-full);
   }
@@ -32,7 +33,7 @@ export const statusIndicatorStyles: CSSResult = css`
     opacity: var(--opacity-full);
   }
 
-  .status-indicator.is-initializing {
+  .status-indicator.is-starting {
     background-color: var(--wa-color-text-quiet);
     opacity: var(--opacity-full);
   }

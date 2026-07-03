@@ -3,21 +3,33 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import {
+  canAcquireStreamReservation,
+  canReleaseStreamReservation,
+  canTransitionStreamPhase,
   deriveRunOutcome,
+  groupEndStatusForOutcome,
   isActiveStatus,
   isInFlightStatus,
   isLiveElapsedStatus,
   isTerminalStatus,
+  legacyEndGroupStatusForOutcome,
   projectRunOutcome,
   RUN_OUTCOME_PROJECTION,
+  STREAM_TRANSITION_CAUSE,
+  terminalStreamStatusForOutcome,
+  type StreamTransitionCause,
 } from '@common/constants/streamStatus';
 import {
   EXECUTION_STATUS,
   LIVE_ELAPSED_STREAM_STATUSES,
   RUN_OUTCOME,
+  STREAM_PHASE,
   STREAM_STATUS,
+  STREAM_SUBSTATE,
+  StreamPhaseSchema,
   streamStatusesWithTrait,
   type RunOutcome,
+  type StreamPhase,
 } from '@shared/schemas';
 
 describe('run outcome algebra', () => {
@@ -38,30 +50,148 @@ describe('run outcome algebra', () => {
     );
   });
 
-  it('projects each outcome into the three legacy vocabularies', () => {
+  it('projects each outcome into the injective legacy execution vocabulary', () => {
     expect(RUN_OUTCOME_PROJECTION[RUN_OUTCOME.COMPLETED]).toEqual({
       executionStatus: EXECUTION_STATUS.COMPLETED,
-      endGroupStatus: 'stopped',
-      streamStatus: STREAM_STATUS.STOPPED,
     });
     // A user stop persists 'interrupted' and ends the transcript group
     // neutral — cancelled is a sibling of failed, never folded into it.
     expect(RUN_OUTCOME_PROJECTION[RUN_OUTCOME.CANCELLED]).toEqual({
       executionStatus: EXECUTION_STATUS.INTERRUPTED,
-      endGroupStatus: 'stopped',
-      streamStatus: STREAM_STATUS.STOPPED,
     });
     expect(RUN_OUTCOME_PROJECTION[RUN_OUTCOME.FAILED]).toEqual({
       executionStatus: EXECUTION_STATUS.ERROR,
-      endGroupStatus: 'error',
-      streamStatus: STREAM_STATUS.ERROR,
     });
+  });
+
+  it('derives folded legacy group-end and stream-status projections from one helper', () => {
+    expect(groupEndStatusForOutcome(RUN_OUTCOME.COMPLETED)).toBe('ok');
+    expect(groupEndStatusForOutcome(RUN_OUTCOME.CANCELLED)).toBe('ok');
+    expect(groupEndStatusForOutcome(RUN_OUTCOME.FAILED)).toBe('error');
+
+    expect(legacyEndGroupStatusForOutcome(RUN_OUTCOME.COMPLETED)).toBe(
+      'stopped',
+    );
+    expect(legacyEndGroupStatusForOutcome(RUN_OUTCOME.CANCELLED)).toBe(
+      'stopped',
+    );
+    expect(legacyEndGroupStatusForOutcome(RUN_OUTCOME.FAILED)).toBe('error');
+
+    expect(terminalStreamStatusForOutcome(RUN_OUTCOME.COMPLETED)).toBe(
+      STREAM_STATUS.STOPPED,
+    );
+    expect(terminalStreamStatusForOutcome(RUN_OUTCOME.CANCELLED)).toBe(
+      STREAM_STATUS.STOPPED,
+    );
+    expect(terminalStreamStatusForOutcome(RUN_OUTCOME.FAILED)).toBe(
+      STREAM_STATUS.ERROR,
+    );
   });
 
   it('fails loudly on an out-of-vocabulary outcome', () => {
     expect(() => projectRunOutcome('bogus' as RunOutcome)).toThrow(
       'Unhandled run outcome: bogus',
     );
+  });
+});
+
+describe('stream phase transition table', () => {
+  const phases = StreamPhaseSchema.options;
+  const causes = Object.values(
+    STREAM_TRANSITION_CAUSE,
+  ) as StreamTransitionCause[];
+
+  const allowed: Record<
+    StreamPhase,
+    Record<StreamTransitionCause, readonly StreamPhase[]>
+  > = {
+    [STREAM_PHASE.RUNNING]: {
+      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [
+        STREAM_PHASE.COMPLETED,
+        STREAM_PHASE.CANCELLED,
+        STREAM_PHASE.FAILED,
+      ],
+      [STREAM_TRANSITION_CAUSE.WAIT]: [STREAM_PHASE.WAITING],
+      [STREAM_TRANSITION_CAUSE.RESUME]: [],
+      [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
+      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [
+        STREAM_PHASE.WAITING,
+        STREAM_PHASE.FAILED,
+      ],
+    },
+    [STREAM_PHASE.WAITING]: {
+      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [],
+      [STREAM_TRANSITION_CAUSE.WAIT]: [],
+      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
+      [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
+      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [],
+    },
+    [STREAM_PHASE.COMPLETED]: {
+      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [],
+      [STREAM_TRANSITION_CAUSE.WAIT]: [],
+      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
+      [STREAM_TRANSITION_CAUSE.USER_STOP]: [],
+      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [],
+    },
+    [STREAM_PHASE.CANCELLED]: {
+      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [],
+      [STREAM_TRANSITION_CAUSE.WAIT]: [],
+      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
+      [STREAM_TRANSITION_CAUSE.USER_STOP]: [],
+      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [],
+    },
+    [STREAM_PHASE.FAILED]: {
+      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [],
+      [STREAM_TRANSITION_CAUSE.WAIT]: [],
+      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
+      [STREAM_TRANSITION_CAUSE.USER_STOP]: [],
+      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [],
+    },
+  };
+
+  it('is exhaustive over every phase, cause, and destination phase', () => {
+    for (const from of phases) {
+      for (const cause of causes) {
+        for (const to of phases) {
+          expect(canTransitionStreamPhase(from, to, cause)).toBe(
+            allowed[from][cause].includes(to),
+          );
+        }
+      }
+    }
+  });
+
+  it('admits only lifecycle starts from idle', () => {
+    for (const cause of causes) {
+      for (const to of phases) {
+        expect(canTransitionStreamPhase(undefined, to, cause)).toBe(
+          cause === STREAM_TRANSITION_CAUSE.LIFECYCLE &&
+            to === STREAM_PHASE.RUNNING,
+        );
+      }
+    }
+  });
+
+  it('pins reservation invariants separately from transitions', () => {
+    expect(canAcquireStreamReservation(undefined)).toBe(true);
+    expect(canAcquireStreamReservation(STREAM_PHASE.RUNNING)).toBe(false);
+    expect(canAcquireStreamReservation(STREAM_PHASE.WAITING)).toBe(false);
+    expect(canAcquireStreamReservation(STREAM_PHASE.COMPLETED)).toBe(true);
+    expect(canAcquireStreamReservation(STREAM_PHASE.CANCELLED)).toBe(true);
+    expect(canAcquireStreamReservation(STREAM_PHASE.FAILED)).toBe(true);
+
+    for (const phase of [undefined, ...phases]) {
+      for (const substate of [
+        undefined,
+        STREAM_SUBSTATE.STARTING,
+        STREAM_SUBSTATE.RESUMING,
+      ]) {
+        expect(canReleaseStreamReservation({ phase, substate })).toBe(
+          phase === STREAM_PHASE.RUNNING &&
+            substate === STREAM_SUBSTATE.STARTING,
+        );
+      }
+    }
   });
 });
 
