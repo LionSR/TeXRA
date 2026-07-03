@@ -661,7 +661,7 @@ substate afterwards.
 (`CliRunResult`) is the widest external pin: it exposes **all three** legacy
 terminal vocabularies simultaneously (`outcome` + `status`/`terminalStatus` +
 `endGroupStatus`) to scripts, behind a deliberately loose NDJSON schema that
-would not catch renames. Per clig future-proofing (changes stay additive),
+would not catch renames. Per the clig.dev future-proofing guideline (changes stay additive),
 those legacy fields are **not removed**: they become frozen projections
 derived from `outcome` (`terminalStatus` via the legacy mapping,
 `endGroupStatus` via the 2-value helper), documented as deprecated, with
@@ -760,7 +760,7 @@ invisible to it while desktop/CLI gain correctness.
    (desktop `streams.json` union+transform, `terminalStatus` legacy mapping),
    the tier-4 frozen CLI projections, and the display-table re-keying —
    while the old service still runs. Pure schema/shim work, independently
-   revertable, and it forces the outcome-naming fix onto the direct stop
+   revertible, and it forces the outcome-naming fix onto the direct stop
    paths (per §5 sequencing rule 1: vocabulary before machine).
 1. **Hub + projection of the easy seven.** Add `SessionEventHub` (with
    subscription filters, see §5 chunk risk) + the `attachRunTrace`
