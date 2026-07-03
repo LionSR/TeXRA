@@ -54,12 +54,14 @@ import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
+  STREAM_PHASE,
   STREAM_STATUS,
   type AgentProposalPermission,
   type AgentCategoryFilter,
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
+  type StreamPhase,
   type StreamTabId,
   streamStatusesWithTrait,
 } from '@shared/schemas';
@@ -112,6 +114,10 @@ const DESKTOP_UNAVAILABLE_TOOLS: readonly DesktopUnavailableTool[] = [
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
 ];
 const RESTART_REPAIR_STATUSES = streamStatusesWithTrait('inFlight');
+const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
+  STREAM_PHASE.RUNNING,
+  STREAM_PHASE.WAITING,
+]);
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
@@ -677,7 +683,7 @@ export class DesktopProgressBridge {
       }
       const currentStatus = StreamStatusService.get(streamId);
       if (
-        RESTART_REPAIR_STATUSES.has(snapshot.lastKnownStatus) ||
+        RESTART_REPAIR_PHASES.has(snapshot.lastKnownStatus) ||
         (currentStatus != null && RESTART_REPAIR_STATUSES.has(currentStatus))
       ) {
         repairStreams.add(streamId);

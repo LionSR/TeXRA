@@ -16,6 +16,7 @@ import {
 } from '@agent/runtime/InterruptRegistry';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import {
+  EXECUTION_STATUS,
   STREAM_STATUS,
   LIVE_ELAPSED_STREAM_STATUSES,
   type ActiveChildInfo,
@@ -49,6 +50,8 @@ export interface StopAgentStreamOptions {
   readonly detachActiveChildren?: boolean;
   readonly runtimeHost?: AgentRuntimeHost;
 }
+
+const USER_STOP_TERMINAL_STATUS = EXECUTION_STATUS.INTERRUPTED;
 
 export type StopAgentChildPolicy = 'cascade' | 'detach';
 
@@ -619,7 +622,10 @@ export class ExecutionRegistry {
     if (!runtimeHost) {
       return { kind: 'no_target', streamId, childPolicy };
     }
-    this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
+    this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, {
+      runtimeHost,
+      terminalStatus: USER_STOP_TERMINAL_STATUS,
+    });
     return { kind: 'marked_stopped', streamId, childPolicy };
   }
 
@@ -739,6 +745,7 @@ export class ExecutionRegistry {
       interruptible.interrupt();
       this.streamStatus.set(handle.childStreamId, STREAM_STATUS.STOPPED, {
         runtimeHost: handle.runtimeHost,
+        terminalStatus: USER_STOP_TERMINAL_STATUS,
       });
       return true;
     }
@@ -758,7 +765,10 @@ export class ExecutionRegistry {
     if (!interruptible) return false;
     interruptible.interrupt();
     if (runtimeHost) {
-      this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
+      this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, {
+        runtimeHost,
+        terminalStatus: USER_STOP_TERMINAL_STATUS,
+      });
     }
     return true;
   }

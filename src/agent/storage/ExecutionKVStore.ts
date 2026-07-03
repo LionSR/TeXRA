@@ -16,7 +16,13 @@ import {
   AgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
-import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import {
+  ExecutionIdSchema,
+  RunOutcomeSchema,
+  executionStatusToRunOutcome,
+  type ExecutionId,
+  type RunOutcome,
+} from '@shared/schemas';
 import { normalizeFilePath } from '@shared/utils/path';
 import {
   CompileFailureSummarySchema,
@@ -45,11 +51,13 @@ const KEYS = {
 // ============================================================================
 
 /** Execution metadata stored alongside config at launch time. */
-const ExecutionMetaSchema = z.object({
+const ExecutionMetaBaseSchema = z.object({
   timestamp: z.string(),
   parentExecutionId: ExecutionIdSchema.optional(),
   /** Persisted when execution reaches a terminal state (success or error). */
   terminalStatus: z.string().optional(),
+  /** Canonical terminal outcome; legacy meta files derive this from terminalStatus. */
+  outcome: RunOutcomeSchema.optional(),
   /** Runtime category override (e.g. 'process' for background bash). */
   category: z.string().optional(),
   /** AI-generated summary of what the session aimed to accomplish. */
@@ -62,6 +70,16 @@ const ExecutionMetaSchema = z.object({
    */
   delegationDepth: z.int().nonnegative().optional(),
 });
+
+const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
+  (
+    meta,
+  ): z.infer<typeof ExecutionMetaBaseSchema> & { outcome?: RunOutcome } => {
+    const outcome =
+      meta.outcome ?? executionStatusToRunOutcome(meta.terminalStatus);
+    return outcome ? { ...meta, outcome } : meta;
+  },
+);
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 
 /** Shape of a persisted todo item from tool-use flow state. */

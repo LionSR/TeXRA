@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import {
   AgentCategory,
+  STREAM_PHASE,
   STREAM_STATUS,
   type RestoredStreamSnapshot,
   type StreamTabId,
@@ -32,7 +33,7 @@ function createSnapshot(
   return {
     label: overrides.streamId,
     agentCategory: AgentCategory.Workflow,
-    lastKnownStatus: STREAM_STATUS.STOPPED,
+    lastKnownStatus: STREAM_PHASE.COMPLETED,
     creationTimestamp: 1_000,
     persistedAt: 2_000,
     ...overrides,

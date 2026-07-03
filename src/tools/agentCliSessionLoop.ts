@@ -25,6 +25,7 @@ import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
 import {
   deriveRunOutcome,
+  legacyEndGroupStatusForOutcome,
   projectRunOutcome,
 } from '@common/constants/streamStatus';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -322,13 +323,12 @@ export function runAgentCliSession<TTurn>(
       // are projections of it. The child-stream finalize below is NOT a
       // projection: child streams reset to READY on clean exit so the tab
       // clears, which has no outcome equivalent.
-      const projection = projectRunOutcome(
-        deriveRunOutcome({
-          failed: sawTurnFailure,
-          cancelled: session.isInterrupted(),
-        }),
-      );
-      sessionStage.end(projection.endGroupStatus);
+      const outcome = deriveRunOutcome({
+        failed: sawTurnFailure,
+        cancelled: session.isInterrupted(),
+      });
+      const projection = projectRunOutcome(outcome);
+      sessionStage.end(legacyEndGroupStatusForOutcome(outcome));
       runSession.interrupts.unregister(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       strategy.onSessionCleanup?.();

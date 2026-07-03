@@ -11,7 +11,11 @@ import {
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
 
@@ -117,6 +121,18 @@ describe('executionRegistry', () => {
       expect(childInterrupt).toHaveBeenCalledOnce();
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_STATUS.STOPPED);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(
+        explicit.events
+          .filter((event) => event.event === 'updateStreamStatus')
+          .map((event) => event.payload),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            status: STREAM_STATUS.STOPPED,
+            terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          }),
+        ]),
+      );
     } finally {
       registry.dispose();
     }
@@ -350,6 +366,10 @@ describe('executionRegistry', () => {
 
       expect(interrupt).toHaveBeenCalledOnce();
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(explicit.events.at(-1)?.payload).toMatchObject({
+        status: STREAM_STATUS.STOPPED,
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      });
     } finally {
       registry.dispose();
     }
@@ -372,6 +392,10 @@ describe('executionRegistry', () => {
         childPolicy: 'cascade',
       });
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(explicit.events.at(-1)?.payload).toMatchObject({
+        status: STREAM_STATUS.STOPPED,
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      });
     } finally {
       registry.dispose();
     }

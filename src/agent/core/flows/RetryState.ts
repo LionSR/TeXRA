@@ -10,6 +10,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { ensureError, normalizeProviderError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import {
+  EXECUTION_STATUS,
   STREAM_STATUS,
   toRetryErrorInfo,
   type RetryErrorInfo,
@@ -287,6 +288,7 @@ export abstract class RetryableInvocationNode<
     logProgressStatus(logger, message);
     streamStatus.set(streamId, STREAM_STATUS.STOPPED, {
       runtimeHost,
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
     });
     return { shouldRetry: false, userCancelled: true };
   }
