@@ -15,8 +15,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
-  attachPartialText,
-  attachFlowAutoRetryRequired,
+  annotateStreamFailure,
   detectStatusCode,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -282,12 +281,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           aggregator.partialContent,
           PARTIAL_TEXT_TAIL_MAX,
         );
-        if (partialTail) {
-          attachPartialText(err, partialTail);
-        }
-        if (streamConnected || partialTail) {
-          attachFlowAutoRetryRequired(err);
-        }
+        annotateStreamFailure(
+          err,
+          partialTail,
+          streamConnected || partialTail.length > 0,
+        );
         throw err;
       }
     }
