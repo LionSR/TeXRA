@@ -15,8 +15,6 @@ export {
 
 export { GlobalStorageAgentDirectoryStorage } from './AgentDirectorySync';
 
-export { setAgentDirectories } from './agentDirectoriesRegistry';
-
 export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 
 export {

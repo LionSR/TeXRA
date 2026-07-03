@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
     isAuthenticated: vi.fn(),
   },
   bootstrapPlatformAgentDirectories: vi.fn(),
+  createPlatformAgentDirectories: vi.fn(() => ({
+    custom: vi.fn(),
+    builtIn: vi.fn(),
+    builtInToolUse: vi.fn(),
+  })),
   createNodePlatform: vi.fn(() => ({})),
   initializeCliSupabaseAuth: vi.fn(),
   initializeNodeGoalPrompts: vi.fn(),
@@ -31,6 +36,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index/platformAgentDirectories', () => ({
   bootstrapPlatformAgentDirectories: mocks.bootstrapPlatformAgentDirectories,
+  createPlatformAgentDirectories: mocks.createPlatformAgentDirectories,
 }));
 
 vi.mock('@auth/serverKeys', () => ({
