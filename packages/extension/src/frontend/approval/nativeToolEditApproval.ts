@@ -36,7 +36,6 @@ import {
   emitToolEditApprovalPrompt,
   firstChangedLine,
   registerPendingApproval,
-  setToolEditApprovalHandler,
   unregisterPendingApproval,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
@@ -124,7 +123,7 @@ function resolveProgressViewApprovalPrompt(requestId: string): void {
   getRuntimeHost().emit('resolveToolEditPermission', { requestId });
 }
 
-async function nativeRequestApproval(
+export async function nativeRequestApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
   getStorageDir(); // Validates initialization
@@ -374,7 +373,11 @@ export async function handleProgressViewToolEditApprovalAction(
 
 /**
  * Initialize the native VS Code tool edit approval handler.
- * Sets up storage directory and registers the native approval handler.
+ *
+ * Sets up the storage directory and runtime host used by {@link nativeRequestApproval},
+ * which is wired into the Platform at {@link initPlatform} time.  The wiring itself
+ * lives in the extension's `initPlatform` call — this function only supplies the
+ * module-level dependencies `nativeRequestApproval` closes over.
  */
 export function initializeNativeToolEditApproval(
   context: vscode.ExtensionContext,
@@ -383,5 +386,4 @@ export function initializeNativeToolEditApproval(
   const baseDir = context.storageUri ?? context.globalStorageUri;
   storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
   runtimeHost = host;
-  setToolEditApprovalHandler(nativeRequestApproval);
 }

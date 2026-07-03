@@ -62,7 +62,10 @@ import { killActiveRecording } from '@frontend/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
-import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
+import {
+  initializeNativeToolEditApproval,
+  nativeRequestApproval,
+} from '@frontend/approval/nativeToolEditApproval';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
@@ -260,6 +263,7 @@ export async function activate(context: vscode.ExtensionContext) {
         void vscode.window.showInformationMessage(message);
       }
     },
+    toolEditApproval: nativeRequestApproval,
   });
   registerAgentFeatures();
   // `disposeStatusListener` and `statusBarItem` are owned solely by

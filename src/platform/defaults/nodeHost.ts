@@ -34,6 +34,7 @@ import type { LifecycleHost } from '../interfaces/lifecycle';
 import type { StateStore } from '../interfaces/state';
 import type { StorageProvider } from '../interfaces/storage';
 import type { ToolAvailabilityHost } from '../interfaces/toolAvailability';
+import type { ToolEditApprovalPort } from '../interfaces/toolEditApproval';
 import type { Platform } from '../platform';
 import type { PlatformSecrets } from '../secrets';
 
@@ -55,6 +56,13 @@ export interface NodePlatformServices {
   readonly getWorkspacePath: () => string | undefined;
   /** Host-specific availability overrides merged over the no-op defaults. */
   readonly toolAvailability?: Partial<ToolAvailabilityHost>;
+  /**
+   * Tool-edit approval handler override.  If omitted, the returned Platform
+   * object carries a default that throws — hosts that run agents with tool-use
+   * must provide a real handler here, wired either directly (extension) or via a
+   * session-scoped indirection (CLI, desktop).
+   */
+  readonly toolEditApproval?: ToolEditApprovalPort;
 }
 
 /**
@@ -88,6 +96,17 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
     toolMissingHandler: () => {},
     toolNotificationHandler: () => {},
+    // Default handler throws — a host must override this to support tool-edit
+    // approvals.  CLI and desktop override via a session-scoped indirection
+    // (see the host's own initPlatform code); the extension wires its native
+    // handler directly.
+    toolEditApproval:
+      services.toolEditApproval ??
+      (() => {
+        throw new Error(
+          'Tool edit approval is not available: no handler has been configured.',
+        );
+      }),
   };
 }
 

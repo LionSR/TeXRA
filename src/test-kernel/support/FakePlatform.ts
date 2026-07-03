@@ -762,6 +762,12 @@ export function createFakePlatform(
     addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
     toolMissingHandler: () => {},
     toolNotificationHandler: () => {},
+    toolEditApproval: () => {
+      throw new Error(
+        'Tool edit approval is not available in the fake platform. ' +
+          'Override with `createFakePlatform({}, { toolEditApproval: ... })`.',
+      );
+    },
     ...overrides,
   };
 }

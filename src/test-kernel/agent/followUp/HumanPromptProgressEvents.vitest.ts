@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -24,10 +24,38 @@ import {
 } from '@tools/approval/bashApproval';
 import {
   requestToolEditApproval,
-  setToolEditApprovalHandler,
+  type ToolEditApprovalRequest,
+  type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { createRecordingHost } from '../progressTestUtils';
 import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
+
+let testApprovalHandler:
+  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
+  | undefined;
+
+async function installTestPlatform(): Promise<void> {
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  initPlatform(
+    createFakePlatform(
+      {},
+      {
+        toolEditApproval: (request) => {
+          const handler = testApprovalHandler;
+          if (!handler) {
+            throw new Error(
+              'No test approval handler. Set `testApprovalHandler` first.',
+            );
+          }
+          return handler(request);
+        },
+      },
+    ),
+  );
+}
 
 function inToolContext<T>(
   host: AgentRuntimeHost,
@@ -40,8 +68,14 @@ function inToolContext<T>(
 }
 
 describe('human prompt progress events', () => {
+  beforeEach(async () => {
+    testApprovalHandler = undefined;
+    await installTestPlatform();
+  });
+
   afterEach(() => {
     cleanupAllApprovals();
+    testApprovalHandler = undefined;
   });
 
   it('publishes bash approval events through the tool runtime host', async () => {
@@ -221,13 +255,13 @@ describe('human prompt progress events', () => {
       });
 
       let editApprovalRequests = 0;
-      setToolEditApprovalHandler(async (request) => {
+      testApprovalHandler = async (request) => {
         editApprovalRequests += 1;
         return {
           accepted: true,
           appliedContent: request.proposedContent,
         };
-      });
+      };
 
       const editApproval = await withRunContext(
         createRunContext({ runtimeHost: explicit.host, streamId }),
@@ -246,7 +280,7 @@ describe('human prompt progress events', () => {
         appliedContent: 'new',
       });
     } finally {
-      setToolEditApprovalHandler();
+      testApprovalHandler = undefined;
     }
   });
 
