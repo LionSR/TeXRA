@@ -21,6 +21,8 @@ import type { MainViewExecuteMessage } from '@shared/mainView';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { isNonEmptyString } from '@utils/core';
+// Used only by `resolveDesktopSetupModel` below — the shared
+// `resolveSetupModelExcludingOpenRouter` scan has no routing-flag dependency.
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { PlatformSecrets } from '@platform/secrets';
 
