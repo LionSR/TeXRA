@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import {
+  formatTimestamp,
   formatCompactDuration,
   formatCompactTokenCount,
   objectToLogString,
@@ -158,5 +159,18 @@ describe('formatCompactTokenCount', () => {
     [1_250_000, '1.3M'],
   ])('renders %i tokens as %s', (tokens, label) => {
     expect(formatCompactTokenCount(tokens)).toBe(label);
+  });
+});
+
+describe('formatTimestamp', () => {
+  it('normalizes offset timestamps to compact UTC', () => {
+    expect(formatTimestamp('2026-06-02T16:30:45.123+02:00')).toBe(
+      '2026-06-02 14:30:45',
+    );
+  });
+
+  it('keeps invalid timestamps non-throwing', () => {
+    expect(formatTimestamp('')).toBe('');
+    expect(formatTimestamp('abcTdef')).toBe('abc def');
   });
 });
