@@ -8,6 +8,7 @@ import {
   hasRoundOutputs,
   getStorageKey,
   setCompileFailures,
+  type OutputDependencies,
 } from '@agent/output/outputState';
 import { runCompileCheck } from '@agent/output/compileCheck';
 import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
@@ -60,6 +61,22 @@ export class OutputNode<C = unknown> extends Node<
   FlowParams,
   ReflectionServices<C>
 > {
+  private outputDependencies(): OutputDependencies {
+    const { executionId, runtimeHost, streamId } = useLaunchRunContext();
+    const { baseFiles, config, fileService, logger, setting } = this.services;
+
+    return {
+      baseFiles,
+      config,
+      executionId,
+      fileService,
+      logger,
+      runtimeHost,
+      setting,
+      streamId,
+    };
+  }
+
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
     if (!shared.outputLocation) {
       throw new Error(
@@ -77,6 +94,7 @@ export class OutputNode<C = unknown> extends Node<
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const { outputState, xmlManager, diffManager, setting, logger, baseFiles } =
       this.services;
+    const outputDependencies = this.outputDependencies();
     const { outputLocation, currentRound, endTurn } = prepRes;
 
     // Resolve to pre-run snapshots once so mapping, latexdiff, and diff
@@ -109,7 +127,7 @@ export class OutputNode<C = unknown> extends Node<
         () =>
           extractFilesFromXml(
             outputState,
-            this.services,
+            outputDependencies,
             xmlManager,
             outputLocation,
             currentRound,
@@ -136,7 +154,7 @@ export class OutputNode<C = unknown> extends Node<
             currentRound,
           );
           const compileResult = await runCompileCheck(
-            this.services,
+            { ...outputDependencies, outputState },
             currentRound,
           );
           compileFailures = compileResult.failures;
@@ -152,7 +170,7 @@ export class OutputNode<C = unknown> extends Node<
     // Summarize round (pure data — no events)
     const summary = await summarizeRound(
       outputState,
-      this.services,
+      outputDependencies,
       outputLocation,
       currentRound,
       {
@@ -186,6 +204,7 @@ export class OutputNode<C = unknown> extends Node<
     error: Error,
   ): Promise<OutputExecResult> {
     const { logger, outputState, setting } = this.services;
+    const outputDependencies = this.outputDependencies();
     const { outputLocation, currentRound, endTurn } = prepRes;
     logger.warn(`Output processing failed: ${error.message}`, { data: error });
 
@@ -194,7 +213,7 @@ export class OutputNode<C = unknown> extends Node<
     try {
       summary = await summarizeRound(
         outputState,
-        this.services,
+        outputDependencies,
         outputLocation,
         currentRound,
         { endTurn, isRewrite: setting.isRewrite },
@@ -243,7 +262,8 @@ export class OutputNode<C = unknown> extends Node<
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
     const { outputState, workflowOutputPolicy } = this.services;
-    const { streamId, runtimeHost } = useLaunchRunContext();
+    const outputDependencies = this.outputDependencies();
+    const { runtimeHost, streamId } = outputDependencies;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary, roundOutput } = execRes;
 
@@ -288,7 +308,7 @@ export class OutputNode<C = unknown> extends Node<
       await tryOperation(async () => {
         const validationResult = await checkExpectedOutputs(
           outputState,
-          this.services,
+          outputDependencies,
           outputLocation,
           currentRound,
           summary.stage,

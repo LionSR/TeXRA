@@ -4,7 +4,6 @@ import { StatusCodes } from 'http-status-codes';
 
 import { Node, type NonIterableObject } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -43,8 +42,6 @@ export type InvocationResult<TSuccess> =
   | { kind: 'skipped' };
 
 interface RetryableNodeServices {
-  streamId: string;
-  runtimeHost: AgentRuntimeHost;
   streamStatus: StreamStatusRegistry;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
@@ -254,7 +251,8 @@ export abstract class RetryableInvocationNode<
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
-    const { streamId, logger, runtimeHost, streamStatus } = this.services;
+    const { logger, streamStatus } = this.services;
+    const { runtimeHost, session, streamId } = useLaunchRunContext();
     const operationName = this.getOperationName();
     const formatted = normalizeProviderError(error);
 
@@ -267,7 +265,6 @@ export abstract class RetryableInvocationNode<
     streamStatus.set(streamId, STREAM_STATUS.WAITING, {
       runtimeHost,
     });
-    const { session } = useLaunchRunContext();
     const result = await session.coordinators.waitForRetry(streamId, {
       operation: operationName,
       errorMessage: formatted.message,
