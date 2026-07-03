@@ -1,8 +1,9 @@
-All facts verified. I now have everything needed to write the definitive spec. Writing the final synthesis.
-
----
-
 # Implementation Spec: Stateful Google Interactions Handler (store:true + previous_interaction_id chaining)
+
+> **Status:** Implemented (2026-07-04 status sweep). Google Interactions
+> server-state chaining now lives on the handler instance via
+> `chainedInteractionId`/`sentStepCount`; this spec is retained as implementation
+> evidence.
 
 **Handler:** `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts` (1483 lines, currently STATELESS)
 **Precedent:** `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts`

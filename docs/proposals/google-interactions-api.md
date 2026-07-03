@@ -1,6 +1,9 @@
 # Proposal: Google Gemini via the Interactions API
 
-**Status:** Proposal (research verified against the installed SDK; no handler code yet)
+**Status:** Partially landed (2026-07-04 status sweep). The additive
+`ModelHandlerGoogleInteractions` handler, server-state chaining, and background
+mode now exist in code. Treat this document as the original design/evidence
+record; re-verify current handler behavior before using older v0 defaults below.
 **Owner:** _unassigned_
 **Tracking branch:** `claude/interactions-api-ga-28j8yu`
 **Companion proposal:** [`openai-responses-api.md`](./openai-responses-api.md) — the directly analogous "provider ships a new stateful, server-side-state API" precedent that this design mirrors.

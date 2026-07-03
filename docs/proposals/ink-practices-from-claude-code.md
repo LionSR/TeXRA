@@ -1,5 +1,10 @@
 # Good Ink Practices from the Claude Code CLI Source, Mapped to TeXRA
 
+> **Status:** Partially landed reference notes (2026-07-04 status sweep).
+> Current TeXRA already implements the synchronous terminal-mode restoration and
+> per-entry error-boundary corrections noted below; remaining practices are
+> guidance to re-verify before acting.
+
 > Source studied: a de-obfuscated dump of the real Claude Code CLI, which vendors a
 > **heavily-forked Ink** under `src/ink/` (its own reconciler, screen/scrollback model,
 > log-update, selection engine, terminal-capability querier, keypress parser). All
