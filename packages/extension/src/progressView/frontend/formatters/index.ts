@@ -4,7 +4,11 @@
  */
 
 // Local imports - formatter helpers
-import type { LogMessageData, MessageType } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  type LogMessageData,
+  type MessageType,
+} from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isObject } from '@utils/core';
 import { safeFormat, type FormatOptions } from './baseLogFormatter';
@@ -52,6 +56,28 @@ const NULLABLE_TYPES: Set<MessageType> = new Set([
   'contextState',
   'contextManagement',
 ]);
+
+const STREAMING_TEXT_TYPES = new Set<string>([
+  MESSAGE_TYPES.THINKING,
+  MESSAGE_TYPES.SCRATCHPAD,
+  MESSAGE_TYPES.MODEL_RESPONSE,
+]);
+
+function isRunningData(data: unknown): boolean {
+  return (
+    data !== null &&
+    typeof data === 'object' &&
+    'status' in data &&
+    data.status === 'running'
+  );
+}
+
+export function isStreamingTextLogMessage(message: LogMessageData): boolean {
+  return (
+    STREAMING_TEXT_TYPES.has(message.messageType ?? '') &&
+    isRunningData(message.data)
+  );
+}
 
 /** Create an error fallback template when formatting fails. */
 function formatRenderError(label: string, errorMsg: string): TemplateResult {
@@ -144,6 +170,11 @@ export function formatLogEntry(
   logMessage: LogMessageData,
   options: FormatOptions = {},
 ): TemplateResult | typeof nothing {
+  if (isStreamingTextLogMessage(logMessage)) {
+    if (!logMessage.text.trim()) return nothing;
+    return formatDefaultLogMessageTemplate(logMessage) ?? nothing;
+  }
+
   const { messageType } = logMessage;
 
   // Determine if details should be open (undefined = no preference)

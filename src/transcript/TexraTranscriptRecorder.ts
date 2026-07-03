@@ -111,8 +111,9 @@ export function attachTranscriptRecorder(
       clearTimeout(state.updateTimer);
       state.updateTimer = null;
     }
+    const pendingText = state.pending.join('');
     if (state.pending.length > 0) {
-      state.buffer += state.pending.join('');
+      state.buffer += pendingText;
       state.pending = [];
     }
     if (!state.enabled) return;
@@ -134,10 +135,17 @@ export function attachTranscriptRecorder(
       return;
     }
 
-    store.update(streamId, id, {
-      text: state.buffer,
-      data: { status: state.ended ? 'completed' : 'running' },
-    });
+    if (!state.ended && pendingText.length > 0) {
+      store.appendText(streamId, id, pendingText);
+      return;
+    }
+
+    if (state.ended) {
+      store.update(streamId, id, {
+        text: state.buffer,
+        data: { status: 'completed' },
+      });
+    }
   };
 
   const scheduleStreamUpdate = (state: StreamSinkState, id: string): void => {

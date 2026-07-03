@@ -1,0 +1,161 @@
+import { create } from 'mutative';
+import { describe, expect, it } from 'vitest';
+
+import { isStreamingTextLogMessage } from '@progressView/frontend/formatters';
+import type {
+  HandlerRegistry,
+  MessageHandlerContext,
+} from '@progressView/frontend/messageHandlerTypes';
+import { logHandlers } from '@progressView/frontend/slices/logSlice';
+import {
+  createInitialState,
+  type ProgressState,
+  type StreamLogs,
+} from '@progressView/frontend/store';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  AgentCategory,
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
+  createStreamState,
+  type ProgressViewOutboundMessage,
+  type StreamLogEntry,
+  type StreamTabId,
+} from '@shared/schemas';
+
+function createContext(initialState: ProgressState): {
+  ctx: MessageHandlerContext;
+  getState: () => ProgressState;
+} {
+  let state = initialState;
+  const ctx: MessageHandlerContext = {
+    getState: () => state,
+    setState: (updater) => {
+      state = updater(state);
+    },
+    setStreamState: (streamId, updater) => {
+      const current = state.streamStates.get(streamId);
+      if (!current) return;
+      const updated = updater(current);
+      if (updated === current) return;
+      state = create(state, (draft) => {
+        draft.streamStates.set(streamId, updated);
+      });
+    },
+    setStreamLogs: (
+      _streamId,
+      _updater: (prev: StreamLogs) => StreamLogs,
+    ) => {},
+    savePrefs: () => {},
+    getPermissions: () => [],
+    setPermissions: () => {},
+    setPlacement: () => {},
+  };
+  return { ctx, getState: () => state };
+}
+
+function dispatch(
+  handlers: HandlerRegistry,
+  message: ProgressViewOutboundMessage,
+  ctx: MessageHandlerContext,
+) {
+  const handler = handlers[message.command];
+  expect(handler).toBeDefined();
+  handler?.(message as never, ctx);
+}
+
+function modelResponseEntry(
+  text: string,
+  status: 'running' | 'completed',
+): StreamLogEntry {
+  return {
+    seqNo: 1,
+    id: 'model-response',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp: 100,
+    messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    text,
+    data: { status },
+  };
+}
+
+describe('LOG_DELTA text deltas', () => {
+  it('accepts legacy logDelta messages with no textDeltas field', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    state.activeStreamId = streamId;
+    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
+    const { ctx, getState } = createContext(state);
+
+    dispatch(
+      logHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        streamId,
+        entries: [modelResponseEntry('hello', 'running')],
+        updates: [],
+      } as unknown as ProgressViewOutboundMessage,
+      ctx,
+    );
+
+    expect(getState().streamLogs.get(streamId)?.logs[0]?.text).toBe('hello');
+  });
+
+  it('appends streamed text without whole-entry replacement and finalizes via full update', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    state.activeStreamId = streamId;
+    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
+    const { ctx, getState } = createContext(state);
+
+    dispatch(
+      logHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        streamId,
+        entries: [modelResponseEntry('hello', 'running')],
+        updates: [],
+        textDeltas: [],
+      },
+      ctx,
+    );
+
+    dispatch(
+      logHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        streamId,
+        entries: [],
+        updates: [],
+        textDeltas: [{ id: 'model-response', appendText: ' world' }],
+      },
+      ctx,
+    );
+
+    const streamedLogs = getState().streamLogs.get(streamId);
+    const streamed = streamedLogs?.logs[0];
+    expect(streamed?.text).toBe('hello world');
+    expect(streamedLogs?.updatedMessageIndices).toEqual([0]);
+    expect(streamed && isStreamingTextLogMessage(streamed)).toBe(true);
+
+    dispatch(
+      logHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        streamId,
+        entries: [],
+        updates: [modelResponseEntry('hello world', 'completed')],
+        textDeltas: [],
+      },
+      ctx,
+    );
+
+    const finalizedLogs = getState().streamLogs.get(streamId);
+    const finalized = finalizedLogs?.logs[0];
+    expect(finalized?.text).toBe('hello world');
+    expect(finalizedLogs?.updatedMessageIndices).toEqual([0]);
+    expect(finalized && isStreamingTextLogMessage(finalized)).toBe(false);
+  });
+});
