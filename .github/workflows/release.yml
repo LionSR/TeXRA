@@ -28,15 +28,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Verify release tag matches extension package version
-        run: |
-          tag="${{ github.event.release.tag_name }}"
-          version=$(node -p "require('./packages/extension/package.json').version")
-          if [ "$tag" != "v$version" ]; then
-            echo "::error::Release tag '$tag' does not match packages/extension/package.json version '$version' (expected 'v$version')"
-            exit 1
-          fi
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
@@ -48,6 +39,15 @@ jobs:
           node-version: '22'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify release tag matches extension package version
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version=$(node -p "require('./packages/extension/package.json').version")
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::Release tag '$tag' does not match packages/extension/package.json version '$version' (expected 'v$version')"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -94,15 +94,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Verify release tag matches CLI package version
-        run: |
-          tag="${{ github.event.release.tag_name }}"
-          version=$(node -p "require('./packages/cli/package.json').version")
-          if [ "$tag" != "cli-v$version" ]; then
-            echo "::error::Release tag '$tag' does not match packages/cli/package.json version '$version' (expected 'cli-v$version')"
-            exit 1
-          fi
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
@@ -116,12 +107,21 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Verify release tag matches CLI package version
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version=$(node -p "require('./packages/cli/package.json').version")
+          if [ "$tag" != "cli-v$version" ]; then
+            echo "::error::Release tag '$tag' does not match packages/cli/package.json version '$version' (expected 'cli-v$version')"
+            exit 1
+          fi
+
       - name: Use an npm CLI recent enough for trusted publishing
-        run: npm install -g npm@11
+        run: npm install -g npm@^11.5.1
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Publish @texra-ai/cli
         working-directory: packages/cli
-        run: npm publish
+        run: npm publish --provenance
