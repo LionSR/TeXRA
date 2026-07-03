@@ -18,6 +18,7 @@ import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   approvalPromptAllowed,
+  handleCliAgentProposalDecision,
   humanInputDenialFeedback,
   immediateDecision,
   immediateDecisionForApproval,
@@ -409,11 +410,7 @@ function dispatchProposal(
   payload: ProgressEventPayloads['showAgentProposal'],
   decision: ApprovalDecision,
 ): void {
-  const feedback = feedbackOnReject(decision);
-  runCoordinatorBridge.resolveProposal(payload.proposalId, {
-    action: decision.accepted ? 'approve' : 'reject',
-    ...(feedback ? { feedback } : {}),
-  });
+  void handleCliAgentProposalDecision(payload.proposalId, decision);
 }
 
 function dispatchRetry(
