@@ -10,7 +10,11 @@
  */
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentErrorKind } from '@common/errors';
-import type { EndGroupStatus, RetryErrorInfo } from '@shared/schemas';
+import type {
+  EndGroupStatus,
+  RetryErrorInfo,
+  RunOutcome,
+} from '@shared/schemas';
 
 /** Status assigned to a tool call when it completes. */
 export type ToolStatus = 'completed' | 'failed' | 'in_progress';
@@ -170,7 +174,7 @@ export interface DomainEvent extends StageStamp {
  */
 export interface ResultEvent extends StageStamp {
   readonly type: 'result';
-  readonly outcome: 'completed' | 'failed' | 'cancelled';
+  readonly outcome: RunOutcome;
   readonly executionId: string;
   readonly streamId: string;
   readonly agentName: string;

@@ -151,7 +151,7 @@ export async function executeCliToolUseConfig(
   const { result, terminalStatus } = execution;
   return {
     ok: true,
-    displayResult: createCliRunResult(result, terminalStatus, {
+    displayResult: createCliRunResult(result, {
       workingDirectory: runContext.cwd,
     }),
     exitCode: terminalStatusExitCode(terminalStatus, runContext),

@@ -25,15 +25,18 @@ import { z } from 'zod';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   RestoredStreamsFileSchema,
-  STREAM_STATUS,
-  streamStatusesWithTrait,
+  STREAM_PHASE,
   type RestoredStreamSnapshot,
   type RestoredStreamsFile,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 
 const STREAMS_KEY = 'restoredStreams';
-const RESTART_REPAIR_STATUSES = streamStatusesWithTrait('inFlight');
+const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
+  STREAM_PHASE.RUNNING,
+  STREAM_PHASE.WAITING,
+]);
 
 export interface DesktopStreamSnapshotStore {
   /**
@@ -138,12 +141,12 @@ function parseHydrated(
     );
     return [];
   }
-  // Preserve in-flight states so startup repair can classify them. A finished
-  // or already-inert prior state remains an inactive ghost on the next launch.
+  // Preserve in-flight phases so startup repair can classify them. A finished
+  // or already-inert prior phase remains an inactive ghost on the next launch.
   return parsed.data.streams.map((s) => ({
     ...s,
-    lastKnownStatus: RESTART_REPAIR_STATUSES.has(s.lastKnownStatus)
+    lastKnownStatus: RESTART_REPAIR_PHASES.has(s.lastKnownStatus)
       ? s.lastKnownStatus
-      : STREAM_STATUS.STOPPED,
+      : STREAM_PHASE.COMPLETED,
   }));
 }
