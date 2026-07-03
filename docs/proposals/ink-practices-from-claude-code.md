@@ -208,7 +208,7 @@ routes them off the key path. They chose DECXCPR (`CSI ?6n`) over plain DSR spec
 plain DSR's reply collides with modified-F3 key sequences.
 Evidence: `ink/parse-keypress.ts:96-122`, `ink/terminal-querier.ts:83-92`, `ink/components/App.tsx:455-460`.
 **TeXRA:** Implicitly handled by running the probe _before_ Ink mounts
-(`runChatTui.tsx:1117-1125,1650-1652`), sidestepping the shared-stdin demux problem entirely.
+(`runChatTui.tsx:373-378`), sidestepping the shared-stdin demux problem entirely.
 That's a simpler, equally-safe approach for one-shot startup detection. No gap.
 
 **Two-tier detection: fast env heuristics plus an SSH-surviving in-band XTVERSION probe.**
@@ -286,7 +286,7 @@ Kitty CSI u, modifyOtherKeys, legacy tables, and raw control bytes collapse into
 CSI u can express it) so a `cmd+c` binding is representable and simply never fires elsewhere
 instead of colliding with alt.
 Evidence: `ink/parse-keypress.ts:456-541,630-673`, `keybindings/match.ts:60-105`, `keybindings/resolver.ts:107-118`.
-**TeXRA:** TeXRA rewrites Kitty Enter via an App effect (`runChatTui.tsx:1638-1652`) — a
+**TeXRA:** TeXRA rewrites Kitty Enter via an App effect (`App.tsx:628-640`) — a
 targeted normalization rather than a general one-bitmask model. Adequate for its current binding
 set; the general model is worth borrowing only if TeXRA grows configurable/chorded bindings.
 
@@ -516,8 +516,8 @@ Evidence: `main.tsx:799-815,2211-2229,2824-2860`, `utils/process.ts:17-34`.
 **TeXRA:** **Already aligned and arguably cleaner** — `runChat` refuses to mount the TUI unless
 stdin+stdout are TTYs and `TERM` isn't dumb, routing non-TTY/print/CI to `texra run` so Ink chrome
 never leaks to piped output; gate keys off `mode headless`/`stdoutIsTty !== true`; SGR stripped
-when color off; DA1 returns `NONE` off-TTY (`runChatTui.tsx:1006-1024`;
-`terminalRequirements.ts:5-8`; `render/noColorOutput.ts:71-105`; `terminalCapabilities.ts:94-97`;
+when color off; DA1 returns `NONE` off-TTY (`terminalRequirements.ts:5-8`;
+`render/noColorOutput.ts:71-105`; `terminalCapabilities.ts:94-97`;
 `cliContext.ts:130-132,269`). This matches `CLAUDE.md`'s "headless parity is sacred" rule. Strong
 alignment, no gap.
 
@@ -580,9 +580,10 @@ handle to the live renderer — relevant if/when TeXRA adds the synchronous sign
 
 ## Top Things Worth Adopting/Borrowing for TeXRA (highest leverage first)
 
-1. **Synchronous `writeSync` terminal restoration wired to SIGINT/SIGTERM/SIGHUP + a force-exit
-   failsafe.** Prevents the classic "shell is broken after a crash/signal kill" — TeXRA's async
-   cleanup can be dropped on signal exit. Low effort, high payoff.
+1. **Force-exit failsafe after the already-synchronous terminal restoration.** TeXRA already
+   runs `writeSync` cleanup on SIGINT/SIGTERM/SIGHUP (see Status / corrections above); the
+   remaining borrowable piece is a last-resort timer if shutdown persistence hangs after modes
+   have been restored. Low effort, narrow payoff.
    (`gracefulShutdown.ts:58-136,256-297,414-437`)
 2. **A single shared animation Clock** (subscriber map + snapshotted time, idle when no subscriber,
    slow when blurred). Consolidates all spinners/animations into one phase-synced wake-up; serves
