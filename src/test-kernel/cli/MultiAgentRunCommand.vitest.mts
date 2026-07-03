@@ -5,10 +5,9 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliContext } from '@cli/runtime/cliContext';
-import { RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
-  executeCliConfig: vi.fn(),
+  executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
   cliMultiAgentPlanHasGaps: vi.fn(),
   cliMultiAgentPresetCanLaunchTeam: vi.fn(),
@@ -98,7 +97,7 @@ vi.mock('@cli/runtime/runModel', () => ({
 }));
 
 vi.mock('@cli/runtime/runExecution', () => ({
-  executeCliConfig: mocks.executeCliConfig,
+  executeCliToolUseConfig: mocks.executeCliToolUseConfig,
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
@@ -199,16 +198,10 @@ describe('CLI multi-agent run command', () => {
       toolUseAgentKeys: ['builtInToolUse:orchestrator'],
     });
     mocks.isAuthenticated.mockResolvedValue(false);
-    mocks.executeCliConfig.mockResolvedValue({
+    mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
-      executionId: 'exec-1',
-      result: {
-        category: 'toolUse',
-        executionId: 'exec-1',
-        outcome: RUN_OUTCOME.COMPLETED,
-        lastResponse: 'The proof is correct.',
-      },
-      terminalStatus: 'completed',
+      displayResult: { lastResponse: 'The proof is correct.' },
+      exitCode: 0,
     });
   });
 
@@ -224,8 +217,8 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.executeCliConfig).toHaveBeenCalledTimes(1);
-    expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
+    expect(mocks.executeCliToolUseConfig).toHaveBeenCalledTimes(1);
+    expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
       enforceCategory: true,
       registerExecution: true,
       markErrorOnThrow: true,
@@ -242,7 +235,7 @@ describe('CLI multi-agent run command', () => {
       },
       expect.any(Function),
     );
-    const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
     expect(config?.instruction).toContain('Primary user input files:');
     expect(config?.instruction).toContain('- "problem.tex"');
     expect(config?.instruction).toContain(
@@ -376,7 +369,7 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.loadAgents).toHaveBeenCalledOnce();
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
-    expect(mocks.executeCliConfig).not.toHaveBeenCalled();
+    expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
   });
 
   it('does not warn when yolo can auto-approve delegation', async () => {
@@ -426,7 +419,7 @@ describe('CLI multi-agent run command', () => {
       },
       expect.any(Function),
     );
-    const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
     expect(config?.inputFiles).toEqual([]);
     expect(config?.instruction).toContain('User instruction:');
     expect(config?.instruction).toContain(
@@ -468,7 +461,7 @@ describe('CLI multi-agent run command', () => {
         },
         expect.any(Function),
       );
-      const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+      const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
       expect(config?.inputFiles).toEqual([]);
       expect(config?.instruction).toContain('User instruction:');
       expect(config?.instruction).toContain(
@@ -545,7 +538,7 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(2);
-    expect(mocks.executeCliConfig).not.toHaveBeenCalled();
+    expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(message);
     expect(
       mocks.formatCliMultiAgentTeamLaunchBlockMessage,
@@ -632,7 +625,7 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(2);
-    expect(mocks.executeCliConfig).not.toHaveBeenCalled();
+    expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(message);
     expect(
       mocks.formatCliMultiAgentTeamLaunchBlockMessage,
