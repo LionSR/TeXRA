@@ -23,17 +23,18 @@ import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local imports - tools
 import { requireRuntimeHost } from '@tools/contextHelpers';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { defineTool } from '@tools/core/define';
+import { assertNoParentTraversal } from '@tools/pathResolution';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
   getApprovedContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
+import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
 import {
@@ -50,7 +51,6 @@ import {
   getOriginalSnapshotPath,
   resolveStoragePath,
 } from '@utils/files/taskRunStorage';
-import { getPathSegments } from '@utils/core/pathCore';
 
 // ============================================================================
 // Schema
@@ -151,9 +151,7 @@ Optional:
     // Phase 1: Validate all source paths and read content before any approvals
     const prepared = await Promise.all(
       files.map(async (mapping) => {
-        if (getPathSegments(mapping.path).includes('..')) {
-          throw new ToolError(`path must not contain '..': ${mapping.path}`);
-        }
+        assertNoParentTraversal(mapping.path);
 
         const { sourceAbsolute, sourceLocation } = await this.resolveSourceFile(
           executionId,
