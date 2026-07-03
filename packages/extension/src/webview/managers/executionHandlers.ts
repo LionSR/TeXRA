@@ -4,18 +4,18 @@ import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewE
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import type { MainViewExecuteMessage } from '@shared/mainView';
+import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
 
 const CHANNEL = 'ExecutionHandlers';
 logger.initialize(CHANNEL);
 
-/** Message shape for command-based operations. */
+/** Message shape for command-based operations without a validated payload
+ * schema (housekeeping/pack/clean commands). */
 export interface CommandMessage {
   command: string;
-  inputFile?: string;
-  baseFile?: string;
-  editedFile?: string;
   agent?: string;
   model?: string;
+  inputFile?: string;
   inputFiles?: string[];
   outputFiles?: string[];
 }
@@ -51,11 +51,11 @@ export async function handleExecute(
   await vscode.commands.executeCommand('texra.execute', preparation.request);
 }
 
-export function handleFileOperation(message: CommandMessage): void {
+export function handleFileOperation(message: FileOperationMessage): void {
   void vscode.commands.executeCommand(
     `texra.${message.command}`,
-    message.inputFile,
-    message.baseFile,
+    'inputFile' in message ? message.inputFile : undefined,
+    'baseFile' in message ? message.baseFile : undefined,
     message.editedFile,
   );
 }

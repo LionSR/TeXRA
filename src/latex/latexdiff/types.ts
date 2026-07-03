@@ -19,7 +19,7 @@ export interface RunLatexdiffCommandConfig {
   outputFilesActive?: string[];
   streamId?: string;
   runId?: string | null;
-  outputsByRound?: Record<string, OutputFileInfo[]>;
+  outputsByRound?: [round: number, files: OutputFileInfo[]][];
 }
 
 export interface DiffRunResult {
@@ -37,13 +37,22 @@ export interface DiffRunOutcome {
 
 export type DiffOperationType = 'round' | 'between-rounds';
 
-export interface DiffOperation {
-  type: DiffOperationType;
+interface DiffOperationBase {
   base: FileLocation;
   revised: FileLocation;
   description: string;
-  cwd?: string;
-  round?: number;
-  fromRound?: number;
-  toRound?: number;
+  cwd: string;
 }
+
+export interface RoundDiffOperation extends DiffOperationBase {
+  type: 'round';
+  round: number;
+}
+
+export interface BetweenRoundsDiffOperation extends DiffOperationBase {
+  type: 'between-rounds';
+  fromRound: number;
+  toRound: number;
+}
+
+export type DiffOperation = RoundDiffOperation | BetweenRoundsDiffOperation;

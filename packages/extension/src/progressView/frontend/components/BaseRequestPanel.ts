@@ -10,8 +10,13 @@ import { ProgressEvents } from '../events';
 // Local imports - progress view component types
 import type { PermissionState } from '../permissionState';
 
-export abstract class BaseRequestPanel extends LitElement {
-  @property({ attribute: false }) permission!: PermissionState;
+export abstract class BaseRequestPanel<
+  K extends PermissionState['kind'] = PermissionState['kind'],
+> extends LitElement {
+  @property({ attribute: false }) permission!: Extract<
+    PermissionState,
+    { kind: K }
+  >;
 
   /** Handle keyboard shortcut from container. Returns true if handled. */
   abstract handleKeyboardShortcut(key: string): boolean;

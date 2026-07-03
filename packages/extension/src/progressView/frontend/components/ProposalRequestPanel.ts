@@ -67,7 +67,7 @@ function readSelectValue(event: Event): string {
 }
 
 @customElement('proposal-request-panel')
-export class ProposalRequestPanel extends BaseFeedbackPanel {
+export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -125,15 +125,9 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   }
 
   override render(): TemplateResult {
-    const data = this.permission.data as AgentProposalPermission;
-    const modelOptions =
-      this.permission.kind === PERMISSION_KIND.PROPOSAL
-        ? (this.permission.modelOptions ?? [])
-        : [];
-    const agentOptions =
-      this.permission.kind === PERMISSION_KIND.PROPOSAL
-        ? (this.permission.agentOptions ?? [])
-        : [];
+    const data = this.permission.data;
+    const modelOptions = this.permission.modelOptions ?? [];
+    const agentOptions = this.permission.agentOptions ?? [];
     const isWorkflow = data.agentCategory === AgentCategory.Workflow;
     const categoryLabel = isWorkflow ? 'Workflow' : 'Tool-Use';
     const currentModel = this.selectedModel ?? data.model;
@@ -331,7 +325,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
       super.emitAction(action, feedback);
       return;
     }
-    const data = this.permission.data as AgentProposalPermission;
+    const data = this.permission.data;
     const pickIfChanged = (
       selected: string | null,
       original: string,

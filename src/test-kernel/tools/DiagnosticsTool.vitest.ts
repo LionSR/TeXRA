@@ -61,9 +61,13 @@ describe('DiagnosticsTool', () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.error).toContain(
-      'requires line, message, severity, and confidence',
-    );
+    // Now caught by DiagnosticsInputSchema's discriminated union (the `add`
+    // variant requires these fields) rather than a hand-rolled message, so
+    // the structured Zod diagnostics list each missing field individually.
+    expect(result.error).toContain('at line');
+    expect(result.error).toContain('at message');
+    expect(result.error).toContain('at severity');
+    expect(result.error).toContain('at confidence');
   });
 
   it('reports when the criticism sink does not accept (feature disabled)', async () => {

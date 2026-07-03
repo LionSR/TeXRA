@@ -12,6 +12,7 @@ import {
   FileReferenceSchema,
   EditRecordSchema,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+  NormalizedToolResultSchema,
 } from '@shared/schemas/toolResult';
 
 // Local imports - utils
@@ -125,8 +126,9 @@ function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
  * Binary data (base64Data, bytes) is stripped from the result.
  *
  * Uses a Zod looseObject schema so unknown fields are preserved for forward
- * compatibility. The computed discriminator is stamped after raw fields so a
- * stray raw `status` key cannot invalidate the normalized payload.
+ * compatibility. The result is first normalized via `NormalizedToolResultSchema`,
+ * whose computed discriminator always wins over any stray raw `status` key,
+ * so it cannot invalidate the normalized payload.
  *
  * @param result - Raw tool result (may contain binary data)
  * @returns Extracted attachments and typed payload (without binary data)
@@ -140,35 +142,18 @@ export function extractToolAttachments(
     ? attachmentsCandidate.filter(isToolFileAttachment)
     : [];
 
-  // Determine the discriminator before parsing. Explicit tool failure status
-  // wins; otherwise output takes priority over error text for compatibility
-  // with formatToolResultAsText.
-  const hasError = isNonEmptyString(result.error);
-  const hasOutput = isNonEmptyString(result.output);
-  const hasSummary = isNonEmptyString(result.summary);
-  const isError = result.isError === true;
-  const status =
-    isError || (hasError && !hasOutput)
-      ? ('error' as const)
-      : ('executed' as const);
+  // Normalize the ambiguous raw result (no reliable `status` field; only
+  // `output`/`summary`/`error`/`isError` set ad hoc by tool implementations)
+  // into a `{ status, ... }` shape. The precedence rules that used to live
+  // here as an inline heuristic now live once, in
+  // `NormalizedToolResultSchema` (shared/schemas/toolResult.ts), so this is
+  // just a parse + narrow on `status`.
+  const normalized = NormalizedToolResultSchema.parse(result);
+  const status = normalized.status;
 
-  // Error text precedence: explicit error, then output, then summary, then a
-  // generic fallback. Computed here to keep the discriminator stamp below flat.
-  let errorText: string | undefined;
-  if (status === 'error') {
-    if (hasError) errorText = result.error;
-    else if (hasOutput) errorText = result.output;
-    else if (hasSummary) errorText = result.summary;
-    else errorText = 'Tool failed';
-  }
-
-  // Stamp the discriminator onto the raw result so the discriminated union
-  // schema validates the correct variant.
-  const parsed = ToolResultPayloadSchema.parse({
-    ...result,
-    ...(status === 'error' ? { error: errorText } : {}),
-    status,
-  });
+  // Re-validate against the discriminated union so downstream consumers get
+  // a properly typed, narrowable `ToolResultPayload`.
+  const parsed = ToolResultPayloadSchema.parse(normalized);
 
   // Build sanitized result, stripping binary data, undefined values, and redundant fields
   const sanitizedResult: Record<string, unknown> = { status };
