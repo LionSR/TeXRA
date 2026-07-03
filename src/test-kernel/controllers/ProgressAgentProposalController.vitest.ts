@@ -174,4 +174,31 @@ describe('ProgressAgentProposalController', () => {
       },
     ]);
   });
+
+  it('omits absent optional fields when approving or rejecting', async () => {
+    const resolved: { result: Record<string, unknown> }[] = [];
+    const controller = new ProgressAgentProposalController({
+      getPendingProposal: () => createWorkflowProposal(),
+      restoreTaskState: async () => {
+        throw new Error('restore should not run');
+      },
+      resolveProposal: (_proposalId, result) => {
+        resolved.push({ result });
+      },
+    });
+
+    await controller.handleAction({
+      proposalId: 'proposal-approve',
+      action: 'approve',
+    });
+    await controller.handleAction({
+      proposalId: 'proposal-reject',
+      action: 'reject',
+    });
+
+    assert.deepEqual(resolved, [
+      { result: { action: 'approve' } },
+      { result: { action: 'reject' } },
+    ]);
+  });
 });

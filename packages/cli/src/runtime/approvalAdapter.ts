@@ -48,6 +48,7 @@ export {
   isCliChatGptSubscriptionRetry,
   markApprovalDenied,
 } from './approval/approvalPolicy';
+export { handleCliAgentProposalDecision } from './approval/agentProposalController';
 export {
   formatAgentProposalApprovalSummary,
   formatRetryRequestMessage,
