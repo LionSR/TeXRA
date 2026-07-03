@@ -1,13 +1,20 @@
 -- Generalize the ChatGPT-only subscription usage table into a multi-source
 -- one. More subscription-backed providers (e.g. GitHub Copilot) are coming;
--- the table was deployed today with zero rows, so it can be reshaped in
--- place rather than requiring a data migration.
+-- existing ChatGPT subscription rows are backfilled to the new source before
+-- the column is made mandatory.
 
 ALTER TABLE public.chatgpt_subscription_usage_logs
   RENAME TO subscription_usage_logs;
 
 ALTER TABLE public.subscription_usage_logs
-  ADD COLUMN source TEXT NOT NULL;
+  ADD COLUMN source TEXT DEFAULT 'chatgpt';
+
+UPDATE public.subscription_usage_logs
+SET source = 'chatgpt'
+WHERE source IS NULL OR source = '';
+
+ALTER TABLE public.subscription_usage_logs
+  ALTER COLUMN source SET NOT NULL;
 
 ALTER INDEX public.idx_chatgpt_subscription_usage_logs_user_id
   RENAME TO idx_subscription_usage_logs_user_id;
@@ -37,8 +44,6 @@ CREATE UNIQUE INDEX subscription_usage_logs_user_source_stream_unique
 ALTER POLICY "Users can read own ChatGPT subscription usage logs"
   ON public.subscription_usage_logs
   RENAME TO "Users can read own subscription usage logs";
-
-DROP FUNCTION IF EXISTS public.chatgpt_subscription_usage_logs_upsert(jsonb);
 
 CREATE OR REPLACE FUNCTION public.subscription_usage_logs_upsert(p_rows JSONB)
 RETURNS INTEGER
@@ -173,6 +178,26 @@ $$;
 REVOKE ALL ON FUNCTION public.subscription_usage_logs_upsert(jsonb)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.subscription_usage_logs_upsert(jsonb)
+  TO service_role;
+
+-- Temporary compatibility wrapper for old log-usage deployments that still
+-- call the ChatGPT-specific RPC name during a coordinated rollout.
+CREATE OR REPLACE FUNCTION public.chatgpt_subscription_usage_logs_upsert(
+  p_rows JSONB
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  RETURN public.subscription_usage_logs_upsert(p_rows);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.chatgpt_subscription_usage_logs_upsert(jsonb)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.chatgpt_subscription_usage_logs_upsert(jsonb)
   TO service_role;
 
 COMMENT ON TABLE public.subscription_usage_logs IS
