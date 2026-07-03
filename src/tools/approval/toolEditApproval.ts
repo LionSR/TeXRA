@@ -4,17 +4,14 @@ import {
   DIFF_EQUAL,
   DIFF_INSERT,
 } from 'diff-match-patch';
-import { z } from 'zod';
 
+import { platform } from '@platform/platform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
-import {
-  LineChangesSchema,
-  type LineChanges,
-} from '@shared/schemas/lineChanges';
+import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
@@ -22,30 +19,12 @@ import { countLines } from '@utils/text/stringUtils';
 
 import { bashApprovalController } from './bashApproval';
 import { createStreamApprovalController } from './streamApprovalQueue';
+import type {
+  ToolEditApprovalRequest,
+  ToolEditApprovalResult,
+} from '@platform/interfaces/toolEditApproval';
 
-const ToolEditApprovalRequestSchema = z.object({
-  path: z.string(),
-  originalContent: z.string(),
-  proposedContent: z.string(),
-  sourceTool: z.string(),
-  streamId: StreamTabIdSchema.nullish(),
-});
-export type ToolEditApprovalRequest = z.infer<
-  typeof ToolEditApprovalRequestSchema
->;
-
-const ToolEditApprovalResultSchema = z.object({
-  accepted: z.boolean(),
-  userMessage: z.string().optional(),
-  appliedContent: z.string().optional(),
-  userPatch: z.string().optional(),
-  lineChanges: LineChangesSchema.optional(),
-  /** 1-based line number where the first change occurs (for navigation) */
-  startLine: z.int().positive().optional(),
-});
-export type ToolEditApprovalResult = z.infer<
-  typeof ToolEditApprovalResultSchema
->;
+export type { ToolEditApprovalRequest, ToolEditApprovalResult };
 
 const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
@@ -56,10 +35,6 @@ export const toolEditApprovalController =
     rejectionResult: () => ({ accepted: false }),
     bypassEvent: 'updateToolEditApprovalBypassState',
   });
-
-let customHandler:
-  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
-  | undefined;
 
 /** Register a pending approval entry for rejection tracking. */
 export function registerPendingApproval(
@@ -147,14 +122,6 @@ export function emitToolEditApprovalPrompt(
     removedLines: lineChanges.removed,
     isLatex: isLatexFile(request.path),
   });
-}
-
-export function setToolEditApprovalHandler(
-  handler?: (
-    request: ToolEditApprovalRequest,
-  ) => Promise<ToolEditApprovalResult>,
-): void {
-  customHandler = handler;
 }
 
 // ============================================================================
@@ -269,12 +236,7 @@ export async function requestToolEditApproval(
   }
 
   const result = await toolEditApprovalController.enqueue(async () => {
-    if (!customHandler) {
-      throw new Error(
-        'No approval handler registered. Call initializeNativeToolEditApproval first.',
-      );
-    }
-    return customHandler(preparedRequest);
+    return platform().toolEditApproval(preparedRequest);
   });
   return finalizeApprovalResult(result, preparedRequest);
 }

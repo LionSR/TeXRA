@@ -40,6 +40,10 @@ interface DesktopToolEditApprovalModule {
   };
 }
 
+interface DesktopPlatformModule {
+  createDesktopToolEditApprovalPort(): import('@platform/interfaces/toolEditApproval').ToolEditApprovalPort;
+}
+
 function createBusRuntimeHost(bus: ProgressEventBusLike): AgentRuntimeHost {
   return {
     emit: (event, payload) => bus.emit(event, payload),
@@ -123,13 +127,29 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     };
   });
 
-  const [{ initPlatform }, { createFakePlatform }, { nodeFilesystem }] =
-    await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-      import('@platform/defaults/nodeFilesystem'),
-    ]);
-  initPlatform(createFakePlatform({ workspacePath }, { fs: nodeFilesystem }));
+  const [
+    { initPlatform },
+    { createFakePlatform },
+    { nodeFilesystem },
+    desktopPlatformModule,
+  ] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+    import('@platform/defaults/nodeFilesystem'),
+    import(
+      moduleFileUrl(desktopSourcePath('main', 'platform', 'index.ts'))
+    ) as Promise<DesktopPlatformModule>,
+  ]);
+  initPlatform(
+    createFakePlatform(
+      { workspacePath },
+      {
+        fs: nodeFilesystem,
+        toolEditApproval:
+          desktopPlatformModule.createDesktopToolEditApprovalPort(),
+      },
+    ),
+  );
 
   const [
     { bus },
