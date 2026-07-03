@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.3] - 2026-07-03
+
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **TikZ extraction handles wide and unlabeled figures correctly** — `figure*`
+  environments are now detected, and an unlabeled figure can no longer borrow a
+  later figure's label.
+- **Background result delivery handles generated ids safely** — subagent
+  background-command results are now escaped before being sent back to the
+  orchestrator, so ids containing XML-sensitive characters no longer corrupt
+  the delivered result.
+
+### Extension (VS Code) and Desktop
+
+#### Bug Fixes
+
+- **Provider API keys are saved without surrounding spaces** — keys entered or
+  pasted with accidental whitespace are normalized before storage.
+
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Tool-use resume command registrations are cleaned up correctly** — the
+  extension now owns the resume command disposable through the shared command
+  registrar, avoiding stale registrations after reloads.
+
+### Desktop
+
+#### Bug Fixes
+
+- **Desktop asks before deleting provider API keys** — removing a stored model
+  provider key now uses the same confirmation step as the VS Code extension.
+
 ## [0.39.2] - 2026-07-03
 
 ### Shared (all surfaces)
@@ -25,9 +61,6 @@ All notable changes to this project will be documented in this file.
   `message_start` are no longer misreported as pre-message-start failures.
 - **The text editor tool preserves dollar signs** — `str_replace` edits no
   longer corrupt replacement text containing `$` sequences.
-- **TikZ extraction handles wide and unlabeled figures correctly** — `figure*`
-  environments are now detected, and an unlabeled figure can no longer borrow a
-  later figure's label.
 - **Model and stream failures get clearer annotations** — stream failures,
   retry handoffs, and API-key status labels now report the relevant state more
   directly.
@@ -42,8 +75,6 @@ All notable changes to this project will be documented in this file.
 - **Desktop repairs orphaned streams on startup** — after a restart, desktop
   streams that were left running or waiting are reconciled instead of staying in
   a stale in-flight state.
-- **Desktop asks before deleting provider API keys** — removing a stored model
-  provider key now uses the same confirmation step as the VS Code extension.
 
 ### Extension (VS Code)
 
