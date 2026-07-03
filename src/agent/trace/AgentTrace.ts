@@ -136,6 +136,11 @@ export interface StagedEmitOptions {
   readonly stageId?: string;
 }
 
+export interface UsageEmitOptions extends StagedEmitOptions {
+  readonly data?: unknown;
+  readonly recordTranscript?: boolean;
+}
+
 /**
  * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
  * the trace channel is a single source of truth. TeXRA-specific helpers are
@@ -158,7 +163,7 @@ export interface AgentTrace {
   error(message: string, options?: LogOptions): void;
 
   // ─── First-class agent-general union arms ───────────────────────────
-  usage(stats: TokenUsageStats, options?: StagedEmitOptions): void;
+  usage(stats: TokenUsageStats, options?: UsageEmitOptions): void;
   contextState(snapshot: ContextStateData, options?: StagedEmitOptions): void;
   toolStart(
     input: { logId: string; toolName: string; input: unknown },
