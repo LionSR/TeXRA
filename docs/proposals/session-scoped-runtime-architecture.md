@@ -339,8 +339,11 @@ interface StreamStatusMachine {
 - **The rules move inside**: cancelled-wins (today's STOPPED-wins),
   `shouldPreserveOnCompletion`, stale-handle guards become the machine's
   transition table instead of call-site checks in the registry and
-  lifecycle. Illegal transitions return `false`; today's scattered guards
-  are deleted.
+  lifecycle. Terminal-state immutability is general — the table rejects any
+  transition out of a terminal phase except an explicit `resume`; cancelled-
+  wins is its specific arbitration between a user stop and a racing
+  lifecycle completion. Illegal transitions return `false`; today's
+  scattered guards are deleted.
 - **The `emit:false` backdoor becomes a named cause.** Restart repair and
   ghost hydration are legitimate host-authored transitions — the current
   design just has no vocabulary for them. `cause: 'restart-repair'` gives the
@@ -519,8 +522,10 @@ outright bugs:
   (extension tab-delete never calls `forget`; only CLI history-delete
   does).
 - **Resumability is re-derived in five places with different predicates** —
-  bare flow-record existence (`detectWaitingStreams.ts:33`), a
-  schema-parsing variant (`SessionResumeRetrieval.ts:120`), a
+  bare flow-record existence (`detectWaitingStreams.ts:33`), the same
+  truthy check re-implemented for lazy follow-up promotion
+  (`lazyDetectWaitingStatus`, `followUpCommand.ts:48`), a schema-parsing
+  variant (`SessionResumeRetrieval.ts:120`), a
   `terminalStatus` gate that only the CLI applies (`history.ts:292-311`),
   and a status-based rule on desktop (`desktopStreamSnapshot.ts:145`). The
   hosts genuinely disagree about which runs are resumable — a stream the
