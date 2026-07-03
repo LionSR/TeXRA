@@ -21,13 +21,13 @@ import {
   computeUserPatch,
   emitToolEditApprovalPrompt,
   registerPendingApproval,
-  setToolEditApprovalHandler,
   unregisterPendingApproval,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { setDesktopToolEditApprovalHandler } from './platform/index.js';
 
 export interface DesktopToolEditApprovalOptions {
   runtimeHost: AgentRuntimeHost;
@@ -63,7 +63,9 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   private disposed = false;
 
   constructor(private readonly options: DesktopToolEditApprovalOptions) {
-    setToolEditApprovalHandler((request) => this.requestApproval(request));
+    setDesktopToolEditApprovalHandler((request) =>
+      this.requestApproval(request),
+    );
   }
 
   async requestApproval(
@@ -147,7 +149,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    setToolEditApprovalHandler();
+    setDesktopToolEditApprovalHandler(undefined);
     for (const requestId of [...this.pending.keys()]) {
       this.settle(requestId, { accepted: false });
     }

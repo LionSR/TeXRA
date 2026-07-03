@@ -9,10 +9,40 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import {
   cleanupAllApprovals,
-  setToolEditApprovalHandler,
+  type ToolEditApprovalRequest,
+  type ToolEditApprovalResult,
 } from '@tools/approval';
 import { AbsoluteFS, flexibleFS, StorageFS, WorkspaceFS } from '@utils/files';
 import { createRecordingHost } from '../progressTestUtils';
+
+let testApprovalHandler:
+  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
+  | undefined;
+
+async function installTestPlatform(): Promise<void> {
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  initPlatform(
+    createFakePlatform(
+      {
+        workspacePath,
+        storagePath,
+        globalStoragePath: '/global/.texra/storage',
+      },
+      {
+        toolEditApproval: (request) => {
+          const handler = testApprovalHandler;
+          if (!handler) {
+            throw new Error('No test handler. Set `testApprovalHandler`.');
+          }
+          return handler(request);
+        },
+      },
+    ),
+  );
+}
 
 const executionId = 'abcdef' as ExecutionId;
 const streamId = 'stream:accept-run-files' as StreamTabId;
@@ -46,7 +76,7 @@ describe('accept_run_files progress events', () => {
   let originalAbsoluteRead: typeof AbsoluteFS.read;
   let originalFlexibleRead: typeof flexibleFS.read;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalStorageExists = StorageFS.exists;
     originalStorageFullPath = StorageFS.fullPath;
     originalWorkspaceLocatePath = WorkspaceFS.locatePath;
@@ -59,6 +89,8 @@ describe('accept_run_files progress events', () => {
     originalAbsoluteRead = AbsoluteFS.read;
     originalFlexibleRead = flexibleFS.read;
     AbsoluteFS.isSymbolicLink = async () => false;
+    testApprovalHandler = undefined;
+    await installTestPlatform();
     cleanupAllApprovals();
   });
 
@@ -74,7 +106,7 @@ describe('accept_run_files progress events', () => {
     AbsoluteFS.isSymbolicLink = originalAbsoluteIsSymbolicLink;
     AbsoluteFS.read = originalAbsoluteRead;
     flexibleFS.read = originalFlexibleRead;
-    setToolEditApprovalHandler();
+    testApprovalHandler = undefined;
     cleanupAllApprovals();
   });
 
@@ -97,7 +129,7 @@ describe('accept_run_files progress events', () => {
     WorkspaceFS.delete = async () => undefined;
     flexibleFS.read = async () => 'accepted content';
 
-    setToolEditApprovalHandler(async () => ({ accepted: true }));
+    testApprovalHandler = async () => ({ accepted: true });
 
     const result = await runAccept(tool, explicit.host, [
       { path: 'output.tex', original: 'paper.tex' },
@@ -152,11 +184,11 @@ describe('accept_run_files progress events', () => {
       target === `${storagePath}/executions/${executionId}/original/draft.tex`;
     AbsoluteFS.read = async () => 'old content';
     flexibleFS.read = async () => 'new content';
-    setToolEditApprovalHandler(async (request) => {
+    testApprovalHandler = async (request) => {
       approvalOriginal = request.originalContent;
       approvalProposed = request.proposedContent;
       return { accepted: true };
-    });
+    };
 
     const result = await runAccept(tool, explicit.host, [
       { path: 'draft.tex', original: 'draft.tex' },
@@ -193,10 +225,10 @@ describe('accept_run_files progress events', () => {
     WorkspaceFS.delete = async () => undefined;
     AbsoluteFS.isFile = async () => false;
     flexibleFS.read = async () => 'same content';
-    setToolEditApprovalHandler(async () => {
+    testApprovalHandler = async () => {
       approvals++;
       return { accepted: true };
-    });
+    };
 
     const result = await runAccept(tool, explicit.host, [
       { path: 'draft.tex', original: 'draft.tex' },
@@ -234,10 +266,10 @@ describe('accept_run_files progress events', () => {
     AbsoluteFS.isSymbolicLink = async (target) =>
       target ===
       `${storagePath}/executions/${executionId}/r1/Draft/appendices.tex`;
-    setToolEditApprovalHandler(async () => {
+    testApprovalHandler = async () => {
       approvals++;
       return { accepted: true };
-    });
+    };
 
     const result = await runAccept(tool, explicit.host, [
       { path: 'r1/Draft/appendices.tex', original: 'Draft/appendices.tex' },

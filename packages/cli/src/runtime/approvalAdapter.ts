@@ -5,10 +5,10 @@
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 import {
-  setToolEditApprovalHandler,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { setActiveCliToolEditApprovalHandler } from './initPlatform';
 
 import { isCliDecisionApprovalEvent } from './approvalEvents';
 import { type CliContext } from './cliContext';
@@ -83,11 +83,11 @@ export function installCliApprovalHandlers(
   context: CliContext,
   hooks: CliApprovalPromptHooks = {},
 ): () => void {
-  setToolEditApprovalHandler((request) =>
+  setActiveCliToolEditApprovalHandler((request) =>
     decideToolEdit(request, context, hooks),
   );
   return () => {
-    setToolEditApprovalHandler();
+    setActiveCliToolEditApprovalHandler(undefined);
   };
 }
 

@@ -127,7 +127,6 @@ export {
 
 export {
   // Tool edit approval
-  setToolEditApprovalHandler,
   setToolEditApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,
   isApprovalBypassedForStream,
