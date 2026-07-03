@@ -12,6 +12,7 @@ import { createFakeUIHosts } from '../support/FakeHosts';
 
 function createController(options?: {
   inputResponses?: readonly (string | undefined)[];
+  confirmResponses?: readonly boolean[];
   urls?: Record<string, string | undefined>;
   setError?: Error;
   deleteError?: Error;
@@ -24,6 +25,7 @@ function createController(options?: {
 } {
   const hosts = createFakeUIHosts({
     inputResponses: options?.inputResponses,
+    confirmResponses: options?.confirmResponses ?? [true],
   });
   const secrets = new Map<string, string>();
   const deleted: string[] = [];
@@ -90,7 +92,7 @@ describe('SettingsProfileKeyController', () => {
     assert.equal(hosts.prompt.messages.length, 0);
   });
 
-  it('removes provider keys and refreshes dependent state', async () => {
+  it('removes provider keys after confirmation and refreshes dependent state', async () => {
     const { controller, deleted, refreshCount, hosts } = createController();
 
     await controller.removeProviderKey('openai');
@@ -98,8 +100,38 @@ describe('SettingsProfileKeyController', () => {
     assert.deepEqual(deleted, ['openai-secret']);
     assert.equal(refreshCount(), 1);
     assert.equal(
+      hosts.prompt.confirms[0]?.message,
+      'Remove the OpenAI API key? This cannot be undone.',
+    );
+    assert.equal(
       hosts.prompt.messages.at(-1)?.message,
       'OpenAI API key has been removed',
+    );
+  });
+
+  it('does nothing when provider key removal is not confirmed', async () => {
+    const { controller, deleted, refreshCount, hosts } = createController({
+      confirmResponses: [false],
+    });
+
+    await controller.removeProviderKey('openai');
+
+    assert.deepEqual(deleted, []);
+    assert.equal(refreshCount(), 0);
+    assert.equal(hosts.prompt.messages.length, 0);
+  });
+
+  it('commits a provider key without prompting for input', async () => {
+    const { controller, hosts, secrets, refreshCount } = createController();
+
+    await controller.commitProviderKey('openai', 'sk-direct');
+
+    assert.equal(secrets.get('openai-secret'), 'sk-direct');
+    assert.equal(hosts.prompt.inputs.length, 0);
+    assert.equal(refreshCount(), 1);
+    assert.equal(
+      hosts.prompt.messages.at(-1)?.message,
+      'OpenAI API key has been set',
     );
   });
 
