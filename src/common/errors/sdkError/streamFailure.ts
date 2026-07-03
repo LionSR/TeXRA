@@ -5,12 +5,17 @@ import {
 
 /**
  * Minimal shape of a provider SDK stream that emits a `connect` event once the
- * HTTP response has begun. The Anthropic (`beta.messages.stream`), OpenAI
- * (`chat.completions.stream`, `responses.stream`) and OpenRouter streams all
- * match this surface; `off` is optional because not every stream exposes it.
+ * HTTP response has begun. The Anthropic (`beta.messages.stream`) and OpenAI
+ * (`chat.completions.stream`, `responses.stream`) streams match this surface.
+ * OpenRouter is intentionally NOT tracked through here: its SDK emits no
+ * `connect` event, so its handler keeps a manual `streamConnected` flag instead.
+ * Both `on` and `off` are optional so the `typeof … === 'function'` guards in
+ * {@link trackStreamConnect} stay type-consistent: the OpenAI Responses stream
+ * reaches here through a wrapper that may not expose the emitter methods, and
+ * the pre-refactor handler guarded against exactly that.
  */
 export interface ConnectTrackableStream {
-  on(event: 'connect', listener: () => void): unknown;
+  on?(event: 'connect', listener: () => void): unknown;
   off?(event: 'connect', listener: () => void): unknown;
 }
 
@@ -34,8 +39,13 @@ export function trackStreamConnect(
   stream: ConnectTrackableStream,
 ): StreamConnectTracker {
   let connected = false;
+  // `live` gates the flag independently of listener removal: a stream that has
+  // no `off` cannot be detached, so after cleanup a late `connect` event would
+  // otherwise still flip `connected`. Gating keeps the tracker inert once
+  // cleaned up, whether or not the listener could actually be removed.
+  let live = true;
   const onConnect = (): void => {
-    connected = true;
+    if (live) connected = true;
   };
   if (typeof stream.on === 'function') {
     stream.on('connect', onConnect);
@@ -43,6 +53,7 @@ export function trackStreamConnect(
   return {
     isConnected: () => connected,
     cleanup: () => {
+      live = false;
       if (typeof stream.off === 'function') {
         stream.off('connect', onConnect);
       }

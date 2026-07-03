@@ -49,13 +49,17 @@ describe('trackStreamConnect', () => {
     expect(tracker.isConnected()).toBe(false);
   });
 
-  it('tolerates a stream without an off method', () => {
+  it('stays inert after cleanup even when the stream has no off method', () => {
     const listeners: Array<() => void> = [];
     const stream: ConnectTrackableStream = {
       on: (_e, listener) => listeners.push(listener),
     };
     const tracker = trackStreamConnect(stream);
     expect(() => tracker.cleanup()).not.toThrow();
+    // The listener can't be detached, but a late connect event must not flip
+    // the flag once the tracker has been cleaned up.
+    for (const l of listeners) l();
+    expect(tracker.isConnected()).toBe(false);
   });
 });
 
