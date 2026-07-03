@@ -42,11 +42,11 @@ factories in the flow/node layer. The SDK-idiomatic spine is re-confirmed in-tre
 at HEAD:
 
 - **`createModelHandler` factory** — `PROVIDER_HANDLER_ROUTES` exhaustive
-  `Record<ModelProvider, …>` (`ModelFactory.ts:55`), single `createModelHandler`
-  entry (`:378`). Compatibility-key routing means an SDK-backed handler can drop
+  `Record<ModelProvider, …>` (`ModelFactory.ts:54`), single `createModelHandler`
+  entry (`:377`). Compatibility-key routing means an SDK-backed handler can drop
   in behind one case with zero caller changes.
-- **`platform()` composition root** — `initPlatform` (`platform.ts:49`), frozen
-  `platform()` accessor (`:57`). The single-call-site ports (`linter`,
+- **`platform()` composition root** — `initPlatform` (`platform.ts:66`), frozen
+  `platform()` accessor (`:74`). The single-call-site ports (`linter`,
   `addCriticismSink`, `toolMissingHandler`, `toolNotificationHandler`,
   `toolEditApproval`) each re-verified to have **three genuinely different
   implementations** (VS Code UI / Node no-op / test fake) — correct host seams,
@@ -138,7 +138,7 @@ signature / surface changes or design-direction notes); none is unattended-safe.
 
 3. **`createMediaContent` returns `any[]` on the abstract base member**
    _(MEDIUM — re-scoped after an empirical attempt this pass)_.
-   `ModelHandler.ts:814` — `abstract createMediaContent(mediaMessage:
+   `ModelHandler.ts:823` — `abstract createMediaContent(mediaMessage:
 MediaEntry[]): any[]` — the lone `any` on an abstract member in a class that
    otherwise preserves full `<M,U,T,C,Resp>` generic typing. **The naive fix
    (`any[] → unknown[]`) does not work** — see § Applied's revert note: the
@@ -273,8 +273,8 @@ unattended sweep. Do not re-open the adjudicated traps.
 ## Verified (this checkpoint)
 
 - Spine re-confirmed by grep at HEAD `11e063e`: `PROVIDER_HANDLER_ROUTES` +
-  `createModelHandler` (`ModelFactory.ts:55/378`), `initPlatform` / `platform`
-  (`platform.ts:49/57`), `AgentTrace` emit/subscribe (`trace/index.ts`),
+  `createModelHandler` (`ModelFactory.ts:54/377`), `initPlatform` / `platform`
+  (`platform.ts:66/74`), `AgentTrace` emit/subscribe (`trace/index.ts`),
   `src/agent/core/index.ts` **absent** (no barrel regression).
 - Applied deletion verified: `grep "static async attach\|getRunId"
 src/agent/node/persistedFlow.ts` → **0** after edit; both had **0** callers
@@ -288,7 +288,7 @@ src/agent/node/persistedFlow.ts` → **0** after edit; both had **0** callers
 - Both applied changes verified green: `npm run typecheck` **exit 0** (all four
   projects); `npx vitest run src/test-kernel/agent/` — **888 passed / 4 skipped**.
 - Other candidates verified in-tree: `RoundPersistedFlow` instantiated once
-  (`runReflectionFlow.ts`); `createMediaContent(): any[]` (`ModelHandler.ts:814`);
+  (`runReflectionFlow.ts`); `createMediaContent(): any[]` (`ModelHandler.ts:823`);
   `Pick<IModelHandler, …>` already in `followUpMessages.ts`; `@platform` barrel
   4 importers vs 79 deep-path; `@logger/index.ts` 1 re-export vs 164 deep imports.
 - Model-handler thin-subclass measurement corroborated independently: DashScope
