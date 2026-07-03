@@ -32,9 +32,11 @@ describe('MainViewExecutionController', () => {
     const result = prepareMainViewExecutionRequest({
       agent: 'direct-agent',
       model: 'gpt-5.4',
-      inputFiles: ['paper/main.tex'],
-      mediaFiles: ['diagram.png', null],
-      attachDiagnostics: true,
+      files: {
+        inputFiles: ['paper/main.tex'],
+        mediaFiles: ['diagram.png', null],
+      },
+      toolConfig: { attachDiagnostics: true },
     });
 
     expect(result.valid).toBe(true);
@@ -57,8 +59,10 @@ describe('MainViewExecutionController', () => {
     const result = prepareMainViewExecutionRequest({
       agent: 'direct-agent',
       model: 'gpt-5.4',
-      inputFiles: ['paper/main.tex'],
-      outputFiles: ['paper/old-output.tex'],
+      files: {
+        inputFiles: ['paper/main.tex'],
+        outputFiles: ['paper/old-output.tex'],
+      },
     });
 
     expect(result.valid).toBe(true);

@@ -393,13 +393,11 @@ export class MainApp extends MainAppBase {
     );
 
   private readonly onRemoveFile = this.detailHandler<RemoveFileDetail>(
-    ({ listId, file }) =>
-      this.handleRemoveFile(listId as keyof MultiFiles, file),
+    ({ listId, file }) => this.handleRemoveFile(listId, file),
   );
 
   private readonly onFilesReordered = this.detailHandler<ReorderFilesDetail>(
-    ({ listId, files }) =>
-      this.updateMultiFiles(listId as keyof MultiFiles, files),
+    ({ listId, files }) => this.updateMultiFiles(listId, files),
   );
 
   private readonly onCheckboxChange = this.detailHandler<CheckboxChangeDetail>(
@@ -1459,21 +1457,22 @@ export class MainApp extends MainAppBase {
     if (!instructionText.trim()) return;
 
     const executionMessage = this.buildExecuteMessage();
+    const files = executionMessage.files ?? {};
     this.isPolishing.set(true);
     postMessage(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT, {
       text: instructionText,
       agent: executionMessage.agent,
       model: this.model.get(),
-      editedFile: executionMessage.editedFile,
-      baseFile: executionMessage.baseFile,
-      inputFiles: executionMessage.inputFiles,
-      inputFilesActive: executionMessage.inputFilesActive,
-      contextFiles: executionMessage.contextFiles,
-      contextFilesActive: executionMessage.contextFilesActive,
-      mediaFiles: executionMessage.mediaFiles,
-      mediaFilesActive: executionMessage.mediaFilesActive,
-      outputFiles: executionMessage.outputFiles,
-      outputFilesActive: executionMessage.outputFilesActive,
+      editedFile: files.editedFile,
+      baseFile: files.baseFile,
+      inputFiles: files.inputFiles,
+      inputFilesActive: files.inputFilesActive,
+      contextFiles: files.contextFiles,
+      contextFilesActive: files.contextFilesActive,
+      mediaFiles: files.mediaFiles,
+      mediaFilesActive: files.mediaFilesActive,
+      outputFiles: files.outputFiles,
+      outputFilesActive: files.outputFilesActive,
     });
   }
 

@@ -18,7 +18,7 @@ export interface WorkflowDiffRequest {
   outputFilesActive: boolean;
   streamId: StreamTabId;
   runId?: string;
-  outputsByRound?: Record<string, OutputFileInfo[]>;
+  outputsByRound?: [round: number, files: OutputFileInfo[]][];
 }
 
 export type WorkflowFileOperation = 'pack' | 'clean';
@@ -78,7 +78,7 @@ export class ProgressWorkflowActionsController {
     await this.withWorkflowTaskState(stream, async (taskState) => {
       const runOutputs = this.deps.state.getOutputFiles(stream);
       const outputsByRound = runOutputs.size
-        ? Object.fromEntries(runOutputs.entries())
+        ? [...runOutputs.entries()].sort((a, b) => a[0] - b[0])
         : undefined;
 
       await this.deps.runDiff({

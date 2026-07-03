@@ -35,7 +35,6 @@ import { DiffManager } from './managers/DiffManager';
 import * as executionHandlers from './managers/executionHandlers';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
-import type { CommandMessage } from './managers/executionHandlers';
 
 export interface MainViewOnboardingHooks {
   /**
@@ -170,18 +169,19 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: () =>
         safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
-      // The execution/file-op commands are validated as loose `{ command }`
-      // objects (payload typed nearer the handlers), so the dispatcher can't
-      // infer the rich shape — cast to the handler's declared input type
-      // rather than discarding all checking with `any`.
+      // EXECUTE is still validated as a loose `{ command }` object (payload
+      // typed nearer the handler), so the dispatcher can't infer the rich
+      // shape — cast to the handler's declared input type rather than
+      // discarding all checking with `any`. MERGE/COMPARE/ACCEPT_EDITED have
+      // real per-command Zod schemas now, so those flow through pre-narrowed.
       [MAIN_VIEW_COMMANDS.EXECUTE]: (m) =>
         executionHandlers.handleExecute(m as MainViewExecuteMessage),
       [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
-        executionHandlers.handleFileOperation(m as CommandMessage),
+        executionHandlers.handleFileOperation(m),
       [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
-        executionHandlers.handleFileOperation(m as CommandMessage),
+        executionHandlers.handleFileOperation(m),
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
-        executionHandlers.handleFileOperation(m as CommandMessage),
+        executionHandlers.handleFileOperation(m),
 
       [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
         this.fileManager.handleEditedFileSelection(),

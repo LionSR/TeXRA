@@ -15,7 +15,6 @@ import {
 } from '@shared/styles';
 
 // Local imports - progress view styles
-import type { BashPermission } from '@shared/schemas';
 import { codeBlockStyles } from '../styles/codeBlockStyles';
 
 // Local imports - progress view formatters
@@ -25,7 +24,7 @@ import { buildCodeBlock } from '../formatters/htmlBuilders';
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
 @customElement('bash-request-panel')
-export class BashRequestPanel extends BaseFeedbackPanel {
+export class BashRequestPanel extends BaseFeedbackPanel<'bash'> {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -34,7 +33,7 @@ export class BashRequestPanel extends BaseFeedbackPanel {
   ];
 
   override render(): TemplateResult {
-    const data = this.permission.data as BashPermission;
+    const data = this.permission.data;
 
     return this.renderRequestShell({
       prefix: 'bash-approval-request',

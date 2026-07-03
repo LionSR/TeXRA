@@ -18,7 +18,7 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
-import type { ProviderErrorPartial, RetryPermission } from '@shared/schemas';
+import type { ProviderErrorPartial } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 
@@ -26,11 +26,11 @@ import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { BaseRequestPanel } from './BaseRequestPanel';
 
 @customElement('retry-request-panel')
-export class RetryRequestPanel extends BaseRequestPanel {
+export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   override handleKeyboardShortcut(key: string): boolean {
-    const data = this.permission.data as RetryPermission;
+    const data = this.permission.data;
     switch (key) {
       case 'r':
         this.emitAction('retry');
@@ -50,7 +50,7 @@ export class RetryRequestPanel extends BaseRequestPanel {
   }
 
   override render(): TemplateResult {
-    const data = this.permission.data as RetryPermission;
+    const data = this.permission.data;
     const isRelay = data.errorDetails?.isRelayError === true;
     const isCredentialExhausted =
       data.errorDetails?.isCredentialExhausted === true;

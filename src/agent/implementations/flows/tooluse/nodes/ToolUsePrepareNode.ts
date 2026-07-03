@@ -8,10 +8,11 @@ import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 import type { ToolUseServices } from '../ToolUseServices';
-import type { ToolUseRunShared, PrepareResult } from './types';
+import type { ToolUseRunShared, CyclePrepResult } from './types';
 
 type PrepareExecResult =
-  { kind: 'success'; result: PrepareResult } | { kind: 'error'; error: Error };
+  | { kind: 'success'; result: CyclePrepResult }
+  | { kind: 'error'; error: Error };
 
 /**
  * Session-init node: runs **once per tool-use session** to build the initial
@@ -28,7 +29,7 @@ export class ToolUsePrepareNode<C> extends Node<
 > {
   async exec(
     _prepRes: void,
-  ): Promise<{ kind: 'success'; result: PrepareResult }> {
+  ): Promise<{ kind: 'success'; result: CyclePrepResult }> {
     const { userVarChannels, logger, snapshot, config, fileService } =
       this.services;
     const resolvedToolNames = this.services.resolvedTools.map((t) => t.name);
