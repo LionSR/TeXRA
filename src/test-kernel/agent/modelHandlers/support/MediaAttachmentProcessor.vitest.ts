@@ -24,6 +24,7 @@ import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
+import { attachProviderError } from '@common/errors/sdkErrorUtils';
 
 // Type imports
 
@@ -299,5 +300,41 @@ describe('MediaAttachmentProcessor', () => {
       ],
       'should warn while loading and again when logging the failed batch',
     );
+  });
+
+  it('keeps SDK-specific media load errors in the visible log message', async () => {
+    const mediaPath = createTempFile('sdk-error.png', Buffer.from('not-png'));
+    const mediaLocation = pathToLocation(mediaPath);
+    const displayPath = getShortDisplayPath(mediaLocation);
+    const { logger, stub } = createLoggerStub();
+    const processor = createProcessor(logger, { supportsVision: true });
+    const originalExists = absoluteFsAny.exists;
+
+    const error = new Error('plain fallback');
+    attachProviderError(error, {
+      message: 'HTTP 429 Too Many Requests - provider body',
+      provider: 'openai',
+      statusCode: 429,
+      statusText: 'Too Many Requests',
+      userRetryable: true,
+    });
+
+    absoluteFsAny.exists = async () => {
+      throw error;
+    };
+
+    try {
+      const { entries, results } = await processor.loadEntries([mediaLocation]);
+
+      assert.equal(entries.length, 0);
+      assert.deepEqual(results, [{ path: displayPath, ok: false }]);
+      assert.equal(stub.errorMessages.length, 1);
+      assert.match(
+        stub.errorMessages[0] ?? '',
+        /HTTP 429 Too Many Requests - provider body/,
+      );
+    } finally {
+      absoluteFsAny.exists = originalExists;
+    }
   });
 });

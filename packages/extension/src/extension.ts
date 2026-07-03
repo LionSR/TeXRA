@@ -94,7 +94,7 @@ import * as logger from '@logger/logUtils';
 import {
   apiKeyExists,
   apiKeySecretName,
-  lookupApiKey,
+  hasUsableApiKey,
 } from '@model/apiProviders';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { type StreamStatus, type TokenUsageStats } from '@shared/schemas';
@@ -112,7 +112,6 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { isNonEmptyString } from '@utils/core';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 // Local imports - components
@@ -243,6 +242,7 @@ export async function activate(context: vscode.ExtensionContext) {
     },
     toolMissingHandler: async (message, openDocsCommand) => {
       const actions = openDocsCommand ? ['View Installation Guide'] : [];
+      logger.error('extension', message);
       const choice = await vscode.window.showErrorMessage(message, ...actions);
       if (choice === 'View Installation Guide' && openDocsCommand) {
         const [command, ...args] = openDocsCommand.split(',');
@@ -546,8 +546,8 @@ export async function activate(context: vscode.ExtensionContext) {
       deleteApiKey: (provider) =>
         platform().secrets.delete(apiKeySecretName(provider)),
       apiKeyExists: (provider) => apiKeyExists(platform().secrets, provider),
-      hasUsableApiKey: async (provider) =>
-        isNonEmptyString(await lookupApiKey(platform().secrets, provider)),
+      hasUsableApiKey: (provider) =>
+        hasUsableApiKey(platform().secrets, provider),
       storedApiKeyExists: async (provider) => {
         const stored = await SecretManager.get(apiKeySecretName(provider));
         return stored !== undefined;
@@ -629,6 +629,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const disposeGitHubAuthListener = bus.on(
     'githubTokenInvalid',
     ({ message }) => {
+      logger.error('extension', `GitHub token rejected: ${message}`);
       void vscode.window
         .showErrorMessage(
           `GitHub token rejected: ${message}`,

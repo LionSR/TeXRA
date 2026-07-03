@@ -1,3 +1,7 @@
+// Not routed through executeCommand: this needs an injectable spawn seam
+// (`spawnCommand`) with per-candidate kill-on-timeout while falling through
+// multiple clipboard tools, which executeCommand's single-command timeout
+// model doesn't expose as a test seam.
 import { spawn } from 'node:child_process';
 import { platform as osPlatform } from 'node:os';
 import { toErrorMessage } from '@common/errors';

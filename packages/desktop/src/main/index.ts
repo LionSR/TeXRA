@@ -444,6 +444,10 @@ function createWindow(options: {
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
     if (!selectedPath) return;
 
+    // Not routed through executeCommand: this launches a new, independent
+    // Electron window process (detached + unref'd) that must outlive this
+    // process and is never awaited — executeCommand always awaits subprocess
+    // completion, which would hang here.
     spawn(
       process.execPath,
       withNewWindowWorkspaceArgs(process.argv.slice(1), selectedPath),

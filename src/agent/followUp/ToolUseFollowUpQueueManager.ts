@@ -62,9 +62,9 @@ export class ToolUseFollowUpQueue {
       try {
         observer(streamId);
       } catch (err) {
-        logger.warn(
-          `Release observer threw for stream ${streamId}: ${String(err)}`,
-        );
+        logger.warn(`Release observer threw for stream ${streamId}`, {
+          data: err,
+        });
       }
     }
   }

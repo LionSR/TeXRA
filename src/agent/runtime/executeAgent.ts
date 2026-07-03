@@ -425,9 +425,9 @@ export async function executeAgent(
         if (executionId) await ensureRunDir(executionId);
         logger.info(`Starting task execution (streamId: ${streamId})`);
         logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
-        logger.debug(
-          `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
-        );
+        logger.debug('Task execution details', {
+          data: { streamId, agent: config.agent, model: config.model },
+        });
         logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
         // Subagents don't need to force-open the progress board or show notifications —
         // the orchestrator's stream is already visible.
@@ -442,7 +442,9 @@ export async function executeAgent(
           taskState: agentConfigToTaskState(config),
         });
 
-        logger.info(`Executing ${config.agent} with model ${config.model}`);
+        logger.info('Executing agent', {
+          data: { agent: config.agent, model: config.model },
+        });
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
           return runToolUseAgent(ctx, handle, setting, options);

@@ -18,6 +18,9 @@
  * have been ambiguous if we'd echoed the human-readable label directly.
  */
 
+// Not routed through executeCommand: it doesn't expose a `maxBuffer` option,
+// and the explicit MAX_BUFFER_BYTES cap below is a deliberate Electron
+// main-process OOM guard (execa's own default maxBuffer is ~100 MiB).
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 

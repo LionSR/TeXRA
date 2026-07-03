@@ -88,8 +88,8 @@ export async function copyDefaultAgents(
         globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, version),
     },
     logger: {
-      info: (message) => logger.info('extension', message),
-      warn: (message) => logger.warn('extension', message),
+      info: (message, data) => logger.info('extension', message, { data }),
+      warn: (message, data) => logger.warn('extension', message, { data }),
     },
   });
 

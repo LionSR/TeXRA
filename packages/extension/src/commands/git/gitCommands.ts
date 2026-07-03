@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { toErrorMessage } from '@common/errors';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   buildAuthenticatedRemoteUrl,
   buildGitCredential,
@@ -193,10 +194,12 @@ async function getGitToken(
   if (!input) return null;
 
   if (!isValid(input)) {
+    const invalidTokenMessage = promptHint
+      ? `Invalid token format. ${promptHint}`
+      : 'Invalid token format.';
+    logger.error(CHANNEL, invalidTokenMessage);
     const action = await vscode.window.showErrorMessage(
-      promptHint
-        ? `Invalid token format. ${promptHint}`
-        : 'Invalid token format.',
+      invalidTokenMessage,
       ...(promptHint ? (['How to get a token'] as const) : []),
     );
     if (action === 'How to get a token') {
@@ -253,6 +256,7 @@ async function promptGitMissing(): Promise<void> {
     ? (['Copy Command', 'Run in Terminal', 'Open git-scm.com'] as const)
     : (['Open git-scm.com'] as const);
 
+  logger.error(CHANNEL, message);
   const selected = await vscode.window.showErrorMessage(message, ...actions);
   if (selected === 'Copy Command' && command) {
     await vscode.env.clipboard.writeText(command);
@@ -277,13 +281,13 @@ async function checkClonePreconditions(
   try {
     entries = await WorkspaceFS.readDir(workspacePath);
   } catch (e) {
-    vscode.window.showErrorMessage('Cannot read workspace folder.');
     logger.error(CHANNEL, `readDir failed: ${toErrorMessage(e)}`);
+    void vscode.window.showErrorMessage('Cannot read workspace folder.');
     return false;
   }
 
   if (entries.some(([name]) => !IGNORED_FILES.has(name))) {
-    vscode.window.showErrorMessage('Workspace folder must be empty.');
+    void showLoggedMessage(CHANNEL, 'Workspace folder must be empty.');
     return false;
   }
 
@@ -301,13 +305,13 @@ export async function cloneOverleafProject(
 
   const parsed = parseLatexGitUrl(input);
   if (!parsed) {
-    vscode.window.showErrorMessage('Invalid project URL or ID.');
+    void showLoggedMessage(CHANNEL, 'Invalid project URL or ID.');
     return;
   }
 
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
-    vscode.window.showErrorMessage('Open a workspace folder first.');
+    void showLoggedMessage(CHANNEL, 'Open a workspace folder first.');
     return;
   }
 
@@ -357,8 +361,9 @@ export async function cloneOverleafProject(
       const actions = parsed.isOverleaf
         ? (['Get New Token', 'How to get a token'] as const)
         : (['Retry'] as const);
+      const authErrorMessage = `Clone failed: authentication error. ${detail}`;
       const selected = await vscode.window.showErrorMessage(
-        `Clone failed: authentication error. ${detail}`,
+        authErrorMessage,
         ...actions,
       );
       if (selected === 'Get New Token') {
@@ -367,7 +372,7 @@ export async function cloneOverleafProject(
         void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL));
       }
     } else {
-      vscode.window.showErrorMessage(
+      void vscode.window.showErrorMessage(
         'Clone failed. Check credentials and connection.',
       );
     }
