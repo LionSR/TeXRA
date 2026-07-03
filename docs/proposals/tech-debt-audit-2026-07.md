@@ -1,5 +1,10 @@
 # Tech-debt audit: largest debts not previously uncovered (2026-07)
 
+> **Status:** Open tracking audit (2026-07-03; status refreshed 2026-07-04).
+> This is the evidence base for the #6950/#6951/#6952/#6953 tech-debt program.
+> Items are implemented by the tracking issues; re-verify every cited file before
+> acting because this area changes quickly.
+
 Full-repo sweep (repo-root `src/` ~245k LoC non-test, `packages/extension` 57k,
 `packages/cli`, `packages/desktop` 10.9k) cross-referenced against the existing
 debt corpus (`docs/proposals/*`, `docs/tui-performance-audit.md`,
@@ -245,10 +250,10 @@ WAITING) has no trace representation and its handler performs memory-eviction
 side effects (`ProgressEventHandler.ts:580-584`), so it stays bus-native
 unless a `status` trace variant is added deliberately.
 
-Note the logger itself is **no longer debt**: `src/logger/` is 308 lines, 4
-files, one sink boundary (`writeLine`), with `AgentLogger`/`structuredLogger`
-genuinely deleted. The remaining cost is fact duplication across pipelines,
-not stacked modules.
+Note the logger itself is **no longer debt**: `src/logger/` is 381 lines, 4
+files after the redaction helper expansion, with one channel-sink boundary and
+`AgentLogger`/`structuredLogger` genuinely deleted. The remaining cost is fact
+duplication across pipelines, not stacked modules.
 
 ### B2. CLI↔extension sharing: the documented rung-ladder targets approvals; the real duplication is the projection layer
 
@@ -356,9 +361,8 @@ What actually remains:
 - **The remaining true cross-session singletons** are deliberate but
   undocumented as such in the DI plan: `StreamStatusService` (same instance
   injected into every `SessionHandle`, :92) and the static
-  `ToolUseFollowUpQueue`. (Also: the DI doc still lists
-  `idleContinuationRegistry` as a live singleton — that module has been
-  deleted; the doc reference is stale.)
+  `ToolUseFollowUpQueue`. The DI doc's stale deleted-registry cite was corrected
+  by the 2026-07 D2 proposal-status sweep.
 
 ### B6. The PocketFlow `shared` bag: DI-cleanup targets the AgentCore bag; the flow bag is the bigger untyped surface
 

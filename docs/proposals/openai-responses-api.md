@@ -1,5 +1,8 @@
 # OpenAI Responses API
 
+> **Status:** Implemented reference doc (2026-07-04 status sweep). TeXRA supports
+> the OpenAI Responses path; this file is explanatory, not an open proposal.
+
 The Responses API is a recent addition to the OpenAI platform. It allows developers to build conversational tools by referencing the `previous_response_id` rather than sending the full message history on every request. TeXRA supports this API as an alternative to the Chat Completions API.
 
 ## Key differences
