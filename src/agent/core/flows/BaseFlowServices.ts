@@ -12,16 +12,8 @@ import type {
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  RetryRequestOptions,
-  RetryResult,
-} from '@agent/runtime/RetryRequestCoordinator';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
-import type {
-  ActiveChildInfo,
-  ExecutionId,
-  StreamTabId,
-} from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
 export type RoundFinalizedCallback = (
@@ -57,16 +49,6 @@ export interface AgentCore<C = unknown> {
   delegation?: DelegationPolicy;
   /** Tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
-  /** Get active subagent and process children for a parent stream. */
-  getActiveChildren: (parentStreamId: StreamTabId) => {
-    subagents: ActiveChildInfo[];
-    processes: ActiveChildInfo[];
-  };
-  /** Wait for user decision on a retry prompt (resolve-side bridge to run coordinators). */
-  waitForRetry: (
-    streamId: StreamTabId,
-    options: RetryRequestOptions,
-  ) => Promise<RetryResult>;
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
