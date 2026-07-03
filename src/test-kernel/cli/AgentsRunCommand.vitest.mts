@@ -2,10 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
-  executeCliConfig: vi.fn(),
+  executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
   initLocalCliPlatform: vi.fn(),
   isAuthenticated: vi.fn(),
@@ -60,7 +59,7 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
 }));
 
 vi.mock('@cli/runtime/runExecution', () => ({
-  executeCliConfig: mocks.executeCliConfig,
+  executeCliToolUseConfig: mocks.executeCliToolUseConfig,
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
@@ -111,16 +110,10 @@ describe('CLI agents run command', () => {
       async (_context: CliContext, model: string | undefined) =>
         model ?? 'gpt54',
     );
-    mocks.executeCliConfig.mockResolvedValue({
+    mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
-      executionId: 'exec-1',
-      result: {
-        category: AgentCategory.ToolUse,
-        executionId: 'exec-1',
-        outcome: RUN_OUTCOME.COMPLETED,
-        lastResponse: 'Correct.',
-      },
-      terminalStatus: 'completed',
+      displayResult: { lastResponse: 'Correct.' },
+      exitCode: 0,
     });
   });
 
@@ -157,7 +150,7 @@ describe('CLI agents run command', () => {
       },
       expect.any(Function),
     );
-    const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
     expect(config?.inputFiles).toEqual(['problem.md']);
     expect(config?.contextFiles).toEqual(['notes.md']);
     expect(config?.displayInstruction).toBe('Assess the proof concisely.');

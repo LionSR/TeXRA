@@ -47,10 +47,8 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliConfig } from '../runtime/runExecution';
+import { executeCliToolUseConfig } from '../runtime/runExecution';
 import {
-  createCliRunResult,
-  terminalStatusExitCode,
   toolUseResultText,
   type CliToolUseRunResult,
 } from '../runtime/terminalStatus';
@@ -223,28 +221,19 @@ export async function runMultiAgentPreset(
         cliMultiAgentPresetId: plan.preset.id,
       };
 
-      const execution = await executeCliConfig(config, runContext, {
+      const execution = await executeCliToolUseConfig(config, runContext, {
         enforceCategory: true,
         registerExecution: true,
         markErrorOnThrow: true,
         stopAfterCycle: true,
         wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
-        expectedCategory: AgentCategory.ToolUse,
         categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
       });
       if (!execution.ok) return execution.exitCode;
 
-      const { result, terminalStatus } = execution;
-      const displayResult: CliToolUseRunResult = createCliRunResult(
-        result,
-        terminalStatus,
-        {
-          workingDirectory: runContext.cwd,
-        },
-      );
-      writeMultiAgentRunResult(runContext, plan, displayResult);
+      writeMultiAgentRunResult(runContext, plan, execution.displayResult);
 
-      return terminalStatusExitCode(terminalStatus, runContext);
+      return execution.exitCode;
     },
   );
 }
