@@ -17,7 +17,6 @@ import {
   backfillFirstRunDone,
   hasAnyProviderApiKey,
 } from '@controllers/onboarding/onboardingFunnel';
-import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getAgent } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { isCodexSubscriptionActive } from '@auth/codex';
@@ -807,7 +806,7 @@ function createWindow(options: {
   const shellActions = createDesktopShellActions(
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
-      getCustomAgentDirectory: () => getAgentDirectories().custom(),
+      getCustomAgentDirectory: () => platform().agentDirectories.custom(),
       openExternalUrl: previewHost.openExternal,
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,

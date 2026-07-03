@@ -20,6 +20,7 @@ import type { StorageProvider } from '@platform/interfaces/storage';
 import type { WorkspaceProvider } from '@platform/interfaces/workspace';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { AgentDirectoriesPort } from '@platform/interfaces/agentDirectories';
 
 type FakeFileRecord =
   | {
@@ -736,6 +737,12 @@ export interface FakePlatformOptions {
   globalStoragePath?: string;
 }
 
+const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
+  custom: async () => '/workspace/.texra/agents',
+  builtIn: async () => '/workspace/resources/agents',
+  builtInToolUse: async () => '/workspace/resources/tool_use_agents',
+};
+
 export function createFakePlatform(
   options: FakePlatformOptions = {},
   overrides: Partial<Platform> = {},
@@ -757,6 +764,7 @@ export function createFakePlatform(
     secrets: new FakeSecrets(options.secrets, options.secretsEnv),
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeStream: async () => false },
+    agentDirectories: FAKE_AGENT_DIRECTORIES,
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,
     linter: async () => [],
     addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),

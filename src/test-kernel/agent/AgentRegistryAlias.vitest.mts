@@ -13,10 +13,6 @@ import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
-  type AgentDirectories,
-  setAgentDirectories,
-} from '@agent/index/agentDirectoriesRegistry';
-import {
   computeAgentOptionsData,
   getAgent,
   getVisibleAgent,
@@ -26,6 +22,7 @@ import {
   refresh,
 } from '@agent/index/agentRegistry';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import type { AgentDirectoriesPort } from '@platform/interfaces/agentDirectories';
 
 vi.mock('@agent/remote/RemoteAgentLoader', () => ({
   RemoteAgentLoader: {
@@ -55,14 +52,30 @@ const BUILTIN_TOOL_USE_AGENTS_DIR = resolve(
   'packages/extension/resources/tool_use_agents',
 );
 
-/** Point the registry at the real bundled agent YAMLs, overriding any dir. */
-function useAgentDirectories(overrides: Partial<AgentDirectories> = {}): void {
-  setAgentDirectories({
+function testAgentDirectories(
+  overrides: Partial<AgentDirectoriesPort> = {},
+): AgentDirectoriesPort {
+  return {
     custom: async () => '',
     builtIn: async () => BUILTIN_AGENTS_DIR,
     builtInToolUse: async () => BUILTIN_TOOL_USE_AGENTS_DIR,
     ...overrides,
-  });
+  };
+}
+
+let activeAgentDirectories: AgentDirectoriesPort = testAgentDirectories();
+
+const mutableAgentDirectories: AgentDirectoriesPort = {
+  custom: () => activeAgentDirectories.custom(),
+  builtIn: () => activeAgentDirectories.builtIn(),
+  builtInToolUse: () => activeAgentDirectories.builtInToolUse(),
+};
+
+/** Point the platform at the real bundled agent YAMLs, overriding any dir. */
+function useAgentDirectories(
+  overrides: Partial<AgentDirectoriesPort> = {},
+): void {
+  activeAgentDirectories = testAgentDirectories(overrides);
 }
 
 /** Install a fresh fake platform seeded with the given workspace state. */
@@ -70,7 +83,12 @@ async function initPlatformWithState(
   workspaceState: Record<string, unknown>,
 ): Promise<void> {
   const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({ workspaceState }, { fs: nodeFilesystem }));
+  initPlatform(
+    createFakePlatform(
+      { workspaceState },
+      { fs: nodeFilesystem, agentDirectories: mutableAgentDirectories },
+    ),
+  );
 }
 
 describe('agent registry legacy aliases', () => {
