@@ -274,7 +274,7 @@ stop/kill. Changes:
   registered via `session.runs.get(streamId).attachInterrupt(cb)` (flows and
   background bash both already have the stream's handle in reach). One index;
   the discoverable-but-uninterruptible state and the untested two-map pairing
-  invariant become unrepresentable. `InterruptRegistry` (35 lines) is
+  invariant become unrepresentable. `InterruptRegistry` (34 lines) is
   deleted.
 - **Follow-up routing closes its race.** `getToolUseFollowUpTarget` +
   `appendFollowUp` fuse into `session.runs.deliverFollowUp(streamId, item)`,
