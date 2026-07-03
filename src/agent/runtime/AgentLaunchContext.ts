@@ -41,7 +41,6 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -72,6 +71,7 @@ import {
 } from './StreamStatusService';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { attachConversationProgressHub } from './conversationProgressHub';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface AgentLaunchContext extends AgentCore {

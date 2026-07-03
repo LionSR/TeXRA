@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentProposalCoordinator } from './AgentProposalCoordinator';

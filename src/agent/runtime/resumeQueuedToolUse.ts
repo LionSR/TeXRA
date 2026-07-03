@@ -1,13 +1,13 @@
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { resumeToolUseFromSnapshot } from './executeAgent';
+import { StreamStatusService } from './StreamStatusService';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import { resumeToolUseFromSnapshot } from './executeAgent';
 import type { SessionHandle } from './SessionHandle';
-import { StreamStatusService } from './StreamStatusService';
 
 export interface ResumeQueuedToolUseOptions {
   /** Session owning this run's coordination state. Defaults to the process session. */

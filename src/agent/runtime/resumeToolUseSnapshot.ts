@@ -14,9 +14,9 @@
  * not change either host's pre-unification resume behavior.
  */
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import { resumeQueuedToolUseSnapshot } from './resumeQueuedToolUse';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 
-import { resumeQueuedToolUseSnapshot } from './resumeQueuedToolUse';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { SessionHandle } from './SessionHandle';
 

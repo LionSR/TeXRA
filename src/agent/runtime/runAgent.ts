@@ -1,11 +1,11 @@
 import { registerExecution } from '@agent/storage';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent } from './executeAgent';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 import type { AgentRunHandle } from './executionRegistry';

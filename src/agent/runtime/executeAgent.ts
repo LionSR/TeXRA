@@ -29,7 +29,6 @@ import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import {
   type StreamTabId,
   type ExecutionId,
@@ -58,6 +57,7 @@ import {
   buildOptionalFlowResultFields,
   type AgentFlowResult,
 } from './AgentFlowResult';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
