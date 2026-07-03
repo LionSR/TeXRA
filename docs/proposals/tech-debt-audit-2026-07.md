@@ -183,22 +183,52 @@ versa). Also fixes the CLI's synthetic-entry dedup at the source (see B2).
 
 ## Part B — documented debts where a much better solution exists
 
-### B1. Dual run-event taxonomy: stop maintaining two rails, make the bus a projection
+### B1. Dual run-event taxonomy: a full collapse is NOT feasible — target the three duplicated facts instead
 
-Documented state: `error-pipeline-and-ownership.md` ruled that new facts extend
-`AgentEvent` **or** `ProgressEventPayloads` (never new `bus.emit` from free
-zones), and SDK-readiness F-1 deferred the host-path re-routes — i.e. the two
-systems are treated as permanent parallel rails. Reality: the bus has 54+ event
-keys and ~110 emit sites plus a 645-line `ProgressEventHandler`, while
-`src/agent/trace/` is a clean 4-variant discriminated union already exported as
-the SDK contract. Every new run-visible fact is a two-vocabulary decision.
+_(Revised after the mechanism-level deep dive; see the appendix below for the
+full map.)_ Documented state: `error-pipeline-and-ownership.md` ruled that new
+facts extend `AgentEvent` **or** `ProgressEventPayloads`, and SDK-readiness F-1
+deferred host-path re-routes. The deep dive shows the naive "make the bus a
+trace projection" idea is wrong: of the bus's **54** keys, **22** are
+bidirectional approval/host RPC (`show*`/`resolve*` pairs with promise
+coordinators) and **10** are app-lifecycle signals emitted outside any run —
+neither can ever be append-only trace facts. The bus also provides
+pre-subscription buffering (`ProgressEventBus.ts:329-351`, 1000-event replay)
+that `TraceEmitter` lacks. And the discipline already holds: zero raw
+`bus.emit` in VS Code-free zones; everything routes via
+`runtimeHost`/`emitRuntimeEvent`.
 
-**Better solution:** declare the trace the _only_ emit path and reduce
-`ProgressEventPayloads` to a host-side projection — one adapter subscribing to
-`AgentEvent` and invoking UI callbacks. Per-event `bus.emit` sites delete
-incrementally (the `emitRuntimeEvent()` migration in `src/tools` already
-proved the mechanics). This turns the standing F-1 deferral into a terminal
-state instead of an indefinite dual-write discipline.
+The _actual_ debt is **the same fact emitted in two vocabularies at three
+spots**:
+
+1. **Terminal outcome dual-emit** — `AgentRunLifecycle.ts:83` emits the trace
+   `ResultEvent` while `StreamStatusService.set → runtimeHost.emit('updateStreamStatus')`
+   (`StreamStatusService.ts:76`) publishes the same fact as
+   `StreamStatus`+`terminalStatus`. Two shapes, two channels, guard-coordinated.
+2. **Usage triple-emit** — `UsageMonitor.ts:170` (bus `updateStreamUsage`) +
+   `UsageMonitor.ts:182` (trace `usage`) + `ResultEvent.usage`
+   (`events.ts:183`), already flagged "genuine duplication" in
+   `docs/agent-sdk-readiness-audit.md:226`.
+3. **Every `trace.info()` on a run writes two sinks** — output channel (via
+   `attachChannelSubscriber`) and transcript (`TexraTranscriptRecorder` →
+   `StreamLogStore`). Intentional, but a per-call double write.
+
+**Better solution:** keep the bus, but (a) make the remaining overlapping
+run-facts _projections_ of trace events, following the in-repo reference
+implementation `conversationProgressHub.ts:36-45` (one trace domain emit →
+hub republishes onto the bus); (b) collapse usage to a single trace emit
+projected to the bus; (c) split `ProgressEventPayloads` into three explicit
+interfaces — `RunFactEvents` (22), `ApprovalRpcEvents` (22),
+`AppSignalEvents` (10) — so the taxonomy is in the types and nobody proposes
+the wrong collapse again. Non-terminal stream status (INITIALIZING/RUNNING/
+WAITING) has no trace representation and its handler performs memory-eviction
+side effects (`ProgressEventHandler.ts:580-584`), so it stays bus-native
+unless a `status` trace variant is added deliberately.
+
+Note the logger itself is **no longer debt**: `src/logger/` is 308 lines, 4
+files, one sink boundary (`writeLine`), with `AgentLogger`/`structuredLogger`
+genuinely deleted. The remaining cost is fact duplication across pipelines,
+not stacked modules.
 
 ### B2. CLI↔extension sharing: the documented rung-ladder targets approvals; the real duplication is the projection layer
 
@@ -258,16 +288,53 @@ the snapshot+invariants scripts entirely (a codegen diff check replaces them).
 Same SSOT the proposal wants, but it deletes ~two scripts, a 70 KB artifact,
 and the whole silent-rename failure mode instead of adding a third surface.
 
-### B5. `ExecutionRegistry`: the SessionHandle work fixed _global-ness_, not cohesion
+### B5. `ExecutionRegistry`: the SessionHandle work fixed _global-ness_; the remaining debt is narrower than "split the class"
 
-The documented Step 7a–d/SessionHandle program (landed) made the registries
-injectable — but `src/agent/runtime/executionRegistry.ts` remains one 809-line
-class with 42 methods spanning 4–5 responsibilities: execution tracking,
-stop/kill/cascade-vs-detach policy, tool-use follow-up queueing, and manual
-compaction requests. **Better solution:** finish the job with a cohesion split
-(`ExecutionLifecycle`, `FollowUpRouter`, `CompactionRequests`) now that
-injection exists; the DI-cleanup doc's ISP step points here but never names
-this class as its largest instance.
+_(Revised after the mechanism-level deep dive; see appendix.)_ Corrections to
+the first pass: the class is ~33 methods over 7 fields (not 42), and it
+contains **no follow-up queue** — `getToolUseFollowUpTarget` is a pure
+read-only routing _decision_; the queue is the separate static
+`ToolUseFollowUpQueue` (`src/agent/followUp/ToolUseFollowUpQueueManager.ts`).
+The tracking + waiter-notification + stop/kill clusters are genuinely one
+cohesive object (stop reads the handle map, every mutation notifies waiters,
+`streamStatus.set` re-enters the registry synchronously via `onDidChange`) —
+a full split would add abstraction without isolating anything.
+
+What actually remains:
+
+- **Two clean lift-outs**: `getToolUseFollowUpTarget` and
+  `requestManualCompaction` are read-only, disjoint-caller methods; the repo
+  already narrows the registry via `Pick<ExecutionRegistry, …>` in two places
+  (`runCoordinators.ts:39`, `ExecutionSubscriptionBinder.ts:48`) — same
+  pattern, copy-move.
+- **Double bookkeeping of STOPPED**: both the registry stop path
+  (`terminate` :740, `interruptRegisteredStream` :761, `stopAgentStream`
+  :622) and the lifecycle arms (`AgentRunLifecycle.ts:157/215/280`) write the
+  shared `StreamStatusService` for the same stream, coordinated only by
+  STOPPED-wins guards. One writer (the lifecycle) with the stop path
+  _requesting_ rather than writing would remove a whole class of guard code.
+- **Two live-run indices that must stay coherent**: `handles`
+  (executionId-keyed) and `InterruptRegistry.entries` (streamTabId-keyed). A
+  stream present in only one is discoverable-but-uninterruptible
+  (`terminate` returns false at :738). No test enforces the pairing.
+- **Decision-then-act window**: `getToolUseFollowUpTarget` returns `active`,
+  then `appendFollowUp` runs (`ToolUseFollowUp.ts:192,199`) with no liveness
+  re-check between — a stop landing in that window appends to a terminating
+  flow.
+- **Unenforced session invariant**: `SessionHandle.ts:99-104` documents that
+  the per-session `ExecutionSubscriptionBinder` reads the _process-static_,
+  streamId-keyed follow-up queue as its release source — coherent only while
+  the queue stays streamId-keyed, flagged in a comment but not by any test.
+- **Bimodal tests**: registry unit tests construct fresh injected instances
+  (`ExecutionRegistry.vitest.ts:24,46`), while follow-up/integration suites
+  still mutate the exported singleton (`ToolUseFollowUp.vitest.ts:51,81`) —
+  a migration-in-progress footprint worth finishing.
+- **The remaining true cross-session singletons** are deliberate but
+  undocumented as such in the DI plan: `StreamStatusService` (same instance
+  injected into every `SessionHandle`, :92) and the static
+  `ToolUseFollowUpQueue`. (Also: the DI doc still lists
+  `idleContinuationRegistry` as a live singleton — that module has been
+  deleted; the doc reference is stale.)
 
 ### B6. The PocketFlow `shared` bag: DI-cleanup targets the AgentCore bag; the flow bag is the bigger untyped surface
 
@@ -284,6 +351,94 @@ slice accessors) instead of the loose bag, and an expiry date for
 
 ---
 
+## Appendix — deep dive (2026-07-03): event/logger pipelines and the execution cluster
+
+Mechanism-level findings behind the B1/B5 revisions above.
+
+### Event architecture as it actually runs
+
+Two independent delivery systems, meeting only at two bridges:
+
+- **Pipeline A (bus):** `ProgressEventBus` — synchronous Node `EventEmitter`,
+  54 typed payloads, pre-subscription buffer (1000 events, replayed on first
+  `on()`). Consumed by the host-agnostic `ProgressEventHandler` (~22 run-fact
+  handlers via `registerHandlers.ts`, 18 approval callbacks via `UIEvents.ts`)
+  plus host-specific subscribers (status bar, file decorations, desktop
+  window bridge, CLI `subscribeRuntimeHost`).
+- **Pipeline B (trace):** `TraceEmitter` implementing the 12-variant
+  `AgentEvent` union (`log`, `stage.*`, `tool.*`, `usage`, `context.state`,
+  `stream.*`, `domain`, `result`). Per-run subscribers: channel logger
+  (`attachChannelSubscriber` → `writeLine` sink), transcript recorder
+  (`TexraTranscriptRecorder` → `StreamLogStore`, which each host UI reads
+  directly), `conversationProgressHub` (trace→bus projection), and
+  `SessionHandle.attachRunTrace` (`result` → `session.onResult`).
+- **Key structural fact:** the bus carries **no log lines and no model stream
+  text** — all transcript content flows trace→`StreamLogStore`. So "merge the
+  log pipeline into the bus" and "collapse the bus into the trace" are both
+  non-problems; the systems partition cleanly except for the three duplicated
+  facts listed in B1.
+- **Emit discipline is fully enforced**: zero raw `bus.emit` under `src/`
+  outside `emitRuntimeEvent.ts:31` (the sanctioned single-session fallback);
+  `src/tools` (~30 sites) and `src/agent` (~28 sites) all route through
+  `runtimeHost.emit`/`emitRuntimeEvent`. Raw bus access exists only in the
+  three host packages, which bind the bus by design
+  (`extensionAgentRuntimeHost.ts:5`, `desktopAgentExecution.ts:811`,
+  `runExecution.ts:70`).
+- Migration hazards for any future projection work: the bus's buffering and
+  per-handler `withEventErrorHandling` wrapping must be reproduced;
+  `ProgressEventHandler` handlers are not pure renderers (they drive
+  `streamLogs.ensureLoaded/releaseEntries` eviction and
+  `StreamStatusService.set(emit:false)`); `setActiveStream` is half fact,
+  half UI command (tab switching, `suppressViewSwitch` gating) and is emitted
+  from non-run contexts; `updateProcessOutput` is high-frequency process
+  output with no trace analogue — folding it into `stream.chunk` would
+  conflate model text with process output.
+
+### Execution cluster as it actually runs
+
+- **Ownership map:** `SessionHandle` (289 lines) composes per-session
+  `InterruptRegistry`, `ExecutionRegistry`, `RunCoordinatorBridge`,
+  `ExecutionSubscriptionBinder` in forced dependency order
+  (`SessionHandle.ts:86-118`); `defaultSession()` aliases the process
+  singletons so unmigrated call sites stay byte-identical. Deliberately NOT
+  session-owned: `StreamStatusService` (shared instance injected into every
+  session), static `ToolUseFollowUpQueue`, `subagentDeliveryRegistry`
+  (explicit rationale comment), `toolInjectionRegistry`.
+- **Lifecycle single-writer (landed):** `runFlowWithLifecycle` is the sole
+  owner of RUNNING and of the terminal transition; `RunOutcome` is projected
+  through the declarative `RUN_OUTCOME_PROJECTION` table to
+  execution/group/stream statuses, with emit-before-untrack ordering and a
+  `resultEmitted` double-publish guard. Terminal fan-out
+  (`handle.settleResult`, `session.onResult`, `writeTerminalStatus`,
+  `streamStatus.set`) stays consistent only because all four route through
+  one projection — this is the invariant to protect in any refactor.
+- **Stop propagation:** host → `stopAgentStream` → child sweep
+  (cascade/detach sharing one `visited` set) → `terminate` → look up
+  `interrupts.get(streamTabId)` → `interrupt()` → flow's
+  `InterruptManager` closure sets `isInterrupted` + aborts the
+  `AbortController` the model handler streams under.
+- **Known safe-but-fragile spots (all currently guarded by synchronous
+  single-tick execution):** `streamStatus.set → onDidChange → handles` walk
+  re-enters the registry mid-cascade; `untrackHandle` defers the final
+  process-output flush across an await (`executionRegistry.ts:273-280`);
+  `ExecutionSubscriptionBinder.ts:116-124` re-checks the handle after
+  `addListener` (TOCTOU); `wakeAttempts` serializes concurrent resume wakes
+  (`ToolUseFollowUp.ts:52,78-90`).
+- **AgentCore/RunContext split-brain, concretely:** flow nodes read the
+  services bag while tools read the ALS `RunContext`; both are populated from
+  the same `AgentLaunchContext` (`agentContextToRunContext`,
+  `AgentLaunchContext.ts:153-172`). Same-fact-two-paths examples: `streamId`
+  (`BaseFlowServices.ts:53` vs `tryUseRunContext()?.streamId` in
+  `bashApproval.ts:72`, `PlanTool.ts:112`), `executionId`
+  (`CommonCycleTypes.ts:98` vs `MemoryTool.ts:197`, `bash.ts:157`),
+  `workingDirectory` (`AgentCore.workingDirectory` vs `bash.ts:134`,
+  `DiagnosticsTool.ts:120`). Each duplicated field has exactly one write
+  site, so per-field collapse is mechanical. The bag over-carry is wholesale
+  spreads (`{...this.services}`) inflating declared ~13 fields to ~31-35 at
+  runtime with 70-90% unread per node — also mechanical to narrow.
+
+---
+
 ## Suggested priority
 
 1. **A2 host-adapter factories** — highest bug-yield per line deleted; purely
@@ -292,8 +447,15 @@ slice accessors) instead of the loose bag, and an expiry date for
    OpenAIResponse/Google collaborator splits) — largest raw mass; every
    provider feature currently pays 4–5×.
 3. **B2 shared projection/display-model layer** — unblocks CLI feature parity
-   and deletes the synthetic-entry hacks; sequence after (or with) B1 so the
-   reducer folds the right event type.
+   and deletes the synthetic-entry hacks; B1's taxonomy split
+   (RunFacts/ApprovalRpc/AppSignals) is a natural prerequisite so the shared
+   reducer folds a well-typed event set.
+   3a. **B1/B5 targeted fixes** (small, high-safety-value): usage single-emit +
+   projection; terminal-status single-writer; a test enforcing the
+   handles/interrupts pairing and the binder↔queue keying invariant; close
+   the follow-up decision-then-act window; lift
+   `getToolUseFollowUpTarget`/`requestManualCompaction` behind `Pick<>`
+   interfaces; migrate the singleton-bound follow-up tests to fresh sessions.
 4. **B4 config codegen** — deletes tooling and a whole failure mode; small.
 5. **A4 test-infra** (`memfs` + global setup) — cheap, pays on every suite.
 6. **A3 MainApp slice migration, B3 boundary enforcement, A6 transcript store
