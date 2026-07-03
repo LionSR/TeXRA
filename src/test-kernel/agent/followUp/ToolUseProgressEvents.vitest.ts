@@ -29,7 +29,7 @@ function createPrepResult(
   workspaceState: AgentWorkspaceState,
 ): CyclePrepResult {
   return {
-    shouldSkip: true,
+    shouldSkipCycle: true,
     messages: [],
     runState: { totalRounds: 0 } as CyclePrepResult['runState'],
     workspaceState,

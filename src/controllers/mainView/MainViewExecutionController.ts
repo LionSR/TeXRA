@@ -41,7 +41,8 @@ export function prepareMainViewExecutionRequest(
   }
 
   const isToolUse = Boolean(message.isToolUseAgent);
-  if (!isToolUse && (message.inputFiles?.length ?? 0) === 0) {
+  const files = message.files ?? {};
+  if (!isToolUse && (files.inputFiles?.length ?? 0) === 0) {
     return {
       valid: false,
       message: 'Please select an input file.',
@@ -51,7 +52,7 @@ export function prepareMainViewExecutionRequest(
 
   const toolConfigResult = isToolUse
     ? { success: true as const, data: DEFAULT_TOOL_CONFIG }
-    : ToolConfigSchema.safeParse(message);
+    : ToolConfigSchema.safeParse(message.toolConfig);
   if (!toolConfigResult.success) {
     const issue = toolConfigResult.error.issues[0];
     const path = issue?.path.join('.') || 'toolConfig';
@@ -63,13 +64,19 @@ export function prepareMainViewExecutionRequest(
 
   const validation = validateExecutionRequest({
     config: {
-      ...message,
+      agent: message.agent,
+      model: message.model,
+      instruction: message.instruction,
+      displayInstruction: message.displayInstruction,
+      memories: message.memories,
+      ...message.session,
+      ...files,
       agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
       // Workflow output paths are implicit in the input list. Agent settings
       // may still declare generated filenames later during prompt rendering.
       outputFiles: [],
       toolConfig: { ...toolConfigResult.data, attachDiagnostics: false },
-      mediaFiles: (message.mediaFiles ?? [])
+      mediaFiles: (files.mediaFiles ?? [])
         .map(mapMediaFile)
         .filter(filterNotNull),
       editedFile: null,

@@ -37,39 +37,52 @@ export const DiagnosticsReadInputSchema = z.strictObject({
 const DIAGNOSTICS_READ_ONLY_DESCRIPTION =
   'Inspect diagnostics for a file. Use "list" to retrieve linter diagnostics or "count" for a severity summary.';
 
-export const DiagnosticsInputSchema = DiagnosticsReadInputSchema.extend({
+const DiagnosticsListSchema = z.strictObject({
   command: z
-    .enum(['list', 'count', 'add'])
+    .literal('list')
+    .describe('Retrieve full linter diagnostics for a file.'),
+  path: DiagnosticsPathSchema,
+});
+
+const DiagnosticsCountSchema = z.strictObject({
+  command: z
+    .literal('count')
     .describe(
-      'Use "list" for full diagnostics, "count" for a summary, or "add" to push a critique annotation as a diagnostic (squiggle + Problems panel) without inserting a literal \\criticize{...}{...}{...} macro into the document.',
+      'Retrieve a severity-count summary of linter diagnostics for a file.',
     ),
-  line: z
-    .int()
-    .min(1)
-    .nullish()
-    .describe('add: 1-based line number where the issue occurs.'),
-  message: z
-    .string()
-    .min(1)
-    .nullish()
-    .describe('add: description of the issue.'),
+  path: DiagnosticsPathSchema,
+});
+
+const DiagnosticsAddSchema = z.strictObject({
+  command: z
+    .literal('add')
+    .describe(
+      'Push a critique annotation as a diagnostic (squiggle + Problems panel entry) without inserting a literal \\criticize{...}{...}{...} macro into the document.',
+    ),
+  path: DiagnosticsPathSchema,
+  line: z.int().min(1).describe('1-based line number where the issue occurs.'),
+  message: z.string().min(1).describe('Description of the issue.'),
   severity: z
     .int()
     .min(0)
     .max(5)
-    .nullish()
     .describe(
-      'add: severity 0–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic, 0=verified/correct.',
+      'Severity 0–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic, 0=verified/correct.',
     ),
   confidence: z
     .int()
     .min(1)
     .max(5)
-    .nullish()
     .describe(
-      'add: confidence 1–5: 5=certain, 4=high certainty with minor subjectivity, 3=reasonable but field-dependent, 2=subjective, 1=speculative.',
+      'Confidence 1–5: 5=certain, 4=high certainty with minor subjectivity, 3=reasonable but field-dependent, 2=subjective, 1=speculative.',
     ),
 });
+
+export const DiagnosticsInputSchema = z.discriminatedUnion('command', [
+  DiagnosticsListSchema,
+  DiagnosticsCountSchema,
+  DiagnosticsAddSchema,
+]);
 
 export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;
 
@@ -108,7 +121,9 @@ export class DiagnosticsTool extends defineTool({
     return resolveWorkspaceRelativePath(filePath, workingDirectory).absolute;
   }
 
-  private async readDiagnostics(input: DiagnosticsInput): Promise<ToolResult> {
+  private async readDiagnostics(
+    input: Extract<DiagnosticsInput, { command: 'list' | 'count' }>,
+  ): Promise<ToolResult> {
     const { command, path } = input;
     const diagnosticsPath = this.resolveAbsolutePath(path);
 
@@ -145,18 +160,10 @@ export class DiagnosticsTool extends defineTool({
     }
   }
 
-  private async addCriticism(input: DiagnosticsInput): Promise<ToolResult> {
+  private async addCriticism(
+    input: Extract<DiagnosticsInput, { command: 'add' }>,
+  ): Promise<ToolResult> {
     const { path, line, message, severity, confidence } = input;
-    if (
-      line == null ||
-      message == null ||
-      severity == null ||
-      confidence == null
-    ) {
-      throw new ToolError(
-        'The "add" command requires line, message, severity, and confidence.',
-      );
-    }
 
     try {
       const absolutePath = this.resolveAbsolutePath(path);

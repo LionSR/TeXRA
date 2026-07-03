@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseCriticismAnnotations } from '@latex/criticismParser';
-import { DiagnosticsInputSchema } from '@tools/DiagnosticsTool';
+import {
+  DiagnosticsInputSchema,
+  type DiagnosticsInput,
+} from '@tools/DiagnosticsTool';
 
 describe('parseCriticismAnnotations', () => {
   it('accepts whitespace before arguments and severity zero', () => {
@@ -43,15 +46,14 @@ describe('DiagnosticsInputSchema add command', () => {
       }),
     ).toThrow();
 
-    expect(
-      DiagnosticsInputSchema.parse({
-        command: 'add',
-        path: 'paper.tex',
-        line: 1,
-        message: 'verified',
-        severity: 0,
-        confidence: 5,
-      }).severity,
-    ).toBe(0);
+    const parsed = DiagnosticsInputSchema.parse({
+      command: 'add',
+      path: 'paper.tex',
+      line: 1,
+      message: 'verified',
+      severity: 0,
+      confidence: 5,
+    }) as Extract<DiagnosticsInput, { command: 'add' }>;
+    expect(parsed.severity).toBe(0);
   });
 });

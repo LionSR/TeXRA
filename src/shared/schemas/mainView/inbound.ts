@@ -74,11 +74,44 @@ const SettingsMessages = [
   }),
 ] as const;
 
+// MERGE sends the primary input plus the edited file (planMerge); COMPARE
+// and ACCEPT_EDITED send the base/edited pair (planCompare). Each command
+// needs a distinct required-field shape, so they get their own schemas
+// instead of a shared loose object — file paths flowing straight into VS
+// Code commands (see executionHandlers.handleFileOperation) must be
+// validated at the dispatch boundary like every other inbound message.
+export const MergeMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.MERGE),
+  inputFile: z.string(),
+  editedFile: z.string(),
+});
+export type MergeMessage = z.infer<typeof MergeMessageSchema>;
+
+export const CompareMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.COMPARE),
+  baseFile: z.string(),
+  editedFile: z.string(),
+});
+export type CompareMessage = z.infer<typeof CompareMessageSchema>;
+
+export const AcceptEditedMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.ACCEPT_EDITED),
+  baseFile: z.string(),
+  editedFile: z.string(),
+});
+export type AcceptEditedMessage = z.infer<typeof AcceptEditedMessageSchema>;
+
+/** Union consumed by `executionHandlers.handleFileOperation`. */
+export type FileOperationMessage =
+  | MergeMessage
+  | CompareMessage
+  | AcceptEditedMessage;
+
 const ExecutionMessages = [
   z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE) }),
-  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.MERGE) }),
-  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.COMPARE) }),
-  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.ACCEPT_EDITED) }),
+  MergeMessageSchema,
+  CompareMessageSchema,
+  AcceptEditedMessageSchema,
 ] as const;
 
 const FileSelectionMessages = [

@@ -10,7 +10,10 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import './ApproveSplitButton';
 
 // Local imports - shared utilities
-import { FEEDBACK_ELIGIBLE_KINDS } from '@shared/utils/uiConstants';
+import {
+  FEEDBACK_ELIGIBLE_KINDS,
+  PERMISSION_KIND,
+} from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - progress view events
@@ -19,7 +22,44 @@ import { APPROVE_SESSION_ACTION } from '../events';
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
 
-export abstract class BaseFeedbackPanel extends BaseRequestPanel {
+// Local imports - progress view component types
+import type { PermissionState } from '../permissionState';
+
+/**
+ * `allowBypass` / `streamId` are structurally present on every permission
+ * kind whose schema extends `PermissionBaseSchema` (toolEdit, bash,
+ * externalInquiry, userQuestion) — see `src/shared/schemas/prompts.ts`. The
+ * remaining kinds (retry, proposal, planApproval) don't carry them at all.
+ * `BaseFeedbackPanel` is the shared base for every feedback-eligible panel
+ * (all of the above except retry), so it can't be generically constrained to
+ * "just the kinds with these fields" — `PlanApprovalRequestPanel` inherits
+ * `canBypass` without overriding it. An exhaustive switch here (rather than a
+ * cast on `this.permission.data`) keeps the "which kinds have this" list
+ * type-checked against the real union instead of hand-rolled.
+ */
+function getBypassInfo(permission: PermissionState): {
+  allowBypass?: boolean;
+  streamId?: string;
+} {
+  switch (permission.kind) {
+    case PERMISSION_KIND.TOOL_EDIT:
+    case PERMISSION_KIND.BASH:
+    case PERMISSION_KIND.EXTERNAL_INQUIRY:
+    case PERMISSION_KIND.USER_QUESTION:
+      return {
+        allowBypass: permission.data.allowBypass,
+        streamId: permission.data.streamId,
+      };
+    case PERMISSION_KIND.RETRY:
+    case PERMISSION_KIND.PROPOSAL:
+    case PERMISSION_KIND.PLAN_APPROVAL:
+      return {};
+  }
+}
+
+export abstract class BaseFeedbackPanel<
+  K extends PermissionState['kind'] = PermissionState['kind'],
+> extends BaseRequestPanel<K> {
   @query('[data-feedback-input]') private feedbackInput?: HTMLElement;
   @state() protected showFeedback = false;
 
@@ -152,11 +192,8 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
    * there is nothing to scope it to and the button would silently no-op.
    */
   protected get canBypass(): boolean {
-    const data = this.permission.data as {
-      allowBypass?: boolean;
-      streamId?: string;
-    };
-    return Boolean(data.allowBypass && data.streamId);
+    const { allowBypass, streamId } = getBypassInfo(this.permission);
+    return Boolean(allowBypass && streamId);
   }
 
   /**

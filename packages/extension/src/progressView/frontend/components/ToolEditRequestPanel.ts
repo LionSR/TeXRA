@@ -31,7 +31,7 @@ import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { monacoLanguageForPath } from './monacoLanguage';
 
 @customElement('tool-edit-request-panel')
-export class ToolEditRequestPanel extends BaseFeedbackPanel {
+export class ToolEditRequestPanel extends BaseFeedbackPanel<'toolEdit'> {
   static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   @state() private inlineDiffOpen = false;
@@ -45,7 +45,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   }
 
   override render(): TemplateResult {
-    const data = this.permission.data as ToolEditPermission;
+    const data = this.permission.data;
     const diffMeta = this.renderDiffMeta(data);
     const metaParts: MetaPart[] = [];
     if (data.sourceTool) metaParts.push(`Requested by ${data.sourceTool}`);
@@ -71,7 +71,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   // ===========================================================================
 
   private renderDiffActions(): TemplateResult {
-    const data = this.permission.data as ToolEditPermission;
+    const data = this.permission.data;
     const showDropdown = Boolean(data.isLatex);
     const hasInlineDiff = this.hasInlineDiff(data);
 
@@ -200,7 +200,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   };
 
   private handleDiffAction = (): void => {
-    const data = this.permission.data as ToolEditPermission;
+    const data = this.permission.data;
     if (this.hasInlineDiff(data)) {
       this.inlineDiffOpen = !this.inlineDiffOpen;
       return;

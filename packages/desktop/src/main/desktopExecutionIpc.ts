@@ -1,7 +1,9 @@
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MainViewInboundMessageSchema } from '@shared/schemas/mainView';
 import {
   createCommandHandler,
+  createDesktopErrorReporter,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 
@@ -13,10 +15,32 @@ export interface DesktopExecutionIpcOptions {
 export function createDesktopExecutionIpc(
   options: DesktopExecutionIpcOptions = {},
 ): DesktopMessageHandler {
+  const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
+
   return createCommandHandler(
     {
-      [MAIN_VIEW_COMMANDS.EXECUTE]: (message) =>
-        options.executeAgent?.(message as MainViewExecuteMessage),
+      [MAIN_VIEW_COMMANDS.EXECUTE]: (message) => {
+        // Validate at the IPC boundary against the shared inbound schema
+        // (the same schema desktopShellIpc/desktopProgressIpc/desktopSettingsIpc
+        // parse against) instead of blindly casting untrusted renderer input.
+        const parsed = MainViewInboundMessageSchema.safeParse(message);
+        if (
+          !parsed.success ||
+          parsed.data.command !== MAIN_VIEW_COMMANDS.EXECUTE
+        ) {
+          reportAsyncError(
+            new Error(
+              `Ignoring malformed ${MAIN_VIEW_COMMANDS.EXECUTE} message: ${
+                parsed.success
+                  ? `unexpected command ${String(parsed.data.command)}`
+                  : parsed.error.message
+              }`,
+            ),
+          );
+          return;
+        }
+        return options.executeAgent?.(parsed.data as MainViewExecuteMessage);
+      },
     },
     { onAsyncError: options.onAsyncError },
   );

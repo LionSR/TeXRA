@@ -149,33 +149,38 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
 // ============================================================================
 
 /** Schema for delegate_agent tool (tool-use agents). */
-const DelegateAgentInputSchema = z.strictObject({
-  agent: z
-    .string()
-    .nullish()
-    .describe(
-      'Name of the tool-use agent to delegate to. Required for new delegations, ignored when resuming via execution_id.',
-    ),
-  model: z
-    .string()
-    .nullish()
-    .describe(
-      'Model short name from the Available models line. Omit unless the user explicitly requested a model; defaults to the current model when available.',
-    ),
-  instruction: z
-    .string()
-    .describe(
-      'Plain prose instruction for the agent. For new delegations, include file paths naturally and copy every relevant parent constraint into this field: tool/network/file/approval limits, output format, and scope. The subagent does not automatically inherit the parent conversation or hidden constraints. For resumes, reference previous work freely — the subagent retains its full history.',
-    ),
-  memories: memoriesField,
-  working_directory: workingDirectoryField,
-  execution_id: z
-    .string()
-    .nullish()
-    .describe(
-      'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the execution ID from the original delegation result or /executions.',
-    ),
-});
+const DelegateAgentInputSchema = z
+  .strictObject({
+    agent: z
+      .string()
+      .nullish()
+      .describe(
+        'Name of the tool-use agent to delegate to. Required for new delegations, ignored when resuming via execution_id.',
+      ),
+    model: z
+      .string()
+      .nullish()
+      .describe(
+        'Model short name from the Available models line. Omit unless the user explicitly requested a model; defaults to the current model when available.',
+      ),
+    instruction: z
+      .string()
+      .describe(
+        'Plain prose instruction for the agent. For new delegations, include file paths naturally and copy every relevant parent constraint into this field: tool/network/file/approval limits, output format, and scope. The subagent does not automatically inherit the parent conversation or hidden constraints. For resumes, reference previous work freely — the subagent retains its full history.',
+      ),
+    memories: memoriesField,
+    working_directory: workingDirectoryField,
+    execution_id: z
+      .string()
+      .nullish()
+      .describe(
+        'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the execution ID from the original delegation result or /executions.',
+      ),
+  })
+  .refine((data) => Boolean(data.agent) !== Boolean(data.execution_id), {
+    error:
+      "Provide exactly one of 'agent' (to start a new delegation) or 'execution_id' (to resume an existing one) — not both, not neither.",
+  });
 
 export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 
@@ -213,14 +218,10 @@ Git worktree support: resolved from the active workspace at runtime.`,
       return this.resumeAgent(input.execution_id, input.instruction);
     }
 
-    // Delegate path: agent is required
-    if (!input.agent) {
-      throw new Error(
-        `'agent' is required when starting a new delegation. Provide an agent name, or set 'execution_id' to resume an existing subagent.`,
-      );
-    }
-
-    const agent = requireVisibleAgent('toolUse', input.agent);
+    // New-delegation path: the schema's refine() guarantees exactly one of
+    // agent/execution_id is set, so agent is defined here — refine() doesn't
+    // narrow types, hence the assertion.
+    const agent = requireVisibleAgent('toolUse', input.agent!);
     const agentName = agent.name;
 
     const { streamId, context } = requireRunStream('delegate_agent');

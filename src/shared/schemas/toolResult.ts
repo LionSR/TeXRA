@@ -1,6 +1,9 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - utils
+import { isNonEmptyString } from '@utils/core';
+
 // Local imports - shared schemas
 import { LineChangesSchema, LineCountSchema } from './lineChanges';
 
@@ -144,6 +147,57 @@ export const ToolResultSchema = z.looseObject({
   files: z.array(ToolFileAttachmentSchema).optional(),
 });
 export type ToolResult = z.infer<typeof ToolResultSchema>;
+
+// ============================================================================
+// ToolResult Normalization (status inference for ambiguous legacy results)
+// ============================================================================
+
+/**
+ * Tool result status discriminant. `executed` results carry output/summary/
+ * files etc.; `error` results carry a required non-empty `error` message.
+ */
+export const TOOL_RESULT_STATUSES = ['executed', 'error'] as const;
+export type ToolResultStatus = (typeof TOOL_RESULT_STATUSES)[number];
+
+/**
+ * Normalizes an ambiguous `ToolResultSchema` shape (no reliable `status`
+ * field; only `output`/`summary`/`error`/`isError` populated ad hoc by tool
+ * implementations) into a `{ status, ... }` shape that can be narrowed on
+ * `status` directly.
+ *
+ * The computed discriminator always wins over any incidental raw `status`
+ * key a result object might carry (no current tool implementation sets one,
+ * but this keeps behavior unambiguous rather than trusting an unverified
+ * field) — precedence rules are the single source of truth now, previously
+ * duplicated as a heuristic inline in `toolAttachmentUtils.ts`: an explicit
+ * `isError: true`, or non-empty `error` text with no `output`, wins as
+ * `'error'`; otherwise the result is `'executed'`. When `'error'`, the
+ * surfaced error text prefers `error`, then `output`, then `summary`, then a
+ * generic fallback — this preserves historical behavior for tools that only
+ * ever set `output`/`summary` while failing.
+ */
+export const NormalizedToolResultSchema = ToolResultSchema.transform(
+  (raw) => {
+    const hasError = isNonEmptyString(raw.error);
+    const hasOutput = isNonEmptyString(raw.output);
+    const hasSummary = isNonEmptyString(raw.summary);
+    const isError = raw.isError === true;
+    const status: ToolResultStatus =
+      isError || (hasError && !hasOutput) ? 'error' : 'executed';
+
+    if (status !== 'error') {
+      return { ...raw, status };
+    }
+
+    let errorText: string;
+    if (isNonEmptyString(raw.error)) errorText = raw.error;
+    else if (isNonEmptyString(raw.output)) errorText = raw.output;
+    else if (isNonEmptyString(raw.summary)) errorText = raw.summary;
+    else errorText = 'Tool failed';
+
+    return { ...raw, status, error: errorText };
+  },
+);
 
 export class ToolError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
