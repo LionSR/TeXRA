@@ -113,9 +113,9 @@ wiring, not to deliberate host-specific flows already called out in
 `agent-runtime-ui-coupling-audit.md` (GitHub subscriptions, crash reporting,
 history export/rerun, provider-key differences, and similar platform seams).
 
-### A3. `MainApp.ts`: 1,915-line god component running three state mechanisms at once
+### A3. `MainApp.ts`: 1,887-line god component running three state mechanisms at once
 
-`packages/extension/src/webview/frontend/MainApp.ts` mixes 18 ad-hoc
+`packages/extension/src/webview/frontend/MainApp.ts` mixes 31 ad-hoc
 `signal(...)` fields in the class state block, 4 `@state()` fields (2 also
 `@provide()` context fields), and a `PersistedState`/`createWebviewStorage`
 manager, with restore logic sprawled over three methods. The repo already
