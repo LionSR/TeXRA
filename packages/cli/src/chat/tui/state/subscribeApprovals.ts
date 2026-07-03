@@ -9,9 +9,9 @@
 // `never` auto-rejects with `denyMessage(...)`. Only `ask` (or interactive
 // non-print) reaches the queue.
 //
-// Tool-edit goes through `setToolEditApprovalHandler` (separate API since
-// it returns a typed Promise<ToolEditApprovalResult>, not a fire-and-forget
-// event).
+// Tool-edit goes through the Platform approval port (installed per active CLI
+// session) because it returns a typed Promise<ToolEditApprovalResult>, not a
+// fire-and-forget event.
 
 import { platform } from '@platform/platform';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
@@ -30,6 +30,7 @@ import {
   isCliApprovalEvent,
   type CliApprovalEvent,
 } from '@cli/runtime/approvalEvents';
+import { setActiveCliToolEditApprovalHandler } from '@cli/runtime/initPlatform';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -43,7 +44,6 @@ import {
   handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
-  setToolEditApprovalHandler,
 } from '@tools/approval';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
@@ -150,7 +150,7 @@ export function installTuiApprovals(
     originalEmit(event, payload);
   }) as CliRuntimeHost['emit'];
 
-  setToolEditApprovalHandler(async (request) => {
+  setActiveCliToolEditApprovalHandler(async (request) => {
     let decision: ApprovalDecision | undefined = immediateDecision(context);
     if (!decision) {
       decision = await enqueueTuiApproval({ kind: 'toolEdit', request }, host);
@@ -172,7 +172,7 @@ export function installTuiApprovals(
     invalidateRetryRoutes({ cancel: false });
     disposeApprovalClearListener();
     host.emit = originalEmit;
-    setToolEditApprovalHandler();
+    setActiveCliToolEditApprovalHandler(undefined);
   };
 }
 
