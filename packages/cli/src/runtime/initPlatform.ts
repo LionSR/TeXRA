@@ -332,7 +332,6 @@ export async function initCliPlatform(
       channel: 'cli',
       bundleSource: new PathAgentDirectoryBundleSource(context.resourcesPath),
       currentVersion: context.version,
-      customDirectoryStore: { get: () => undefined },
       versionStore: {
         get: () => globalState.get<string>(cliBundledAgentsVersionKey),
         update: (version) =>

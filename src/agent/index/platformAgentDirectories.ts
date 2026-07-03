@@ -8,13 +8,15 @@ import {
   type AgentDirectoryBundleSource,
   type AgentDirectoryVersionStore,
 } from './AgentDirectorySync';
+import type { AgentDirectoriesPort } from '@platform/interfaces/agentDirectories';
 
 interface PlatformAgentDirectoryOptions {
   channel: string;
   customDirectoryStore: { get(): string | undefined };
 }
 
-export interface PlatformAgentDirectoryBootstrapOptions extends PlatformAgentDirectoryOptions {
+export interface PlatformAgentDirectoryBootstrapOptions {
+  channel: string;
   bundleSource: AgentDirectoryBundleSource;
   currentVersion: string | undefined;
   versionStore: AgentDirectoryVersionStore;
@@ -22,7 +24,7 @@ export interface PlatformAgentDirectoryBootstrapOptions extends PlatformAgentDir
 
 export function createPlatformAgentDirectories(
   options: PlatformAgentDirectoryOptions,
-): AgentDirectoryService {
+): AgentDirectoriesPort {
   return new AgentDirectoryService({
     storage: new GlobalStorageAgentDirectoryStorage(),
     customDirectoryStore: options.customDirectoryStore,
