@@ -681,11 +681,8 @@ export function createDesktopSettingsIpc(
       await options.showErrorMessage?.(`Unknown API provider: ${provider}`);
       return;
     }
-    if (submittedApiKey?.trim()) {
-      await profileKeyController.commitProviderKey(
-        provider,
-        submittedApiKey.trim(),
-      );
+    if (submittedApiKey != null) {
+      await profileKeyController.commitProviderKey(provider, submittedApiKey);
       return;
     }
     await profileKeyController.setProviderKey(provider);

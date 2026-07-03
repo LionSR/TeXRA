@@ -30,16 +30,20 @@ export class SettingsProfileKeyController {
       placeHolder: '************************************',
     });
 
-    if (!apiKey) return;
+    if (apiKey == null) return;
 
     await this.commitProviderKey(provider, apiKey);
   }
 
   async commitProviderKey(provider: string, apiKey: string): Promise<void> {
-    if (!apiKey) return;
+    const normalizedApiKey = apiKey.trim();
+    if (!normalizedApiKey) return;
 
     const displayName = this.deps.getProviderDisplayName(provider);
-    await this.deps.setSecret(this.deps.getApiKeySecretName(provider), apiKey);
+    await this.deps.setSecret(
+      this.deps.getApiKeySecretName(provider),
+      normalizedApiKey,
+    );
     void this.deps.prompt.info(`${displayName} API key has been set`);
     await this.deps.refreshAfterKeyChange();
   }
