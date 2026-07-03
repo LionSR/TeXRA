@@ -490,6 +490,87 @@ Target design:
   encodings #2/#3 — it only needs to read the typed round-stage events for
   its status line; flat rendering stays.
 
+### Persistence and resume: one facade, one resumability rule (census-backed)
+
+A store-by-store audit of the persistence/restore/resume layer found the
+same disease as the event layer — the same fact written to several stores by
+several owners, and the same decision re-derived per host — plus two
+outright bugs:
+
+- **Deleting a tab orphans its executions forever.** `clearStream`
+  (`ProgressViewState.ts:325-326`) deletes `streamLogs/` + `streamData/`
+  but never the backing `executions/{id}/` (config, meta, conversation,
+  flow record). There is **no retention policy and no orphan GC anywhere**;
+  kept `flow_*.json` records double as phantom "resumable" markers for
+  streams that no longer exist. Goal-store entries leak the same way
+  (extension tab-delete never calls `forget`; only CLI history-delete
+  does).
+- **A crash renders as success in CLI history.** Resumability is re-derived
+  in **five places with different predicates** — bare flow-record existence
+  (`detectWaitingStreams.ts:33`), a schema-parsing variant
+  (`SessionResumeRetrieval.ts:120`), a `terminalStatus` gate that only the
+  CLI applies (`history.ts:292-311`, which also defaults a missing terminal
+  write to `'completed'`), and a status-based rule on desktop
+  (`desktopStreamSnapshot.ts:145`). The hosts genuinely disagree about
+  which runs are resumable.
+- **Crash repair is duplicated per host and self-inconsistent.** Extension
+  and desktop each orchestrate their own restart repair in different orders
+  (desktop carries a full duplicate in its `catch` arm,
+  `desktopAgentExecution.ts:754-797`); `endRunningGroups` can only write
+  `'error'` groups while `resetRunningTasksToError` repairs the same stream
+  to WAITING, and `terminalStatus` is never rewritten — so one crash yields
+  a resumable stream with a red transcript and a stale outcome, three
+  artifacts with three answers.
+- **Four durable copies of the run's content.** Todos ×3 (KV projection,
+  `workPlan.json`, flow-record shared), conversation ×2 (flow record is
+  what resume actually reads; `conversation.json` is a display-only
+  duplicate rewritten **every node step**), output files ×2, description
+  ×2, agentConfig ×2 (the RunDescriptor finding). `PersistedFlow`
+  `structuredClone`s and rewrites the whole shared blob per step
+  (`persistedFlow.ts:182-183`), and desktop's `streams.json` rewrites the
+  whole rail file on every status tick.
+- **Silent-drop reads.** `readValidated` is `.nullable().catch(null)`
+  (`ExecutionKVStore.ts:182`); unparseable transcript entries and
+  `taskState` parses are dropped with no signal — corruption is invisible
+  and manifests as "resume does nothing". `ExecutionMeta`, `FlowRecord`,
+  and `meta.json` have no `schemaVersion` (unlike snapshots and the
+  desktop rail, which do this right); and the flow-record legacy-shape
+  migration is implemented twice (`nodes/types.ts:113` and
+  `SessionResumeRetrieval.ts:66`), while the pre-KV `index.json`
+  migration still runs on the hot path years past its data.
+
+Target design (extends plane 3's `session.transcripts`; honors audit A6 —
+formats stay separate, ownership unifies):
+
+- **`session.stores` facade with atomic lifecycle.** One owner for the
+  stream's durable footprint: tab-delete removes `streamLogs` +
+  `streamData` + `executions/{id}` + goal entries together; a startup sweep
+  GCs orphans against the live stream set. Retention becomes a policy hook
+  instead of "never".
+- **One ownership rule per fact.** Flow record = resume SSOT;
+  `streamData/` = display sidecars; `executions/config.json` = config. The
+  `conversation.json`/`todos.json` KV projections and the
+  `meta.json.taskState` raw copy are deleted (the RunDescriptor references
+  config by executionId).
+- **One `deriveResumability(executionId) → {resumable, cause}`** consumed
+  by all five call sites. With terminal statuses as `RunOutcome` (§Status
+  model), the CLI's gate stops disagreeing with the runtime, and a missing
+  terminal write derives `failed`-after-crash instead of `'completed'`.
+- **One `repairAfterRestart(session)` primitive** shared by extension and
+  desktop: status via the `restart-repair` cause, transcript group closure,
+  and outcome rewrite happen together, so the three artifacts cannot
+  disagree. Repaired-to-WAITING streams get neutral group closure, not
+  forced `'error'`.
+- **Loud reads, versioned writes.** `schemaVersion` on `ExecutionMeta`,
+  `FlowRecord`, and `meta.json`; parse failures on the resume path surface
+  as warnings instead of silently degrading; the duplicated legacy-shape
+  migration collapses into `migrateSharedState` as the single
+  implementation, and the pre-KV `index.json` migration is retired behind a
+  one-time marker.
+- **Write hygiene.** Desktop rail writes debounced like the transcript
+  store; the flow record's unbounded `nodes[]` history moves to
+  append-delta or capped retention (it is a step log, not resume state).
+
 ## 3. What each existing artifact becomes
 
 | Today                                                                                   | Becomes                                                                                                                             |
@@ -515,6 +596,10 @@ Target design:
 | `handleSetTaskState` run-start piggy-backs (counter reset, hint clear, O(N) rebuild)    | The status machine's `→ running` transition                                                                                         |
 | `r<N>` label regex + `ExecutionProgress` round counters + `conversationProgress` rounds | Typed round stages (`kind:'round'`, `index`, `total`); `conversationProgress` shrinks to `toolCallCount`                            |
 | `progress-grouping-refactor.md` (R1/R2/R4 landed, PRD stale)                            | Marked superseded; residue = module channel logger in `executeAgent.ts`                                                             |
+| Tab-delete leaving `executions/`, flow records, goal entries behind                     | `session.stores` facade: atomic delete + startup orphan sweep + retention hook                                                      |
+| 5 resumability predicates (extension/CLI/desktop disagree; crash → `completed`)         | One `deriveResumability(executionId)` over flow record + `RunOutcome`                                                               |
+| Per-host restart repair (status/transcript/terminalStatus can disagree)                 | One shared `repairAfterRestart(session)` writing all three artifacts together via the `restart-repair` cause                        |
+| `conversation.json`/`todos.json` KV projections (duplicate flow-record shared)          | Deleted; display reads the sidecar facade, resume reads the flow record                                                             |
 
 Invariants that become true _by construction_ (each currently held by a guard,
 a comment, or luck): no event exists before its subscriber (hub is built with
@@ -699,7 +784,11 @@ invisible to it while desktop/CLI gain correctness.
    its run-start piggy-backs onto the `→ running` transition from stage 2)
    and typed round stages (`kind`/`index`/`total`), deleting the
    `ExecutionProgress` round counters and the round half of
-   `conversationProgress`.
+   `conversationProgress`. The persistence facade lands here too:
+   `session.stores` atomic delete + orphan sweep, the single
+   `deriveResumability` and shared `repairAfterRestart` primitives (repair
+   uses stage 2's `restart-repair` cause), and deletion of the
+   `conversation.json`/`todos.json` projections.
 4. **Interactions port.** Introduce `HostInteractions` per session; implement
    for CLI first (deletes the monkey-patch and exercises the contract), then
    desktop (deletes the per-window handler plumbing), then extension.
