@@ -36,10 +36,11 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
-import { clamp, filterNotNullish, roundTo } from '@utils/core';
+import { clamp, filterNotNullish } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { computeUtilizationPercent } from '../support/contextUtilization';
+import { logCompactionEvent } from '../support/compactionLogging';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import {
@@ -959,27 +960,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         tokensAfter = compactedResponse.usage.output_tokens;
       }
 
-      const utilizationAfter = computeUtilizationPercent(
+      logCompactionEvent({
+        logger: this.logger,
+        tokensBefore,
         tokensAfter,
         contextWindow,
-      );
-      const reduction = tokensBefore - tokensAfter;
-      const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
-
-      // Log context management event with structured data
-      logContextManagementEvent(
-        this.logger,
-        `Compacted conversation: ${tokensBefore.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-        {
-          action: 'compaction',
-          tokensBefore,
-          tokensAfter,
-          contextWindow,
-          utilizationBefore: roundTo(utilizationBefore, 1),
-          utilizationAfter: roundTo(utilizationAfter, 1),
-          details: `OpenAI Responses API compaction: ${compactedResponse.output.length} items`,
-        },
-      );
+        details: `OpenAI Responses API compaction: ${compactedResponse.output.length} items`,
+      });
 
       // Store compacted messages for use in this request.
       // Mark as pending compaction - state will be finalized after successful API call.
