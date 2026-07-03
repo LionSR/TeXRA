@@ -344,6 +344,10 @@ mouse-scroll for finalized history, so don't reinvent them.
   bracketed paste, cursor) before any async drain, wired to SIGINT/SIGTERM/SIGHUP.
   Implemented in `runChatTui.tsx`; route new mode toggles through that same
   synchronous path.
+- **Per-transcript-entry render-null error boundaries.** Every transcript entry
+  is wrapped in `EntryErrorBoundary` (`ConversationPane.tsx`,
+  `StaticConversationTranscript.tsx`), so one malformed entry degrades to blank
+  instead of blanking the session. New transcript renderers must live inside it.
 - **Not yet built — adopt when touched:** animations should share one Clock
   (single timer, idle when unsubscribed, offscreen rows unsubscribe via a
   ref-only check) instead of per-component intervals; raw mode should be
@@ -352,9 +356,7 @@ mouse-scroll for finalized history, so don't reinvent them.
   DEC 2026 sync-output (BSU/ESU, gated on the existing DECRQM 2027 probe) if a
   blank flash is ever observed; prefer a `/dev/tty` fallback over refusing the
   TUI when stdin is piped but a real terminal is present, and handle EPIPE
-  globally; transcript renderers should gain per-entry error boundaries so one
-  malformed entry degrades to blank instead of blanking the session. Full
-  rationale and citations:
+  globally. Full rationale and citations:
   `docs/proposals/ink-practices-from-claude-code.md`.
 
 ### CLI design (clig.dev)

@@ -42,9 +42,10 @@ The per-subsystem grounding agent surveyed `terminalCleanup.ts` but missed
   hangs — small and optional, since terminal modes are already restored
   synchronously regardless.
 - **#3 (per-transcript-entry error boundaries) was the actual high-confidence gap
-  and is still not built**. There is no `EntryErrorBoundary` in the current tree.
-  Verified there are zero error boundaries in the CLI; a runtime smoke test
-  confirmed `ink@7.1.0` propagates a render throw to a nested boundary.
+  and is now shipped.** `EntryErrorBoundary` wraps live transcript entries
+  (`ConversationPane.tsx:114-116`) and static transcript entries
+  (`StaticConversationTranscript.tsx:410-426`), so a render throw is isolated to
+  one entry.
 
 ---
 
