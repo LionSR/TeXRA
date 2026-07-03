@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
   background-command results are now escaped before being sent back to the
   orchestrator, so ids containing XML-sensitive characters no longer corrupt
   the delivered result.
+- **More provider API keys are redacted from logs** — desktop and other
+  redacting log sinks now cover the key formats used by all configurable model
+  providers, including Google auth keys.
 
 ### Extension (VS Code) and Desktop
 
