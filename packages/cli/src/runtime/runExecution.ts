@@ -24,7 +24,9 @@ import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
 import {
+  createCliRunResult,
   readCliTerminalStatus,
+  terminalStatusExitCode,
   type ExecuteAgentResult,
 } from './terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
@@ -132,6 +134,27 @@ export async function executeCliConfig<
     executionId,
     result: result as ExecuteAgentResultForCategory<C>,
     terminalStatus,
+  };
+}
+
+export async function executeCliToolUseConfig(
+  config: AgentConfigPayload,
+  runContext: CliContext,
+  options: CliConfigExecuteOptions<typeof AgentCategory.ToolUse> = {},
+) {
+  const execution = await executeCliConfig(config, runContext, {
+    ...options,
+    expectedCategory: AgentCategory.ToolUse,
+  });
+  if (!execution.ok) return execution;
+
+  const { result, terminalStatus } = execution;
+  return {
+    ok: true,
+    displayResult: createCliRunResult(result, terminalStatus, {
+      workingDirectory: runContext.cwd,
+    }),
+    exitCode: terminalStatusExitCode(terminalStatus, runContext),
   };
 }
 
