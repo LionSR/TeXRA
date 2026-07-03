@@ -135,7 +135,7 @@ export class RoundPersistedFlow<
   async run(shared: S): Promise<RunOutcome> {
     let outcome: RunOutcome = RUN_OUTCOME.COMPLETED;
 
-    await this.init(shared);
+    await this.ensureRecord(shared);
     let currentShared = shared;
 
     try {
