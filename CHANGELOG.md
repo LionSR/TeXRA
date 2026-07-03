@@ -2,6 +2,70 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.2] - 2026-07-03
+
+### Shared (all surfaces)
+
+#### Improvements
+
+- **Agent output recovery is more forgiving** — multi-file workflow output can
+  now be recovered even when the model omits the expected XML or percent-header
+  filename markers, as long as the generated sections can still be matched
+  safely.
+- **ChatGPT subscription usage is accounted for separately** — usage logged for
+  ChatGPT subscription-backed Codex runs is separated from relay/API usage in
+  the backend, so subscription activity can be audited without mixing it into
+  metered relay traffic.
+- **Provider API keys can be supplied through familiar environment variables** —
+  provider-style variables such as `ANTHROPIC_API_KEY` are now recognized by the
+  same paths that read stored keys.
+
+#### Bug Fixes
+
+- **OpenAI streaming falls back when the SDK sees a new event type** — if the
+  OpenAI SDK throws on an unrecognized response-stream event, TeXRA falls back
+  to polling instead of failing the run.
+- **Anthropic stream failures are labelled more accurately** — failures after
+  `message_start` are no longer misreported as pre-message-start failures.
+- **The text editor tool preserves dollar signs** — `str_replace` edits no
+  longer corrupt replacement text containing `$` sequences.
+- **Model and stream failures get clearer annotations** — stream failures,
+  retry handoffs, and API-key status labels now report the relevant state more
+  directly.
+
+### Extension (VS Code) and Desktop
+
+#### Bug Fixes
+
+- **The launcher selects team root agents correctly** — choosing a multi-agent
+  team now selects its orchestrating/root agent in the run launcher instead of
+  leaving the previous agent selected.
+- **Desktop repairs orphaned streams on startup** — after a restart, desktop
+  streams that were left running or waiting are reconciled instead of staying in
+  a stale in-flight state.
+
+### Extension (VS Code)
+
+#### Improvements
+
+- **The GitHub integration accepts CLI-style token variables** — the GitHub
+  subscription tool now recognizes the token environment aliases users commonly
+  configure for command-line GitHub tools.
+
+### CLI
+
+#### Improvements
+
+- **Tool integrations appear in the config catalogue** — CLI configuration now
+  exposes tool-integration settings alongside the other shared settings.
+
+#### Bug Fixes
+
+- **Headless run history is more complete** — non-interactive CLI runs now keep
+  the durable progress metadata expected by resume and history tools.
+- **API access labels are clearer** — model availability output distinguishes
+  relay, subscription, and local-key states more plainly.
+
 ## [0.39.1] - 2026-06-30
 
 ### Shared (all surfaces)
