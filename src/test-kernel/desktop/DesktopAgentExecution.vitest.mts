@@ -28,6 +28,7 @@ import type { StreamSnapshotStore as ProgressSnapshotStore } from '@transcript';
 
 type Bridge = {
   openFileCompile(filePath: string): Promise<void>;
+  flush(): Promise<void>;
   dispose(): void;
 };
 
@@ -50,6 +51,14 @@ type TestableBridge = Bridge & {
         text: string;
       },
     ): unknown;
+    releaseEntries(streamId: StreamTabId): void;
+    load(): Promise<void>;
+    ensureLoaded(streamId: StreamTabId): Promise<void>;
+    get(streamId: StreamTabId):
+      | {
+          getRange(fromSeq: number): Array<{ text?: string }>;
+        }
+      | undefined;
   };
 };
 
@@ -67,6 +76,7 @@ type BridgeWithSession = TestableBridge & {
 type DesktopExecution = {
   handleExecute(message: unknown): Promise<void>;
   progress: Bridge;
+  flush(): Promise<void>;
   dispose(): void;
 };
 
@@ -108,6 +118,7 @@ interface DesktopAgentExecutionModule {
 }
 
 type CreateBridgeOptions = {
+  kvStoreBacking?: Map<string, unknown>;
   kvRead?: (key: string) => Promise<unknown> | unknown;
   retrieveSessionResumeData?: ReturnType<typeof vi.fn>;
   resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
@@ -192,22 +203,44 @@ async function createBridge(
   }));
   vi.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
+      constructor(private readonly dir: string) {}
+
       async read(key: string): Promise<unknown> {
-        return options.kvRead?.(key);
+        return (
+          options.kvRead?.(key) ?? options.kvStoreBacking?.get(this.key(key))
+        );
       }
 
-      async write(): Promise<void> {}
+      async write(key: string, value: unknown): Promise<void> {
+        options.kvStoreBacking?.set(this.key(key), value);
+      }
 
-      async delete(): Promise<void> {}
+      async delete(key: string): Promise<void> {
+        options.kvStoreBacking?.delete(this.key(key));
+      }
 
-      async deleteDir(): Promise<void> {}
+      async deleteDir(): Promise<void> {
+        if (!options.kvStoreBacking) return;
+        for (const key of options.kvStoreBacking.keys()) {
+          if (key.startsWith(`${this.dir}/`))
+            options.kvStoreBacking.delete(key);
+        }
+      }
 
       async exists(): Promise<boolean> {
         return false;
       }
 
       async listKeys(): Promise<string[]> {
-        return [];
+        if (!options.kvStoreBacking) return [];
+        const prefix = `${this.dir}/`;
+        return [...options.kvStoreBacking.keys()]
+          .filter((key) => key.startsWith(prefix))
+          .map((key) => key.slice(prefix.length));
+      }
+
+      private key(key: string): string {
+        return `${this.dir}/${key}`;
       }
     },
   }));
@@ -2306,6 +2339,36 @@ describe('DesktopProgressBridge', () => {
           }),
         }),
       ]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('flushes debounced stream logs before shutdown can drop them', async () => {
+    const streamId = 'shutdown-flush' as StreamTabId;
+    const kvStoreBacking = new Map<string, unknown>();
+    const bridge = await createBridge([], { kvStoreBacking });
+
+    try {
+      bridge.streamLogs.append(streamId, {
+        id: 'shutdown-log',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 1_000,
+        text: 'persist me before quit',
+      });
+
+      await bridge.flush();
+      bridge.streamLogs.releaseEntries(streamId);
+      await bridge.streamLogs.load();
+      await bridge.streamLogs.ensureLoaded(streamId);
+
+      expect(
+        bridge.streamLogs
+          .get(streamId)
+          ?.getRange(0)
+          .map((entry) => entry.text),
+      ).toEqual(['persist me before quit']);
     } finally {
       bridge.dispose();
     }

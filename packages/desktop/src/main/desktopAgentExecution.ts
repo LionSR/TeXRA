@@ -143,6 +143,7 @@ export interface DesktopAgentExecutionOptions {
 export interface DesktopAgentExecution {
   handleExecute(message: MainViewExecuteMessage): Promise<void>;
   progress: DesktopProgressBridge;
+  flush(): Promise<void>;
   dispose(): void;
 }
 
@@ -594,6 +595,10 @@ export class DesktopProgressBridge {
     // executing headless on macOS after the window closes, but their execution
     // ids must remain visible to process-wide history guards until they settle.
     this.session.dispose({ keepActiveExecutions: true });
+  }
+
+  async flush(): Promise<void> {
+    await this.state.flush();
   }
 
   private clearDesktopSessionMaps(): void {
@@ -1274,6 +1279,9 @@ export function createDesktopAgentExecution(
     },
     dispose() {
       progress.dispose();
+    },
+    flush() {
+      return progress.flush();
     },
   };
 }
