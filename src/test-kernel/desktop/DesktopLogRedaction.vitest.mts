@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { redactSecrets } from '@logger/redaction';
+import { PROVIDER_KEY_REDACTION_RULES, redactSecrets } from '@logger/redaction';
+import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
 
 describe('desktop log redaction', () => {
   it('redacts obvious secrets and sensitive path prefixes', async () => {
@@ -24,5 +25,22 @@ describe('desktop log redaction', () => {
     expect(redacted).toContain('OPENAI_API_KEY=[redacted]');
     expect(redacted).toContain('Bearer [redacted]');
     expect(redacted).toContain('[path]/main.tex');
+  });
+
+  it('redacts representative API key shapes for every configurable provider', () => {
+    for (const provider of API_KEY_PROVIDER_IDS) {
+      for (const sample of PROVIDER_KEY_REDACTION_RULES[provider].examples) {
+        const redacted = redactSecrets(`${provider}: ${sample}`);
+
+        expect(redacted).not.toContain(sample);
+        expect(redacted).toContain('[redacted]');
+      }
+    }
+  });
+
+  it('keeps API-key provider coverage explicit', () => {
+    expect(Object.keys(PROVIDER_KEY_REDACTION_RULES).toSorted()).toEqual(
+      [...API_KEY_PROVIDER_IDS].toSorted(),
+    );
   });
 });
