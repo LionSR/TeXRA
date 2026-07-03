@@ -36,6 +36,7 @@ describe('ToolUseWaitNode', () => {
     const memoryMisses: AttachedMemoryMiss[] = [
       { path: '/memories/missing.md', reason: 'not found' },
     ];
+    const runtimeHost = { emit: vi.fn() };
 
     const services = {
       attachedMemoryMisses: memoryMisses,
@@ -44,7 +45,7 @@ describe('ToolUseWaitNode', () => {
       logger: { error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
       onBeforeWaiting,
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       session: {
         hasQueuedFollowUp: () => false,
         waitForFollowUp: async () => {
@@ -60,7 +61,7 @@ describe('ToolUseWaitNode', () => {
 
     const prep = await node.prep(shared);
     const transition = await withTestRunContext(
-      services.runtimeHost,
+      runtimeHost,
       'test-stream',
       async () => {
         const exec = await node.exec(prep);
@@ -86,6 +87,7 @@ describe('ToolUseWaitNode', () => {
       .fn()
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(true);
+    const runtimeHost = { emit: vi.fn() };
 
     const services = {
       checkInterruption: () => interrupted,
@@ -96,7 +98,7 @@ describe('ToolUseWaitNode', () => {
         extractAssistantText: () => undefined,
       },
       onBeforeWaiting,
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       session: {
         hasQueuedFollowUp: () => waitCalls === 0,
         waitForFollowUp: async () => {
@@ -119,7 +121,7 @@ describe('ToolUseWaitNode', () => {
 
     const firstPrep = await node.prep(shared);
     const firstTransition = await withTestRunContext(
-      services.runtimeHost,
+      runtimeHost,
       'test-stream',
       async () => {
         const firstExec = await node.exec(firstPrep);
@@ -131,7 +133,7 @@ describe('ToolUseWaitNode', () => {
 
     const secondPrep = await node.prep(shared);
     const secondTransition = await withTestRunContext(
-      services.runtimeHost,
+      runtimeHost,
       'test-stream',
       async () => {
         const secondExec = await node.exec(secondPrep);
@@ -152,6 +154,7 @@ describe('ToolUseWaitNode', () => {
       stateSlices: null,
     };
     const onBeforeWaiting = vi.fn(async () => true);
+    const runtimeHost = { emit: vi.fn() };
 
     const services = {
       checkInterruption: () => true,
@@ -159,7 +162,7 @@ describe('ToolUseWaitNode', () => {
       logger: { error: vi.fn(), info: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
       onBeforeWaiting,
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       session: {
         hasQueuedFollowUp: () => false,
         waitForFollowUp: vi.fn(),
@@ -172,7 +175,7 @@ describe('ToolUseWaitNode', () => {
 
     const prep = await node.prep(shared);
     const transition = await withTestRunContext(
-      services.runtimeHost,
+      runtimeHost,
       'test-stream',
       async () => {
         const exec = await node.exec(prep);
@@ -193,6 +196,7 @@ describe('ToolUseWaitNode', () => {
     };
     const warn = vi.fn();
     const addMediaToUserMessage = vi.fn(async () => {});
+    const runtimeHost = { emit: vi.fn() };
 
     const services = {
       checkInterruption: () => false,
@@ -208,14 +212,14 @@ describe('ToolUseWaitNode', () => {
         },
         createUserFollowUpMessages: vi.fn(async () => []),
       },
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       streamStatus: new StreamStatusRegistry(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
 
     const node = new ToolUseWaitNode().setServices(services);
     const transition = await withTestRunContext(
-      services.runtimeHost,
+      runtimeHost,
       'test-stream',
       () =>
         node.post(
@@ -329,6 +333,7 @@ describe('ToolUseWaitNode', () => {
     const onFollowUpConsumed = vi.fn();
     const waitForFollowUp = vi.fn();
     const streamStatus = new StreamStatusRegistry();
+    const runtimeHost = { emit: vi.fn() };
     const services = {
       checkInterruption: () => false,
       isSubagent: false,
@@ -338,7 +343,7 @@ describe('ToolUseWaitNode', () => {
         extractAssistantText: () => undefined,
       },
       onFollowUpConsumed,
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       session: {
         hasQueuedFollowUp: () => false,
         waitForFollowUp,
@@ -350,10 +355,8 @@ describe('ToolUseWaitNode', () => {
 
     try {
       const prep = await node.prep(shared);
-      const exec = await withTestRunContext(
-        services.runtimeHost,
-        streamId,
-        () => node.exec(prep),
+      const exec = await withTestRunContext(runtimeHost, streamId, () =>
+        node.exec(prep),
       );
 
       expect(exec.kind).toBe('continue');
@@ -368,10 +371,8 @@ describe('ToolUseWaitNode', () => {
       expect(waitForFollowUp).not.toHaveBeenCalled();
       expect(streamStatus.get(streamId)).toBeUndefined();
 
-      const transition = await withTestRunContext(
-        services.runtimeHost,
-        streamId,
-        () => node.post(shared, prep, exec),
+      const transition = await withTestRunContext(runtimeHost, streamId, () =>
+        node.post(shared, prep, exec),
       );
 
       expect(transition).toBe(FlowTransition.CONTINUE);
@@ -417,6 +418,7 @@ describe('ToolUseWaitNode', () => {
       ],
     );
     const waitForFollowUp = vi.fn(async () => null);
+    const runtimeHost = { emit: vi.fn() };
     const services = {
       checkInterruption: () => false,
       isSubagent: false,
@@ -425,7 +427,7 @@ describe('ToolUseWaitNode', () => {
         createUserFollowUpMessages,
         extractAssistantText: () => undefined,
       },
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       session: {
         hasQueuedFollowUp: () => false,
         waitForFollowUp,
@@ -439,10 +441,8 @@ describe('ToolUseWaitNode', () => {
       const continuationCycles = 25;
       for (let cycle = 0; cycle < continuationCycles; cycle += 1) {
         const prep = await node.prep(shared);
-        const exec = await withTestRunContext(
-          services.runtimeHost,
-          streamId,
-          () => node.exec(prep),
+        const exec = await withTestRunContext(runtimeHost, streamId, () =>
+          node.exec(prep),
         );
 
         expect(exec.kind).toBe('continue');
@@ -452,10 +452,8 @@ describe('ToolUseWaitNode', () => {
           'Keep solving the hard problem until verification is complete.',
         );
 
-        const transition = await withTestRunContext(
-          services.runtimeHost,
-          streamId,
-          () => node.post(shared, prep, exec),
+        const transition = await withTestRunContext(runtimeHost, streamId, () =>
+          node.post(shared, prep, exec),
         );
         expect(transition).toBe(FlowTransition.CONTINUE);
         expect(createUserFollowUpMessages).toHaveBeenCalledTimes(cycle + 1);
@@ -470,10 +468,8 @@ describe('ToolUseWaitNode', () => {
       await GoalStore.setStatus(streamId, 'paused');
 
       const prep = await node.prep(shared);
-      const exec = await withTestRunContext(
-        services.runtimeHost,
-        streamId,
-        () => node.exec(prep),
+      const exec = await withTestRunContext(runtimeHost, streamId, () =>
+        node.exec(prep),
       );
 
       expect(waitForFollowUp).toHaveBeenCalledOnce();
@@ -494,11 +490,12 @@ describe('ToolUseWaitNode', () => {
       items: [{ text: 'user correction', origin: 'user' }],
       synthetic: false,
     }));
+    const runtimeHost = { emit: vi.fn() };
     const services = {
       checkInterruption: () => false,
       logger: { error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp,
@@ -509,16 +506,13 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      const exec = await withTestRunContext(
-        services.runtimeHost,
-        streamId,
-        () =>
-          node.exec({
-            afterError: false,
-            lastResponse: undefined,
-            previouslyDeliveredToOrchestrator: false,
-            touchedFiles: [],
-          }),
+      const exec = await withTestRunContext(runtimeHost, streamId, () =>
+        node.exec({
+          afterError: false,
+          lastResponse: undefined,
+          previouslyDeliveredToOrchestrator: false,
+          touchedFiles: [],
+        }),
       );
 
       expect(waitForFollowUp).toHaveBeenCalledOnce();
@@ -540,12 +534,13 @@ describe('ToolUseWaitNode', () => {
     await GoalStore.start(streamId, 'Parent-owned objective.');
 
     const waitForFollowUp = vi.fn(async () => null);
+    const runtimeHost = { emit: vi.fn() };
     const services = {
       checkInterruption: () => false,
       isSubagent: true,
       logger: { error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       session: {
         hasQueuedFollowUp: () => false,
         waitForFollowUp,
@@ -556,16 +551,13 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      const exec = await withTestRunContext(
-        services.runtimeHost,
-        streamId,
-        () =>
-          node.exec({
-            afterError: false,
-            lastResponse: undefined,
-            previouslyDeliveredToOrchestrator: false,
-            touchedFiles: [],
-          }),
+      const exec = await withTestRunContext(runtimeHost, streamId, () =>
+        node.exec({
+          afterError: false,
+          lastResponse: undefined,
+          previouslyDeliveredToOrchestrator: false,
+          touchedFiles: [],
+        }),
       );
 
       expect(waitForFollowUp).toHaveBeenCalledOnce();
@@ -585,6 +577,7 @@ describe('ToolUseWaitNode', () => {
       stateSlices: null,
     };
     const createUserFollowUpMessages = vi.fn(async () => []);
+    const runtimeHost = { emit: vi.fn() };
     const services = {
       checkInterruption: () => false,
       logger: { error: vi.fn() },
@@ -592,7 +585,7 @@ describe('ToolUseWaitNode', () => {
         createUserFollowUpMessages,
         extractAssistantText: () => undefined,
       },
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       session: {
         hasQueuedFollowUp: () => false,
         waitForFollowUp: async () => ({
@@ -612,15 +605,13 @@ describe('ToolUseWaitNode', () => {
       });
 
       const prep = await node.prep(shared);
-      const exec = await withTestRunContext(
-        services.runtimeHost,
-        streamId,
-        () => node.exec(prep),
+      const exec = await withTestRunContext(runtimeHost, streamId, () =>
+        node.exec(prep),
       );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.WAITING);
       expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
 
-      await withTestRunContext(services.runtimeHost, streamId, () =>
+      await withTestRunContext(runtimeHost, streamId, () =>
         node.post(shared, prep, exec),
       );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);

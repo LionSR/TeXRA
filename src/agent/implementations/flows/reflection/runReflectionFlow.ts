@@ -12,6 +12,7 @@ import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
@@ -92,15 +93,13 @@ export async function runReflectionFlow<C = unknown>(
     setting,
     prompt,
     logger,
-    runtimeHost,
-    streamId,
-    executionId,
     storageKey,
     parentStage,
     userVarChannels,
     checkInterruption,
     onRoundFinalized = async () => {},
   } = input;
+  const { runtimeHost, streamId, executionId } = useLaunchRunContext();
   // Capture the run's session at setup (inside the run's ALS); the interrupt
   // closure below fires from the host thread outside the ALS.
   const runSession = currentSession();
@@ -285,7 +284,6 @@ export async function runReflectionFlow<C = unknown>(
 
     services = {
       ...input,
-      runtimeHost,
       onRoundFinalized,
       outputState,
       xmlManager,
