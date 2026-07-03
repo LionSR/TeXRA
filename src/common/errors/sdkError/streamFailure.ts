@@ -1,4 +1,7 @@
-import { attachFlowAutoRetryRequired, attachPartialText } from './errorMetadata';
+import {
+  attachFlowAutoRetryRequired,
+  attachPartialText,
+} from './errorMetadata';
 
 /**
  * Minimal shape of a provider SDK stream that emits a `connect` event once the
