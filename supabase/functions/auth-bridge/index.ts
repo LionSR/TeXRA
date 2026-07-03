@@ -224,7 +224,7 @@ function bridgePageHtml(ext: string, id: string): string {
   <a id="open" class="button primary" rel="noopener">Open in your editor</a>
   <button id="copy" type="button">Copy link</button>
 </div>
-<p class="muted">If nothing happens, copy this and run <strong>Open URL</strong> in your editor.</p>
+<p class="muted">If nothing happens, copy this link, open the Command Palette (<strong>Cmd/Ctrl+Shift+P</strong>), run <strong>Open URL</strong>, and paste the link into the box that appears.</p>
 <p><code id="link"></code></p>
 <p id="status" aria-live="polite"></p>
 <script>
