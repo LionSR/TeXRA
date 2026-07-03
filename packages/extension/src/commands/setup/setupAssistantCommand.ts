@@ -2,6 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { resolveSetupModelExcludingOpenRouter } from '@controllers/onboarding/setupLaunch';
+import { platform } from '@platform/platform';
 import { loadAgents } from '@agent/index';
 import { registerExecution } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -27,7 +29,6 @@ import {
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_CHOICE_SIGN_IN,
 } from '@shared/copy/onboarding';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -63,27 +64,17 @@ interface LaunchModelResolution {
  * launching with a model that will crash on tier enforcement.
  *
  * Order:
- *   0. ChatGPT subscription — when enabled and signed in, use the
- *      Codex-eligible OpenAI setup model.
- *   1. Researcher Access — only when "Use Included Access" is actually
- *      on AND the signed-in setup model is in the user's tier. A plain
- *      `canUseServerSideKeys()` pass is insufficient because a lower-tier
- *      user may have server-side access to *some* models but not
- *      `DEFAULT_AGENT_MODEL`; we'd otherwise fall through preflight
- *      and fail at runtime when tier enforcement kicks in.
- *   2. If the user is signed in but `DEFAULT_AGENT_MODEL` is not in
- *      tier, scan `SETUP_MODEL_BY_PROVIDER` for any model that IS in
- *      tier so a lower-tier signed-in user still gets a working launch.
- *   3. Any direct API key for a provider whose default model routes
- *      through that same provider directly (iterating
- *      `SecretManager.API_PROVIDERS` for deterministic ordering). Preferred
- *      over OpenRouter so we don't need to touch the routing flag at all.
- *   4. Only if `openRouter` is the sole provider with a key, report a
+ *   0. If the global `useOpenRouter` flag is already on, use the
+ *      OpenRouter-routed default (the caller's `ensureRoutingConfigured`
+ *      already validated a key is present).
+ *   1. Otherwise, ChatGPT subscription, Researcher Access, then a direct
+ *      provider key — the host-shared priority scan in
+ *      `resolveSetupModelExcludingOpenRouter` (see that function for the
+ *      ChatGPT/Researcher Access/direct-key detail).
+ *   2. Only if `openRouter` is the sole provider with a key, report a
  *      router-backed default and let the caller temporarily flip the flag.
  */
 async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
-  const serverKeys = getServerSideKeyService();
-
   // When global OR routing is on, every model call is re-routed through
   // OpenRouter at the ModelFactory level regardless of what we pick for
   // "direct" here — so a server-side or direct-provider pick would be
@@ -99,47 +90,13 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
     };
   }
 
-  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
-    return {
-      model: CHATGPT_SETUP_MODEL,
-      requiresOpenRouter: false,
-    };
+  const model = await resolveSetupModelExcludingOpenRouter(platform().secrets);
+  if (model) {
+    return { model, requiresOpenRouter: false };
   }
 
-  if (await serverKeys.canUseServerSideKeysForModel(DEFAULT_AGENT_MODEL)) {
-    return { model: DEFAULT_AGENT_MODEL, requiresOpenRouter: false };
-  }
-
-  // Step 2: signed-in user whose tier excludes the default signed-in
-  // model. Look for any tier-available *directly-routed* model among the
-  // per-provider defaults. Skip the `openRouter` entry because that
-  // model (e.g. `sonnet46T`) is specifically for OR-routed calls and
-  // routing it direct via server-side keys would pick the wrong backend.
-  if (await serverKeys.canUseServerSideKeys()) {
-    for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
-      if (provider === 'openRouter') continue;
-      if (serverKeys.canUseModelSync(model)) {
-        return { model, requiresOpenRouter: false };
-      }
-    }
-  }
-
-  // Step 3: direct provider key. Only consider providers we know how to
-  // map to a default model — silently falling back to `DEFAULT_AGENT_MODEL`
-  // (a Google model) for an unmapped provider would produce a runtime
-  // auth failure with a credential that can't reach Google.
-  for (const provider of SecretManager.API_PROVIDERS) {
-    if (provider === 'openRouter') continue;
-    const model = SETUP_MODEL_BY_PROVIDER[provider];
-    if (!model) continue;
-    if (await SecretManager.hasUsableApiKey(provider)) {
-      return { model, requiresOpenRouter: false };
-    }
-  }
-
-  // Step 4: only OpenRouter key present. The `openRouter` entry is
-  // statically declared in `SETUP_MODEL_BY_PROVIDER`, so no fallback
-  // is needed.
+  // Only OpenRouter key present. The `openRouter` entry is statically
+  // declared in `SETUP_MODEL_BY_PROVIDER`, so no fallback model is needed.
   if (await SecretManager.hasUsableApiKey('openRouter')) {
     return {
       model: SETUP_MODEL_BY_PROVIDER.openRouter,
