@@ -672,7 +672,7 @@ export class DesktopProgressBridge {
       const currentStatus = StreamStatusService.get(streamId);
       if (
         RESTART_REPAIR_STATUSES.has(snapshot.lastKnownStatus) ||
-        RESTART_REPAIR_STATUSES.has(currentStatus)
+        (currentStatus != null && RESTART_REPAIR_STATUSES.has(currentStatus))
       ) {
         repairStreams.add(streamId);
       }
