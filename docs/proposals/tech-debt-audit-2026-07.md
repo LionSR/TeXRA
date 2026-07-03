@@ -541,8 +541,9 @@ choice that sidesteps TeX-distro brittleness; protect it. The debts:
 - **C2c.** The bib-error retry requires **all four** hardcoded latexdiff
   message substrings (`diffCommandExecutor.ts:15-20,265-269`) — the
   `--flatten` fallback dies silently on a message change. **C2d.** TikZ
-  extraction uses greedy `.*?/gs` regexes that miss `figure*`/nested
-  environments (`TikzPictureManager.ts:76-78`).
+  extraction uses lazy `.*?` regexes (with `/gs`) that miss `figure*` and
+  break on nested environments — lazy matching stops at the first closing
+  delimiter, not the matching one (`TikzPictureManager.ts:76-78`).
 
 ### C3. Model registry + auth: capability variance by auth mode is the anchor
 
