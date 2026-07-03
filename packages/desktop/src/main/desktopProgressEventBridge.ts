@@ -61,6 +61,18 @@ export interface DesktopProgressEventBridge {
   /** All currently-hydrated ghost streams (keyed by streamId). */
   readonly restoredStreams: ReadonlyMap<StreamTabId, RestoredStreamSnapshot>;
 
+  /**
+   * Reapply restored stream placeholders, hints, and statuses from the snapshot
+   * store. This is idempotent and may run again after durable state is loaded.
+   */
+  hydrateRestoredStreams(): void;
+
+  /** Remove restored ghost ownership for executions already active in-process. */
+  forgetActiveRestoredStreams(
+    activeExecutionIds: ReadonlySet<string>,
+    streamExecutionIds?: ReadonlyMap<StreamTabId, string>,
+  ): void;
+
   /** True when a ghost stream with the given id exists. */
   hasRestoredStream(streamId: StreamTabId): boolean;
 
@@ -107,6 +119,8 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
   private readonly restoredDisplaySent = new Set<StreamTabId>();
   /** Ghost streams with an async persisted-display restore already pending. */
   private readonly restoredDisplayInFlight = new Set<StreamTabId>();
+  /** Streams that became live in this bridge and must not be restored as ghosts. */
+  private readonly liveStreams = new Set<StreamTabId>();
 
   private readonly unsubscribe: () => void;
 
@@ -119,23 +133,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     // stopped/orphaned entries; "Resume run" funnels back through the
     // existing storage-backed resume path when an executionId is
     // available, otherwise falls back to "start fresh".
-    const hydrated = opts.streamSnapshotStore?.hydrated ?? [];
-    for (const snapshot of hydrated) {
-      this.restoredStreams.set(snapshot.streamId, snapshot);
-      opts.state.streamLogs.ensureStream(snapshot.streamId);
-      opts.state.updateStreamHints(snapshot.streamId, {
-        agent: snapshot.agent,
-        agentCategory: snapshot.agentCategory,
-        inputFile: snapshot.inputFile,
-        creationTimestamp: snapshot.creationTimestamp,
-        executionId: snapshot.executionId,
-        parentStreamId: snapshot.parentStreamId,
-        description: snapshot.description,
-      });
-      StreamStatusService.set(snapshot.streamId, snapshot.lastKnownStatus, {
-        emit: false,
-      });
-    }
+    this.hydrateRestoredStreams();
 
     // These events can be emitted on the process bus without an active desktop
     // runtime host. Keep them subscribed here so all desktop windows see goal
@@ -165,8 +163,46 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
 
   // ── Query ───────────────────────────────────────────────────────────────
 
+  hydrateRestoredStreams(): void {
+    const hydrated = this.opts.streamSnapshotStore?.hydrated ?? [];
+    this.restoredStreams.clear();
+    for (const snapshot of hydrated) {
+      if (this.liveStreams.has(snapshot.streamId)) continue;
+      this.restoredStreams.set(snapshot.streamId, snapshot);
+      this.opts.state.streamLogs.ensureStream(snapshot.streamId);
+      this.opts.state.updateStreamHints(snapshot.streamId, {
+        agent: snapshot.agent,
+        agentCategory: snapshot.agentCategory,
+        inputFile: snapshot.inputFile,
+        creationTimestamp: snapshot.creationTimestamp,
+        executionId: snapshot.executionId,
+        parentStreamId: snapshot.parentStreamId,
+        description: snapshot.description,
+      });
+      StreamStatusService.set(snapshot.streamId, snapshot.lastKnownStatus, {
+        emit: false,
+      });
+    }
+  }
+
   hasRestoredStream(streamId: StreamTabId): boolean {
     return this.restoredStreams.has(streamId);
+  }
+
+  forgetActiveRestoredStreams(
+    activeExecutionIds: ReadonlySet<string>,
+    streamExecutionIds?: ReadonlyMap<StreamTabId, string>,
+  ): void {
+    for (const [streamId, snapshot] of this.restoredStreams) {
+      const executionId =
+        snapshot.executionId ?? streamExecutionIds?.get(streamId);
+      if (!executionId || !activeExecutionIds.has(executionId)) {
+        continue;
+      }
+      this.restoredStreams.delete(streamId);
+      this.restoredDisplaySent.delete(streamId);
+      this.restoredDisplayInFlight.delete(streamId);
+    }
   }
 
   // ── Progress events ──────────────────────────────────────────────────────
@@ -194,6 +230,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       }
       case 'setTaskState': {
         const data = payload as ProgressEventPayloads['setTaskState'];
+        this.liveStreams.add(data.streamId);
         this.opts.state.streamLogs.ensureStream(data.streamId);
         this.restoredStreams.delete(data.streamId);
         this.persistStreamSnapshot(data.streamId);
@@ -201,6 +238,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       }
       case 'updateStreamStatus': {
         const data = payload as ProgressEventPayloads['updateStreamStatus'];
+        this.liveStreams.add(data.streamId);
         this.restoredStreams.delete(data.streamId);
         this.persistStreamSnapshot(data.streamId);
         return;
@@ -307,6 +345,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
   // ── Stream lifecycle ──────────────────────────────────────────────────────
 
   onStreamDeleted(streamId: StreamTabId): void {
+    this.liveStreams.delete(streamId);
     this.removePersistedStream(streamId);
     this.restoredDisplaySent.delete(streamId);
     this.restoredDisplayInFlight.delete(streamId);
@@ -316,6 +355,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     this.restoredStreams.clear();
     this.restoredDisplaySent.clear();
     this.restoredDisplayInFlight.clear();
+    this.liveStreams.clear();
     if (this.opts.streamSnapshotStore) {
       try {
         await this.opts.streamSnapshotStore.replaceAll([]);
@@ -334,6 +374,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     this.restoredStreams.clear();
     this.restoredDisplaySent.clear();
     this.restoredDisplayInFlight.clear();
+    this.liveStreams.clear();
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────
