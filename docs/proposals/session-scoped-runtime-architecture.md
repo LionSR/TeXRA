@@ -398,27 +398,123 @@ projector analysis found (ALS callers today can never reach the trace). Nodes
 declare narrowed interfaces over it; the `{...this.services}` wholesale
 spreads are replaced by explicit selection.
 
+### Run descriptor: what "task state" becomes (census-backed)
+
+An end-to-end census of the `setTaskState` subsystem found that `TaskState`
+is agent **config** (a discriminated `AgentConfig` + a fully-derived
+`activeFiles` projection, `agentConfigToTaskState.ts:20-26`), misnamed as
+state — and that the event carrying it has quietly become a **second
+run-start signal**: `handleSetTaskState` (`ProgressEventHandler.ts:362-392`)
+piggy-backs five run-start side effects (clear hints, ensure stream state,
+reset finished-child counters, prune interrupt handles, O(N) tab-metadata
+rebuild) onto a config write, so run-start is currently spread across three
+uncoordinated events (`setActiveStream`, status→RUNNING, `setTaskState`).
+Three more defects: the same `AgentConfig` is persisted **twice** by
+different subsystems (`meta.json.taskState` raw vs the execution store's
+`config.json` normalized — drift by construction); `meta.json` stores it as
+`z.unknown()` with no schema version, and two of the three read paths drop a
+failed parse **silently** (tab loses its config, resume becomes impossible);
+and a mid-run `switchModel` never re-emits it (`runToolUseFlow.ts:214-259`),
+so the persisted model — and therefore the tab footer and any rerun — goes
+stale.
+
+Target design:
+
+- **One immutable, versioned `RunDescriptor`** (rename of `TaskConfig`)
+  emitted exactly once per run as a `run.start` arm on the run's trace:
+  identity (executionId, streamId, parent), category discriminant, and the
+  config. `activeFiles` is deleted as stored data — derived at render time
+  from the config's file arrays, as it already is at write time.
+- **One config persistence.** The descriptor references the execution
+  store's `config.json` (by executionId) instead of `meta.json` carrying a
+  second raw copy; `meta.json.taskState` becomes a read-shimmed legacy field
+  with a `schemaVersion` going forward, and parse failures surface instead
+  of silently unresuming the stream.
+- **Run-start side effects move to the run-start transition.** The counter
+  resets, hint clears, and metadata rebuild belong to the status machine's
+  `→ running` transition (plane 3), where "a new run started on this stream"
+  is a first-class fact — the config event only persists config. This also
+  unblocks re-emitting config mid-run: `switchModel` emits a config-update
+  fact without nuking per-run counters, fixing the stale-model bug.
+- Consumers rebind mechanically: board cards (`buildStreamInfo`), setup
+  proposal / history restore (`buildMainViewState` derives output-active
+  from `config.outputFiles`), resume (`retrieveSessionResumeData`
+  discriminates on the descriptor's category), CLI `StreamSlice`, and the
+  pack/clean matcher (`findWorkflowStreamsMatching`).
+
+### Transcript structure: typed stages, one round encoding
+
+The grouping refactor documented in `progress-grouping-refactor.md` has
+mostly **landed** (verified: per-trace stage scope R1, orphan re-rooting R2,
+usage stage-id R4, and the inert `Task:` stage is gone — that PRD is now
+stale and should be marked superseded; the one residue is the module
+channel logger in `executeAgent.ts:65-66`). The stage layer is clean and
+already the canonical spine. What remains is that a single fact — "round N
+of M" — is emitted in **three unsynchronized encodings** with three
+consumers:
+
+1. `r<N>` **stage labels** (`runReflectionFlow.ts:266`) → transcript group
+   headers, with the extension **regex-sniffing the label**
+   (`/^r\d+$/`, `TaskGroupList.ts:292`);
+2. `ExecutionProgress.currentRound/totalRounds` **counters**
+   (`executeAgent.ts:165-169` → `ExecutionHandle`) → the orchestrator's
+   subagent status line;
+3. `conversationProgress` **domain events** (`executeAgent.ts:179-231`) →
+   the StreamHeader badge and the CLI run-progress line — each encoding
+   counting differently (0-indexed stage vs `conversationTurns = round+1`).
+
+Target design:
+
+- **Stages become typed.** `StageStartEvent` gains
+  `kind: 'run' | 'round' | 'phase' | 'session'` and, for rounds,
+  `index`/`total` — the round is self-describing; the label regex and the
+  string protocol die. Tool-use turns emit `kind:'round'` stages too,
+  unifying both agent categories under one structure.
+- **Encoding #2 is deleted** — the subagent status line derives round
+  progress from the child's round stage (via the hub) instead of a parallel
+  registry counter; `ExecutionProgress.currentRound/totalRounds` and
+  `createRoundProgressCallback` go away.
+- **Encoding #3 shrinks to what stages can't carry**: `toolCallCount` (a
+  genuine counter, not a structural fact). The round half of
+  `conversationProgress` is deleted once the StreamHeader badge and the CLI
+  progress line read `index/total` from the round stage.
+- **Group-end status derives from `RunOutcome`** (the §"Status model"
+  2-value helper), removing the `defaultStatus` guessing in
+  `StageHandleImpl`; the crash-repair scan (`endRunningGroups`) stays as the
+  single fallback closer.
+- **Resume re-materializes the round stage** from the persisted
+  `shared.currentRound` (which remains the loop's source of truth), so a
+  resumed transcript continues at `r<N>`, not `r0`.
+- Known lift: the CLI transcript deliberately renders a **flat timeline**
+  and ignores GROUP rows today. It does not need to grow a tree to drop
+  encodings #2/#3 — it only needs to read the typed round-stage events for
+  its status line; flat rendering stays.
+
 ## 3. What each existing artifact becomes
 
-| Today                                                                        | Becomes                                                                                                                    |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `ProgressEventBus` (54 keys) + 1000-event buffer                             | Migration-period projection target; deleted at end. Buffer never reimplemented.                                            |
-| `ProgressEventPayloads` run-fact keys (22)                                   | `AgentEvent` (existing + `status`, `child.activity`, `process.output` arms) and `SessionFact`                              |
-| show/resolve pairs + bypass toggles (22 keys)                                | Internal to `HostInteractions` implementations; bypass state is port-owned                                                 |
-| App-lifecycle keys (10)                                                      | `AppSignals` (small, explicitly process-scoped emitter)                                                                    |
-| `emitRuntimeEvent`                                                           | `runScope.trace.*` (in-run) / `session.events.emit` (host-path); the three-way fallback resolution disappears              |
-| `BasePromiseCoordinator` + 3 coordinators + `RunCoordinatorBridge`           | `HostInteractions` request bookkeeping + pending registry                                                                  |
-| `platform().toolEditApproval` + per-run handler override + host promise maps | The session's `HostInteractions` implementation                                                                            |
-| `ApprovalRequestHandler.pending/delivered` + `replayPendingPrompts`          | `session.interactions.pending()` + host redisplay                                                                          |
-| `StreamStatusService` (shared singleton)                                     | `session.status` (`StreamStatusMachine`); cross-session reads via explicit aggregation                                     |
-| `ExecutionRegistry`                                                          | `session.runs` (`RunTable`); E/F behind `Pick<>`; constructor `onDidChange` bridge → subscription to own session's machine |
-| `InterruptRegistry`                                                          | deleted — capability lives on the run handle                                                                               |
-| `ToolUseFollowUpQueue` (static)                                              | `session.followUps` instance                                                                                               |
-| `getDefaultStreamLogStore` (last-writer-wins)                                | `session.transcripts`, threaded into `createRunTrace`                                                                      |
-| `conversationProgressHub`, `terminalResultToast`                             | First-class projector subscribers on `session.events` (the pattern, generalized)                                           |
-| `installTuiApprovals` emit monkey-patch (CLI)                                | CLI `HostInteractions` implementation                                                                                      |
-| STOPPED-wins / preserve / stale-handle guards                                | `StreamStatusMachine` transition table                                                                                     |
-| `UsageMonitor` dual emit                                                     | Single trace `usage` emit; sidebar totals are a projector                                                                  |
+| Today                                                                                   | Becomes                                                                                                                             |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `ProgressEventBus` (54 keys) + 1000-event buffer                                        | Migration-period projection target; deleted at end. Buffer never reimplemented.                                                     |
+| `ProgressEventPayloads` run-fact keys (22)                                              | `AgentEvent` (existing + `status`, `child.activity`, `process.output` arms) and `SessionFact`                                       |
+| show/resolve pairs + bypass toggles (22 keys)                                           | Internal to `HostInteractions` implementations; bypass state is port-owned                                                          |
+| App-lifecycle keys (10)                                                                 | `AppSignals` (small, explicitly process-scoped emitter)                                                                             |
+| `emitRuntimeEvent`                                                                      | `runScope.trace.*` (in-run) / `session.events.emit` (host-path); the three-way fallback resolution disappears                       |
+| `BasePromiseCoordinator` + 3 coordinators + `RunCoordinatorBridge`                      | `HostInteractions` request bookkeeping + pending registry                                                                           |
+| `platform().toolEditApproval` + per-run handler override + host promise maps            | The session's `HostInteractions` implementation                                                                                     |
+| `ApprovalRequestHandler.pending/delivered` + `replayPendingPrompts`                     | `session.interactions.pending()` + host redisplay                                                                                   |
+| `StreamStatusService` (shared singleton)                                                | `session.status` (`StreamStatusMachine`); cross-session reads via explicit aggregation                                              |
+| `ExecutionRegistry`                                                                     | `session.runs` (`RunTable`); E/F behind `Pick<>`; constructor `onDidChange` bridge → subscription to own session's machine          |
+| `InterruptRegistry`                                                                     | deleted — capability lives on the run handle                                                                                        |
+| `ToolUseFollowUpQueue` (static)                                                         | `session.followUps` instance                                                                                                        |
+| `getDefaultStreamLogStore` (last-writer-wins)                                           | `session.transcripts`, threaded into `createRunTrace`                                                                               |
+| `conversationProgressHub`, `terminalResultToast`                                        | First-class projector subscribers on `session.events` (the pattern, generalized)                                                    |
+| `installTuiApprovals` emit monkey-patch (CLI)                                           | CLI `HostInteractions` implementation                                                                                               |
+| STOPPED-wins / preserve / stale-handle guards                                           | `StreamStatusMachine` transition table                                                                                              |
+| `UsageMonitor` dual emit                                                                | Single trace `usage` emit; sidebar totals are a projector                                                                           |
+| `setTaskState` event + `TaskState` + `meta.json.taskState` (raw copy)                   | `run.start` trace arm carrying an immutable versioned `RunDescriptor`; config persisted once (`config.json`); `activeFiles` derived |
+| `handleSetTaskState` run-start piggy-backs (counter reset, hint clear, O(N) rebuild)    | The status machine's `→ running` transition                                                                                         |
+| `r<N>` label regex + `ExecutionProgress` round counters + `conversationProgress` rounds | Typed round stages (`kind:'round'`, `index`, `total`); `conversationProgress` shrinks to `toolCallCount`                            |
+| `progress-grouping-refactor.md` (R1/R2/R4 landed, PRD stale)                            | Marked superseded; residue = module channel logger in `executeAgent.ts`                                                             |
 
 Invariants that become true _by construction_ (each currently held by a guard,
 a comment, or luck): no event exists before its subscriber (hub is built with
@@ -595,10 +691,15 @@ invisible to it while desktop/CLI gain correctness.
    `restart-repair`/`clear` causes; add the `status` trace arm and make
    `updateStreamStatus` a projection. RunTable stop path switches from
    writing to requesting `cancelled`.
-3. **Session facts + registry facts.** `SessionFact` channel for the non-run
-   emitters; `child.activity`/`process.output` arms; `session.transcripts`
-   and `session.followUps` instances (fixes L1; deletes the static queue and
-   the binder invariant comment).
+3. **Session facts + registry facts + run structure.** `SessionFact` channel
+   for the non-run emitters; `child.activity`/`process.output` arms;
+   `session.transcripts` and `session.followUps` instances (fixes L1;
+   deletes the static queue and the binder invariant comment). Also here:
+   the `run.start` `RunDescriptor` arm (retiring `setTaskState` and moving
+   its run-start piggy-backs onto the `→ running` transition from stage 2)
+   and typed round stages (`kind`/`index`/`total`), deleting the
+   `ExecutionProgress` round counters and the round half of
+   `conversationProgress`.
 4. **Interactions port.** Introduce `HostInteractions` per session; implement
    for CLI first (deletes the monkey-patch and exercises the contract), then
    desktop (deletes the per-window handler plumbing), then extension.
