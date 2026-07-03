@@ -131,6 +131,7 @@ describe('CLI history runtime', () => {
         entry: entries[0],
       },
     ]);
+    expect(mocks.readCliToolUseResumeDataForListing).not.toHaveBeenCalled();
   });
 
   it('labels multi-agent team runs by preset in history lists', async () => {
