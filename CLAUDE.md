@@ -8,7 +8,7 @@ For `/review` or any code review on this repo, load [.claude/skills/code-review/
 
 ## Project Overview
 
-TeXRA is a VS Code extension that serves as an AI theorist. It uses Large Language Models to help academics with writing, research, and document processing.
+TeXRA is an AI theorist that helps academics with writing, research, and document processing using Large Language Models. It ships as a VS Code extension, a standalone Electron desktop app, and a terminal CLI (`texra`) — three hosts sharing one host-agnostic core (see Workspace Layout below).
 
 ## Development Commands
 
@@ -81,7 +81,7 @@ needed. Re-run `texra-local:build` to refresh. Override the install dir with
 The core of TeXRA is its agent architecture in repo-root `src/agent/`:
 
 - **`core/`** holds the host-agnostic domain model, organized by bounded concern: `definition/` (what an agent is), `state/` (run-state snapshots), `usage/` (usage value objects), `tools/` (tool contracts), and `flows/` (reusable cycle primitives). See `src/agent/core/README.md` for the module map and dependency rules.
-- **`implementations/flows/`** provides the PocketFlow-based flow implementations (reflection, tooluse)
+- **`implementations/flows/`** provides the PocketFlow-based flow implementations (`reflection`, `tooluse`, `agentCreator`)
 - **`modelHandlers/`** abstracts AI provider APIs (Anthropic, OpenAI, Google, OpenRouter)
 - Agents are configured via YAML files in `packages/extension/resources/agents/`
 
@@ -94,7 +94,7 @@ This repository is a pnpm workspace:
 - Repo-root `src/` holds host-agnostic core logic, platform interfaces, shared schemas, and test harness code.
 - `packages/extension/` holds the VS Code extension entrypoint, commands, webviews, and packaged resources.
 - `packages/desktop/` holds the Electron desktop shell and adapters around the shared core.
-- `packages/core/` exposes the shared core package surface for workspace consumers.
+- `packages/core/` (`@texra/core`) is the curated public SDK surface (`initPlatform`, `runAgent`, `AgentTrace`, etc.) that a host should prefer over deep `@agent/*` / `@platform` imports — not a stub; deep imports still work and aren't being migrated in bulk.
 - `packages/cli/` holds the `texra` terminal client (Ink TUI plus headless `texra run` / `--print` modes).
 - `src/hosts/` defines host capability ports used by both VS Code and Electron integrations.
 - `src/test-kernel/` contains Vitest suites for host-neutral and Electron-facing behavior.
@@ -103,8 +103,8 @@ This repository is a pnpm workspace:
 
 Key directories in `src/`:
 
-- `agent/` - Agent core, implementations, model handlers, runtime, toolUse, output, storage, remote, node, trace, goal, features
-  - `implementations/flows/` - PocketFlow-based flow implementations (reflection, tooluse)
+- `agent/` - Agent core, implementations, model handlers, runtime, output, storage, remote, node, trace, goal, review, export, followUp, templates, features
+  - `implementations/flows/` - PocketFlow-based flow implementations (`reflection`, `tooluse`, `agentCreator`)
 - `platform/` - Platform abstraction layer (composition root). Hosts (VS Code, CLI, Electron) call `initPlatform()` once at startup; core code accesses host services via `platform()` from `@platform`. See `src/platform/platform.ts`.
 - `controllers/` - Host-neutral orchestration for the main, progress, and settings views behind injected ports
 - `common/` - Backend-only helpers (errors, state, files, webview base classes)
@@ -127,8 +127,11 @@ Key directories in `src/`:
 Key directories in `packages/extension/`:
 
 - `packages/extension/src/extension.ts` - VS Code extension entry point
+- `packages/extension/src/MainViewProvider.ts` - Webview provider wiring for the main view
 - `packages/extension/src/commands/` - VS Code commands organized by domain (see below)
+- `packages/extension/src/common/` - Webview/state base classes shared across extension views
 - `packages/extension/src/frontend/` - Extension-host utilities for shared UI flows
+- `packages/extension/src/schemas/` - Extension-specific settings schemas
 - `packages/extension/src/webview/` - Main agent interaction interface
 - `packages/extension/src/progressView/` - Task tracking board
 - `packages/extension/src/settingsView/` - Unified settings webview (Memory, History, Models, Agents, Multi-Agent, Tools, AI Agents, Git, LaTeX, Goal tabs)
@@ -137,6 +140,7 @@ Key directories in `packages/extension/`:
 Key documentation in `docs/`:
 
 - `pocketflow/` - PocketFlow framework documentation (core abstractions, design patterns, utility functions)
+- `guide/` and selected root docs (`index.md`, `launch.md`, `providers.md`, `changelog.md`, `terms.md`) are published on the texra.ai VitePress site. Internal directories such as `architecture/`, `blog/`, `design/`, `dev/`, `prds/`, `proposals/`, `reference/`, `skills/`, and `supabase/` are excluded by `docs/.vitepress/publicDocs.js`. A doc landing at the `docs/` root can silently freeze the texra.ai deploy if it trips the publish allowlist — check `docs/.vitepress/publicDocs.js` and the commit-time `docs-root-boundary` pre-commit gate (`docs/scripts/check-root-docs.mjs`) before adding root-level docs.
 
 ### Commands (`packages/extension/src/commands/`)
 
@@ -150,6 +154,7 @@ Key documentation in `docs/`:
 - `housekeeping/` - Cleanup, packing, and utilities
 - `latex/` - LaTeX operations (diff, figures, etc.)
 - `progress/` - Progress board management
+- `review/` - Agent review commands
 - `settings/` - Settings view commands
 - `setup/` - Setup assistant
 - `system/` - Help, tests, XML/YAML utilities, editor commands
@@ -334,6 +339,26 @@ mouse-scroll for finalized history, so don't reinvent them.
   live session header. Don't "fix" this back to line-count erasing; the
   no-repaint rule applies to steady-state rendering, not resize or transcript
   viewport switches.
+- **Sync-teardown terminal restoration on every exit path.** `exitNow()`/every
+  signal handler does synchronous `writeSync` mode-disable (mouse, kitty,
+  bracketed paste, cursor) before any async drain, wired to SIGINT/SIGTERM/SIGHUP.
+  Implemented in `runChatTui.tsx`; route new mode toggles through that same
+  synchronous path.
+- **Per-transcript-entry render-null error boundaries.** Every transcript entry
+  is wrapped in `EntryErrorBoundary` (`panes/ConversationPane.tsx`,
+  `panes/StaticConversationTranscript.tsx`), so one malformed entry degrades to
+  blank instead of blanking the session. New transcript renderers must live
+  inside it.
+- **Not yet built — adopt when touched:** animations should share one Clock
+  (single timer, idle when unsubscribed, offscreen rows unsubscribe via a
+  ref-only check) instead of per-component intervals; raw mode should be
+  reference-counted (enable on 0→1, disable on 0, snapshot/restore across
+  Ctrl-Z) instead of toggled directly; the resize clear+reprint should wrap in
+  DEC 2026 sync-output (BSU/ESU, gated on the existing DECRQM 2027 probe) if a
+  blank flash is ever observed; prefer a `/dev/tty` fallback over refusing the
+  TUI when stdin is piped but a real terminal is present, and handle EPIPE
+  globally. Full rationale and citations:
+  `docs/proposals/ink-practices-from-claude-code.md`.
 
 ### CLI design (clig.dev)
 
@@ -439,9 +464,11 @@ Common aliases (full list in `tsconfig.json`):
 
 ## Release Process
 
+TeXRA ships three release tracks off the same CHANGELOG.md commit (versions are pre-bumped by `version-bump.yml`), with identical user-facing notes:
+
 1. Update CHANGELOG.md with user-facing changes (Features, Bug Fixes, Improvements)
-2. Build: `npm run build:fast`
-3. Create GitHub release with `gh release create`
-4. Publish: `vsce publish` and `ovsx publish`
+2. **VS Code extension** (tag `vX.Y.Z`): `npm run build:fast` → `gh release create` → publish with `vsce publish` and `ovsx publish`.
+3. **CLI** (tag `cli-vX.Y.Z`): `npm publish` from `packages/cli` (needs an OTP).
+4. **Desktop**: `.github/workflows/desktop-package.yml` builds signed macOS/Linux/Windows installers and publishes them to the public `texra-ai/texra-desktop-releases` repo.
 
 **Changelog guidelines**: Focus on user-visible changes. Never document intermediate bugs fixed within the same PR.
