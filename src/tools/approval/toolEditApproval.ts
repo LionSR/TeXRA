@@ -240,7 +240,8 @@ export async function requestToolEditApproval(
     // than one concurrent session per process, e.g. desktop's one window per
     // run) over the frozen, process-wide Platform port, which only ever holds
     // one active handler at a time.
-    const handler = context?.toolEditApprovalHandler ?? platform().toolEditApproval;
+    const handler =
+      context?.toolEditApprovalHandler ?? platform().toolEditApproval;
     return handler(preparedRequest);
   });
   return finalizeApprovalResult(result, preparedRequest);
