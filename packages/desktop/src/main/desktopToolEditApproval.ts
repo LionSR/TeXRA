@@ -44,6 +44,15 @@ export interface DesktopToolEditApprovalController {
     action: ToolEditApprovalAction;
     feedback?: string;
   }): boolean;
+  /**
+   * This window's tool-edit approval handler. Pass this to `runAgent`/
+   * `resumeToolUseSnapshot` as `toolEditApprovalHandler` so a request always
+   * resolves through this window's controller, not whichever window's
+   * controller last wrote the shared `platform().toolEditApproval` fallback.
+   */
+  requestApproval(
+    request: ToolEditApprovalRequest,
+  ): Promise<ToolEditApprovalResult>;
   dispose(): void;
 }
 

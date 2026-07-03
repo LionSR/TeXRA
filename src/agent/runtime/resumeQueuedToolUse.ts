@@ -1,6 +1,7 @@
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -13,6 +14,8 @@ export interface ResumeQueuedToolUseOptions {
   readonly session?: SessionHandle;
   /** Tools hidden because the current host/runtime cannot support them. */
   readonly runtimeUnavailableTools?: readonly string[];
+  /** Per-run override for the host's tool-edit approval UI — see `ExecuteAgentOptions.toolEditApprovalHandler`. */
+  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
   /**
    * Follow-ups to replay ahead of any items already queued for the stream
    * (e.g. an explicit follow-up typed alongside a manual resume). Seeded before
@@ -61,6 +64,7 @@ export async function resumeQueuedToolUseSnapshot(
     await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
       session: options.session,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
+      toolEditApprovalHandler: options.toolEditApprovalHandler,
       setupSession: (session) => {
         for (const item of followUps) {
           session.appendFollowUp(item);

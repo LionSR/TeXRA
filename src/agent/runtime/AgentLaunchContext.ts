@@ -41,6 +41,7 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -84,6 +85,11 @@ export interface AgentLaunchContext extends AgentCore {
   approvalPromptsUnavailable?: boolean;
   /** Whether this tool-use run exits after one cycle instead of idling. */
   stopAfterCycle?: boolean;
+  /**
+   * Per-run override for the host's tool-edit approval UI, projected onto the
+   * ambient {@link RunContext}. See `RunContext.toolEditApprovalHandler`.
+   */
+  toolEditApprovalHandler?: ToolEditApprovalPort;
   /**
    * Session that owns this run's coordination state. Always populated by
    * {@link buildAgentLaunchContext} (defaults to `currentSession()` — the
@@ -160,6 +166,7 @@ function agentContextToRunContext(
     runtimeUnavailableTools: ctx.runtimeUnavailableTools,
     stopAfterCycle: ctx.stopAfterCycle,
     session: ctx.session,
+    toolEditApprovalHandler: ctx.toolEditApprovalHandler,
   };
 }
 

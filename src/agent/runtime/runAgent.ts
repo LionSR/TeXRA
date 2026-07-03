@@ -1,6 +1,7 @@
 import { registerExecution } from '@agent/storage';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { applyHelperModelPreference } from './helperModelPreference';
@@ -19,6 +20,11 @@ export interface RunAgentOptions {
   stopAfterCycle?: boolean;
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
+  /**
+   * Per-run override for the host's tool-edit approval UI — see
+   * `ExecuteAgentOptions.toolEditApprovalHandler`.
+   */
+  toolEditApprovalHandler?: ToolEditApprovalPort;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
    * progress-view compile fixer): run the launched agent on the configured
@@ -85,6 +91,7 @@ export async function runAgent(
     stopAfterCycle: options.stopAfterCycle,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
+    toolEditApprovalHandler: options.toolEditApprovalHandler,
     session: options.session,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     onRun: options.onRun,
