@@ -11,7 +11,7 @@ import { ToolError } from '@shared/schemas/toolResult';
 import { WorkspaceFS } from '@utils/files';
 import { findExternalRoot } from '@utils/files/externalRoots';
 import { locatePathInRoot } from '@utils/files/workspaceRoot';
-import { toPosixPath } from '@utils/core/pathCore';
+import { getPathSegments, toPosixPath } from '@utils/core/pathCore';
 
 export interface WorkspacePathResolution {
   relative: string;
@@ -56,6 +56,13 @@ export function parseWorkingDirectory(
  */
 export function currentToolRoot(): string | undefined {
   return parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
+}
+
+/** Throw when a raw tool path contains a parent-directory segment. */
+export function assertNoParentTraversal(targetPath: string): void {
+  if (getPathSegments(targetPath).includes('..')) {
+    throw new ToolError(`path must not contain '..': ${targetPath}`);
+  }
 }
 
 /**
