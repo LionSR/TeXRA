@@ -155,7 +155,7 @@ const DelegateAgentInputSchema = z
       .string()
       .nullish()
       .describe(
-        'Name of the tool-use agent to delegate to. Required for new delegations, ignored when resuming via execution_id.',
+        'Name of the tool-use agent to delegate to. Required for new delegations; omit when resuming via execution_id.',
       ),
     model: z
       .string()
