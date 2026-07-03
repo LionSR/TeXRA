@@ -31,14 +31,14 @@ one `createFakePlatform`, not a service-locator god object.
 pipeline — message assembly, media attachment, tool-result blocks, streaming,
 continuation — against its SDK types:
 
-| File | LoC |
-| --- | ---: |
-| `openai/modelHandlerOpenAIResponse.ts` | 2,871 |
-| `google/modelHandlerGoogleInteractions.ts` | 2,154 |
-| `anthropic/modelHandlerAnthropic.ts` | 1,692 |
-| `openai/modelHandlerOpenAI.ts` | 1,513 |
-| `google/modelHandlerGoogleGenAI.ts` | 1,204 |
-| `openrouter/modelHandlerOpenRouterNative.ts` | 957 |
+| File                                         |   LoC |
+| -------------------------------------------- | ----: |
+| `openai/modelHandlerOpenAIResponse.ts`       | 2,871 |
+| `google/modelHandlerGoogleInteractions.ts`   | 2,154 |
+| `anthropic/modelHandlerAnthropic.ts`         | 1,692 |
+| `openai/modelHandlerOpenAI.ts`               | 1,513 |
+| `google/modelHandlerGoogleGenAI.ts`          | 1,204 |
+| `openrouter/modelHandlerOpenRouterNative.ts` |   957 |
 
 Concrete sub-debts, each independently fixable:
 
@@ -193,7 +193,7 @@ keys and ~110 emit sites plus a 645-line `ProgressEventHandler`, while
 `src/agent/trace/` is a clean 4-variant discriminated union already exported as
 the SDK contract. Every new run-visible fact is a two-vocabulary decision.
 
-**Better solution:** declare the trace the *only* emit path and reduce
+**Better solution:** declare the trace the _only_ emit path and reduce
 `ProgressEventPayloads` to a host-side projection — one adapter subscribing to
 `AgentEvent` and invoking UI callbacks. Per-event `bus.emit` sites delete
 incrementally (the `emitRuntimeEvent()` migration in `src/tools` already
@@ -251,14 +251,14 @@ hand-maintained manifest (65 settings + 67 commands) synced by
 by raw string key (`config.get('texra.files.exclude', …)`), with feature-flag
 wrappers existing solely to hide that.
 
-**Better solution:** make the catalog generate *both* directions —
+**Better solution:** make the catalog generate _both_ directions —
 `contributes.configuration`/`contributes.commands` in package.json **and** a
 typed `SettingKey` accessor map consumed via `platform().config` — then retire
 the snapshot+invariants scripts entirely (a codegen diff check replaces them).
 Same SSOT the proposal wants, but it deletes ~two scripts, a 70 KB artifact,
 and the whole silent-rename failure mode instead of adding a third surface.
 
-### B5. `ExecutionRegistry`: the SessionHandle work fixed *global-ness*, not cohesion
+### B5. `ExecutionRegistry`: the SessionHandle work fixed _global-ness_, not cohesion
 
 The documented Step 7a–d/SessionHandle program (landed) made the registries
 injectable — but `src/agent/runtime/executionRegistry.ts` remains one 809-line
