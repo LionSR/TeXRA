@@ -222,6 +222,7 @@ app.get('/list', async (c) => {
 // POST /revoke - Revoke one of the signed-in user's tokens by id.
 app.post('/revoke', async (c) => {
   try {
+    const userId = c.get('userId');
     const body = await c.req.json().catch(() => null);
     const id = typeof body?.id === 'string' ? body.id : '';
     if (!id) {
@@ -233,7 +234,7 @@ app.post('/revoke', async (c) => {
       .from('relay_ci_tokens')
       .update({ revoked_at: new Date().toISOString() })
       .eq('id', id)
-      .eq('user_id', c.get('userId'))
+      .eq('user_id', userId)
       .is('revoked_at', null)
       .select('id, name');
     if (error) {
@@ -244,9 +245,7 @@ app.post('/revoke', async (c) => {
       return errorResponse(c, 'Token not found or already revoked', 404);
     }
 
-    console.log(
-      `[RELAY_TOKENS] revoked token ${id} for user ${c.get('userId')}`,
-    );
+    console.log(`[RELAY_TOKENS] revoked token ${id} for user ${userId}`);
     return versionedJsonResponse(c.req.raw, VERSION, { revoked: data[0] }, 200);
   } catch (error) {
     console.error('[RELAY_TOKENS] revoke error:', error);

@@ -13,8 +13,8 @@
  * - POST /log-usage - Log a batch of usage entries
  *
  * Database Requirements:
- * - Tables: usage_logs, chatgpt_subscription_usage_logs
- * - RPCs: usage_logs_upsert, chatgpt_subscription_usage_logs_upsert (service role only)
+ * - Tables: usage_logs, subscription_usage_logs
+ * - RPCs: usage_logs_upsert, subscription_usage_logs_upsert (service role only)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -28,7 +28,7 @@ import { versionedJsonResponse } from '../_shared/responses.ts';
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.4.0';
+const LOG_USAGE_VERSION = '1.5.0';
 
 // =============================================================================
 // Schemas
@@ -36,22 +36,15 @@ const LOG_USAGE_VERSION = '1.4.0';
 
 // Invalid optional fields are dropped (`.catch(undefined)`) rather than
 // rejecting the whole entry; invalid required fields reject the entry.
-const optionalString = z
-  .string()
-  .nullish()
-  .catch(undefined)
-  .transform((value) => value ?? undefined);
-const optionalNonnegativeInt = z
-  .int()
-  .nonnegative()
-  .nullish()
-  .catch(undefined)
-  .transform((value) => value ?? undefined);
-const optionalBoolean = z
-  .boolean()
-  .nullish()
-  .catch(undefined)
-  .transform((value) => value ?? undefined);
+function optional<T extends z.ZodType>(schema: T) {
+  return schema
+    .nullish()
+    .catch(undefined)
+    .transform((value): z.infer<T> | undefined => value ?? undefined);
+}
+const optionalString = optional(z.string());
+const optionalNonnegativeInt = optional(z.int().nonnegative());
+const optionalBoolean = optional(z.boolean());
 
 const UsageLogEntrySchema = z.object({
   timestamp: z.iso.datetime(),
@@ -61,11 +54,7 @@ const UsageLogEntrySchema = z.object({
   outputTokens: z.int().nonnegative(),
   cost: z.number().nonnegative(),
   agentName: optionalString,
-  agentCategory: z
-    .enum(['workflow', 'toolUse'])
-    .nullish()
-    .catch(undefined)
-    .transform((value) => value ?? undefined),
+  agentCategory: optional(z.enum(['workflow', 'toolUse'])),
   isMultipleOutput: optionalBoolean,
   responseTimeMs: optionalNonnegativeInt,
   cachedInputTokens: optionalNonnegativeInt,
@@ -76,6 +65,10 @@ const UsageLogEntrySchema = z.object({
     .nullish()
     .catch(false)
     .transform((value) => value ?? false),
+  // Explicit subscription source (e.g. 'copilot') for future non-ChatGPT
+  // subscription clients. Omitted entries fall back to 'chatgpt' since
+  // that's the only subscription source today.
+  subscriptionSource: optionalString,
   streamId: optionalString,
   extensionVersion: optionalString,
   editorType: optionalString,
@@ -93,11 +86,21 @@ const UsageDestinations = {
     table: 'usage_logs',
     rpc: 'usage_logs_upsert',
     accepts: (entry: UsageLogEntry) => !entry.viaChatGptSubscription,
+    toRows: toDbRows,
   },
-  chatgptSubscription: {
-    table: 'chatgpt_subscription_usage_logs',
-    rpc: 'chatgpt_subscription_usage_logs_upsert',
+  subscription: {
+    table: 'subscription_usage_logs',
+    rpc: 'subscription_usage_logs_upsert',
     accepts: (entry: UsageLogEntry) => entry.viaChatGptSubscription,
+    toRows: (
+      userId: string,
+      batchId: string,
+      entries: readonly UsageLogEntry[],
+    ) =>
+      toDbRows(userId, batchId, entries).map((row, index) => ({
+        ...row,
+        source: entries[index].subscriptionSource ?? 'chatgpt',
+      })),
   },
 } as const;
 
@@ -290,7 +293,7 @@ Deno.serve(async (req: Request) => {
           entries.length === 0 ||
           (await batchExists(destination, userId, batch.batchId))
             ? []
-            : toDbRows(userId, batch.batchId, entries);
+            : destination.toRows(userId, batch.batchId, entries);
         return { destination, rows };
       }),
     );
@@ -318,7 +321,7 @@ Deno.serve(async (req: Request) => {
       return errorResponse(req, 'Failed to store usage logs', 500);
     }
 
-    // 8. Return success response
+    // 7. Return success response
     return successResponse(req, validEntries.length);
   } catch (error) {
     console.error('[LOG_USAGE] Unexpected error:', error);

@@ -41,6 +41,10 @@ interface HookRequest {
   user?: HookUser;
 }
 
+function warn(message: string): void {
+  console.warn(`[before-user-created] ${message}`);
+}
+
 function allow(): Response {
   return new Response('{}', {
     status: 200,
@@ -68,16 +72,14 @@ async function fetchGitHubCreatedAt(login: string): Promise<string | null> {
       },
     );
     if (!resp.ok) {
-      console.warn(
-        `[before-user-created] GitHub /users/${login} returned ${resp.status}`,
-      );
+      warn(`GitHub /users/${login} returned ${resp.status}`);
       return null;
     }
     const data = await resp.json();
     return typeof data?.created_at === 'string' ? data.created_at : null;
   } catch (e) {
-    console.warn(
-      `[before-user-created] GitHub fetch failed for ${login}: ${e instanceof Error ? e.message : String(e)}`,
+    warn(
+      `GitHub fetch failed for ${login}: ${e instanceof Error ? e.message : String(e)}`,
     );
     return null;
   }
@@ -119,13 +121,13 @@ Deno.serve(async (req) => {
         'webhook-signature': req.headers.get('webhook-signature') ?? '',
       });
     } catch {
-      console.warn('[before-user-created] Signature verification failed');
+      warn('Signature verification failed');
       return new Response('Unauthorized', { status: 401 });
     }
   } else {
-    console.warn(
-      '[before-user-created] BEFORE_USER_CREATED_HOOK_SECRET is not set; ' +
-        'allowing unsigned requests. Configure the hook secret to enforce verification.',
+    warn(
+      'BEFORE_USER_CREATED_HOOK_SECRET is not set; allowing unsigned requests. ' +
+        'Configure the hook secret to enforce verification.',
     );
   }
 
@@ -137,9 +139,7 @@ Deno.serve(async (req) => {
 
   const emailDecision = checkEmailDomain(user.email);
   if (!emailDecision.allowed) {
-    console.warn(
-      `[before-user-created] Rejected ${user.email}: ${emailDecision.reason}`,
-    );
+    warn(`Rejected ${user.email}: ${emailDecision.reason}`);
     return block(emailDecision.userMessage);
   }
 
@@ -150,21 +150,17 @@ Deno.serve(async (req) => {
       if (createdAt) {
         const ageDecision = checkGitHubAccountAge(createdAt);
         if (!ageDecision.allowed) {
-          console.warn(
-            `[before-user-created] Rejected ${user.email} (gh=${login}): ${ageDecision.reason}`,
-          );
+          warn(`Rejected ${user.email} (gh=${login}): ${ageDecision.reason}`);
           return block(ageDecision.userMessage);
         }
       } else {
         // GitHub unavailable / rate-limited / 404. Fail-open rather than
         // block real signups when the network is the problem.
-        console.warn(
-          `[before-user-created] Could not fetch GitHub created_at for ${login}; allowing`,
-        );
+        warn(`Could not fetch GitHub created_at for ${login}; allowing`);
       }
     } else {
-      console.warn(
-        `[before-user-created] GitHub OAuth but no user_name in metadata for ${user.email}; allowing`,
+      warn(
+        `GitHub OAuth but no user_name in metadata for ${user.email}; allowing`,
       );
     }
   }
