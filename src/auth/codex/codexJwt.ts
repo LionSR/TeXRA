@@ -62,8 +62,7 @@ export function decodeJwtPayload(token: string): CodexJwtClaims {
     const parts = token.split('.');
     if (parts.length !== 3) return {};
     const json = Buffer.from(parts[1], 'base64url').toString('utf-8');
-    const result = CodexJwtClaimsSchema.safeParse(JSON.parse(json));
-    return result.success ? result.data : {};
+    return CodexJwtClaimsSchema.catch({}).parse(JSON.parse(json));
   } catch {
     return {};
   }

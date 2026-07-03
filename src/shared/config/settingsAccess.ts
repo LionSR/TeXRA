@@ -59,8 +59,7 @@ export function readSetting(
   if (raw === undefined) {
     return settingDefault(entry);
   }
-  const parsed = entry.schema.safeParse(raw);
-  return parsed.success ? parsed.data : settingDefault(entry);
+  return entry.schema.catch(() => settingDefault(entry)).parse(raw);
 }
 
 /**
