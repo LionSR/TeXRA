@@ -18,11 +18,11 @@ wrapping/diffing to upstream Ink, Claude Code replaced the entire render core wi
 packed typed-array virtual screen, cell-level damage-bounded diffing, per-node pixel
 blitting, and interned styles — turning steady-state frames into O(changed cells) work. The
 highest-leverage borrowables are mostly _correctness and robustness_ rather than the deep
-rendering rewrite: a single shared animation Clock, offscreen-aware tick pausing, synchronous
-`writeSync` terminal restoration on every exit path, reference-counted raw mode, and a
+rendering rewrite: a single shared animation Clock, offscreen-aware tick pausing, a force-exit
+failsafe after TeXRA's existing synchronous terminal restoration, reference-counted raw mode, and a
 `/dev/tty` fallback for piped-but-interactive stdin. TeXRA is genuinely already aligned on
-scrollback ownership, resize-as-full-repaint, DA1-sentinel capability probing, and headless
-parity by construction — these are areas to validate, not rebuild. The rendering-engine
+scrollback ownership, resize-as-full-repaint, DA1-sentinel capability probing, headless parity, and
+sync signal cleanup by construction — these are areas to validate, not rebuild. The rendering-engine
 practices (packed Screen, blit, intern pools) are high-effort, lower-priority given TeXRA's
 tail-window cap already bounds the practical cost.
 
@@ -483,11 +483,10 @@ each tool/progress render is wrapped in a minimal boundary that renders `null` (
 helpers `try/catch` → log → `return null`), so one bad message degrades to blank instead of
 blanking the session.
 Evidence: `components/SentryErrorBoundary.ts:11-28`, `ink/components/App.tsx:103-110,206-208`, `components/messages/AssistantToolUseMessage.tsx:341-358`.
-**TeXRA:** **Learnable opportunity.** The baseline evidence shows stateless renderers but no
-per-entry error boundary. For a long-lived REPL, wrapping each transcript entry's renderer in a
-render-null boundary means a single malformed entry (bad markdown, a throwing tool renderer)
-can't take down the whole TUI. Low-to-medium effort, high resilience payoff — worth adding around
-`TranscriptEntry`/`Markdown` renderers.
+**TeXRA:** **Already shipped.** `EntryErrorBoundary` now wraps live transcript entries and static
+transcript entries, so a single malformed entry (bad markdown, a throwing tool renderer) degrades
+that entry rather than blanking the whole TUI. This is no longer a borrowable gap; it is an adopted
+practice to preserve.
 
 **Thin composition-root + per-provider isolation with stable (`useState`-created) values.**
 `App.tsx` is logic-free, only stacking providers; each provider (e.g. `ClockProvider`) is its own
@@ -589,25 +588,22 @@ handle to the live renderer — relevant if/when TeXRA adds the synchronous sign
 2. **A single shared animation Clock** (subscriber map + snapshotted time, idle when no subscriber,
    slow when blurred). Consolidates all spinners/animations into one phase-synced wake-up; serves
    battery/CPU and the "minimal live region" rule. (`ClockContext.tsx:10-108`)
-3. **Per-transcript-entry render-null error boundaries.** One malformed entry or throwing renderer
-   shouldn't blank a long-lived REPL session. Cheap resilience.
-   (`SentryErrorBoundary.ts:11-28`; `AssistantToolUseMessage.tsx:341-358`)
-4. **`/dev/tty` fallback for piped-but-interactive stdin, plus EPIPE handling.** Recovers the TUI
+3. **`/dev/tty` fallback for piped-but-interactive stdin, plus EPIPE handling.** Recovers the TUI
    when stdin is redirected at a real terminal, and makes `texra | head` a well-behaved pipeline
    citizen (aligns with TeXRA's clig.dev commitment). (`renderOptions.ts:8-60`; `process.ts:1-15`)
-5. **Wrap the resize clear+reprint in DEC 2026 BSU/ESU (capability-gated, which TeXRA already
+4. **Wrap the resize clear+reprint in DEC 2026 BSU/ESU (capability-gated, which TeXRA already
    probes).** Eliminates any visible blank flash during the full repaint by making erase+paint
    atomic. Low effort, leverages an existing probe. (`ink.tsx:636-651`; `terminal.ts:200-247`)
-6. **Reference-count raw mode + snapshot/restore across Ctrl-Z suspend.** Makes future modals
+5. **Reference-count raw mode + snapshot/restore across Ctrl-Z suspend.** Makes future modals
    safely compose raw mode and fixes suspend/resume terminal state. Medium priority.
    (`App.tsx:114,221-280,390-422`)
-7. **Offscreen-aware animation pausing (ref-only visibility, unsubscribe when scrolled into
+6. **Offscreen-aware animation pausing (ref-only visibility, unsubscribe when scrolled into
    scrollback).** Adopt alongside the shared Clock; avoids wasted ticks and a flicker source on
    rows that scrolled out. (`use-terminal-viewport.ts:46-93`; `use-animation-frame.ts:34-54`)
-8. **One-time chalk-level boost/clamp for VS Code-integrated-terminal and tmux truecolor
+7. **One-time chalk-level boost/clamp for VS Code-integrated-terminal and tmux truecolor
    degradation, with an env escape hatch** — _if_ TeXRA exhibits the salmon/black-on-dark color
    symptom. Small, well-scoped fix. (`colorize.ts:20-62`)
-9. **tmux/screen DCS-passthrough wrapper with per-sequence exceptions (raw BEL, skip sync-output
+8. **tmux/screen DCS-passthrough wrapper with per-sequence exceptions (raw BEL, skip sync-output
    under tmux)** — _if_ TeXRA emits OSC notifications/clipboard and tmux users matter.
    (`osc.ts:23-44`; `terminal.ts:70-74`)
 
