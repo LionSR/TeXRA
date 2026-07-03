@@ -16,7 +16,7 @@ import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { backfillFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
-import { loadAgents, setAgentDirectories } from '@agent/index';
+import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal';
@@ -188,7 +188,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   SecretManager.initialize(context);
   agentDirectories.initialize(context);
-  setAgentDirectories(agentDirectories);
   logger.setOutputChannelFactory((name) =>
     vscode.window.createOutputChannel(name),
   );
@@ -220,6 +219,7 @@ export async function activate(context: vscode.ExtensionContext) {
     storage: new VscodeStorage(context),
     secrets: new VscodeSecrets(context),
     lifecycle,
+    agentDirectories,
     agentResume: {
       tryResumeStream: (streamId) => tryResumeFromSnapshot(streamId),
       isResumeInFlight: (streamId) => isResumeInFlight(streamId),

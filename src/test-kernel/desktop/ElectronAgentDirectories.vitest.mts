@@ -44,8 +44,12 @@ interface ElectronAgentDirectoriesModule {
   ): Promise<void>;
 }
 
-interface AgentDirectoriesRegistryModule {
-  getAgentDirectories(): {
+interface PlatformAgentDirectoriesModule {
+  createPlatformAgentDirectories(options: {
+    channel: string;
+    customDirectoryStore: { get(): string | undefined };
+  }): {
+    custom(): Promise<string>;
     builtIn(): Promise<string>;
     builtInToolUse(): Promise<string>;
   };
@@ -68,7 +72,9 @@ describe('desktop agent directory bootstrap', () => {
 
   async function createHarness(): Promise<{
     bootstrapElectronAgentDirectories: ElectronAgentDirectoriesModule['bootstrapElectronAgentDirectories'];
-    getAgentDirectories: AgentDirectoriesRegistryModule['getAgentDirectories'];
+    agentDirectories: ReturnType<
+      PlatformAgentDirectoriesModule['createPlatformAgentDirectories']
+    >;
     globalStateStore: JsonStore;
     resourcesPath: string;
     storage: StorageProvider;
@@ -90,15 +96,15 @@ describe('desktop agent directory bootstrap', () => {
     const [
       { JsonStore },
       { bootstrapElectronAgentDirectories },
-      { initPlatform },
-      { getAgentDirectories },
+      { initPlatform, platform },
+      { createPlatformAgentDirectories },
     ] = await Promise.all([
       loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
       loadDesktopPlatformModule<ElectronAgentDirectoriesModule>(
         'agentDirectories.ts',
       ),
       import('@platform/platform'),
-      import('@agent/index/agentDirectoriesRegistry'),
+      import('@agent/index/platformAgentDirectories'),
     ]);
     const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
     const globalStateStore = await JsonStore.open(
@@ -118,6 +124,13 @@ describe('desktop agent directory bootstrap', () => {
       secrets: new FakeSecrets(),
       lifecycle: createLifecycleHost(),
       agentResume: { tryResumeStream: async () => false },
+      agentDirectories: createPlatformAgentDirectories({
+        channel: 'test',
+        customDirectoryStore: {
+          get: () =>
+            globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
+        },
+      }),
       toolAvailability: NO_TOOL_AVAILABILITY_HOST,
       linter: async () => [],
       addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
@@ -130,7 +143,7 @@ describe('desktop agent directory bootstrap', () => {
 
     return {
       bootstrapElectronAgentDirectories,
-      getAgentDirectories,
+      agentDirectories: platform().agentDirectories,
       globalStateStore,
       resourcesPath,
       storage,
@@ -139,8 +152,8 @@ describe('desktop agent directory bootstrap', () => {
 
   it('copies bundled agents into fresh userData storage and registers directory access', async () => {
     const {
+      agentDirectories,
       bootstrapElectronAgentDirectories,
-      getAgentDirectories,
       globalStateStore,
       resourcesPath,
       storage,
@@ -148,8 +161,8 @@ describe('desktop agent directory bootstrap', () => {
 
     await bootstrapElectronAgentDirectories(resourcesPath, '1.2.3');
 
-    const builtInDir = await getAgentDirectories().builtIn();
-    const toolUseDir = await getAgentDirectories().builtInToolUse();
+    const builtInDir = await agentDirectories.builtIn();
+    const toolUseDir = await agentDirectories.builtInToolUse();
 
     expect(builtInDir).toBe(join(storage.getGlobalStoragePath(), 'agents'));
     expect(toolUseDir).toBe(

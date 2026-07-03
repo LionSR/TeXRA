@@ -23,7 +23,6 @@ import {
   loadAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
-import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
 import {
   codexCoordinator,
@@ -210,7 +209,8 @@ export function createDesktopSettingsIpc(
   const refreshToolAvailability = options.refreshToolAvailability;
   const secrets = options.secrets ?? tryPlatform()?.secrets ?? emptySecrets;
   const getCustomAgentDirectory =
-    options.getCustomAgentDirectory ?? (() => getAgentDirectories().custom());
+    options.getCustomAgentDirectory ??
+    (() => platform().agentDirectories.custom());
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
   const latexToolingController = new LatexToolingController({
@@ -290,9 +290,9 @@ export function createDesktopSettingsIpc(
       case 'custom':
         return getCustomAgentDirectory();
       case 'builtInWorkflow':
-        return getAgentDirectories().builtIn();
+        return platform().agentDirectories.builtIn();
       case 'builtInToolUse':
-        return getAgentDirectories().builtInToolUse();
+        return platform().agentDirectories.builtInToolUse();
       case 'remote':
         return Promise.resolve(undefined);
     }
