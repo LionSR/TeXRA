@@ -39,7 +39,7 @@ export function createDesktopExecutionIpc(
           );
           return;
         }
-        return options.executeAgent?.(parsed.data as MainViewExecuteMessage);
+        return options.executeAgent?.(parsed.data);
       },
     },
     { onAsyncError: options.onAsyncError },

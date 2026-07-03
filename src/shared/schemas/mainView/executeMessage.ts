@@ -1,0 +1,59 @@
+import { z } from 'zod';
+
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+
+import { ToolConfigInputFieldsSchema } from '../toolConfig';
+
+const MainViewExecuteToolConfigSchema = ToolConfigInputFieldsSchema.partial();
+
+export const MainViewExecuteFilesSchema = z.object({
+  inputFiles: z.array(z.string()).optional(),
+  contextFiles: z.array(z.string()).optional(),
+  mediaFiles: z.array(z.string().nullable()).optional(),
+  outputFiles: z.array(z.string()).optional(),
+  editedFile: z.string().optional(),
+  editedFiles: z.array(z.string()).optional(),
+  baseFile: z.string().optional(),
+  inputFilesActive: z.boolean().optional(),
+  contextFilesActive: z.boolean().optional(),
+  mediaFilesActive: z.boolean().optional(),
+  outputFilesActive: z.boolean().optional(),
+});
+export type MainViewExecuteFiles = z.infer<typeof MainViewExecuteFilesSchema>;
+
+export const MainViewExecuteSessionSchema = z.object({
+  workingDirectory: z.string().nullable().optional(),
+  cliOutputFile: z.string().nullable().optional(),
+  cliMultiAgentPresetId: z.string().nullable().optional(),
+});
+export type MainViewExecuteSession = z.infer<
+  typeof MainViewExecuteSessionSchema
+>;
+
+/**
+ * Payload from the main view for agent execution. The IPC dispatcher adds the
+ * command discriminant separately; keeping the payload schema command-free
+ * matches the browser-side builder and the execution controller.
+ */
+export const MainViewExecuteMessageSchema = z.object({
+  agent: z.string().optional(),
+  model: z.string().optional(),
+  instruction: z.string().optional(),
+  displayInstruction: z.string().nullable().optional(),
+  isToolUseAgent: z.boolean().optional(),
+  memories: z.array(z.string()).optional(),
+  files: MainViewExecuteFilesSchema.optional(),
+  session: MainViewExecuteSessionSchema.optional(),
+  toolConfig: MainViewExecuteToolConfigSchema.optional(),
+});
+export type MainViewExecuteMessage = z.infer<
+  typeof MainViewExecuteMessageSchema
+>;
+
+export const MainViewExecuteInboundMessageSchema =
+  MainViewExecuteMessageSchema.extend({
+    command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE),
+  });
+export type MainViewExecuteInboundMessage = z.infer<
+  typeof MainViewExecuteInboundMessageSchema
+>;

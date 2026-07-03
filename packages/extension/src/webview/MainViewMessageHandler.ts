@@ -26,7 +26,6 @@ import {
   MainViewInboundHandlerRegistry,
   type GettingStartedAction,
 } from '@shared/schemas';
-import type { MainViewExecuteMessage } from '@shared/mainView';
 import { PROVIDER_URLS } from '@shared/constants/providers';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
@@ -169,13 +168,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: () =>
         safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
-      // EXECUTE is still validated as a loose `{ command }` object (payload
-      // typed nearer the handler), so the dispatcher can't infer the rich
-      // shape — cast to the handler's declared input type rather than
-      // discarding all checking with `any`. MERGE/COMPARE/ACCEPT_EDITED have
-      // real per-command Zod schemas now, so those flow through pre-narrowed.
-      [MAIN_VIEW_COMMANDS.EXECUTE]: (m) =>
-        executionHandlers.handleExecute(m as MainViewExecuteMessage),
+      [MAIN_VIEW_COMMANDS.EXECUTE]: (m) => executionHandlers.handleExecute(m),
       [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
         executionHandlers.handleFileOperation(m),
       [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
