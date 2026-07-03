@@ -4,11 +4,8 @@ import { create } from 'mutative';
 import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 
 import { z } from 'zod';
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 
@@ -25,11 +22,9 @@ import {
 } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { designTokens, viewTabStyles } from '@shared/styles';
-import {
-  registerTeXRAWebAwesomeIcons,
-  TEXRA_ICON_LIBRARY,
-} from '@shared/wa/webAwesomeIcons';
+import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
+import { renderViewHeader } from '@shared/wa/viewHeader';
 import '@shared/wa/tabs';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
@@ -167,70 +162,23 @@ export class ProgressApp extends ProgressAppBase {
           desktop: isDesktopMode,
         })}
       >
-        <div class="view-header">
-          <wa-tab-group
-            class="view-tabs"
-            .active=${'progress'}
-            without-scroll-controls
-            @wa-tab-show=${this.onViewTabShow}
-          >
-            <wa-tab
-              panel="launcher"
-              class=${classMap({ 'focus-sidebar-tab': isEditorMode })}
-              title=${ifDefined(
-                isEditorMode ? 'Focus Launcher sidebar' : undefined,
-              )}
-              @click=${this.onFocusLauncherTab}
-            >
-              <wa-icon
-                library=${TEXRA_ICON_LIBRARY}
-                name="pencil"
-                variant="solid"
-              ></wa-icon>
-              Launcher
-            </wa-tab>
-            <wa-tab panel="progress">
-              <wa-icon
-                library=${TEXRA_ICON_LIBRARY}
-                name="robot"
-                variant="solid"
-              ></wa-icon>
-              Progress
-            </wa-tab>
-            <wa-tab-panel name="launcher"></wa-tab-panel>
-            <wa-tab-panel name="progress"></wa-tab-panel>
-          </wa-tab-group>
-
-          <wa-button
-            class="header-action"
-            aria-label="Open dashboard"
-            appearance="plain"
-            size="small"
-            title="Open dashboard"
-            @click=${this.onOpenDashboard}
-          >
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="gear"
-              variant="solid"
-            ></wa-icon>
-          </wa-button>
-          <wa-button
-            class="header-action"
-            aria-label=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
-            appearance="plain"
-            size="small"
-            title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
-            @click=${isEditorMode ? this.onPopBack : this.onPopOut}
-          >
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name=${isEditorMode ? 'backward-step' : 'picture-in-picture'}
-              variant="solid"
-            ></wa-icon>
-          </wa-button>
-        </div>
-
+        ${renderViewHeader({
+          active: 'progress',
+          dashboardButtonId: 'progressOpenDashboardButton',
+          launcherTab: {
+            focusSidebar: isEditorMode,
+            title: isEditorMode ? 'Focus Launcher sidebar' : undefined,
+            onClick: this.onFocusLauncherTab,
+          },
+          onOpenDashboard: this.onOpenDashboard,
+          onTabShow: this.onViewTabShow,
+          secondaryAction: {
+            id: 'progressPopOutButton',
+            label: isEditorMode ? 'Back to sidebar' : 'Open in editor',
+            icon: isEditorMode ? 'backward-step' : 'picture-in-picture',
+            onClick: isEditorMode ? this.onPopBack : this.onPopOut,
+          },
+        })}
         ${
           hasAnyStreams
             ? html`
