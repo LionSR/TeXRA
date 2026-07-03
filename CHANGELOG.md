@@ -42,6 +42,8 @@ All notable changes to this project will be documented in this file.
 - **Desktop repairs orphaned streams on startup** — after a restart, desktop
   streams that were left running or waiting are reconciled instead of staying in
   a stale in-flight state.
+- **Desktop asks before deleting provider API keys** — removing a stored model
+  provider key now uses the same confirmation step as the VS Code extension.
 
 ### Extension (VS Code)
 
