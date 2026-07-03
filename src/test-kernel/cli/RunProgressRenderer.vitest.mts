@@ -179,6 +179,23 @@ describe('CLI run progress renderer', () => {
     expect(output.endsWith('\r\x1b[2K')).toBe(true);
   });
 
+  it('keeps long elapsed times in minute-second form', () => {
+    let now = 0;
+    let output = '';
+    const renderer = createRunProgressRenderer(context(), {
+      colorEnabled: true,
+      write: (text) => {
+        output += text;
+      },
+      nowMs: () => now,
+    });
+
+    now = 3_600_000;
+    renderer?.handle('setTaskState', workflowTaskState());
+
+    expect(output).toContain('\r\x1b[2Kpolish paper.tex · 60m 00s');
+  });
+
   it('ticks the ANSI status line while a root workflow is quiet', () => {
     let now = 0;
     let output = '';

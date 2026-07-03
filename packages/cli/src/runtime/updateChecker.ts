@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { gt as semverGt, valid as semverValid } from 'semver';
 import { z } from 'zod';
 
+import { parseJsonWith } from '@common/parsing/safeParseJson';
+
 import {
   cliEnvValue,
   readCliAmbientState,
@@ -140,14 +142,9 @@ export async function fetchLatestCliVersion(options?: {
 }): Promise<string | undefined> {
   const registry = options?.registry ?? DEFAULT_REGISTRY;
   const fetchImpl = options?.fetchImpl ?? fetch;
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-  );
   try {
     const response = await fetchImpl(`${registry}/${CLI_PACKAGE_NAME}/latest`, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(options?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       headers: { accept: 'application/json' },
     });
     if (!response.ok) return undefined;
@@ -155,8 +152,6 @@ export async function fetchLatestCliVersion(options?: {
     return typeof body.version === 'string' ? body.version : undefined;
   } catch {
     return undefined;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -221,15 +216,9 @@ function parseHomebrewFormulaVersion(
   stdout: string,
   formula = CLI_HOMEBREW_FORMULA,
 ): string | undefined {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(stdout);
-  } catch {
-    return undefined;
-  }
-  const parsed = HomebrewInfoSchema.safeParse(raw);
-  if (!parsed.success) return undefined;
-  const entry = parsed.data.formulae?.find((f) => f?.name === formula);
+  const parsed = parseJsonWith(stdout, HomebrewInfoSchema);
+  if (parsed.isErr()) return undefined;
+  const entry = parsed.value.formulae?.find((f) => f?.name === formula);
   return entry?.versions?.stable ?? undefined;
 }
 

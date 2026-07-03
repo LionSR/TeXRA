@@ -1,4 +1,5 @@
 import { getReasonPhrase } from 'http-status-codes';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import { isObject, isString } from '@utils/core';
 
 import { pickStatus } from './sdkErrorKinds';
@@ -203,11 +204,7 @@ export function detectRawErrorBody(err: unknown): unknown {
 
   // Google GenAI SDK may embed JSON in the error message
   if (candidate.message && candidate.message.startsWith('{')) {
-    try {
-      return JSON.parse(candidate.message);
-    } catch {
-      // Not valid JSON, ignore
-    }
+    return safeParseJson(candidate.message).unwrapOr(undefined);
   }
 
   return undefined;

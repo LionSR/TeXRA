@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { listExecutionWorkspaceFiles } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError } from '@common/errors';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { byStringProp } from '@utils/core/comparators';
@@ -173,12 +174,8 @@ function parseToolArguments(
 ): Record<string, unknown> | undefined {
   if (isObject(argumentsValue)) return argumentsValue;
   if (typeof argumentsValue !== 'string') return undefined;
-  try {
-    const parsed: unknown = JSON.parse(argumentsValue);
-    return isObject(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
+  const parsed = safeParseJson(argumentsValue).unwrapOr(undefined);
+  return isObject(parsed) ? parsed : undefined;
 }
 
 export function mergeHistoryFiles(
