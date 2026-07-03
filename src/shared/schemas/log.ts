@@ -83,6 +83,12 @@ export const StreamLogEntrySchema = z.strictObject({
 
 export type StreamLogEntry = z.infer<typeof StreamLogEntrySchema>;
 
+export const StreamLogTextDeltaSchema = z.strictObject({
+  id: z.string().min(1),
+  appendText: z.string().min(1),
+});
+export type StreamLogTextDelta = z.infer<typeof StreamLogTextDeltaSchema>;
+
 export const LogMessageDataSchema = z.strictObject({
   id: z.string().min(1),
   text: z.string(),

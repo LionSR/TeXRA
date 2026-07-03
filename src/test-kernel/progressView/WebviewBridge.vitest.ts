@@ -71,6 +71,7 @@ describe('WebviewBridge', () => {
         }),
       ],
       updates: [],
+      textDeltas: [],
     });
 
     bridge.dispose();
@@ -119,6 +120,36 @@ describe('WebviewBridge', () => {
         }),
       ],
       updates: [],
+      textDeltas: [],
+    });
+
+    bridge.dispose();
+  });
+
+  it('replays full streamed text when a webview syncs mid-stream', async () => {
+    const store = new StreamLogStore();
+    const activeStream = 'active' as StreamTabId;
+    const sendMessage = vi.fn(() => true);
+    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+
+    store.append(activeStream, logEntry('active-1', '', 100));
+    store.appendText(activeStream, 'active-1', 'hello ');
+    store.appendText(activeStream, 'active-1', 'world');
+
+    bridge.syncStream(activeStream);
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId: activeStream,
+      entries: [
+        expect.objectContaining({
+          id: 'active-1',
+          text: 'hello world',
+        }),
+      ],
+      updates: [],
+      textDeltas: [],
     });
 
     bridge.dispose();
@@ -163,6 +194,7 @@ describe('WebviewBridge', () => {
           text: 'edited log',
         }),
       ],
+      textDeltas: [],
     });
 
     bridge.dispose();
@@ -203,7 +235,45 @@ describe('WebviewBridge', () => {
           text: 'edited while sending',
         }),
       ],
+      textDeltas: [],
     });
+
+    bridge.dispose();
+  });
+
+  it('ships streamed text as O(L) append deltas instead of full updates', async () => {
+    const store = new StreamLogStore();
+    const activeStream = 'active' as StreamTabId;
+    let deliveredBytes = 0;
+    const sendMessage = vi.fn((message) => {
+      deliveredBytes += JSON.stringify(message).length;
+      return true;
+    });
+    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const chunk = 'x'.repeat(1024);
+
+    bridge.syncStream(activeStream);
+    store.append(activeStream, logEntry('active-1', '', 100));
+    await vi.advanceTimersByTimeAsync(20);
+
+    for (let i = 0; i < 40; i++) {
+      store.appendText(activeStream, 'active-1', chunk);
+      await vi.advanceTimersByTimeAsync(20);
+    }
+
+    const streamedFrames = sendMessage.mock.calls.slice(1).map(([message]) => {
+      expect(message).toEqual(
+        expect.objectContaining({
+          entries: [],
+          updates: [],
+          textDeltas: [{ id: 'active-1', appendText: chunk }],
+        }),
+      );
+      return JSON.stringify(message).length;
+    });
+
+    expect(streamedFrames).toHaveLength(40);
+    expect(deliveredBytes).toBeLessThan(90_000);
 
     bridge.dispose();
   });

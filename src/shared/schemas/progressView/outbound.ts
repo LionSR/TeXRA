@@ -8,7 +8,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { GoalStatusSchema } from '../goal';
 
 import { StreamTabIdSchema } from '../identifiers';
-import { StreamLogEntrySchema } from '../log';
+import { StreamLogEntrySchema, StreamLogTextDeltaSchema } from '../log';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from '../mainView';
 import { CompileFailureSchema, OutputFileInfoSchema } from '../output';
 import { InquiryThreadUpdatedEventSchema } from '../inquiry';
@@ -93,6 +93,7 @@ export const LogDeltaMessageSchema = z.object({
   streamId: StreamTabIdSchema,
   entries: z.array(StreamLogEntrySchema),
   updates: z.array(StreamLogEntrySchema).prefault([]),
+  textDeltas: z.array(StreamLogTextDeltaSchema).prefault([]),
 });
 
 // Round-keyed update messages share one shape: a stream id, an optional
