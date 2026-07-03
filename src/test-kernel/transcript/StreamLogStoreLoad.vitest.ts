@@ -364,6 +364,50 @@ describe('StreamLogStore load', () => {
     });
   });
 
+  it('can close running groups for only selected summarized streams', async () => {
+    const storage = mockStorage({
+      logs: {
+        alpha: [runningGroupEntry('alpha', 1, 100)],
+        beta: [runningGroupEntry('beta', 1, 110)],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: true,
+        },
+        beta: {
+          firstTimestamp: 110,
+          lastTimestamp: 110,
+          hasRunningGroup: true,
+        },
+      },
+    });
+
+    const store = new StreamLogStore();
+    await store.load();
+
+    const affected = await store.endRunningGroupsForStreams(['alpha'], 300);
+    await store.flush();
+
+    expect(affected).toEqual(['alpha']);
+    expect(storage.fullLogReads()).toBe(1);
+    expect(store.get('alpha')?.getRange(0).at(0)?.type).toBe(
+      STREAM_LOG_ENTRY_TYPES.GROUP_END,
+    );
+    expect(store.get('beta')).toBeUndefined();
+    expect(
+      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
+    ).toEqual({
+      firstTimestamp: 100,
+      lastTimestamp: 100,
+      hasRunningGroup: false,
+    });
+    expect(
+      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'beta')),
+    ).toBeUndefined();
+  });
+
   it('bounds stale running group rehydrates', async () => {
     const streamIds = Array.from(
       { length: 20 },

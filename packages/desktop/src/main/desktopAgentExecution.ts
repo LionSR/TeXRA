@@ -21,6 +21,7 @@ import {
 } from '@agent/core/state/executionRequests';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   isResumeInFlight as isStreamResumeInFlight,
   resolveAndResumeStream,
@@ -29,9 +30,16 @@ import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCo
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  getAllActiveExecutionIds,
+  SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  sendFollowUp,
+  wakeQueuedFollowUpStream,
+} from '@agent/followUp/ToolUseFollowUp';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { toErrorMessage } from '@common/errors';
 import {
@@ -53,6 +61,7 @@ import {
   type ProgressViewOutboundMessage,
   type ExecutionId,
   type StreamTabId,
+  streamStatusesWithTrait,
 } from '@shared/schemas';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
@@ -102,6 +111,7 @@ const DESKTOP_UNAVAILABLE_TOOLS: readonly DesktopUnavailableTool[] = [
   'inline_comment',
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
 ];
+const RESTART_REPAIR_STATUSES = streamStatusesWithTrait('inFlight');
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
@@ -210,6 +220,7 @@ export class DesktopProgressBridge {
    * progress-event → rail-update translation.  See #6329.
    */
   private readonly progressEvents: DesktopProgressEventBridge;
+  private readonly restartRepair: Promise<void>;
 
   readonly runtimeHost: AgentRuntimeHost;
   readonly progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
@@ -299,6 +310,7 @@ export class DesktopProgressBridge {
         void this.options.showErrorMessage?.(message);
       },
     });
+    this.restartRepair = this.repairOrphanedStreamsAfterRestart();
     // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
     // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
     // terminal `result` event, so by the time this listener fires the funnel
@@ -605,6 +617,185 @@ export class DesktopProgressBridge {
     );
   }
 
+  private getRestartRepairExecutionIdMap(): ReadonlyMap<
+    StreamTabId,
+    ExecutionId
+  > {
+    const executionIds = new Map(this.state.snapshots.getExecutionIdMap());
+    for (const [streamId, snapshot] of this.progressEvents.restoredStreams) {
+      if (snapshot.executionId && !executionIds.has(streamId)) {
+        executionIds.set(streamId, snapshot.executionId);
+      }
+    }
+    return executionIds;
+  }
+
+  private resetRestartRepairStreamStatuses(
+    repairStreams: ReadonlySet<StreamTabId>,
+    waitingStreams: ReadonlySet<StreamTabId>,
+  ): StreamTabId[] {
+    const affectedStreams: StreamTabId[] = [];
+    for (const streamId of repairStreams) {
+      const currentStatus = StreamStatusService.get(streamId);
+      if (!currentStatus || !RESTART_REPAIR_STATUSES.has(currentStatus)) {
+        continue;
+      }
+      if (waitingStreams.has(streamId)) {
+        StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+          emit: false,
+        });
+        this.logger.debug(
+          `Stream ${streamId} restored to WAITING after reload`,
+        );
+        continue;
+      }
+      StreamStatusService.set(streamId, STREAM_STATUS.ERROR, { emit: false });
+      affectedStreams.push(streamId);
+      this.logger.debug(
+        `Stream ${streamId} set to ERROR during desktop restart recovery`,
+      );
+    }
+    return affectedStreams;
+  }
+
+  private getRestartRepairStreamSet(
+    executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
+    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>,
+    activeExecutionIds: ReadonlySet<string>,
+  ): Set<StreamTabId> {
+    const repairStreams = new Set(executionIdMap.keys());
+    for (const [streamId, snapshot] of this.progressEvents.restoredStreams) {
+      const executionId = snapshot.executionId ?? allExecutionIds.get(streamId);
+      if (executionId && activeExecutionIds.has(executionId)) {
+        continue;
+      }
+      const currentStatus = StreamStatusService.get(streamId);
+      if (
+        RESTART_REPAIR_STATUSES.has(snapshot.lastKnownStatus) ||
+        RESTART_REPAIR_STATUSES.has(currentStatus)
+      ) {
+        repairStreams.add(streamId);
+      }
+    }
+    return repairStreams;
+  }
+
+  private async closeRunningTaskGroupsForStreams(
+    streamIds: readonly StreamTabId[],
+  ): Promise<StreamTabId[]> {
+    if (streamIds.length === 0) return [];
+    const closedGroups = await this.state.streamLogs.endRunningGroupsForStreams(
+      streamIds,
+      Date.now(),
+    );
+    if (closedGroups.length > 0) {
+      await this.state.streamLogs.save();
+    }
+    return closedGroups;
+  }
+
+  private async repairOrphanedStreamsAfterRestart(): Promise<void> {
+    try {
+      await this.state.streamLogs.load();
+      this.progressEvents.hydrateRestoredStreams();
+      const activeExecutionIds = new Set(getAllActiveExecutionIds());
+      const allExecutionIds = this.getRestartRepairExecutionIdMap();
+      this.progressEvents.forgetActiveRestoredStreams(
+        activeExecutionIds,
+        allExecutionIds,
+      );
+      const executionIdMap = new Map(
+        [...allExecutionIds].filter(
+          ([, executionId]) => !activeExecutionIds.has(executionId),
+        ),
+      );
+      const waitingStreams = await detectWaitingStreams(executionIdMap);
+      const repairActiveExecutionIds = new Set(getAllActiveExecutionIds());
+      const repairAllExecutionIds = this.getRestartRepairExecutionIdMap();
+      this.progressEvents.forgetActiveRestoredStreams(
+        repairActiveExecutionIds,
+        repairAllExecutionIds,
+      );
+      for (const [streamId, executionId] of repairAllExecutionIds) {
+        if (repairActiveExecutionIds.has(executionId)) {
+          waitingStreams.delete(streamId);
+        }
+      }
+      const repairExecutionIdMap = new Map(
+        [...repairAllExecutionIds].filter(
+          ([, executionId]) => !repairActiveExecutionIds.has(executionId),
+        ),
+      );
+      const repairStreams = this.getRestartRepairStreamSet(
+        repairExecutionIdMap,
+        repairAllExecutionIds,
+        repairActiveExecutionIds,
+      );
+      const affectedStreams = this.resetRestartRepairStreamStatuses(
+        repairStreams,
+        waitingStreams,
+      );
+      const closeGroupStreams = new Set([
+        ...affectedStreams,
+        ...waitingStreams,
+      ]);
+      const closedGroups = await this.closeRunningTaskGroupsForStreams([
+        ...closeGroupStreams,
+      ]);
+      if (
+        waitingStreams.size > 0 ||
+        affectedStreams.length > 0 ||
+        closedGroups.length > 0 ||
+        this.progressEvents.restoredStreams.size > 0
+      ) {
+        this.syncFullView();
+      }
+    } catch (error) {
+      const waitingStreams = new Set(
+        [...this.progressEvents.restoredStreams.keys()].filter(
+          (streamId) =>
+            StreamStatusService.get(streamId) === STREAM_STATUS.WAITING,
+        ),
+      );
+      this.progressEvents.hydrateRestoredStreams();
+      const activeExecutionIds = new Set(getAllActiveExecutionIds());
+      const allExecutionIds = this.getRestartRepairExecutionIdMap();
+      this.progressEvents.forgetActiveRestoredStreams(
+        activeExecutionIds,
+        allExecutionIds,
+      );
+      const affectedStreams = this.resetRestartRepairStreamStatuses(
+        new Set(this.progressEvents.restoredStreams.keys()),
+        waitingStreams,
+      );
+      const closeGroupStreams = new Set([
+        ...affectedStreams,
+        ...waitingStreams,
+      ]);
+      if (closeGroupStreams.size > 0) {
+        try {
+          await this.closeRunningTaskGroupsForStreams([...closeGroupStreams]);
+        } catch (groupError) {
+          this.logger.warn(
+            'Failed to close desktop stream groups after repair failure',
+            {
+              data:
+                groupError instanceof Error
+                  ? groupError
+                  : { error: groupError },
+            },
+          );
+        }
+      }
+      if (affectedStreams.length > 0 || waitingStreams.size > 0) {
+        this.syncFullView();
+      }
+      this.logger.warn('Failed to repair desktop streams after restart', {
+        data: error instanceof Error ? error : { error },
+      });
+    }
+  }
+
   private routeToProgress(): void {
     this.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
@@ -747,6 +938,7 @@ export class DesktopProgressBridge {
   }
 
   async tryResumeStream(streamId: StreamTabId): Promise<boolean> {
+    await this.restartRepair;
     // Desktop-only pre-check: a stream deleted in this window must never be
     // resurrected, even if its persisted meta.json survives on disk. The shared
     // orchestrator owns the active/resuming + in-flight guards.
@@ -943,6 +1135,7 @@ export class DesktopProgressBridge {
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void> {
+    await this.restartRepair;
     // Resolve the follow-up target against THIS window's session: the run's
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would
@@ -956,6 +1149,20 @@ export class DesktopProgressBridge {
     );
     if (result.status === 'sent' || result.status === 'queued') {
       this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
+      const wake = await wakeQueuedFollowUpStream(streamId, result, {
+        tryResumeStream: (id) => this.tryResumeStream(id),
+        isResumeInFlight: (id) => this.isResumeInFlight(id),
+      });
+      if (wake.kind === 'dropped') {
+        this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
+        await this.options.showInfoMessage?.(
+          'Message dropped because no session was available to receive it. Start a new agent task to continue.',
+        );
+      } else if (wake.kind === 'queued_resume_failed') {
+        await this.options.showInfoMessage?.(
+          'Message queued. Auto-resume failed; start a new agent task to continue.',
+        );
+      }
       return;
     }
 
@@ -972,6 +1179,7 @@ export class DesktopProgressBridge {
     request: ValidatedExecutionRequest,
     options: DesktopRunExecutionOptions = {},
   ): Promise<void> {
+    await this.restartRepair;
     const { runAgent } = await import('@agent/runtime/runAgent');
     await runAgent(request, {
       runtimeHost: this.runtimeHost,
