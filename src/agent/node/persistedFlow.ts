@@ -233,11 +233,7 @@ export class PersistedFlow<
     await this.fireProjection(shared);
   }
 
-  async init(shared: S): Promise<void> {
-    await this.ensureRecord(shared);
-  }
-
-  private async ensureRecord(shared: S): Promise<void> {
+  protected async ensureRecord(shared: S): Promise<void> {
     const key = flowKey(this.runId);
     const existing = await this.kv.read<FlowRecord>(key);
     if (existing) {

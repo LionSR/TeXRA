@@ -60,10 +60,11 @@ at HEAD:
 - **PocketFlow `Node.exec → createFlow().run` shape** and the
   **lead-and-specialists delegation model** — unchanged.
 
-## Applied this pass — one unattended-safe pure deletion
+## Applied this pass — two confirmed-safe cleanups
 
-**`PersistedFlow.attach()` + `PersistedFlow.getRunId()` deleted**
-(`src/agent/node/persistedFlow.ts`). Both are genuine zero-caller dead code:
+### 1. `PersistedFlow.attach()` + `PersistedFlow.getRunId()` deleted (pure dead code)
+
+`src/agent/node/persistedFlow.ts`. Both are genuine zero-caller dead code:
 
 - `static async attach<S,P,Svc>(kv, runId, start)` (17 lines + JSDoc) — a
   documented "attach to an existing persisted flow for resume" factory. Verified
@@ -80,8 +81,32 @@ Both are absent from all prior readiness docs (grep: 0 hits in the canonical doc
 the detailed audit, the delta, and every checkpoint), so this is a genuinely-new
 find, not a re-open. This is the same **pure-deletion class the 06-30 checkpoint
 applied unattended**; the 07-02 checkpoint reported "no equivalent unattended-safe
-deletion" was found — this pass found one. `npm run typecheck` — **exit 0** across
-all projects after the deletion.
+deletion" was found — this pass found one.
+
+### 2. `PersistedFlow.init()` one-caller alias inlined
+
+`init(shared)` was a pure pass-through to the private `ensureRecord(shared)`
+with a single caller, `RoundPersistedFlow.run()` (`roundPersistedFlow.ts:138`).
+Since `RoundPersistedFlow extends PersistedFlow`, `ensureRecord` was promoted
+`private → protected`, `RoundPersistedFlow.run()` now calls it directly, and the
+`init()` wrapper was deleted. Behavior-identical (this was candidate #1 below,
+promoted to applied after confirming the single caller).
+
+**Verification:** `npm run typecheck` — **exit 0** across all projects
+(`tsc --noEmit`, test-kernel, `texra`, `@texra-ai/cli`) after both changes; the
+full agent test suite — **888 passed / 4 skipped** — after both changes. `runId`
+field retained (used internally by `flowKey(this.runId)`).
+
+**Attempted and reverted — `createMediaContent(): any[] → unknown[]` (candidate #3
+below).** Empirically **not** confirmed-safe: the abstract's `any` is load-bearing
+for the `createMediaMessage` wrapper's `Promise<ReturnType<typeof
+this.createMediaContent>>` return type — the base-class method resolves the
+_abstract_ signature, so `any` silently flows through to concrete call sites in
+`modelHandlerOpenAI` / `modelHandlerOpenRouterNative`. `unknown[]` produced 11
+`TS2345`/`TS2322` errors there. A correct fix requires making
+`createMediaContent` / `createMediaMessage` generic over the provider
+content-part type — reviewed-train, not an unattended one-liner. Reverted; the
+candidate is re-scoped below.
 
 ## Genuinely-new candidates — surfaced by this fan-out, absent from all prior docs
 
@@ -91,13 +116,11 @@ signature / surface changes or design-direction notes); none is unattended-safe.
 
 ### Core / runtime
 
-1. **`PersistedFlow.init()` is a one-caller public alias for private
-   `ensureRecord()`** _(LOW)_. `persistedFlow.ts` `init(shared)` is a pure
-   pass-through to the private `ensureRecord(shared)`; the sole caller is
-   `RoundPersistedFlow.run()` (`roundPersistedFlow.ts`). Since
-   `RoundPersistedFlow extends PersistedFlow`, making `ensureRecord` `protected`
-   and calling it directly lets `init()` be deleted. Not applied unattended:
-   changes a member's visibility on a base class. Reviewed-train.
+1. **`PersistedFlow.init()` one-caller alias** _(LOW)_ — **APPLIED this pass**
+   (see § Applied #2). Left here for the record: `init(shared)` was a pure
+   pass-through to private `ensureRecord(shared)` with the sole caller
+   `RoundPersistedFlow.run()`; `ensureRecord` promoted to `protected` and the
+   wrapper deleted. Typecheck + full suite green.
 
 2. **Two divergent round-loop mechanisms for the same control-flow shape**
    _(MEDIUM — design consistency, note-only)_. The reflection flow drives its
@@ -114,12 +137,18 @@ signature / surface changes or design-direction notes); none is unattended-safe.
 ### Model handlers
 
 3. **`createMediaContent` returns `any[]` on the abstract base member**
-   _(LOW)_. `ModelHandler.ts:814` — `abstract createMediaContent(mediaMessage:
+   _(MEDIUM — re-scoped after an empirical attempt this pass)_.
+   `ModelHandler.ts:814` — `abstract createMediaContent(mediaMessage:
 MediaEntry[]): any[]` — the lone `any` on an abstract member in a class that
-   otherwise preserves full `<M,U,T,C,Resp>` generic typing. Every provider
-   implements it with a concrete provider content-part type. Widen to the
-   provider content-part type (or at least `unknown[]`). Not on `IModelHandler`,
-   so self-contained. Reviewed-train (touches each provider's signature).
+   otherwise preserves full `<M,U,T,C,Resp>` generic typing. **The naive fix
+   (`any[] → unknown[]`) does not work** — see § Applied's revert note: the
+   abstract `any` flows through the `createMediaMessage` wrapper's
+   `ReturnType<typeof this.createMediaContent>` return type and `unknown` breaks
+   11 concrete call sites. The real fix is to make `createMediaContent` /
+   `createMediaMessage` generic over the provider content-part type (each
+   override already returns a concrete type: `ContentBlockParam[]`,
+   `ChatCompletionContentPart[]`, `ResponseInputContent[]`, `ChatContentItems[]`,
+   `MediaEntry[]`). Reviewed-train (a real generics refactor, not a one-liner).
 
 4. **`IModelHandler` role-split angle** _(MEDIUM surface — distinct from the
    adjudicated "delete `IModelHandler`" trap)_. The ~35-method port bundles two
@@ -229,14 +258,17 @@ Split points ranked by value/effort (unchanged from 06-26 → 07-02):
 
 ## Recommendation
 
-**SDK-ready in shape; no structural refactoring warranted.** One unattended-safe
-pure deletion applied this pass (`PersistedFlow.attach` + `getRunId`). Continue
-the canonical plan's surface / multi-tenant track through the reviewed PR train:
-port narrowing (incl. the new `IModelHandler` role-split and `createMediaContent`
-typing), per-session state relocation, the typed `delegateTo` primitive, and
-wiring `review` as the first Verifier delegation. Fold the six new candidates
-above into that train — none but the applied deletion is an unattended sweep. Do
-not re-open the adjudicated traps.
+**SDK-ready in shape; no structural refactoring warranted.** Two confirmed-safe
+cleanups applied this pass: the `PersistedFlow.attach` + `getRunId` dead-code
+deletion and the `PersistedFlow.init` one-caller-alias inline (both typecheck +
+full-suite green). A third attempt (`createMediaContent` typing) was made,
+empirically found unsafe as a one-liner, and reverted — re-scoped to a generics
+refactor. Continue the canonical plan's surface / multi-tenant track through the
+reviewed PR train: port narrowing (incl. the `IModelHandler` role-split and the
+`createMediaContent` generics), per-session state relocation, the typed
+`delegateTo` primitive, and wiring `review` as the first Verifier delegation.
+Fold the remaining candidates above into that train — none of them is an
+unattended sweep. Do not re-open the adjudicated traps.
 
 ## Verified (this checkpoint)
 
@@ -248,8 +280,14 @@ not re-open the adjudicated traps.
 src/agent/node/persistedFlow.ts` → **0** after edit; both had **0** callers
   across `src` + `packages` before deletion; absent from all prior readiness docs
   (0 grep hits). `runId` field retained.
-- New candidates verified in-tree: `PersistedFlow.init` → private `ensureRecord`
-  (1 caller `RoundPersistedFlow`); `RoundPersistedFlow` instantiated once
+- Applied inline verified: `PersistedFlow.init` had exactly **1** caller
+  (`RoundPersistedFlow.run()`, `roundPersistedFlow.ts:138`); `ensureRecord`
+  promoted `private → protected`; `grep "\.init(" src/agent/node` → **0** after
+  edit. `createMediaContent any[] → unknown[]` attempted → **11 TS errors**
+  (`modelHandlerOpenAI` / `modelHandlerOpenRouterNative`) → reverted.
+- Both applied changes verified green: `npm run typecheck` **exit 0** (all four
+  projects); `npx vitest run src/test-kernel/agent/` — **888 passed / 4 skipped**.
+- Other candidates verified in-tree: `RoundPersistedFlow` instantiated once
   (`runReflectionFlow.ts`); `createMediaContent(): any[]` (`ModelHandler.ts:814`);
   `Pick<IModelHandler, …>` already in `followUpMessages.ts`; `@platform` barrel
   4 importers vs 79 deep-path; `@logger/index.ts` 1 re-export vs 164 deep imports.
