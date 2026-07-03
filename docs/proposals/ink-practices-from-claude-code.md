@@ -43,8 +43,8 @@ The per-subsystem grounding agent surveyed `terminalCleanup.ts` but missed
   synchronously regardless.
 - **#3 (per-transcript-entry error boundaries) was the actual high-confidence gap
   and is now shipped.** `EntryErrorBoundary` wraps live transcript entries
-  (`ConversationPane.tsx:114-116`) and static transcript entries
-  (`StaticConversationTranscript.tsx:410-426`), so a render throw is isolated to
+  (`panes/ConversationPane.tsx:114-116`) and static transcript entries
+  (`panes/StaticConversationTranscript.tsx:410-426`), so a render throw is isolated to
   one entry.
 
 ---

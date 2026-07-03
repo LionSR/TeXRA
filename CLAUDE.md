@@ -140,7 +140,7 @@ Key directories in `packages/extension/`:
 Key documentation in `docs/`:
 
 - `pocketflow/` - PocketFlow framework documentation (core abstractions, design patterns, utility functions)
-- The rest of `docs/` is the texra.ai VitePress site (`architecture/`, `blog/`, `design/`, `dev/`, `guide/`, `prds/`, `proposals/`, `reference/`, `skills/`, `supabase/`, plus root docs like `changelog.md`/`providers.md`/`terms.md`). A doc landing at the `docs/` root can silently freeze the texra.ai deploy if it trips the publish allowlist — check `docs/.vitepress/publicDocs.js` and the commit-time `docs-root-boundary` pre-commit gate (`docs/scripts/check-root-docs.mjs`) before adding root-level docs.
+- `guide/` and selected root docs (`index.md`, `launch.md`, `providers.md`, `changelog.md`, `terms.md`) are published on the texra.ai VitePress site. Internal directories such as `architecture/`, `blog/`, `design/`, `dev/`, `prds/`, `proposals/`, `reference/`, `skills/`, and `supabase/` are excluded by `docs/.vitepress/publicDocs.js`. A doc landing at the `docs/` root can silently freeze the texra.ai deploy if it trips the publish allowlist — check `docs/.vitepress/publicDocs.js` and the commit-time `docs-root-boundary` pre-commit gate (`docs/scripts/check-root-docs.mjs`) before adding root-level docs.
 
 ### Commands (`packages/extension/src/commands/`)
 
@@ -345,9 +345,10 @@ mouse-scroll for finalized history, so don't reinvent them.
   Implemented in `runChatTui.tsx`; route new mode toggles through that same
   synchronous path.
 - **Per-transcript-entry render-null error boundaries.** Every transcript entry
-  is wrapped in `EntryErrorBoundary` (`ConversationPane.tsx`,
-  `StaticConversationTranscript.tsx`), so one malformed entry degrades to blank
-  instead of blanking the session. New transcript renderers must live inside it.
+  is wrapped in `EntryErrorBoundary` (`panes/ConversationPane.tsx`,
+  `panes/StaticConversationTranscript.tsx`), so one malformed entry degrades to
+  blank instead of blanking the session. New transcript renderers must live
+  inside it.
 - **Not yet built — adopt when touched:** animations should share one Clock
   (single timer, idle when unsubscribed, offscreen rows unsubscribe via a
   ref-only check) instead of per-component intervals; raw mode should be
