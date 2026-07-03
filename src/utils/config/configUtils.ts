@@ -56,8 +56,7 @@ export function getValidatedConfig<T>(
   schema: ZodType<T>,
   defaultValue: T,
 ): T {
-  const result = schema.safeParse(getConfig<unknown>(path));
-  return result.success ? result.data : defaultValue;
+  return schema.catch(defaultValue).parse(getConfig<unknown>(path));
 }
 
 /**

@@ -179,8 +179,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   ): Promise<T | null> {
     const raw = await this.read(key);
     if (!raw) return null;
-    const result = schema.safeParse(raw);
-    return result.success ? result.data : null;
+    return schema.nullable().catch(null).parse(raw);
   }
 
   async readMeta(): Promise<ExecutionMeta | null> {

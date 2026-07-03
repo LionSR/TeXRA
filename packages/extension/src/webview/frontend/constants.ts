@@ -24,6 +24,5 @@ export { MULTIPLE_DOCUMENT_FILE_TYPES };
 export function parseSessionType(
   sessionType: string | null | undefined,
 ): SessionType | undefined {
-  const result = SessionTypeSchema.safeParse(sessionType);
-  return result.success ? result.data : undefined;
+  return SessionTypeSchema.optional().catch(undefined).parse(sessionType);
 }

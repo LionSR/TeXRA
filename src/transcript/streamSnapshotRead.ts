@@ -116,8 +116,10 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
       ? raw.schemaVersion
       : STREAM_SNAPSHOT_SCHEMA_VERSION;
   if (version > STREAM_SNAPSHOT_SCHEMA_VERSION) return EMPTY_WORK_PLAN;
-  const parsed = PersistedWorkPlanSchema.safeParse(raw);
-  return parsed.success ? parsed.data : EMPTY_WORK_PLAN;
+  return PersistedWorkPlanSchema.catch({
+    schemaVersion: STREAM_SNAPSHOT_SCHEMA_VERSION,
+    ...EMPTY_WORK_PLAN,
+  }).parse(raw);
 }
 
 /** Read every per-stream sidecar file ONCE, flattening any legacy nested data. */
