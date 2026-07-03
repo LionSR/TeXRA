@@ -63,11 +63,15 @@ interface LaunchModelResolution {
  * The caller surfaces that as a clear preflight error rather than
  * launching with a model that will crash on tier enforcement.
  *
- * Order (the middle three steps are the host-shared priority scan in
- * `resolveSetupModelFromDirectCredentials` — see that function for the
- * ChatGPT/Researcher Access/direct-key detail):
- *   0. ChatGPT subscription, Researcher Access, then a direct provider key.
- *   1. Only if `openRouter` is the sole provider with a key, report a
+ * Order:
+ *   0. If the global `useOpenRouter` flag is already on, use the
+ *      OpenRouter-routed default (the caller's `ensureRoutingConfigured`
+ *      already validated a key is present).
+ *   1. Otherwise, ChatGPT subscription, Researcher Access, then a direct
+ *      provider key — the host-shared priority scan in
+ *      `resolveSetupModelFromDirectCredentials` (see that function for the
+ *      ChatGPT/Researcher Access/direct-key detail).
+ *   2. Only if `openRouter` is the sole provider with a key, report a
  *      router-backed default and let the caller temporarily flip the flag.
  */
 async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
