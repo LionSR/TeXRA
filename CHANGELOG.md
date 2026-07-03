@@ -26,14 +26,6 @@ All notable changes to this project will be documented in this file.
 - **Provider API keys are saved without surrounding spaces** — keys entered or
   pasted with accidental whitespace are normalized before storage.
 
-### Extension (VS Code)
-
-#### Bug Fixes
-
-- **Tool-use resume command registrations are cleaned up correctly** — the
-  extension now owns the resume command disposable through the shared command
-  registrar, avoiding stale registrations after reloads.
-
 ### Desktop
 
 #### Bug Fixes
