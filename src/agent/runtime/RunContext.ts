@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
@@ -23,6 +24,15 @@ interface RunContextCommon {
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
   readonly stopAfterCycle?: boolean;
+  /**
+   * Per-run override for the host's tool-edit approval UI. Takes priority over
+   * `platform().toolEditApproval` when present — hosts that manage more than
+   * one concurrent session per process (e.g. desktop's one window per
+   * `DesktopAgentExecution`) thread their session-scoped handler here instead
+   * of relying on the frozen, process-wide Platform port, which only ever
+   * holds one active handler at a time.
+   */
+  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
 }
 
 export interface LaunchRunContext extends RunContextCommon {
@@ -74,6 +84,7 @@ interface CreateRunContextBase {
   runtimeUnavailableTools?: readonly string[];
   stopAfterCycle?: boolean;
   session?: SessionHandle;
+  toolEditApprovalHandler?: ToolEditApprovalPort;
 }
 
 type CreateLaunchRunContextFields = Required<
@@ -136,6 +147,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       stopAfterCycle: options.stopAfterCycle,
       session: options.session,
+      toolEditApprovalHandler: options.toolEditApprovalHandler,
     });
   }
 
@@ -156,6 +168,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
     session: options.session,
+    toolEditApprovalHandler: options.toolEditApprovalHandler,
   });
 }
 

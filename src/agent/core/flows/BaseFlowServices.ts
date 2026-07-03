@@ -28,6 +28,19 @@ export type RoundFinalizedCallback = (
   run: AgentRunStateSnapshot,
 ) => void | Promise<void>;
 
+/** Delegation-scoped policy flags, grouped so they travel together on `AgentCore`. */
+export interface DelegationPolicy {
+  /**
+   * Delegation depth: 0 for root (user-initiated), N for a subagent N levels deep.
+   * Set by executeAgent from ExecuteAgentOptions.delegationDepth. Used by the
+   * tool-use flow to gate delegation tools and by the delegation tool itself
+   * to compute the child's depth.
+   */
+  delegationDepth?: number;
+  /** Whether approval or user prompts cannot be answered by the current host. */
+  approvalPromptsUnavailable?: boolean;
+}
+
 export interface AgentCore<C = unknown> {
   modelHandler: IModelHandler<ProviderMessage, unknown, SdkToolCall, C>;
   config: AgentConfig;
@@ -41,15 +54,7 @@ export interface AgentCore<C = unknown> {
   userVarChannels: UserVariableChannels;
   /** Working directory override for subagent tool calls (e.g. a git worktree). */
   workingDirectory?: string;
-  /**
-   * Delegation depth: 0 for root (user-initiated), N for a subagent N levels deep.
-   * Set by executeAgent from ExecuteAgentOptions.delegationDepth. Used by the
-   * tool-use flow to gate delegation tools and by the delegation tool itself
-   * to compute the child's depth.
-   */
-  delegationDepth?: number;
-  /** Whether approval or user prompts cannot be answered by the current host. */
-  approvalPromptsUnavailable?: boolean;
+  delegation?: DelegationPolicy;
   /** Tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
   /** Get active subagent and process children for a parent stream. */
