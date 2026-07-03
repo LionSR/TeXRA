@@ -18,6 +18,7 @@ import { workspaceSM, globalSM } from '@common/state';
 import {
   isFileNotFoundError,
   showLoggedErrorMessage,
+  showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
@@ -91,14 +92,16 @@ export class AgentHandlers {
         name: data.agentName,
       });
       if (!result.ok && result.reason === 'missingAgent') {
-        await vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          this.ctx.channel,
           `Agent "${data.agentName}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`,
         );
         return;
       }
 
       if (!result.ok) {
-        await vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          this.ctx.channel,
           `No configuration file found for agent "${data.agentName}". The agent definition may be incomplete — try re-creating it from the Agents tab.`,
         );
         return;
@@ -162,7 +165,8 @@ export class AgentHandlers {
         data.folderType,
       );
       if (!result.ok) {
-        await vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          this.ctx.channel,
           `No local directory for agent source: ${data.folderType}`,
         );
         return;
@@ -189,7 +193,8 @@ export class AgentHandlers {
         name: data.agentName,
       });
       if (!result.ok) {
-        await vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          this.ctx.channel,
           `Agent not found or has no file: ${data.agentName}`,
         );
         return;
@@ -215,7 +220,7 @@ export class AgentHandlers {
         data.agentName,
       );
       if (!result.ok) {
-        await vscode.window.showErrorMessage(result.message);
+        await showLoggedMessage(this.ctx.channel, result.message);
         return;
       }
 
@@ -255,7 +260,8 @@ export class AgentHandlers {
       const key = createKey(data.agentSource, data.agentName);
       const entry = getAgent(key);
       if (!entry?.path) {
-        await vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          this.ctx.channel,
           `Agent not found or has no file: ${data.agentName}`,
         );
         return;
@@ -270,7 +276,8 @@ export class AgentHandlers {
         sourceDir,
       });
       if (!result.ok) {
-        await vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          this.ctx.channel,
           `Refusing to copy: target path escapes the custom agents directory.`,
         );
         return;
@@ -319,7 +326,8 @@ export class AgentHandlers {
       const key = createKey('custom', data.agentName);
       const entry = getAgent(key);
       if (!entry?.path) {
-        await vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          this.ctx.channel,
           `Custom agent not found: ${data.agentName}`,
         );
         return;
@@ -331,7 +339,8 @@ export class AgentHandlers {
         customDir,
       });
       if (!result.ok) {
-        await vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          this.ctx.channel,
           `Refusing to delete: file is not inside the custom agents directory.`,
         );
         return;
@@ -409,7 +418,10 @@ export class AgentHandlers {
       await loadAgents();
       const result = await this.catalogController.applyPreset(data.presetId);
       if (!result.ok) {
-        await vscode.window.showErrorMessage(`Unknown team: ${data.presetId}`);
+        await showLoggedMessage(
+          this.ctx.channel,
+          `Unknown team: ${data.presetId}`,
+        );
         return;
       }
 

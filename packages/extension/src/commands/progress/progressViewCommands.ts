@@ -1,11 +1,13 @@
-import * as vscode from 'vscode';
-
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+
+const CHANNEL = 'progressViewCommands';
 
 function getProgressProviderOrWarn(): ProgressViewProvider | undefined {
   const provider = ProgressViewProvider.getInstance();
   if (!provider) {
-    void vscode.window.showErrorMessage(
+    void showLoggedMessage(
+      CHANNEL,
       'Progress View is not available. Please try again.',
     );
   }

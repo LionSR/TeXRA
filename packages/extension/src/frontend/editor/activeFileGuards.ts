@@ -2,8 +2,11 @@
 import * as vscode from 'vscode';
 
 // Local imports - utils
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
+
+const CHANNEL = 'ActiveFileGuards';
 
 export type ActiveFileGuardFailureReason =
   'noEditor' | 'unsupportedExtension' | 'saveFailed';
@@ -65,7 +68,8 @@ export async function getActiveEditorWithGuards(
   if (saveDocument && editor.document.isDirty) {
     const saved = await editor.document.save();
     if (!saved) {
-      await vscode.window.showErrorMessage(
+      await showLoggedMessage(
+        CHANNEL,
         'Could not save the current file. Please save and try again.',
       );
       return { status: 'saveFailed' };

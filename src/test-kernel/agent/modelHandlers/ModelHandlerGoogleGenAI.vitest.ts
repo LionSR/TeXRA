@@ -52,20 +52,22 @@ beforeAll(async () => {
 interface LoggerStub extends Partial<AgentTrace> {
   streamId: string;
   fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
+  warnMessages: string[];
 }
 
 function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
   const stub: LoggerStub = {
     streamId: 'test-channel',
     fileListEntries: [],
+    warnMessages: [],
     debug: () => {
       /* no-op for tests */
     },
     info: () => {
       /* no-op for tests */
     },
-    warn: () => {
-      /* no-op for tests */
+    warn(message: string) {
+      this.warnMessages.push(message);
     },
     error: () => {
       /* no-op for tests */
@@ -239,6 +241,42 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     assert.deepEqual(parts, [
       createPartFromUri('files/large', 'application/pdf'),
     ]);
+  });
+
+  it('keeps Google upload failure details in the visible warning', async () => {
+    const clientStub = {
+      files: {
+        upload: async () => {
+          throw new Error('provider quota exhausted');
+        },
+      },
+    };
+
+    class LimitedInlineHandler extends GoogleHandlerTestDouble {
+      protected override getInlineUploadLimitBytes(): number {
+        return 1;
+      }
+    }
+
+    const handler = new LimitedInlineHandler(buildGoogleConfig(), clientStub);
+    const { logger, stub } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const oversized = Buffer.from([0, 1]).toString('base64');
+    const entry: MediaEntry = {
+      file_name: 'large.pdf',
+      data: oversized,
+      media_type: 'application/pdf',
+      media_category: 'image',
+      source_path: '/tmp/large.pdf',
+    };
+
+    const parts = await handler.invokeUpload([entry]);
+
+    assert.deepEqual(parts, []);
+    assert.equal(stub.warnMessages.length, 1);
+    assert.match(stub.warnMessages[0] ?? '', /large\.pdf/);
+    assert.match(stub.warnMessages[0] ?? '', /provider quota exhausted/);
   });
 
   it('builds media entries once and delegates upload inside createMediaMessage', async () => {

@@ -2,7 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - Tool implementations
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import {
   TextEditorTool,
@@ -124,7 +127,7 @@ export async function handleTestTextEditor(): Promise<void> {
         });
 
         if (!oldStr) {
-          vscode.window.showErrorMessage('Text to replace is required');
+          void showLoggedMessage(CHANNEL, 'Text to replace is required');
           return;
         }
 
@@ -153,7 +156,7 @@ export async function handleTestTextEditor(): Promise<void> {
         });
 
         if (!textToInsert) {
-          vscode.window.showErrorMessage('Text to insert is required');
+          void showLoggedMessage(CHANNEL, 'Text to insert is required');
           return;
         }
 
@@ -177,7 +180,7 @@ export async function handleTestTextEditor(): Promise<void> {
         });
 
         if (!fileContent) {
-          vscode.window.showErrorMessage('File content is required');
+          void showLoggedMessage(CHANNEL, 'File content is required');
           return;
         }
 
@@ -190,7 +193,7 @@ export async function handleTestTextEditor(): Promise<void> {
         break;
 
       default:
-        vscode.window.showErrorMessage(`Unsupported command: ${command}`);
+        void showLoggedMessage(CHANNEL, `Unsupported command: ${command}`);
         return;
     }
 

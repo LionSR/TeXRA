@@ -184,9 +184,9 @@ export async function handleExternalInquiryAction(
 
   // drop — only flips status if the thread is still open; see markDropped.
   if (payload.feedback) {
-    logger.info(
-      `Inquiry ${payload.threadId} dropped with feedback: ${payload.feedback}`,
-    );
+    logger.info(`Inquiry ${payload.threadId} dropped with feedback`, {
+      data: payload.feedback,
+    });
   }
   const droppedManifest = await markDropped({ threadId: payload.threadId });
   emitRuntimeEvent(
@@ -337,9 +337,9 @@ export class ExternalInquiryTool extends defineTool({
       );
     }
 
-    logger.info(
-      `Inquiry dispatch [${input.thread_id ?? 'new'}]: ${input.question.slice(0, 100)}...`,
-    );
+    logger.info(`Inquiry dispatch [${input.thread_id ?? 'new'}]`, {
+      data: input.question.slice(0, 100),
+    });
 
     const persisted = await recordOpenQuestion({
       threadId: input.thread_id ?? undefined,
@@ -363,7 +363,8 @@ export class ExternalInquiryTool extends defineTool({
         });
       } catch (err) {
         logger.warn(
-          `Failed to mirror inquiry thread ${persisted.threadId} to execution ${executionId}: ${String(err)}`,
+          `Failed to mirror inquiry thread ${persisted.threadId} to execution ${executionId}`,
+          { data: err },
         );
       }
     }

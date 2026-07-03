@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
-import { toErrorMessage } from '@common/errors';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
@@ -68,8 +67,6 @@ export async function maybeSaveDebugObject({
     const debugFilePath = fs.fullPath(filePath);
     logger.info(`Saved ${objectType} object to ${debugFilePath}`);
   } catch (error) {
-    logger.error(
-      `Failed to save ${objectType} object: ${toErrorMessage(error)}`,
-    );
+    logger.error(`Failed to save ${objectType} object`, { data: error });
   }
 }

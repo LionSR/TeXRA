@@ -34,7 +34,10 @@ import { runAgent } from '@agent/runtime/runAgent';
 import { toErrorMessage } from '@common/errors';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
@@ -180,7 +183,8 @@ class AgentReviewServiceImpl {
     const cwd = WorkspaceFS.getPath();
     if (!cwd) {
       if (trigger === 'manual') {
-        void vscode.window.showErrorMessage(
+        void showLoggedMessage(
+          CHANNEL,
           'Agent review needs an open workspace folder.',
         );
       }

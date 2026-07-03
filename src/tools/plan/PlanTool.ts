@@ -293,7 +293,11 @@ Best practices:
       ? `\nUser feedback: ${feedback}`
       : '\nNo specific feedback was provided.';
 
-    logger.info(`Plan rejected by user${feedback ? `: ${feedback}` : ''}`);
+    if (feedback) {
+      logger.info('Plan rejected by user', { data: feedback });
+    } else {
+      logger.info('Plan rejected by user');
+    }
 
     return {
       summary: 'Plan rejected — revise approach',
@@ -360,7 +364,8 @@ Best practices:
       } catch (err) {
         const reason = toErrorMessage(err);
         logger.warn(
-          `Failed to retarget in-flight goal for approved plan; returning an explicit error result. ${reason}`,
+          'Failed to retarget in-flight goal for approved plan; returning an explicit error result.',
+          { data: err },
         );
         return {
           summary:
@@ -394,7 +399,8 @@ Best practices:
     } catch (err) {
       const reason = toErrorMessage(err);
       logger.warn(
-        `Failed to start goal for approved plan; falling back to plain approval. ${reason}`,
+        'Failed to start goal for approved plan; falling back to plain approval.',
+        { data: err },
       );
       return {
         summary:

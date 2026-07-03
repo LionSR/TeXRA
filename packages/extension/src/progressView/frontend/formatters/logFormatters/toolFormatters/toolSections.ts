@@ -361,10 +361,8 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
     }
   }
 
-  const mcpParsed = CodexMcpToolOutputSchema.safeParse(parsedOutput);
-  const mcpOutput: CodexMcpToolOutput | null = mcpParsed.success
-    ? mcpParsed.data
-    : null;
+  const mcpOutput: CodexMcpToolOutput | null =
+    CodexMcpToolOutputSchema.nullable().catch(null).parse(parsedOutput);
   const contentBlocks = Array.isArray(mcpOutput?.contentBlocks)
     ? mcpOutput.contentBlocks
     : [];

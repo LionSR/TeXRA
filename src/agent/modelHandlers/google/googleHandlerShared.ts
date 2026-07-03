@@ -15,9 +15,9 @@ import type { FileLocation } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 
-import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
+import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 
 /**
  * Shared helpers for the two Google handlers (generateContent chat handler and
@@ -198,7 +198,10 @@ export async function uploadGoogleMediaEntries<T>(
         continue;
       }
       logger.debug(
-        `Media entry ${fileName} is ${payloadBytes} bytes which exceeds inline limit of ${inlineLimit}. Falling back to upload.`,
+        'Media entry exceeds inline limit; falling back to upload.',
+        {
+          data: { fileName, payloadBytes, inlineLimit },
+        },
       );
     }
 
@@ -242,9 +245,14 @@ export async function uploadGoogleMediaEntries<T>(
   }
 
   if (summaries.some((summary) => !summary.ok)) {
+    const failureSummary = failures.join('; ');
     logger.warn(
-      'Some media files failed to upload via Google GenAI SDK' +
-        (failures.length > 0 ? `: ${failures.join('; ')}` : ''),
+      failureSummary
+        ? `Some media files failed to upload via Google GenAI SDK: ${failureSummary}`
+        : 'Some media files failed to upload via Google GenAI SDK',
+      {
+        data: failures,
+      },
     );
   }
   return parts;
@@ -273,9 +281,12 @@ export async function initializeGooglePseudoPrefillOutputAndPrefill<M>(
   outputLocation: FileLocation,
   prefill: string,
 ): Promise<[boolean, M[]]> {
-  adapter.logger.debug(
-    `Initializing output and prefill for ${outputLocation.absolutePath}. Prefill content: "${prefill.slice(0, 100)}..."`,
-  );
+  adapter.logger.debug('Initializing output and prefill.', {
+    data: {
+      outputPath: outputLocation.absolutePath,
+      prefillPreview: prefill.slice(0, 100),
+    },
+  });
 
   if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
     adapter.logger.debug(
@@ -292,7 +303,9 @@ export async function initializeGooglePseudoPrefillOutputAndPrefill<M>(
 
     const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
     adapter.appendPseudoPrefillToUserStep(messages, pseudoPrefillMsg);
-    adapter.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
+    adapter.logger.debug('Added pseudo-prefill message.', {
+      data: pseudoPrefillMsg,
+    });
     return [false, messages];
   }
 

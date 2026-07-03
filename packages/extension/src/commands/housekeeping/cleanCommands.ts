@@ -4,7 +4,10 @@ import * as vscode from 'vscode';
 // Local imports
 import type { FileOpResult } from '@agent/types';
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { parseWithErrorDisplay } from '@frontend/ui/errorHandlingUtils';
+import {
+  parseWithErrorDisplay,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import {
   runCleanSingle,
   runCleanMultiple,
@@ -30,10 +33,12 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
       );
       break;
     case 'missingParams':
-      vscode.window.showErrorMessage('Missing required parameters for clean');
+      void showLoggedMessage(CHANNEL, 'Missing required parameters for clean');
       break;
     case 'error':
-      vscode.window.showErrorMessage(`Error during cleanup: ${result.error}`);
+      void vscode.window.showErrorMessage(
+        `Error during cleanup: ${result.error}`,
+      );
       break;
   }
 }

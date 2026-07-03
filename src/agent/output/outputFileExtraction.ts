@@ -10,7 +10,6 @@
  */
 
 import type { StageHandle } from '@agent/trace';
-import { toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES, type FileLocation } from '@shared/schemas';
 
 import {
@@ -39,10 +38,10 @@ async function prepareRunWorkspaceIfNeeded(
   try {
     await state.runPreparation;
   } catch (error) {
-    deps.logger.debug(
-      `Failed to prepare run workspace: ${toErrorMessage(error)}`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
-    );
+    deps.logger.debug('Failed to prepare run workspace', {
+      data: error,
+      messageType: MESSAGE_TYPES.INTERNAL,
+    });
   } finally {
     state.runPreparation = null;
   }

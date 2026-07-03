@@ -64,6 +64,10 @@ export function pageStdout(
 
   // Run through the default shell so `$PAGER` strings with flags ("less -FIRX")
   // and user customizations work without us re-implementing shell word-splitting.
+  // Uses raw spawnSync (not executeCommand) because the pager needs true
+  // stdio:['pipe','inherit','inherit'] — full-duplex TTY control for
+  // interactive paging that executeCommand's buffered/streamed output can't
+  // provide.
   const result = spawnSync(command, {
     input: `${text}\n`,
     stdio: ['pipe', 'inherit', 'inherit'],

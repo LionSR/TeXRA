@@ -1009,9 +1009,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
 
     if (thoughtContent) {
-      this.logger.debug(
-        `Google Interactions thought summary preview: ${thoughtContent.slice(0, K_SLICE)}...`,
-      );
+      this.logger.debug('Google Interactions thought summary preview.', {
+        data: thoughtContent.slice(0, K_SLICE),
+      });
     }
     return thoughtContent || null;
   }
@@ -1381,6 +1381,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     } catch (error) {
       this.logger.warn(
         `Failed to encode attachment '${attachment.path}' for Interactions function result: ${getSdkErrorMessage(error)}`,
+        { data: error },
       );
       return null;
     }
@@ -1815,7 +1816,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       // treated uniformly as a thrown, tagged error.
       const status = polled.status ?? 'unknown';
       this.logger.error(
-        `Background interaction ${interactionId} ended with status "${status}".`,
+        'Background interaction ended with a non-completed status.',
         {
           data: {
             interactionId,
@@ -1848,8 +1849,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       this.logger.debug(`Cancelled background interaction ${interactionId}.`);
     } catch (err) {
       this.logger.warn(
-        `Failed to cancel background interaction ${interactionId}: ` +
-          getSdkErrorMessage(err),
+        `Failed to cancel background interaction ${interactionId}.`,
+        { data: err },
       );
     }
   }
@@ -2106,9 +2107,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     if (!buffer) return {};
     const parsed = safeParseJson(buffer);
     if (parsed.isErr()) {
-      this.logger.warn(
-        `Failed to parse streamed tool arguments: ${getSdkErrorMessage(parsed.error)}`,
-      );
+      this.logger.warn('Failed to parse streamed tool arguments.', {
+        data: parsed.error,
+      });
       return {};
     }
     return isObject(parsed.value) ? parsed.value : {};
