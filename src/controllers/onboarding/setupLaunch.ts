@@ -34,6 +34,11 @@ export const SETUP_INSTRUCTION =
  * agent model, server-side keys for any per-provider setup model, then a
  * direct provider API key. Returns `null` when none resolve.
  *
+ * Named for what it excludes, not just "direct" keys: it also covers the
+ * ChatGPT subscription and server-side-key paths, which aren't
+ * secrets-lookup credentials either. The one thing every path here shares
+ * is that none of them need the OpenRouter routing flag.
+ *
  * This is the credential-priority core shared by every host's setup-model
  * resolution: the VS Code extension's `resolveLaunchModel`
  * (`setupAssistantCommand.ts`) layers its interactive OpenRouter-flag flip
@@ -42,7 +47,7 @@ export const SETUP_INSTRUCTION =
  * priority order in one place means the two hosts can't silently drift on
  * which credential wins.
  */
-export async function resolveSetupModelFromDirectCredentials(
+export async function resolveSetupModelExcludingOpenRouter(
   secrets: PlatformSecrets,
 ): Promise<string | null> {
   if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
@@ -101,9 +106,9 @@ export async function resolveDesktopSetupModel(): Promise<string | null> {
   // above). A bare OpenRouter key with the flag off can't be used: the desktop
   // launch passes only a model string to `handleExecute` and never flips the
   // routing flag, so an OR model would run unrouted and fail at inference.
-  // `resolveSetupModelFromDirectCredentials` already skips the `openRouter`
+  // `resolveSetupModelExcludingOpenRouter` already skips the `openRouter`
   // entry, so it naturally refuses instead of picking a doomed model.
-  return resolveSetupModelFromDirectCredentials(secrets);
+  return resolveSetupModelExcludingOpenRouter(secrets);
 }
 
 /**

@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  CHATGPT_SETUP_MODEL,
+  SETUP_MODEL_BY_PROVIDER,
+} from '@model/setupModelDefaults';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
+
 /**
- * `resolveSetupModelFromDirectCredentials` is the credential-priority core
+ * `resolveSetupModelExcludingOpenRouter` is the credential-priority core
  * shared by the VS Code extension (`resolveLaunchModel`) and desktop
  * (`resolveDesktopSetupModel`) setup-launch paths. Exercising it directly
  * guards the priority order (ChatGPT subscription > server-side default >
@@ -12,7 +18,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   isCodexSubscriptionActive: vi.fn<() => Promise<boolean>>(),
   canUseServerSideKeys: vi.fn<() => Promise<boolean>>(),
-  canUseServerSideKeysForModel: vi.fn<() => Promise<boolean>>(),
+  canUseServerSideKeysForModel: vi.fn<(model: string) => Promise<boolean>>(),
   canUseModelSync: vi.fn<(model: string) => boolean>(),
   lookupApiKey:
     vi.fn<
@@ -46,10 +52,10 @@ vi.mock('@utils/config/providerConfig', () => ({
   getUseOpenRouter: mocks.getUseOpenRouter,
 }));
 
-const { resolveSetupModelFromDirectCredentials, resolveDesktopSetupModel } =
+const { resolveSetupModelExcludingOpenRouter, resolveDesktopSetupModel } =
   await import('@controllers/onboarding/setupLaunch');
 
-describe('resolveSetupModelFromDirectCredentials', () => {
+describe('resolveSetupModelExcludingOpenRouter', () => {
   beforeEach(() => {
     mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
     mocks.canUseServerSideKeys.mockReset().mockResolvedValue(false);
@@ -65,36 +71,43 @@ describe('resolveSetupModelFromDirectCredentials', () => {
     mocks.lookupApiKey.mockResolvedValue('sk-test');
 
     await expect(
-      resolveSetupModelFromDirectCredentials({} as never),
-    ).resolves.toBe('gpt55');
+      resolveSetupModelExcludingOpenRouter({} as never),
+    ).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 
   it('falls back to the default agent model when server-side keys cover it', async () => {
     mocks.canUseServerSideKeysForModel.mockResolvedValue(true);
 
-    const model = await resolveSetupModelFromDirectCredentials({} as never);
-    expect(model).toBeTruthy();
-    expect(mocks.canUseServerSideKeysForModel).toHaveBeenCalled();
+    await expect(
+      resolveSetupModelExcludingOpenRouter({} as never),
+    ).resolves.toBe(DEFAULT_AGENT_MODEL);
+    expect(mocks.canUseServerSideKeysForModel).toHaveBeenCalledWith(
+      DEFAULT_AGENT_MODEL,
+    );
   });
 
   it('scans per-provider setup models when the default is out of tier', async () => {
     mocks.canUseServerSideKeysForModel.mockResolvedValue(false);
     mocks.canUseServerSideKeys.mockResolvedValue(true);
-    mocks.canUseModelSync.mockImplementation((model) => model === 'gemini31p');
+    mocks.canUseModelSync.mockImplementation(
+      (model) => model === SETUP_MODEL_BY_PROVIDER.google,
+    );
 
     await expect(
-      resolveSetupModelFromDirectCredentials({} as never),
-    ).resolves.toBe('gemini31p');
+      resolveSetupModelExcludingOpenRouter({} as never),
+    ).resolves.toBe(SETUP_MODEL_BY_PROVIDER.google);
   });
 
   it('skips the openRouter entry when scanning per-provider server-side models', async () => {
     mocks.canUseServerSideKeys.mockResolvedValue(true);
     // Only the openRouter-mapped model would satisfy this — it must never
     // be picked here, since server-side keys route directly, not via OR.
-    mocks.canUseModelSync.mockImplementation((model) => model === 'sonnet46T');
+    mocks.canUseModelSync.mockImplementation(
+      (model) => model === SETUP_MODEL_BY_PROVIDER.openRouter,
+    );
 
     await expect(
-      resolveSetupModelFromDirectCredentials({} as never),
+      resolveSetupModelExcludingOpenRouter({} as never),
     ).resolves.toBeNull();
   });
 
@@ -104,8 +117,8 @@ describe('resolveSetupModelFromDirectCredentials', () => {
     );
 
     await expect(
-      resolveSetupModelFromDirectCredentials({} as never),
-    ).resolves.toBe('opus48T');
+      resolveSetupModelExcludingOpenRouter({} as never),
+    ).resolves.toBe(SETUP_MODEL_BY_PROVIDER.anthropic);
     expect(mocks.lookupApiKey).not.toHaveBeenCalledWith(
       expect.anything(),
       'openRouter',
@@ -114,7 +127,7 @@ describe('resolveSetupModelFromDirectCredentials', () => {
 
   it('returns null when no credential resolves to a runnable model', async () => {
     await expect(
-      resolveSetupModelFromDirectCredentials({} as never),
+      resolveSetupModelExcludingOpenRouter({} as never),
     ).resolves.toBeNull();
   });
 });
@@ -135,7 +148,9 @@ describe('resolveDesktopSetupModel', () => {
       provider === 'openRouter' ? 'or-test' : undefined,
     );
 
-    await expect(resolveDesktopSetupModel()).resolves.toBe('sonnet46T');
+    await expect(resolveDesktopSetupModel()).resolves.toBe(
+      SETUP_MODEL_BY_PROVIDER.openRouter,
+    );
   });
 
   it('refuses launch when the OpenRouter flag is on without a key, without falling back', async () => {
@@ -149,6 +164,8 @@ describe('resolveDesktopSetupModel', () => {
   it('delegates to the shared credential scan when the flag is off', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
 
-    await expect(resolveDesktopSetupModel()).resolves.toBe('gpt55');
+    await expect(resolveDesktopSetupModel()).resolves.toBe(
+      CHATGPT_SETUP_MODEL,
+    );
   });
 });

@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { resolveSetupModelFromDirectCredentials } from '@controllers/onboarding/setupLaunch';
+import { resolveSetupModelExcludingOpenRouter } from '@controllers/onboarding/setupLaunch';
 import { platform } from '@platform/platform';
 import { loadAgents } from '@agent/index';
 import { registerExecution } from '@agent/storage';
@@ -69,7 +69,7 @@ interface LaunchModelResolution {
  *      already validated a key is present).
  *   1. Otherwise, ChatGPT subscription, Researcher Access, then a direct
  *      provider key — the host-shared priority scan in
- *      `resolveSetupModelFromDirectCredentials` (see that function for the
+ *      `resolveSetupModelExcludingOpenRouter` (see that function for the
  *      ChatGPT/Researcher Access/direct-key detail).
  *   2. Only if `openRouter` is the sole provider with a key, report a
  *      router-backed default and let the caller temporarily flip the flag.
@@ -90,7 +90,7 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
     };
   }
 
-  const model = await resolveSetupModelFromDirectCredentials(
+  const model = await resolveSetupModelExcludingOpenRouter(
     platform().secrets,
   );
   if (model) {
