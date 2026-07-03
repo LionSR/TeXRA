@@ -14,6 +14,7 @@ import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import { withTestRunContext } from '../progressTestUtils';
 
 describe('ToolUseRoundFlow queued follow-ups', () => {
   it('attaches media from follow-ups queued at round start', async () => {
@@ -30,7 +31,6 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       checkInterruption: () => false,
       client: {},
       config: { agent: 'test-agent', model: 'test-model' },
-      executionId: 'test-exec',
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
@@ -44,7 +44,6 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       },
       prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
       run: AgentRunStateSnapshotSchema.parse({}),
-      runtimeHost: noopAgentRuntimeHost,
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp: async () => ({
@@ -60,7 +59,6 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       },
       setAbortController: () => {},
       setting: { temperature: 0, tools: [] },
-      streamId: 'test-stream',
       streamStatus: new StreamStatusRegistry(),
       toolRegistry: new MapToolRegistry({}),
       userVarChannels: { input: {}, transient: {} },
@@ -69,7 +67,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
 
     const shared = createShared([]);
 
-    await createToolUseRoundFlow().setServices(services).run(shared);
+    await runRound(services, shared);
 
     expect(createUserFollowUpMessages).toHaveBeenCalledWith(
       [],
@@ -113,6 +111,15 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     };
   }
 
+  function runRound(
+    services: ToolUseRoundServices,
+    shared: ToolUseRoundShared,
+  ): Promise<string | undefined> {
+    return withTestRunContext(noopAgentRuntimeHost, 'test-stream', () =>
+      createToolUseRoundFlow().setServices(services).run(shared),
+    );
+  }
+
   function createBlankTurnServices(
     responses: Array<{ id: string; text?: string; toolCall?: boolean }>,
   ): {
@@ -147,7 +154,6 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       checkInterruption: () => false,
       client: {},
       config: { agent: 'test-agent', model: 'test-model' },
-      executionId: 'test-exec',
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
@@ -192,13 +198,11 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       },
       prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
       run: AgentRunStateSnapshotSchema.parse({}),
-      runtimeHost: noopAgentRuntimeHost,
       session: {
         hasQueuedFollowUp: () => false,
       },
       setAbortController: () => {},
       setting: { temperature: 0, tools: [{ name: 'again' }] },
-      streamId: 'test-stream',
       streamStatus: new StreamStatusRegistry(),
       toolRegistry: new MapToolRegistry({
         again: {
@@ -221,7 +225,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       ]);
     const shared = createShared([toolResultMessage('executions-1')]);
 
-    await createToolUseRoundFlow().setServices(services).run(shared);
+    await runRound(services, shared);
 
     expect(createResponse).toHaveBeenCalledTimes(2);
     expect(createUserFollowUpMessages).toHaveBeenCalledWith(
@@ -246,7 +250,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       interactionsFunctionResultMessage('executions-1'),
     ]);
 
-    await createToolUseRoundFlow().setServices(services).run(shared);
+    await runRound(services, shared);
 
     expect(createResponse).toHaveBeenCalledTimes(2);
     expect(createUserFollowUpMessages).toHaveBeenCalledWith(
@@ -269,7 +273,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       ]);
     const shared = createShared([toolResultMessage('executions-1')]);
 
-    await createToolUseRoundFlow().setServices(services).run(shared);
+    await runRound(services, shared);
 
     expect(createResponse).toHaveBeenCalledTimes(2);
     expect(createUserFollowUpMessages).toHaveBeenCalledTimes(1);
@@ -290,9 +294,9 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       new Error('follow-up append failed'),
     );
 
-    await expect(
-      createToolUseRoundFlow().setServices(services).run(shared),
-    ).rejects.toThrow('follow-up append failed');
+    await expect(runRound(services, shared)).rejects.toThrow(
+      'follow-up append failed',
+    );
 
     expect(createUserFollowUpMessages).toHaveBeenCalledTimes(1);
     expect(shared.blankToolResultContinuationMessageIndex).toBeUndefined();
@@ -309,7 +313,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       ]);
     const shared = createShared([toolResultMessage('executions-1')]);
 
-    await createToolUseRoundFlow().setServices(services).run(shared);
+    await runRound(services, shared);
 
     expect(createResponse).toHaveBeenCalledTimes(4);
     expect(createUserFollowUpMessages).toHaveBeenCalledTimes(2);

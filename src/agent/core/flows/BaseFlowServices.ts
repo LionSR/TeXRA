@@ -39,16 +39,19 @@ export interface AgentCore<C = unknown> {
   setting: AgentSetting;
   prompt: AgentPrompt;
   logger: AgentTrace;
-  runtimeHost: AgentRuntimeHost;
   streamStatus: StreamStatusRegistry;
-  streamId: StreamTabId;
-  executionId: ExecutionId;
   userVarChannels: UserVariableChannels;
   /** Working directory override for subagent tool calls (e.g. a git worktree). */
   workingDirectory?: string;
   delegation?: DelegationPolicy;
   /** Tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
+}
+
+export interface AgentRunIdentity {
+  readonly runtimeHost: AgentRuntimeHost;
+  readonly streamId: StreamTabId;
+  readonly executionId: ExecutionId;
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
