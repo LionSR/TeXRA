@@ -129,4 +129,9 @@ jobs:
 
       - name: Publish @texra-ai/cli
         working-directory: packages/cli
+        # Provenance attestation requires a public source repository; this repo
+        # is private, so trusted-publishing auth still works but provenance
+        # generation must be disabled or npm rejects the publish with a 422.
+        env:
+          NPM_CONFIG_PROVENANCE: 'false'
         run: npm publish
