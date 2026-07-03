@@ -10,7 +10,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { setAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import {
   findAgentByIdentifier,
   getCategoryAgent,
@@ -74,14 +73,24 @@ describe('cross-category agent resolution', () => {
     );
 
     const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
-    setAgentDirectories({
-      custom: async () => customDir,
-      builtIn: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-      builtInToolUse: async () =>
-        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
-    });
+    initPlatform(
+      createFakePlatform(
+        {},
+        {
+          fs: nodeFilesystem,
+          agentDirectories: {
+            custom: async () => customDir,
+            builtIn: async () =>
+              resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+            builtInToolUse: async () =>
+              resolve(
+                REPO_ROOT,
+                'packages/extension/resources/tool_use_agents',
+              ),
+          },
+        },
+      ),
+    );
 
     await refresh({ includeRemote: false });
   });

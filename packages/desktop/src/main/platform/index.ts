@@ -14,6 +14,7 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { StreamSnapshotStore } from '@transcript';
+import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { toErrorMessage } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { configKeyVariants } from '@shared/config/configKeys';
@@ -161,6 +162,12 @@ export async function initializeElectronPlatform(
   const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
 
   repairLaunchPath();
+  const agentDirectories = createPlatformAgentDirectories({
+    channel: 'desktop',
+    customDirectoryStore: {
+      get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
+    },
+  });
   initPlatform(
     createNodePlatform({
       configStores: {
@@ -178,6 +185,7 @@ export async function initializeElectronPlatform(
         tryResumeStream: tryResumeDesktopStream,
         isResumeInFlight: isDesktopResumeInFlight,
       },
+      agentDirectories,
       getWorkspacePath: () => workspacePath,
       toolEditApproval: createDesktopToolEditApprovalPort(),
     }),

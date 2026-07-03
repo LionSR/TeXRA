@@ -14,7 +14,6 @@ import {
   setDefaultTeamId,
 } from '@controllers/onboarding/onboardingFunnel';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
-import { setAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { refresh } from '@agent/index/agentRegistry';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
@@ -69,14 +68,21 @@ beforeAll(async () => {
   // the tests exercise the actual name → key resolution including the
   // unresolved relay-served orchestrator.
   const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
-  setAgentDirectories({
-    custom: async () => '',
-    builtIn: async () =>
-      resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-    builtInToolUse: async () =>
-      resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
-  });
+  initPlatform(
+    createFakePlatform(
+      {},
+      {
+        fs: nodeFilesystem,
+        agentDirectories: {
+          custom: async () => '',
+          builtIn: async () =>
+            resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+          builtInToolUse: async () =>
+            resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+        },
+      },
+    ),
+  );
   await refresh({ includeRemote: false });
 });
 

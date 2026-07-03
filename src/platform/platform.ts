@@ -9,6 +9,7 @@
  * Pattern: Composition Root (Mark Seemann) + Frozen Object.
  */
 import type { AgentResumePort } from './interfaces/agentResume';
+import type { AgentDirectoriesPort } from './interfaces/agentDirectories';
 import type { AddCriticismSink } from './interfaces/criticism';
 import type { ConfigProvider } from './interfaces/config';
 import type { StateStore } from './interfaces/state';
@@ -44,6 +45,7 @@ export interface Platform {
   readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
+  readonly agentDirectories: AgentDirectoriesPort;
   readonly toolAvailability: ToolAvailabilityHost;
   /** Linter diagnostics provider for the diagnostics tool's `list`/`count` commands. */
   readonly linter: LinterProvider;
