@@ -37,7 +37,7 @@ jobs:
       - uses: LionSR/agent-ci-actions@v1
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
-          model-tier: opus
+          model-tier: sonnet
           allowed-bots: 'github-actions[bot]'
           allowed_tools_preset: quality-improver
           allowed_tools_preset_map_file: .github/allowed-tools.json
