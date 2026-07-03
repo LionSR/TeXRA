@@ -115,11 +115,11 @@ history export/rerun, provider-key differences, and similar platform seams).
 
 ### A3. `MainApp.ts`: 1,915-line god component running three state mechanisms at once
 
-`packages/extension/src/webview/frontend/MainApp.ts` mixes about 32 ad-hoc
-`signal(...)` fields around the class state block, 4 distinct
-`@state`/`@provide` context fields, and a `PersistedState`/
-`createWebviewStorage` manager, with restore logic sprawled over three methods.
-The repo already contains the correct pattern —
+`packages/extension/src/webview/frontend/MainApp.ts` mixes 18 ad-hoc
+`signal(...)` fields in the class state block, 4 `@state()` fields (2 also
+`@provide()` context fields), and a `PersistedState`/`createWebviewStorage`
+manager, with restore logic sprawled over three methods. The repo already
+contains the correct pattern —
 `progressView/frontend/` uses a store + 10 slice files with `mutative` — and
 MainApp simply predates it. Same story in miniature for
 `settingsView/frontend/SettingsApp.ts` (1,140) +
@@ -144,7 +144,7 @@ architecture needed.
   JSON-comment stripper in `aliasUtils.mjs` (reimplements `strip-json-comments`)
   whose own header admits the extension tsconfig "will silently follow the
   root" on divergence.
-- Root `tsconfig.json` has **54 path aliases**; `@/*` and `~/*` are exact
+- Root `tsconfig.json` has **46 path aliases**; `@/*` and `~/*` are exact
   duplicates, and several "shared" aliases (`@webview/*`, `@commands/*`,
   `@settingsView/*`, …) point into `packages/extension/`, coupling core to one
   host. `packages/desktop/tsconfig.paths.json` is a second hand-maintained copy.
@@ -482,7 +482,8 @@ Two independent delivery systems, meeting only at two bridges:
    the follow-up decision-then-act window; lift
    `getToolUseFollowUpTarget`/`requestManualCompaction` behind `Pick<>`
    interfaces; migrate the singleton-bound follow-up tests to fresh sessions.
-4. **B4 config codegen** — deletes tooling and a whole failure mode; small.
+4. **B4 config codegen** — deletes the snapshot artifact and silent-rename
+   failure mode while preserving package-resource checks; small.
 5. **A4 test-infra** (`memfs` + global setup) — cheap, pays on every suite.
 6. **A3 MainApp slice migration, B3 boundary enforcement, A6 transcript facade,
    B5/B6 cohesion splits** — as-touched.
