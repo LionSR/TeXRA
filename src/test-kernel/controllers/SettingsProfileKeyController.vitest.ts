@@ -62,7 +62,7 @@ function createController(options?: {
 describe('SettingsProfileKeyController', () => {
   it('stores provider keys and refreshes dependent state', async () => {
     const { controller, hosts, secrets, refreshCount } = createController({
-      inputResponses: ['sk-test'],
+      inputResponses: ['  sk-test  '],
     });
 
     await controller.setProviderKey('openai');
@@ -125,7 +125,7 @@ describe('SettingsProfileKeyController', () => {
   it('commits a provider key without prompting for input', async () => {
     const { controller, hosts, secrets, refreshCount } = createController();
 
-    await controller.commitProviderKey('openai', 'sk-direct');
+    await controller.commitProviderKey('openai', '  sk-direct  ');
 
     assert.equal(secrets.get('openai-secret'), 'sk-direct');
     assert.equal(hosts.prompt.inputs.length, 0);
