@@ -1,8 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { EXECUTION_STATUS } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  type StreamTabId,
+  type TodoItem,
+} from '@shared/schemas';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 
 const mocks = vi.hoisted(() => ({
@@ -15,6 +27,28 @@ const mocks = vi.hoisted(() => ({
   writeTextStderr: vi.fn(),
   writeTerminalStatus: vi.fn(),
 }));
+
+const tempDirs: string[] = [];
+
+async function installStoragePlatform(): Promise<void> {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-run-'));
+  tempDirs.push(tempDir);
+  const workspaceDir = path.join(tempDir, 'workspace');
+  const storageRoot = path.join(tempDir, 'storage');
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(
+    createFakePlatform(
+      { workspacePath: workspaceDir },
+      {
+        fs: nodeFilesystem,
+        workspace: createNodeWorkspace(() => workspaceDir),
+        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+        globalState: new MemoryStateStore(),
+        workspaceState: new MemoryStateStore(),
+      },
+    ),
+  );
+}
 
 vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
@@ -76,6 +110,14 @@ function stubRunExecutionDeps(): void {
 
 describe('executeCliRequest', () => {
   beforeEach(stubRunExecutionDeps);
+
+  afterEach(async () => {
+    await Promise.all(
+      tempDirs
+        .splice(0)
+        .map((dir) => rm(dir, { recursive: true, force: true })),
+    );
+  });
 
   it('marks headless never runs as approval-unavailable for agent execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
@@ -217,6 +259,76 @@ describe('executeCliRequest', () => {
     expect(uninstall.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.close.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
+  });
+
+  it('persists headless stream sidecars emitted through the runtime host', async () => {
+    await installStoragePlatform();
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = {
+      config: {},
+      executionId: 'exec-1',
+    } as Parameters<typeof executeCliRequest>[0];
+    const todo: TodoItem = {
+      content: 'Write the introduction',
+      status: 'in_progress',
+      activeForm: 'Writing the introduction',
+    };
+
+    mocks.runAgent.mockImplementationOnce(async (_request, options) => {
+      options.runtimeHost.emit('updateTodos', {
+        streamId: 'stream-1',
+        todos: [todo],
+      });
+      return {
+        category: 'toolUse',
+        executionId: 'exec-1',
+        status: 'completed',
+        streamId: 'stream-1',
+      };
+    });
+
+    await executeCliRequest(request, cliContext());
+
+    const { StreamSnapshotStore } = await import('@transcript');
+    const snapshot = await new StreamSnapshotStore().read(
+      'stream-1' as StreamTabId,
+    );
+    expect(snapshot.todos).toEqual([todo]);
+  });
+
+  it('closes the runtime host when sidecar flush fails', async () => {
+    vi.resetModules();
+    const flushError = new Error('flush failed');
+    vi.doMock('@transcript', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@transcript')>();
+      return {
+        ...actual,
+        StreamSnapshotStore: class {
+          handleProgressEvent = vi.fn();
+
+          flush = vi.fn(async () => {
+            throw flushError;
+          });
+        },
+      };
+    });
+
+    try {
+      const { executeCliRequest } = await import('@cli/runtime/runExecution');
+      const request = {
+        config: {},
+        executionId: 'exec-1',
+      } as Parameters<typeof executeCliRequest>[0];
+
+      await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
+        flushError,
+      );
+
+      expect(mocks.close).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.doUnmock('@transcript');
+      vi.resetModules();
+    }
   });
 
   it('marks owned executions interrupted during platform shutdown', async () => {

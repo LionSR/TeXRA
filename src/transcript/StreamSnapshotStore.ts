@@ -1,12 +1,12 @@
 /**
- * Host-agnostic, bus-driven per-stream sidecar persistence.
+ * Host-agnostic per-stream sidecar persistence.
  *
  * One store, shared by the CLI TUI, VS Code extension, and Electron desktop
  * app, that is the SINGLE writer of `streamData/{id}/*` and the reader that
- * reassembles a {@link StreamSnapshot} for resume. It subscribes to the shared
- * {@link ProgressEventBus} and persists the same field-scoped files the
+ * reassembles a {@link StreamSnapshot} for resume. Runtime events are fed into
+ * {@link handleProgressEvent}, which persists the same field-scoped files the
  * extension already writes (so all three hosts produce identical on-disk data),
- * plus the one new `workPlan.json` giving todos/plan a durable home.
+ * plus the `workPlan.json` giving todos/plan a durable home.
  *
  * It consolidates the accumulation logic previously split across the extension's
  * `OutputFilesManager` / `UsageStatsManager` / `StreamMetaManager`, talking to
@@ -26,7 +26,10 @@ import {
   type TaskState,
 } from '@agent/core/state/TaskState';
 import { KVStore } from '@common/storage/KVStore';
-import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
+import type {
+  ProgressEvent,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import * as logger from '@logger/logUtils';
 import {
   CompileFailureSchema,
@@ -77,15 +80,17 @@ type UsageUpdateResult =
 
 /**
  * Round-keyed delta shape carried by the `addOutputFiles` /
- * `updateMissingOutputs` / `updateCompileFailures` bus events. Stated once here
- * so the store's mutators don't each restate the `{ [round: number]: T[] }`
- * literal. Mirrors the inline payload fields in `ProgressEventPayloads`.
+ * `updateMissingOutputs` / `updateCompileFailures` progress events. Stated
+ * once here so the store's mutators don't each restate the
+ * `{ [round: number]: T[] }` literal. Mirrors the inline payload fields in
+ * `ProgressEventPayloads`.
  */
 type RoundKeyedList<T> = { [round: number]: T[] };
 
 /**
  * Match criteria for {@link StreamSnapshotStore.findWorkflowStreamsMatching}.
- * Mirrors the `streamConfig` payload on the `clearMissingOutputs` bus event.
+ * Mirrors the `streamConfig` payload on the `clearMissingOutputs` progress
+ * event.
  */
 interface WorkflowStreamMatch {
   agent: string;
@@ -178,78 +183,67 @@ export class StreamSnapshotStore {
   }
 
   // ==========================================================================
-  // Bus subscription
+  // Runtime event ingestion
   // ==========================================================================
 
   /**
-   * Subscribe to the progress bus and persist durable per-stream state. Each
-   * mutation goes through the same public store mutators used by the extension
-   * and desktop, so all hosts share the same seed-before-write policy. Returns
-   * a disposer.
+   * Persist durable state carried by a runtime progress event. Each mutation
+   * goes through the public store mutators used by the extension and desktop,
+   * so all hosts share the same seed-before-write policy.
    */
-  subscribe(
-    bus: ProgressEventBusLike,
-    options?: { signal?: AbortSignal },
-  ): () => void {
-    const offs: Array<() => void> = [
-      bus.on(
-        'addOutputFiles',
-        ({ streamId, filesByRound }) =>
-          this.addOutputFiles(streamId, filesByRound),
-        options,
-      ),
-      bus.on(
-        'updateMissingOutputs',
-        ({ streamId, filesByRound }) =>
-          this.updateMissingOutputs(streamId, filesByRound),
-        options,
-      ),
-      bus.on(
-        'updateCompileFailures',
-        ({ streamId, filesByRound }) =>
-          this.updateCompileFailures(streamId, filesByRound),
-        options,
-      ),
-      bus.on(
-        'updateStreamUsage',
-        ({ streamId, storageKey, usage }) => {
-          void this.addUsage(streamId, storageKey, usage);
-        },
-        options,
-      ),
-      bus.on(
-        'updateTodos',
-        ({ streamId, todos }) => this.setTodos(streamId, todos),
-        options,
-      ),
-      bus.on(
-        'updatePlan',
-        ({ streamId, plan }) => this.setPlan(streamId, plan),
-        options,
-      ),
-      bus.on(
-        'setTaskState',
-        ({ streamId, executionId, taskState }) =>
-          this.setTaskState(streamId, taskState, executionId),
-        options,
-      ),
-      bus.on(
-        'updateStreamDescription',
-        ({ streamId, description }) =>
-          this.setDescription(streamId, description),
-        options,
-      ),
-      bus.on(
-        'setParentStream',
-        ({ childStreamId, parentStreamId }) =>
-          this.setParentStream(childStreamId, parentStreamId),
-        options,
-      ),
-    ];
-
-    return () => {
-      for (const off of offs) off();
-    };
+  handleProgressEvent<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void {
+    switch (event) {
+      case 'addOutputFiles': {
+        const p = payload as ProgressEventPayloads['addOutputFiles'];
+        this.addOutputFiles(p.streamId, p.filesByRound);
+        return;
+      }
+      case 'updateMissingOutputs': {
+        const p = payload as ProgressEventPayloads['updateMissingOutputs'];
+        this.updateMissingOutputs(p.streamId, p.filesByRound);
+        return;
+      }
+      case 'updateCompileFailures': {
+        const p = payload as ProgressEventPayloads['updateCompileFailures'];
+        this.updateCompileFailures(p.streamId, p.filesByRound);
+        return;
+      }
+      case 'updateStreamUsage': {
+        const p = payload as ProgressEventPayloads['updateStreamUsage'];
+        void this.addUsage(p.streamId, p.storageKey, p.usage);
+        return;
+      }
+      case 'updateTodos': {
+        const p = payload as ProgressEventPayloads['updateTodos'];
+        this.setTodos(p.streamId, p.todos);
+        return;
+      }
+      case 'updatePlan': {
+        const p = payload as ProgressEventPayloads['updatePlan'];
+        this.setPlan(p.streamId, p.plan);
+        return;
+      }
+      case 'setTaskState': {
+        const p = payload as ProgressEventPayloads['setTaskState'];
+        this.setTaskState(p.streamId, p.taskState, p.executionId);
+        return;
+      }
+      case 'updateStreamDescription': {
+        const p = payload as ProgressEventPayloads['updateStreamDescription'];
+        this.setDescription(p.streamId, p.description);
+        return;
+      }
+      case 'setParentStream': {
+        const p = payload as ProgressEventPayloads['setParentStream'];
+        this.setParentStream(p.childStreamId, p.parentStreamId);
+        return;
+      }
+      default:
+        return;
+    }
   }
 
   /**
@@ -846,11 +840,11 @@ export class StreamSnapshotStore {
 
   /**
    * Reassemble the durable display snapshot for a stream. Once a stream is
-   * seeded (via {@link load} or a bus event) its in-memory accumulators are the
-   * single source of truth — they already hold the disk state plus any newer
-   * deltas — so we assemble from memory and skip a redundant disk re-read (the
-   * CLI resume path calls `load` then `read` back-to-back). Only an unseeded
-   * stream (a display-only read that was never resumed) hits disk.
+   * seeded (via {@link load} or a progress event) its in-memory accumulators
+   * are the single source of truth — they already hold the disk state plus any
+   * newer deltas — so we assemble from memory and skip a redundant disk re-read.
+   * The CLI resume path calls `load` then `read` back-to-back. Only an unseeded
+   * stream, such as a display-only read that was never resumed, hits disk.
    */
   async read(streamId: StreamTabId): Promise<StreamSnapshot> {
     const seedChain = this.seedChains.get(streamId);
