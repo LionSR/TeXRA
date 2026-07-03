@@ -90,9 +90,7 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
     };
   }
 
-  const model = await resolveSetupModelExcludingOpenRouter(
-    platform().secrets,
-  );
+  const model = await resolveSetupModelExcludingOpenRouter(platform().secrets);
   if (model) {
     return { model, requiresOpenRouter: false };
   }

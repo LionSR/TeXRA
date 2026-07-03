@@ -164,8 +164,6 @@ describe('resolveDesktopSetupModel', () => {
   it('delegates to the shared credential scan when the flag is off', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
 
-    await expect(resolveDesktopSetupModel()).resolves.toBe(
-      CHATGPT_SETUP_MODEL,
-    );
+    await expect(resolveDesktopSetupModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 });
