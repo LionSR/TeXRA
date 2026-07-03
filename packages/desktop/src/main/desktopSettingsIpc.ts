@@ -7,6 +7,7 @@ import {
 } from '@controllers/settingsView/LatexToolingController';
 import { createSettingsViewCommandHandlers } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import { buildProviderKeyStatuses } from '@controllers/settingsView/SettingsProfileController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
@@ -257,6 +258,44 @@ export function createDesktopSettingsIpc(
         await options.showInfoMessage?.(message);
       },
     },
+  });
+  const profileKeyController = new SettingsProfileKeyController({
+    prompt: {
+      input: (input) =>
+        options.promptSecret?.({
+          title: input.title ?? input.prompt ?? 'Set API key',
+          prompt: input.prompt ?? 'Enter API key',
+        }) ?? Promise.resolve(undefined),
+      info: async (message) => {
+        await options.showInfoMessage?.(message);
+        return undefined;
+      },
+      confirm: (message, promptOptions) =>
+        options.confirmAction?.(message, promptOptions?.confirmLabel) ??
+        Promise.resolve(true),
+    },
+    externalOpener: {
+      openExternal: (url) =>
+        options.openExternalUrl?.(url) ?? Promise.resolve(),
+    },
+    getProviderDisplayName: (provider) =>
+      getProviderDisplayName(
+        provider,
+        PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+      ),
+    getProviderKeyUrl: (provider) => {
+      const defaultUrl = PROVIDER_URLS[provider];
+      return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
+    },
+    getApiKeySecretName: (provider) => {
+      if (!isApiProvider(provider)) {
+        throw new Error(`Unknown API provider: ${provider}`);
+      }
+      return apiKeySecretName(provider);
+    },
+    setSecret: (key, value) => secrets.set(key, value),
+    deleteSecret: (key) => secrets.delete(key),
+    refreshAfterKeyChange: () => refreshAfterCredentialChange(),
   });
 
   function readCurrentGitAuthorSettings() {
@@ -642,20 +681,14 @@ export function createDesktopSettingsIpc(
       await options.showErrorMessage?.(`Unknown API provider: ${provider}`);
       return;
     }
-    const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
-    const apiKey =
-      submittedApiKey?.trim() ||
-      (
-        await options.promptSecret?.({
-          title: `Set ${displayName} API key`,
-          prompt: `Enter ${displayName} API key`,
-        })
-      )?.trim();
-    if (!apiKey) return;
-
-    await secrets.set(apiKeySecretName(provider), apiKey);
-    await options.showInfoMessage?.(`${displayName} API key has been set`);
-    await refreshAfterCredentialChange();
+    if (submittedApiKey?.trim()) {
+      await profileKeyController.commitProviderKey(
+        provider,
+        submittedApiKey.trim(),
+      );
+      return;
+    }
+    await profileKeyController.setProviderKey(provider);
   }
 
   async function removeProviderKey(provider: string): Promise<void> {
@@ -663,16 +696,13 @@ export function createDesktopSettingsIpc(
       await options.showErrorMessage?.(`Unknown API provider: ${provider}`);
       return;
     }
-    const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
-    await secrets.delete(apiKeySecretName(provider));
-    await options.showInfoMessage?.(`${displayName} API key has been removed`);
-    await refreshAfterCredentialChange();
+    await profileKeyController.removeProviderKey(provider);
   }
 
   async function openProviderKeyUrl(provider: string): Promise<void> {
     const defaultUrl = PROVIDER_URLS[provider];
     if (!defaultUrl) return;
-    await options.openExternalUrl?.(getProviderKeyUrl(provider, defaultUrl));
+    await profileKeyController.openProviderKeyUrl(provider);
   }
 
   async function updateProviderStreaming(input: {
