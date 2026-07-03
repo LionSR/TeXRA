@@ -53,7 +53,6 @@ import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { isLiveElapsedStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorMessage';
-import { bus } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
   type StreamStatus,
@@ -410,7 +409,6 @@ export async function runChat(
   disposers.push(installTerminalRestoreOnExit({ clearItermProgress }));
   disposers.push(subscribeStreamLog());
   disposers.push(subscribeStreamStatus());
-  disposers.push(snapshotStore.subscribe(bus));
 
   const session: TuiSession = {
     streamId: undefined,

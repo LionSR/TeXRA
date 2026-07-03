@@ -2,13 +2,14 @@
 
 import { EventEmitter } from 'node:events';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createRunTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   StreamLogStore,
+  type StreamSnapshotStore,
 } from '@transcript';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -88,7 +89,6 @@ import {
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
-import { bus } from '@eventBus/ProgressEventBus';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -2735,19 +2735,17 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     } as unknown as CliRuntimeHost;
   }
 
-  it('mirrors runtime events to the shared progress bus', () => {
-    const seen: unknown[] = [];
-    const off = bus.on('updateTodos', (payload) => {
-      seen.push(payload);
-    });
-    const wrapped = wrapRuntimeHost(makeHost());
+  it('feeds runtime events to the snapshot store directly', () => {
+    const snapshotStore = {
+      handleProgressEvent: vi.fn(),
+    } as unknown as StreamSnapshotStore;
+    const wrapped = wrapRuntimeHost(makeHost(), snapshotStore);
 
-    try {
-      wrapped.emit('updateTodos', { streamId: root, todos: [] });
-      expect(seen).toEqual([{ streamId: root, todos: [] }]);
-    } finally {
-      off();
-    }
+    wrapped.emit('updateTodos', { streamId: root, todos: [] });
+    expect(snapshotStore.handleProgressEvent).toHaveBeenCalledWith(
+      'updateTodos',
+      { streamId: root, todos: [] },
+    );
   });
 
   it('registers suppressed child streams without switching away from the parent page', () => {
