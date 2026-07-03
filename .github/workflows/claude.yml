@@ -79,7 +79,7 @@ jobs:
         uses: LionSR/agent-ci-actions@v1
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
-          model-tier: opus
+          model-tier: sonnet
           allowed-bots: 'claude[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
           branch-name-template: '{{prefix}}{{entityType}}-{{entityNumber}}-{{description}}'
           allowed_tools_preset: claude-interactive
