@@ -12,10 +12,6 @@ All notable changes to this project will be documented in this file.
   now be recovered even when the model omits the expected XML or percent-header
   filename markers, as long as the generated sections can still be matched
   safely.
-- **ChatGPT subscription usage is accounted for separately** — usage logged for
-  ChatGPT subscription-backed Codex runs is separated from relay/API usage in
-  the backend, so subscription activity can be audited without mixing it into
-  metered relay traffic.
 - **Provider API keys can be supplied through familiar environment variables** —
   provider-style variables such as `ANTHROPIC_API_KEY` are now recognized by the
   same paths that read stored keys.
