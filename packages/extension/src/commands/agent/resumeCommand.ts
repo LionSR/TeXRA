@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getToolUsePersistenceEnabled } from '@utils/config';
@@ -51,26 +52,28 @@ export function resumeExtensionToolUseSnapshot(
 }
 
 export function registerResumeAgentCommand(
-  _context: vscode.ExtensionContext,
-): vscode.Disposable {
-  return vscode.commands.registerCommand(
-    'texra.resumeAgent',
-    async (
-      payload: ResumeAgentCommandPayload | undefined,
-    ): Promise<ResumeAgentResult> => {
-      const snapshot = payload?.snapshot;
-      if (!snapshot) {
-        return { success: false };
-      }
-      if (StreamStatusService.isActiveOrResuming(snapshot.streamId)) {
-        return { success: false };
-      }
+  context: vscode.ExtensionContext,
+): void {
+  registerCommands(context, [
+    {
+      id: 'texra.resumeAgent',
+      handler: async (
+        payload: ResumeAgentCommandPayload | undefined,
+      ): Promise<ResumeAgentResult> => {
+        const snapshot = payload?.snapshot;
+        if (!snapshot) {
+          return { success: false };
+        }
+        if (StreamStatusService.isActiveOrResuming(snapshot.streamId)) {
+          return { success: false };
+        }
 
-      const success = await resumeExtensionToolUseSnapshot(
-        snapshot,
-        payload?.followUp,
-      );
-      return { success };
+        const success = await resumeExtensionToolUseSnapshot(
+          snapshot,
+          payload?.followUp,
+        );
+        return { success };
+      },
     },
-  );
+  ]);
 }
