@@ -1,5 +1,10 @@
 # Unified Output Protocol
 
+> **Status:** Partially landed proposal (2026-07-04 status sweep). Bundled agents
+> and templates have converged on the `<documents><document ...>` protocol, but
+> the schema/registry deletion plan is not complete: configurable
+> `documentTag`/`endTag` still exist for compatibility.
+
 ## Problem
 
 Today, agents that produce multiple output documents are a structural fork of agents that produce one. The fork shows up at every layer:

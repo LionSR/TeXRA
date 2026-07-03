@@ -1,8 +1,19 @@
 # Logger Simplification — Feasibility Assessment
 
-**Status:** **Superseded (2026-06-10)** — Phase 1's goal landed via the AgentTrace consolidation instead (see [`agent-trace-sdk-surface.md`](./agent-trace-sdk-surface.md)): `AgentLogger`, `structuredLogger`, `filterUtils`, and `logOptions` were **deleted**, and `StreamLogStore`/`StreamLog` relocated to `src/transcript/`. The layer inventory and call graph below describe a tree that no longer exists. **Still live:** §3 (what blocks a wholesale Claude-Code copy — those constraints all still hold) and the Phase 2/3 verdicts (JSONL persistence: defer; append-only: never). Channel ownership is now ruled by [`error-pipeline-and-ownership.md`](./error-pipeline-and-ownership.md).
-**Date:** 2026-05-17
-**Reference:** Claude Code (`https://github.com/anthropics/claude-code`)
+> **Status:** Superseded (2026-07-04 refresh) by the AgentTrace consolidation
+> (see [`agent-trace-sdk-surface.md`](./agent-trace-sdk-surface.md)):
+> `AgentLogger`, `structuredLogger`, `filterUtils`, and `logOptions` were
+> **deleted**, and `StreamLogStore`/`StreamLog` relocated to `src/transcript/`.
+> Current source has `src/logger/*` at 381 total lines after the redaction helper
+> expansion, one channel-sink boundary (`createChannelTrace`), and run transcript
+> wiring in `src/transcript/runTrace.ts` (`createRunTrace`). The layer inventory
+> and call graph below describe a tree that no longer exists. **Still live:** §3
+> (what blocks a wholesale Claude-Code copy — those constraints all still hold)
+> and the Phase 2/3 verdicts (JSONL persistence: defer; append-only: never).
+> Channel ownership is now ruled by
+> [`error-pipeline-and-ownership.md`](./error-pipeline-and-ownership.md).
+> **Date:** 2026-05-17
+> **Reference:** Claude Code (`https://github.com/anthropics/claude-code`)
 
 ## TL;DR
 
