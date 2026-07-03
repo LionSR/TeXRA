@@ -40,8 +40,7 @@ function parseRecord(raw: string): HistoryRecord | undefined {
     // ignore malformed line
     return undefined;
   }
-  const parsed = HistoryRecordSchema.safeParse(obj);
-  return parsed.success ? parsed.data : undefined;
+  return HistoryRecordSchema.optional().catch(undefined).parse(obj);
 }
 
 /** Serialise the in-memory ring back to JSONL. Records keep their original
