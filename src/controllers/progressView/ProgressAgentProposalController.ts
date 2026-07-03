@@ -36,14 +36,14 @@ export class ProgressAgentProposalController {
       case 'approve':
         this.deps.resolveProposal(input.proposalId, {
           action: 'approve',
-          model: input.model,
-          agent: input.agent,
+          ...(input.model ? { model: input.model } : {}),
+          ...(input.agent ? { agent: input.agent } : {}),
         });
         return true;
       case 'reject':
         this.deps.resolveProposal(input.proposalId, {
           action: 'reject',
-          feedback: input.feedback,
+          ...(input.feedback ? { feedback: input.feedback } : {}),
         });
         return true;
       default:

@@ -1,9 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
+const runCoordinatorMocks = vi.hoisted(() => ({
+  cancelRetry: vi.fn(),
+  resolvePlanApproval: vi.fn(),
+  resolveProposal: vi.fn(),
+  triggerRetry: vi.fn(),
+}));
 
 vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
+}));
+
+vi.mock('@agent/runtime/runCoordinators', () => ({
+  runCoordinatorBridge: runCoordinatorMocks,
 }));
 
 import {
@@ -71,6 +81,10 @@ beforeEach(async () => {
 afterEach(() => {
   setActiveCliToolEditApprovalHandler(undefined);
   handleExternalInquiryActionMock.mockClear();
+  runCoordinatorMocks.cancelRetry.mockClear();
+  runCoordinatorMocks.resolvePlanApproval.mockClear();
+  runCoordinatorMocks.resolveProposal.mockClear();
+  runCoordinatorMocks.triggerRetry.mockClear();
 });
 
 describe('immediateDecisionForApproval', () => {
@@ -189,6 +203,27 @@ describe('approval prompt hooks', () => {
 
     expect(handled).toBe(true);
     expect(events).toEqual([]);
+    expect(runCoordinatorMocks.resolveProposal).toHaveBeenCalledWith(
+      'proposal-1',
+      { action: 'approve' },
+    );
+  });
+
+  it('routes automatic proposal rejection through the shared proposal controller', () => {
+    const handled = handleCliApprovalEvent(
+      'showAgentProposal',
+      proposal,
+      context({ approvalPolicy: 'never' }),
+    );
+
+    expect(handled).toBe(true);
+    expect(runCoordinatorMocks.resolveProposal).toHaveBeenCalledWith(
+      'proposal-1',
+      {
+        action: 'reject',
+        feedback: 'Denied by CLI approval policy.',
+      },
+    );
   });
 
   it('does not prompt for external inquiry in non-TUI CLI runs', async () => {
