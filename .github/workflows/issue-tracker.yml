@@ -138,7 +138,7 @@ jobs:
         uses: LionSR/agent-ci-actions@v1
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
-          model-tier: opus
+          model-tier: sonnet
           allowed-bots: 'dependabot[bot],github-actions[bot],Copilot,claude[bot],cursor[bot]'
           allowed_tools_preset: issue-tracker
           allowed_tools_preset_map_file: .trusted-actions/.github/allowed-tools.json
