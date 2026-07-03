@@ -83,6 +83,18 @@ export const SETTINGS_TAB_ORDER = [
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
 
+export function toSettingsTabPanelName(name: SettingsTabName): string {
+  return name.toLowerCase().replaceAll('_', '-');
+}
+
+export const SETTINGS_TAB_PANEL_BY_NAME = Object.fromEntries(
+  SETTINGS_TAB_ORDER.map((name) => [name, toSettingsTabPanelName(name)]),
+) as Record<SettingsTabName, string>;
+
+export const SETTINGS_TAB_PANEL_NAMES = SETTINGS_TAB_ORDER.map(
+  (name) => SETTINGS_TAB_PANEL_BY_NAME[name],
+);
+
 /** Tab indices derived from ordered array */
 export const SETTINGS_TAB = Object.fromEntries(
   SETTINGS_TAB_ORDER.map((name, index) => [name, index]),
