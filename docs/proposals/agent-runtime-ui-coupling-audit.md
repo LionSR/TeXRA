@@ -1,6 +1,13 @@
 # Agent-runtime ↔ UI coupling audit (2026-07-02)
 
-**Status:** Audit complete, 4 findings filed as issues. 1 originally-planned finding (dead `ClipboardHost`/`TerminalHost` ports) was fixed by #6883 while this audit was in flight — see "Findings already resolved" below.
+**Status:** Partially landed (2026-07-04 refresh). Finding #1's runtime bug is
+closed by #6908, finding #2 is closed by #6906, and finding #4 is closed by
+#6904. Finding #3's CLI/headless sidecar persistence and TUI bus-mirror scope is
+closed by #6905; remaining scope is the intentionally retained desktop-wide
+bus fan-out and the broader #6951 session-scoped runtime architecture. #6909 was
+adjacent agent-sync readiness cleanup in the same review train. 1
+originally-planned finding (dead `ClipboardHost`/`TerminalHost` ports) was fixed
+by #6883 while this audit was in flight — see "Findings already resolved" below.
 **Scope:** How `src/agent/`'s runtime emits state/events, and how the three UI hosts (VS Code extension webview, Electron desktop, CLI/Ink TUI) consume and act on it. Triggered by a felt sense that the codebase runs "dual or even multiple systems" between agent runtime and UI, with a request to find the severest problems and prioritize LOC-reducing, non-abstraction-adding fixes.
 **Method:** 10-pass investigation — 3 initial scouts (emission surface, front-end bridges, existing abstraction/proposal docs) → 3 adversarial verifiers (is the duplication real, or justified divergence? is the "fix" actually LOC-negative?) → 3 root-cause hunters (is there one systemic redesign underneath the symptoms?) → 1 contradiction-resolver (a source doc's own sections disagreed with each other on one finding; resolved by direct re-investigation). Explicitly designed to avoid this repo's known trap: "extract shared abstraction" refactors that look clean but net-_add_ LOC when call sites diverge for real reasons (see `project_refactor_loc_lesson.md`).
 **Related:** `docs/proposals/error-pipeline-and-ownership.md`, `dependency-injection-cleanup.md`, `tui-extension-sharing.md`, `session-handle-7d-design.md`, `lifecycle-status-ownership.md` — this audit builds on and cross-checks all five rather than re-deriving their findings.

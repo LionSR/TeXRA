@@ -1,5 +1,10 @@
 # OpenAI SDK Type Improvements Proposal
 
+> **Status:** Partially landed proposal (2026-07-04 status sweep). Individual
+> helper replacements have landed opportunistically, but SDK-version-specific
+> claims must be re-verified before implementation; several custom adapters remain
+> intentional.
+
 ## Executive Summary
 
 This proposal identifies opportunities to leverage native OpenAI SDK types, type guards, and utilities to reduce code duplication, improve type safety, and establish a single source of truth for OpenAI-related types in the TeXRA codebase.

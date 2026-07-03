@@ -1,8 +1,14 @@
 # PRD: Progress-board grouping — remove the cross-trace footgun
 
-> Status: **Fact-checked** — every claim below has been verified against the
-> codebase. Line numbers and verdicts are recorded in the Fact-check summary at
-> the end. Deletion targets and their safety verdicts are in Deletions enabled.
+> **Status:** Superseded (2026-07-04) by the landed progress-grouping fixes and
+> the 2026-07 tech-debt tracking tree. R1/R2/R4 have landed:
+> `TraceEmitter.stageScope` is per instance, orphan groups re-root in
+> `messageIndex`, and usage falls back from `logger.activeStageId()` to the
+> storage key. The proposed `Task:` stage deletion has also landed; `executeAgent`
+> no longer opens that stage. Current residue is the module-level channel logger
+> in `src/agent/runtime/executeAgent.ts` (`CHANNEL` + `createChannelTrace`), while
+> typed round stages are owned by #6965. Treat the body below as historical
+> evidence, not current implementation guidance.
 
 ## Background
 

@@ -1,8 +1,11 @@
 # Sharing & consistency: CLI TUI ↔ VS Code extension
 
-Status: proposal / roadmap. Produced by an adversarial analysis pass over the
-shared cross-host layer (`src/controllers`, `src/hosts`, `src/shared`) versus
-the CLI TUI state layer (`packages/cli/src/chat/tui/state/`).
+> **Status:** Partially landed roadmap (2026-07-04 status sweep). CLI
+> approve/reject proposal routing now goes through the shared
+> `ProgressAgentProposalController`; setup-action parity and the remaining
+> sharing rungs are still open. Produced by an adversarial analysis pass over the
+> shared cross-host layer (`src/controllers`, `src/hosts`, `src/shared`) versus
+> the CLI TUI state layer (`packages/cli/src/chat/tui/state/`).
 
 ## The situation today
 
