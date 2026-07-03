@@ -47,7 +47,7 @@ jobs:
 
       - name: Locate built VSIX
         id: vsix
-        run: echo "path=$(ls releases/*.vsix | head -n1)" >> "$GITHUB_OUTPUT"
+        run: echo "path=releases/texra-$(node -p "require('./package.json').version").vsix" >> "$GITHUB_OUTPUT"
 
       - name: Publish to Visual Studio Marketplace
         uses: HaaLeo/publish-vscode-extension@v2
@@ -91,7 +91,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Use an npm CLI recent enough for trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
