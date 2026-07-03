@@ -1,8 +1,10 @@
+import { LRUCache } from 'lru-cache';
+
 /**
- * A Set<string> capped at a maximum size, evicting the oldest entry (in
- * insertion order) once the cap is exceeded. Used to bound "seen id" guards
- * (out-of-order message guards, resolved-id tracking) that would otherwise
- * grow unbounded over a long-running webview session.
+ * A Set<string> capped at a maximum size, evicting the oldest entry once the
+ * cap is exceeded. Used to bound "seen id" guards (out-of-order message
+ * guards, resolved-id tracking) that would otherwise grow unbounded over a
+ * long-running webview session.
  */
 export interface BoundedIdSet {
   has(id: string): boolean;
@@ -12,18 +14,14 @@ export interface BoundedIdSet {
 }
 
 export function createBoundedIdSet(cap: number): BoundedIdSet {
-  const ids = new Set<string>();
+  const ids = new LRUCache<string, true>({ max: cap });
   return {
     has: (id) => ids.has(id),
     delete: (id) => ids.delete(id),
     clear: () => ids.clear(),
-    add(id) {
-      ids.add(id);
-      if (ids.size > cap) {
-        // Set iteration order is insertion order — first value is oldest
-        const oldest = ids.values().next().value;
-        if (oldest !== undefined) ids.delete(oldest);
-      }
+    add: (id) => {
+      if (ids.has(id)) return;
+      ids.set(id, true);
     },
   };
 }

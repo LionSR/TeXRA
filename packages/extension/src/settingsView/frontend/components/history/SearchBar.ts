@@ -9,9 +9,14 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { historyStyles } from '@shared/styles/historyStyles';
 
+// Local imports - utils
+import { debounce } from '@utils/core';
+
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 @customElement('history-search-bar')
 export class SearchBar extends LitElement {
@@ -21,25 +26,19 @@ export class SearchBar extends LitElement {
   @property({ attribute: false }) matchCount = '';
   @property({ type: Boolean, attribute: false }) canClearHistory = false;
 
-  private searchTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private readonly debouncedDispatchSearch = debounce((term: string) => {
+    this.dispatchEvent(HistoryViewEvents.searchChange({ term }));
+  }, SEARCH_DEBOUNCE_MS);
 
   override disconnectedCallback(): void {
-    if (this.searchTimeoutId) {
-      clearTimeout(this.searchTimeoutId);
-      this.searchTimeoutId = null;
-    }
+    this.debouncedDispatchSearch.cancel();
     super.disconnectedCallback();
   }
 
   private handleInput(event: Event): void {
     const target = event.currentTarget as WaInput | null;
     const term = target?.value?.trim() ?? '';
-    if (this.searchTimeoutId) {
-      clearTimeout(this.searchTimeoutId);
-    }
-    this.searchTimeoutId = setTimeout(() => {
-      this.dispatchEvent(HistoryViewEvents.searchChange({ term }));
-    }, 300);
+    void this.debouncedDispatchSearch(term);
   }
 
   private handleNext(): void {
