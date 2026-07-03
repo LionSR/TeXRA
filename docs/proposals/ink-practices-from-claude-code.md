@@ -240,11 +240,11 @@ Every mode enabled on raw-mode entry is disabled in matching pairs on clean unmo
 external-editor handoff. Disables are unconditional (no-ops where unsupported). Kitty uses
 DISABLE+ENABLE so re-asserts don't grow stack depth.
 Evidence: `ink/components/App.tsx:232-279,390-438`, `ink/ink.tsx:1472-1505,357-419,896-918`.
-**TeXRA:** **Partial — real opportunity.** TeXRA's exit cleanup disables mouse 1000/1003/1006
-and bracketed paste 2004 (`terminalCleanup.ts:3-9`), so the unconditional-disable instinct is
-there. What the evidence does _not_ show is (a) synchronous `writeSync` teardown on _signal_
-exit (SIGINT/SIGTERM/SIGHUP), and (b) suspend/resume + editor-handoff symmetry. See §9 for the
-signal-exit gap, which is the highest-value item in this report.
+**TeXRA:** **Partial — real opportunity.** TeXRA's signal exits already run synchronous
+`writeSync` cleanup for mouse, kitty, bracketed paste, and cursor state before async drains
+(`runChatTui.tsx:819-838,918-920`; `terminalCleanup.ts:44-54`). The remaining gaps are narrower:
+no force-exit failsafe timer if shutdown persistence hangs, and no broader suspend/resume +
+editor-handoff symmetry. See §9 for the failsafe gap.
 
 **Route OSC features through a tmux/screen DCS-passthrough wrapper, with curated per-sequence exceptions.**
 `wrapForMultiplexer()` tunnels escapes through tmux/screen DCS, but BEL is sent raw (wrapping
@@ -537,13 +537,13 @@ unmount may never run on signal exit. `gracefulShutdown` registers SIGINT/SIGTER
 orphan detector (TTY revoked without SIGHUP), runs cleanup BEFORE async work, arms a failsafe
 timer, and falls back to SIGKILL on EIO from a dead PTY.
 Evidence: `ink/ink.tsx:1455-1533,921-955`, `utils/gracefulShutdown.ts:58-136,193-232,256-297,414-437`.
-**TeXRA:** **The single highest-value gap.** TeXRA's exit cleanup disables mouse and bracketed
-paste (`terminalCleanup.ts:3-9`), but the baseline evidence does not show _synchronous_ `writeSync`
-teardown on signal exit, nor SIGHUP/orphan handling, nor a force-exit failsafe. If TeXRA is killed
-by a signal mid-render, async cleanup can be dropped and leave the shell in a bad mode (mouse
-bytes, hidden cursor). Adopting synchronous, unconditional `writeSync` teardown wired to
-SIGINT/SIGTERM/SIGHUP (plus a failsafe timer) is low effort and directly prevents the classic "my
-shell is messed up after the app crashed" footgun.
+**TeXRA:** **Mostly aligned; one narrow gap remains.** TeXRA already runs synchronous
+`cleanupTerminalModes()` before async shutdown on SIGINT/SIGTERM/SIGHUP
+(`runChatTui.tsx:819-838,918-920`; `terminalCleanup.ts:44-54`), so the classic signal-exit
+terminal-mode footgun is covered. The borrowable gap is the force-exit failsafe: if
+`drainPersistence()` or platform shutdown hangs after terminal modes are restored, TeXRA currently
+has no last-resort timer. An orphan-detector path may also be useful if the controlling TTY is
+revoked without SIGHUP.
 
 **Reference-count raw mode (and terminal-mode escapes) so nested consumers compose; snapshot/restore across suspend.**
 `rawModeEnabledCount` emits enter sequences only on 0→1 and disables only on return to 0; suspend
