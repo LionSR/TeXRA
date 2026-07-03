@@ -171,8 +171,7 @@ function parseDiffResultEntry(data: unknown): DiffResultDisplay | null {
   }
 
   // Try legacy format (transforms to display)
-  const legacyResult = LegacyDiffResultSchema.safeParse(data);
-  return legacyResult.success ? legacyResult.data : null;
+  return LegacyDiffResultSchema.nullable().catch(null).parse(data);
 }
 
 /** Parse an array of diff result entries, skipping invalid ones */
