@@ -5,6 +5,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
 import {
   currentSession,
   type SessionHandle,
@@ -98,6 +99,20 @@ export function createChildStream(
   // status-update and finalize closures below fire later, possibly outside it.
   const session = currentSession();
   const runTrace = createRunTrace(childStreamId, undefined, session.flushers);
+  const detachSessionTrace = session.attachRunTrace(
+    runTrace.trace,
+    childStreamId,
+  );
+  const detachRunFactProjector = attachSessionRunFactProjector(
+    session.events,
+    runtimeHost,
+    childStreamId,
+  );
+  const disposeTrace = () => {
+    detachRunFactProjector();
+    detachSessionTrace();
+    runTrace.dispose();
+  };
   const handle = new AgentExecutionHandle(
     executionId,
     parentStreamId,
@@ -141,7 +156,7 @@ export function createChildStream(
         handle,
         session,
         logger: runTrace.trace,
-        disposeTrace: runTrace.dispose,
+        disposeTrace,
         options: finalizeOptions,
       });
     },

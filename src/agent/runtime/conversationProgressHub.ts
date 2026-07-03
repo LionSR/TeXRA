@@ -8,11 +8,11 @@
  * event, replacing the two call sites that used to call `runtimeHost.emit`
  * directly from `executeAgent.ts`.
  */
-import type { AgentTrace } from '@agent/trace';
 import type { ConversationProgress, StreamTabId } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import type { SessionEventHub } from './SessionEventHub';
 
 /** Narrows a domain event's untyped `data` to the shape `logConversationProgress`
  *  always sends. `DomainEvent.data` is `unknown` because the channel is a
@@ -29,18 +29,26 @@ function isConversationProgress(data: unknown): data is ConversationProgress {
 
 /** Returns a detach disposer; callers bundle it into the run's trace teardown. */
 export function attachConversationProgressHub(
-  trace: AgentTrace,
+  events: SessionEventHub,
   runtimeHost: AgentRuntimeHost,
   streamId: StreamTabId,
 ): () => void {
-  return trace.subscribe((event) => {
-    if (event.type !== 'domain' || event.key !== 'conversationProgress') {
-      return;
-    }
-    if (!isConversationProgress(event.data)) return;
-    runtimeHost.emit('updateConversationProgress', {
-      streamId,
-      progress: event.data,
-    });
-  });
+  return events.subscribe(
+    (sessionEvent) => {
+      if (
+        sessionEvent.scope !== 'run' ||
+        sessionEvent.streamId !== streamId ||
+        sessionEvent.event.type !== 'domain' ||
+        sessionEvent.event.key !== 'conversationProgress'
+      ) {
+        return;
+      }
+      if (!isConversationProgress(sessionEvent.event.data)) return;
+      runtimeHost.emit('updateConversationProgress', {
+        streamId,
+        progress: sessionEvent.event.data,
+      });
+    },
+    { scope: 'run', types: ['domain'] },
+  );
 }

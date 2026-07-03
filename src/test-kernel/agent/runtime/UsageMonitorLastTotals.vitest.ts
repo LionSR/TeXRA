@@ -3,10 +3,12 @@ import { ModelProvider } from 'llm-zoo';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
-import { noopTrace } from '@agent/trace';
+import { TraceEmitter } from '@agent/trace';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
 import {
   AgentCategory,
   type StorageKey,
@@ -34,14 +36,27 @@ const modelInfo = {
 
 function createMonitorWithEvents() {
   const { host, events } = createRecordingHost();
+  const logger = new TraceEmitter();
+  const hub = new SessionEventHub();
   const storageKey = 'usage-last-totals' as StorageKey;
   const streamId = 'stream:usage-last-totals' as StreamTabId;
+  const detachTrace = logger.subscribe((event) =>
+    hub.emit({ scope: 'run', streamId, event }),
+  );
+  const detachProjector = attachSessionRunFactProjector(hub, host, streamId);
   const monitor = new UsageMonitor(
     modelInfo,
-    { logger: noopTrace, runtimeHost: host, storageKey, streamId },
+    { logger, runtimeHost: host, storageKey, streamId },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
-  return { monitor, events };
+  return {
+    monitor,
+    events,
+    dispose: () => {
+      detachProjector();
+      detachTrace();
+    },
+  };
 }
 
 describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
@@ -54,39 +69,47 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
   });
 
   it('is undefined before any round and caches the totals after recordUsage', async () => {
-    const { monitor } = createMonitorWithEvents();
-    expect(monitor.lastTotals()).toBeUndefined();
+    const { dispose, monitor } = createMonitorWithEvents();
+    try {
+      expect(monitor.lastTotals()).toBeUndefined();
 
-    const state = AgentRunStateSnapshotSchema.parse({});
-    await monitor.recordUsage(state);
+      const state = AgentRunStateSnapshotSchema.parse({});
+      await monitor.recordUsage(state);
 
-    // The cache holds the exact totals object the accumulator exposed, so a
-    // failed run's terminal `result` event can report usage from the catch arm.
-    expect(monitor.lastTotals()).toBe(state.usageAccumulator.totals);
+      // The cache holds the exact totals object the accumulator exposed, so a
+      // failed run's terminal `result` event can report usage from the catch arm.
+      expect(monitor.lastTotals()).toBe(state.usageAccumulator.totals);
+    } finally {
+      dispose();
+    }
   });
 
   it('forwards the ChatGPT subscription marker to progress usage events', async () => {
-    const { monitor, events } = createMonitorWithEvents();
-    const state = AgentRunStateSnapshotSchema.parse({});
-    recordNormalizedUsage(state.usageAccumulator, {
-      inputTokens: 10,
-      outputTokens: 2,
-      cost: 0,
-      responseTimeMs: 50,
-      provider: 'openai-response',
-      viaChatGptSubscription: true,
-    });
-
-    await monitor.recordUsage(state);
-
-    const usageEvent = events.find(
-      (event) => event.event === 'updateStreamUsage',
-    );
-    expect(usageEvent?.payload).toMatchObject({
-      usage: {
+    const { dispose, events, monitor } = createMonitorWithEvents();
+    try {
+      const state = AgentRunStateSnapshotSchema.parse({});
+      recordNormalizedUsage(state.usageAccumulator, {
+        inputTokens: 10,
+        outputTokens: 2,
+        cost: 0,
+        responseTimeMs: 50,
+        provider: 'openai-response',
         viaChatGptSubscription: true,
-        usageRoute: 'chatgpt-subscription',
-      },
-    });
+      });
+
+      await monitor.recordUsage(state);
+
+      const usageEvent = events.find(
+        (event) => event.event === 'updateStreamUsage',
+      );
+      expect(usageEvent?.payload).toMatchObject({
+        usage: {
+          viaChatGptSubscription: true,
+          usageRoute: 'chatgpt-subscription',
+        },
+      });
+    } finally {
+      dispose();
+    }
   });
 });

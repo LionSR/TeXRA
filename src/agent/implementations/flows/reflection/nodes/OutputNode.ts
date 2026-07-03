@@ -1,5 +1,6 @@
 import { Node } from '@agent/node';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import { emitRunFact } from '@agent/runtime/runFactEvents';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { CompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
@@ -261,20 +262,20 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { outputState, workflowOutputPolicy } = this.services;
+    const { logger, outputState, workflowOutputPolicy } = this.services;
     const outputDependencies = this.outputDependencies();
     const { runtimeHost, streamId } = outputDependencies;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary, roundOutput } = execRes;
 
     // Emit output files event
-    runtimeHost.emit('addOutputFiles', {
+    emitRunFact(logger, 'addOutputFiles', {
       streamId,
       filesByRound: { [currentRound]: summary.fileInfos },
     });
 
     if (execRes.emitCompileFailures) {
-      runtimeHost.emit('updateCompileFailures', {
+      emitRunFact(logger, 'updateCompileFailures', {
         streamId,
         filesByRound: { [currentRound]: execRes.compileFailures },
       });
@@ -314,7 +315,7 @@ export class OutputNode<C = unknown> extends Node<
           summary.stage,
         );
 
-        runtimeHost.emit('updateMissingOutputs', {
+        emitRunFact(logger, 'updateMissingOutputs', {
           streamId,
           filesByRound: { [currentRound]: validationResult.missing },
         });

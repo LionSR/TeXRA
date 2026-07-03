@@ -484,9 +484,9 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     const session = new SessionHandle();
     const logger = new TraceEmitter();
     const onResult = vi.fn();
-    const detach = session.attachRunTrace(logger);
-    session.onResult(onResult);
     const { ctx, streamStatus } = createCtx({ logger });
+    const detach = session.attachRunTrace(logger, ctx.streamId);
+    session.onResult(onResult);
     try {
       await runFlowWithLifecycle(
         ctx,

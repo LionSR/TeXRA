@@ -74,6 +74,7 @@ import {
 } from './StreamStatusService';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { attachConversationProgressHub } from './conversationProgressHub';
+import { attachSessionRunFactProjector } from './SessionRunFactProjector';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -333,12 +334,36 @@ async function assembleAgentLaunchContext(
   // runs outside any ALS, so it resolves to the process default. Either way the
   // child is tracked in the same session as its launcher.
   const session = input.session ?? currentSession();
-  const runTrace = createRunTrace(streamId, undefined, session.flushers);
+  const rawRunTrace = createRunTrace(streamId, undefined, session.flushers);
+  const detachSessionTrace = session.attachRunTrace(
+    rawRunTrace.trace,
+    streamId,
+  );
+  const detachRunFactProjector = attachSessionRunFactProjector(
+    session.events,
+    runtimeHost,
+    streamId,
+  );
+  const detachProgressHub = attachConversationProgressHub(
+    session.events,
+    runtimeHost,
+    streamId,
+  );
+  const runTrace: RunTrace = {
+    trace: rawRunTrace.trace,
+    dispose: () => {
+      detachProgressHub();
+      detachRunFactProjector();
+      detachSessionTrace();
+      rawRunTrace.dispose();
+    },
+  };
   onRunTraceCreated(runTrace);
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
 
+  session.events.assertRunSubscribersAttachedBeforeActivation(streamId);
   input.onBeforeActivation?.(streamId);
 
   runtimeHost.emit('setActiveStream', {
@@ -578,25 +603,6 @@ export async function buildAgentLaunchContext(
         runTrace = rt;
       },
     );
-    // Attach the session result-hub only after a successful launch, so a
-    // launch failure (which disposes the trace via the catch below and never
-    // returns a context) can never publish a result event. Bundle the detach
-    // into the run's trace teardown.
-    const detachResultHub = ctx.session.attachRunTrace(ctx.logger);
-    // Single derivation point for `updateConversationProgress` (F-1b): flow
-    // code reports counters via `logConversationProgress`, this hub is the
-    // only place that turns them into the host UI event.
-    const detachProgressHub = attachConversationProgressHub(
-      ctx.logger,
-      ctx.runtimeHost,
-      ctx.streamId,
-    );
-    const disposeTrace = ctx.disposeTrace;
-    ctx.disposeTrace = () => {
-      detachResultHub();
-      detachProgressHub();
-      disposeTrace();
-    };
     return ctx;
   } catch (err) {
     compensateFailedActivation({
