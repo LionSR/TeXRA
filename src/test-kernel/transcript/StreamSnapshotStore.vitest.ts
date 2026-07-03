@@ -11,7 +11,6 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
-import { bus } from '@eventBus/ProgressEventBus';
 import type {
   ExecutionId,
   OutputFileInfo,
@@ -93,28 +92,29 @@ describe('StreamSnapshotStore', () => {
     );
   });
 
-  it('persists todos/plan/usage via the bus and reassembles them on a fresh store', async () => {
+  it('persists todos/plan/usage from progress events and reassembles them on a fresh store', async () => {
     await installPlatform();
 
     const writer = new StreamSnapshotStore();
-    const off = writer.subscribe(bus);
 
-    bus.emit('updateTodos', { streamId: STREAM, todos: [TODO] });
-    bus.emit('updatePlan', { streamId: STREAM, plan: PLAN });
+    writer.handleProgressEvent('updateTodos', {
+      streamId: STREAM,
+      todos: [TODO],
+    });
+    writer.handleProgressEvent('updatePlan', { streamId: STREAM, plan: PLAN });
     // Two deltas for the same run must accumulate, not overwrite.
-    bus.emit('updateStreamUsage', {
+    writer.handleProgressEvent('updateStreamUsage', {
       streamId: STREAM,
       storageKey: RUN,
       usage: usage(100, 20, 0.5),
     });
-    bus.emit('updateStreamUsage', {
+    writer.handleProgressEvent('updateStreamUsage', {
       streamId: STREAM,
       storageKey: RUN,
       usage: usage(50, 10, 0.25),
     });
 
     await writer.flush();
-    off();
 
     // A second store reads only from disk — the resume path.
     const reader = new StreamSnapshotStore();
@@ -176,7 +176,7 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
-  it('seeds existing disk data before an unloaded bus mutation, so it is not erased', async () => {
+  it('seeds existing disk data before an unloaded progress mutation, so it is not erased', async () => {
     await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
@@ -186,16 +186,14 @@ describe('StreamSnapshotStore', () => {
       JSON.stringify({ 'run-1': usage(100, 20, 0.5) }),
     );
 
-    // A fresh store (NOT load()ed) subscribes and gets a delta for a NEW run.
+    // A fresh store (NOT load()ed) handles a delta for a NEW run.
     const store = new StreamSnapshotStore();
-    const off = store.subscribe(bus);
-    bus.emit('updateStreamUsage', {
+    store.handleProgressEvent('updateStreamUsage', {
       streamId: STREAM,
       storageKey: 'run-2' as StorageKey,
       usage: usage(50, 10, 0.25),
     });
     await store.flush();
-    off();
 
     // run-1 (prior) survives — the unseeded write did not clobber it.
     const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));

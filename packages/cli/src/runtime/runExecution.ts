@@ -1,5 +1,6 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { tryPlatform } from '@platform/platform';
+import { StreamSnapshotStore } from '@transcript';
 import { writeTerminalStatus } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -10,12 +11,16 @@ import { runAgent } from '@agent/runtime/runAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import type {
+  ProgressEvent,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { installCliApprovalHandlers } from './approvalAdapter';
-import { createCliRuntimeHost } from './runtimeHost';
+import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
 import {
@@ -50,6 +55,20 @@ type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
   C extends AgentCategory
     ? Extract<ExecuteAgentResult, { category: C }>
     : ExecuteAgentResult;
+
+function persistCliProgressEvents(
+  host: CliRuntimeHost,
+  snapshotStore: StreamSnapshotStore,
+): CliRuntimeHost {
+  const emit = <K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void => {
+    snapshotStore.handleProgressEvent(event, payload);
+    host.emit(event, payload);
+  };
+  return { ...host, emit };
+}
 
 export interface CliConfigExecuteOptions<
   C extends AgentCategory | undefined = undefined,
@@ -128,7 +147,9 @@ export async function executeCliRequest(
   runContext: CliContext,
   options: CliExecuteOptions = {},
 ): Promise<{ result: ExecuteAgentResult; terminalStatus: ExecutionStatus }> {
-  const runtimeHost = createCliRuntimeHost(runContext);
+  const baseRuntimeHost = createCliRuntimeHost(runContext);
+  const snapshotStore = new StreamSnapshotStore();
+  const runtimeHost = persistCliProgressEvents(baseRuntimeHost, snapshotStore);
   // Present terminal-error toasts from the run's `result` event through the same
   // runtimeHost path the lifecycle used before (so ndjson / logger output is
   // unchanged); the lifecycle no longer emits them directly.
@@ -182,7 +203,11 @@ export async function executeCliRequest(
     }
     detachResultToast();
     uninstallApprovalHandlers();
-    await runtimeHost.close();
+    try {
+      await snapshotStore.flush();
+    } finally {
+      await runtimeHost.close();
+    }
   }
 
   const terminalStatus = await readCliTerminalStatus(result);

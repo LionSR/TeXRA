@@ -137,7 +137,9 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       });
     }
 
-    // Subscribe to progress-relevant event-bus channels.
+    // These events can be emitted on the process bus without an active desktop
+    // runtime host. Keep them subscribed here so all desktop windows see goal
+    // badge, progress-routing, and root-error updates.
     const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
       const goal = GoalStore.getForStream(streamId);
       opts.onGoalStateChanged(streamId, isGoalInFlight(goal), {
@@ -151,9 +153,6 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
         opts.routeToProgress();
       },
     );
-    // Run failures surface only through this event for root runs; without a
-    // subscriber the message dies in the main process and the rail shows a
-    // bare ERROR status.
     const unsubscribeShowError = bus.on('requestShowError', ({ message }) => {
       opts.onShowError(message);
     });
