@@ -16,7 +16,7 @@ export function normalizeRunLatexdiffOutputsByRound(
       (entry): entry is [number, OutputFileInfo[]] =>
         Array.isArray(entry) &&
         typeof entry[0] === 'number' &&
-        Number.isFinite(entry[0]) &&
+        Number.isInteger(entry[0]) &&
         Array.isArray(entry[1]) &&
         entry[1].length > 0,
     )

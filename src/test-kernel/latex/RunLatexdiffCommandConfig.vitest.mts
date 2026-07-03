@@ -29,4 +29,15 @@ describe('normalizeRunLatexdiffOutputsByRound', () => {
     ).toBeNull();
     expect(normalizeRunLatexdiffOutputsByRound('not-rounds')).toBeNull();
   });
+
+  it('drops non-integer round entries', () => {
+    const valid = createOutputFile({ round: 1 });
+
+    expect(
+      normalizeRunLatexdiffOutputsByRound([
+        [1.5, [createOutputFile({ round: 1.5 })]],
+        [1, [valid]],
+      ]),
+    ).toEqual(new Map([[1, [valid]]]));
+  });
 });
