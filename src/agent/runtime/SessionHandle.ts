@@ -31,6 +31,7 @@ import { getActiveFlushers, unregisterFlushers } from '@transcript';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { createChannelTrace } from '@logger';
+import type { StreamTabId } from '@shared/schemas';
 
 import { tryUseRunContext } from './RunContext';
 import { ExecutionRegistry, executionRegistry } from './executionRegistry';
@@ -41,6 +42,7 @@ import {
   executionSubscriptionBinder,
 } from './ExecutionSubscriptionBinder';
 import { StreamStatusService } from './StreamStatusService';
+import { SessionEventHub } from './SessionEventHub';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('sessionHandle');
@@ -53,6 +55,7 @@ export type SessionHandleInit = Partial<
     | 'executions'
     | 'coordinators'
     | 'subscriptions'
+    | 'events'
     | 'flushers'
     | 'hostChannel'
   >
@@ -75,6 +78,8 @@ export class SessionHandle {
   readonly coordinators: RunCoordinatorBridge;
   /** Execution-status subscriptions bound to agent stream lifecycles. */
   readonly subscriptions: ExecutionSubscriptionBinder;
+  /** Session-scoped one-way fact plane. */
+  readonly events: SessionEventHub;
   /** This session's trace-flush callbacks (drained on dispose / shutdown). */
   readonly flushers: Set<() => void>;
   /**
@@ -110,6 +115,7 @@ export class SessionHandle {
         session: this,
       });
     this.subscriptions = subscriptions;
+    this.events = init.events ?? new SessionEventHub();
     // A fresh session owns its own flusher set; the default session aliases the
     // process-module set so `createRunTrace`'s default writes still drain.
     this.flushers = init.flushers ?? new Set<() => void>();
@@ -142,8 +148,9 @@ export class SessionHandle {
    * `result` events to the session's listeners. Returns a detach disposer the
    * run bundles into its trace teardown.
    */
-  attachRunTrace(trace: AgentTrace): () => void {
+  attachRunTrace(trace: AgentTrace, streamId: StreamTabId): () => void {
     return trace.subscribe((event) => {
+      this.events.emit({ scope: 'run', streamId, event });
       if (event.type !== 'result') return;
       // Guard each listener so one throwing consumer can't starve the rest:
       // the whole fan-out is a single trace subscriber, so without this a throw

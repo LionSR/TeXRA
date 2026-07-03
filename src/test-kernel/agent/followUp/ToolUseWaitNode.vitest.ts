@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { TraceEmitter } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
 import {
@@ -14,6 +15,8 @@ import {
   StreamStatusRegistry,
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import {
   MESSAGE_TYPES,
@@ -264,11 +267,21 @@ describe('ToolUseWaitNode', () => {
       stateSlices: null,
     };
     const runtimeHost = { emit: vi.fn() };
+    const logger = new TraceEmitter();
+    const hub = new SessionEventHub();
+    const detachTrace = logger.subscribe((event) =>
+      hub.emit({ scope: 'run', streamId, event }),
+    );
+    const detachProjector = attachSessionRunFactProjector(
+      hub,
+      runtimeHost,
+      streamId,
+    );
     const waitForFollowUp = vi.fn();
     const services = {
       checkInterruption: () => false,
       isSubagent: false,
-      logger: { error: vi.fn(), info: vi.fn() },
+      logger,
       modelHandler: { extractAssistantText: () => undefined },
       runtimeHost,
       session: {
@@ -307,6 +320,8 @@ describe('ToolUseWaitNode', () => {
         { streamId, bypassActive: false },
       );
     } finally {
+      detachProjector();
+      detachTrace();
       await GoalStore.forget(streamId);
       cleanupApprovalsForStream(streamId);
     }

@@ -59,8 +59,7 @@ export interface UsageMonitorModelInfo {
  * Runtime dependencies for UsageMonitor.
  *
  * Takes individual fields instead of full AgentExecutionContext:
- * - logger: For error logging and the workflow-mode `usage` trace event
- * - runtimeHost: For the `updateStreamUsage` progress-view event
+ * - logger: For error logging and the single `usage` trace event
  * - storageKey: The storage key for this execution (immutable)
  * - streamId: For backend logging
  */
@@ -103,7 +102,7 @@ export class UsageMonitor {
   }
 
   async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
-    const { logger, runtimeHost, storageKey, streamId } = this.context;
+    const { logger, storageKey, streamId } = this.context;
     const { agentCategory } = this.metadata;
     const runKind: UsageMonitorRunKind =
       agentCategory === AgentCategory.ToolUse ? 'tool-use' : 'workflow';
@@ -163,26 +162,25 @@ export class UsageMonitor {
         ...(usageRoute != null && { usageRoute }),
       };
 
-      // Two surfaces for usage: the progress-view sidebar (via runtimeHost
-      // event) and — for workflow agents — the transcript's statistics line
-      // (via the trace channel). Tool-use agents skip the transcript copy
-      // because their UI surface is the tool-use cards, not a stats line.
-      runtimeHost.emit('updateStreamUsage', {
-        streamId,
-        storageKey,
-        usage: payload,
-      });
-      if (agentCategory === AgentCategory.Workflow) {
-        const transcriptPayload = Object.fromEntries(
-          Object.entries(payload).filter(([, v]) => typeof v === 'number'),
-        ) as Record<string, number>;
+      const transcriptPayload = Object.fromEntries(
+        Object.entries(payload).filter(([, v]) => typeof v === 'number'),
+      ) as Record<string, number>;
+      // One trace event feeds both surfaces: the transcript recorder consumes
+      // `stats` for workflow agents, and the session projector consumes `data`
+      // for sidebar totals. Tool-use agents keep their existing no-stats-row UI
+      // by opting out of transcript recording.
+      logger.usage(transcriptPayload, {
+        data: {
+          streamId,
+          storageKey,
+          usage: payload,
+        },
+        recordTranscript: agentCategory === AgentCategory.Workflow,
         // The round stage's AsyncLocalStorage scope already stamps the active
         // round id (r0/r1...) onto emitted events; fall back to storageKey for
         // any usage logged outside a round stage.
-        logger.usage(transcriptPayload, {
-          stageId: logger.activeStageId() ?? storageKey,
-        });
-      }
+        stageId: logger.activeStageId() ?? storageKey,
+      });
 
       // Log to backend for analytics/billing. Relay-backed rounds wait for the
       // flush because the next relay request enforces the cap from DB state.

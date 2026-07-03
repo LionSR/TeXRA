@@ -444,7 +444,7 @@ function startClaudeAgentLoop(params: {
           childStreamId,
           executionId,
           buildClaudeUsageStats(turn.usage),
-          runtimeHost,
+          logger,
         );
       }
     },

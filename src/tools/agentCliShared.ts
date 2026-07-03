@@ -114,13 +114,19 @@ export function publishAgentCliStreamUsage(
   childStreamId: StreamTabId,
   executionId: ExecutionId,
   usage: TokenUsageStats,
-  runtimeHost: AgentRuntimeHost,
+  logger: AgentTrace,
 ): void {
-  runtimeHost.emit('updateStreamUsage', {
-    streamId: childStreamId,
-    storageKey: executionId as StorageKey,
-    executionId,
-    usage,
+  const stats = Object.fromEntries(
+    Object.entries(usage).filter(([, value]) => typeof value === 'number'),
+  ) as Record<string, number>;
+  logger.usage(stats, {
+    data: {
+      streamId: childStreamId,
+      storageKey: executionId as StorageKey,
+      executionId,
+      usage,
+    },
+    recordTranscript: false,
   });
 }
 

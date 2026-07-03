@@ -109,6 +109,14 @@ export interface ToolEndEvent extends StageStamp {
 export interface UsageEvent extends StageStamp {
   readonly type: 'usage';
   readonly stats: TokenUsageStats;
+  /**
+   * Host/product-specific usage projection payload. Agent-general consumers can
+   * ignore this; TeXRA uses it to project sidebar totals from the same trace
+   * event that records transcript statistics.
+   */
+  readonly data?: unknown;
+  /** False when this usage report should not create a transcript stats row. */
+  readonly recordTranscript?: boolean;
 }
 
 /** Context window utilisation snapshot. */
