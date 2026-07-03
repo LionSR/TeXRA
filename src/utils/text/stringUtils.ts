@@ -240,12 +240,18 @@ export function tailWithEllipsis(text: string, maxLen: number): string {
 }
 
 /**
- * Format an ISO-8601 timestamp for compact display: replace the `T`
- * separator with a space and drop the fractional-seconds + `Z` suffix.
- * (e.g. `'2026-06-02T14:30:45.123Z'` → `'2026-06-02 14:30:45'`).
+ * Format an ISO-8601 timestamp for compact display: normalize to UTC,
+ * replace the `T` separator with a space, and drop the fractional-seconds
+ * suffix. (e.g. `'2026-06-02T14:30:45.123Z'` → `'2026-06-02 14:30:45'`).
+ * Parses through `Date` first so offset forms (e.g. `+02:00`) normalize to
+ * UTC instead of passing through unstripped.
  */
 export function formatTimestamp(isoTimestamp: string): string {
-  return isoTimestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+  const parsed = new Date(isoTimestamp);
+  const utcIso = Number.isFinite(parsed.getTime())
+    ? parsed.toISOString()
+    : isoTimestamp;
+  return utcIso.replace('T', ' ').replace(/\.\d+Z$/, '');
 }
 
 /**
