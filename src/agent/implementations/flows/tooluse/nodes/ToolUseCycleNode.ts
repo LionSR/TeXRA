@@ -1,6 +1,7 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   createToolUseRoundFlow,
@@ -52,15 +53,15 @@ export class ToolUseCycleNode<C> extends Node<
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
     const { setting, resolvedTools, modelHandler } = this.services;
-    const { streamId, runtimeHost } = useLaunchRunContext();
+    const { streamId } = useLaunchRunContext();
 
     if (prepRes.shouldSkipCycle) {
       const { todos, plan } = prepRes.workspaceState.workPlan;
       if (todos.length) {
-        runtimeHost.emit('updateTodos', { streamId, todos });
+        emitRunFact(this.services.logger, 'updateTodos', { streamId, todos });
       }
       if (plan) {
-        runtimeHost.emit('updatePlan', { streamId, plan });
+        emitRunFact(this.services.logger, 'updatePlan', { streamId, plan });
       }
       return { outcome: 'skipped' };
     }
@@ -90,7 +91,7 @@ export class ToolUseCycleNode<C> extends Node<
     let todoPersistChain = Promise.resolve();
     prepRes.workspaceState.workPlan.setOnUpdate({
       onTodosUpdate: (todos) => {
-        runtimeHost.emit('updateTodos', { streamId, todos });
+        emitRunFact(this.services.logger, 'updateTodos', { streamId, todos });
         if (persistTodos) {
           todoPersistChain = todoPersistChain
             .then(() => persistTodos(todos))
@@ -105,7 +106,7 @@ export class ToolUseCycleNode<C> extends Node<
         onProgress?.({ kind: 'todos', todos });
       },
       onPlanUpdate: (plan) => {
-        runtimeHost.emit('updatePlan', { streamId, plan });
+        emitRunFact(this.services.logger, 'updatePlan', { streamId, plan });
         onProgress?.({ kind: 'plan', plan });
       },
     });

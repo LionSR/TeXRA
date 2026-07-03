@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
@@ -13,6 +13,8 @@ import {
   type ProcessingContext,
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
 import { normalizeRunId } from '@common/constants/runIds';
 import type {
   AgentFileLocation,
@@ -22,6 +24,7 @@ import type {
   OutputFileInfo,
   OutputXmlSummary,
   RoundOutput,
+  StreamTabId,
 } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 import { createRecordingHost, withTestRunContext } from '../progressTestUtils';
@@ -119,20 +122,51 @@ function createOutputNode(
   streamId: string,
   host: ReturnType<typeof createRecordingHost>['host'],
   workflowOutputPolicy: typeof defaultWorkflowOutputPolicy = defaultWorkflowOutputPolicy,
+  logger: AgentTrace = noopTrace,
 ): OutputNode {
   return new OutputNode().setServices({
     streamId,
-    logger: { warn: () => {} },
+    logger,
     outputState: createOutputState(),
     runtimeHost: host,
     workflowOutputPolicy,
   } as unknown as ReflectionServices);
 }
 
+function createProjectedRuntime(streamId: string) {
+  const { events, host } = createRecordingHost();
+  const logger = new TraceEmitter();
+  const hub = new SessionEventHub();
+  const typedStreamId = streamId as StreamTabId;
+  const detachTrace = logger.subscribe((event) =>
+    hub.emit({ scope: 'run', streamId: typedStreamId, event }),
+  );
+  const detachProjector = attachSessionRunFactProjector(
+    hub,
+    host,
+    typedStreamId,
+  );
+  return {
+    events,
+    host,
+    logger,
+    dispose: () => {
+      detachProjector();
+      detachTrace();
+    },
+  };
+}
+
 describe('output progress events', () => {
   it('publishes reflection output-node events through the runtime host', async () => {
-    const { events, host } = createRecordingHost();
-    const outputNode = createOutputNode('stream:output-node', host);
+    const projected = createProjectedRuntime('stream:output-node');
+    const { events, host, logger } = projected;
+    const outputNode = createOutputNode(
+      'stream:output-node',
+      host,
+      defaultWorkflowOutputPolicy,
+      logger,
+    );
     const outputLocation = createAgentLocation('/tmp/output.xml');
     const openedLocation = createLocation('/tmp/rendered.tex');
     const fileInfo: OutputFileInfo = {
@@ -150,48 +184,52 @@ describe('output progress events', () => {
       xmlSummary: emptyXmlSummary,
     };
 
-    const transition = await withTestRunContext(
-      host,
-      'stream:output-node',
-      () =>
-        outputNode.post(
-          { roundOutputs: [] } as never,
-          {
-            outputLocation,
-            currentRound: 2,
-            endTurn: false,
-          },
-          {
-            roundOutput,
-            summary: {
-              storageKey: normalizeRunId('run:output-node'),
-              currRound: 2,
-              fileInfos: [fileInfo],
-              filesToOpen: [openedLocation],
-              outputFile: outputLocation,
+    try {
+      const transition = await withTestRunContext(
+        host,
+        'stream:output-node',
+        () =>
+          outputNode.post(
+            { roundOutputs: [] } as never,
+            {
+              outputLocation,
+              currentRound: 2,
               endTurn: false,
             },
-            compileFailures: [],
-            compiledArtifacts: [],
-            emitCompileFailures: false,
-          },
-        ),
-    );
+            {
+              roundOutput,
+              summary: {
+                storageKey: normalizeRunId('run:output-node'),
+                currRound: 2,
+                fileInfos: [fileInfo],
+                filesToOpen: [openedLocation],
+                outputFile: outputLocation,
+                endTurn: false,
+              },
+              compileFailures: [],
+              compiledArtifacts: [],
+              emitCompileFailures: false,
+            },
+          ),
+      );
 
-    expect(transition).toBe('default');
-    expect(events).toEqual([
-      {
-        event: 'addOutputFiles',
-        payload: {
-          streamId: 'stream:output-node',
-          filesByRound: { 2: [fileInfo] },
+      expect(transition).toBe('default');
+      expect(events).toEqual([
+        {
+          event: 'addOutputFiles',
+          payload: {
+            streamId: 'stream:output-node',
+            filesByRound: { 2: [fileInfo] },
+          },
         },
-      },
-      {
-        event: 'requestOpenFile',
-        payload: { location: openedLocation, preserveFocus: true },
-      },
-    ]);
+        {
+          event: 'requestOpenFile',
+          payload: { location: openedLocation, preserveFocus: true },
+        },
+      ]);
+    } finally {
+      projected.dispose();
+    }
   });
 
   it('stores compile failure context for the next reflection round', async () => {
@@ -315,13 +353,10 @@ describe('output progress events', () => {
   });
 
   it('publishes missing-output processing events through the runtime host', async () => {
-    const { events, host } = createRecordingHost();
+    const projected = createProjectedRuntime('stream:processor');
+    const { events, host, logger } = projected;
     const { roundData, ensureRoundData, setRoundOutputs } =
       createRoundDataStore();
-    const logger = {
-      debug: () => {},
-      domain: () => {},
-    } as unknown as AgentTrace;
     const xmlManager = {
       splitScratchpadMultipleOutputXml: async () => {
         throw new Error('invalid xml');
@@ -338,32 +373,33 @@ describe('output progress events', () => {
       ensureRoundData,
     };
 
-    await new OutputFileProcessor(context).processMultipleOutputs(
-      createLocation('/tmp/broken-output.xml'),
-      3,
-      createLocation('/tmp/raw-output.xml'),
-    );
+    try {
+      await new OutputFileProcessor(context).processMultipleOutputs(
+        createLocation('/tmp/broken-output.xml'),
+        3,
+        createLocation('/tmp/raw-output.xml'),
+      );
 
-    expect(events).toEqual([
-      {
-        event: 'updateMissingOutputs',
-        payload: {
-          streamId: 'stream:processor',
-          filesByRound: { 3: [] },
+      expect(events).toEqual([
+        {
+          event: 'updateMissingOutputs',
+          payload: {
+            streamId: 'stream:processor',
+            filesByRound: { 3: [] },
+          },
         },
-      },
-    ]);
-    expect(roundData.get(3)?.outputs).toEqual([]);
+      ]);
+      expect(roundData.get(3)?.outputs).toEqual([]);
+    } finally {
+      projected.dispose();
+    }
   });
 
   it('emits missing-output events when extraction yields no files (no exception)', async () => {
-    const { events, host } = createRecordingHost();
+    const projected = createProjectedRuntime('stream:processor');
+    const { events, host, logger } = projected;
     const { roundData, ensureRoundData, setRoundOutputs } =
       createRoundDataStore();
-    const logger = {
-      debug: () => {},
-      domain: () => {},
-    } as unknown as AgentTrace;
     const xmlManager = {
       splitScratchpadMultipleOutputXml: async () => [],
     } as unknown as XmlOutputManager;
@@ -378,22 +414,26 @@ describe('output progress events', () => {
       ensureRoundData,
     };
 
-    await new OutputFileProcessor(context).processMultipleOutputs(
-      createLocation('/tmp/empty-output.xml'),
-      4,
-      createLocation('/tmp/raw-output.xml'),
-    );
+    try {
+      await new OutputFileProcessor(context).processMultipleOutputs(
+        createLocation('/tmp/empty-output.xml'),
+        4,
+        createLocation('/tmp/raw-output.xml'),
+      );
 
-    expect(events).toEqual([
-      {
-        event: 'updateMissingOutputs',
-        payload: {
-          streamId: 'stream:processor',
-          filesByRound: { 4: [] },
+      expect(events).toEqual([
+        {
+          event: 'updateMissingOutputs',
+          payload: {
+            streamId: 'stream:processor',
+            filesByRound: { 4: [] },
+          },
         },
-      },
-    ]);
-    expect(roundData.get(4)?.outputs).toEqual([]);
+      ]);
+      expect(roundData.get(4)?.outputs).toEqual([]);
+    } finally {
+      projected.dispose();
+    }
   });
 
   it('warns when a non-empty response yields zero extracted files', async () => {
@@ -404,15 +444,16 @@ describe('output progress events', () => {
     const readSpy = vi
       .spyOn(flexibleFS, 'read')
       .mockResolvedValue('% chunk.tex\n\\section{Untagged content}\n');
+    const projected = createProjectedRuntime('stream:processor');
+    const { events, host, logger } = projected;
+    const warnings: string[] = [];
+    const detachWarnings = logger.subscribe((event) => {
+      if (event.type === 'log' && event.level === 'warn') {
+        warnings.push(event.message);
+      }
+    });
     try {
-      const { events, host } = createRecordingHost();
-      const warnings: string[] = [];
       const { ensureRoundData, setRoundOutputs } = createRoundDataStore();
-      const logger = {
-        debug: () => {},
-        domain: () => {},
-        warn: (message: string) => warnings.push(message),
-      } as unknown as AgentTrace;
       const xmlManager = {
         splitScratchpadMultipleOutputXml: async () => [],
       } as unknown as XmlOutputManager;
@@ -443,6 +484,8 @@ describe('output progress events', () => {
         },
       ]);
     } finally {
+      detachWarnings();
+      projected.dispose();
       readSpy.mockRestore();
     }
   });

@@ -35,6 +35,7 @@ import type {
   StageOptions,
   StreamHandle,
   StreamOptions,
+  UsageEmitOptions,
 } from './AgentTrace';
 
 export class TraceEmitter implements AgentTrace {
@@ -139,8 +140,14 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Structured emitters ───────────────────────────────────────────
 
-  usage(stats: TokenUsageStats, options: StagedEmitOptions = {}): void {
-    this.emit({ type: 'usage', stats, stageId: options.stageId });
+  usage(stats: TokenUsageStats, options: UsageEmitOptions = {}): void {
+    this.emit({
+      type: 'usage',
+      stats,
+      data: options.data,
+      recordTranscript: options.recordTranscript,
+      stageId: options.stageId,
+    });
   }
 
   contextState(
