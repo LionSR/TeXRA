@@ -78,7 +78,7 @@ export class ProgressWorkflowActionsController {
     await this.withWorkflowTaskState(stream, async (taskState) => {
       const runOutputs = this.deps.state.getOutputFiles(stream);
       const outputsByRound = runOutputs.size
-        ? [...runOutputs.entries()]
+        ? [...runOutputs.entries()].sort((a, b) => a[0] - b[0])
         : undefined;
 
       await this.deps.runDiff({

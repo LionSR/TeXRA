@@ -371,10 +371,20 @@ async function handleRunLatexdiff(
 
     const runId = config.runId ?? undefined;
 
-    const outputsByRound: Map<number, OutputFileInfo[]> | null = config
-      .outputsByRound?.length
-      ? new Map(config.outputsByRound)
-      : null;
+    // `config` arrives as an arbitrary VS Code command argument (any caller
+    // can invoke `texra.runLatexdiff` with a malformed payload), so validate
+    // each round entry's shape rather than trusting the declared type.
+    const validRounds = (config.outputsByRound ?? [])
+      .filter(
+        (entry): entry is [number, OutputFileInfo[]] =>
+          Array.isArray(entry) &&
+          typeof entry[0] === 'number' &&
+          Array.isArray(entry[1]) &&
+          entry[1].length > 0,
+      )
+      .sort((a, b) => a[0] - b[0]);
+    const outputsByRound: Map<number, OutputFileInfo[]> | null =
+      validRounds.length > 0 ? new Map(validRounds) : null;
 
     const { outcome } = await vscode.window.withProgress(
       {
