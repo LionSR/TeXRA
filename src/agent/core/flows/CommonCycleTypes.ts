@@ -6,6 +6,7 @@ import { logContextStateSnapshot } from '@agent/trace';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import {
   ProviderMessageSchema,
   type ProviderMessage,
@@ -110,9 +111,9 @@ export async function saveCycleDebug(
 export function defaultPostCompactionContext(
   services: CycleServices,
 ): string | null {
-  const { subagents, processes } = services.getActiveChildren(
-    services.streamId,
-  );
+  const { session, streamId } = useLaunchRunContext();
+  const { subagents, processes } =
+    session.executions.getActiveChildren(streamId);
   return formatPostCompactionContext(
     subagents,
     processes,

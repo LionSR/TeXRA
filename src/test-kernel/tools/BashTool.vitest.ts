@@ -174,8 +174,6 @@ function roundServices(opts: {
     executionId: 'test-execution-id',
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
-    getActiveChildren: () => ({ subagents: [], processes: [] }),
-    waitForRetry: vi.fn(),
   };
 }
 
