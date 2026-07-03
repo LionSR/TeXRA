@@ -2,11 +2,9 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   buildMainViewExecuteMessage,
@@ -69,6 +67,7 @@ import {
 } from '@shared/wa/webAwesomeIcons';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { agentName } from '@shared/schemas/agent';
+import { renderViewHeader } from '@shared/wa/viewHeader';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 import '@shared/wa/tabs';
 import { unique } from '@utils/core';
@@ -1688,45 +1687,18 @@ export class MainApp extends MainAppBase {
   /** Launcher/Progress tabs plus header actions (hidden on the desktop host). */
   private renderViewHeader(): TemplateResult | typeof nothing {
     if (this.isDesktopHost) return nothing;
-    return html`
-      <div class="view-header">
-        <wa-tab-group
-          class="view-tabs"
-          active="launcher"
-          without-scroll-controls
-          @wa-tab-show=${this.onViewTabShow}
-        >
-          <wa-tab panel="launcher"> ${waIcon('pencil')} Launcher </wa-tab>
-          <wa-tab panel="progress"> ${waIcon('robot')} Progress </wa-tab>
-          <wa-tab-panel name="launcher"></wa-tab-panel>
-          <wa-tab-panel name="progress"></wa-tab-panel>
-        </wa-tab-group>
-        <wa-button
-          id="openDashboardButton"
-          class="header-action"
-          aria-label="Open dashboard"
-          appearance="plain"
-          size="small"
-          @click=${this.onOpenDashboard}
-        >
-          ${waIcon('gear')}
-        </wa-button>
-        <wa-tooltip for="openDashboardButton"> Open dashboard </wa-tooltip>
-        <wa-button
-          id="popOutProgressButton"
-          class="header-action"
-          aria-label="Open progress sessions in editor"
-          appearance="plain"
-          size="small"
-          @click=${this.onPopOutProgress}
-        >
-          ${waIcon('picture-in-picture')}
-        </wa-button>
-        <wa-tooltip for="popOutProgressButton">
-          Open progress sessions in editor
-        </wa-tooltip>
-      </div>
-    `;
+    return renderViewHeader({
+      active: 'launcher',
+      dashboardButtonId: 'openDashboardButton',
+      onOpenDashboard: this.onOpenDashboard,
+      onTabShow: this.onViewTabShow,
+      secondaryAction: {
+        id: 'popOutProgressButton',
+        label: 'Open progress sessions in editor',
+        icon: 'picture-in-picture',
+        onClick: this.onPopOutProgress,
+      },
+    });
   }
 
   render(): TemplateResult {
