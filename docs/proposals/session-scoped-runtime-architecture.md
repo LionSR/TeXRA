@@ -139,7 +139,7 @@ interface SessionEventHub {
   `buildAgentLaunchContext` immediately after `createRunTrace` and **before**
   the first emit (today's hub attach happens after `setActiveStream`, which is
   why the buffer exists).
-- **`AgentEvent` gains two arms** for facts that are genuinely run lifecycle
+- **`AgentEvent` gains three arms** for facts that are genuinely run lifecycle
   but currently bus-only: `status` (emitted by plane 3's machine — subsumes
   `updateStreamStatus`, including non-terminal transitions and
   `terminalStatus`, ending the terminal dual-emit) and `child.activity`
