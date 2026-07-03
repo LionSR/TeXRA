@@ -18,8 +18,8 @@ import {
   buildErrorLogData,
   getSdkErrorMessage,
   isMissingFinishReasonError,
-  attachPartialText,
-  attachFlowAutoRetryRequired,
+  annotateStreamFailure,
+  trackStreamConnect,
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -364,10 +364,7 @@ export class ModelHandlerOpenAI<
     const stream = await client.chat.completions.stream(streamParams, {
       signal,
     });
-    let streamConnected = false;
-    const onConnect = (): void => {
-      streamConnected = true;
-    };
+    const connect = trackStreamConnect(stream);
     const streamingAggregator = this.createStreamingAggregator();
 
     const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
@@ -386,12 +383,11 @@ export class ModelHandlerOpenAI<
       }
     };
 
-    stream.on('connect', onConnect);
     stream.on('content.delta', onContentDelta);
     stream.on('chunk', onChunk);
 
     const cleanup = (): void => {
-      stream.off('connect', onConnect);
+      connect.cleanup();
       stream.off('content.delta', onContentDelta);
       stream.off('chunk', onChunk);
     };
@@ -437,12 +433,11 @@ export class ModelHandlerOpenAI<
         stream.currentChatCompletionSnapshot,
         PARTIAL_TEXT_TAIL_MAX,
       );
-      if (partialText) {
-        attachPartialText(streamError, partialText);
-      }
-      if (streamConnected || partialText) {
-        attachFlowAutoRetryRequired(streamError);
-      }
+      annotateStreamFailure(
+        streamError,
+        partialText,
+        connect.isConnected() || partialText.length > 0,
+      );
       const isAbort = isUserAbort(streamError);
       if (!isAbort) {
         this.logger.warn('Stream failed', {
