@@ -75,4 +75,65 @@ describe('StreamLog', () => {
     expect(log.update('message', { text: 'unchanged' })).toBeUndefined();
     expect(log.drainDirtyUpdates()).toEqual([]);
   });
+
+  it('tracks text appends separately from whole-entry updates', () => {
+    const log = new StreamLog();
+    log.append({
+      id: 'message',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      text: '',
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+
+    log.appendText('message', 'hello');
+    log.appendText('message', ' world');
+
+    expect(log.getRange(0, log.head)[0]?.text).toBe('hello world');
+    expect(log.getDirtyUpdates()).toEqual([]);
+    expect(log.getDirtyTextDeltas()).toEqual([
+      { id: 'message', appendText: 'hello world' },
+    ]);
+  });
+
+  it('keeps text appended while a delta frame is in flight', () => {
+    const log = new StreamLog();
+    log.append({
+      id: 'message',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      text: '',
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+
+    log.appendText('message', 'hello');
+    const inFlight = log.getDirtyTextDeltas();
+    log.appendText('message', ' world');
+    log.ackDirtyTextDeltas(inFlight);
+
+    expect(log.getDirtyTextDeltas()).toEqual([
+      { id: 'message', appendText: ' world' },
+    ]);
+  });
+
+  it('drops pending text deltas when a full entry replay covers them', () => {
+    const log = new StreamLog();
+    log.append({
+      id: 'message',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      text: '',
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+
+    log.appendText('message', 'hello');
+    const [entry] = log.getRange(0, log.head);
+    if (!entry) throw new Error('expected delivered entry');
+    log.ackDirtyTextDeltas([], [entry]);
+
+    expect(log.getDirtyTextDeltas()).toEqual([]);
+  });
 });
