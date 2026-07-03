@@ -110,16 +110,12 @@ function outputCopyRelativePath(output: OutputFileSummary): string {
 
 function outputCopyRelativePathForExpectedOutput(
   output: OutputFileSummary,
-  expectedOutputFiles: readonly string[],
+  expectedRelativePaths: readonly string[],
 ): string {
   const generatedRelativePath = outputCopyRelativePath(output);
-  if (expectedOutputFiles.length === 0) return generatedRelativePath;
-  const expectedRelativePaths = expectedOutputFiles.map((file) =>
-    getSafeDocumentRelativePath(file),
-  );
+  if (expectedRelativePaths.length === 0) return generatedRelativePath;
 
-  const normalizedGeneratedPath = toPosix(generatedRelativePath);
-  const generatedName = path.posix.basename(normalizedGeneratedPath);
+  const generatedName = path.posix.basename(toPosix(generatedRelativePath));
   const normalizedOriginalPath =
     output.originalPath == null ? undefined : toPosix(output.originalPath);
   const matchingExpectedPaths =
@@ -227,12 +223,14 @@ export async function resolveWorkflowOutput(
   const runDirectory = options.runDirectory ?? getRunDir(result.executionId);
   if (outputDir) {
     const targetRoot = joinCwdRelative(outputDir, context.cwd);
-    const expectedOutputFiles = options.expectedOutputFiles ?? [];
+    const expectedRelativePaths = (options.expectedOutputFiles ?? []).map(
+      (file) => getSafeDocumentRelativePath(file),
+    );
     const outputsByRelativePath = new Map<string, OutputFileSummary>();
     for (const output of result.outputs) {
       const relativePath = outputCopyRelativePathForExpectedOutput(
         output,
-        expectedOutputFiles,
+        expectedRelativePaths,
       );
       const existing = outputsByRelativePath.get(relativePath);
       if (existing == null || output.round > existing.round) {
@@ -248,12 +246,12 @@ export async function resolveWorkflowOutput(
       copiedOutputs.push(targetPath);
     }
 
-    const missing = expectedOutputFiles
-      .map((f) => getSafeDocumentRelativePath(f))
-      .filter((expected) => !outputsByRelativePath.has(expected));
+    const missing = expectedRelativePaths.filter(
+      (expected) => !outputsByRelativePath.has(expected),
+    );
     if (missing.length > 0) {
       throw new Error(
-        `Workflow ${terminalStatus} without expected output${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${expectedOutputFiles.length} expected output${expectedOutputFiles.length === 1 ? '' : 's'} to ${targetRoot}.`,
+        `Workflow ${terminalStatus} without expected output${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${expectedRelativePaths.length} expected output${expectedRelativePaths.length === 1 ? '' : 's'} to ${targetRoot}.`,
       );
     }
 
