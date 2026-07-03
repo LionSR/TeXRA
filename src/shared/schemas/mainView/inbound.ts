@@ -25,6 +25,7 @@ import {
   MultipleDocumentFileTypeSchema,
 } from '../fileTypes';
 import { GettingStartedActionSchema, SessionTypeSchema } from './state';
+import { MainViewExecuteInboundMessageSchema } from './executeMessage';
 
 const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.WEBVIEW_READY),
@@ -106,7 +107,7 @@ export type FileOperationMessage =
   MergeMessage | CompareMessage | AcceptEditedMessage;
 
 const ExecutionMessages = [
-  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE) }),
+  MainViewExecuteInboundMessageSchema,
   MergeMessageSchema,
   CompareMessageSchema,
   AcceptEditedMessageSchema,
