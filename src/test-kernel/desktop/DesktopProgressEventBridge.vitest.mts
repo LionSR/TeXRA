@@ -43,6 +43,9 @@ type BridgeOptions = Parameters<
   typeof import('@desktop/main/desktopProgressEventBridge').createDesktopProgressEventBridge
 >[0];
 type SnapshotStore = NonNullable<BridgeOptions['streamSnapshotStore']>;
+type MockBusHandler = (payload: any) => void;
+
+const mockBusHandlers = new Map<string, MockBusHandler>();
 
 function createSnapshotStore(
   overrides: Partial<SnapshotStore> = {},
@@ -108,6 +111,7 @@ async function loadBridgeModule(): Promise<
   typeof import('@desktop/main/desktopProgressEventBridge')
 > {
   vi.resetModules();
+  mockBusHandlers.clear();
   vi.doMock('@logger', () => ({
     createChannelTrace: () => makeLogger(),
     setDefaultStreamLogStore: () => {},
@@ -121,7 +125,14 @@ async function loadBridgeModule(): Promise<
   }));
   vi.doMock('@eventBus/ProgressEventBus', () => ({
     bus: {
-      on: vi.fn(() => () => undefined),
+      on: vi.fn((event: string, handler: MockBusHandler) => {
+        mockBusHandlers.set(event, handler);
+        return () => {
+          if (mockBusHandlers.get(event) === handler) {
+            mockBusHandlers.delete(event);
+          }
+        };
+      }),
       emit: vi.fn(),
     },
   }));
@@ -382,6 +393,45 @@ describe('DesktopProgressEventBridge', () => {
           command: 'setActiveStream',
           activeStream: '',
         });
+      } finally {
+        bridge.dispose();
+      }
+    });
+  });
+
+  // ── Process-bus events ──────────────────────────────────────────────────
+
+  describe('process-bus events', () => {
+    it('subscribes to desktop-wide goal, routing, and root-error events', () => {
+      const routeToProgress = vi.fn();
+      const onGoalStateChanged = vi.fn();
+      const onShowError = vi.fn();
+      const bridge = createBridge({
+        routeToProgress,
+        onGoalStateChanged,
+        onShowError,
+      });
+
+      try {
+        mockBusHandlers.get('goalStateChanged')?.({
+          streamId: 'goal-stream',
+        });
+        mockBusHandlers.get('requestEnsureProgressView')?.({});
+        mockBusHandlers.get('requestShowError')?.({
+          message: 'Root run failed',
+        });
+
+        expect(onGoalStateChanged).toHaveBeenCalledWith('goal-stream', false, {
+          status: undefined,
+          objective: undefined,
+        });
+        expect(routeToProgress).toHaveBeenCalledTimes(1);
+        expect(onShowError).toHaveBeenCalledWith('Root run failed');
+
+        bridge.dispose();
+        expect(mockBusHandlers.has('goalStateChanged')).toBe(false);
+        expect(mockBusHandlers.has('requestEnsureProgressView')).toBe(false);
+        expect(mockBusHandlers.has('requestShowError')).toBe(false);
       } finally {
         bridge.dispose();
       }

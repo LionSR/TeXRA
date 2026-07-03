@@ -8,7 +8,6 @@ import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
-import { bus } from '@eventBus/ProgressEventBus';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
   reduceStreamMeta,
@@ -27,6 +26,7 @@ import { mergeChildStreams } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
+import type { StreamSnapshotStore } from '@transcript';
 
 type Emit = <K extends ProgressEvent>(
   event: K,
@@ -87,11 +87,14 @@ function applyStreamMeta(
   );
 }
 
-export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
+export function wrapRuntimeHost(
+  host: CliRuntimeHost,
+  snapshotStore?: StreamSnapshotStore,
+): CliRuntimeHost {
   const original = host.emit;
   const emit: Emit = (event, payload) => {
     applyToState(event, payload);
-    bus.emit(event, payload);
+    snapshotStore?.handleProgressEvent(event, payload);
     return original(event, payload);
   };
   return { ...host, emit };
