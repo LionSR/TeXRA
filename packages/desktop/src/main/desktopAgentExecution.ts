@@ -231,7 +231,7 @@ export class DesktopProgressBridge {
    * from other windows and torn down on window close. Cross-window "is this
    * execution running anywhere" checks use `getAllActiveExecutionIds()`.
    */
-  private readonly session: SessionHandle = new SessionHandle();
+  private readonly session: SessionHandle;
   /** Detaches the session→toast consumer; called on dispose. */
   private detachResultToast: (() => void) | undefined;
 
@@ -239,6 +239,10 @@ export class DesktopProgressBridge {
     private readonly postToRenderer: (message: unknown) => boolean | void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
+    this.runtimeHost = {
+      emit: (event, payload) => this.handleProgressEvent(event, payload),
+    };
+    this.session = new SessionHandle({ hostChannel: this.runtimeHost });
     setProgressViewBridge({ isViewVisible: () => true });
     this.backend = new ProgressBackend({
       session: this.session,
@@ -326,9 +330,6 @@ export class DesktopProgressBridge {
       backendSubscription.dispose();
       this.progressEvents.dispose();
       unsubscribeResult();
-    };
-    this.runtimeHost = {
-      emit: (event, payload) => this.handleProgressEvent(event, payload),
     };
     // Present terminal-error toasts from this window's run results (the run
     // lifecycle no longer emits them directly) through the same runtimeHost

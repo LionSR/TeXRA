@@ -1,6 +1,9 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - agent state
+import { TaskStateSchema } from '@agent/core/state/TaskState';
+
 // Local imports - progress schemas
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
 import {
@@ -17,7 +20,6 @@ import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
-import { TaskStateSchema } from '@agent/core/state/TaskState';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 
 // Local imports - desktop test paths
@@ -53,6 +55,9 @@ type TestableBridge = Bridge & {
 
 type BridgeWithSession = TestableBridge & {
   session: {
+    hostChannel?: {
+      emit(event: string, payload: unknown): void;
+    };
     coordinators: {
       cleanupAllRequests(): void;
     };
@@ -472,6 +477,42 @@ describe('DesktopProgressBridge', () => {
       expect(seen).toEqual([{ streamId: 'parent', todos: [] }]);
     } finally {
       off();
+      bridge.dispose();
+    }
+  });
+
+  it('routes host-path runtime events through the desktop session host channel', async () => {
+    const messages: unknown[] = [];
+    const streamSnapshotStore = createStreamSnapshotStore([]);
+    const bridge = (await createBridge(messages, {
+      streamSnapshotStore,
+    })) as BridgeWithSession;
+    const { emitRuntimeEvent } =
+      await import('@agent/runtime/emitRuntimeEvent');
+    const session = bridge.session as unknown as Parameters<
+      typeof emitRuntimeEvent
+    >[2];
+
+    try {
+      emitRuntimeEvent(
+        'setTaskState',
+        {
+          streamId: 'desktop-host-stream',
+          executionId: 'desktop-host-exec',
+          taskState: TaskStateSchema.parse(workflowTaskState()),
+        },
+        session,
+      );
+
+      await vi.waitFor(() => {
+        expect(streamSnapshotStore.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            streamId: 'desktop-host-stream',
+            executionId: 'desktop-host-exec',
+          }),
+        );
+      });
+    } finally {
       bridge.dispose();
     }
   });
