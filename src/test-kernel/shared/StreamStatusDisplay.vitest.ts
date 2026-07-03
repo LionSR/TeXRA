@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { STREAM_STATUS } from '@shared/schemas';
+import { STREAM_PHASE, STREAM_STATUS, STREAM_SUBSTATE } from '@shared/schemas';
 import {
   type StreamStatusLabelStyle,
   formatStreamStatusLabel,
+  streamStatusDisplayKey,
+  streamStatusIndicatorClass,
 } from '@shared/streams/streamStatusDisplay';
 
 describe('stream status display labels', () => {
@@ -14,6 +16,9 @@ describe('stream status display labels', () => {
     ['cliCompact', STREAM_STATUS.WAITING, 'idle'],
     ['progressHeader', STREAM_STATUS.WAITING, 'Waiting for follow-up'],
     ['progressHeader', STREAM_STATUS.INITIALIZING, 'Initializing'],
+    ['cliCompact', STREAM_PHASE.COMPLETED, 'completed'],
+    ['progressHeader', STREAM_PHASE.COMPLETED, 'Completed'],
+    ['cliCompact', STREAM_STATUS.STOPPED, 'stopped'],
   ];
 
   it.each(wordingCases)(
@@ -28,4 +33,19 @@ describe('stream status display labels', () => {
     expect(formatStreamStatusLabel('')).toBe('');
     expect(formatStreamStatusLabel(undefined, { missingLabel: '-' })).toBe('-');
   });
+
+  it.each([
+    [STREAM_STATUS.INITIALIZING, STREAM_SUBSTATE.STARTING, 'is-starting'],
+    [STREAM_STATUS.RESUMING, STREAM_SUBSTATE.RESUMING, 'is-resuming'],
+    [STREAM_STATUS.STOPPED, STREAM_PHASE.COMPLETED, 'is-completed'],
+    [STREAM_STATUS.ERROR, STREAM_PHASE.FAILED, 'is-failed'],
+    [STREAM_STATUS.WAITING, STREAM_PHASE.WAITING, 'is-waiting'],
+    [STREAM_STATUS.READY, 'ready', 'is-ready'],
+  ] as const)(
+    'maps legacy %s to display key %s and class %s',
+    (status, key, className) => {
+      expect(streamStatusDisplayKey(status)).toBe(key);
+      expect(streamStatusIndicatorClass(status)).toBe(className);
+    },
+  );
 });

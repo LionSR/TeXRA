@@ -871,13 +871,13 @@ describe('CLI root argument routing', () => {
     ).toBe(EXECUTION_STATUS.ERROR);
   });
 
-  it('honors stored interrupted terminal status', () => {
+  it('honors stored cancelled outcome', () => {
     expect(
       cliTerminalStatus(
         {
           outcome: RUN_OUTCOME.COMPLETED,
         } as Parameters<typeof cliTerminalStatus>[0],
-        EXECUTION_STATUS.INTERRUPTED,
+        RUN_OUTCOME.CANCELLED,
       ),
     ).toBe(EXECUTION_STATUS.INTERRUPTED);
   });
@@ -891,7 +891,6 @@ describe('CLI root argument routing', () => {
         streamId: 'stream-without-output',
         lastResponse: 'done',
       } as Parameters<typeof createCliRunResult>[0],
-      EXECUTION_STATUS.COMPLETED,
       { workingDirectory: '/tmp/project' },
     );
 
@@ -899,6 +898,8 @@ describe('CLI root argument routing', () => {
       executionId: 'completed-without-output',
       workingDirectory: '/tmp/project',
       terminalStatus: EXECUTION_STATUS.COMPLETED,
+      status: EXECUTION_STATUS.COMPLETED,
+      endGroupStatus: 'stopped',
     });
   });
 

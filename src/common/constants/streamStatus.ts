@@ -5,11 +5,15 @@
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
+  STREAM_PHASE,
   STREAM_STATUS,
+  STREAM_SUBSTATE,
   STREAM_STATUS_TRAITS,
   type ExecutionStatus,
   type RunOutcome,
+  type StreamPhase,
   type StreamStatus,
+  type StreamSubstate,
 } from '@shared/schemas';
 
 // ============================================================================
@@ -37,23 +41,14 @@ export function deriveRunOutcome(facts: {
 export interface RunOutcomeProjection {
   /** Persisted-history projection (`ExecutionMeta.terminalStatus`). */
   readonly executionStatus: ExecutionStatus;
-  /** Transcript-group projection (`stage.end()` / group-end rows). */
-  readonly endGroupStatus: 'error' | 'stopped';
-  /** Live stream-state projection for the terminal transition. */
-  readonly streamStatus: StreamStatus;
 }
 
 /**
- * Projection table: one row per outcome, one column per legacy vocabulary.
+ * Projection table: one row per outcome, one injective legacy vocabulary.
  *
- * Reading the columns:
- * - `executionStatus` is the only injective projection — persisted history
- *   keeps all three outcomes apart.
- * - `endGroupStatus` and `streamStatus` are isomorphic (completed/cancelled
- *   fold to the same neutral value; only failed is distinct): a cancelled run
- *   ends neutral, never red — a user stop is not a failure. If the transcript
- *   group vocabulary ever learns a third value, consolidate these two columns
- *   into one.
+ * `executionStatus` is the only injective projection — persisted history keeps
+ * all three outcomes apart. The non-injective legacy transcript/stream shapes
+ * are derived by helpers below so the completed/cancelled fold has one source.
  *
  * The `Record` key type keeps the table compile-time exhaustive; read it
  * through {@link projectRunOutcome} so an out-of-vocabulary value (stale
@@ -65,18 +60,12 @@ export const RUN_OUTCOME_PROJECTION: Readonly<
 > = {
   [RUN_OUTCOME.COMPLETED]: {
     executionStatus: EXECUTION_STATUS.COMPLETED,
-    endGroupStatus: 'stopped',
-    streamStatus: STREAM_STATUS.STOPPED,
   },
   [RUN_OUTCOME.CANCELLED]: {
     executionStatus: EXECUTION_STATUS.INTERRUPTED,
-    endGroupStatus: 'stopped',
-    streamStatus: STREAM_STATUS.STOPPED,
   },
   [RUN_OUTCOME.FAILED]: {
     executionStatus: EXECUTION_STATUS.ERROR,
-    endGroupStatus: 'error',
-    streamStatus: STREAM_STATUS.ERROR,
   },
 };
 
@@ -87,6 +76,117 @@ export function projectRunOutcome(outcome: RunOutcome): RunOutcomeProjection {
     throw new Error(`Unhandled run outcome: ${String(outcome)}`);
   }
   return projection;
+}
+
+export function runOutcomeToExecutionStatus(
+  outcome: RunOutcome,
+): ExecutionStatus {
+  return projectRunOutcome(outcome).executionStatus;
+}
+
+export function groupEndStatusForOutcome(outcome: RunOutcome): 'ok' | 'error' {
+  return outcome === RUN_OUTCOME.FAILED ? 'error' : 'ok';
+}
+
+export function legacyEndGroupStatusForOutcome(
+  outcome: RunOutcome,
+): 'error' | 'stopped' {
+  return groupEndStatusForOutcome(outcome) === 'error' ? 'error' : 'stopped';
+}
+
+export function terminalStreamStatusForOutcome(
+  outcome: RunOutcome,
+): StreamStatus {
+  return groupEndStatusForOutcome(outcome) === 'error'
+    ? STREAM_STATUS.ERROR
+    : STREAM_STATUS.STOPPED;
+}
+
+// ============================================================================
+// StreamPhase transition algebra (stage 0 vocabulary only)
+// ============================================================================
+
+export const STREAM_TRANSITION_CAUSE = {
+  LIFECYCLE: 'lifecycle',
+  WAIT: 'wait',
+  RESUME: 'resume',
+  USER_STOP: 'user-stop',
+  RESTART_REPAIR: 'restart-repair',
+} as const;
+
+export type StreamTransitionCause =
+  (typeof STREAM_TRANSITION_CAUSE)[keyof typeof STREAM_TRANSITION_CAUSE];
+
+function isTerminalOutcomePhase(
+  phase: StreamPhase | undefined,
+): phase is RunOutcome {
+  return (
+    phase === STREAM_PHASE.COMPLETED ||
+    phase === STREAM_PHASE.CANCELLED ||
+    phase === STREAM_PHASE.FAILED
+  );
+}
+
+export function isActivePhase(phase: StreamPhase | undefined): boolean {
+  return phase === STREAM_PHASE.RUNNING;
+}
+
+export function isInFlightPhase(phase: StreamPhase | undefined): boolean {
+  return phase === STREAM_PHASE.RUNNING || phase === STREAM_PHASE.WAITING;
+}
+
+export function isTerminalPhase(phase: StreamPhase | undefined): boolean {
+  return phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase);
+}
+
+export function canAcquireStreamReservation(
+  phase: StreamPhase | undefined,
+): boolean {
+  return !isInFlightPhase(phase);
+}
+
+export function canReleaseStreamReservation(state: {
+  readonly phase: StreamPhase | undefined;
+  readonly substate?: StreamSubstate;
+}): boolean {
+  return (
+    state.phase === STREAM_PHASE.RUNNING &&
+    state.substate === STREAM_SUBSTATE.STARTING
+  );
+}
+
+export function canTransitionStreamPhase(
+  from: StreamPhase | undefined,
+  to: StreamPhase,
+  cause: StreamTransitionCause,
+): boolean {
+  if (cause === STREAM_TRANSITION_CAUSE.USER_STOP) {
+    return isInFlightPhase(from) && to === STREAM_PHASE.CANCELLED;
+  }
+
+  if (isTerminalOutcomePhase(from)) {
+    return (
+      cause === STREAM_TRANSITION_CAUSE.RESUME && to === STREAM_PHASE.RUNNING
+    );
+  }
+
+  switch (cause) {
+    case STREAM_TRANSITION_CAUSE.LIFECYCLE:
+      if (from === undefined) return to === STREAM_PHASE.RUNNING;
+      return from === STREAM_PHASE.RUNNING && isTerminalOutcomePhase(to);
+    case STREAM_TRANSITION_CAUSE.WAIT:
+      return from === STREAM_PHASE.RUNNING && to === STREAM_PHASE.WAITING;
+    case STREAM_TRANSITION_CAUSE.RESUME:
+      return (
+        (from === STREAM_PHASE.WAITING || isTerminalOutcomePhase(from)) &&
+        to === STREAM_PHASE.RUNNING
+      );
+    case STREAM_TRANSITION_CAUSE.RESTART_REPAIR:
+      return (
+        from === STREAM_PHASE.RUNNING &&
+        (to === STREAM_PHASE.WAITING || to === STREAM_PHASE.FAILED)
+      );
+  }
 }
 
 // ============================================================================

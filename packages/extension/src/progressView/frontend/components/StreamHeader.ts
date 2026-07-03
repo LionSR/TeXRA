@@ -13,11 +13,18 @@ import {
   commonViewStyles,
 } from '@shared/styles';
 import {
+  STREAM_PHASE,
   STREAM_STATUS,
+  STREAM_SUBSTATE,
   type ConversationProgress,
   type StreamTabInfo,
 } from '@shared/schemas';
-import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
+import {
+  formatStreamStatusLabel,
+  streamStatusDisplayKey,
+  streamStatusIndicatorClass,
+  type StreamStatusDisplayKey,
+} from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import {
   TEXRA_ICON_LIBRARY,
@@ -53,15 +60,18 @@ interface ToolbarButton {
 }
 
 /**
- * Buttons enabled per status - pre-computed as Sets to avoid
+ * Buttons enabled per phase/substate - pre-computed as Sets to avoid
  * allocating a new Set on every getButtonState() call during render.
  */
-const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
-  [STREAM_STATUS.INITIALIZING]: new Set([
+const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
+  StreamStatusDisplayKey,
+  Set<string>
+> = {
+  [STREAM_SUBSTATE.STARTING]: new Set([
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.CLEAN_STREAM_BTN,
   ]),
-  [STREAM_STATUS.RUNNING]: new Set([
+  [STREAM_PHASE.RUNNING]: new Set([
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
@@ -69,7 +79,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ]),
-  [STREAM_STATUS.ERROR]: new Set([
+  [STREAM_PHASE.FAILED]: new Set([
     ELEMENT_IDS.RUN_NEW_BTN,
     ELEMENT_IDS.RESUME_BTN,
     ELEMENT_IDS.PACK_STREAM_BTN,
@@ -78,7 +88,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.DIFF_STREAM_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ]),
-  [STREAM_STATUS.STOPPED]: new Set([
+  [STREAM_PHASE.COMPLETED]: new Set([
     ELEMENT_IDS.RUN_NEW_BTN,
     ELEMENT_IDS.RESUME_BTN,
     ELEMENT_IDS.PACK_STREAM_BTN,
@@ -87,7 +97,16 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.DIFF_STREAM_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ]),
-  [STREAM_STATUS.READY]: new Set([
+  [STREAM_PHASE.CANCELLED]: new Set([
+    ELEMENT_IDS.RUN_NEW_BTN,
+    ELEMENT_IDS.RESUME_BTN,
+    ELEMENT_IDS.PACK_STREAM_BTN,
+    ELEMENT_IDS.CLEAN_STREAM_BTN,
+    ELEMENT_IDS.RESTORE_STATE_BTN,
+    ELEMENT_IDS.DIFF_STREAM_BTN,
+    ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ]),
+  ready: new Set([
     ELEMENT_IDS.RUN_NEW_BTN,
     ELEMENT_IDS.PACK_STREAM_BTN,
     ELEMENT_IDS.CLEAN_STREAM_BTN,
@@ -95,7 +114,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.DIFF_STREAM_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ]),
-  [STREAM_STATUS.WAITING]: new Set([
+  [STREAM_PHASE.WAITING]: new Set([
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
@@ -103,7 +122,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ]),
-  [STREAM_STATUS.RESUMING]: new Set([
+  [STREAM_SUBSTATE.RESUMING]: new Set([
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
@@ -318,6 +337,7 @@ export class StreamHeader extends LitElement {
     const statusLabel = formatStreamStatusLabel(status, {
       style: 'progressHeader',
     });
+    const statusClass = streamStatusIndicatorClass(status);
     const hasExecutionId = Boolean(this.stream.executionId);
     const agentCategory = this.stream.agentCategory;
     const toolbarButtons =
@@ -371,7 +391,7 @@ export class StreamHeader extends LitElement {
               id=${ELEMENT_IDS.STATUS_INDICATOR}
               class=${classMap({
                 'status-indicator': true,
-                [`is-${status}`]: Boolean(status),
+                ...(statusClass ? { [statusClass]: true } : {}),
               })}
             ></span>
             <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
@@ -424,7 +444,10 @@ export class StreamHeader extends LitElement {
     status: string,
     hasExecutionId: boolean,
   ): { disabled: boolean; hidden: boolean } {
-    const enabledButtons = ENABLED_BUTTONS_BY_STATUS[status];
+    const displayKey = streamStatusDisplayKey(status);
+    const enabledButtons = displayKey
+      ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
+      : undefined;
     const hidden = EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId;
     const disabled = hidden || !enabledButtons?.has(buttonId);
     return { disabled, hidden };
