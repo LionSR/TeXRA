@@ -4,18 +4,24 @@
  * The annotations endpoint is paginated and fans out per check-run, so a busy
  * matrix build could otherwise burn through GitHub's primary 5,000/hour limit
  * on annotations alone. This budget caps annotation-page requests across ALL
- * PR subscriptions in the process to a fixed allowance per sliding window,
- * independent of the poll interval.
+ * PR subscriptions in the process to a token bucket that continuously
+ * refills, independent of the poll interval.
  *
  * A single shared singleton (`annotationFetchBudget`) is the authority; the
  * infrastructure `fetchAnnotations` claims against it and `PRPollingSource`
  * exposes a test-only reset that targets the same instance.
+ *
+ * This is a small hand-rolled token bucket rather than a library (e.g.
+ * `p-throttle`) because callers need a synchronous, non-blocking
+ * claim-or-defer check (`tryClaim`) with an injectable clock for
+ * deterministic tests (`resetForTests`) — `p-throttle` only offers an async
+ * queue-and-wait contract, which doesn't fit either requirement.
  */
 
 // Bound annotation endpoint traffic across all PR subscriptions in this
-// process. Pagination claims one unit per annotations page, so this 60s budget
-// window permits at most 3,000 annotation requests per hour, leaving room for
-// the rest of the PR polling endpoints under GitHub's primary 5,000/hour limit.
+// process. Pagination claims one unit per annotations page, so this budget
+// permits at most 3,000 annotation requests per hour, leaving room for the
+// rest of the PR polling endpoints under GitHub's primary 5,000/hour limit.
 // Keep it independent of the poll interval so tuning PR_POLL_INTERVAL_MS does
 // not silently raise the hourly ceiling.
 export const MAX_PROCESS_ANNOTATION_REQUESTS_PER_WINDOW = 50;
@@ -28,24 +34,38 @@ export class AnnotationFetchBudgetExhaustedError extends Error {
 }
 
 export class AnnotationFetchBudget {
-  private windowStartMs: number;
-  private remainingRequests: number;
+  private tokens: number;
+  private lastRefillMs: number;
 
   constructor(
     private readonly maxRequestsPerWindow: number,
     private readonly windowMs: number,
   ) {
-    this.windowStartMs = Date.now();
-    this.remainingRequests = maxRequestsPerWindow;
+    this.tokens = maxRequestsPerWindow;
+    this.lastRefillMs = Date.now();
+  }
+
+  /**
+   * Refill continuously (tokens/ms) rather than resetting the full
+   * allowance at fixed window boundaries — a fixed-window reset lets a
+   * caller burst up to 2x the budget across a boundary (all of one window's
+   * allowance immediately followed by all of the next).
+   */
+  private refill(nowMs: number): void {
+    const elapsedMs = nowMs - this.lastRefillMs;
+    if (elapsedMs <= 0) return;
+    const refillRate = this.maxRequestsPerWindow / this.windowMs;
+    this.tokens = Math.min(
+      this.maxRequestsPerWindow,
+      this.tokens + elapsedMs * refillRate,
+    );
+    this.lastRefillMs = nowMs;
   }
 
   tryClaim(nowMs = Date.now()): boolean {
-    if (nowMs - this.windowStartMs >= this.windowMs) {
-      this.windowStartMs = nowMs;
-      this.remainingRequests = this.maxRequestsPerWindow;
-    }
-    if (this.remainingRequests <= 0) return false;
-    this.remainingRequests -= 1;
+    this.refill(nowMs);
+    if (this.tokens < 1) return false;
+    this.tokens -= 1;
     return true;
   }
 
@@ -53,8 +73,8 @@ export class AnnotationFetchBudget {
     remainingRequests = this.maxRequestsPerWindow,
     nowMs = Date.now(),
   ): void {
-    this.windowStartMs = nowMs;
-    this.remainingRequests = Math.max(
+    this.lastRefillMs = nowMs;
+    this.tokens = Math.max(
       0,
       Math.min(this.maxRequestsPerWindow, remainingRequests),
     );
