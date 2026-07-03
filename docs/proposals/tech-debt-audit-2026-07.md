@@ -55,8 +55,11 @@ Concrete sub-debts, each independently fixable:
   (28 in the base alone: `supportsToolResultFileUpload`,
   `supportsResponseChaining`, `shouldIncludeReasoningInToolCalls`, …) are
   individually overridable toggles. A new provider means auditing dozens of
-  independent booleans. **Fix:** one declarative `ProviderCapabilities` record
-  per handler.
+  independent booleans. **Fix:** one declarative `ProviderCapabilities` source
+  per handler, with entries allowed to be runtime resolvers over config/auth
+  mode rather than only static constants. `ModelHandlerCodex` is the concrete
+  warning: subscription and API-key routes do not advertise the same
+  capabilities.
 - **`modelHandlerOpenAIResponse.ts` god class.** 94 methods; header comment
   admits non-thread-safe instance state (`previousResponseId`,
   `pendingBackgroundResponseId`, `conversationState`); juggles streaming vs
@@ -71,8 +74,11 @@ Concrete sub-debts, each independently fixable:
   predicates. **Fix:** unify behind one handler with an explicit
   `InteractionChain` collaborator, or record a sunset date for the GenAI path.
 - **Dual contract.** `types/IModelHandler.ts` (475 LoC, 33 signatures)
-  duplicates the abstract class surface by hand. **Fix:** derive one from the
-  other or delete the interface.
+  duplicates most of the abstract class surface by hand. **Fix:** derive the
+  common surface from one source, while preserving interface-only extension
+  ports such as `createBatchedToolUseFollowUpMessages?`, which
+  `ToolUseDispatchNode` feature-detects for providers requiring batched
+  parallel tool-result messages.
 
 Caveat, honoring this repo's documented "rejected traps" discipline: the fix is
 **not** a grand unified handler framework (call sites genuinely diverge per
@@ -102,17 +108,22 @@ desktop" bugs (the coupling audit's #6887 crash-repair gap was exactly this
 class of drift). **Fix:** a shared
 `createSettingsViewHost({ postMessage, secrets, state })` /
 `createAgentExecutionHost(...)` factory in `src/controllers/`, parameterized by
-a thin host-capability interface; each host shrinks to a ~100-line adapter.
+a thin host-capability interface. Scope it to repeated controller/command
+wiring, not to deliberate host-specific flows already called out in
+`agent-runtime-ui-coupling-audit.md` (GitHub subscriptions, crash reporting,
+history export/rerun, provider-key differences, and similar platform seams).
 
 ### A3. `MainApp.ts`: 1,915-line god component running three state mechanisms at once
 
-`packages/extension/src/webview/frontend/MainApp.ts` mixes 18 ad-hoc
-`signal(...)` fields (`:162-227`), 5 `@state`/`@provide` context fields, and a
-`PersistedState`/`createWebviewStorage` manager, with restore logic sprawled
-over three methods. The repo already contains the correct pattern —
+`packages/extension/src/webview/frontend/MainApp.ts` mixes about 32 ad-hoc
+`signal(...)` fields around the class state block, 4 distinct
+`@state`/`@provide` context fields, and a `PersistedState`/
+`createWebviewStorage` manager, with restore logic sprawled over three methods.
+The repo already contains the correct pattern —
 `progressView/frontend/` uses a store + 10 slice files with `mutative` — and
 MainApp simply predates it. Same story in miniature for
-`settingsView/frontend/SettingsApp.ts` (1,140) + `LaTeXTab.ts` (848).
+`settingsView/frontend/SettingsApp.ts` (1,140) +
+`settingsView/frontend/tabs/LaTeXTab.ts` (848).
 **Fix:** migrate MainApp/SettingsApp to the in-repo slice-store pattern; no new
 architecture needed.
 
@@ -129,11 +140,11 @@ architecture needed.
 
 ### A5. Build/script/alias sprawl
 
-- `scripts/` holds ~30 `.mjs` files, ~7,850 lines, including a hand-rolled
+- `scripts/` holds ~30 `.mjs` files, ~5,000 lines, including a hand-rolled
   JSON-comment stripper in `aliasUtils.mjs` (reimplements `strip-json-comments`)
   whose own header admits the extension tsconfig "will silently follow the
   root" on divergence.
-- Root `tsconfig.json` has **45 path aliases**; `@/*` and `~/*` are exact
+- Root `tsconfig.json` has **54 path aliases**; `@/*` and `~/*` are exact
   duplicates, and several "shared" aliases (`@webview/*`, `@commands/*`,
   `@settingsView/*`, …) point into `packages/extension/`, coupling core to one
   host. `packages/desktop/tsconfig.paths.json` is a second hand-maintained copy.
@@ -143,25 +154,34 @@ architecture needed.
   re-evaluation trigger on ink bumps).
 
 **Fixes:** use `tsconfck`/`strip-json-comments`; drop `~/*`; move host aliases
-into host tsconfigs and generate the desktop table from root; consolidate
-desktop tsconfigs via project references; document the ink-patch exit plan.
+into host tsconfigs only after the root typecheck is split or taught to read
+the host project configs (today `tsc --noEmit` still includes extension files
+that import `@commands/*`, `@frontend/*`, `@progressView/*`, etc.); generate
+the desktop table from root; consolidate desktop tsconfigs via project
+references; document the ink-patch exit plan.
 
 ### A6. Transcript persistence: four overlapping stores (2,856 LoC)
 
 `src/transcript/` — `StreamSnapshotStore.ts` (1,046), `StreamLogStore.ts`
-(814), `streamSnapshotRead.ts` (218), `StreamLog.ts` (185) — two big stores
-persisting the same conceptual per-run stream data plus a separate read path.
-The coupling audit's #6889 (vestigial pub-sub, headless sidecar gap) touches
-this area but not the structural overlap. **Fix:** one store interface with a
-single serialization format; the snapshot becomes a view over the log (or vice
-versa). Also fixes the CLI's synthetic-entry dedup at the source (see B2).
+(814), `streamSnapshotRead.ts` (218), `StreamLog.ts` (185) — carries two durable
+per-run stores plus a separate read path. They are not interchangeable:
+`StreamSnapshotStore` owns sidecars under `streamData/{id}/*` (output files,
+usage, todos/plan, task state), while `StreamLogStore` is the append-only
+transcript under `streamLogs`. The coupling audit's #6889 (vestigial pub-sub,
+headless sidecar gap) touches this area but not the narrower duplicated
+read/write paths. **Fix:** one facade over both formats, with explicit
+ownership of sidecars vs transcript entries; do not force sidecar-only restore
+data into the append-only log. Also fixes the CLI's synthetic-entry dedup at
+the source (see B2).
 
 ### A7. Smaller, contained items
 
 - **Command-surface dual bookkeeping:** `extensionCommandSurface.ts` (538 LoC,
   40 aliased imports, 111 command-id strings) hand-mirrors
   `src/shared/commands/catalog.ts`, which desktop already consumes cleanly.
-  Drive extension registration fully from the catalog.
+  Drive extension registration from the catalog plus explicit hidden-alias
+  metadata/table, so compatibility ids such as `texra.showSettingsView` remain
+  registered even when they are intentionally absent from the public catalog.
 - **CSS-in-TS sprawl:** ~6,000 LoC across 25+ `*Styles.ts` files;
   `src/shared/styles/requestPanelStyles.ts` alone is 1,058. Split per-panel,
   colocate, finish `designTokens` adoption.
@@ -243,11 +263,13 @@ so feature parity is a port, not a rewrite" — the shapes have already forked
 (one 25-field map-of-structs vs 10 slices). Only `normalizeToolUseData` is
 genuinely shared.
 
-**Better solution:** one host-neutral reducer in `src/shared` that folds
-`ProgressEventPayloads` (or, post-B1, `AgentEvent`) into a normalized
-per-stream view model, plus a shared per-tool **display model** (title,
-sections, status, elided output); the CLI and webview become thin ANSI/Lit
-paint layers. This also dissolves the CLI's fragile synthetic-entry machinery
+**Better solution:** not the broad "single reducer for CLI and webview" rejected
+in `agent-runtime-ui-coupling-audit.md:76` (that rejection is still correct for
+async disk I/O, race handling, host-specific derived fields, and persistence
+ownership). The viable target is narrower: one shared projection/display-model
+layer for common run facts and per-tool presentation facts (title, sections,
+status, elided output), while each host keeps its own persistence and derived
+UI state. This also dissolves the CLI's fragile synthetic-entry machinery
 (`state/transcript.ts:35` dedup-by-normalized-text,
 `syntheticAfterSeq` splicing in `subscribeStreamLog.ts:385-411`) — the correct
 fix is upstream: emit the finalized assistant message into `StreamLogStore`
@@ -283,10 +305,12 @@ wrappers existing solely to hide that.
 
 **Better solution:** make the catalog generate _both_ directions —
 `contributes.configuration`/`contributes.commands` in package.json **and** a
-typed `SettingKey` accessor map consumed via `platform().config` — then retire
-the snapshot+invariants scripts entirely (a codegen diff check replaces them).
-Same SSOT the proposal wants, but it deletes ~two scripts, a 70 KB artifact,
-and the whole silent-rename failure mode instead of adding a third surface.
+typed `SettingKey` accessor map consumed via `platform().config` — then replace
+the snapshot part of the invariant machinery with a codegen diff check while
+preserving package-resource checks that are not catalog-derived (required
+agents/docs/templates/webview assets and `.vscodeignore` allow-list lines).
+Same SSOT the proposal wants, but it removes the 70 KB generated artifact and
+the silent-rename failure mode without weakening VSIX resource validation.
 
 ### B5. `ExecutionRegistry`: the SessionHandle work fixed _global-ness_; the remaining debt is narrower than "split the class"
 
@@ -441,15 +465,17 @@ Two independent delivery systems, meeting only at two bridges:
 
 ## Suggested priority
 
-1. **A2 host-adapter factories** — highest bug-yield per line deleted; purely
-   mechanical; no design debate.
+1. **A2 host-adapter factories** — highest bug-yield per line deleted when
+   limited to duplicated controller/command wiring; deliberate platform seams
+   remain host-owned.
 2. **A1 model-handler hoists** (prefill template method → capabilities struct →
    OpenAIResponse/Google collaborator splits) — largest raw mass; every
    provider feature currently pays 4–5×.
 3. **B2 shared projection/display-model layer** — unblocks CLI feature parity
-   and deletes the synthetic-entry hacks; B1's taxonomy split
+   without reviving the rejected full-reducer extraction, and deletes the
+   synthetic-entry hacks; B1's taxonomy split
    (RunFacts/ApprovalRpc/AppSignals) is a natural prerequisite so the shared
-   reducer folds a well-typed event set.
+   projection layer folds a well-typed event set.
    3a. **B1/B5 targeted fixes** (small, high-safety-value): usage single-emit +
    projection; terminal-status single-writer; a test enforcing the
    handles/interrupts pairing and the binder↔queue keying invariant; close
@@ -458,5 +484,5 @@ Two independent delivery systems, meeting only at two bridges:
    interfaces; migrate the singleton-bound follow-up tests to fresh sessions.
 4. **B4 config codegen** — deletes tooling and a whole failure mode; small.
 5. **A4 test-infra** (`memfs` + global setup) — cheap, pays on every suite.
-6. **A3 MainApp slice migration, B3 boundary enforcement, A6 transcript store
-   unification, B5/B6 cohesion splits** — as-touched.
+6. **A3 MainApp slice migration, B3 boundary enforcement, A6 transcript facade,
+   B5/B6 cohesion splits** — as-touched.
