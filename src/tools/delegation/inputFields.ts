@@ -6,7 +6,7 @@
 import { z } from 'zod';
 
 // Local imports - logger
-import { toErrorMessage } from '@common/errors';
+import { extractErrorMessage, toErrorMessage } from '@common/errors';
 
 // Local imports - tools
 import type { ToolResult } from '@shared/schemas/toolResult';
@@ -44,10 +44,7 @@ export const memoriesField = z
         ctx.addIssue({
           code: 'custom',
           path: [i],
-          message:
-            e instanceof Error
-              ? toErrorMessage(e)
-              : `Invalid memory path: ${memory}`,
+          message: extractErrorMessage(e) ?? `Invalid memory path: ${memory}`,
         });
       }
     }
