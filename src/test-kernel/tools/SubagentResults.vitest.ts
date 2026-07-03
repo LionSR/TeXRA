@@ -9,6 +9,7 @@ import type {
 import { RUN_OUTCOME } from '@shared/schemas';
 import {
   formatBashDelivery,
+  formatBashError,
   formatSubagentDelivery,
 } from '@tools/subagentResults';
 
@@ -131,6 +132,21 @@ describe('formatSubagentDelivery', () => {
 
     expect(delivery).toContain('line-01');
     expect(delivery).toContain('line-20');
+  });
+
+  it('escapes background bash ids at the XML attribute boundary', () => {
+    const delivery = formatBashDelivery(
+      'bash&1"<',
+      'printf lines',
+      1000,
+      { success: true, stdout: '', stderr: '', exitCode: 0 },
+      'ok',
+      '',
+    );
+    const error = formatBashError('bash&1"<', 'printf lines', new Error('no'));
+
+    expect(delivery).toContain('<background-result id="bash&amp;1&quot;&lt;"');
+    expect(error).toContain('<background-error id="bash&amp;1&quot;&lt;"');
   });
 
   it('normalizes CRLF when truncating background output previews', () => {
