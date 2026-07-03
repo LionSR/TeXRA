@@ -283,6 +283,24 @@ export class StreamLogStore {
     return updated;
   }
 
+  appendText(
+    streamId: StreamTabId,
+    id: string,
+    appendText: string,
+  ): StreamLogEntry | undefined {
+    const logInstance = this.logs.get(streamId);
+    if (!logInstance) return undefined;
+
+    const updated = logInstance.appendText(id, appendText);
+    if (!updated) return undefined;
+
+    this.refreshSummary(streamId, logInstance);
+    this.markDirty(streamId);
+    void this.save();
+    this.notify(streamId);
+    return updated;
+  }
+
   clearDirtyUpdates(streamId: StreamTabId): void {
     this.logs.get(streamId)?.clearDirtyUpdates();
   }

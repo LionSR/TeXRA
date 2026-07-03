@@ -1,4 +1,8 @@
-import { STREAM_LOG_ENTRY_TYPES, type StreamLogEntry } from '@shared/schemas';
+import {
+  STREAM_LOG_ENTRY_TYPES,
+  type StreamLogEntry,
+  type StreamLogTextDelta,
+} from '@shared/schemas';
 import { isObject } from '@utils/core';
 
 export type StreamLogAppendInput = Omit<StreamLogEntry, 'seqNo'>;
@@ -18,6 +22,7 @@ export class StreamLog {
   private seqCounter = 0;
   private readonly indexById = new Map<string, number>();
   private readonly dirtyUpdates = new Set<string>();
+  private readonly dirtyTextDeltas = new Map<string, StreamLogTextDelta>();
   private runningGroupCount = 0;
 
   constructor(entries: StreamLogEntry[] = []) {
@@ -110,6 +115,32 @@ export class StreamLog {
 
     this.entries[index] = updated;
     this.dirtyUpdates.add(id);
+    this.dirtyTextDeltas.delete(id);
+    return updated;
+  }
+
+  appendText(id: string, appendText: string): StreamLogEntry | undefined {
+    if (appendText.length === 0) return undefined;
+
+    const index = this.indexById.get(id);
+    if (index === undefined) return undefined;
+
+    const current = this.entries[index];
+    if (current.type !== STREAM_LOG_ENTRY_TYPES.LOG) return undefined;
+
+    const updated: StreamLogEntry = {
+      ...current,
+      text: `${current.text ?? ''}${appendText}`,
+    };
+
+    this.entries[index] = updated;
+    if (!this.dirtyUpdates.has(id)) {
+      const currentDelta = this.dirtyTextDeltas.get(id);
+      this.dirtyTextDeltas.set(id, {
+        id,
+        appendText: `${currentDelta?.appendText ?? ''}${appendText}`,
+      });
+    }
     return updated;
   }
 
@@ -137,6 +168,28 @@ export class StreamLog {
     return updates;
   }
 
+  getDirtyTextDeltas(
+    maxSeqInclusive: number = this.seqCounter,
+  ): StreamLogTextDelta[] {
+    const deltas: Array<{
+      delta: StreamLogTextDelta;
+      seqNo: number;
+    }> = [];
+    for (const [id, delta] of this.dirtyTextDeltas) {
+      const index = this.indexById.get(id);
+      if (index === undefined) {
+        this.dirtyTextDeltas.delete(id);
+        continue;
+      }
+      const entry = this.entries[index];
+      if (entry.seqNo <= maxSeqInclusive) {
+        deltas.push({ delta, seqNo: entry.seqNo });
+      }
+    }
+    deltas.sort((a, b) => a.seqNo - b.seqNo);
+    return deltas.map(({ delta }) => delta);
+  }
+
   drainDirtyUpdates(
     maxSeqInclusive: number = this.seqCounter,
   ): StreamLogEntry[] {
@@ -156,6 +209,17 @@ export class StreamLog {
         this.dirtyUpdates.delete(id);
       }
     }
+
+    for (const id of this.dirtyTextDeltas.keys()) {
+      const index = this.indexById.get(id);
+      if (index === undefined) {
+        this.dirtyTextDeltas.delete(id);
+        continue;
+      }
+      if (this.entries[index].seqNo <= maxSeqInclusive) {
+        this.dirtyTextDeltas.delete(id);
+      }
+    }
   }
 
   ackDirtyUpdates(updates: readonly StreamLogEntry[]): void {
@@ -167,6 +231,35 @@ export class StreamLog {
       }
       if (this.entries[index] === update) {
         this.dirtyUpdates.delete(update.id);
+      }
+    }
+  }
+
+  ackDirtyTextDeltas(
+    deltas: readonly StreamLogTextDelta[],
+    fullEntries: readonly StreamLogEntry[] = [],
+  ): void {
+    for (const entry of fullEntries) {
+      const index = this.indexById.get(entry.id);
+      if (index !== undefined && this.entries[index] === entry) {
+        this.dirtyTextDeltas.delete(entry.id);
+      }
+    }
+
+    for (const delta of deltas) {
+      const current = this.dirtyTextDeltas.get(delta.id);
+      if (!current) continue;
+
+      if (current.appendText === delta.appendText) {
+        this.dirtyTextDeltas.delete(delta.id);
+        continue;
+      }
+
+      if (current.appendText.startsWith(delta.appendText)) {
+        this.dirtyTextDeltas.set(delta.id, {
+          id: delta.id,
+          appendText: current.appendText.slice(delta.appendText.length),
+        });
       }
     }
   }
