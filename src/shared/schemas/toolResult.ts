@@ -176,28 +176,26 @@ export type ToolResultStatus = (typeof TOOL_RESULT_STATUSES)[number];
  * generic fallback — this preserves historical behavior for tools that only
  * ever set `output`/`summary` while failing.
  */
-export const NormalizedToolResultSchema = ToolResultSchema.transform(
-  (raw) => {
-    const hasError = isNonEmptyString(raw.error);
-    const hasOutput = isNonEmptyString(raw.output);
-    const hasSummary = isNonEmptyString(raw.summary);
-    const isError = raw.isError === true;
-    const status: ToolResultStatus =
-      isError || (hasError && !hasOutput) ? 'error' : 'executed';
+export const NormalizedToolResultSchema = ToolResultSchema.transform((raw) => {
+  const hasError = isNonEmptyString(raw.error);
+  const hasOutput = isNonEmptyString(raw.output);
+  const hasSummary = isNonEmptyString(raw.summary);
+  const isError = raw.isError === true;
+  const status: ToolResultStatus =
+    isError || (hasError && !hasOutput) ? 'error' : 'executed';
 
-    if (status !== 'error') {
-      return { ...raw, status };
-    }
+  if (status !== 'error') {
+    return { ...raw, status };
+  }
 
-    let errorText: string;
-    if (isNonEmptyString(raw.error)) errorText = raw.error;
-    else if (isNonEmptyString(raw.output)) errorText = raw.output;
-    else if (isNonEmptyString(raw.summary)) errorText = raw.summary;
-    else errorText = 'Tool failed';
+  let errorText: string;
+  if (isNonEmptyString(raw.error)) errorText = raw.error;
+  else if (isNonEmptyString(raw.output)) errorText = raw.output;
+  else if (isNonEmptyString(raw.summary)) errorText = raw.summary;
+  else errorText = 'Tool failed';
 
-    return { ...raw, status, error: errorText };
-  },
-);
+  return { ...raw, status, error: errorText };
+});
 
 export class ToolError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {

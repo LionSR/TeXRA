@@ -103,9 +103,7 @@ export type AcceptEditedMessage = z.infer<typeof AcceptEditedMessageSchema>;
 
 /** Union consumed by `executionHandlers.handleFileOperation`. */
 export type FileOperationMessage =
-  | MergeMessage
-  | CompareMessage
-  | AcceptEditedMessage;
+  MergeMessage | CompareMessage | AcceptEditedMessage;
 
 const ExecutionMessages = [
   z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE) }),
