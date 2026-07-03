@@ -8,7 +8,6 @@ import {
   type AgentDirectoryBundleSource,
   type AgentDirectoryVersionStore,
 } from './AgentDirectorySync';
-import { setAgentDirectories } from './agentDirectoriesRegistry';
 
 interface PlatformAgentDirectoryOptions {
   channel: string;
@@ -21,7 +20,7 @@ export interface PlatformAgentDirectoryBootstrapOptions extends PlatformAgentDir
   versionStore: AgentDirectoryVersionStore;
 }
 
-function createPlatformAgentDirectories(
+export function createPlatformAgentDirectories(
   options: PlatformAgentDirectoryOptions,
 ): AgentDirectoryService {
   return new AgentDirectoryService({
@@ -69,5 +68,4 @@ export async function bootstrapPlatformAgentDirectories(
   });
 
   await sync.reconcile(options.currentVersion);
-  setAgentDirectories(createPlatformAgentDirectories(options));
 }

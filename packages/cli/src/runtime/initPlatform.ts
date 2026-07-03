@@ -21,7 +21,10 @@ import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
-import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import {
+  bootstrapPlatformAgentDirectories,
+  createPlatformAgentDirectories,
+} from '@agent/index/platformAgentDirectories';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 
 // Local imports - auth
@@ -234,6 +237,10 @@ export async function initCliPlatform(
         );
       },
     });
+    const agentDirectories = createPlatformAgentDirectories({
+      channel: 'cli',
+      customDirectoryStore: { get: () => undefined },
+    });
     initPlatform(
       createNodePlatform({
         configStores: { workspace: configStore, global: globalConfigStore },
@@ -243,6 +250,7 @@ export async function initCliPlatform(
         secrets: getCliSecrets(context.storageRoot),
         lifecycle,
         agentResume: { tryResumeStream: async () => false },
+        agentDirectories,
         getWorkspacePath: () => cliWorkspaceCwd,
         toolAvailability: {
           isTexraCliEntrypoint: () =>

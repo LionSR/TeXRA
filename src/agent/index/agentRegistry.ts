@@ -16,7 +16,6 @@ import {
   agentName,
 } from '@shared/schemas/agent';
 import { unique } from '@utils/core';
-import { getAgentDirectories } from './agentDirectoriesRegistry';
 import {
   DEFAULT_WORKFLOW_AGENT,
   LEGACY_AGENT_ALIASES,
@@ -146,7 +145,7 @@ async function doLoad(includeRemote: boolean): Promise<void> {
   migrateLegacySourceKeys();
 
   // Load from all sources in parallel
-  const dirs = getAgentDirectories();
+  const dirs = platform().agentDirectories;
   const [customDir, builtInDir, toolUseDir] = await Promise.all([
     dirs.custom(),
     dirs.builtIn(),

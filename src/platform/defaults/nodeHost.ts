@@ -29,6 +29,7 @@ import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces/toolAvailability';
 
 // Type imports
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
+import type { AgentDirectoriesPort } from '../interfaces/agentDirectories';
 import type { AgentResumePort } from '../interfaces/agentResume';
 import type { LifecycleHost } from '../interfaces/lifecycle';
 import type { StateStore } from '../interfaces/state';
@@ -52,6 +53,7 @@ export interface NodePlatformServices {
   readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
+  readonly agentDirectories: AgentDirectoriesPort;
   /** Current workspace root, read lazily so the host can update it later. */
   readonly getWorkspacePath: () => string | undefined;
   /** Host-specific availability overrides merged over the no-op defaults. */
@@ -84,6 +86,7 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     secrets: services.secrets,
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,
+    agentDirectories: services.agentDirectories,
     toolAvailability: {
       ...NO_TOOL_AVAILABILITY_HOST,
       ...services.toolAvailability,
