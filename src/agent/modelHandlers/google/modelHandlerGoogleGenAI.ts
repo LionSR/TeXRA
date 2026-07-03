@@ -28,7 +28,7 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   getSdkErrorMessage,
-  attachPartialText,
+  annotateStreamFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -517,12 +517,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       // error so the retry UI can show progress and future continuation logic
       // can reference it. Google's SDK has no currentMessage accessor, so we
       // rely on the manually accumulated buffer above.
-      if (aggregatedText) {
-        attachPartialText(
-          error,
-          takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX),
-        );
-      }
+      // Google's SDK never reaches the SDK-retry boundary here, so this catch
+      // does not opt into flow-level auto-retry (retryEligible = false); it only
+      // lifts any accumulated tail onto the error for the retry UI.
+      annotateStreamFailure(
+        error,
+        aggregatedText ? takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX) : '',
+        false,
+      );
       throw error;
     }
   }

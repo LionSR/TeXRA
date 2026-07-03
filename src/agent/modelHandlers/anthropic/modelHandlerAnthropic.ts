@@ -25,8 +25,8 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 // Local imports - common
 import {
   attachStreamDiagnostics,
-  attachPartialText,
-  attachFlowAutoRetryRequired,
+  annotateStreamFailure,
+  trackStreamConnect,
   takeTail,
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
@@ -607,11 +607,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         throw new AnthropicUserAbortError();
       }
 
-      let streamConnected = false;
-      const onConnect = (): void => {
-        streamConnected = true;
-      };
-      stream.on('connect', onConnect);
+      const connect = trackStreamConnect(stream);
 
       let cleanupAbortListener: (() => void) | undefined;
       if (signal) {
@@ -725,17 +721,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.logger.debug(logMessage, logData);
 
         attachStreamDiagnostics(enrichedError, diagnostics);
-        attachPartialText(enrichedError, partialText);
-        if (streamConnected || partialText) {
-          attachFlowAutoRetryRequired(enrichedError);
-        }
+        annotateStreamFailure(
+          enrichedError,
+          partialText,
+          connect.isConnected() || partialText.length > 0,
+        );
         throw enrichedError;
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
         streamHandler.finalize();
-        if (typeof stream.off === 'function') {
-          stream.off('connect', onConnect);
-        }
+        connect.cleanup();
         cleanupAbortListener?.();
       }
     } else {
