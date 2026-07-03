@@ -105,7 +105,7 @@ jobs:
         uses: LionSR/agent-ci-actions@v1
         with:
           provider: ${{ matrix.provider }}
-          model-tier: opus
+          model-tier: sonnet
           allowed-bots: 'claude[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
