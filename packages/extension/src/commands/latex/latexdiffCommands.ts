@@ -23,6 +23,7 @@ import {
   type LatexdiffPackResult,
 } from '@housekeeping';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
+import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/commandConfig';
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
@@ -33,7 +34,7 @@ import { CHANNEL, service } from '@latex/latexdiff/service';
 import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
 import type { RunLatexdiffCommandConfig } from '@latex/latexdiff/types';
 import * as logger from '@logger/logUtils';
-import type { FileLocation, OutputFileInfo } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
@@ -371,20 +372,9 @@ async function handleRunLatexdiff(
 
     const runId = config.runId ?? undefined;
 
-    // `config` arrives as an arbitrary VS Code command argument (any caller
-    // can invoke `texra.runLatexdiff` with a malformed payload), so validate
-    // each round entry's shape rather than trusting the declared type.
-    const validRounds = (config.outputsByRound ?? [])
-      .filter(
-        (entry): entry is [number, OutputFileInfo[]] =>
-          Array.isArray(entry) &&
-          typeof entry[0] === 'number' &&
-          Array.isArray(entry[1]) &&
-          entry[1].length > 0,
-      )
-      .sort((a, b) => a[0] - b[0]);
-    const outputsByRound: Map<number, OutputFileInfo[]> | null =
-      validRounds.length > 0 ? new Map(validRounds) : null;
+    const outputsByRound = normalizeRunLatexdiffOutputsByRound(
+      config.outputsByRound,
+    );
 
     const { outcome } = await vscode.window.withProgress(
       {
