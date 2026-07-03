@@ -115,7 +115,7 @@ signature / surface changes or design-direction notes); none is unattended-safe.
 
 3. **`createMediaContent` returns `any[]` on the abstract base member**
    _(LOW)_. `ModelHandler.ts:814` — `abstract createMediaContent(mediaMessage:
-   MediaEntry[]): any[]` — the lone `any` on an abstract member in a class that
+MediaEntry[]): any[]` — the lone `any` on an abstract member in a class that
    otherwise preserves full `<M,U,T,C,Resp>` generic typing. Every provider
    implements it with a concrete provider content-part type. Widen to the
    provider content-part type (or at least `unknown[]`). Not on `IModelHandler`,
@@ -126,12 +126,12 @@ signature / surface changes or design-direction notes); none is unattended-safe.
    disjoint flow roles (reflection/workflow message-building vs tool-use
    dispatch) plus usage/pricing, yet no single consumer needs all of them —
    `followUpMessages.ts` **already** narrows via `Pick<IModelHandler,
-   'addMediaToUserMessage' | 'capabilities' | 'createUserFollowUpMessages'>`.
+'addMediaToUserMessage' | 'capabilities' | 'createUserFollowUpMessages'>`.
    Extending that `Pick<>` pattern into named role slices (`ISamplingHandler` /
    `IReflectionHandler` / `IToolUseHandler` / `IUsageHandler`, with
    `ModelHandler` implementing the union) would let a minimal SDK-backed provider
    satisfy only the slice it runs. **This is not the adjudicated trap** (which was
-   *removing* the interface as a duplicate of `ModelHandler` — still a trap; the
+   _removing_ the interface as a duplicate of `ModelHandler` — still a trap; the
    optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` narrowing keep it
    load-bearing). Type-only refactor, reviewed-train.
 
@@ -159,19 +159,19 @@ signature / surface changes or design-direction notes); none is unattended-safe.
 The uninformed audit raised, and the standing rulings correctly filter, all of
 the following. No change.
 
-| Re-surfaced candidate                                                               | Ruling                                                                                                                                            |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table | **Trap** — the `modelHandlers` reader rejected this itself: each carries real per-provider override points (`getThinkingParameter` shapes, reasoning-wire fields, temperatures, token-count APIs). Only DashScope (1 flag) + XAI are genuinely thin. |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                            | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing (see new candidate #4 for the distinct *split* angle).           |
-| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger`                  | **Keep** — each hook has a distinct real overrider (OpenAIResponse in-flight guard; per-SDK tagger; per-handler impl).                            |
-| Provider getters `isGrokReasoningModel` / `isDeepSeek` / `isKimi` / `isMiniMax` are "dead" | **VERIFIED FALSE** (detailed audit) — used by `modelHandlerOpenAI` / `ModelHandlerOpenRouterNative`; the live angle is *placement* (07-02 candidate #7), still reviewed-train. |
-| `ModelFactory` two-layer / trivial-identity factories                               | **No violation** — `createModelHandler` + `createModelHandlerForCompatibilityKey` are two real entry points sharing logic (justified DRY); routes give compile-time exhaustiveness. |
-| Inline the cycle-wrapper nodes / `createXCycleFlow` factories                       | **Keep** — this *is* the mandated `Node.exec → createFlow → flow.run` shape.                                                                      |
-| Collapse `runAgent` / `runAgentStream` dual entry / add a `runtime/index.ts` barrel | **Trap** — deliberate naming; `@texra/core` **is** the curated barrel.                                                                            |
-| `AgentTrace` over-layered / platform single-call-site ports are over-abstraction    | **Keep** — trace is one `emit()` SSoT (SDK-shaped); the thin ports each have three divergent host impls.                                          |
-| Two logging idioms (`logUtils` vs `createChannelTrace`) are "redundant"             | **Known / tracked** — run-scope vs module-singleton split targeted by `docs/prds/2026-05-17-logger-surface-cleanup.md`; the reader's "narrow `createChannelTrace` to 4 methods for log-only singletons" is the same tracked cleanup, not novel. |
-| `runToolUseAgent` / `runReflectionAgent` are single-caller wrappers                 | **Keep** — each owns genuinely category-specific wiring (progress-turn counting / follow-up side effects vs per-round callback); inlining bloats `executeAgent`. The reader flagged them as defensible, not must-fix. |
-| Test-only injection seams on `runReflectionFlow` (`getOutputFileLocation?` etc.)    | **Keep** — legitimate DI-for-testability; production caller passes neither.                                                                       |
+| Re-surfaced candidate                                                                      | Ruling                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table        | **Trap** — the `modelHandlers` reader rejected this itself: each carries real per-provider override points (`getThinkingParameter` shapes, reasoning-wire fields, temperatures, token-count APIs). Only DashScope (1 flag) + XAI are genuinely thin. |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                                  | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing (see new candidate #4 for the distinct _split_ angle).                                                                                |
+| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger`                         | **Keep** — each hook has a distinct real overrider (OpenAIResponse in-flight guard; per-SDK tagger; per-handler impl).                                                                                                                               |
+| Provider getters `isGrokReasoningModel` / `isDeepSeek` / `isKimi` / `isMiniMax` are "dead" | **VERIFIED FALSE** (detailed audit) — used by `modelHandlerOpenAI` / `ModelHandlerOpenRouterNative`; the live angle is _placement_ (07-02 candidate #7), still reviewed-train.                                                                       |
+| `ModelFactory` two-layer / trivial-identity factories                                      | **No violation** — `createModelHandler` + `createModelHandlerForCompatibilityKey` are two real entry points sharing logic (justified DRY); routes give compile-time exhaustiveness.                                                                  |
+| Inline the cycle-wrapper nodes / `createXCycleFlow` factories                              | **Keep** — this _is_ the mandated `Node.exec → createFlow → flow.run` shape.                                                                                                                                                                         |
+| Collapse `runAgent` / `runAgentStream` dual entry / add a `runtime/index.ts` barrel        | **Trap** — deliberate naming; `@texra/core` **is** the curated barrel.                                                                                                                                                                               |
+| `AgentTrace` over-layered / platform single-call-site ports are over-abstraction           | **Keep** — trace is one `emit()` SSoT (SDK-shaped); the thin ports each have three divergent host impls.                                                                                                                                             |
+| Two logging idioms (`logUtils` vs `createChannelTrace`) are "redundant"                    | **Known / tracked** — run-scope vs module-singleton split targeted by `docs/prds/2026-05-17-logger-surface-cleanup.md`; the reader's "narrow `createChannelTrace` to 4 methods for log-only singletons" is the same tracked cleanup, not novel.      |
+| `runToolUseAgent` / `runReflectionAgent` are single-caller wrappers                        | **Keep** — each owns genuinely category-specific wiring (progress-turn counting / follow-up side effects vs per-round callback); inlining bloats `executeAgent`. The reader flagged them as defensible, not must-fix.                                |
+| Test-only injection seams on `runReflectionFlow` (`getOutputFileLocation?` etc.)           | **Keep** — legitimate DI-for-testability; production caller passes neither.                                                                                                                                                                          |
 
 ## Structural divergence from the Agent SDK loop — re-stated (no new action)
 
@@ -180,7 +180,7 @@ from the SDK's flat `query()` generator loop; all are justified capability, not
 over-abstraction:
 
 1. **Nested two-flow execution.** The SDK's single "model call + tool dispatch"
-   loop is TeXRA's *inner* cycle flow (`createResponseCycleFlow` /
+   loop is TeXRA's _inner_ cycle flow (`createResponseCycleFlow` /
    `createToolUseRoundFlow`); an outer persisted flow drives rounds and bridges
    services across the boundary. The nesting exists for persistence, not
    ceremony. Highest-leverage SDK-alignment move (candidate #2) is to converge
@@ -188,7 +188,7 @@ over-abstraction:
    the outer flow, making "one model call + tool dispatch" a graph edge.
 2. **Persistence-first design.** Every node step is `structuredClone`'d to a KV
    store so a run resumes after a VS Code reload — a real product requirement with
-   no SDK counterpart (this is *why* the loop can't be a plain generator, and why
+   no SDK counterpart (this is _why_ the loop can't be a plain generator, and why
    the now-deleted `attach`/`getRunId` speculative resume surface was never
    needed).
 3. **Rich human-in-the-loop coordination.** `BasePromiseCoordinator` +
@@ -245,7 +245,7 @@ not re-open the adjudicated traps.
   (`platform.ts:49/57`), `AgentTrace` emit/subscribe (`trace/index.ts`),
   `src/agent/core/index.ts` **absent** (no barrel regression).
 - Applied deletion verified: `grep "static async attach\|getRunId"
-  src/agent/node/persistedFlow.ts` → **0** after edit; both had **0** callers
+src/agent/node/persistedFlow.ts` → **0** after edit; both had **0** callers
   across `src` + `packages` before deletion; absent from all prior readiness docs
   (0 grep hits). `runId` field retained.
 - New candidates verified in-tree: `PersistedFlow.init` → private `ensureRecord`
