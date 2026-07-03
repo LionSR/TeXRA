@@ -57,6 +57,7 @@ import {
   buildOptionalFlowResultFields,
   type AgentFlowResult,
 } from './AgentFlowResult';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -370,6 +371,13 @@ export interface ExecuteAgentOptions {
   runtimeUnavailableTools?: readonly string[];
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
+  /**
+   * Per-run override for the host's tool-edit approval UI. Hosts that manage
+   * more than one concurrent session per process (e.g. desktop, one window per
+   * run) pass their session-scoped handler here instead of relying on the
+   * frozen, process-wide `platform().toolEditApproval` port.
+   */
+  toolEditApprovalHandler?: ToolEditApprovalPort;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
   /** Fires after flow completes but before executionRegistry.untrack, so follow-ups are enqueued before waiters resolve. */
@@ -400,10 +408,13 @@ export async function executeAgent(
     session: options.session,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
   });
-  ctx.delegationDepth = options.delegationDepth ?? 0;
-  ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
+  ctx.delegation = {
+    delegationDepth: options.delegationDepth ?? 0,
+    approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+  };
   ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
   ctx.stopAfterCycle = options.stopAfterCycle;
+  ctx.toolEditApprovalHandler = options.toolEditApprovalHandler;
   return withExecutionRunContext(ctx, async () => {
     const { setting, streamId, config } = ctx;
     const { isSubagent } = options;
@@ -469,6 +480,8 @@ export interface ResumeToolUseFromSnapshotOptions {
   readonly runtimeUnavailableTools?: readonly string[];
   /** Session owning this run's coordination state. Defaults to the process session. */
   readonly session?: SessionHandle;
+  /** Per-run override for the host's tool-edit approval UI — see `ExecuteAgentOptions.toolEditApprovalHandler`. */
+  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
   readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
   readonly setupSession?: (session: IToolUseSession) => void;
 }
@@ -498,11 +511,14 @@ export async function resumeToolUseFromSnapshot(
   // Recover delegation depth from the persisted parent-execution chain
   // so resumed subagents remain gated by the nested-delegation policy
   // instead of silently promoting to root.
-  ctx.delegationDepth = await computeDelegationDepthFromStorage(
-    snapshot.executionId,
-  );
-  ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
+  ctx.delegation = {
+    delegationDepth: await computeDelegationDepthFromStorage(
+      snapshot.executionId,
+    ),
+    approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+  };
   ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
+  ctx.toolEditApprovalHandler = options.toolEditApprovalHandler;
   const { setting, streamId } = ctx;
 
   await withExecutionRunContext(ctx, async () => {
@@ -512,7 +528,7 @@ export async function resumeToolUseFromSnapshot(
       );
     }
 
-    const isSubagent = (ctx.delegationDepth ?? 0) > 0;
+    const isSubagent = (ctx.delegation?.delegationDepth ?? 0) > 0;
     await runFlowWithLifecycle(
       ctx,
       async (handle) => {
