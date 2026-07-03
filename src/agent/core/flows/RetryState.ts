@@ -5,10 +5,7 @@ import { StatusCodes } from 'http-status-codes';
 import { Node, type NonIterableObject } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import {
-  type RetryResult,
-  type RetryRequestOptions,
-} from '@agent/runtime/RetryRequestCoordinator';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ensureError, normalizeProviderError } from '@common/errors';
@@ -52,10 +49,6 @@ interface RetryableNodeServices {
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: () => Promise<void>;
-  waitForRetry: (
-    streamId: string,
-    options: RetryRequestOptions,
-  ) => Promise<RetryResult>;
 }
 
 /**
@@ -274,7 +267,8 @@ export abstract class RetryableInvocationNode<
     streamStatus.set(streamId, STREAM_STATUS.WAITING, {
       runtimeHost,
     });
-    const result: RetryResult = await this.services.waitForRetry(streamId, {
+    const { session } = useLaunchRunContext();
+    const result = await session.coordinators.waitForRetry(streamId, {
       operation: operationName,
       errorMessage: formatted.message,
       logger,
