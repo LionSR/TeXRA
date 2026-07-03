@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sendFollowUpMock = vi.hoisted(() =>
   vi.fn(async () => ({ status: 'sent' as const })),
@@ -39,6 +39,11 @@ function createLogger() {
 }
 
 describe('ExecutionSubscriptionBinder session routing', () => {
+  beforeEach(() => {
+    sendFollowUpMock.mockReset();
+    sendFollowUpMock.mockResolvedValue({ status: 'sent' as const });
+  });
+
   it('passes the owning session to subscription follow-ups', async () => {
     const registry = new ExecutionRegistry();
     const session = { tag: 'window-session' } as unknown as SessionHandle;
@@ -74,6 +79,49 @@ describe('ExecutionSubscriptionBinder session routing', () => {
         session,
       );
     } finally {
+      binder.dispose();
+      registry.dispose();
+    }
+  });
+
+  it('warns instead of leaking an unhandled rejection when delivery fails', async () => {
+    const registry = new ExecutionRegistry();
+    const explicit = createRecordingHost();
+    const logger = createLogger();
+    const binder = new ExecutionSubscriptionBinder({
+      registry,
+      releaseSource: createReleaseSource(),
+      logger,
+    });
+    const executionId = 'exec-subscription-rejection-test';
+    const handle = new AgentExecutionHandle(
+      executionId,
+      streamId,
+      childStreamId,
+      'search',
+      'toolUse',
+      explicit.host,
+    );
+    const unhandledRejection = vi.fn();
+    sendFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
+
+    try {
+      process.once('unhandledRejection', unhandledRejection);
+      registry.track(handle);
+      binder.bind(streamId, executionId, explicit.host);
+
+      registry.untrack(executionId);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(unhandledRejection).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Failed to deliver execution subscription follow-up',
+        expect.objectContaining({
+          data: expect.objectContaining({ executionId, streamId }),
+        }),
+      );
+    } finally {
+      process.off('unhandledRejection', unhandledRejection);
       binder.dispose();
       registry.dispose();
     }
