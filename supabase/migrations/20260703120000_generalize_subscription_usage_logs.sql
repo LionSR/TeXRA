@@ -45,6 +45,20 @@ ALTER POLICY "Users can read own ChatGPT subscription usage logs"
   ON public.subscription_usage_logs
   RENAME TO "Users can read own subscription usage logs";
 
+-- Temporary read compatibility for old log-usage deployments. The previous
+-- edge function checks batch existence with `.from('chatgpt_subscription_usage_logs')`
+-- before it calls the upsert RPC, so the old relation name must remain readable
+-- during a migration-then-function rollout.
+CREATE OR REPLACE VIEW public.chatgpt_subscription_usage_logs
+WITH (security_invoker = on)
+AS
+SELECT *
+FROM public.subscription_usage_logs
+WHERE source = 'chatgpt';
+
+GRANT SELECT ON public.chatgpt_subscription_usage_logs
+  TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.subscription_usage_logs_upsert(p_rows JSONB)
 RETURNS INTEGER
 LANGUAGE plpgsql
