@@ -103,6 +103,7 @@ describe('SettingsProfileKeyController', () => {
       hosts.prompt.confirms[0]?.message,
       'Remove the OpenAI API key? This cannot be undone.',
     );
+    assert.equal(hosts.prompt.confirms[0]?.options?.modal, false);
     assert.equal(
       hosts.prompt.messages.at(-1)?.message,
       'OpenAI API key has been removed',
@@ -133,6 +134,16 @@ describe('SettingsProfileKeyController', () => {
       hosts.prompt.messages.at(-1)?.message,
       'OpenAI API key has been set',
     );
+  });
+
+  it('does nothing when committing an empty provider key', async () => {
+    const { controller, secrets, refreshCount, hosts } = createController();
+
+    await controller.commitProviderKey('openai', '');
+
+    assert.equal(secrets.size, 0);
+    assert.equal(refreshCount(), 0);
+    assert.equal(hosts.prompt.messages.length, 0);
   });
 
   it('opens provider key URLs when configured', async () => {

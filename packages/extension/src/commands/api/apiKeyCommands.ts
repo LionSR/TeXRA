@@ -2,11 +2,11 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import {
   settleQuickInput,
   showQuickPick,
 } from '@commands/_shared/quickInputUtils';
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
@@ -20,6 +20,10 @@ import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
 } from '@shared/constants/providers';
+import {
+  getProviderDisplayName,
+  getProviderKeyUrl,
+} from '@utils/config/providerConfig';
 
 const CHANNEL = 'ApiKeyCommands';
 logger.initialize(CHANNEL);
@@ -46,8 +50,14 @@ function createProfileKeyController(): SettingsProfileKeyController {
     prompt: new VscodePromptHost(),
     externalOpener: new VscodeExternalOpener(),
     getProviderDisplayName: (provider) =>
-      PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-    getProviderKeyUrl: (provider) => PROVIDER_URLS[provider],
+      getProviderDisplayName(
+        provider,
+        PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+      ),
+    getProviderKeyUrl: (provider) => {
+      const defaultUrl = PROVIDER_URLS[provider];
+      return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
+    },
     getApiKeySecretName: (provider) =>
       SecretManager.getApiKeySecretName(provider as ApiProvider),
     setSecret: (key, value) => SecretManager.set(key, value),

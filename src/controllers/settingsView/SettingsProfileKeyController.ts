@@ -36,6 +36,8 @@ export class SettingsProfileKeyController {
   }
 
   async commitProviderKey(provider: string, apiKey: string): Promise<void> {
+    if (!apiKey) return;
+
     const displayName = this.deps.getProviderDisplayName(provider);
     await this.deps.setSecret(this.deps.getApiKeySecretName(provider), apiKey);
     void this.deps.prompt.info(`${displayName} API key has been set`);
@@ -46,7 +48,7 @@ export class SettingsProfileKeyController {
     const displayName = this.deps.getProviderDisplayName(provider);
     const confirmed = await this.deps.prompt.confirm(
       `Remove the ${displayName} API key? This cannot be undone.`,
-      { confirmLabel: 'Remove', cancelLabel: 'Cancel' },
+      { confirmLabel: 'Remove', cancelLabel: 'Cancel', modal: false },
     );
     if (!confirmed) return;
 
