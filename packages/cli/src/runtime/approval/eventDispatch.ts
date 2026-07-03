@@ -8,6 +8,7 @@ import { writeTextStderr } from '../logSinks';
 
 import { type ApprovalDecision } from './approvalPolicy';
 import { formatAgentProposalApprovalSummary } from './approvalSummaries';
+import { handleCliAgentProposalDecision } from './agentProposalController';
 
 export function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
   event: K,
@@ -65,10 +66,7 @@ export function dispatchApprovalDecision<K extends CliDecisionApprovalEvent>(
     }
     case 'showAgentProposal': {
       const data = payload as ProgressEventPayloads['showAgentProposal'];
-      runCoordinatorBridge.resolveProposal(data.proposalId, {
-        action,
-        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
-      });
+      void handleCliAgentProposalDecision(data.proposalId, decision);
       return;
     }
     case 'showRetryRequest': {
