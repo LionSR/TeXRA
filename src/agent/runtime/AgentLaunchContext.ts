@@ -71,6 +71,7 @@ import {
 } from './StreamStatusService';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { attachConversationProgressHub } from './conversationProgressHub';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface AgentLaunchContext extends AgentCore {
@@ -80,10 +81,13 @@ export interface AgentLaunchContext extends AgentCore {
   streamStatus: StreamStatusRegistry;
   coordinators: RunCoordinators;
   attachedMemoryMisses: AttachedMemoryMiss[];
-  /** Whether approval or user prompts cannot be answered by the current host. */
-  approvalPromptsUnavailable?: boolean;
   /** Whether this tool-use run exits after one cycle instead of idling. */
   stopAfterCycle?: boolean;
+  /**
+   * Per-run override for the host's tool-edit approval UI, projected onto the
+   * ambient {@link RunContext}. See `RunContext.toolEditApprovalHandler`.
+   */
+  toolEditApprovalHandler?: ToolEditApprovalPort;
   /**
    * Session that owns this run's coordination state. Always populated by
    * {@link buildAgentLaunchContext} (defaults to `currentSession()` — the
@@ -155,11 +159,12 @@ function agentContextToRunContext(
     getModel: () => ctx.config.model,
     agentName: ctx.config.agent,
     workingDirectory: ctx.workingDirectory,
-    delegationDepth: ctx.delegationDepth,
-    approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
+    delegationDepth: ctx.delegation?.delegationDepth,
+    approvalPromptsUnavailable: ctx.delegation?.approvalPromptsUnavailable,
     runtimeUnavailableTools: ctx.runtimeUnavailableTools,
     stopAfterCycle: ctx.stopAfterCycle,
     session: ctx.session,
+    toolEditApprovalHandler: ctx.toolEditApprovalHandler,
   };
 }
 

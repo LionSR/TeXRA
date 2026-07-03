@@ -14,8 +14,9 @@
  * not change either host's pre-unification resume behavior.
  */
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-
 import { resumeQueuedToolUseSnapshot } from './resumeQueuedToolUse';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
+
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { SessionHandle } from './SessionHandle';
 
@@ -26,6 +27,8 @@ export interface ResumeToolUseHostOptions {
   readonly explicitFollowUp?: string;
   /** Tools hidden because the current host/runtime cannot support them. */
   readonly runtimeUnavailableTools?: readonly string[];
+  /** Per-run override for the host's tool-edit approval UI — see `ExecuteAgentOptions.toolEditApprovalHandler`. */
+  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
   /**
    * Session owning this run's coordination state. Host-path callers (e.g. the
    * desktop progress-view IPC handler) thread their window session; defaults to
@@ -56,6 +59,7 @@ export async function resumeToolUseSnapshot(
     {
       session: options.session,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
+      toolEditApprovalHandler: options.toolEditApprovalHandler,
       extraFollowUps:
         options.explicitFollowUp !== undefined
           ? [{ text: options.explicitFollowUp, origin: 'user' as const }]
