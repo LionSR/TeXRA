@@ -222,7 +222,7 @@ export function createChatSessionController(
     readonly finalize: () => void;
   } => {
     const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost);
+    const wrapped = wrapRuntimeHost(runtimeHost, snapshotStore);
     const detachResultToast = attachTerminalResultToast(
       defaultSession(),
       wrapped,
