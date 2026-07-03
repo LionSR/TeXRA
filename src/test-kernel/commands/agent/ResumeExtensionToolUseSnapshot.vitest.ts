@@ -9,9 +9,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 const mocks = vi.hoisted(() => ({
   getToolUsePersistenceEnabled: vi.fn(() => true),
+  registerCommand: vi.fn(),
   resumeToolUseSnapshot: vi.fn(async () => true),
+  showWarningMessage: vi.fn(),
 }));
 
+vi.mock('vscode', () => ({
+  commands: {
+    registerCommand: mocks.registerCommand,
+  },
+  window: {
+    showWarningMessage: mocks.showWarningMessage,
+  },
+}));
 vi.mock('@utils/config', async (importActual) => ({
   ...(await importActual<typeof import('@utils/config')>()),
   getToolUsePersistenceEnabled: mocks.getToolUsePersistenceEnabled,
@@ -21,7 +31,10 @@ vi.mock('@agent/runtime/resumeToolUseSnapshot', () => ({
 }));
 
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import { resumeExtensionToolUseSnapshot } from '@commands/agent/resumeCommand';
+import {
+  registerResumeAgentCommand,
+  resumeExtensionToolUseSnapshot,
+} from '@commands/agent/resumeCommand';
 import type { StreamTabId } from '@shared/schemas';
 
 const STREAM = 'stream:ext-resume' as StreamTabId;
@@ -33,8 +46,10 @@ function snapshot(): ToolUseSessionSnapshot {
 describe('resumeExtensionToolUseSnapshot', () => {
   beforeEach(() => {
     mocks.getToolUsePersistenceEnabled.mockReturnValue(true);
+    mocks.registerCommand.mockReset();
     mocks.resumeToolUseSnapshot.mockReset();
     mocks.resumeToolUseSnapshot.mockResolvedValue(true);
+    mocks.showWarningMessage.mockReset();
   });
 
   it('refuses to resume when tool-use persistence is disabled', async () => {
@@ -58,5 +73,27 @@ describe('resumeExtensionToolUseSnapshot', () => {
         explicitFollowUp: 'typed alongside resume',
       }),
     );
+  });
+});
+
+describe('registerResumeAgentCommand', () => {
+  beforeEach(() => {
+    mocks.registerCommand.mockReset();
+  });
+
+  it('stores the command disposable on the extension context', () => {
+    const disposable = { dispose: vi.fn() };
+    mocks.registerCommand.mockReturnValue(disposable);
+    const context = { subscriptions: [] as unknown[] };
+
+    registerResumeAgentCommand(
+      context as Parameters<typeof registerResumeAgentCommand>[0],
+    );
+
+    expect(mocks.registerCommand).toHaveBeenCalledExactlyOnceWith(
+      'texra.resumeAgent',
+      expect.any(Function),
+    );
+    expect(context.subscriptions).toEqual([disposable]);
   });
 });
