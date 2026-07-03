@@ -1,7 +1,10 @@
 import * as path from 'node:path';
 
+import { z } from 'zod';
+
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 import {
@@ -18,6 +21,16 @@ const LEGACY_AGENT_FILES = [
   'agents/write/paper2cover.yaml',
   'agents/write/write_slide.yaml',
 ];
+const SYNC_MARKER_FILE = '.bundled-agent-sync.json';
+const RECENT_EXTERNAL_SYNC_MS = 5 * 60 * 1000;
+
+const AgentDirectorySyncMarkerSchema = z.object({
+  completedAt: z.number().nonnegative(),
+  ownerPid: z.int().nonnegative(),
+  version: z.string().nullish(),
+});
+
+type AgentDirectorySyncMarker = z.output<typeof AgentDirectorySyncMarkerSchema>;
 
 export interface AgentDirectoryBundleSource {
   copyDirectory(
@@ -29,6 +42,8 @@ export interface AgentDirectoryBundleSource {
 export interface AgentDirectoryStorage {
   ensureDir(relativePath: string): Promise<void>;
   exists(relativePath: string): Promise<boolean>;
+  read(relativePath: string): Promise<string>;
+  write(relativePath: string, content: string): Promise<void>;
   delete(relativePath: string): Promise<void>;
   fullPath(relativePath: string): string;
 }
@@ -74,6 +89,14 @@ export class GlobalStorageAgentDirectoryStorage implements AgentDirectoryStorage
     return GlobalStorageFS.exists(relativePath);
   }
 
+  read(relativePath: string): Promise<string> {
+    return GlobalStorageFS.read(relativePath);
+  }
+
+  write(relativePath: string, content: string): Promise<void> {
+    return GlobalStorageFS.write(relativePath, content);
+  }
+
   delete(relativePath: string): Promise<void> {
     return GlobalStorageFS.delete(relativePath);
   }
@@ -84,10 +107,42 @@ export class GlobalStorageAgentDirectoryStorage implements AgentDirectoryStorage
 }
 
 export class BundledAgentDirectorySync {
+  private static readonly reconcileByStorageRoot = new Map<
+    string,
+    Promise<boolean>
+  >();
+
   constructor(private readonly options: BundledAgentDirectorySyncOptions) {}
 
   async reconcile(currentVersion: string | undefined): Promise<boolean> {
+    const storageRoot = this.options.storage.fullPath('');
+    const previous =
+      BundledAgentDirectorySync.reconcileByStorageRoot.get(storageRoot) ??
+      Promise.resolve(true);
+    const current = previous
+      .catch(() => true)
+      .then(() => this.reconcileUnlocked(currentVersion));
+    const tracked = current.finally(() => {
+      if (
+        BundledAgentDirectorySync.reconcileByStorageRoot.get(storageRoot) ===
+        tracked
+      ) {
+        BundledAgentDirectorySync.reconcileByStorageRoot.delete(storageRoot);
+      }
+    });
+    tracked.catch(() => undefined);
+    BundledAgentDirectorySync.reconcileByStorageRoot.set(storageRoot, tracked);
+    return current;
+  }
+
+  private async reconcileUnlocked(
+    currentVersion: string | undefined,
+  ): Promise<boolean> {
     await this.deleteLegacyAgentFiles();
+    if (await this.hasRecentExternalSync(currentVersion)) {
+      await this.options.versionStore.update(currentVersion);
+      return false;
+    }
 
     for (const directoryName of BUNDLED_AGENT_DIRECTORY_NAMES) {
       await this.options.storage.ensureDir(directoryName);
@@ -98,7 +153,54 @@ export class BundledAgentDirectorySync {
     }
 
     await this.options.versionStore.update(currentVersion);
+    await this.writeSyncMarker(currentVersion);
     return true;
+  }
+
+  private async hasRecentExternalSync(
+    currentVersion: string | undefined,
+  ): Promise<boolean> {
+    const marker = await this.readSyncMarker();
+    if (!marker || marker.ownerPid === process.pid) return false;
+    if ((marker.version ?? undefined) !== currentVersion) return false;
+    return Date.now() - marker.completedAt < RECENT_EXTERNAL_SYNC_MS;
+  }
+
+  private async readSyncMarker(): Promise<
+    AgentDirectorySyncMarker | undefined
+  > {
+    try {
+      const raw = await this.options.storage.read(SYNC_MARKER_FILE);
+      return AgentDirectorySyncMarkerSchema.optional()
+        .catch(undefined)
+        .parse(JSON.parse(raw));
+    } catch (error) {
+      if (isFileNotFoundError(error)) return undefined;
+      this.options.logger.warn(
+        `Ignoring bundled agent sync marker: ${toErrorMessage(error)}`,
+      );
+      return undefined;
+    }
+  }
+
+  private async writeSyncMarker(
+    currentVersion: string | undefined,
+  ): Promise<void> {
+    try {
+      await this.options.storage.ensureDir('');
+      await this.options.storage.write(
+        SYNC_MARKER_FILE,
+        `${JSON.stringify({
+          completedAt: Date.now(),
+          ownerPid: process.pid,
+          version: currentVersion,
+        })}\n`,
+      );
+    } catch (error) {
+      this.options.logger.warn(
+        `Failed to write bundled agent sync marker: ${toErrorMessage(error)}`,
+      );
+    }
   }
 
   private async deleteLegacyAgentFiles(): Promise<void> {

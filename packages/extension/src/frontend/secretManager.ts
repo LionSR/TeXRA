@@ -7,9 +7,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   API_PROVIDERS,
   apiKeyExists as resolvedApiKeyExists,
-  apiKeyEnvName,
   apiKeySecretName,
-  getApiKey as requireApiKey,
   lookupApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
@@ -76,23 +74,6 @@ export class SecretManager {
     if (stored) return 'secret';
     if (getGitHubEnvToken()) return 'env';
     return 'none';
-  }
-
-  public static async getApiKey(provider: ApiProvider): Promise<string> {
-    try {
-      return await requireApiKey(platform().secrets, provider);
-    } catch (err) {
-      if (
-        !(err instanceof Error) ||
-        !err.message.startsWith(`No API key found for ${provider}.`)
-      ) {
-        throw err;
-      }
-      throw new Error(
-        `No API key found for ${provider}. Please set it using the "Set API Key" command or ${apiKeyEnvName(provider)} environment variable.`,
-        { cause: err },
-      );
-    }
   }
 
   public static async anyApiKeyExists(): Promise<boolean> {
