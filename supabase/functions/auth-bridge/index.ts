@@ -196,12 +196,8 @@ const PAGE_STYLE = `
   }
 `;
 
-/**
- * The bridge page. Server-validated `ext`/`id` are JSON-embedded for the inline
- * script; both are also re-validated client-side before building the href, so a
- * mismatched or tampered URL never produces a javascript:/data: link.
- */
-function bridgePageHtml(ext: string, id: string): string {
+/** Wrap page body markup in the shared document shell (head + theme-aware style). */
+function htmlDocument(bodyHtml: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -211,7 +207,18 @@ function bridgePageHtml(ext: string, id: string): string {
 <style>${PAGE_STYLE}</style>
 </head>
 <body>
-<h1 id="heading">Finish signing in to TeXRA</h1>
+${bodyHtml}
+</body>
+</html>`;
+}
+
+/**
+ * The bridge page. Server-validated `ext`/`id` are JSON-embedded for the inline
+ * script; both are also re-validated client-side before building the href, so a
+ * mismatched or tampered URL never produces a javascript:/data: link.
+ */
+function bridgePageHtml(ext: string, id: string): string {
+  return htmlDocument(`<h1 id="heading">Finish signing in to TeXRA</h1>
 <p id="lede" class="muted">Click the button below to return to your editor and complete sign-in.</p>
 <div class="actions">
   <a id="open" class="button primary" rel="noopener">Open in your editor</a>
@@ -327,27 +334,14 @@ function bridgePageHtml(ext: string, id: string): string {
       }
     });
   }
-</script>
-</body>
-</html>`;
+</script>`);
 }
 
 /** Generic error page that never reflects raw request input. */
 function errorPageHtml(message: string): string {
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TeXRA sign-in</title>
-<style>${PAGE_STYLE}</style>
-</head>
-<body>
-<h1>Sign-in could not be completed</h1>
+  return htmlDocument(`<h1>Sign-in could not be completed</h1>
 <p class="error">${escapeHtml(message)}</p>
-<p class="muted">Return to your editor and start sign-in again.</p>
-</body>
-</html>`;
+<p class="muted">Return to your editor and start sign-in again.</p>`);
 }
 
 function escapeHtml(value: string): string {
