@@ -312,8 +312,7 @@ type TransitionCause =
   | 'wait'
   | 'resume' // ToolUseWaitNode, resumeQueuedToolUse
   | 'user-stop' // RunTable stop path *requests*; machine writes 'cancelled'
-  | 'restart-repair' // host recovery: running→waiting/failed after reload
-  | 'clear'; // tab delete / delete-all (this session only)
+  | 'restart-repair'; // host recovery: running→waiting/failed after reload
 
 interface StreamStatusMachine {
   transition(
@@ -322,9 +321,16 @@ interface StreamStatusMachine {
     cause: TransitionCause,
     substate?: StreamSubstate,
   ): boolean; // false = rejected by the transition table
+  /** Tab delete / delete-all (this session only). NOT a transition: it
+   *  removes the entry (no StreamPhase represents "no stream") and emits
+   *  an explicit `cleared` event rather than a status event. */
+  clearStream(streamId: StreamTabId): void;
   get(streamId: StreamTabId): StreamPhase | undefined;
   /** Admission lock: reserves the stream (internal state, not a phase).
-   *  Surfaces to the UI as running+substate:'starting'. */
+   *  Surfaces to the UI as running+substate:'starting'. Deliberately
+   *  outside the transition table — it is a two-state reservation
+   *  (reserved/free) with its own invariant pair (acquire rejected while
+   *  in-flight; release only if still reserved), tested separately. */
   tryAcquire(streamId: StreamTabId): boolean;
   releaseIfReserved(streamId: StreamTabId): void;
 }
@@ -379,14 +385,21 @@ else is a projection, a sentinel, or a display hint:
 | `TaskState`                                                        | **Not a status** — agent config (model, category, files); misnamed                                                                                                                                      | rename to `TaskConfig` when touched                                                                                                      |
 | `ToolStatus`, `GoalStatus`, PR/CI states, `LogLevel`               | Orthogonal subjects (tool call, user goal, GitHub, severity)                                                                                                                                            | unchanged                                                                                                                                |
 
-The `STREAM_STATUS_TRAITS` table collapses into four derived predicates over
-5 values (`isActive = running`, `isInFlight = running \|\| waiting`,
+The `STREAM_STATUS_TRAITS` table collapses into **three** derived predicates
+over 5 values: `isActive = running`, `isInFlight = running \|\| waiting`,
 `isTerminal = outcome ∈ RunOutcome \|\| waiting` — with WAITING's deliberate
-`terminal ∧ inFlight` oddball preserved as today, `isLiveElapsed = running`),
-and `RUN_OUTCOME_PROJECTION` shrinks from a three-column table to the single
-derived group-end helper. The machine's transition table over 5 phases × 6
+`terminal ∧ inFlight` oddball preserved as today. `isLiveElapsed` becomes
+identical to `isActive` after the trim and is **deleted** (in the old table
+they diverged only on INITIALIZING — elapsed-ticking but not active; with
+`starting` as a substate of `running`, the distinction has no member left).
+The one behavioral delta: a stream in `starting` now counts as "active",
+which is safe because the guards that matter (`tryAcquire`,
+follow-up routing, eviction) key off `isInFlight`, not `isActive`.
+`RUN_OUTCOME_PROJECTION` shrinks from a three-column table to the single
+derived group-end helper. The machine's transition table over 5 phases × 5
 causes is small enough to be exhaustively unit-tested, which was the point
-of the trim.
+of the trim (the admission reservation is deliberately outside the table —
+see the interface note — and carries its own two-invariant test pair).
 
 **Bag/context unification** (the split-brain fix, mechanical per the DI
 audit): the launch context builds one frozen `RunScope` — identity
@@ -505,14 +518,19 @@ outright bugs:
   streams that no longer exist. Goal-store entries leak the same way
   (extension tab-delete never calls `forget`; only CLI history-delete
   does).
-- **A crash renders as success in CLI history.** Resumability is re-derived
-  in **five places with different predicates** — bare flow-record existence
-  (`detectWaitingStreams.ts:33`), a schema-parsing variant
-  (`SessionResumeRetrieval.ts:120`), a `terminalStatus` gate that only the
-  CLI applies (`history.ts:292-311`, which also defaults a missing terminal
-  write to `'completed'`), and a status-based rule on desktop
-  (`desktopStreamSnapshot.ts:145`). The hosts genuinely disagree about
-  which runs are resumable.
+- **Resumability is re-derived in five places with different predicates** —
+  bare flow-record existence (`detectWaitingStreams.ts:33`), a
+  schema-parsing variant (`SessionResumeRetrieval.ts:120`), a
+  `terminalStatus` gate that only the CLI applies (`history.ts:292-311`),
+  and a status-based rule on desktop (`desktopStreamSnapshot.ts:145`). The
+  hosts genuinely disagree about which runs are resumable — a stream the
+  extension would auto-resume can be gated non-resumable by the CLI, and
+  desktop's rule keys off a persisted status the others ignore. (The CLI's
+  crash handling itself is already correct: `resolveCliHistoryStatus`
+  explicitly refuses to report a missing terminal write as `'completed'`,
+  returning `'resumable'`/`'unknown'` — the historical crash-as-success bug
+  described in `lifecycle-status-ownership.md:134` has been fixed. The
+  remaining debt is the five-way disagreement, not that bug.)
 - **Crash repair is duplicated per host and self-inconsistent.** Extension
   and desktop each orchestrate their own restart repair in different orders
   (desktop carries a full duplicate in its `catch` arm,
@@ -555,7 +573,8 @@ formats stay separate, ownership unifies):
 - **One `deriveResumability(executionId) → {resumable, cause}`** consumed
   by all five call sites. With terminal statuses as `RunOutcome` (§Status
   model), the CLI's gate stops disagreeing with the runtime, and a missing
-  terminal write derives `failed`-after-crash instead of `'completed'`.
+  terminal write derives a definite `failed`-after-crash instead of the
+  CLI's `'unknown'` bucket.
 - **One `repairAfterRestart(session)` primitive** shared by extension and
   desktop: status via the `restart-repair` cause, transcript group closure,
   and outcome rewrite happen together, so the three artifacts cannot
@@ -622,7 +641,10 @@ and a new `StreamPhaseSchema` in `@shared/schemas` are the only definitions.
 `ResultEvent.outcome` is today a **hand-inlined literal** that must track
 `RunOutcome` by hand (`events.ts:173`) — it becomes schema-derived.
 `StageEndEvent.status` drops `EndGroupStatus` for `'ok' | 'error'` (the only
-distinction any group renderer consumes).
+distinction any group renderer consumes). The mapping is explicit:
+`completed → 'ok'`, `cancelled → 'ok'`, `failed → 'error'` — the same
+collapse the legacy 2-value helper applies (`{completed,cancelled}→stopped`,
+`failed→error`), renamed so "ok" stops being spelled "stopped".
 
 **Tier 1 — SDK (`@texra/core` / `AgentEvent`).** `StreamStatus` does not
 leak into the SDK today (verified) — keep it that way: the SDK speaks
@@ -756,6 +778,14 @@ ordering they force:
 The `defaultSession()` aliasing strategy from the 7d migration carries every
 stage: the extension keeps one default session, so wiring changes are
 invisible to it while desktop/CLI gain correctness.
+
+Test gates per stage: stage 0 ships the exhaustive phase×cause transition
+table test, the reservation invariant pair, and round-trip tests for every
+tier-3 shim (old value in → phase out); stage 1 ships the
+activation-ordering assertion and the CLI headless byte-parity test; stages
+2–5 each keep the parity test green and add projector-equivalence tests
+(bus-fed vs hub-fed handler output identical) before any bus key is
+deleted.
 
 0. **Vocabulary + shims.** Land `StreamPhaseSchema`, the tier-3 read shims
    (desktop `streams.json` union+transform, `terminalStatus` legacy mapping),

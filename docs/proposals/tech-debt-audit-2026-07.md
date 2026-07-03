@@ -463,6 +463,204 @@ Two independent delivery systems, meeting only at two bridges:
 
 ---
 
+## Part C — second sweep (2026-07-03): tools, LaTeX, model/auth, IPC performance, async correctness
+
+Five areas not covered by Parts A/B, audited to the same evidence standard.
+Each subsection ends with what is healthy, so fixes don't churn sound code.
+
+### C1. Tools layer: the result contract never declares its status
+
+`src/tools/` is 29,135 LoC, 56 tools behind one clean contract
+(`defineTool` → `BaseTool`), with projection to model/transcript/headless
+written once, centrally. The debts are in the contract's blind spots:
+
+- **C1a (keystone). `ToolResult` has no `status` at the source.**
+  `ToolResultSchema` is an all-optional `looseObject`
+  (`toolResult.ts:127-149`); success-vs-error is reverse-engineered
+  downstream by `NormalizedToolResultSchema`'s heuristic
+  (`isError || (error && !output)`, `:179-198`) and then re-parsed into the
+  _real_ discriminated `ToolResultPayloadSchema` that model/trace layers
+  want (`toolAttachmentUtils.ts:78-101`). All 56 tools flow through the
+  heuristic bridge, which papers over real bugs — `ExecutionsTool.handleKill`
+  returns `isError: true` with the message in `output`, not `error`
+  (`ExecutionsTool.ts:602-648`). **Fix:** tools return the discriminated
+  union at the source; delete the normalizer and the fallback ladder. Then a
+  single `toolError()` builder makes the throw-vs-return convention
+  principled (throw = programmer error, return = expected failure).
+- **C1b. Two parallel child-agent run drivers.** Native subagents
+  (`subagentExecution.ts`, 542 LoC) and external CLI agents
+  (`agentCliSessionLoop.ts`, 351) hand-implement the same
+  launch → deliver-to-parent-queue → persist-report → derive-outcome →
+  terminal-status choreography twice, including twin delivery-envelope
+  formatters (`subagentResults.ts` 469 vs `agentCliShared.ts:60-95`, both
+  emitting the same `<…-result>` XML). The codex/claude pair already proves
+  the fix: both are ~30-line strategies over one shared loop
+  (`AgentCliSessionStrategy`). **Fix:** promote that loop to the single
+  child-run driver (the architecture proposal's `session.runs` owns it);
+  native delegation becomes a strategy.
+- **C1c. Tool capabilities live as four external name-sets** —
+  `APPROVAL_GATED` (20 names), `SLOW_TOOLS`, `DEFERRED_LOG_TOOLS`,
+  `STREAMABLE_TOOLS` (`approvalGatedTools.ts:7-28`,
+  `ToolUseDispatchNode.ts:38-50`) — because the contract has no capability
+  axis. Adding a tool means editing up to four far-away sets. **Fix:**
+  optional capability flags on `ToolDefinition`; the dispatcher reads
+  `tool.definition.*`.
+- **C1d.** `ExecutionsTool` (951 LoC, ~30 methods, 12 virtual routes) wants
+  the same `executions/*` extraction already started for its formatters;
+  its file-reader subsystem duplicates the `..` traversal guard
+  **character-for-character** with `AcceptRunFilesTool.ts:154-155`, plus
+  five more ad-hoc variants — one `assertNoParentTraversal()` helper is
+  missing and each unshared copy is a potential path-escape bug.
+
+Healthy: single contract shape, centralized projection, clean registry,
+Zod v4 hygiene nearly complete (241 `.prefault/.catch/.nullish` uses; two
+stragglers in `ExternalInquiryTool.ts:121,130`), and silent catches are
+overwhelmingly disciplined best-effort-with-logging.
+
+### C2. LaTeX subsystem: healthy core, fragility concentrated in two files
+
+`src/latex/` (5,133 LoC, 30 files) passes the platform test perfectly: zero
+`vscode` imports, filesystem via `platform().fs`, every binary invoked
+through the shared `executeCommand` (execa, array-form args — no shell
+quoting bugs — centralized tree-kill/timeout). The compile-failure pipeline
+deliberately does **no** LaTeX-log parsing: binary exit code + raw 200-line
+log tail for the LLM (`texTools.ts`, `compileCheck.ts`) — best-in-class
+choice that sidesteps TeX-distro brittleness; protect it. The debts:
+
+- **C2a. Diff machinery fragmentation:** four bare `new diff_match_patch()`
+  instantiations with no shared wrapper (`diffComputation.ts:51`,
+  `contentSimilarity.ts:90`, `subagentDiffs.ts:34`,
+  `toolEditApproval.ts:135,203,328`), already drifting (some
+  `diff_cleanupSemantic`, some not; line-mode vs char-mode). **Fix:** one
+  `@utils/text/diff` module (line diff + stats + cleanup).
+- **C2b. `diffFileProcessor.ts` regex patch-stack** over latexdiff output —
+  six hardcoded repair regexes plus preamble skipping keyed on
+  natural-language markers **including LLM phrasing** (`'Here is'`,
+  `'以下是'`, `:34`). Silently corrupts when latexdiff or model phrasing
+  shifts. **Fix:** structured preamble-boundary detection + fixture matrix.
+- **C2c.** The bib-error retry requires **all four** hardcoded latexdiff
+  message substrings (`diffCommandExecutor.ts:15-20,265-269`) — the
+  `--flatten` fallback dies silently on a message change. **C2d.** TikZ
+  extraction uses greedy `.*?/gs` regexes that miss `figure*`/nested
+  environments (`TikzPictureManager.ts:76-78`).
+
+### C3. Model registry + auth: capability variance by auth mode is the anchor
+
+`src/model/` (953 LoC) is structurally sound: `llm-zoo` is the true single
+source of model facts (no local table — even the Supabase relay consumes
+it), handler routing is enum-keyed and exhaustiveness-checked, one model
+catalog serves all three hosts, and secret hygiene is excellent (secrets
+never cross IPC/webviews — status-only DTOs; no key material in errors or
+logs). `src/auth/` is 4,181 LoC. The debts:
+
+- **C3a (anchor — confirms the maintainer's Codex warning).**
+  Subscription-vs-API-key is a **capability fork implemented as ~15
+  `usingSubscription()` runtime overrides** in `modelHandlerCodex.ts:207-380`
+  (context window clamped to a hardcoded 272k, token counting / compaction /
+  uploads disabled, different pricing) — while the picker still advertises
+  llm-zoo's API-key capabilities (`computeModelOptions.ts:180-189`). The
+  routing _predicate_ is properly centralized (`codexRouting.ts`); the
+  _consequences_ are scattered. **Fix:** the declarative
+  `ProviderCapabilities` record from A1, **keyed by (model, auth-mode)**
+  with runtime resolvers — subscription becomes a capability profile the
+  picker reads, not 15 method forks.
+- **C3b. Two (soon three) concurrent-refresh coordinators.**
+  `SupabaseSessionCoordinator` (mutex + mutation-version + store-if-current)
+  and `CodexSessionCoordinator` (in-flight flags + generation counter) solve
+  the identical single-flight/supersede problem with different primitives
+  (`SupabaseSession.ts:196-345` vs `CodexSessionCoordinator.ts:118-289`);
+  the Copilot OAuth PRD implies a third. **Fix:** one generic
+  `RefreshingTokenStore<Session>`; providers supply `refresh()`/`isExpired()`.
+- **C3c. Capability split-brain:** llm-zoo's 20 per-model data flags vs
+  **128** handler-level `is*/supports*/requires*` predicates with no unified
+  resolver — the superset of Part A1's count; C3a is its worst symptom.
+- **C3d. Security-adjacent: redaction coverage gaps.** `redaction.ts:6-7`
+  recognizes only `sk-`/`sk-ant-`/`xai-` key shapes (plus `KEY=`/Bearer
+  forms) — a raw Google `AIza…`/Moonshot/DeepSeek/GLM key logged outside
+  those shapes reaches off-machine sinks unredacted. **Fix:** derive the
+  pattern set from `PROVIDER_REGISTRY`; assert every off-machine sink is
+  wrapped.
+- **C3e.** Tier/spend policy manually mirrored client↔relay with "you MUST
+  update both" comments (`sharedConfig.ts:97-129` ↔ `relay/models.ts:79-169`)
+  — billing-adjacent silent drift; codegen or shared JSON. **C3f.** Stringly
+  model-family routing (`startsWith('gpt-5')`, Anthropic name prefixes,
+  hardcoded Codex eligible-model list) belongs as data flags on the model
+  config.
+
+### C4. Webview IPC performance: streaming is quadratic; everything else is per-event
+
+A message-volume model of a streaming run found exactly one per-token-scale
+cost, and it's quadratic twice over:
+
+- **C4a (dominant). Full-buffer resend + full re-format per streaming
+  tick.** Every 50ms the recorder writes the _entire accumulated text_ into
+  the streaming row (`TexraTranscriptRecorder.ts:137`), the bridge ships the
+  _whole entry_ in `LOG_DELTA.updates` (`StreamLog.ts:123`,
+  `WebviewBridge.ts:139`), and the frontend re-parses the whole growing text
+  through the formatter (new object ref defeats `guard()` memoization by
+  design). Bytes and CPU are O(L²) in response length. **Fix:** a text-delta
+  protocol (`{id, appendText}`) for live rows — one change removes both
+  quadratic costs.
+- **C4b.** `sendStreamMetadata` rebuilds and ships **all historical
+  streams** (two O(N) loops, `WebviewUpdater.ts:392,428-442`; N unbounded =
+  every stream ever persisted) and fires per run start _and per subagent
+  spawn_ — O(N·S) during fan-out runs, O(N) at startup. **Fix:** per-stream
+  add/patch messages + memoized per-stream metadata.
+- **C4c.** `@lit-labs/virtualizer` is a declared dependency with **zero
+  imports**; long transcripts rely on manual windowing (120 timeline / 400
+  per-group rows with reveal buttons). Mount it on the timeline `repeat()`
+  or drop the dependency. **C4d.** The 50ms recorder throttle + 16ms bridge
+  frame are a redundant double buffer for single-row streaming (five ad-hoc
+  timing constants total, no shared policy). **C4e.** The 300ms save
+  debounce serializes the full stream log on the same hot path.
+
+Healthy (explicitly fenced off): the frontend's incremental `MessageIndex`
+
+- keyed `repeat()`/`guard()` pipeline, the trimmed 7-field `StreamMetadata`
+  payload, cheap known-stream tab switches, per-window clone-free desktop
+  relay, and the eviction/rehydration machinery.
+
+### C5. Async correctness: four real defects in an otherwise disciplined codebase
+
+The sweep (129 statement-position `void` calls, 220 `Promise.all*` sites,
+9 AbortControllers, zero unguarded async bus handlers) found the store
+write-chains, coordinator timeout handling, and `withEventErrorHandling`
+wrapping genuinely careful. The defects:
+
+- **C5a.** Two `void sendFollowUp(...).then(...)` sites with **no
+  `.catch`** — `ExecutionSubscriptionBinder.ts:170` and
+  `github/StreamSubscriptionRegistry.ts:131`. `appendFollowUp` or the
+  `.then`'s `runtimeHost.emit` throwing during teardown ⇒ unhandled
+  rejection. Both sites get _more_ reachable under session scoping.
+- **C5b (data-loss window).** Desktop never awaits the transcript-store
+  flush at quit: only `snapshotStore.flush()` is a registered shutdown
+  handler (`desktop/platform/index.ts:210`); the per-window
+  `StreamLogStore` flush is fire-and-forget on window `closed`
+  (`desktopAgentExecution.ts:588`), racing the 300ms write debounce against
+  process exit. The extension does this correctly
+  (`extension.ts:275-277` awaits `flushState()` in a BEFORE phase).
+- **C5c.** `goalStore.addToIndex` read-check-act across an await
+  (`goalStore.ts:109-113`): concurrent goal creation on different streams
+  last-writer-wins the index — silently dropped entries (the file's own
+  comment acknowledges dangling entries). **C5d.**
+  `executionLifecycle.ts:130` `Promise.all` over config/meta/parent-link
+  writes — one rejection leaves a half-registered execution on disk.
+
+The sweep also classified which known-safe patterns the session refactor
+would destabilize (the deferred `untrackHandle` flush vs `dispose()`, the
+process-global `wakeAttempts` map, the streamId-keyed queue) — these are
+inputs to the architecture proposal's §5 risk list, not immediate bugs.
+
+### Part C quick wins (small PRs, independent of the architecture program)
+
+Add `.catch` to the two C5a sites; await the desktop stream-log flush in a
+shutdown phase (C5b); serialize `addToIndex` through the existing
+per-stream write pattern (C5c); extract `assertNoParentTraversal()` (C1d);
+broaden the redaction pattern set (C3d); fix the two Zod stragglers (C1);
+delete or mount the unused virtualizer dependency (C4c).
+
+---
+
 ## Suggested priority
 
 1. **A2 host-adapter factories** — highest bug-yield per line deleted when
