@@ -130,6 +130,37 @@ const OPENAI_GPT5_REASONING_EFFORT_CAPS: Record<string, ReasoningEffortCap> = {
   [MAX_TIER]: 'high',
 };
 
+// Hop-by-hop and auth headers stripped before forwarding to the upstream
+// provider (auth is re-added from the server-side key).
+const SKIP_REQUEST_HEADERS = new Set([
+  'host',
+  'connection',
+  'keep-alive',
+  'transfer-encoding',
+  'te',
+  'trailer',
+  'upgrade',
+  'proxy-authorization',
+  'proxy-connection',
+  'authorization',
+  'content-length',
+  'x-api-key',
+  'x-goog-api-key',
+  'x-texra-auth',
+  'x-client-info',
+  'apikey',
+]);
+
+// Hop-by-hop headers stripped from the upstream response before returning it.
+const SKIP_RESPONSE_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'transfer-encoding',
+  'te',
+  'trailer',
+  'upgrade',
+]);
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -802,27 +833,8 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   // 9. Prepare upstream headers
   const upstreamHeaders = new Headers();
-  const SKIP_HEADERS = new Set([
-    'host',
-    'connection',
-    'keep-alive',
-    'transfer-encoding',
-    'te',
-    'trailer',
-    'upgrade',
-    'proxy-authorization',
-    'proxy-connection',
-    'authorization',
-    'content-length',
-    'x-api-key',
-    'x-goog-api-key',
-    'x-texra-auth',
-    'x-client-info',
-    'apikey',
-  ]);
-
   c.req.raw.headers.forEach((value, key) => {
-    if (!SKIP_HEADERS.has(key.toLowerCase())) {
+    if (!SKIP_REQUEST_HEADERS.has(key.toLowerCase())) {
       upstreamHeaders.set(key, value);
     }
   });
@@ -870,15 +882,6 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   // 11. Forward response with headers
   const responseHeaders = new Headers();
-  const SKIP_RESPONSE_HEADERS = new Set([
-    'connection',
-    'keep-alive',
-    'transfer-encoding',
-    'te',
-    'trailer',
-    'upgrade',
-  ]);
-
   upstreamResponse.headers.forEach((value, key) => {
     if (!SKIP_RESPONSE_HEADERS.has(key.toLowerCase())) {
       responseHeaders.set(key, value);
