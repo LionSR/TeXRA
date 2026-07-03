@@ -616,8 +616,9 @@ tables) ranked where the current vocabulary is pinned. The redesign tiers
 the surfaces so each has one canonical source and an explicit compatibility
 posture:
 
-**Tier 0 — canonical schemas (one source).** `RunOutcomeSchema` and a new
-`StreamPhaseSchema` in `@shared/schemas` are the only definitions.
+**Tier 0 — canonical schemas (one source).** `RunOutcomeSchema` (which
+**already ships** — `src/shared/schemas/stream.ts:145`; do not redefine it)
+and a new `StreamPhaseSchema` in `@shared/schemas` are the only definitions.
 `ResultEvent.outcome` is today a **hand-inlined literal** that must track
 `RunOutcome` by hand (`events.ts:173`) — it becomes schema-derived.
 `StageEndEvent.status` drops `EndGroupStatus` for `'ok' | 'error'` (the only
