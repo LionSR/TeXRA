@@ -66,7 +66,8 @@ vi.mock('@cli/runtime/approvalAdapter', () => ({
   installCliApprovalHandlers: mocks.installCliApprovalHandlers,
 }));
 
-vi.mock('@cli/runtime/terminalStatus', () => ({
+vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/terminalStatus')>()),
   readCliTerminalStatus: mocks.readCliTerminalStatus,
 }));
 
@@ -87,6 +88,18 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
     version: '0.0.0',
     resourcesPath: '/tmp/resources',
     ...overrides,
+  };
+}
+
+function toolUseConfig() {
+  return {
+    agent: 'chat',
+    model: 'gpt54',
+    inputFiles: [] as string[],
+    contextFiles: [] as string[],
+    instruction: 'Check this.',
+    workingDirectory: '/tmp/project',
+    agentCategory: 'toolUse' as const,
   };
 }
 
@@ -411,6 +424,42 @@ describe('executeCliConfig', () => {
     expect(mocks.runAgent).not.toHaveBeenCalled();
   });
 
+  it('derives the CLI display result and exit code for tool-use configs', async () => {
+    const { AgentCategory } =
+      await import('@agent/core/definition/AgentDataclass');
+    const { executeCliToolUseConfig } =
+      await import('@cli/runtime/runExecution');
+    mocks.runAgent.mockResolvedValueOnce({
+      category: AgentCategory.ToolUse,
+      executionId: 'exec-1',
+      outcome: 'completed',
+      lastResponse: 'Done.',
+    });
+    mocks.readCliTerminalStatus.mockResolvedValueOnce(
+      EXECUTION_STATUS.COMPLETED,
+    );
+
+    const result = await executeCliToolUseConfig(
+      toolUseConfig(),
+      cliContext(),
+      {
+        registerExecution: true,
+        stopAfterCycle: true,
+      },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      exitCode: 0,
+      displayResult: {
+        status: EXECUTION_STATUS.COMPLETED,
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+        workingDirectory: '/tmp/project',
+        lastResponse: 'Done.',
+      },
+    });
+  });
+
   it('marks executions errored when the resolved category is unexpected', async () => {
     const { AgentCategory } =
       await import('@agent/core/definition/AgentDataclass');
@@ -423,22 +472,10 @@ describe('executeCliConfig', () => {
       compileFailures: [],
     });
 
-    const result = await executeCliConfig(
-      {
-        agent: 'chat',
-        model: 'gpt54',
-        inputFiles: [],
-        contextFiles: [],
-        instruction: 'Check this.',
-        workingDirectory: '/tmp/project',
-        agentCategory: AgentCategory.ToolUse,
-      },
-      cliContext(),
-      {
-        expectedCategory: AgentCategory.ToolUse,
-        categoryMismatchMessage: 'wrong category',
-      },
-    );
+    const result = await executeCliConfig(toolUseConfig(), cliContext(), {
+      expectedCategory: AgentCategory.ToolUse,
+      categoryMismatchMessage: 'wrong category',
+    });
 
     expect(result).toMatchObject({ ok: false });
     expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(

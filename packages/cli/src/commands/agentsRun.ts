@@ -25,13 +25,8 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { emitCliResult } from './_helpers/output';
-import { executeCliConfig } from '../runtime/runExecution';
-import {
-  createCliRunResult,
-  terminalStatusExitCode,
-  toolUseResultText,
-  type CliToolUseRunResult,
-} from '../runtime/terminalStatus';
+import { executeCliToolUseConfig } from '../runtime/runExecution';
+import { toolUseResultText } from '../runtime/terminalStatus';
 import { formatToolUseAgentRunInstruction } from './_helpers/toolUseRunInstruction';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
@@ -84,32 +79,22 @@ export async function runToolUseAgent(
         agentCategory: AgentCategory.ToolUse,
       };
 
-      const execution = await executeCliConfig(config, runContext, {
+      const execution = await executeCliToolUseConfig(config, runContext, {
         enforceCategory: true,
         registerExecution: true,
         markErrorOnThrow: true,
         stopAfterCycle: true,
-        expectedCategory: AgentCategory.ToolUse,
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non tool-use run.`,
       });
       if (!execution.ok) return execution.exitCode;
 
-      const { result, terminalStatus } = execution;
-
-      const displayResult: CliToolUseRunResult = createCliRunResult(
-        result,
-        terminalStatus,
-        {
-          workingDirectory: runContext.cwd,
-        },
-      );
       emitCliResult(runContext, {
-        json: displayResult,
-        ndjson: { kind: 'agent-result', result: displayResult },
-        text: toolUseResultText(displayResult),
+        json: execution.displayResult,
+        ndjson: { kind: 'agent-result', result: execution.displayResult },
+        text: toolUseResultText(execution.displayResult),
       });
 
-      return terminalStatusExitCode(terminalStatus, runContext);
+      return execution.exitCode;
     },
   );
 }
