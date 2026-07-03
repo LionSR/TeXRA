@@ -50,6 +50,8 @@ interface PollingSourceLike<K extends string, Input> {
 export interface StreamSubscriptionRegistryOptions<K extends string, Input> {
   /** Display name for log messages. */
   name: string;
+  /** Logger override. */
+  logger?: Pick<AgentTrace, 'info' | 'warn'>;
   /** The polling source that owns the subscription. */
   source: PollingSourceLike<K, Input>;
   /** Convert a subscribe-input value to the canonical string key. */
@@ -77,7 +79,7 @@ interface BoundSubscription {
 }
 
 export class StreamSubscriptionRegistry<K extends string, Input> {
-  private readonly logger: AgentTrace;
+  private readonly logger: Pick<AgentTrace, 'info' | 'warn'>;
   private readonly perStream = new Map<
     StreamTabId,
     Map<K, BoundSubscription>
@@ -87,7 +89,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   constructor(
     private readonly opts: StreamSubscriptionRegistryOptions<K, Input>,
   ) {
-    this.logger = createChannelTrace(opts.name);
+    this.logger = opts.logger ?? createChannelTrace(opts.name);
   }
 
   /** Returns true if a new subscription was created, false if it already existed. */
@@ -134,11 +136,19 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
         undefined,
         undefined,
         subscription.session,
-      ).then((result) => {
-        if (result.status === 'sent' || result.status === 'queued') {
-          subscription.runtimeHost.emit('updateQueuedFollowUps', { streamId });
-        }
-      });
+      )
+        .then((result) => {
+          if (result.status === 'sent' || result.status === 'queued') {
+            subscription.runtimeHost.emit('updateQueuedFollowUps', {
+              streamId,
+            });
+          }
+        })
+        .catch((err: unknown) => {
+          this.logger.warn('Failed to deliver subscription follow-up', {
+            data: { key, streamId, err },
+          });
+        });
     };
     bound.set(key, subscription);
     // The source's keys-changed event fires synchronously during subscribe()
