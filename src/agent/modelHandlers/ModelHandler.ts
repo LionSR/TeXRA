@@ -48,14 +48,13 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
-// Local imports - utils
-import { roundTo } from '@utils/core';
 import {
   getProviderStreaming,
   getGlobalStreaming,
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 import { computeUtilizationPercent } from './support/contextUtilization';
+import { logCompactionEvent } from './support/compactionLogging';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,
@@ -943,29 +942,14 @@ export abstract class ModelHandler<
       ];
 
       const estimatedTokensAfter = Math.max(1, outputTokens);
-      const reduction = tokensBefore - estimatedTokensAfter;
-      const reductionPercent =
-        tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
-
-      logContextManagementEvent(
-        this.logger,
-        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-        {
-          action: 'compaction',
-          tokensBefore,
-          tokensAfter: estimatedTokensAfter,
-          contextWindow,
-          utilizationBefore: roundTo(
-            computeUtilizationPercent(tokensBefore, contextWindow),
-            1,
-          ),
-          utilizationAfter: roundTo(
-            computeUtilizationPercent(estimatedTokensAfter, contextWindow),
-            1,
-          ),
-          details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
-        },
-      );
+      logCompactionEvent({
+        logger: this.logger,
+        tokensBefore,
+        tokensAfter: estimatedTokensAfter,
+        contextWindow,
+        details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
+        tokensAfterIsEstimate: true,
+      });
 
       return { compactedMessages, didCompact: true };
     } catch (err) {
