@@ -62,8 +62,6 @@ export interface RunToolUseFlowInput<
   onFollowUpConsumed?: () => void;
   /** When true, delegation tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
-  /** When true, approval-gated tools are filtered out before model invocation. */
-  approvalPromptsUnavailable?: boolean;
   /** Tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
@@ -152,14 +150,14 @@ export async function runToolUseFlow<C = unknown>(
   const runSession = currentSession();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
-  const delegationDepth = input.delegationDepth ?? 0;
+  const delegationDepth = input.delegation?.delegationDepth ?? 0;
   const delegationGate = evaluateCurrentDelegationGate(delegationDepth);
   const { tools: resolvedTools, delegationTrimmed } = await resolveAgentTools({
     tools: setting.tools,
     registry,
     logger,
     delegationBlocked: !delegationGate.allowed,
-    approvalPromptsUnavailable: input.approvalPromptsUnavailable,
+    approvalPromptsUnavailable: input.delegation?.approvalPromptsUnavailable,
     runtimeUnavailableTools: input.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
   });
@@ -176,7 +174,7 @@ export async function runToolUseFlow<C = unknown>(
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
     fileService: new TaskRunFileService(executionId),
-    delegationDepth,
+    delegation: { ...input.delegation, delegationDepth },
     delegationTrimmed,
   };
   const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();

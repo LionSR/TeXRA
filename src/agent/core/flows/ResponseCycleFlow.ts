@@ -196,10 +196,7 @@ type ContinuationNodeResult = SkippableNodeResult<{
 export function responseCycleToolsForModel<C>(
   services: Pick<
     ResponseCycleServices<C>,
-    | 'approvalPromptsUnavailable'
-    | 'modelHandler'
-    | 'runtimeUnavailableTools'
-    | 'setting'
+    'delegation' | 'modelHandler' | 'runtimeUnavailableTools' | 'setting'
   >,
 ): ToolDefinition[] | undefined {
   if (!services.modelHandler.capabilities.supportsFunctionCalling) {
@@ -209,7 +206,7 @@ export function responseCycleToolsForModel<C>(
   return services.setting.tools.filter(
     (tool) =>
       !runtimeUnavailable.has(tool.name) &&
-      (services.approvalPromptsUnavailable !== true ||
+      (services.delegation?.approvalPromptsUnavailable !== true ||
         !isApprovalGatedToolName(tool.name)),
   );
 }

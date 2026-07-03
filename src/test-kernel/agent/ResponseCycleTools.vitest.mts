@@ -17,7 +17,7 @@ function responseServices({
   supportsFunctionCalling?: boolean;
 }) {
   return {
-    approvalPromptsUnavailable,
+    delegation: { approvalPromptsUnavailable },
     runtimeUnavailableTools,
     modelHandler: {
       capabilities: { supportsFunctionCalling },
