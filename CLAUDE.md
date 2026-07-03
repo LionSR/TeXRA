@@ -140,7 +140,7 @@ Key directories in `packages/extension/`:
 Key documentation in `docs/`:
 
 - `pocketflow/` - PocketFlow framework documentation (core abstractions, design patterns, utility functions)
-- The rest of `docs/` is the texra.ai VitePress site (`architecture/`, `blog/`, `design/`, `dev/`, `guide/`, `prds/`, `proposals/`, `reference/`, `skills/`, `supabase/`, plus root docs like `changelog.md`/`providers.md`/`terms.md`). A doc landing at the `docs/` root can silently freeze the texra.ai deploy if it trips the publish allowlist — check `docs/.vitepress/publicDocs.js` and the PR-time `docs-boundary` gate (`check-root-docs.mjs`) before adding root-level docs.
+- The rest of `docs/` is the texra.ai VitePress site (`architecture/`, `blog/`, `design/`, `dev/`, `guide/`, `prds/`, `proposals/`, `reference/`, `skills/`, `supabase/`, plus root docs like `changelog.md`/`providers.md`/`terms.md`). A doc landing at the `docs/` root can silently freeze the texra.ai deploy if it trips the publish allowlist — check `docs/.vitepress/publicDocs.js` and the commit-time `docs-root-boundary` pre-commit gate (`docs/scripts/check-root-docs.mjs`) before adding root-level docs.
 
 ### Commands (`packages/extension/src/commands/`)
 
@@ -340,13 +340,10 @@ mouse-scroll for finalized history, so don't reinvent them.
   no-repaint rule applies to steady-state rendering, not resize or transcript
   viewport switches.
 - **Sync-teardown terminal restoration on every exit path.** `exitNow()`/every
-  signal handler does synchronous `writeSync` mode-disable (mouse, alt-screen,
-  kitty, bracketed paste, cursor) before any async drain, wired to
-  SIGINT/SIGTERM/SIGHUP. Implemented in `runChatTui.tsx`; route new mode
-  toggles through that same synchronous path.
-- **Per-transcript-entry render-null error boundaries.** Every transcript
-  renderer is wrapped in `EntryErrorBoundary`, so one malformed entry degrades
-  to blank instead of blanking the session. New renderers must live inside it.
+  signal handler does synchronous `writeSync` mode-disable (mouse, kitty,
+  bracketed paste, cursor) before any async drain, wired to SIGINT/SIGTERM/SIGHUP.
+  Implemented in `runChatTui.tsx`; route new mode toggles through that same
+  synchronous path.
 - **Not yet built — adopt when touched:** animations should share one Clock
   (single timer, idle when unsubscribed, offscreen rows unsubscribe via a
   ref-only check) instead of per-component intervals; raw mode should be
@@ -355,7 +352,9 @@ mouse-scroll for finalized history, so don't reinvent them.
   DEC 2026 sync-output (BSU/ESU, gated on the existing DECRQM 2027 probe) if a
   blank flash is ever observed; prefer a `/dev/tty` fallback over refusing the
   TUI when stdin is piped but a real terminal is present, and handle EPIPE
-  globally. Full rationale and citations:
+  globally; transcript renderers should gain per-entry error boundaries so one
+  malformed entry degrades to blank instead of blanking the session. Full
+  rationale and citations:
   `docs/proposals/ink-practices-from-claude-code.md`.
 
 ### CLI design (clig.dev)

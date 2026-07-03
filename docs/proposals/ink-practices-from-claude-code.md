@@ -35,17 +35,16 @@ The per-subsystem grounding agent surveyed `terminalCleanup.ts` but missed
 
 - **#1 (sync `writeSync` signal teardown) is ALREADY implemented in TeXRA.**
   `runChatTui.tsx`'s `exitNow()` calls `cleanupTerminalModes()` (synchronous
-  `writeSync` resetting mouse/alt-screen/kitty/bracketed-paste/cursor) _before_
+  `writeSync` resetting mouse/kitty/bracketed-paste/cursor) _before_
   the async drain, and SIGINT/SIGTERM/SIGHUP are all wired to it
-  (`runChatTui.tsx:1704-1723,1777-1779`). The only genuinely-missing sliver is a
+  (`runChatTui.tsx:819-838,846-890,918-920`). The only genuinely-missing sliver is a
   **force-exit failsafe timer** in case `drainPersistence()` / platform shutdown
   hangs — small and optional, since terminal modes are already restored
   synchronously regardless.
 - **#3 (per-transcript-entry error boundaries) was the actual high-confidence gap
-  and is now shipped** in PR #5446 (`EntryErrorBoundary` wrapping the `<Static>`
-  and live transcript renderers). Verified there were zero error boundaries in
-  the CLI beforehand; a runtime smoke test confirmed `ink@7.0.5` propagates a
-  render throw to a nested boundary.
+  and is still not built**. There is no `EntryErrorBoundary` in the current tree.
+  Verified there are zero error boundaries in the CLI; a runtime smoke test
+  confirmed `ink@7.1.0` propagates a render throw to a nested boundary.
 
 ---
 
@@ -82,7 +81,7 @@ guards (`prevFrameContaminated`) force a clean re-render when the prior buffer i
 Evidence: `ink/render-node-to-output.ts:452-481`, `ink/screen.ts:858-895`, `ink/renderer.ts:35-47,118-135`.
 **TeXRA:** Partial gap, but largely neutralized. TeXRA prints finalized turns exactly once via
 Static (so they aren't re-rendered each frame at all), and caches finalized ANSI markdown in
-an LRU keyed by content (`ansiMarkdown.ts:409-459`; `TranscriptEntry.tsx:277-322,405-424`).
+an LRU keyed by content (`render/ansiMarkdown.ts:409-459`; `TranscriptEntry.tsx:277-322,405-424`).
 The blit fast-path is the same idea applied to a custom buffer TeXRA doesn't have. Not worth
 adopting unless TeXRA replaces Ink's renderer.
 
@@ -127,7 +126,7 @@ Evidence: `ink/log-update.ts:136-147,503-513`, `ink/frame.ts:105-124`.
 **TeXRA:** Already does exactly this — the vendored patch swaps count-based erase for a
 debounced full repaint (`clearTerminal` then reprint reflowed `fullStaticOutput`), and
 `CLAUDE.md` explicitly forbids reverting to line-count erasing. Strong alignment
-(`ink@7.0.5.patch:26-66,69-82,87-124`). The only borrowable nuance is naming/commenting the
+(`ink@7.1.0.patch:26-66,69-82,87-124`). The only borrowable nuance is naming/commenting the
 cost in code so it stays.
 
 **Handle SIGWINCH synchronously (no debounce) but dedupe same-dimension events.**
@@ -138,7 +137,7 @@ render in that window detects a width change, clears, then the debounce fires an
 = double flicker.
 Evidence: `ink/ink.tsx:303-346,212-216`.
 **TeXRA:** **Divergence worth examining.** TeXRA's patch _debounces_ the full repaint at 24ms
-(`ink@7.0.5.patch`). Claude Code's argument is that debouncing desyncs source-of-truth width
+(`ink@7.1.0.patch`). Claude Code's argument is that debouncing desyncs source-of-truth width
 from rendered width and can double-flicker if any other render fires in the debounce window.
 TeXRA's debounce may be safe _because_ it routes all repaints through one full-reset path (no
 spinner can paint a half-resized frame if nothing else renders independently), but this is the
@@ -151,7 +150,7 @@ phase runs `onComputeLayout` → `setWidth` + `calculateLayout`, and `measureFun
 leaves. It deliberately avoids the throttled path so layout settles before the frame is produced.
 Evidence: `ink/ink.tsx:239-258,338-345`.
 **TeXRA:** Aligned in effect — TeXRA recomputes soft-wrap from `useWindowSize()` columns every
-render via `wrap-ansi` (`App.tsx:455`; `ansiWrap.ts:75-115`) and remounts Static on width
+render via `wrap-ansi` (`App.tsx:455`; `render/ansiWrap.ts:75-115`) and remounts Static on width
 change (`StaticConversationTranscript.tsx:299-306`). Width is already a layout input. Not a gap.
 
 **Define the visible-vs-scrollback seam (including the cursor-restore off-by-one) in ONE formula, reused everywhere.**
@@ -347,7 +346,7 @@ Other engine practices — **per-node layout cache + blit** (`render-node-to-out
 **layoutShifted narrow-vs-full flag** (`render-node-to-output.ts:27-41`),
 **squash/raw-ansi pre-render** (`squash-text-nodes.ts:18-63`, `dom.ts:376-387`) — are all part
 of the same custom render core. **TeXRA:** none adopted; the `LIVE_TAIL_ROWS=24` cap and
-content-keyed ANSI LRU (`ansiMarkdown.ts:409-459`) achieve "cheap enough" without them.
+content-keyed ANSI LRU (`render/ansiMarkdown.ts:409-459`) achieve "cheap enough" without them.
 Recommendation: do **not** chase these unless profiling shows the tail-window cap is insufficient.
 
 ---
@@ -361,7 +360,7 @@ early and truncated the slice"; the cell writer places a `SpacerHead` blank when
 can't fit the last column so the terminal's own wrap doesn't desync the cursor.
 Evidence: `ink/wrap-text.ts:10-13,23-37`, `utils/sliceAnsi.ts:43-58`, `ink/output.ts:759-794`, `ink/render-border.ts:42-46`.
 **TeXRA:** **Aligned** — TeXRA wraps via `wrap-ansi` and treats wide chars as 2 cells through
-`string-width` (`ansiWrap.ts:75-115`; `terminalText.ts:1-28`), with grapheme-aware text input
+`string-width` (`render/ansiWrap.ts:75-115`; `render/terminalText.ts:1-28`), with grapheme-aware text input
 (`BaseTextInput.tsx:122-180`). Width-as-unit is in place. The spacer-head edge case is owned by
 `wrap-ansi`/Ink; not a gap.
 
@@ -381,7 +380,7 @@ so each slice carries complete SGR open/close, and handles OSC 8 hyperlinks that
 mishandles.
 Evidence: `utils/sliceAnsi.ts:26-91`, `ink/output.ts:553-620`, `ink/Ansi.tsx:118-153`.
 **TeXRA:** TeXRA uses `wrap-ansi` (which tokenizes/re-emits SGR) plus a markdown-prefix path
-preserving quote gutters and list indents (`ansiWrap.ts:75-115`). Aligned in approach. Verify
+preserving quote gutters and list indents (`render/ansiWrap.ts:75-115`). Aligned in approach. Verify
 OSC 8 hyperlink survival if TeXRA emits links in transcript markdown.
 
 **Store colors as raw typed values; resolve depth quirks (xterm.js/tmux) once at startup via the color library's level, with an env escape hatch.**
@@ -390,7 +389,7 @@ salmon) and clamp 3→2 under `$TMUX` (else truecolor bg → black-on-dark), ord
 clamp can re-clamp a VS Code+tmux nesting, with an env override.
 Evidence: `ink/styles.ts:36-53`, `ink/colorize.ts:176-220,20-26,47-62`.
 **TeXRA:** **Learnable opportunity.** TeXRA strips SGR when color is off
-(`noColorOutput.ts:71-105`) but the evidence doesn't show terminal-specific color-_depth_
+(`render/noColorOutput.ts:71-105`) but the evidence doesn't show terminal-specific color-_depth_
 adjustment for the VS Code-integrated-terminal or tmux truecolor-degradation cases. If TeXRA
 renders in the VS Code integrated terminal or under tmux and colors look wrong, a one-time
 chalk-level boost/clamp is a small, high-clarity fix. Medium priority, contingent on whether the
@@ -518,7 +517,7 @@ Evidence: `main.tsx:799-815,2211-2229,2824-2860`, `utils/process.ts:17-34`.
 stdin+stdout are TTYs and `TERM` isn't dumb, routing non-TTY/print/CI to `texra run` so Ink chrome
 never leaks to piped output; gate keys off `mode headless`/`stdoutIsTty !== true`; SGR stripped
 when color off; DA1 returns `NONE` off-TTY (`runChatTui.tsx:1006-1024`;
-`terminalRequirements.ts:5-8`; `noColorOutput.ts:71-105`; `terminalCapabilities.ts:94-97`;
+`terminalRequirements.ts:5-8`; `render/noColorOutput.ts:71-105`; `terminalCapabilities.ts:94-97`;
 `cliContext.ts:130-132,269`). This matches `CLAUDE.md`'s "headless parity is sacred" rule. Strong
 alignment, no gap.
 
