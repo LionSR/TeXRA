@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
-import type { PermissionState } from '@progressView/frontend/permissionState';
 import type { BashRequestPanel } from '@progressView/frontend/components/BashRequestPanel';
 
 // Local imports - shared schemas
@@ -11,7 +10,9 @@ import type { BashPermission } from '@shared/schemas';
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-function createPermission(data: Partial<BashPermission>): PermissionState {
+function createPermission(
+  data: Partial<BashPermission>,
+): BashRequestPanel['permission'] {
   return {
     kind: 'bash',
     data: {
@@ -25,7 +26,7 @@ function createPermission(data: Partial<BashPermission>): PermissionState {
 }
 
 async function mountPanel(
-  permission: PermissionState,
+  permission: BashRequestPanel['permission'],
 ): Promise<BashRequestPanel> {
   const element = document.createElement(
     'bash-request-panel',

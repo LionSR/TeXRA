@@ -30,14 +30,14 @@ import { ProgressEvents } from '../events';
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
 @customElement('user-question-panel')
-export class UserQuestionPanel extends BaseFeedbackPanel {
+export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   @state() private selections: Record<string, string[]> = {};
   @state() private freeText: Record<string, string> = {};
 
   override render(): TemplateResult {
-    const data = this.permission.data as UserQuestionPermission;
+    const data = this.permission.data;
     const canSubmit = this.hasAnyAnswer(data);
 
     return html`
@@ -81,7 +81,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
   override handleKeyboardShortcut(key: string): boolean {
     if (key === 'y') {
       if (this.showFeedback) return false;
-      if (!this.hasAnyAnswer(this.permission.data as UserQuestionPermission)) {
+      if (!this.hasAnyAnswer(this.permission.data)) {
         return true;
       }
       this.submitAnswers();
@@ -175,7 +175,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
   }
 
   private submitAnswers(): void {
-    const data = this.permission.data as UserQuestionPermission;
+    const data = this.permission.data;
     const answers: UserQuestionAnswers = {};
 
     for (const question of data.questions) {

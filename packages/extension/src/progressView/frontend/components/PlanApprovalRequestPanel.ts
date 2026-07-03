@@ -11,9 +11,6 @@ import {
   requestPanelStyles,
 } from '@shared/styles';
 
-// Local imports - shared schemas
-import type { PlanApprovalPermission } from '@shared/schemas';
-
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
@@ -21,12 +18,12 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
 @customElement('plan-approval-request-panel')
-export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
+export class PlanApprovalRequestPanel extends BaseFeedbackPanel<'planApproval'> {
   static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   protected override handleExtraKey(key: string): boolean {
     if (key === 'r') {
-      const data = this.permission.data as PlanApprovalPermission;
+      const data = this.permission.data;
       if (data.goalEnabled) {
         this.emitAction('approve_and_goal');
         return true;
@@ -36,7 +33,7 @@ export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
   }
 
   override render(): TemplateResult {
-    const data = this.permission.data as PlanApprovalPermission;
+    const data = this.permission.data;
     const { plan, goalEnabled } = data;
 
     return this.renderRequestShell({

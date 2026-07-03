@@ -40,7 +40,7 @@ export class ToolUseCycleNode<C> extends Node<
     assertPreparedShared(shared);
 
     return {
-      shouldSkip: shared.shouldSkipCycle,
+      shouldSkipCycle: shared.shouldSkipCycle,
       messages: shared.messages,
       runState: shared.stateSlices.runStateSnapshot,
       workspaceState: AgentWorkspaceState.fromSnapshot(
@@ -54,7 +54,7 @@ export class ToolUseCycleNode<C> extends Node<
     const { setting, resolvedTools, modelHandler } = this.services;
     const { streamId, runtimeHost } = useLaunchRunContext();
 
-    if (prepRes.shouldSkip) {
+    if (prepRes.shouldSkipCycle) {
       const { todos, plan } = prepRes.workspaceState.workPlan;
       if (todos.length) {
         runtimeHost.emit('updateTodos', { streamId, todos });
@@ -151,7 +151,7 @@ export class ToolUseCycleNode<C> extends Node<
     prepRes: CyclePrepResult,
     execRes: ToolUseCycleOutcome,
   ): Promise<string | undefined> {
-    if (prepRes.shouldSkip) {
+    if (prepRes.shouldSkipCycle) {
       shared.shouldSkipCycle = false;
     }
 

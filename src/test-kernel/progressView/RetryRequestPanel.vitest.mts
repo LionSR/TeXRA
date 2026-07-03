@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
-import type { PermissionState } from '@progressView/frontend/permissionState';
 import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
 
 // Local imports - shared constants
@@ -15,7 +14,7 @@ useLitComponentTestDom(
   () => import('@progressView/frontend/components/RetryRequestPanel'),
 );
 
-function createRetryPermission(): PermissionState {
+function createRetryPermission(): RetryRequestPanel['permission'] {
   return {
     kind: PERMISSION_KIND.RETRY,
     data: {
