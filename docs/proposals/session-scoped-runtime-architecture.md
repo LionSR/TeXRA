@@ -1,10 +1,10 @@
 # Session-scoped runtime architecture: facts, interactions, and status ownership
 
-Status: proposal (2026-07-03). Companion to the diagnosis in
-`tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this document is the
-target design. It covers the event/logger chain, the approval/interaction RPC
-machinery, stream status, and the execution registries — and how all of them
-couple to the UI backends.
+> **Status:** Open proposal (2026-07-03; status refreshed 2026-07-04). Companion
+> to the diagnosis in `tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this
+> document is the target design. It covers the event/logger chain, the
+> approval/interaction RPC machinery, stream status, and the execution registries
+> — and how all of them couple to the UI backends.
 
 ## 1. Diagnosis: one root cause, many symptoms
 
@@ -68,7 +68,8 @@ The evidence, condensed (file:line references in the audit appendix):
 - `runFlowWithLifecycle` + `RUN_OUTCOME_PROJECTION` is a working
   single-writer terminal transition.
 - Emit discipline holds: zero raw `bus.emit` in VS Code-free zones.
-- The logger is done: 308 lines, one sink boundary, two entry points that
+- The logger is done in shape: `src/logger/*` is 381 lines after the redaction
+  helper expansion, with one channel-sink boundary and two entry points that
   converge.
 
 ## 2. Target architecture: three planes, one owner each

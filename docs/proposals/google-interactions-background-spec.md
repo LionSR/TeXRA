@@ -1,8 +1,9 @@
-I now have complete, grounded understanding of the codebase, the OpenAI reference machinery, the SDK surface (from the research reports' verbatim genai.d.ts signatures), and the test patterns. I have everything needed to write the definitive spec.
-
----
-
 # Implementation Spec: BACKGROUND-mode execution for `ModelHandlerGoogleInteractions`
+
+> **Status:** Implemented (2026-07-04 status sweep). The Google Interactions
+> handler now supports `background:true`, polling through `interactions.get`, and
+> abort-time `interactions.cancel`; this spec is retained as implementation
+> evidence.
 
 **Handler:** `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts`
 **Reference:** `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts`

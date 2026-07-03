@@ -1,6 +1,8 @@
 # Dependency Injection Cleanup — "Deep Injection" Audit & Plan
 
-**Status:** Audit (2026-06-07; status addendum 2026-06-10 — see below). Findings verified against current source; plan steps 1–5 not yet implemented.
+**Status:** Partially landed audit (2026-06-07; status addenda 2026-06-10 and
+2026-07-04 — see below). Findings verified against current source; plan steps
+1–5 not yet implemented.
 **Scope:** How dependencies flow through the agent core — `src/agent/` (runtime, flows, toolUse), `src/tools/`, `src/platform/`, and the host composition roots (`packages/extension/src/extension.ts`, `packages/desktop`, `packages/cli`).
 **Target:** Make every dependency **visible at the point it is used**, **wired once** at a single composition root, **scoped** to the right lifetime (process vs. run vs. tool-call), and **carried only where read**.
 **Related:** [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) (process-global registries as the concurrency blocker), [`logger-simplification-feasibility.md`](./logger-simplification-feasibility.md). See also `CLAUDE.md` → "Discouraged Factory Patterns", "Flattening Abstraction Layers", "Separation of Concerns: VS Code Coupling".
@@ -11,6 +13,13 @@
 > - **Registry inventory grows by one:** `executionSubscriptionBinder` (`ExecutionSubscriptionBinder.ts`) belongs in the Finding-C list and in the 7d composition.
 > - **`AgentCore` is still 13 fields but with different membership** (`streamStatus` added 06-08; `delegationConfig` deleted 06-09, `092358d86`); the cohesion split in Finding A should place `streamStatus` with `RunIdentity`-adjacent runtime wiring and drop `delegationConfig` from the `DelegationPolicy` group when step 3 lands.
 > - **Re-spread cites drifted:** `ToolUseCycleNode.ts:76` / `ResponseCycleNode.ts:95` (was :75/:94). Anchor on the `{...this.services}` clause text, not line numbers.
+>
+> **Status addendum (2026-07-04, from the 2026-07 tech-debt D2 sweep):**
+>
+> - **The old idle-continuation registry entry is no longer live:** that module
+>   has been deleted. It is removed from the live process-global registry
+>   inventory below; earlier references to the "7 registry" framing are
+>   historical.
 
 ## How this was produced
 
@@ -282,7 +291,14 @@ flowchart TB
 
 ### Process-global registries (the concurrency blocker)
 
-`runCoordinatorBridge` (`runCoordinators.ts:220`), `executionRegistry` (`executionRegistry.ts:451`), `interruptRegistry` (`InterruptRegistry.ts:49`), `idleContinuationRegistry` (`idleContinuation.ts:55`), `toolInjectionRegistry` (`toolInjection.ts:34`), `StreamStatusService` (`StreamStatusService.ts:123`), `subagentDeliveryRegistry` (`subagentDeliveryState.ts:69`). These make the runtime a per-process singleton — documented as the blocker for concurrent in-process sessions in [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) (§ "Host↔core coordination is process-global"). Tracked there; cross-referenced here for completeness.
+`runCoordinatorBridge` (`runCoordinators.ts`), `executionRegistry`
+(`executionRegistry.ts`), `interruptRegistry` (`InterruptRegistry.ts`),
+`toolInjectionRegistry` (`toolInjection.ts`), `StreamStatusService`
+(`StreamStatusService.ts`), and `subagentDeliveryRegistry`
+(`subagentDeliveryState.ts`). These make the runtime a per-process singleton —
+documented as the blocker for concurrent in-process sessions in
+[`agent-sdk-readiness.md`](./agent-sdk-readiness.md) (§ "Host↔core coordination
+is process-global"). Tracked there; cross-referenced here for completeness.
 
 ### Rejected suspicions (traps)
 

@@ -1,6 +1,17 @@
 # Lifecycle & Status Ownership — Investigation & Cleanup Plan
 
-**Status:** Step 1 implemented (2026-06-10, this branch): `RunOutcome` + projections + the interrupted-persistence fix + persistence companions (5a–c), with the outcome-projection vitest matrix. Same day, the mappings were made **declarative tables** (see "Declarative consolidation" below). Steps 2–3 remain plans gated on T2-2 / 7d PR 2 as sequenced below. Investigation revised same day with a persistence deep-dive. The terminal-outcome decision chain (D1) and the user-stop path were verified first-hand line-by-line; the persistence maps come from four parallel sub-audits, spot-checked but not fully adversarially verified — items marked _(unverified)_ need a re-open before being acted on. Findings checked against the current tree (`88d7afe`). Line numbers drift — anchor on clause text.
+**Status:** Partially landed (2026-07-04 refresh). Step 1 landed:
+`RunOutcome` + projections + the interrupted-persistence fix + persistence
+companions (5a–c), with the outcome-projection vitest matrix. The
+crash-as-completed bug described in P1/P6 is fixed in
+`resolveCliHistoryStatus`: absent terminal status now returns `unknown` (or
+`resumable` when a valid flow record exists), never invented `completed`. The
+original Steps 2–3 are subsumed by the #6951 session-scoped runtime architecture:
+`StreamPhase`/`StreamStatusMachine` own the next live-status vocabulary while
+`RUN_OUTCOME_PROJECTION` remains the current bridge until that migration lands.
+The persistence maps come from four parallel sub-audits, spot-checked but not
+fully adversarially verified — items marked _(unverified)_ need a re-open before
+being acted on. Line numbers drift — anchor on clause text.
 **Scope:** The terminal-outcome path of an agent run — who decides "how did this run end", in which vocabulary, and where flows own lifecycle plumbing that belongs to the runtime. Covers `src/agent/runtime/AgentRunLifecycle.ts`, `executeAgent.ts`, both flow runners (`runToolUseFlow.ts`, `runReflectionFlow.ts`), `RoundPersistedFlow`, and the status schemas (`src/shared/schemas/stream.ts`, `log.ts`, `src/common/constants/streamStatus.ts`).
 **Out of scope:** error _classification and presentation_ (owned by [`error-pipeline-and-ownership.md`](./error-pipeline-and-ownership.md)), the session/registry composition (owned by [`session-handle-7d-design.md`](./session-handle-7d-design.md)), and the live in-run stream state machine (WAITING/RESUMING writes by `RetryState`/`ToolUseWaitNode` — interaction states, correctly in-run).
 **Related:** both docs above; this plan must land _coordinated with_ T2-2 and 7d PR 2/PR 6, which churn the same seams.

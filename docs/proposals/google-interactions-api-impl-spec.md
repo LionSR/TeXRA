@@ -1,5 +1,10 @@
 # Implementation Spec: `ModelHandlerGoogleInteractions`
 
+> **Status:** Implemented (2026-07-04 status sweep). The additive Google
+> Interactions handler now lives at
+> `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts`; this spec
+> is retained as the implementation evidence trail.
+
 Single source of truth for adding an additive, feature-flagged Google Gemini **Interactions API** handler beside the existing chat/`generateContent` handler. Mirrors the OpenAI-Responses precedent end to end. SDK shapes are verified against `@google/genai@2.9.0` `node_modules/@google/genai/dist/genai.d.ts`.
 
 ## 0. Corrections to the proposal's cited facts (verified against current code)

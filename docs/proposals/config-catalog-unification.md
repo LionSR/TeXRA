@@ -1,5 +1,9 @@
 # Host-neutral settings catalog → unified `/config` (CLI) + extension settings
 
+> **Status:** Open proposal (2026-07-04 status sweep). The settings-catalog
+> unification remains a design/implementation plan; re-verify cited settings
+> paths before implementation.
+
 ## Context
 
 The user wants a `/config` panel in the `texra` CLI TUI to toggle settings, but flagged the deeper risk: a CLI-only settings surface would **overlap with and drift from** the VS Code extension's settings. Research confirms both the concern and an existing foundation to build on:
