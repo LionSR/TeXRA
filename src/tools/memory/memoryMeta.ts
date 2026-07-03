@@ -33,6 +33,7 @@ const MemoryFileMetaSchema = z.object({
    * Whether this memory is pinned as a core long-term insight. A parsed
    * `false` is treated the same as absent everywhere it is read, and
    * {@link buildFrontmatter} only ever writes the flag when truthy.
+   * This schema parses YAML frontmatter, not model-facing tool input.
    */
   pinned: z.boolean().optional(),
 });
