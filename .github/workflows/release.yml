@@ -1,0 +1,127 @@
+name: Release
+
+# Fires once a GitHub Release is published. Tags are cut in pairs off the same
+# commit: `vX.Y.Z` for the extension, `cli-vX.Y.Z` for the CLI (plus legacy
+# `vX.Y.Z-frontend` tags, excluded below). Creating the tag/release itself
+# stays a manual step (gh release create) so a human still curates the
+# changelog body and decides when to go public; this workflow only handles
+# the build + publish that follows.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish-extension:
+    name: Publish VS Code extension (Marketplace + Open VSX)
+    if: ${{ startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify release tag matches extension package version
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version=$(node -p "require('./packages/extension/package.json').version")
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::Release tag '$tag' does not match packages/extension/package.json version '$version' (expected 'v$version')"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build extension VSIX
+        run: pnpm --filter texra build:fast
+
+      - name: Check VSIX contents
+        run: pnpm run check:vsix-contents
+
+      - name: Locate built VSIX
+        id: vsix
+        run: |
+          version=$(node -p "require('./packages/extension/package.json').version")
+          path="releases/texra-${version}.vsix"
+          test -f "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Visual Studio Marketplace
+        uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.VSCE_PAT }}
+          registryUrl: https://marketplace.visualstudio.com
+          extensionFile: ${{ steps.vsix.outputs.path }}
+          skipDuplicate: true
+
+      - name: Publish to Open VSX
+        uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.OVSX_PAT }}
+          registryUrl: https://open-vsx.org
+          extensionFile: ${{ steps.vsix.outputs.path }}
+          skipDuplicate: true
+
+  publish-cli:
+    name: Publish CLI to npm (Trusted Publishing)
+    if: ${{ startsWith(github.event.release.tag_name, 'cli-v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify release tag matches CLI package version
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version=$(node -p "require('./packages/cli/package.json').version")
+          if [ "$tag" != "cli-v$version" ]; then
+            echo "::error::Release tag '$tag' does not match packages/cli/package.json version '$version' (expected 'cli-v$version')"
+            exit 1
+          fi
+
+      - name: Use an npm CLI recent enough for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish @texra-ai/cli
+        working-directory: packages/cli
+        run: npm publish --provenance
