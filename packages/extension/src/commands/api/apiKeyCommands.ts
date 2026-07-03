@@ -2,18 +2,28 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import {
   settleQuickInput,
   showQuickPick,
 } from '@commands/_shared/quickInputUtils';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
+import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { invalidateApiKeyCache } from '@model/apiProviders';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { PROVIDER_URLS } from '@shared/constants/providers';
+import {
+  PROVIDER_DISPLAY_NAMES,
+  PROVIDER_URLS,
+} from '@shared/constants/providers';
+import {
+  getProviderDisplayName,
+  getProviderKeyUrl,
+} from '@utils/config/providerConfig';
 
 const CHANNEL = 'ApiKeyCommands';
 logger.initialize(CHANNEL);
@@ -30,6 +40,41 @@ async function refreshApiKeyUI(): Promise<void> {
   await vscode.commands.executeCommand('texra.refreshAllOptions');
 }
 
+/**
+ * Delegates the write/delete/confirm/notify sequence to the same controller
+ * settingsView's Profile tab uses, so the two surfaces can't drift apart on
+ * confirmation prompts or messaging (see SettingsProfileKeyController).
+ */
+function createProfileKeyController(): SettingsProfileKeyController {
+  return new SettingsProfileKeyController({
+    prompt: new VscodePromptHost(),
+    externalOpener: new VscodeExternalOpener(),
+    getProviderDisplayName: (provider) =>
+      getProviderDisplayName(
+        provider,
+        PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+      ),
+    getProviderKeyUrl: (provider) => {
+      const defaultUrl = PROVIDER_URLS[provider];
+      return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
+    },
+    getApiKeySecretName: (provider) =>
+      SecretManager.getApiKeySecretName(provider as ApiProvider),
+    setSecret: (key, value) => SecretManager.set(key, value),
+    deleteSecret: (key) => SecretManager.delete(key),
+    refreshAfterKeyChange: async () => {
+      await refreshApiKeyUI();
+      const view = await getMainWebview();
+      const anyKeyExists = await SecretManager.anyApiKeyExists();
+      view?.webview.postMessage({
+        command: anyKeyExists
+          ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
+          : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+      });
+    },
+  });
+}
+
 async function setApiKeyForProvider(
   provider: ApiProvider,
   showNavigationFallback = false,
@@ -41,16 +86,7 @@ async function setApiKeyForProvider(
   }
 
   try {
-    await SecretManager.set(
-      SecretManager.getApiKeySecretName(provider),
-      apiKey,
-    );
-    vscode.window.showInformationMessage(`${provider} API key has been set`);
-    await refreshApiKeyUI();
-    const view = await getMainWebview();
-    view?.webview.postMessage({
-      command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
-    });
+    await createProfileKeyController().commitProviderKey(provider, apiKey);
   } catch (err) {
     await showLoggedErrorMessage(
       CHANNEL,
@@ -164,27 +200,8 @@ export async function removeApiKey(): Promise<void> {
     return;
   }
 
-  const confirm = await vscode.window.showWarningMessage(
-    `Remove the ${provider} API key? This cannot be undone.`,
-    'Remove',
-    'Cancel',
-  );
-  if (confirm !== 'Remove') {
-    return;
-  }
-
   try {
-    await SecretManager.delete(SecretManager.getApiKeySecretName(provider));
-    vscode.window.showInformationMessage(
-      `${provider} API key has been removed`,
-    );
-    await refreshApiKeyUI();
-    const view = await getMainWebview();
-    view?.webview.postMessage({
-      command: (await SecretManager.anyApiKeyExists())
-        ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
-        : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-    });
+    await createProfileKeyController().removeProviderKey(provider);
   } catch (err) {
     await showLoggedErrorMessage(
       CHANNEL,
