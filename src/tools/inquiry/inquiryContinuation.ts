@@ -3,10 +3,10 @@
  *
  * Host-neutral. When the user submits an answer (or drops an open
  * inquiry), this module synthesizes the `[inquiry] …` continuation
- * text, hands it to `sendFollowUp` for the parent stream, and — for
- * the cases where the cycle has exited (WAITING / children_running) —
- * triggers `AgentResumePort.tryResumeStream` so the parent stream
- * picks the message up.
+ * text, hands it to `sendFollowUp` for the parent stream, and delegates
+ * queued-stream wake/release policy to the follow-up owner so exited
+ * cycles (WAITING / children_running) can pick the message up when the
+ * parent stream is still resumable.
  *
  * Returns an `InjectionOutcome` so the caller (action handler) can
  * forward it to the UI via the `inquiryThreadUpdated` event.
