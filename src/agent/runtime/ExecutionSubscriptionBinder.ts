@@ -96,6 +96,7 @@ class ExecutionSubscription implements Disposable {
       ExecutionRegistry,
       'addListener' | 'getHandle' | 'getStatus'
     >,
+    private readonly logger: BinderLogger,
     private readonly onDisposed: () => void,
     private readonly session?: SessionHandle,
   ) {
@@ -173,13 +174,19 @@ class ExecutionSubscription implements Disposable {
       undefined,
       undefined,
       this.session,
-    ).then((result) => {
-      if (result.status === 'sent' || result.status === 'queued') {
-        this.runtimeHost.emit('updateQueuedFollowUps', {
-          streamId: this.streamId,
+    )
+      .then((result) => {
+        if (result.status === 'sent' || result.status === 'queued') {
+          this.runtimeHost.emit('updateQueuedFollowUps', {
+            streamId: this.streamId,
+          });
+        }
+      })
+      .catch((err: unknown) => {
+        this.logger.warn('Failed to deliver execution subscription follow-up', {
+          data: { executionId: this.executionId, streamId: this.streamId, err },
         });
-      }
-    });
+      });
   }
 }
 
@@ -233,6 +240,7 @@ export class ExecutionSubscriptionBinder {
       handle,
       runtimeHost,
       this.registry,
+      this.logger,
       () => this.removeBoundKey(streamId, executionId),
       this.session,
     );

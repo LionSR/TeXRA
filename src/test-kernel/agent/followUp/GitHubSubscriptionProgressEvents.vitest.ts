@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sendFollowUpMock = vi.hoisted(() =>
   vi.fn(async () => ({ status: 'sent' as const })),
@@ -119,6 +119,11 @@ class RegistryTestSource {
 }
 
 describe('GitHub subscription progress events', () => {
+  beforeEach(() => {
+    sendFollowUpMock.mockReset();
+    sendFollowUpMock.mockResolvedValue({ status: 'sent' as const });
+  });
+
   it('publishes binding changes through the explicit runtime host', () => {
     const host = createRecordingHost();
 
@@ -247,5 +252,45 @@ describe('GitHub subscription progress events', () => {
       undefined,
       session,
     );
+  });
+
+  it('warns instead of leaking an unhandled rejection when delivery fails', async () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const host = createRecordingHost();
+    const source = new RegistryTestSource();
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+    };
+    const registry = new StreamSubscriptionRegistry<string, string>({
+      name: 'test subscriptions',
+      logger,
+      source,
+      keyOf: (input) => input,
+      bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
+    });
+    const unhandledRejection = vi.fn();
+    sendFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
+
+    try {
+      process.once('unhandledRejection', unhandledRejection);
+      registry.bind(streamId, 'owner/repo', host.host);
+
+      source.emit('owner/repo', 'new github event');
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(unhandledRejection).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Failed to deliver subscription follow-up',
+        expect.objectContaining({
+          data: expect.objectContaining({
+            key: 'owner/repo',
+            streamId,
+          }),
+        }),
+      );
+    } finally {
+      process.off('unhandledRejection', unhandledRejection);
+    }
   });
 });
