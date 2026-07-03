@@ -191,31 +191,6 @@ export class PersistedFlow<
     };
   }
 
-  /**
-   * Attach to an existing persisted flow for resume.
-   *
-   * @param kv - Storage backend (ExecutionKVStore)
-   * @param runId - The run identifier to resume. Defaults to kv.getExecutionId().
-   * @param start - The starting node of the flow graph
-   */
-  static async attach<
-    S = Record<string, unknown>,
-    P extends Record<string, unknown> = Record<string, unknown>,
-    Svc = unknown,
-  >(
-    kv: ExecutionKVStore,
-    runId: string | undefined,
-    start: BaseNode,
-  ): Promise<PersistedFlow<S, P, Svc>> {
-    const effectiveRunId = runId ?? kv.getExecutionId();
-    const flow = await kv.read<FlowRecord>(flowKey(effectiveRunId));
-    if (!flow) throw new Error(`flow "${effectiveRunId}" not found`);
-    const pf = new PersistedFlow<S, P, Svc>(start, kv, effectiveRunId);
-    pf.setParams(flow.params as P);
-    pf.cachedRecord = flow;
-    return pf;
-  }
-
   async getShared(): Promise<S | undefined> {
     const flow =
       this.cachedRecord ??
@@ -226,10 +201,6 @@ export class PersistedFlow<
 
   async setShared(newShared: S): Promise<void> {
     await this.commitShared(newShared);
-  }
-
-  getRunId(): string {
-    return this.runId;
   }
 
   /**
@@ -262,11 +233,7 @@ export class PersistedFlow<
     await this.fireProjection(shared);
   }
 
-  async init(shared: S): Promise<void> {
-    await this.ensureRecord(shared);
-  }
-
-  private async ensureRecord(shared: S): Promise<void> {
+  protected async ensureRecord(shared: S): Promise<void> {
     const key = flowKey(this.runId);
     const existing = await this.kv.read<FlowRecord>(key);
     if (existing) {
