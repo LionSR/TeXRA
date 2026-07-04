@@ -862,14 +862,17 @@ export class DesktopProgressBridge {
     return this.session.status.getAllSubstates();
   }
 
-  syncFullView(): void {
-    const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
+  private updateStreamMetadata(): StreamTabId | '' {
+    return this.backend.webviewUpdater.sendStreamMetadata(
       this.state,
       this.streamStatusSnapshot(),
       undefined,
       this.streamSubstateSnapshot(),
     );
-    this.syncStreamContent(activeStream);
+  }
+
+  syncFullView(): void {
+    this.syncStreamContent(this.updateStreamMetadata());
   }
 
   setActiveStream(streamId: StreamTabId): void {
@@ -881,25 +884,14 @@ export class DesktopProgressBridge {
       this.state.releasePreviousActive(previous);
     }
     this.state.activeStream = streamId;
-    this.backend.webviewUpdater.sendStreamMetadata(
-      this.state,
-      this.streamStatusSnapshot(),
-      undefined,
-      this.streamSubstateSnapshot(),
-    );
+    this.updateStreamMetadata();
     this.backend.webviewUpdater.setActiveStream(streamId);
     this.syncStreamContent(streamId);
   }
 
   private setAgentFilter(filter: AgentCategoryFilter): void {
     this.state.agentCategoryFilter = filter;
-    const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
-      this.state,
-      this.streamStatusSnapshot(),
-      undefined,
-      this.streamSubstateSnapshot(),
-    );
-    this.syncStreamContent(activeStream);
+    this.syncStreamContent(this.updateStreamMetadata());
   }
 
   async deleteStream(streamId: StreamTabId): Promise<void> {
@@ -924,13 +916,7 @@ export class DesktopProgressBridge {
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
       stream: streamId,
     });
-    const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
-      this.state,
-      this.streamStatusSnapshot(),
-      undefined,
-      this.streamSubstateSnapshot(),
-    );
-    this.syncStreamContent(activeStream);
+    this.syncStreamContent(this.updateStreamMetadata());
   }
 
   async deleteAllStreams(): Promise<void> {
@@ -967,12 +953,7 @@ export class DesktopProgressBridge {
     this.clearDesktopSessionMaps();
     this.workflowFileActions.clearAllBackups();
     this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
-    this.backend.webviewUpdater.sendStreamMetadata(
-      this.state,
-      this.streamStatusSnapshot(),
-      undefined,
-      this.streamSubstateSnapshot(),
-    );
+    this.updateStreamMetadata();
   }
 
   private syncStreamContent(streamId: StreamTabId | ''): void {

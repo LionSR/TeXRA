@@ -368,6 +368,20 @@ function createWindow(options: {
     });
     await showSetupCommandResult(window, command, result);
   };
+  // `installDesktopHostBridge.postToRenderer` is itself a no-op when
+  // `webContents.isDestroyed()`. Without checking that here too, callers would
+  // falsely report success and skip their external-viewer fallback. Bot
+  // review (#3816) caught it. Shared by the preview host and agent-execution
+  // wiring below; the diff host keeps its own narrower check (no
+  // `webContents.isDestroyed()`) per bot review #3815, so it is not folded in.
+  const postToRendererIfAlive = (message: unknown): boolean => {
+    const ipc = ipcRef.current;
+    if (!ipc || window.isDestroyed() || window.webContents.isDestroyed()) {
+      return false;
+    }
+    ipc.postToRenderer(message);
+    return true;
+  };
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
@@ -382,19 +396,7 @@ function createWindow(options: {
     // race) or the BrowserWindow has been destroyed; the host then
     // falls back to the external viewer so previews never silently
     // disappear.
-    postToRenderer: (message) => {
-      const ipc = ipcRef.current;
-      if (!ipc) return false;
-      // `installDesktopHostBridge.postToRenderer` is itself a no-op when
-      // `webContents.isDestroyed()`. Without checking that here too, this
-      // wrapper would falsely report success and the preview host would
-      // skip the external-viewer fallback. Bot review (#3816) caught it.
-      if (window.isDestroyed() || window.webContents.isDestroyed()) {
-        return false;
-      }
-      ipc.postToRenderer(message);
-      return true;
-    },
+    postToRenderer: postToRendererIfAlive,
   });
   const refreshDesktopAuthSurfaces = async () => {
     const authenticated = await SupabaseClient.isAuthenticated();
@@ -463,14 +465,7 @@ function createWindow(options: {
   };
   attachRendererConsoleLog(window.webContents);
   const agentExecutionOptions: DesktopAgentExecutionOptions = {
-    postToRenderer: (message) => {
-      const ipc = ipcRef.current;
-      if (!ipc || window.isDestroyed() || window.webContents.isDestroyed()) {
-        return false;
-      }
-      ipc.postToRenderer(message);
-      return true;
-    },
+    postToRenderer: postToRendererIfAlive,
     opener: previewHost,
     diff: createDesktopDiffHost({
       openPath: previewHost.openPath,
