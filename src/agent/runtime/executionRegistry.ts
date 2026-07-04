@@ -170,7 +170,7 @@ export class ExecutionRegistry {
             handle.childStreamId === streamId
           ) {
             this.notifyWaiters(executionId);
-            if (handle.parentStreamId !== handle.childStreamId) {
+            if (handle.isChildExecution) {
               this.emitActiveSubagentsUpdate(
                 handle.parentStreamId,
                 handle.runtimeHost,
@@ -201,7 +201,7 @@ export class ExecutionRegistry {
     const { runtimeHost } = handle;
 
     if (handle instanceof AgentExecutionHandle) {
-      if (handle.parentStreamId !== handle.childStreamId) {
+      if (handle.isChildExecution) {
         this.emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
         runtimeHost.emit('setParentStream', {
           childStreamId: handle.childStreamId,
@@ -275,10 +275,7 @@ export class ExecutionRegistry {
     this.notifyWaiters(handle.executionId);
     const { runtimeHost } = handle;
 
-    if (
-      handle instanceof AgentExecutionHandle &&
-      handle.parentStreamId !== handle.childStreamId
-    ) {
+    if (handle instanceof AgentExecutionHandle && handle.isChildExecution) {
       this.emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
       return;
     }
@@ -570,11 +567,8 @@ export class ExecutionRegistry {
     visited: Set<string> = new Set(),
   ): void {
     for (const handle of this.handles.values()) {
-      if (handle.parentStreamId !== parentStreamId) continue;
-      if (
-        handle instanceof AgentExecutionHandle &&
-        handle.childStreamId !== parentStreamId
-      ) {
+      if (!isChildExecution(handle, parentStreamId)) continue;
+      if (handle instanceof AgentExecutionHandle) {
         handle.detach();
         runtimeHost.emit('setParentStream', {
           childStreamId: handle.childStreamId,
