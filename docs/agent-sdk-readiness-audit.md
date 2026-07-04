@@ -3033,3 +3033,158 @@ re-rebutted or already-tracked; one new false positive (`isOReasoningModel`/`isG
 getters" — verified used 6×) is recorded. Six genuinely-new micro-candidates (P25-1–P25-6) are all
 behavior-touching and recorded for a future tidy pass. Guardrails intact; no dead shim/barrel remains, so no
 refactor was applied to the codebase this pass — only the §25 ledger reconciliation.
+
+---
+
+## 26. Re-verification addendum — 2026-07-04 (twenty-first pass — confirmation; re-pinned to a new branch lineage, §4 observability-unification now landing in code)
+
+A twenty-first pass, run on branch `claude/eager-noether-5uum43` at HEAD **`1ab46ab`** (2026-07-04). Note the
+lineage change: §25's pin `e1bfb60` is **not an ancestor** of this HEAD (`git merge-base --is-ancestor
+e1bfb60 HEAD` → not ancestor), so this is a fresh branch, not a fast-forward of §25's. A three-agent
+fresh-eyes fan-out (independent, source-only, **not** given this document) re-covered the four task areas: an
+`agent/core` + `agent/runtime` + `implementations/flows` abstraction audit, a `modelHandlers/` port + base +
+OpenAI-compatible-subclass audit, and a `packages/core` surface + `logger` + `agent/trace` + `eventBus`
+observability audit. **All three re-reached the standing verdict independently** — the core agent
+self-concluded "already well-aligned," the model-handler agent "well-factored internally … the problem is the
+port shape, not duplication," the surface agent "genuinely SDK-shaped … heavier … mainly in plumbing
+exposure, not architecture." The thesis holds for the twenty-first time: **incremental, not structural.**
+Confirmation-only — **no refactor applied** (every still-open item is behavior- or type-shape-touching; the
+guardrail greps below show no dead shim/barrel to delete).
+
+### Material development since §25 — §4 observability-unification is now landing in code
+
+The one substantive change over the audited dirs since the last lineage is the run-fact routing rework, on
+this branch as of today:
+
+- **`cbf5a39` "route run facts through session event hub" (Closes #6962, 2026-07-04)** introduces
+  `runtime/runFactEvents.ts`, `runtime/SessionRunFactProjector.ts`, and expands `runtime/SessionEventHub.ts`.
+  Run-scoped progress facts (`updateTodos`, `updatePlan`, `addOutputFiles`, `updateMissingOutputs`,
+  `updateCompileFailures`, `goalPaused`) are now emitted as `AgentTrace` **domain** events under a
+  `runFact.*` key (`emitRunFact`, `runFactEvents.ts:32-42`), re-published through `SessionEventHub`, decoded
+  back by string-prefix (`fromRunFactDomainKey`, `SessionRunFactProjector.ts:56`), and re-emitted on
+  `runtimeHost.emit(...)`; token usage is projected the same way to `updateStreamUsage`
+  (`SessionRunFactProjector.ts:51`). This is the team **executing the §4 direction** — run facts leave the
+  VS-Code-free flow code via the trace/host seam rather than a direct `bus.emit`, consistent with the
+  CLAUDE.md "new run-scoped facts extend `AgentTrace` or `ProgressEventPayloads`, never a new `bus.emit`"
+  rule. Recorded as movement **with** the audit, not against it.
+
+### One genuinely-new micro-candidate on the just-landed code (behavior-touching; not applied)
+
+- **P26-1 — the `runFact.*` trace round-trip is a stringly-typed bounce of an already-typed payload**
+  _(MEDIUM, behavior-touching)_. A fact that is already a typed `ProgressEventPayloads[K]` is wrapped into a
+  `domain` trace event under the stringly key `runFact.<name>` and then decoded by prefix-parse back into the
+  identical typed payload on the other side (`runFactEvents.ts:19-42` ↔ `SessionRunFactProjector.ts:56-64`).
+  For an embedder the same fact is now observable on **two** channels — a `domain` `AgentEvent`
+  (`key: "runFact.*"`) on `trace.subscribe(...)` and a typed `ProgressEvent` via `runtimeHost` — with no
+  signpost for which to consume. This is the §4 "two overlapping observability channels" theme, now sharper
+  because the bridge exists in code. Candidate: promote the ~6 run-facts to real first-class `AgentEvent`
+  union arms (deleting the encode/decode), **or** route them straight to `runtimeHost` and keep them off the
+  trace — one home per fact. Behavior-touching (every `emitRunFact` producer + the desktop/extension
+  projector wiring); the surface agent reached this without the doc. Related: **`SessionEventHub`'s
+  `export type SessionFact = never` (`SessionEventHub.ts:9`)** leaves the `{ scope: 'session' }` arm of the
+  event union carrying no payload — a live placeholder; the run-scope re-publish is a pass-through of
+  `trace.subscribe` until a real `SessionFact` materializes. Keep the hub for the multi-window
+  session-isolation seam it is documented to be; the round-trip above is the trimmable part.
+
+### SDK-lens observation re-recorded — the tool-definition primitive is not on the curated surface
+
+Measured against the Anthropic Claude Agent SDK shape ({ run/query, **tool definitions**, streaming
+messages, hooks }), `@texra/core` covers run (`runAgent`), streaming/hooks (`trace` + `runtimeHost`), and
+outcome-as-data (`ResultEvent`), but exports **no** way to define or register a tool — `src/tools/core/define.ts`
+and `src/tools/registry.ts` are not re-exported (`grep` of `packages/core/src/index.ts` → none). An embedder
+can run the built-in YAML agents but cannot extend the tool set without reaching into `@tools/*` internals.
+This is a **product-scope decision, not a defect**: either curate `defineTool` + the registration entry into
+`@texra/core` if custom tools are in scope for embedders, or state the boundary in the `index.ts` header
+(which today implies a full SDK). Near-zero effort to document; recorded, not flagged as an abstraction to
+remove.
+
+### P25-1–P25-6 ledger reconciled first-hand at HEAD `1ab46ab`
+
+- **P25-1 (compat-key monkey-patch → `readonly` field) — PARTIALLY ADDRESSED, still open.**
+  `PROVIDER_HANDLER_ROUTES` now carries a declarative per-route `compatibilityKey`
+  (`ModelFactory.ts:59-101`), but the post-construction non-enumerable brand still exists — the
+  `__texraModelHandlerCompatibilityKey` property and its tagged-type read-back remain (`ModelFactory.ts:43-49`).
+  The declarative source landed; the monkey-patch tagging did not go away. Keep open.
+- **P25-2 (`@agent/types/index.ts` pass-through shim) — unchanged, present** (`export type { FileOpResult }
+  from '@shared/schemas/…'` still re-forwards).
+- **P25-3 (`core/usage/ResponseUsage.ts` provider-SDK type re-export block) — unchanged** (not re-opened this
+  pass; still the low-priority forwarding-only trim).
+- **P25-4 (`@logger/index.ts` exposes one symbol) — unchanged, confirmed** (`export { createChannelTrace }`
+  only; the functional `debug/info/warn/error` API is the deep `@logger/logUtils` path, ~70+ callers — the
+  barrel still misrepresents its module). Low, cosmetic.
+- **P25-5 (Anthropic inline compaction-threshold read) — unchanged, present**
+  (`modelHandlerAnthropic.ts:512` still reads `texra.model.compactionThresholdPercent` inline instead of the
+  base `getCompactionThresholdPercent()`). One-line DRY when next touching the file.
+- **P25-6 (registry one-time migrations on the lookup hot-path) — unchanged** (not re-inspected in depth this
+  pass; carried forward as recorded).
+
+### Guardrails intact at `1ab46ab`
+
+- `find src/agent -name index.ts` → the **same seven** pre-existing barrels (`features`, `goal`, `index`,
+  `node`, `storage`, `trace`, `types`); no new barrel; `src/agent/runtime/index.ts` still **absent** (§3.1).
+- `grep` for `vscode` imports over
+  `src/agent`/`src/model`/`src/latex`/`src/tools`/`src/controllers`/`src/shared`/`src/eventBus`/`src/hosts`
+  → **clean**.
+- `packages/core/src/index.ts` → **16** `export` statements (unchanged from §25 — no surface added or removed).
+
+### The three fresh-eyes agents re-surfaced the recurring traps — all re-rebutted or already-tracked
+
+- **`IModelHandler` width / god-interface (the fourteenth re-surfacing)** — model-handler agent re-proposed
+  splitting the ~44-member port into a core inference contract + `ContinuationProtocol` / `MessageEnrichment`
+  mixins + a queried `capabilities` value object. This is the **§9/§21 trim-the-port track**, still the
+  correct unapplied path; the load-bearing `SdkToolCall` union + optional
+  `createBatchedToolUseFollowUpMessages?` keep the interface non-removable (deletion breaks `tsc`). Tracked,
+  behavior-touching, unapplied — **not** re-flagged for deletion.
+- **"Extract auth/relay out of base `ModelHandler`"** — not raised this pass by name, but the port-decomposition
+  finding brushes it; the standing **rejection** (proposal "Rejected findings"; §23 N1; §25) stands.
+- **Config-only OpenAI subclasses collapse** — model-handler agent re-confirmed the mix precisely:
+  `modelHandlerDashScope.ts` (14 LOC, one config field) and `modelHandlerXAI.ts` (38 LOC, a debug-log-only
+  `extractResponse` override) are effectively pure config and could route to `ModelHandlerOpenAI` with an
+  injected config row; GLM is mostly config + 2 small maps; **DeepSeek/Kimi/MiniMax carry genuine behavioral
+  overrides and stay classes.** Same §21–§24 conclusion (thin ones are collapsible-to-data, but the
+  `PROVIDER_HANDLER_ROUTES` table still needs a constructor per provider) — partial, behavior-touching,
+  unapplied.
+- **Two full Google handlers (`modelHandlerGoogleGenAI` 1.2k + `modelHandlerGoogleInteractions` 2.2k)** —
+  re-surfaced as migration debt gated on the `texra.model.useGoogleInteractionsAPI` flag rollout finishing;
+  retire the legacy handler (or fold both onto a `ModelHandlerGoogleBase`) once Interactions is the committed
+  default. High effort, flag-gated — tracked, not actioned.
+- **`runAgent`/`executeAgent` two-headed entry; `buildAgentLaunchContext → assembleAgentLaunchContext`
+  saga-split; node-runs-subflow "wrapper"** — core agent re-examined and **explicitly kept all three**: the
+  `runAgent`/`runAgentStream` split has distinct real callers (batteries-included hosts vs. delegation /
+  streaming callers) and `runAgent` adds genuine executionId-defaulting + register-on-fresh + `openWorkflowOutput`
+  logic; the `assemble*` split is the documented reserve→assemble→compensate saga boundary; the cycle
+  factories _are_ the prescribed `Node.exec → createFlow → flow.run` shape. Re-rebutted exactly as §21–§25.
+
+### One re-surfaced DRY item worth carrying — `resumeToolUseFromSnapshot` duplication (= §23 N2)
+
+The core agent independently re-found what §23 recorded as **N2**: `resumeToolUseFromSnapshot`
+(`executeAgent.ts:489-569`) rebuilds the same `runToolUseFlow(...)` invocation shape as `runToolUseAgent`
+(`executeAgent.ts:203-277`) — identical `onSetup` attach/detach, `onFollowUpConsumed` emit, and
+`buildToolUseFlowResult(...)` return, differing only by the resume snapshot/`setupSession`. Extract one
+`runToolUseFlowForHandle(ctx, handle, setting, { resumeSnapshot?, setupSession? })` called from both. Low–med,
+covered by `resumeToolUseSnapshot.vitest.ts`. Still open (N2 remains on the §23 backlog); not applied here.
+
+### Subagent split points — unchanged and reconfirmed
+
+No change to §5 + the §25 ranking. Config-driven YAML agents over the two flows (reflection,
+`ToolUseRoundFlow`) + the `delegate_*` tools / `executeSubagent` remain the existing isolated-context
+subagent mechanism; `ModelInvocationNode` / `ToolUseDispatchNode` remain the cleanest node-level extraction
+points; there is still **no `delegateTo(...)` primitive** (delegation remains a tool call — the one
+structurally-open item, multi-day by design). Ranked value/effort order unchanged: (1) wire the existing
+`review` agent as a post-draft Verifier delegation; (2) introduce a typed
+`delegateTo(subagent, input, { maxDepth, tools })`; (3) formalize `polish`/`correct`/`merge` as SDK actors
+with typed I/O; (4) relocate the module-global registries onto the per-session handle (**relocate, never
+delete** — load-bearing); (5) decompose the multi-phase workflow agents (gated by #4).
+
+**Net for 2026-07-04:** thesis reaffirmed for the twenty-first pass — incremental, not structural. The one
+material development is that **§4's observability-unification direction is now landing in code** (`cbf5a39`
+routes run facts through the trace/session-event-hub seam instead of a direct `bus.emit`) — movement *with*
+the audit — which simultaneously makes the two-channel duplication concrete enough to record as **P26-1**
+(the `runFact.*` stringly round-trip + the dead `SessionFact = never` arm). Three independent fresh-eyes
+agents re-reached the standing verdict and re-surfaced every recurring trap (the `IModelHandler` width for the
+fourteenth time, the config-only subclasses, the two Google handlers, the kept two-headed entry, the §23-N2
+resume duplication) — all re-rebutted or already-tracked. P25-1 moved to **partially-addressed** (declarative
+route keys landed; the monkey-patch brand did not); P25-2–P25-6 unchanged. The tool-definition primitive
+absent from `@texra/core` is re-recorded as a product-scope/documentation decision, not an abstraction to
+remove. Guardrails intact (7 barrels, vscode-clean agnostic zones, 16 surface exports); no dead shim/barrel
+remains, so **no refactor was applied** this pass — only the §26 ledger reconciliation and the P26-1 record.
