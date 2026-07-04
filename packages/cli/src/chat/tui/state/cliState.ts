@@ -24,20 +24,15 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 
-export interface ConversationEntry {
+interface ConversationEntryBase {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
   readonly id: string;
-  readonly role: 'assistant' | 'error' | 'process' | 'tool' | 'user';
   /** Concatenated text for `MODEL_RESPONSE` entries. Empty for tool rows. */
   readonly text: string;
   /** True while rendered assistant text is hiding an incomplete protocol block. */
   readonly pendingEmbeddedSubagentFollowup?: boolean;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */
   readonly finalized: boolean;
-  /** Populated only when `role === 'tool'`. */
-  readonly toolUse?: NormalizedToolUse;
-  /** Populated only when `role === 'process'`. */
-  readonly process?: CompletedProcessTranscript;
   /** Entry was synthesized by the CLI and is not present in StreamLogStore. */
   readonly synthetic?: boolean;
   /** Why the CLI synthesized this entry. */
@@ -45,6 +40,22 @@ export interface ConversationEntry {
   /** StreamLog head at the moment a synthetic entry was appended. */
   readonly syntheticAfterSeq?: number;
 }
+
+/**
+ * Discriminated on `role` so `toolUse`/`process` are required exactly for
+ * the rows that need them, instead of independently-optional fields every
+ * consumer has to null-check regardless of role.
+ */
+export type ConversationEntry =
+  | (ConversationEntryBase & { readonly role: 'assistant' | 'error' | 'user' })
+  | (ConversationEntryBase & {
+      readonly role: 'tool';
+      readonly toolUse: NormalizedToolUse;
+    })
+  | (ConversationEntryBase & {
+      readonly role: 'process';
+      readonly process: CompletedProcessTranscript;
+    });
 
 export interface CompletedProcessTranscript {
   readonly executionId: string;
