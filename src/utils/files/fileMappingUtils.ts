@@ -3,12 +3,12 @@ import * as path from 'node:path';
 
 // Local imports - common
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import { toErrorMessage } from '@common/errors';
+import type { FileLocation } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - logger
 
 // Local imports - core utilities
-import type { FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports

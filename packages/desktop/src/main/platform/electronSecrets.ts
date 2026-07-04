@@ -1,7 +1,7 @@
 import { safeStorage } from 'electron';
 
-import { toErrorMessage } from '@common/errors';
 import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import type { PlatformSecrets } from '@platform/secrets';
 

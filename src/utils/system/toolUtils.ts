@@ -7,7 +7,6 @@ import { parse as shellParse } from 'shell-quote';
 
 // Local imports
 import { platform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas/opResults';
 import {
@@ -25,6 +24,7 @@ import {
   PANDOC_INSTALL_GUIDE,
   getInstallGuide,
 } from '@shared/constants/latex';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { IS_WINDOWS, extendEnvPath } from './platformPaths';

@@ -33,7 +33,6 @@ import {
   setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@auth/codex';
-import { toErrorMessage } from '@common/errors';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -85,6 +84,7 @@ import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/cha
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { StorageFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   applyGitAuthorSettings,
   buildGitAuthorSettingsMessage,

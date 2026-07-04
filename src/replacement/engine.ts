@@ -4,9 +4,9 @@
 
 import { LRUCache } from 'lru-cache';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 import { ReplacementCategory, ReplacementValue } from './types';

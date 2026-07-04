@@ -34,7 +34,6 @@ import {
 } from '@auth/serverKeys';
 
 // Local imports - common state
-import { toErrorMessage } from '@common/errors';
 
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';
@@ -44,6 +43,7 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 // Local imports - shared state
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - config
 import { getUseOpenRouter } from '@utils/config/providerConfig';

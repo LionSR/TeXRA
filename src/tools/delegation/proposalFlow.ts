@@ -18,7 +18,6 @@ import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors';
 
 // Local imports - model
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -39,6 +38,7 @@ import {
   availableModelNamesFromOptions,
   selectDelegationModelFromAvailableNames,
 } from '@tools/delegationModelAvailability';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - delegation
 import { executeSubagent } from './subagentExecution';

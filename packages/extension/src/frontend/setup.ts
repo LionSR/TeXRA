@@ -7,7 +7,6 @@ import {
   GlobalStorageAgentDirectoryStorage,
   PathAgentDirectoryBundleSource,
 } from '@agent/index/AgentDirectorySync';
-import { toErrorMessage } from '@common/errors';
 import {
   GlobalStateKey,
   WorkspaceStateKey,
@@ -26,6 +25,7 @@ import {
 } from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { updateConfig } from '@utils/config';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
 

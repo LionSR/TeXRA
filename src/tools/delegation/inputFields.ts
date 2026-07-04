@@ -6,7 +6,6 @@
 import { z } from 'zod';
 
 // Local imports - logger
-import { extractErrorMessage, toErrorMessage } from '@common/errors';
 
 // Local imports - tools
 import type { ToolResult } from '@shared/schemas/toolResult';
@@ -19,6 +18,10 @@ import { displayToStoragePath } from '@tools/memory/memoryUtils';
 
 // Local imports - utils
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import {
+  extractErrorMessage,
+  toErrorMessage,
+} from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 

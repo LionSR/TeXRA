@@ -1,9 +1,9 @@
 // Local imports - utils
-import { delay } from '@utils/core';
+import type { AgentTrace } from '@agent/trace';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import { delay } from '@utils/core';
 
 // Type imports
-import type { AgentTrace } from '@agent/trace';
 
 export interface BackgroundPollStats {
   readonly responseId: string;

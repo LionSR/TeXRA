@@ -1,6 +1,6 @@
 import { Mutex } from 'async-mutex';
 
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   parseAuthCallbackCode,
   parseAuthCallbackTokens,
