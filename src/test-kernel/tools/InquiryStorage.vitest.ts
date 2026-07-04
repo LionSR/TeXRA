@@ -269,12 +269,15 @@ describe('InquiryStorage', () => {
     expect(manifest).not.toBeNull();
     expect(manifest!.status).toBe('answered');
     expect(manifest!.parentStreamId).toBeNull();
-
-    const hydrated = await readExternalInquiryThread('ei_aabbccdd0011', {
-      hydrate: true,
-    });
-    expect(manifestToTranscript(hydrated!)).toMatchObject([
+    expect(manifestToTranscript(manifest!)).toMatchObject([
       { turnIndex: 1, question: 'Legacy Q', answer: 'Legacy A' },
     ]);
+
+    const persisted = JSON.parse(
+      Buffer.from(
+        await platform.fs.readFile(`${threadDir}/manifest.json`),
+      ).toString('utf8'),
+    ) as { turns: Array<{ answer?: string }> };
+    expect(persisted.turns[0]?.answer).toBe('Legacy A');
   });
 });
