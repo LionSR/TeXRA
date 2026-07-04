@@ -739,6 +739,12 @@ ordering they force:
 - Un-attributed stop paths must name an outcome (`cancelled`), which
   _changes_ CLI history for future runs from `unknown` to `interrupted`-
   equivalent — a bug fix wearing a behavior change.
+- A lifecycle outcome for a stream already in WAITING is intentionally written
+  as `WAITING → RUNNING` (`resume`) followed by `RUNNING → outcome`
+  (`lifecycle`). The old preservation behavior left a completed cycle stuck in
+  resumable UI state; the machine now records the run outcome explicitly while
+  keeping WAITING's in-flight/resumable semantics for streams that have not
+  reached a lifecycle outcome.
 
 **Risks and their mitigations:**
 
