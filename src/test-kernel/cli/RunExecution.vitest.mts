@@ -11,6 +11,7 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
+import type { executeCliRequest } from '@cli/runtime/runExecution';
 import {
   EXECUTION_STATUS,
   type StreamTabId,
@@ -92,6 +93,13 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   };
 }
 
+function baseRequest(): Parameters<typeof executeCliRequest>[0] {
+  return {
+    config: {},
+    executionId: 'exec-1',
+  } as Parameters<typeof executeCliRequest>[0];
+}
+
 function toolUseConfig() {
   return {
     agent: 'chat',
@@ -135,10 +143,7 @@ describe('executeCliRequest', () => {
 
   it('marks headless never runs as approval-unavailable for agent execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext());
 
@@ -152,10 +157,7 @@ describe('executeCliRequest', () => {
 
   it('marks headless ask runs as approval-unavailable for agent execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext({ approvalPolicy: 'ask' }));
 
@@ -169,10 +171,7 @@ describe('executeCliRequest', () => {
 
   it('keeps yolo runs approval-available for agent execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext({ approvalPolicy: 'yolo' }));
 
@@ -186,10 +185,7 @@ describe('executeCliRequest', () => {
 
   it('hides host-unavailable tools in CLI execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(
       request,
@@ -212,10 +208,7 @@ describe('executeCliRequest', () => {
 
   it('preserves caller-provided runtime tool exclusions', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext(), {
       runtimeUnavailableTools: ['custom_tool'],
@@ -237,10 +230,7 @@ describe('executeCliRequest', () => {
 
   it('installs CLI approval handlers with the runtime prompt hook', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
     const context = cliContext({ mode: 'interactive', approvalPolicy: 'ask' });
 
     await executeCliRequest(request, context);
@@ -259,10 +249,7 @@ describe('executeCliRequest', () => {
 
   it('restores CLI approval handlers before closing the runtime host', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
     const uninstall = vi.fn();
     mocks.installCliApprovalHandlers.mockReturnValue(uninstall);
 
@@ -278,10 +265,7 @@ describe('executeCliRequest', () => {
   it('persists headless stream sidecars emitted through the runtime host', async () => {
     await installStoragePlatform();
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
     const todo: TodoItem = {
       content: 'Write the introduction',
       status: 'in_progress',
@@ -329,10 +313,7 @@ describe('executeCliRequest', () => {
 
     try {
       const { executeCliRequest } = await import('@cli/runtime/runExecution');
-      const request = {
-        config: {},
-        executionId: 'exec-1',
-      } as Parameters<typeof executeCliRequest>[0];
+      const request = baseRequest();
 
       await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
         flushError,
@@ -350,10 +331,7 @@ describe('executeCliRequest', () => {
     const platform = createFakePlatform();
     initPlatform(platform);
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
     let resolveRun:
       | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
       | undefined;
@@ -393,10 +371,7 @@ describe('executeCliRequest', () => {
     const platform = createFakePlatform();
     initPlatform(platform);
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext(), {
       registerExecution: true,

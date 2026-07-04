@@ -92,6 +92,15 @@ describe('accept_run_files progress events', () => {
     testApprovalHandler = undefined;
     await installTestPlatform();
     cleanupAllApprovals();
+    // Shared by every test below that stubs the execution/workspace paths;
+    // the test that doesn't need it (missing runtime host) fails before
+    // reaching either function.
+    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+    WorkspaceFS.locatePath = (target) => ({
+      kind: 'workspace',
+      absolutePath: `${workspacePath}/${target}`,
+      relativePath: target,
+    });
   });
 
   afterEach(() => {
@@ -117,12 +126,6 @@ describe('accept_run_files progress events', () => {
     StorageFS.exists = async (target) =>
       target === `executions/${executionId}` ||
       target === `executions/${executionId}/output.tex`;
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
-    });
     WorkspaceFS.exists = async () => false;
     WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => undefined;
@@ -168,12 +171,6 @@ describe('accept_run_files progress events', () => {
     let writes = 0;
 
     StorageFS.exists = async (target) => target === `executions/${executionId}`;
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
-    });
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => 'new content';
     WorkspaceFS.write = async () => {
@@ -211,12 +208,6 @@ describe('accept_run_files progress events', () => {
     let writes = 0;
 
     StorageFS.exists = async (target) => target === `executions/${executionId}`;
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
-    });
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => 'same content';
     WorkspaceFS.write = async () => {
@@ -251,12 +242,6 @@ describe('accept_run_files progress events', () => {
     StorageFS.exists = async (target) =>
       target === `executions/${executionId}` ||
       target === `executions/${executionId}/r1/Draft/appendices.tex`;
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
-    });
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => {
