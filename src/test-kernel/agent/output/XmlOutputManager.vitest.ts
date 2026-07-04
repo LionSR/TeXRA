@@ -46,7 +46,6 @@ function createWorkflowAgentSetting(
     tools: [],
     isRewrite: true,
     rounds: 1,
-    prefills: [],
     ...overrides,
   };
 }
