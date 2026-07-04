@@ -68,8 +68,8 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'deepseekproT',
       source: 'builtin',
-      agentSource: 'builtin',
-      modelSource: 'builtin',
+      agentSource: 'builtin-default',
+      modelSource: 'builtin-default',
     });
   });
 
@@ -83,7 +83,7 @@ describe('CLI chat defaults', () => {
       agent: 'research',
       model: 'deepseekproT',
       source: 'builtin',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
     });
   });
 
@@ -99,8 +99,8 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'deepseekproT',
       source: 'mixed',
-      agentSource: 'workspace',
-      modelSource: 'builtin',
+      agentSource: 'workspace-config',
+      modelSource: 'builtin-default',
     });
   });
 
@@ -117,8 +117,8 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'sonnet46T',
       source: 'mixed',
-      agentSource: 'workspace',
-      modelSource: 'env',
+      agentSource: 'workspace-config',
+      modelSource: 'environment',
     });
   });
 
@@ -133,7 +133,7 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'sonnet46T',
       source: 'mixed',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
       modelSource: 'history',
     });
   });
@@ -171,7 +171,7 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
       modelSource: 'history',
     });
   });
@@ -193,7 +193,7 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
       modelSource: 'history',
     });
   });
@@ -209,7 +209,7 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
       modelSource: 'history',
     });
   });
@@ -224,8 +224,8 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
-      modelSource: 'workspace',
+      agentSource: 'builtin-default',
+      modelSource: 'workspace-config',
     });
 
     mockedReadJson.mockResolvedValueOnce({
@@ -239,8 +239,8 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
-      modelSource: 'user',
+      agentSource: 'builtin-default',
+      modelSource: 'user-config',
     });
   });
 
@@ -252,7 +252,7 @@ describe('CLI chat defaults', () => {
       }),
     ).resolves.toMatchObject({
       agent: 'assistant',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
     });
   });
 
@@ -265,7 +265,7 @@ describe('CLI chat defaults', () => {
       }),
     ).resolves.toMatchObject({
       agent: 'simplifier',
-      agentSource: 'override',
+      agentSource: 'explicit-override',
     });
   });
 
@@ -300,8 +300,8 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'deepseekT',
       source: 'user',
-      agentSource: 'user',
-      modelSource: 'user',
+      agentSource: 'user-config',
+      modelSource: 'user-config',
     });
   });
 });

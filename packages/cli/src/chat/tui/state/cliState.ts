@@ -8,8 +8,8 @@
 import { signal, Signal } from '@lit-labs/signals';
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
-import type { CliModelSelectionSource } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
@@ -69,7 +69,7 @@ export interface CompletedProcessTranscript {
 export interface SessionMeta {
   readonly agent: string;
   readonly model: string;
-  readonly modelSource: CliModelSelectionSource;
+  readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly apiMode: CliApiMode;
   readonly approvalPolicy: CliApprovalPolicy;
@@ -154,7 +154,7 @@ export function thinkingIndicatorVisible(
 const EMPTY_SESSION_META: SessionMeta = {
   agent: '',
   model: '',
-  modelSource: 'builtin',
+  modelSource: 'builtin-default',
   cwd: '',
   apiMode: 'personal',
   approvalPolicy: 'ask',
@@ -251,7 +251,7 @@ export function setCliSessionModelOverride(model: string): void {
   cliState.sessionMeta.set({
     ...cliState.sessionMeta.get(),
     model,
-    modelSource: 'override',
+    modelSource: 'explicit-override',
   });
 }
 
