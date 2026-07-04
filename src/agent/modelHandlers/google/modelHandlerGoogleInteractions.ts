@@ -1189,14 +1189,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   /**
-   * Reconstruct the model-generated steps of the just-finished turn: the
-   * thought steps (carrying their signatures, sourced from the reasoning cache
-   * populated by `processThinkingBlock`), optional assistant text, then the
-   * function-call steps. Carried verbatim in the transcript so the backend can
-   * validate reasoning across tool turns (resent each round in stateless mode;
-   * retained server-side once sent in chained mode).
-   */
-  /**
    * Build a `thought` step from an optional signature and thinking summary, or
    * `undefined` when both are empty (an empty thought step is noise on the wire).
    */
@@ -1212,6 +1204,14 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     } satisfies ThoughtStep;
   }
 
+  /**
+   * Reconstruct the model-generated steps of the just-finished turn: the
+   * thought steps (carrying their signatures, sourced from the reasoning cache
+   * populated by `processThinkingBlock`), optional assistant text, then the
+   * function-call steps. Carried verbatim in the transcript so the backend can
+   * validate reasoning across tool turns (resent each round in stateless mode;
+   * retained server-side once sent in chained mode).
+   */
   private buildAssistantTurnSteps(
     calls: GoogleToolCall[],
     workspaceState: AgentWorkspaceState | undefined,

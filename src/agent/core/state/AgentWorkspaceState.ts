@@ -328,19 +328,10 @@ export class WorkPlanState {
 }
 
 const AgentWorkspaceSnapshotFieldsSchema = z.object({
-  assembly: ResponseAssemblyStateSchema.prefault({
-    lastResponse: '',
-    accumulatedOutput: '',
-  }),
-  media: MediaAttachmentStateSnapshotSchema.prefault({ files: [] }),
-  reasoning: ReasoningCacheStateSchema.prefault({
-    thinkingBlocks: [],
-    thinkingAdded: false,
-  }),
-  interactions: FileInteractionStateSnapshotSchema.prefault({
-    readFiles: [],
-    edits: [],
-  }),
+  assembly: ResponseAssemblyStateSchema.prefault({}),
+  media: MediaAttachmentStateSnapshotSchema.prefault({}),
+  reasoning: ReasoningCacheStateSchema.prefault({}),
+  interactions: FileInteractionStateSnapshotSchema.prefault({}),
   workPlan: WorkPlanSnapshotSchema,
 });
 
