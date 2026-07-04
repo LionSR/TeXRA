@@ -6,7 +6,7 @@
  * diff, so blocks can be routed to filenames without trusting response order.
  */
 
-import { diffLevenshtein, diffTextByChar } from '@utils/text/diff';
+import { diffTextLevenshtein } from '@utils/text/diff';
 import {
   isClosingMarkdownFence,
   type MarkdownFence,
@@ -65,8 +65,8 @@ export function collectLatexFencedBlocks(
 function documentSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   const maxLength = Math.max(a.length, b.length, 1);
-  const diffs = diffTextByChar(a, b, { checkLines: true });
-  return Math.max(0, 1 - diffLevenshtein(diffs) / maxLength);
+  const distance = diffTextLevenshtein(a, b, { checkLines: true });
+  return Math.max(0, 1 - distance / maxLength);
 }
 
 /**

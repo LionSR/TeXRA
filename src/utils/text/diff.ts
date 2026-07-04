@@ -106,8 +106,25 @@ export function diffLevenshtein(diffs: TextDiff[]): number {
   return createDiffMatcher().diff_levenshtein(diffs);
 }
 
+/**
+ * Compute diff-match-patch Levenshtein distance directly from two strings
+ * using a single matcher instance.
+ */
+export function diffTextLevenshtein(
+  oldText: string,
+  newText: string,
+  options: CharDiffOptions = {},
+): number {
+  const dmp = createDiffMatcher();
+  const diffs = dmp.diff_main(oldText, newText, options.checkLines ?? false);
+  if (options.cleanupSemantic === true) {
+    applySemanticCleanup(dmp, diffs);
+  }
+  return dmp.diff_levenshtein(diffs);
+}
+
 /** Count added and removed lines from a diff. */
-export function countDiffLineChanges(diffs: TextDiff[]): DiffLineChanges {
+function countDiffLineChanges(diffs: TextDiff[]): DiffLineChanges {
   let added = 0;
   let removed = 0;
   for (const [op, text] of diffs) {
