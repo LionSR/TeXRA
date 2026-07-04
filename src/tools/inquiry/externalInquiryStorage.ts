@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { Mutex } from 'async-mutex';
 import { z } from 'zod';
 
+import { createChannelTrace } from '@logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   ExternalInquirySessionLinksSchema,
@@ -25,6 +26,7 @@ import { isDirectory, isFile } from '@utils/files/fsEntryType';
 const THREADS_DIR = 'ei_threads';
 const EXEC_DIR = 'ei';
 const QUESTION_PREVIEW_CHARS = 200;
+const logger = createChannelTrace('ExternalInquiryStorage');
 
 // ============================================================================
 // Schemas
@@ -605,7 +607,14 @@ export async function readExternalInquiryThread(
     if (!manifest) return null;
     const hydrated = await hydrateAnswersFromDisk(parsed.data, manifest);
     if (hydrated.didHydrate) {
-      await writeThreadManifest(hydrated.manifest);
+      try {
+        await writeThreadManifest(hydrated.manifest);
+      } catch (err) {
+        logger.warn(
+          `Failed to persist hydrated inquiry manifest for ${parsed.data}`,
+          { data: err },
+        );
+      }
     }
     return hydrated.manifest;
   });
