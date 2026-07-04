@@ -48,7 +48,7 @@ import {
   resumeWorkflowOutputFile,
 } from '@cli/runtime/workflowOutput';
 import {
-  isKnownCliModel,
+  isCliSupportedModelId,
   knownCliModelIds,
   resolveKnownCliModelId,
 } from '@cli/runtime/cliConfig';
@@ -1165,14 +1165,14 @@ describe('CLI global color/input flags', () => {
 
 describe('CLI model flag validation contract', () => {
   it('classifies built-in models as known and bogus names as unknown', () => {
-    expect(isKnownCliModel('sonnet46T')).toBe(true);
-    expect(isKnownCliModel('deepseekT')).toBe(true);
-    expect(isKnownCliModel('nonexistent-model-xyz')).toBe(false);
-    expect(isKnownCliModel('')).toBe(false);
+    expect(isCliSupportedModelId('sonnet46T')).toBe(true);
+    expect(isCliSupportedModelId('deepseekT')).toBe(true);
+    expect(isCliSupportedModelId('nonexistent-model-xyz')).toBe(false);
+    expect(isCliSupportedModelId('')).toBe(false);
   });
 
   it('does not advertise host-only Copilot models as CLI models', () => {
-    expect(isKnownCliModel('copilot4o')).toBe(false);
+    expect(isCliSupportedModelId('copilot4o')).toBe(false);
     expect(knownCliModelIds()).not.toContain('copilot4o');
     expect(resolveKnownCliModelId('copilot4o')).toBeUndefined();
     expect(resolveKnownCliModelId('Copilot GPT-4o')).toBeUndefined();

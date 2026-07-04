@@ -1,14 +1,15 @@
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { decideRunModel } from '@model/runModelDecision';
 import { toNewestFirstByTimestamp } from '@utils/core';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
+  commandConfigModel,
   loadWorkspaceCliConfig,
   parseCliConfigValues,
   resolveConfiguredAgent,
-  resolveConfiguredModel,
   type CliConfigValues,
 } from './cliConfig';
 import {
@@ -58,7 +59,7 @@ interface PartialDefaults {
 function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
   return {
     agent: usableConfiguredAgent(resolveConfiguredAgent(values, 'chat')),
-    model: resolveConfiguredModel(values, 'chat'),
+    model: commandConfigModel(values, 'chat'),
   };
 }
 
@@ -92,7 +93,7 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
   const mostRecent = candidates[0];
   if (!mostRecent?.agentConfig) return {};
   return {
-    model: resolveConfiguredModel(
+    model: commandConfigModel(
       parseCliConfigValues({ model: mostRecent.agentConfig.model }),
       'chat',
     ),
@@ -193,11 +194,25 @@ export async function resolveChatDefaults(
       agent = defaults.agent;
       agentSource = source;
     }
-    if (!model && defaults.model) {
-      model = defaults.model;
-      modelSource = source;
-    }
     if (agent && model) break;
+  }
+
+  const modelDecision = decideRunModel([
+    { model: workspace.model, reason: 'workspace-config' },
+    { model: user.model, reason: 'user-config' },
+    { model: history.model, reason: 'history' },
+    { model: BUILTIN_DEFAULT_CHAT_MODEL, reason: 'builtin-default' },
+  ]);
+  if (!model && modelDecision) {
+    model = modelDecision.model;
+    modelSource =
+      modelDecision.reason === 'workspace-config'
+        ? 'workspace'
+        : modelDecision.reason === 'user-config'
+          ? 'user'
+          : modelDecision.reason === 'history'
+            ? 'history'
+            : 'builtin';
   }
 
   return buildChatDefaults({

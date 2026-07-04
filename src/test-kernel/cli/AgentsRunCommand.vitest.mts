@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   initLocalCliPlatform: vi.fn(),
   isAuthenticated: vi.fn(),
   resolveCliLaunchAgent: vi.fn(),
-  resolveCliRunModel: vi.fn(),
+  selectCliRunModel: vi.fn(),
   writeErrorStderr: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
@@ -41,7 +41,7 @@ vi.mock('@cli/runtime/runModel', () => ({
     quietLogs: true,
     renderRunProgress: false,
   })),
-  resolveCliRunModel: mocks.resolveCliRunModel,
+  selectCliRunModel: mocks.selectCliRunModel,
 }));
 
 vi.mock('@cli/runtime/logSinks', () => ({
@@ -106,7 +106,7 @@ describe('CLI agents run command', () => {
       path: '/agents/chat.yaml',
       tools: ['read_file'],
     });
-    mocks.resolveCliRunModel.mockImplementation(
+    mocks.selectCliRunModel.mockImplementation(
       async (_context: CliContext, model: string | undefined) =>
         model ?? 'gpt54',
     );
@@ -176,7 +176,7 @@ describe('CLI agents run command', () => {
     ).rejects.toThrow('Provide --instruction or --instruction-file.');
 
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
@@ -208,7 +208,7 @@ describe('CLI agents run command', () => {
       'missing-agent',
       'agentsRun',
     );
-    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
@@ -239,7 +239,7 @@ describe('CLI agents run command', () => {
       'polish',
       'agentsRun',
     );
-    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 });
