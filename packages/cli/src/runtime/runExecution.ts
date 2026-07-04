@@ -152,6 +152,7 @@ export async function executeCliToolUseConfig(
   return {
     ok: true,
     displayResult: createCliRunResult(result, {
+      terminalStatus,
       workingDirectory: runContext.cwd,
     }),
     exitCode: terminalStatusExitCode(terminalStatus, runContext),
