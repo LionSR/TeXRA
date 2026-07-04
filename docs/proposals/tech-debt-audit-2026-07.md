@@ -1,6 +1,7 @@
 # Tech-debt audit: largest debts not previously uncovered (2026-07)
 
-> **Status:** Open tracking audit (2026-07-03; status refreshed 2026-07-04).
+> **Status:** Open tracking audit (2026-07-03; status refreshed 2026-07-04,
+> Part D follow-up scan appended 2026-07-04).
 > This is the evidence base for the #6950/#6951/#6952/#6953 tech-debt program.
 > Items are implemented by the tracking issues; re-verify every cited file before
 > acting because this area changes quickly.
@@ -666,6 +667,152 @@ delete or mount the unused virtualizer dependency (C4c).
 
 ---
 
+## Part D — follow-up scan (2026-07-04): gaps in the `github/` and edit-tool subtrees
+
+A second independent sweep (four parallel readers over `modelHandlers/`,
+`tools/`, `transcript/`, cross-cutting patterns, and the CLI/webview
+frontends) re-derived Parts A–C from scratch and confirmed them (line counts
+match: MainApp 1,887, `modelHandlerOpenAIResponse` 2,871, `StreamSnapshotStore`
+1,046). It surfaced **four duplication debts not covered anywhere in this
+document or the audit corpus** — the Part-C sweep audited `tools/` broadly but
+never entered the `tools/github/` polling subtree or the edit-tool family, and
+A1's model-handler decomposition names prefill/continuation but not the two
+adjacent hoists below. Same evidence standard; line numbers below are pinned to
+`main` at `73c358f` — re-verify (they drift quickly, especially in
+`modelHandlers/`) before acting.
+
+### D1. GitHub polling-source family: seed-branch cloned from diff-branch per resource (~150–220 LoC)
+
+`src/tools/github/` carries three near-identical pollers over one
+`PollingSourceBase` (370):
+
+| File                    | LoC | `pollOne` |
+| ----------------------- | --: | --------: |
+| `PRPollingSource.ts`    | 884 |    `:308` |
+| `RepoPollingSource.ts`  | 573 |    `:210` |
+| `IssuePollingSource.ts` | 238 |    `:131` |
+
+Every `pollOne` hand-copies the same skeleton per tracked resource: build
+`?since=` URLs → `Promise.all` the GETs → per-endpoint `safeParse`-or-`warn`
+(each preceded by the same "must not throw or the 24h detach trips" rationale,
+copied verbatim across all three files) → **a seed branch
+(`if (!state.initialized) { …; state.initialized = true; return }` —
+`PRPollingSource.ts:459`, `RepoPollingSource.ts:272`,
+`IssuePollingSource.ts:214`) that mirrors the diff branch's seen-id / cursor
+bookkeeping with the `emit()` calls removed** → the dedup/trim unit
+(`seen.has/add` + `shouldDropBotEvent` + `trimSet(…, MAX_SEEN_IDS)` +
+`getNewestTimestamp`, `PRPollingSource.ts:535-574`) repeated once per resource
+(4× PR, 3× Repo, 2× Issue, ~9 copies). The shared bookkeeping parity is
+enforced only by copy-paste discipline: a fix landed in one branch (e.g. bot
+filtering) can silently miss its seed twin, and each new event resource
+re-derives the whole seed/diff/trim quartet by hand.
+
+Note the seed branch is **not** pure diff-minus-`emit`: it also does
+cursor-specific initialization the diff path doesn't — e.g.
+`RepoPollingSource.ts:280` seeds `prUpdatedAtByNumber` (with a comment
+explaining it prevents a next-tick merge-probe stampede) while the diff path
+delegates mergeability to `probeMergeableStates`. Any consolidation must
+preserve these seed-only init behaviors rather than assume strict parity.
+
+**Fix:** a declarative `DedupedResource<T>` on `PollingSourceBase` owning
+`{ seenIds, sinceCursor }` and exposing `seed(items)` / `diff(items, emit)`, so
+`pollOne`'s shared bookkeeping reduces to `resource.seed(data)` (init) or
+`resource.diff(data, c => emit(format(c)))` — with seed-only side effects
+(cursor pre-seeding) kept as explicit per-resource init, not folded into the
+generic `seed`; wrap the parse-or-skip block in one
+`validateOrSkip(res, schema, label)` base helper; hoist the three identical
+`backoffBaseMs`/`backoffMaxMs`/`maxFailureDurationMs` config literals
+(`PollingSourceBase.ts:45-47`) into a shared default. Warrants its own tracked
+issue — larger than a quick win, independent of the architecture program.
+
+### D2. Edit/Write/TextEditor: the approve-and-write pipeline re-inlined 4× (~60–100 LoC)
+
+The read-gate → approval → write → diff-note sequence
+(`requireFileReadForEdit` → `requestApprovedEditContent` → reject-check →
+`writeApprovedContent` → `recordToolFileRead` → assemble the
+`{summary, output, userPatch, edits[]}` result) is re-inlined in four places:
+`EditTool.ts` (`:72,:104,:116,:122`), `WriteTool.ts` (`:53,:64,:76,:82`), and
+**twice inside** `TextEditorTool.ts` — `create` (`:302-328`) and `undoEdit`
+(`:597-624`). TextEditorTool's `create` is essentially WriteTool re-inlined;
+`undoEdit` re-inlines it again. Any change to the approval/return contract must
+land in all four.
+
+TextEditorTool's other two edit commands, `strReplace` (`:415`) and `insert`
+(`:508`), have **already** factored the pipeline into the in-file helpers
+`prepareEditContent` (`:356`) and `approveAndWriteEdit` (`:380`) — they are the
+consolidated precedent, not additional copies. The real target is to promote
+that in-file helper to a cross-tool one so `create`/`undoEdit`, EditTool, and
+WriteTool all route through it.
+
+This is **distinct from F5 (#6975)**, which fixes the `ToolResult` _status
+contract_; F5 does not dedupe this execution pipeline. **Fix:** one shared
+`applyApprovedEdit({path, originalContent, proposedContent, sourceTool})` helper
+(generalizing TextEditorTool's existing `approveAndWriteEdit`); each command
+computes only `proposedContent` and delegates. Best landed alongside F5 while
+these files are open.
+
+### D3. Extends A1/F3 — two model-handler hoists it does not name
+
+A1's decomposition (F3 #6973 prefill/continuation template, F4 #6974
+capabilities) leaves two adjacent copy-paste seams untouched:
+
+- **Streaming-catch boilerplate across 5 handlers.** The mid-stream failure
+  path — `thinking?.finalize(undefined)` + `output?.finalize()` + partial-tail
+  extraction + `annotateStreamFailure(err, tail, …)` + rethrow — is copied in
+  `anthropic:723`, `openai:433`, `openaiResponse:2011`, `googleGenAI:521`,
+  `openRouterNative:281` (the "parity with the other streaming providers"
+  comments admit it). A protected `runProgressStreaming()` template method on
+  `ModelHandler` would own stream creation + the try/finally finalize + the
+  catch block; providers pass only their per-chunk `consume`. **Carve-out:**
+  `modelHandlerOpenAIResponse` is not pure catch-and-annotate — before the
+  outer catch it can recover the Responses-API result via
+  `retrieveAfterUnhandledStreamEvent` (`:1896,:1966,:1973`) and finalize
+  normally. The template must expose an optional provider `recover(streamError)`
+  hook (default: none) so a Responses stream interrupt still recovers rather
+  than being forced straight to `annotateStreamFailure`.
+- **Near-identical message construction, OpenAI ↔ OpenRouterNative.**
+  `initializeMessages` / `createRoundMessages` / `createUserFollowUpMessages`
+  run the same algorithm (`openai:674,:741,:777` vs
+  `openRouterNative:362,:425,:457`); OpenRouter's message model has the OpenAI
+  chat shape (~120–160 LoC). It is **not** byte-identical — the media-failure
+  log call diverges (`openai:757` `logSdkError` vs `openRouterNative:441`
+  `this.logger.error`) and a prior audit explicitly rejected treating the
+  OpenRouter SDK surface as the OpenAI base over real type/shape differences.
+  So the hoist is a shared helper over the **truly common algorithmic pieces**
+  (role selection, media-append gating, "append to last user message vs new"),
+  parameterized on the per-provider message/part types and the error-log call —
+  not a merge that re-couples the two SDK surfaces. Extract into the existing
+  `src/agent/modelHandlers/support/` collaborator directory (alongside
+  `UsageNormalizer`, `MediaAttachmentProcessor`).
+
+Fold both into F3's sub-debt list rather than tracking separately.
+
+### D4. Smaller items
+
+- **`externalToolDefs.ts` `detailCheck` duplication (~40–60 LoC).** The Codex
+  (`:507`) and Claude-agent (`:572`) `detailCheck` callbacks run the same
+  algorithm (import SDK → classify the `not found`/`MODULE_NOT_FOUND`/`Cannot
+find package` triad → find native binary → append WSL hint) that
+  `probeSdkBinaryAvailable` (`:205`) already shares for their `check`. Add a
+  matching `describeSdkTool({importSdk, findBinary, pkgName, …})` helper.
+- **Reasoning-gate: only the one-shot guard is duplicated, not the payload
+  (~20–40 LoC).** The guard
+  `if (workspaceState && !workspaceState.reasoning.thinkingAdded) { …; thinkingAdded = true }`
+  is inlined in `anthropic:1234`, `googleGenAI:801`, `googleInteractions:1001`.
+  But these are **not** foldable into the string-only base helper
+  `ModelHandler.applyStringReasoningToWorkspaceState` (`:1241`), which stores a
+  plain `{ type: 'thinking', thinking: string }` block (correct for
+  OpenAI/OpenRouter). The structured providers legitimately store richer,
+  continuation-critical payloads the string helper would discard —
+  Anthropic keeps the full SDK `thinkingBlocks` (`:1241-1244`) and Gemini keeps
+  per-part `thoughtSignature` (`googleGenAI:802-806`). The duplication is only
+  the guard-and-set-once bookkeeping, so the fix is a typed
+  `applyReasoningBlocks(blocks, workspaceState)` that takes already-constructed
+  provider blocks and applies the one-shot guard — **not** routing these through
+  the string helper. Fold into F4, scoped to the guard only.
+
+---
+
 ## Suggested priority
 
 1. **A2 host-adapter factories** — highest bug-yield per line deleted when
@@ -690,3 +837,5 @@ delete or mount the unused virtualizer dependency (C4c).
 5. **A4 test-infra** (`memfs` + global setup) — cheap, pays on every suite.
 6. **A3 MainApp slice migration, B3 boundary enforcement, A6 transcript facade,
    B5/B6 cohesion splits** — as-touched.
+7. **D1 polling-source `DedupedResource<T>`** — new tracked issue; independent
+   of the architecture program. D2 rides F5, D3 folds into F3, D4 into F4.
