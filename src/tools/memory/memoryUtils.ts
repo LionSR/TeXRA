@@ -1,9 +1,5 @@
 import * as path from 'node:path';
 
-import {
-  resolveMemoryStoragePath,
-  resolveMemoryStorageRelativePath,
-} from '@platform/defaults/workspaceStorage';
 import { normalizeFilePath } from '@shared/utils/path';
 
 import { MEMORY_DISPLAY_ROOT, MEMORY_STORAGE_ROOT } from './constants';
@@ -51,5 +47,10 @@ export function displayToStoragePath(displayPath: string): string {
   const resolved = path.resolve(MEMORY_STORAGE_ROOT, suffix);
   const base = path.resolve(MEMORY_STORAGE_ROOT);
   const relative = path.relative(base, resolved);
-  return resolveMemoryStoragePath(resolveMemoryStorageRelativePath(relative));
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Invalid memory path: ${displayPath}`);
+  }
+  return relative
+    ? path.join(MEMORY_STORAGE_ROOT, relative)
+    : MEMORY_STORAGE_ROOT;
 }

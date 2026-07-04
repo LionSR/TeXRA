@@ -69,6 +69,12 @@ describe('CLI memory formatting', () => {
       'Invalid memory path',
     );
   });
+
+  it('reports the original display path when a memory path escapes the root', () => {
+    expect(() =>
+      cliMemoryStoragePathFromInput('/memories/../outside.md'),
+    ).toThrow('Invalid memory path: /memories/../outside.md');
+  });
 });
 
 describe('memorySelectWindow', () => {
