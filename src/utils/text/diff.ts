@@ -57,11 +57,6 @@ function applySemanticCleanup(
   return diffs;
 }
 
-/** Run diff-match-patch semantic cleanup on an existing diff. */
-export function cleanupSemanticDiffs(diffs: TextDiff[]): TextDiff[] {
-  return applySemanticCleanup(createDiffMatcher(), diffs);
-}
-
 /**
  * Compute a character diff. By default this is the raw diff-match-patch
  * `diff_main(oldText, newText, false)` behavior.
@@ -77,6 +72,21 @@ export function diffTextByChar(
     applySemanticCleanup(dmp, diffs);
   }
   return diffs;
+}
+
+/**
+ * Compute a character diff with semantic cleanup enabled. Callers still choose
+ * the `checkLines` mode explicitly.
+ */
+export function diffTextByCharWithSemanticCleanup(
+  oldText: string,
+  newText: string,
+  options: Pick<CharDiffOptions, 'checkLines'> = {},
+): TextDiff[] {
+  return diffTextByChar(oldText, newText, {
+    ...options,
+    cleanupSemantic: true,
+  });
 }
 
 /**
@@ -99,11 +109,6 @@ export function diffTextByLine(
   }
   dmp.diff_charsToLines_(diffs, lineArray);
   return diffs;
-}
-
-/** Compute diff-match-patch Levenshtein distance for an existing diff. */
-export function diffLevenshtein(diffs: TextDiff[]): number {
-  return createDiffMatcher().diff_levenshtein(diffs);
 }
 
 /**
