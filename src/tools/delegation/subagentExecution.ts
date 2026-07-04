@@ -134,20 +134,6 @@ async function writeSubagentReport(
   }
 }
 
-function resolveDeliveryStreamId(
-  executionId: string,
-  fallbackStreamId: StreamTabId,
-): StreamTabId | undefined {
-  const handle = currentSession().executions.getHandle(executionId);
-  if (!(handle instanceof AgentExecutionHandle)) return fallbackStreamId;
-  // AgentExecutionHandle.detach() promotes a child by setting
-  // parentStreamId === childStreamId. Do not enqueue the formatted result
-  // back into the detached child's own prompt as a synthetic follow-up.
-  return handle.parentStreamId === handle.childStreamId
-    ? undefined
-    : handle.parentStreamId;
-}
-
 /**
  * Runtime depth gate shared by fresh delegations and resumes.
  * Evaluates against the current workspace delegation policy.
@@ -352,10 +338,11 @@ export async function executeSubagent(
     followUp: FollowUpQueueInput,
     options?: { wake?: boolean },
   ): Promise<boolean> {
-    const targetStreamId = resolveDeliveryStreamId(
-      executionId,
-      orchestratorStreamId,
-    );
+    const handle = currentSession().executions.getHandle(executionId);
+    const targetStreamId =
+      handle instanceof AgentExecutionHandle
+        ? handle.deliveryTargetStreamId
+        : orchestratorStreamId;
     if (!targetStreamId) return false;
 
     const result = await sendFollowUp(

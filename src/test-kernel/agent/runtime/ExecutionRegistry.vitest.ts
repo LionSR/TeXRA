@@ -955,7 +955,9 @@ describe('executionRegistry', () => {
       );
 
       registry.track(handle);
+      expect(handle.deliveryTargetStreamId).toBe(parentStreamId);
       registry.detachActiveChildren(parentStreamId, explicit.host);
+      expect(handle.deliveryTargetStreamId).toBeUndefined();
 
       expect(explicit.events.map((entry) => entry.event)).toEqual([
         'updateActiveSubagents',
