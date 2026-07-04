@@ -1,6 +1,7 @@
 /**
- * The single predicate that decides whether a model request should be served by
- * the ChatGPT subscription (Codex backend) instead of the normal OpenAI path.
+ * The single route/profile resolver that decides whether a model request should
+ * be served by the ChatGPT subscription (Codex backend) instead of the normal
+ * OpenAI path.
  *
  * Shared by the handler dispatch (ModelFactory) and the picker availability
  * gate (computeModelOptions) so the two never drift. Deliberately synchronous
@@ -8,18 +9,17 @@
  * request time in the handler and in the async availability context, so the
  * conversation-compatibility key can stay sync.
  */
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
-
+import {
+  resolveProviderCapabilities,
+  type ProviderCapabilityProfile,
+} from '@model/providerCapabilities';
 import { AgentCategory } from '@shared/schemas/agent';
 
-import {
-  codexBackendModelId,
-  isCodexSubscriptionEligible,
-} from './codexConstants';
 import {
   isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
 } from './codexPreference';
+import type { ModelConfig } from 'llm-zoo';
 
 /**
  * Whether this model, under the current routing context, should go through the
@@ -30,13 +30,19 @@ export function shouldUseCodexSubscription(
   config: ModelConfig,
   useOpenRouter: boolean,
 ): boolean {
-  if (useOpenRouter) return false;
-  if (config.provider !== ModelProvider.OPENAI) return false;
-  if (config.openRouterOnly) return false;
-  if (!isPreferCodexSubscription()) return false;
-  // Match the bare id the Codex backend keys on (`gpt-5.5`), not the date-pinned
-  // llm-zoo `fullName` (`gpt-5.5-2026-04-23`) — the same derivation dispatch uses.
-  return isCodexSubscriptionEligible(codexBackendModelId(config));
+  return resolveCodexSubscriptionCapabilities(config, useOpenRouter) !== null;
+}
+
+export function resolveCodexSubscriptionCapabilities(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+): ProviderCapabilityProfile | null {
+  if (!isPreferCodexSubscription()) return null;
+  return resolveProviderCapabilities({
+    model: config,
+    authMode: 'chatgpt-subscription',
+    useOpenRouter,
+  });
 }
 
 export function shouldUseCodexSubscriptionForAgentCategory(
@@ -44,7 +50,25 @@ export function shouldUseCodexSubscriptionForAgentCategory(
   useOpenRouter: boolean,
   agentCategory: AgentCategory | undefined,
 ): boolean {
-  if (!shouldUseCodexSubscription(config, useOpenRouter)) return false;
-  if (!isCodexSubscriptionToolUseOnly()) return true;
-  return agentCategory === AgentCategory.ToolUse;
+  return (
+    resolveCodexSubscriptionCapabilitiesForAgentCategory(
+      config,
+      useOpenRouter,
+      agentCategory,
+    ) !== null
+  );
+}
+
+export function resolveCodexSubscriptionCapabilitiesForAgentCategory(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+  agentCategory: AgentCategory | undefined,
+): ProviderCapabilityProfile | null {
+  const capabilities = resolveCodexSubscriptionCapabilities(
+    config,
+    useOpenRouter,
+  );
+  if (!capabilities) return null;
+  if (!isCodexSubscriptionToolUseOnly()) return capabilities;
+  return agentCategory === AgentCategory.ToolUse ? capabilities : null;
 }

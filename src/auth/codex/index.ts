@@ -63,6 +63,8 @@ export {
   type CodexSubscriptionPreferenceUpdate,
 } from './codexPreference';
 export {
+  resolveCodexSubscriptionCapabilities,
+  resolveCodexSubscriptionCapabilitiesForAgentCategory,
   shouldUseCodexSubscription,
   shouldUseCodexSubscriptionForAgentCategory,
 } from './codexRouting';

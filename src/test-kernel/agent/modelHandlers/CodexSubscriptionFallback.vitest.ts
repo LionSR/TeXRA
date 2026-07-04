@@ -8,11 +8,11 @@ import {
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import {
   CODEX_BACKEND_BASE_URL,
-  CODEX_SUBSCRIPTION_CONTEXT_WINDOW,
   resetCodexCoordinator,
   setPreferCodexSubscription,
 } from '@auth/codex';
 import { setServerSideKeyService } from '@auth/serverKeys';
+import { CODEX_SUBSCRIPTION_CONTEXT_WINDOW } from '@model/providerCapabilities';
 import { AgentCategory } from '@shared/schemas/agent';
 
 import type { ResponseUsage } from 'openai/resources/responses/responses';
