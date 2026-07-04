@@ -1,4 +1,5 @@
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
+import { LRUCache } from 'lru-cache';
 
 import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -341,6 +342,7 @@ async function buildModelOptionData(
 }
 
 const MODEL_OPTIONS_CACHE_TTL_MS = 5_000;
+const MODEL_OPTIONS_CACHE_MAX_ENTRIES = 50;
 const VISIBLE_MODELS_CACHE_KEY = 'visible';
 const EXPLICIT_MODELS_CACHE_PREFIX = 'models:';
 
@@ -352,10 +354,10 @@ const EXPLICIT_MODELS_CACHE_PREFIX = 'models:';
  * State is split into resolved data vs in-flight promise to avoid
  * sentinel values (like `data: []`) that could leak to callers.
  */
-const resolvedModelOptions = new Map<
-  string,
-  { data: ModelOptionData[]; expiry: number }
->();
+const resolvedModelOptions = new LRUCache<string, ModelOptionData[]>({
+  max: MODEL_OPTIONS_CACHE_MAX_ENTRIES,
+  ttl: MODEL_OPTIONS_CACHE_TTL_MS,
+});
 const pendingModelOptions = new Map<string, Promise<ModelOptionData[]>>();
 
 /** Invalidate the shared model options cache (e.g. after key or model-list changes). */
@@ -391,7 +393,7 @@ export async function computeModelOptionsData(
 
   const cacheKey = getModelOptionsCacheKey(models, options);
   const cached = resolvedModelOptions.get(cacheKey);
-  if (cached && Date.now() < cached.expiry) return cached.data;
+  if (cached) return cached;
 
   const pending = pendingModelOptions.get(cacheKey);
   if (pending) return pending;
@@ -407,10 +409,7 @@ export async function computeModelOptionsData(
     const data = await request;
     // Only populate cache if no invalidation occurred while we were awaiting.
     if (pendingModelOptions.get(cacheKey) === request) {
-      resolvedModelOptions.set(cacheKey, {
-        data,
-        expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS,
-      });
+      resolvedModelOptions.set(cacheKey, data);
     }
     return data;
   } finally {
