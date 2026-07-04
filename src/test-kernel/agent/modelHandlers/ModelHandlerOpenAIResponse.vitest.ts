@@ -95,13 +95,18 @@ function createConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
   };
 }
 
-function createHandler(
-  configOverrides: Partial<ModelConfig> = {},
-): ModelHandlerOpenAIResponse {
-  const handler = new ModelHandlerOpenAIResponse(createConfig(configOverrides));
+function setupHandler<T extends ModelHandlerOpenAIResponse>(handler: T): T {
   handler.setLogger(createLoggerStub() as unknown as AgentTrace);
   handler.getStreamingConfig = () => false;
   return handler;
+}
+
+function createHandler(
+  configOverrides: Partial<ModelConfig> = {},
+): ModelHandlerOpenAIResponse {
+  return setupHandler(
+    new ModelHandlerOpenAIResponse(createConfig(configOverrides)),
+  );
 }
 
 class NonChainingResponseHandler extends ModelHandlerOpenAIResponse {
@@ -123,19 +128,17 @@ class StatelessResponseHandler extends ModelHandlerOpenAIResponse {
 function createNonChainingHandler(
   configOverrides: Partial<ModelConfig> = {},
 ): ModelHandlerOpenAIResponse {
-  const handler = new NonChainingResponseHandler(createConfig(configOverrides));
-  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
-  handler.getStreamingConfig = () => false;
-  return handler;
+  return setupHandler(
+    new NonChainingResponseHandler(createConfig(configOverrides)),
+  );
 }
 
 function createStatelessHandler(
   configOverrides: Partial<ModelConfig> = {},
 ): ModelHandlerOpenAIResponse {
-  const handler = new StatelessResponseHandler(createConfig(configOverrides));
-  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
-  handler.getStreamingConfig = () => false;
-  return handler;
+  return setupHandler(
+    new StatelessResponseHandler(createConfig(configOverrides)),
+  );
 }
 
 function createResponse(id: string, usage?: { input_tokens: number }) {
