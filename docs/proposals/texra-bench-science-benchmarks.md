@@ -76,12 +76,20 @@ All schemas live in `src/bench/schema/` as Zod v4, types via `z.infer`, per the 
 ```yaml
 # suites/texra-sci-v1/suite.yaml
 name: texra-sci
-version: 1.2.0            # semver: MAJOR = tasks incomparable, MINOR = grader-only regrade
+version: 1.2.0 # semver: MAJOR = tasks incomparable, MINOR = grader-only regrade
 contaminationCutoff: 2026-06-01
-canaryGuid: 7f3d2a1c-...  # BIG-bench-style corpus-contamination canary (from the harness-architecture lens)
+canaryGuid: 7f3d2a1c-... # BIG-bench-style corpus-contamination canary (from the harness-architecture lens)
 tasks:
-  - { dir: tasks/qft-oneloop-vacuum, weight: 1.0, tags: [derivation, hep-th, wolfram] }
-  - { dir: tasks/injected-2506-01234, weight: 1.0, tags: [error-injection, fresh] }
+  - {
+      dir: tasks/qft-oneloop-vacuum,
+      weight: 1.0,
+      tags: [derivation, hep-th, wolfram],
+    }
+  - {
+      dir: tasks/injected-2506-01234,
+      weight: 1.0,
+      tags: [error-injection, fresh],
+    }
 license: CC-BY-4.0
 ```
 
@@ -96,16 +104,16 @@ Six task kinds, discriminated on `kind`: `derivation`, `proof`, `error-injection
 id: qft-oneloop-vacuum
 kind: derivation
 title: One-loop effective potential for phi^4 theory
-agent: bench/solve_derivation        # ordinary agent YAML; settings.rounds: 2
+agent: bench/solve_derivation # ordinary agent YAML; settings.rounds: 2
 scaffold: texra
 inputs: [problem.tex]
 context: [macros.tex, conventions.tex]
 timeoutMs: 1800000
 graders:
   - type: compile
-    required: true                    # gate: fail => score 0, judge never runs
+    required: true # gate: fail => score 0, judge never runs
   - type: cas-assert
-    engine: wolfram                   # or sympy for the license-free subset
+    engine: wolfram # or sympy for the license-free subset
     asserts: refs/asserts.wls
     weight: 0.6
     prefixRule: monotone
@@ -114,23 +122,23 @@ graders:
     rubric: refs/rubric.md
     weight: 0.4
     calibration: refs/judge-cert.json # required before judge scores count (see 6.4)
-refs:                                 # scorer-only namespace, never mounted for solvers
-  solution: refs/gold-solution.tex    # must score 1.0 under `bench validate`
-  sabotage: refs/copy-input.tex       # must score <= 0.05
+refs: # scorer-only namespace, never mounted for solvers
+  solution: refs/gold-solution.tex # must score 1.0 under `bench validate`
+  sabotage: refs/copy-input.tex # must score <= 0.05
 metadata:
   domain: hep-th
   difficulty: 4
-  family: qft-effective-potentials    # cluster unit for bootstrap resampling
-  provenance: { source: original, author: "...", createdAfter: 2026-06-01 }
+  family: qft-effective-potentials # cluster unit for bootstrap resampling
+  provenance: { source: original, author: '...', createdAfter: 2026-06-01 }
 ```
 
-**The `refs/` namespace is structural anti-contamination** (from the harness-architecture lens): the workspace materializer copies `inputs` and `context` into the solver's temp workdir and *never* copies `refs/`; solver file tools cannot mount it. Reference answers, rubrics, gold fixes, and sabotage baselines are visible only to `bench grade`. Leakage is prevented by construction, not reviewer vigilance.
+**The `refs/` namespace is structural anti-contamination** (from the harness-architecture lens): the workspace materializer copies `inputs` and `context` into the solver's temp workdir and _never_ copies `refs/`; solver file tools cannot mount it. Reference answers, rubrics, gold fixes, and sabotage baselines are visible only to `bench grade`. Leakage is prevented by construction, not reviewer vigilance.
 
 Error-injection tasks add:
 
 ```yaml
-source: { arxiv: "2506.01234", sha256: "..." }   # pinned tarball, fetched once
-injections: refs/injections.yaml                  # [{file, lineStart, lineEnd, kind, goldFixDiff}]
+source: { arxiv: '2506.01234', sha256: '...' } # pinned tarball, fetched once
+injections: refs/injections.yaml # [{file, lineStart, lineEnd, kind, goldFixDiff}]
 injectionSeed: 42
 ```
 
@@ -159,8 +167,12 @@ The atomic product of `bench grade` is a content-addressed record, one per (cell
 {
   "kind": "score-record",
   "cell": { "task": "qft-oneloop-vacuum", "model": "gpt-6.1", "trial": 2 },
-  "grader": { "type": "cas-assert", "version": "1.3.0", "codeDigest": "sha256:..." },
-  "verdict": "pass" ,
+  "grader": {
+    "type": "cas-assert",
+    "version": "1.3.0",
+    "codeDigest": "sha256:..."
+  },
+  "verdict": "pass",
   "value": { "passed": 5, "total": 8 },
   "evidence": ["sha256:...wolfram-transcript", "sha256:...events-slice"],
   "env": "sha256:...env.json",
@@ -169,6 +181,7 @@ The atomic product of `bench grade` is a content-addressed record, one per (cell
 ```
 
 Rules:
+
 - Verdicts are **three-valued**: `pass | fail | unverifiable` (from the scoring-verification lens). A CAS timeout, a Lean toolchain mismatch, or a crashed grader is `unverifiable` and escalates — it is recorded as `graderError` and **never silently scored 0**.
 - Aggregation is a pure function over ScoreRecords; every reported number decomposes into records, each with evidence pointers into sha256-addressed artifacts.
 - Human adjudication is a first-class grader kind writing into the same record stream via a policy-driven escalation queue (from the scoring-verification lens) — not an offline spreadsheet.
@@ -242,28 +255,29 @@ texra bench exec-sample --stdio < sample.json    # one sample JSON in, AgentEven
 
 All paths below verified against the repo.
 
-| Bench component | Existing machinery |
-|---|---|
-| Cell execution | `packages/cli/src/runtime/runExecution.ts` (`executeCliConfig:101`, `executeCliRequest:169`) — request validation, executionId, runtime-host lifecycle, `StreamSnapshotStore` persistence, SIGINT-safe interrupted-status writes; workflow output resolution via `packages/cli/src/runtime/workflowOutput.ts`; tool-use path via `packages/cli/src/commands/agentsRun.ts` |
-| Compile gate | `src/agent/output/compileCheck.ts`, `src/latex/latexToolchain.ts` |
-| Math-aware diff | `src/latex/latexdiff/` (`service.ts`, `mathMarkup.ts`, `runLatexdiff.ts`) |
-| CAS assertions | `executeWolframCode` (`src/tools/wolfram/wolframScriptUtils.ts:72`) |
-| Lean grading / solver tools | `runLakeCommand` (`src/tools/lean/direct/lakeCommands.ts:59`); solver-side `src/tools/lean/LspTools.ts`, `src/tools/lean/LoogleTool.ts` |
-| Issue localization | `ReviewIssue` / `report_review_issue` shapes in `src/agent/review/reviewIssues.ts` (file + 1-based startLine/endLine + severity); solver pattern from `packages/extension/resources/tool_use_agents/changeReviewer.yaml` |
-| Structural assertions | `src/latex/labelSearch.ts`, `src/latex/extractBibliography.ts`, `src/latex/texcount.ts`, `src/latex/latexParsingUtils.ts` (for `\benchstep{k}{...}` extraction) |
-| Fresh-task supply | `src/latex/arxivProcessor.ts` (pinned tarballs, recorded sha256) |
-| Trace archive | `TraceEmitter` subscriber pattern from `src/transcript/TexraTranscriptRecorder.ts`; `AgentEvent` union in `src/agent/trace/events.ts` |
-| Usage/cost | `RunUsageAccumulator` (`src/agent/core/usage/RunUsageAccumulator.ts`, `totalCost` + token fields) — drives the live `--max-cost-usd` abort and $/solved-task reporting |
-| Provider neutrality | `src/agent/modelHandlers/` (anthropic, openai, google, openrouter); `baseURL` already threaded through the handler stacks (e.g. `modelHandlerAnthropic.ts`, `modelHandlerOpenAI.ts`) |
-| Judge + solver agents | ordinary agent YAML under `packages/extension/resources/agents/bench/` (patterned on `agents/write/paper2slide.yaml` etc.), run through `runAgent` re-exported from `packages/core/src/index.ts` |
-| Self-correction curves | per-round outputs via `getOutputFilesByRound` (`src/agent/output/outputState.ts:102`) from the reflection flow (`src/agent/implementations/flows/reflection/`) |
-| Env fingerprint | `texra doctor` machinery (`packages/cli/src/commands/doctor.ts`) |
-| CI distribution | `packages/cli/src/commands/installGithubAction.ts` for the `bench diff --gate` regression job (from the interop-standards lens) |
-| Approval semantics | `packages/cli/src/runtime/approvalPolicyAvailability.ts` — bench cells run with never-block approval semantics |
+| Bench component             | Existing machinery                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cell execution              | `packages/cli/src/runtime/runExecution.ts` (`executeCliConfig:101`, `executeCliRequest:169`) — request validation, executionId, runtime-host lifecycle, `StreamSnapshotStore` persistence, SIGINT-safe interrupted-status writes; workflow output resolution via `packages/cli/src/runtime/workflowOutput.ts`; tool-use path via `packages/cli/src/commands/agentsRun.ts` |
+| Compile gate                | `src/agent/output/compileCheck.ts`, `src/latex/latexToolchain.ts`                                                                                                                                                                                                                                                                                                         |
+| Math-aware diff             | `src/latex/latexdiff/` (`service.ts`, `mathMarkup.ts`, `runLatexdiff.ts`)                                                                                                                                                                                                                                                                                                 |
+| CAS assertions              | `executeWolframCode` (`src/tools/wolfram/wolframScriptUtils.ts:72`)                                                                                                                                                                                                                                                                                                       |
+| Lean grading / solver tools | `runLakeCommand` (`src/tools/lean/direct/lakeCommands.ts:59`); solver-side `src/tools/lean/LspTools.ts`, `src/tools/lean/LoogleTool.ts`                                                                                                                                                                                                                                   |
+| Issue localization          | `ReviewIssue` / `report_review_issue` shapes in `src/agent/review/reviewIssues.ts` (file + 1-based startLine/endLine + severity); solver pattern from `packages/extension/resources/tool_use_agents/changeReviewer.yaml`                                                                                                                                                  |
+| Structural assertions       | `src/latex/labelSearch.ts`, `src/latex/extractBibliography.ts`, `src/latex/texcount.ts`, `src/latex/latexParsingUtils.ts` (for `\benchstep{k}{...}` extraction)                                                                                                                                                                                                           |
+| Fresh-task supply           | `src/latex/arxivProcessor.ts` (pinned tarballs, recorded sha256)                                                                                                                                                                                                                                                                                                          |
+| Trace archive               | `TraceEmitter` subscriber pattern from `src/transcript/TexraTranscriptRecorder.ts`; `AgentEvent` union in `src/agent/trace/events.ts`                                                                                                                                                                                                                                     |
+| Usage/cost                  | `RunUsageAccumulator` (`src/agent/core/usage/RunUsageAccumulator.ts`, `totalCost` + token fields) — drives the live `--max-cost-usd` abort and $/solved-task reporting                                                                                                                                                                                                    |
+| Provider neutrality         | `src/agent/modelHandlers/` (anthropic, openai, google, openrouter); `baseURL` already threaded through the handler stacks (e.g. `modelHandlerAnthropic.ts`, `modelHandlerOpenAI.ts`)                                                                                                                                                                                      |
+| Judge + solver agents       | ordinary agent YAML under `packages/extension/resources/agents/bench/` (patterned on `agents/write/paper2slide.yaml` etc.), run through `runAgent` re-exported from `packages/core/src/index.ts`                                                                                                                                                                          |
+| Self-correction curves      | per-round outputs via `getOutputFilesByRound` (`src/agent/output/outputState.ts:102`) from the reflection flow (`src/agent/implementations/flows/reflection/`)                                                                                                                                                                                                            |
+| Env fingerprint             | `texra doctor` machinery (`packages/cli/src/commands/doctor.ts`)                                                                                                                                                                                                                                                                                                          |
+| CI distribution             | `packages/cli/src/commands/installGithubAction.ts` for the `bench diff --gate` regression job (from the interop-standards lens)                                                                                                                                                                                                                                           |
+| Approval semantics          | `packages/cli/src/runtime/approvalPolicyAvailability.ts` — bench cells run with never-block approval semantics                                                                                                                                                                                                                                                            |
 
 **Private-endpoint overlay (from the lab-ops-scale lens).** Unreleased internal snapshots behind lab gateways are a hard adoption prerequisite. `models.bench.yaml` registers them purely as config against the existing model registry (`src/model/computeModelOptions.ts`): `{ id, provider: openai-compatible, baseUrl, apiKeyEnv, pricing: zero }`. No code fork — `baseURL` is already threaded through the handler stacks.
 
 **Two small core changes, both additive:**
+
 1. `samplingParams` on the agent config (seed/topP where providers support them; `temperature` already exists in `src/agent/core/definition/AgentDataclass.ts`), plumbed to model handlers — verified absent today (from the mvp-wedge lens). Lands in Stage 1, not the MVP.
 2. The wire-ledger event arms (see 7.2).
 
@@ -279,7 +293,7 @@ Everything else is additive code in `src/bench/` (a VS Code-free zone, obeying t
 
 - **`compile`** — hard gate via `compileCheck.ts`. Fail ⇒ score 0, later graders skipped.
 - **`cas-assert`** — checkpoint identities. The task prompt mandates `\benchstep{k}{...}` markers; the grader extracts claimed intermediates with `src/latex/latexParsingUtils.ts` and verifies each with `executeWolframCode` (or the SymPy engine for the license-free subset). Partial credit = fraction passed under a monotone prefix rule (a wrong step voids later credit unless independently re-derived). Verdicts are three-valued; CAS timeout ⇒ `unverifiable`, escalated.
-- **`lean-check`** — `runLakeCommand` against a pinned mathlib toolchain; binary per lemma, aggregated. The Lean LSP/Loogle tools are available *to the solver* in tool-use mode — the benchmark measures interactive theorem proving, not one-shot emission.
+- **`lean-check`** — `runLakeCommand` against a pinned mathlib toolchain; binary per lemma, aggregated. The Lean LSP/Loogle tools are available _to the solver_ in tool-use mode — the benchmark measures interactive theorem proving, not one-shot emission.
 - **`diff-align`** — math-aware latexdiff between the model's fix and gold: changes inside injected spans must match the gold fix; changes outside are penalized (anti-rewrite-everything). Used only where edits are expected to be local.
 - **`issue-match`** — reported `ReviewIssue`s matched to gold defects with a ±N-line window → precision/recall/F1. Grading like a referee report.
 - **`numeric` / `struct-match`** — tolerance on Zod-parsed `<answer>` blocks; exact/set match for literature tasks.
@@ -287,14 +301,14 @@ Everything else is additive code in `src/bench/` (a VS Code-free zone, obeying t
 
 ### 6.2 Task-kind → grader mapping
 
-| Kind | Graders |
-|---|---|
-| derivation | compile (gate) + cas-assert (0.6) + rubric-judge (0.4) |
-| proof | lean-check (1.0) |
-| error-injection | issue-match + diff-align |
-| paper-artifact | compile (gate) + structural asserts + rubric-judge |
-| data-analysis | numeric tolerance, optional sandboxed script re-execution |
-| literature | struct-match |
+| Kind            | Graders                                                   |
+| --------------- | --------------------------------------------------------- |
+| derivation      | compile (gate) + cas-assert (0.6) + rubric-judge (0.4)    |
+| proof           | lean-check (1.0)                                          |
+| error-injection | issue-match + diff-align                                  |
+| paper-artifact  | compile (gate) + structural asserts + rubric-judge        |
+| data-analysis   | numeric tolerance, optional sandboxed script re-execution |
+| literature      | struct-match                                              |
 
 ### 6.3 Falsifiable graders: the calibration contract
 
@@ -310,13 +324,13 @@ Grader quality is thereby a CI gate, not a promise.
 
 ### 6.4 Judge-calibration certificates (from the scoring-verification lens)
 
-`texra bench judge-calibrate` measures a judge grader against human gold labels on a calibration set: Cohen's kappa, systematic bias, blind-swap (order-randomization) consistency. It emits a certificate file (`refs/judge-cert.json`: judge model + prompt digest, kappa, n, expiry tied to suite MINOR version). The task schema *requires* the certificate before a judge grader's scores count as trusted; suites publish judge–human agreement per release, and judge error is propagated into score CIs (from the benchmark-lifecycle lens). Cross-provider judge panels (blinded, order-randomized, Krippendorff's-alpha agreement gates) are available where single-judge kappa is insufficient — native, because `src/agent/modelHandlers/` already abstracts four providers.
+`texra bench judge-calibrate` measures a judge grader against human gold labels on a calibration set: Cohen's kappa, systematic bias, blind-swap (order-randomization) consistency. It emits a certificate file (`refs/judge-cert.json`: judge model + prompt digest, kappa, n, expiry tied to suite MINOR version). The task schema _requires_ the certificate before a judge grader's scores count as trusted; suites publish judge–human agreement per release, and judge error is propagated into score CIs (from the benchmark-lifecycle lens). Cross-provider judge panels (blinded, order-randomized, Krippendorff's-alpha agreement gates) are available where single-judge kappa is insufficient — native, because `src/agent/modelHandlers/` already abstracts four providers.
 
 ### 6.5 Statistics core (from the benchmark-lifecycle lens)
 
 `src/bench/stats/` ships as an importable module (usable outside the CLI):
 
-- **Cluster bootstrap BCa CIs** resampling task *families* (the `family` field), not individual tasks, with a recorded PRNG seed;
+- **Cluster bootstrap BCa CIs** resampling task _families_ (the `family` field), not individual tasks, with a recorded PRNG seed;
 - **Paired-by-task sign-flip permutation tests** for model comparisons (much tighter than unpaired), with **Benjamini–Hochberg correction** across the comparison matrix;
 - **Variance decomposition** (task vs. replicate vs. residual) with a power calculator; replicate floor R ≥ 4 enforced for ranked reports;
 - **Regression gates require both** adjusted p < alpha **and** |delta| > a declared minimum detectable effect — what keeps `bench diff --gate` from flapping on underpowered diffs between snapshots;
@@ -324,7 +338,7 @@ Grader quality is thereby a CI gate, not a promise.
 - pass@k / pass^k, and **self-correction curves** from per-round scores — a first-class metric no single-shot harness produces;
 - **cost as a first-class metric**: $/solved-task per model from `RunUsageTotals`, so labs budget trials honestly.
 
-Honest determinism throughout: providers expose no usable seeds (temperature is even force-overridden per model in the handlers), so replicate variance is *measured and reported*, never pretended away (from the benchmark-lifecycle lens).
+Honest determinism throughout: providers expose no usable seeds (temperature is even force-overridden per model in the handlers), so replicate variance is _measured and reported_, never pretended away (from the benchmark-lifecycle lens).
 
 ---
 
@@ -427,7 +441,7 @@ First-class from Stage 1, not an afterthought — the pack format and graders, n
 
 1. **Wolfram licensing in shared CI.** How large can the SymPy-expressible assertion subset be made in practice? Do we need a hosted verification service for the Wolfram-required subset, and who bears the license?
 2. **Judge-certificate expiry policy.** Per suite MINOR version, per judge-model release, or time-based? What kappa floor gates publication (0.7? per-task-kind floors)?
-3. **`\benchstep` gaming.** Models could emit checkpoint markers containing restated targets rather than derived intermediates. Does the monotone prefix rule plus judge residual suffice, or do we need CAS checks that each step *follows from* the previous one (a harder inference problem)?
+3. **`\benchstep` gaming.** Models could emit checkpoint markers containing restated targets rather than derived intermediates. Does the monotone prefix rule plus judge residual suffice, or do we need CAS checks that each step _follows from_ the previous one (a harder inference problem)?
 4. **Wire-ledger redaction completeness.** Emit-time redaction must survive provider SDK changes (new header fields, streaming frames). Do we allowlist rather than denylist payload fields?
 5. **Injection realism.** Are seeded defects distinguishable from natural errors by style alone? Should a discriminator study (human experts guessing injected-vs-natural) gate each rolling release?
 6. **Cross-scaffold comparability.** Is `minimal` scaffold truly minimal across four provider handler stacks with different tool-calling conventions, or do we need a per-provider minimal-scaffold conformance test?
