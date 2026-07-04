@@ -193,7 +193,11 @@ function threadTurnDir(
 async function hydrateAnswersFromDisk(
   threadId: ExternalInquiryThreadId,
   manifest: ExternalInquiryThreadManifest,
-): Promise<ExternalInquiryThreadManifest> {
+): Promise<{
+  manifest: ExternalInquiryThreadManifest;
+  didHydrate: boolean;
+}> {
+  let didHydrate = false;
   const turns = await Promise.all(
     manifest.turns.map(async (turn) => {
       if (turn.answer || !turn.answerRelativePath) return turn;
@@ -201,6 +205,7 @@ async function hydrateAnswersFromDisk(
         const content = await GlobalStorageFS.read(
           path.join(threadDir(threadId), turn.answerRelativePath),
         );
+        didHydrate = true;
         return { ...turn, answer: content };
       } catch {
         // Answer file unreadable/missing — leave the turn unhydrated (benign:
@@ -209,7 +214,7 @@ async function hydrateAnswersFromDisk(
       }
     }),
   );
-  return { ...manifest, turns };
+  return { manifest: { ...manifest, turns }, didHydrate };
 }
 
 async function readThreadManifest(
@@ -586,24 +591,24 @@ export function manifestToTranscript(
 // ============================================================================
 
 /**
- * Read a thread manifest. When `hydrate` is true, fills in inline
- * `answer` text from `answerRelativePath` for legacy manifests so
- * callers don't see "(awaiting user answer)" for migrated threads.
- * Continuation injection uses the canonical inline `answer` field
- * already, so hydration is opt-in to keep the hot path cheap.
+ * Read a thread manifest and normalize legacy answer files at the boundary.
+ * Legacy turns with only `answerRelativePath` are hydrated once and written
+ * back so callers always see inline answers when answer text is available.
  */
 export async function readExternalInquiryThread(
   threadId: string,
-  options?: { hydrate?: boolean },
 ): Promise<ExternalInquiryThreadManifest | null> {
   const parsed = ExternalInquiryThreadIdSchema.safeParse(threadId);
   if (!parsed.success) return null;
-  const manifest = await readThreadManifest(parsed.data);
-  if (!manifest) return null;
-  if (options?.hydrate) {
-    return hydrateAnswersFromDisk(parsed.data, manifest);
-  }
-  return manifest;
+  return withThreadLock(parsed.data, async () => {
+    const manifest = await readThreadManifest(parsed.data);
+    if (!manifest) return null;
+    const hydrated = await hydrateAnswersFromDisk(parsed.data, manifest);
+    if (hydrated.didHydrate) {
+      await writeThreadManifest(hydrated.manifest);
+    }
+    return hydrated.manifest;
+  });
 }
 
 function manifestToSummary(

@@ -350,9 +350,8 @@ export class ExternalInquiryTool extends defineTool({
       attachFiles: input.attachFiles ?? undefined,
     });
     const manifest =
-      (await readExternalInquiryThread(persisted.threadId, {
-        hydrate: true,
-      })) ?? persisted.manifest;
+      (await readExternalInquiryThread(persisted.threadId)) ??
+      persisted.manifest;
 
     // Mirror to execution so the agent can read prior turns via the executions tool.
     if (executionId) {
@@ -422,11 +421,7 @@ export class ExternalInquiryTool extends defineTool({
     input: Extract<InquiryInput, { command: 'read' }>;
     executionId?: string;
   }): Promise<ToolResult> {
-    // Hydrate inline answer text from disk for legacy manifests whose
-    // turns only stored an `answerRelativePath`.
-    const manifest = await readExternalInquiryThread(args.input.thread_id, {
-      hydrate: true,
-    });
+    const manifest = await readExternalInquiryThread(args.input.thread_id);
     if (!manifest) {
       throw new ToolError(
         `External inquiry thread not found: ${args.input.thread_id}`,
