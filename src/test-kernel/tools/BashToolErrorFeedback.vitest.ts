@@ -86,7 +86,7 @@ describe('BashTool error feedback', () => {
     });
 
     const result = await new BashTool().call({ command: 'echo long' });
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toContain('Command failed');
     expect(result.error).toContain('stderr failure details');
     expect(result.error).toContain('stdout failure guidance');
@@ -117,7 +117,7 @@ describe('BashTool error feedback', () => {
         'nohup python verify_residual_order.py > verify_residual_order_run.log 2>&1 &\necho "PID: $!"',
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toContain('shell-level backgrounding');
     expect(result.error).toContain('run_in_background: true');
     expect(executeSpy).not.toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('BashTool error feedback', () => {
       command: 'nohup longtask; echo done &',
     });
 
-    expect(result.isError).not.toBe(true);
+    expect(result.status).toBe('executed');
     expect(executeSpy).toHaveBeenCalledOnce();
   });
 });

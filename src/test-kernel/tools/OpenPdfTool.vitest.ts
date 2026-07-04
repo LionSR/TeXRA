@@ -39,7 +39,7 @@ describe('OpenPdfTool', () => {
     const result = await tool.call({ path: 'paper.tex' });
 
     expect(result).toMatchObject({
-      isError: true,
+      status: 'error',
       error: expect.stringContaining('open_pdf is not available'),
     });
   });
@@ -138,7 +138,7 @@ describe('OpenPdfTool', () => {
     );
 
     expect(result).toMatchObject({
-      isError: true,
+      status: 'error',
       error: expect.stringContaining(
         'Path must stay within the working directory',
       ),
@@ -154,7 +154,7 @@ describe('OpenPdfTool', () => {
     const result = await tool.call({ path: 'paper.tex' });
 
     expect(result).toMatchObject({
-      isError: true,
+      status: 'error',
       error: expect.stringContaining('open_pdf only opens PDF files'),
     });
     expect(openPdf).not.toHaveBeenCalled();

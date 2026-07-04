@@ -206,7 +206,10 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       streamStatus: new StreamStatusRegistry(),
       toolRegistry: new MapToolRegistry({
         again: {
-          call: vi.fn(async () => ({ output: 'again result' })),
+          call: vi.fn(async () => ({
+            status: 'executed',
+            output: 'again result',
+          })),
           definition: { name: 'again' },
         } as never,
       }),

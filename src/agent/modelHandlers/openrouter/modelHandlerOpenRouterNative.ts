@@ -22,7 +22,10 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - tools and utils
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
 import {
@@ -37,7 +40,6 @@ import { toOpenAITools } from '../toolConversion';
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
-  type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
 import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
@@ -658,7 +660,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   async createToolUseFollowUpMessages(
     _client: OpenRouter | undefined,
     call: OpenRouterToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -685,7 +687,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
   async createBatchedToolUseFollowUpMessages(
     calls: OpenRouterToolCall[],
-    results: ToolResultPayload[],
+    results: ToolResult[],
     _attachmentsPerCall: ToolFileAttachment[][],
     _workspaceState?: AgentWorkspaceState,
     text?: string,

@@ -3,7 +3,10 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { tikzPictureManager } from '@latex/TikzPictureManager';
-import { type ToolFileAttachment } from '@shared/schemas/toolResult';
+import {
+  type ToolFileAttachment,
+  type ToolResult,
+} from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
@@ -34,7 +37,10 @@ export class ExtractTikzFiguresTool extends defineTool({
     'Discover TikZ figures inside a LaTeX document and optionally compile them into standalone PDFs.',
   schema: ExtractTikzInputSchema,
 }) {
-  protected async execute({ texPath, compile = true }: ExtractTikzInput) {
+  protected async execute({
+    texPath,
+    compile = true,
+  }: ExtractTikzInput): Promise<ToolResult> {
     const { path, display } = await resolveLatexFileOrThrow(texPath);
 
     const tikzFigures = await tikzPictureManager.extract(
@@ -43,6 +49,7 @@ export class ExtractTikzFiguresTool extends defineTool({
     if (tikzFigures.length === 0) {
       const summary = `No TikZ figures found in ${display}.`;
       return {
+        status: 'executed',
         summary,
         output: formatToolOutput('TikZ figures', null),
       };
@@ -99,6 +106,7 @@ export class ExtractTikzFiguresTool extends defineTool({
     }
 
     return {
+      status: 'executed',
       summary: summaryParts.join(' '),
       output: outputs.join('\n'),
       files: attachments,

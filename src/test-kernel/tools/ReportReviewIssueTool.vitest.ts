@@ -79,7 +79,7 @@ describe('ReportReviewIssueTool', () => {
 
     const result = await tool.call({ ...REPORT, severity: 'fatal' });
 
-    expect(result).toMatchObject({ isError: true });
+    expect(result).toMatchObject({ status: 'error' });
     expect(sink).not.toHaveBeenCalled();
   });
 });

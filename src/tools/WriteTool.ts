@@ -98,6 +98,7 @@ export class WriteFileTool extends defineTool({
         : undefined;
 
     return {
+      status: 'executed',
       summary,
       output,
       userPatch: approval.userPatch,
