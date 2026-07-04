@@ -205,6 +205,7 @@ export async function resolveWorkflowOutput(
   if (result.outputs.length === 0 && (outputFile || outputDir)) {
     if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
       return createCliRunResult(result, {
+        terminalStatus,
         workingDirectory: context.cwd,
       });
     }
@@ -256,6 +257,7 @@ export async function resolveWorkflowOutput(
     }
 
     return createCliRunResult(result, {
+      terminalStatus,
       workingDirectory: context.cwd,
       runDirectory,
       copiedOutputs,
@@ -264,6 +266,7 @@ export async function resolveWorkflowOutput(
 
   if (!outputFile) {
     return createCliRunResult(result, {
+      terminalStatus,
       workingDirectory: context.cwd,
       runDirectory,
     });
@@ -272,6 +275,7 @@ export async function resolveWorkflowOutput(
   const finalOutput = latestWorkflowOutput(result.outputs);
   if (!finalOutput) {
     return createCliRunResult(result, {
+      terminalStatus,
       workingDirectory: context.cwd,
       runDirectory,
     });
@@ -284,6 +288,7 @@ export async function resolveWorkflowOutput(
   }
 
   return createCliRunResult(result, {
+    terminalStatus,
     workingDirectory: context.cwd,
     runDirectory,
     copiedOutput: targetPath,

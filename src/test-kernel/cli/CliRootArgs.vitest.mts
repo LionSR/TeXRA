@@ -933,6 +933,30 @@ describe('CLI root argument routing', () => {
     });
   });
 
+  it('uses a caller-resolved terminal status in CLI run results', () => {
+    const result = createCliRunResult(
+      {
+        outcome: RUN_OUTCOME.COMPLETED,
+        category: AgentCategory.ToolUse,
+        executionId: 'completed-after-shutdown',
+        streamId: 'stream-after-shutdown',
+        lastResponse: 'done',
+      } as Parameters<typeof createCliRunResult>[0],
+      {
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        workingDirectory: '/tmp/project',
+      },
+    );
+
+    expect(result).toMatchObject({
+      executionId: 'completed-after-shutdown',
+      workingDirectory: '/tmp/project',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      status: EXECUTION_STATUS.INTERRUPTED,
+      endGroupStatus: 'stopped',
+    });
+  });
+
   it('restores one requested workflow output path for resume', () => {
     expect(
       resumeWorkflowOutputFile(
