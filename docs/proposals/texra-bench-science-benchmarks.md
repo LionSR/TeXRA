@@ -46,13 +46,24 @@ Grading never mutates evidence. A grader bug after publication is a regrade, not
 
 **One task contract.** A task is `workspace in → artifacts out → graders emit verdicts`. There is no task-kind taxonomy in the harness; "derivation task" or "proof task" is just a conventional grader stack. The solver is an ordinary TeXRA agent YAML whose digest is part of the run's identity — a deliberately minimal default agent ships with the suite, and any scaffold comparison is just a different agent digest, not special harness machinery.
 
+**Subjects: models and agents.** Grading is _environment-mediated_ — graders read only the final workspace, never the solver's API stream — so the subject is a black box by construction, exactly like Terminal-Bench. Three subject classes share one identity mechanism (the `solver` descriptor digest in `cell.json`):
+
+1. **A model** under the bundled minimal TeXRA agent (the default; measures the model).
+2. **A TeXRA agent** — any agent YAML (measures scaffolds: reflection vs. tooluse flows, prompt variants).
+3. **An external agent** via `--solver-cmd` (measures agent products: Claude Code, Codex CLI, a lab-internal scaffold). The runner materializes the workspace, executes the command in it with `instruction.md` present, waits for exit or timeout, then grades whatever the workspace holds. The solver descriptor is `--solver-id` (e.g. `claude-code@2.1.0`) plus the command string; token usage is recorded as `unavailable` unless the agent emits a usage file — never fabricated, so $/task simply doesn't render for subjects that don't report cost.
+
+Two consequences of external-agent subjects, handled in the schema rather than by machinery: the hermetic network policy narrows from "network off" to **an egress allowlist containing only the agent's model endpoint** (recorded in `env.json` — an agent must reach its own API to think); and the gold/sabotage validation gates apply to agents unchanged — an agent that copies the input still has to score ≤ 0.05.
+
+At scale, external agents run under Harbor via the task export (§9) with Harbor's existing agent adapters; `--solver-cmd` is the local dev-loop equivalent, not a fleet.
+
 ## 4. Task format
 
 ```yaml
 # suites/texra-sci-v1/tasks/qft-oneloop-vacuum/task.yaml
 id: qft-oneloop-vacuum
 title: One-loop effective potential for phi^4 theory
-agent: bench/solve_minimal # ordinary agent YAML; digest recorded in results
+instruction: instruction.md # self-contained brief; the same file every subject sees
+agent: bench/solve_minimal # default solver; overridable per run (--solver-cmd for external agents)
 inputs: [problem.tex]
 context: [macros.tex, conventions.tex]
 timeoutMs: 1800000
@@ -74,6 +85,8 @@ provenance: { source: original, createdAfter: 2026-06-01 }
 ```
 
 The suite file adds `name`, `version` (semver: MAJOR = tasks changed, scores incomparable; MINOR = graders changed, history regradable), `canaryGuid`, and the task list.
+
+`instruction.md` is first-class and self-contained: it fully specifies the task (goal, expected artifacts, `\benchresult` convention) with no TeXRA-specific assumptions, because it is the _same_ brief handed to every subject — the minimal TeXRA agent, an external agent under `--solver-cmd`, and the Harbor export all consume this one file. Cross-agent fairness lives here, not in per-agent prompt tuning.
 
 **`refs/` is structural anti-contamination**: the workspace materializer copies `inputs` and `context` into the solver's temp workdir and never copies `refs/`; solver file tools cannot reach it. Leakage is prevented by construction, not reviewer vigilance.
 
@@ -116,6 +129,8 @@ bench-results/<suite@version>/<runId>/<model>/<task>/trial-<n>/
   env.json          # doctor-style toolchain fingerprint (TeX Live, wolframscript, lake, image digest)
 ```
 
+For external-agent subjects (`--solver-cmd`), `events.ndjson` and `usage.json` are replaced by whatever the agent leaves behind (stdout/stderr captured to `solver.log`, plus any log files it writes into the workspace) — graders never depended on the trace, so grading is unaffected; only trace-level debugging is shallower.
+
 - **Comparability rule:** two scores are comparable iff their digest tuples match; `bench report` refuses mixed comparisons.
 - **Regrade, don't rerun:** graders are pure functions over these directories; `bench grade --regrade --diff-against <old>` recomputes history at zero model cost and attributes every delta to the grader diff.
 - **Hermetic execution:** a published container image pins TeX Live / Lean / wolframscript; `env.json` records the fingerprint; network off by default, web tools disabled via the existing `runtimeUnavailableTools` mechanism (`src/agent/runtime/RunContext.ts`). No new sandbox layer.
@@ -147,6 +162,11 @@ texra bench run suites/texra-sci-v1/suite.yaml \
   --model claude-opus-4-6 --model gpt-6.1 \
   --trials 5 --concurrency 8 --max-cost-usd 250 \
   --results-dir bench-results/ --output-format ndjson
+
+# Bench an external agent as a black box on the same tasks (graded from the workspace it leaves)
+texra bench run suites/texra-sci-v1/suite.yaml \
+  --solver-cmd 'claude -p "$(cat instruction.md)" --permission-mode acceptEdits' \
+  --solver-id claude-code@2.1.0 --trials 5
 
 texra bench grade bench-results/texra-sci-v1@1.2.0            # or --regrade --diff-against 1.1
 texra bench report bench-results/texra-sci-v1@1.2.0 \
@@ -191,7 +211,7 @@ And rather than competing with Harbor, we export into it (§9).
 
 ## 13. Staged rollout
 
-**Stage 1 — usable (4–6 weeks):** `src/bench/` schemas + subprocess runner + `run|grade|report|validate`; graders `compile`, `cas-equal` (Wolfram), `numeric`/`struct-match`, `diff-align`; `refs/` isolation + gold/sabotage gates in CI; seed suite of ~25 tasks; container image; simple report stats.
+**Stage 1 — usable (4–6 weeks):** `src/bench/` schemas + subprocess runner + `run|grade|report|validate`; graders `compile`, `cas-equal` (Wolfram), `numeric`/`struct-match`, `diff-align`; `refs/` isolation + gold/sabotage gates in CI; `--solver-cmd` external-agent subjects (nearly free — the runner already spawns a subprocess per cell); seed suite of ~25 tasks; container image; simple report stats.
 
 **Stage 2 — adoptable (next quarter):** `bench inject` productionized (rolling post-cutoff suites); `lean-check` and `issue-match` graders; SymPy engine for the license-free subset; `bench export --format harbor-task` with a CI conformance check; public **TeXRA-Sci** release (versioned, licensed, per-task provenance). Success criterion: one external lab running the suite — under Harbor, through its own gateway — without talking to us.
 
@@ -217,17 +237,18 @@ And rather than competing with Harbor, we export into it (§9).
 
 Everything below existed in v2 (`git show 5581658`). Each was cut for failing necessity or non-duplication; each has a readmission trigger — the razor removes mechanisms, not options.
 
-| Cut                                                                                                                                                                  | Why                                                                                                                                   | Readmit when                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Hash-chained wire ledger (`model.request`/`response` trace arms), `bench replay --diff`, Merkle-rooted signed bundles, `bench verify`                                | The `AgentEvent` trace already records what the model saw and said; tamper-evidence and byte-replay solve disputes nobody has had yet | A lab disputes a published score in a way the trace can't settle            |
-| Inspect EvalLog export, `exec-sample` stdio protocol, `commandSolver`/`commandScorer` plugin ports                                                                   | Three extra interop surfaces duplicating the one that matters; Harbor export covers the standardized path                             | A lab asks for one, with a concrete pipeline behind the ask                 |
-| `bench rollout` RL mode                                                                                                                                              | Harbor generates rollouts over exported tasks; a second rollout engine duplicates it                                                  | Labs adopt the tasks but demonstrably can't use Harbor for RL               |
-| Judge calibration certificates, `judge-calibrate`, kappa machinery, cross-provider judge panels, human-adjudication queue                                            | The judge is a ≤ 0.2 residual reported separately; certifying a component that shouldn't matter institutionalizes it                  | Judged scores become load-bearing for any published comparison              |
-| Statistics core (cluster-bootstrap BCa, permutation tests, BH correction, MDE-gated `bench diff --gate`, variance decomposition, power calculator, tie-banded ranks) | Labs trust their own statisticians, not a benchmark's; `scores.jsonl` + simple bootstrap CI covers honest reporting                   | Downstream consumers demonstrably misreport from the simple output          |
-| `kind:` task taxonomy field                                                                                                                                          | The graders list already defines the task; kinds are docs/tags                                                                        | Never — keep it in documentation                                            |
-| `scaffold: minimal\|texra` dual-condition machinery                                                                                                                  | The agent YAML digest in the identity tuple already distinguishes scaffolds; the default agent is minimal                             | Never — a scaffold comparison is just two runs with different agent digests |
-| `bench.lock.json` as a separate artifact                                                                                                                             | Same digests, one more file; folded into `cell.json`/run metadata                                                                     | Never                                                                       |
-| `models.bench.yaml` overlay                                                                                                                                          | `baseURL` config already exists; document it, don't build it                                                                          | Handler stacks grow per-lab auth needs config can't express                 |
-| `samplingParams` core-schema addition                                                                                                                                | Providers largely ignore seeds; temperature already exists and is recorded                                                            | A major provider honors seeds well enough to reduce replicate variance      |
-| pass@k, self-correction curves, `bench diff` command, GitHub-Action distribution                                                                                     | All derivable offline from `scores.jsonl` / composable from `report --fail-under` + the existing `texra install-github-action`        | Never — they're recipes, not features                                       |
-| Public/private split governance, canary-scan service, monthly-cadence commitments                                                                                    | Operator policy, not harness code; `canaryGuid` + `createdAfter` fields stay (cheap now, breaking to add later)                       | A consortium actually forms around a private split                          |
+| Cut                                                                                                                                                                  | Why                                                                                                                                                                           | Readmit when                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Hash-chained wire ledger (`model.request`/`response` trace arms), `bench replay --diff`, Merkle-rooted signed bundles, `bench verify`                                | The `AgentEvent` trace already records what the model saw and said; tamper-evidence and byte-replay solve disputes nobody has had yet                                         | A lab disputes a published score in a way the trace can't settle            |
+| Inspect EvalLog export, `exec-sample` stdio protocol, `commandScorer` plugin port                                                                                    | Extra interop surfaces duplicating the one that matters; Harbor export covers the standardized path                                                                           | A lab asks for one, with a concrete pipeline behind the ask                 |
+| `commandSolver` JSON-stdio plugin port                                                                                                                               | **Trigger fired** (benching external agents): readmitted in minimal form as `--solver-cmd` — a shell command graded by workspace end state (§3), not a bidirectional protocol | The full protocol returns only if agents need mid-run harness callbacks     |
+| `bench rollout` RL mode                                                                                                                                              | Harbor generates rollouts over exported tasks; a second rollout engine duplicates it                                                                                          | Labs adopt the tasks but demonstrably can't use Harbor for RL               |
+| Judge calibration certificates, `judge-calibrate`, kappa machinery, cross-provider judge panels, human-adjudication queue                                            | The judge is a ≤ 0.2 residual reported separately; certifying a component that shouldn't matter institutionalizes it                                                          | Judged scores become load-bearing for any published comparison              |
+| Statistics core (cluster-bootstrap BCa, permutation tests, BH correction, MDE-gated `bench diff --gate`, variance decomposition, power calculator, tie-banded ranks) | Labs trust their own statisticians, not a benchmark's; `scores.jsonl` + simple bootstrap CI covers honest reporting                                                           | Downstream consumers demonstrably misreport from the simple output          |
+| `kind:` task taxonomy field                                                                                                                                          | The graders list already defines the task; kinds are docs/tags                                                                                                                | Never — keep it in documentation                                            |
+| `scaffold: minimal\|texra` dual-condition machinery                                                                                                                  | The agent YAML digest in the identity tuple already distinguishes scaffolds; the default agent is minimal                                                                     | Never — a scaffold comparison is just two runs with different agent digests |
+| `bench.lock.json` as a separate artifact                                                                                                                             | Same digests, one more file; folded into `cell.json`/run metadata                                                                                                             | Never                                                                       |
+| `models.bench.yaml` overlay                                                                                                                                          | `baseURL` config already exists; document it, don't build it                                                                                                                  | Handler stacks grow per-lab auth needs config can't express                 |
+| `samplingParams` core-schema addition                                                                                                                                | Providers largely ignore seeds; temperature already exists and is recorded                                                                                                    | A major provider honors seeds well enough to reduce replicate variance      |
+| pass@k, self-correction curves, `bench diff` command, GitHub-Action distribution                                                                                     | All derivable offline from `scores.jsonl` / composable from `report --fail-under` + the existing `texra install-github-action`                                                | Never — they're recipes, not features                                       |
+| Public/private split governance, canary-scan service, monthly-cadence commitments                                                                                    | Operator policy, not harness code; `canaryGuid` + `createdAfter` fields stay (cheap now, breaking to add later)                                                               | A consortium actually forms around a private split                          |
