@@ -11,17 +11,13 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared signals
-import { SignalWatcher, signal } from '@shared/signals';
+import { SignalWatcher } from '@shared/signals';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas and constants
 import {
-  type MemoryViewItem,
-  type HistoryItem,
-  type ProviderKeyStatus,
-  type ModelSelectionItem,
   dispatchSettingsViewOutbound,
   SETTINGS_TAB,
   SETTINGS_TAB_PANEL_BY_NAME,
@@ -30,43 +26,17 @@ import {
   type SettingsTabName,
   type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
   type TeXRAIconName,
 } from '@shared/wa/webAwesomeIcons';
-import {
-  type AgentSelectionItem,
-  type ClaudeAgentEffort,
-  type ClaudeAgentModel,
-  type ClaudeAgentPermissionMode,
-  type LatexConfigValues,
-  type NumberVscodeSetting,
-  type Goal,
-  type PRSubscriptionEntry,
-  type ToolDashboardItem,
-  type ChatGptAuthStatus,
-  DEFAULT_LATEX_SETTINGS_STATUS,
-} from '@shared/schemas/settingsViewMessages';
-import {
-  DEFAULT_GIT_AUTHOR_NAME,
-  DEFAULT_GIT_AUTHOR_EMAIL,
-  DEFAULT_GIT_MARK_COMMITS,
-} from '@shared/constants/git';
-import {
-  DEFAULT_HELPER_MODEL,
-  PROVIDER_DISPLAY_NAMES,
-} from '@shared/constants/providers';
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
-import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolicy';
 
 // Local imports - settings view
-import type { AgentCategory } from '@shared/schemas/agent';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import '@shared/wa/tabs';
 import type { WaTabShowEvent } from '@shared/wa/tabs';
-import { toNewestFirstByTimestamp } from '@utils/core';
 import { settingsViewStyles } from './styles';
 
 // Side-effect: register tab components
@@ -81,6 +51,66 @@ import './tabs/AIAgentsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
 import './components/profile/ProviderKeyModal';
+
+// Local imports - module-scope settings state + composed message handlers
+import { settingsViewHandlers } from './messageDispatcher';
+import {
+  agentSubTab,
+  allowOrchestratorKill,
+  apiAccessMode,
+  authenticated,
+  bashApprovalEnabled,
+  chatgptAuth,
+  claudeAgentEffort,
+  claudeAgentModel,
+  claudeAgentPermissionMode,
+  codexApprovalPolicy,
+  codexReasoningEffort,
+  codexSandboxMode,
+  customAgentDir,
+  customAgentDirIsDefault,
+  customPresets,
+  desktopCrashReportingConfigured,
+  desktopCrashReportingEnabled,
+  detachSubagentsOnStop,
+  gitAuthorEmail,
+  gitAuthorName,
+  githubTokenStatus,
+  gitMarkCommits,
+  gitSettingsLoaded,
+  gitWorktreeSupport,
+  globalStreamingDefault,
+  goalItems,
+  helperModel,
+  historyItems,
+  inlineCriticismEnabled,
+  latexConfigValues,
+  latexConfigValuesLoaded,
+  latexSettingsLoaded,
+  latexSettingsStatus,
+  memoryEnabled,
+  memoryItems,
+  memoryToggleDisabled,
+  modelSelectionItems,
+  nestedDelegationMaxDepth,
+  orchestratorAgents,
+  preferShortModelNames,
+  prSubscriptions,
+  providerKeyModal,
+  providerKeyStatuses,
+  quotaAutoSwitched,
+  reliabilitySettings,
+  resetSettingsState,
+  selectedTabIndex,
+  spendingStatus,
+  tier,
+  toolDashboardItems,
+  toolDashboardLoaded,
+  toolUseAgents,
+  userEmail,
+  workflowAgents,
+  type ProviderKeyModalTarget,
+} from './settingsState';
 import type { HistoryTab } from './tabs/HistoryTab';
 
 registerTeXRAWebAwesomeIcons();
@@ -133,20 +163,6 @@ function forwardCommand(command: string): () => void {
   return () => postMessage(command);
 }
 
-function spendingStatusEqual(
-  a: SpendingStatus | null,
-  b: SpendingStatus | null,
-): boolean {
-  if (a === b) return true;
-  if (a === null || b === null) return false;
-  return (
-    a.currentSpend === b.currentSpend &&
-    a.limit === b.limit &&
-    a.remaining === b.remaining &&
-    a.percentUsed === b.percentUsed
-  );
-}
-
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because SettingsApp implements all abstract members below.
 const SettingsAppBase = SignalWatcher(
@@ -161,231 +177,26 @@ export class SettingsApp extends SettingsAppBase {
   // Tab refs
   @query('history-tab') private historyTab?: HistoryTab;
 
-  // Tab state
-  private readonly selectedTabIndex = signal(0);
+  constructor() {
+    super();
+    // State lives at module scope in `settingsState.ts` (mirrors
+    // progressView/frontend/progressState.ts). That state is shared across
+    // remounts in the same JS context (tests, hot reload), so reset it here
+    // to match the pre-migration per-instance-field behavior, where every
+    // signal started fresh on construction.
+    resetSettingsState();
+  }
 
-  // Memory state
-  private readonly memoryItems = signal<MemoryViewItem[]>([]);
-  private readonly memoryEnabled = signal(false);
-  private readonly memoryToggleDisabled = signal(true);
-
-  // History state
-  private readonly historyItems = signal<HistoryItem[]>([]);
-
-  // Profile state
-  private readonly authenticated = signal(false);
-  private readonly userEmail = signal('');
-  private readonly tier = signal('free');
-  private readonly apiAccessMode = signal<'included' | 'personal'>('personal');
-  private readonly spendingStatus = signal<SpendingStatus | null>(null);
-  private readonly quotaAutoSwitched = signal(false);
-  private readonly providerKeyStatuses = signal<ProviderKeyStatus[]>([]);
-  private readonly globalStreamingDefault = signal(true);
-  private readonly providerKeyModal = signal<{
-    provider: string;
-    displayName: string;
-  } | null>(null);
-
-  // Model selection state
-  private readonly modelSelectionItems = signal<ModelSelectionItem[]>([]);
-  private readonly helperModel = signal(DEFAULT_HELPER_MODEL);
-  private readonly preferShortModelNames = signal(false);
-
-  // Agent selection state
-  private readonly workflowAgents = signal<AgentSelectionItem[]>([]);
-  private readonly toolUseAgents = signal<AgentSelectionItem[]>([]);
-  private readonly customAgentDir = signal('');
-  private readonly customAgentDirIsDefault = signal(true);
-  private readonly agentSubTab = signal<AgentCategory | undefined>(undefined);
-
-  // Agent teams state
-  private readonly customPresets = signal<AgentModePreset[]>([]);
-  private readonly orchestratorAgents = signal<string[]>([]);
-
-  // Multi-agent coordination state
-  private readonly reliabilitySettings = signal<NumberVscodeSetting[]>([]);
-  private readonly allowOrchestratorKill = signal(true);
-  private readonly detachSubagentsOnStop = signal(false);
-  private readonly nestedDelegationMaxDepth = signal<number>(
-    NESTED_DELEGATION_DEPTH_RANGE.default,
-  );
-
-  // Approval settings state
-  private readonly bashApprovalEnabled = signal(true);
-  private readonly codexSandboxMode = signal<string>('workspace-write');
-  private readonly codexReasoningEffort = signal<string>('high');
-  private readonly codexApprovalPolicy = signal<string>('never');
-  private readonly claudeAgentModel =
-    signal<ClaudeAgentModel>('claude-sonnet-4-6');
-  private readonly claudeAgentPermissionMode =
-    signal<ClaudeAgentPermissionMode>('acceptEdits');
-  private readonly claudeAgentEffort = signal<ClaudeAgentEffort>('high');
-
-  // Tool dashboard state
-  private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
-  private readonly toolDashboardLoaded = signal(false);
-
-  // Git author settings state
-  private readonly gitMarkCommits = signal(DEFAULT_GIT_MARK_COMMITS);
-  private readonly gitAuthorName = signal(DEFAULT_GIT_AUTHOR_NAME);
-  private readonly gitAuthorEmail = signal(DEFAULT_GIT_AUTHOR_EMAIL);
-  private readonly gitWorktreeSupport = signal(false);
-  private readonly gitSettingsLoaded = signal(false);
-  private readonly githubTokenStatus = signal<'secret' | 'env' | 'none'>(
-    'none',
-  );
-  private readonly chatgptAuth = signal<ChatGptAuthStatus>({
-    signedIn: false,
-    preferSubscription: false,
-    subscriptionToolUseOnly: false,
-  });
-  private readonly desktopCrashReportingEnabled = signal(false);
-  private readonly desktopCrashReportingConfigured = signal(false);
-  private readonly prSubscriptions = signal<readonly PRSubscriptionEntry[]>([]);
-
-  // LaTeX settings state
-  private readonly latexSettingsStatus = signal({
-    ...DEFAULT_LATEX_SETTINGS_STATUS,
-  });
-  private readonly latexSettingsLoaded = signal(false);
-  private readonly latexConfigValues = signal<LatexConfigValues>({});
-  private readonly latexConfigValuesLoaded = signal(false);
-  private readonly inlineCriticismEnabled = signal(false);
-
-  // Goal settings state
-  private readonly goalItems = signal<readonly Goal[]>([]);
-
-  // Outbound message handlers (extension host → settings webview). Each entry
-  // receives the already-parsed, typed message and updates the matching
-  // signal(s). The dispatcher handles parsing and command lookup.
+  // Outbound message handlers (extension host → settings webview), composed
+  // from the domain slices under `./slices/` (see `messageDispatcher.ts`).
+  // HISTORY_CLEARED is overridden here to additionally clear the
+  // `<history-tab>` search box — a DOM ref this component owns via `@query`,
+  // not signal state, so it can't live in the slice itself.
   private readonly messageHandlers: SettingsViewOutboundHandlerRegistry = {
-    [SETTINGS_VIEW_COMMANDS.SET_TAB]: (data) => {
-      this.selectedTabIndex.set(data.tabIndex);
-      this.agentSubTab.set(data.agentSubTab);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY]: (data) => {
-      this.memoryItems.set(data.items ?? []);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED]: (data) => {
-      this.memoryEnabled.set(data.enabled);
-      this.memoryToggleDisabled.set(false);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW]: (data) => {
-      const { storagePath, preview, lineCount, error } = data.preview;
-      this.memoryItems.set(
-        this.memoryItems.get().map((item) =>
-          item.storagePath === storagePath
-            ? error
-              ? {
-                  ...item,
-                  preview: undefined,
-                  lineCount: undefined,
-                  previewError: true,
-                }
-              : {
-                  ...item,
-                  preview,
-                  ...(lineCount === undefined ? {} : { lineCount }),
-                  previewError: undefined,
-                }
-            : item,
-        ),
-      );
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY]: (data) => {
-      this.historyItems.set(
-        toNewestFirstByTimestamp(data.historyItems, (item) => item.timestamp),
-      );
-    },
-    [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: () => {
-      this.historyItems.set([]);
+    ...settingsViewHandlers,
+    [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: (data) => {
+      settingsViewHandlers[SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]?.(data);
       this.historyTab?.clearSearch();
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION]: (data) => {
-      this.modelSelectionItems.set(data.models);
-      this.helperModel.set(data.helperModel);
-      this.preferShortModelNames.set(data.preferShortModelNames);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION]: (data) => {
-      this.workflowAgents.set(data.workflow);
-      this.toolUseAgents.set(data.toolUse);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR]: (data) => {
-      this.customAgentDir.set(data.path);
-      this.customAgentDirIsDefault.set(data.isDefault);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED]: (data) => {
-      this.reliabilitySettings.set(data.reliabilitySettings);
-      this.allowOrchestratorKill.set(data.allowOrchestratorKill);
-      this.detachSubagentsOnStop.set(data.detachSubagentsOnStop);
-      this.nestedDelegationMaxDepth.set(data.nestedDelegationMaxDepth);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS]: (data) => {
-      this.customPresets.set(data.customPresets);
-      this.orchestratorAgents.set(data.orchestratorAgents ?? []);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS]: (data) => {
-      this.bashApprovalEnabled.set(data.bashApprovalEnabled);
-      this.codexSandboxMode.set(data.codexSandboxMode);
-      this.codexReasoningEffort.set(data.codexReasoningEffort);
-      this.codexApprovalPolicy.set(data.codexApprovalPolicy);
-      this.claudeAgentModel.set(data.claudeAgentModel);
-      this.claudeAgentPermissionMode.set(data.claudeAgentPermissionMode);
-      this.claudeAgentEffort.set(data.claudeAgentEffort);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD]: (data) => {
-      this.toolDashboardItems.set(data.items);
-      this.toolDashboardLoaded.set(true);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS]: (data) => {
-      this.gitMarkCommits.set(data.markCommits);
-      this.gitAuthorName.set(data.authorName);
-      this.gitAuthorEmail.set(data.authorEmail);
-      this.gitWorktreeSupport.set(data.worktreeSupport);
-      this.gitSettingsLoaded.set(true);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS]: (data) => {
-      this.githubTokenStatus.set(data.status);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS]: (data) => {
-      this.chatgptAuth.set(data.status);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING]: (data) => {
-      this.desktopCrashReportingEnabled.set(data.enabled);
-      this.desktopCrashReportingConfigured.set(data.configured);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS]: (data) => {
-      this.prSubscriptions.set(data.subscriptions);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS]: (data) => {
-      this.latexSettingsStatus.set(data.settings);
-      this.latexSettingsLoaded.set(true);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES]: (data) => {
-      this.latexConfigValues.set(data.values);
-      this.latexConfigValuesLoaded.set(true);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED]: (data) => {
-      this.inlineCriticismEnabled.set(data.enabled);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST]: (data) => {
-      this.goalItems.set(data.items);
-    },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE]: (data) => {
-      this.authenticated.set(data.authenticated);
-      this.userEmail.set(data.user?.email ?? 'N/A');
-      this.tier.set(data.tier ?? 'free');
-      const newSpend = data.spendingStatus ?? null;
-      // Skip the signal update when the snapshot is value-equal so the Lit
-      // re-render isn't triggered on every UPDATE_PROFILE just because the
-      // JSON parse produced a fresh object reference.
-      if (!spendingStatusEqual(this.spendingStatus.get(), newSpend)) {
-        this.spendingStatus.set(newSpend);
-      }
-      this.quotaAutoSwitched.set(data.quotaAutoSwitched ?? false);
-      this.apiAccessMode.set(data.apiAccessMode);
-      this.providerKeyStatuses.set(data.providerKeyStatuses ?? []);
-      this.globalStreamingDefault.set(data.globalStreamingDefault ?? true);
     },
   };
 
@@ -404,15 +215,15 @@ export class SettingsApp extends SettingsAppBase {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    if (this.isDesktopHost && this.selectedTabIndex.get() === 0) {
-      this.selectedTabIndex.set(SETTINGS_TAB.MODELS);
+    if (this.isDesktopHost && selectedTabIndex.get() === 0) {
+      selectedTabIndex.set(SETTINGS_TAB.MODELS);
     }
   }
 
   private handleTabShow(event: WaTabShowEvent): void {
     const selectedIndex = SETTINGS_TAB_PANEL_NAMES.indexOf(event.detail.name);
     if (selectedIndex >= 0) {
-      this.selectedTabIndex.set(selectedIndex);
+      selectedTabIndex.set(selectedIndex);
     }
   }
 
@@ -483,10 +294,10 @@ export class SettingsApp extends SettingsAppBase {
       return;
     }
 
-    const status = this.providerKeyStatuses
+    const status = providerKeyStatuses
       .get()
       .find((entry) => entry.provider === event.detail.provider);
-    this.providerKeyModal.set({
+    providerKeyModal.set({
       provider: event.detail.provider,
       displayName: status?.displayName ?? event.detail.provider,
     });
@@ -495,32 +306,27 @@ export class SettingsApp extends SettingsAppBase {
   private handleProviderKeySubmit(
     event: CustomEvent<{ provider: string; apiKey: string }>,
   ): void {
-    this.providerKeyModal.set(null);
+    providerKeyModal.set(null);
     postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, event.detail);
   }
 
   private readonly handleProviderKeyCancel = (): void => {
-    this.providerKeyModal.set(null);
+    providerKeyModal.set(null);
   };
 
-  private getDefaultProviderKeyTarget(): {
-    provider: string;
-    displayName: string;
-  } {
-    const helperProvider = this.modelSelectionItems
+  private getDefaultProviderKeyTarget(): ProviderKeyModalTarget {
+    const helperProvider = modelSelectionItems
       .get()
-      .find((model) => model.name === this.helperModel.get())?.provider;
-    const providerKeyStatuses = this.providerKeyStatuses.get();
+      .find((model) => model.name === helperModel.get())?.provider;
+    const keyStatuses = providerKeyStatuses.get();
     const fallbackProvider =
-      providerKeyStatuses.find((entry) => entry.status === 'not-set')
-        ?.provider ?? API_KEY_PROVIDER_IDS[0];
+      keyStatuses.find((entry) => entry.status === 'not-set')?.provider ??
+      API_KEY_PROVIDER_IDS[0];
     const provider =
       helperProvider && API_KEY_PROVIDER_SET.has(helperProvider)
         ? helperProvider
         : fallbackProvider;
-    const status = providerKeyStatuses.find(
-      (entry) => entry.provider === provider,
-    );
+    const status = keyStatuses.find((entry) => entry.provider === provider);
     return {
       provider,
       displayName:
@@ -530,7 +336,7 @@ export class SettingsApp extends SettingsAppBase {
 
   private readonly handleSetDefaultProviderKey = (): void => {
     const target = this.getDefaultProviderKeyTarget();
-    this.selectedTabIndex.set(SETTINGS_TAB.MODELS);
+    selectedTabIndex.set(SETTINGS_TAB.MODELS);
 
     if (!this.isDesktopHost) {
       postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
@@ -539,7 +345,7 @@ export class SettingsApp extends SettingsAppBase {
       return;
     }
 
-    this.providerKeyModal.set(target);
+    providerKeyModal.set(target);
   };
 
   private handleRemoveProviderKey = forwardDetail(
@@ -807,14 +613,14 @@ export class SettingsApp extends SettingsAppBase {
           </wa-button>
         `;
 
-    if (this.authenticated.get()) {
+    if (authenticated.get()) {
       return html`
         <div class="settings-header">
           <div class="settings-header-user">
             ${waIcon('circle-user', { className: 'settings-header-user-icon' })}
             <div class="settings-header-info">
-              <span class="settings-header-email">${this.userEmail.get()}</span>
-              <span class="settings-header-tier">${this.tier.get()} Plan</span>
+              <span class="settings-header-email">${userEmail.get()}</span>
+              <span class="settings-header-tier">${tier.get()} Plan</span>
             </div>
           </div>
           <div class="settings-header-actions">
@@ -867,7 +673,7 @@ export class SettingsApp extends SettingsAppBase {
   }
 
   private renderProviderKeyModal(): TemplateResult | typeof nothing {
-    const modal = this.providerKeyModal.get();
+    const modal = providerKeyModal.get();
     if (modal == null) {
       return nothing;
     }
@@ -909,7 +715,7 @@ export class SettingsApp extends SettingsAppBase {
         <wa-tab-group
           class="settings-tabs"
           .active=${
-            SETTINGS_TAB_PANEL_NAMES[this.selectedTabIndex.get()] ?? 'memory'
+            SETTINGS_TAB_PANEL_NAMES[selectedTabIndex.get()] ?? 'memory'
           }
           @wa-tab-show=${this.handleTabShow}
         >
@@ -925,9 +731,9 @@ export class SettingsApp extends SettingsAppBase {
 
           <wa-tab-panel name="memory">
             <memory-tab
-              .items=${this.memoryItems.get()}
-              .enabled=${this.memoryEnabled.get()}
-              .toggleDisabled=${this.memoryToggleDisabled.get()}
+              .items=${memoryItems.get()}
+              .enabled=${memoryEnabled.get()}
+              .toggleDisabled=${memoryToggleDisabled.get()}
               @memory-refresh=${this.handleMemoryRefresh}
               @memory-open-folder=${this.handleMemoryOpenFolder}
               @memory-toggle-enabled=${this.handleMemoryToggleEnabled}
@@ -944,14 +750,14 @@ export class SettingsApp extends SettingsAppBase {
               ? nothing
               : html`
                   <wa-tab-panel name="goal">
-                    <goal-tab .items=${this.goalItems.get()}></goal-tab>
+                    <goal-tab .items=${goalItems.get()}></goal-tab>
                   </wa-tab-panel>
                 `
           }
 
           <wa-tab-panel name="history">
             <history-tab
-              .items=${this.historyItems.get()}
+              .items=${historyItems.get()}
               @history-action=${this.handleHistoryAction}
               @history-clear=${this.handleClearHistory}
             ></history-tab>
@@ -959,17 +765,17 @@ export class SettingsApp extends SettingsAppBase {
 
           <wa-tab-panel name="models">
             <models-tab
-              .authenticated=${this.authenticated.get()}
-              .apiAccessMode=${this.apiAccessMode.get()}
-              .spendingStatus=${this.spendingStatus.get()}
-              .quotaAutoSwitched=${this.quotaAutoSwitched.get()}
-              .providerKeyStatuses=${this.providerKeyStatuses.get()}
-              .chatgptAuth=${this.chatgptAuth.get()}
-              .globalStreamingDefault=${this.globalStreamingDefault.get()}
-              .modelSelectionItems=${this.modelSelectionItems.get()}
-              .reliabilitySettings=${this.reliabilitySettings.get()}
-              .helperModel=${this.helperModel.get()}
-              .preferShortModelNames=${this.preferShortModelNames.get()}
+              .authenticated=${authenticated.get()}
+              .apiAccessMode=${apiAccessMode.get()}
+              .spendingStatus=${spendingStatus.get()}
+              .quotaAutoSwitched=${quotaAutoSwitched.get()}
+              .providerKeyStatuses=${providerKeyStatuses.get()}
+              .chatgptAuth=${chatgptAuth.get()}
+              .globalStreamingDefault=${globalStreamingDefault.get()}
+              .modelSelectionItems=${modelSelectionItems.get()}
+              .reliabilitySettings=${reliabilitySettings.get()}
+              .helperModel=${helperModel.get()}
+              .preferShortModelNames=${preferShortModelNames.get()}
               @profile-api-access-mode=${this.handleApiAccessMode}
               @provider-key-set=${this.handleSetProviderKey}
               @provider-key-remove=${this.handleRemoveProviderKey}
@@ -1000,12 +806,12 @@ export class SettingsApp extends SettingsAppBase {
 
           <wa-tab-panel name="agents">
             <agents-tab
-              .workflowAgents=${this.workflowAgents.get()}
-              .toolUseAgents=${this.toolUseAgents.get()}
-              .customAgentDir=${this.customAgentDir.get()}
-              .customAgentDirIsDefault=${this.customAgentDirIsDefault.get()}
-              .initialSubTab=${this.agentSubTab.get()}
-              .userTier=${this.tier.get()}
+              .workflowAgents=${workflowAgents.get()}
+              .toolUseAgents=${toolUseAgents.get()}
+              .customAgentDir=${customAgentDir.get()}
+              .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
+              .initialSubTab=${agentSubTab.get()}
+              .userTier=${tier.get()}
               .desktopHost=${desktopHost}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
@@ -1024,12 +830,12 @@ export class SettingsApp extends SettingsAppBase {
 
           <wa-tab-panel name="multi-agent">
             <multi-agent-tab
-              .customPresets=${this.customPresets.get()}
-              .orchestratorAgents=${this.orchestratorAgents.get()}
-              .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
-              .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
-              .worktreeSupport=${this.gitWorktreeSupport.get()}
-              .nestedDelegationMaxDepth=${this.nestedDelegationMaxDepth.get()}
+              .customPresets=${customPresets.get()}
+              .orchestratorAgents=${orchestratorAgents.get()}
+              .allowOrchestratorKill=${allowOrchestratorKill.get()}
+              .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
+              .worktreeSupport=${gitWorktreeSupport.get()}
+              .nestedDelegationMaxDepth=${nestedDelegationMaxDepth.get()}
               @allow-orchestrator-kill-toggle=${
                 this.handleAllowOrchestratorKillToggle
               }
@@ -1047,12 +853,12 @@ export class SettingsApp extends SettingsAppBase {
 
           <wa-tab-panel name="tools">
             <tools-tab
-              .items=${this.toolDashboardItems.get()}
-              .loaded=${this.toolDashboardLoaded.get()}
-              .bashApprovalEnabled=${this.bashApprovalEnabled.get()}
+              .items=${toolDashboardItems.get()}
+              .loaded=${toolDashboardLoaded.get()}
+              .bashApprovalEnabled=${bashApprovalEnabled.get()}
               .showDesktopCrashReporting=${this.isDesktopHost}
-              .desktopCrashReportingEnabled=${this.desktopCrashReportingEnabled.get()}
-              .desktopCrashReportingConfigured=${this.desktopCrashReportingConfigured.get()}
+              .desktopCrashReportingEnabled=${desktopCrashReportingEnabled.get()}
+              .desktopCrashReportingConfigured=${desktopCrashReportingConfigured.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-run-command=${this.handleToolRunCommand}
@@ -1070,14 +876,14 @@ export class SettingsApp extends SettingsAppBase {
 
           <wa-tab-panel name="ai-agents">
             <ai-agents-tab
-              .items=${this.toolDashboardItems.get()}
-              .loaded=${this.toolDashboardLoaded.get()}
-              .codexSandboxMode=${this.codexSandboxMode.get()}
-              .codexReasoningEffort=${this.codexReasoningEffort.get()}
-              .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
-              .claudeAgentModel=${this.claudeAgentModel.get()}
-              .claudeAgentPermissionMode=${this.claudeAgentPermissionMode.get()}
-              .claudeAgentEffort=${this.claudeAgentEffort.get()}
+              .items=${toolDashboardItems.get()}
+              .loaded=${toolDashboardLoaded.get()}
+              .codexSandboxMode=${codexSandboxMode.get()}
+              .codexReasoningEffort=${codexReasoningEffort.get()}
+              .codexApprovalPolicy=${codexApprovalPolicy.get()}
+              .claudeAgentModel=${claudeAgentModel.get()}
+              .claudeAgentPermissionMode=${claudeAgentPermissionMode.get()}
+              .claudeAgentEffort=${claudeAgentEffort.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-run-command=${this.handleToolRunCommand}
@@ -1099,10 +905,10 @@ export class SettingsApp extends SettingsAppBase {
 
           <wa-tab-panel name="git">
             <git-tab
-              .markCommits=${this.gitMarkCommits.get()}
-              .authorName=${this.gitAuthorName.get()}
-              .authorEmail=${this.gitAuthorEmail.get()}
-              .toggleDisabled=${!this.gitSettingsLoaded.get()}
+              .markCommits=${gitMarkCommits.get()}
+              .authorName=${gitAuthorName.get()}
+              .authorEmail=${gitAuthorEmail.get()}
+              .toggleDisabled=${!gitSettingsLoaded.get()}
               .desktopHost=${desktopHost}
               @git-mark-commits-toggle=${this.handleGitMarkCommitsToggle}
               @git-author-name-change=${this.handleGitAuthorNameChange}
@@ -1114,18 +920,18 @@ export class SettingsApp extends SettingsAppBase {
               @open-pr-subscription-stream=${
                 this.handleOpenPRSubscriptionStream
               }
-              .githubTokenStatus=${this.githubTokenStatus.get()}
-              .prSubscriptions=${this.prSubscriptions.get()}
+              .githubTokenStatus=${githubTokenStatus.get()}
+              .prSubscriptions=${prSubscriptions.get()}
             ></git-tab>
           </wa-tab-panel>
 
           <wa-tab-panel name="latex">
             <latex-tab
-              .settings=${this.latexSettingsStatus.get()}
-              .loaded=${this.latexSettingsLoaded.get()}
-              .configValues=${this.latexConfigValues.get()}
-              .configLoaded=${this.latexConfigValuesLoaded.get()}
-              .inlineCriticismEnabled=${this.inlineCriticismEnabled.get()}
+              .settings=${latexSettingsStatus.get()}
+              .loaded=${latexSettingsLoaded.get()}
+              .configValues=${latexConfigValues.get()}
+              .configLoaded=${latexConfigValuesLoaded.get()}
+              .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
               .desktopHost=${desktopHost}
               @latex-apply-settings=${this.handleApplyLatexSettings}
               @latex-install-workshop=${this.handleInstallLatexWorkshop}
