@@ -1,3 +1,4 @@
+import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import type { MemoryViewItem } from '@shared/schemas';
 import { normalizeFilePath } from '@shared/utils/path';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
@@ -5,7 +6,6 @@ import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
 import {
   displayToStoragePath,
   formatSize,
-  resolveMemoryStoragePath,
   toDisplayPath,
 } from '@tools/memory/memoryUtils';
 import { filterNotNullish } from '@utils/core';
@@ -60,7 +60,7 @@ export function formatCliMemoryList(
   return lines.join('\n');
 }
 
-export function resolveCliMemoryStoragePath(inputPath: string): string {
+export function cliMemoryStoragePathFromInput(inputPath: string): string {
   const trimmed = normalizeFilePath(inputPath.trim());
   if (!trimmed) {
     return displayToStoragePath(MEMORY_DISPLAY_ROOT);
@@ -90,7 +90,7 @@ export function resolveCliMemoryStoragePath(inputPath: string): string {
 export async function formatCliMemoryPreview(
   inputPath: string,
 ): Promise<string> {
-  const storagePath = resolveCliMemoryStoragePath(inputPath);
+  const storagePath = cliMemoryStoragePathFromInput(inputPath);
   const preview = await loadMemoryPreview(storagePath);
   const displayPath = toDisplayPath(storagePath);
   const lines = [`Memory: ${displayPath}`];
