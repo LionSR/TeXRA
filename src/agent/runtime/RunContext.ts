@@ -145,7 +145,15 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
   };
 
   if (options.modelSource === 'live') {
-    const { getModel, model, streamId, executionId, coordinators, agentName, session } = options;
+    const {
+      getModel,
+      model,
+      streamId,
+      executionId,
+      coordinators,
+      agentName,
+      session,
+    } = options;
     return Object.freeze({
       kind: 'launch',
       ...common,
