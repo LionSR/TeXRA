@@ -19,6 +19,7 @@ import {
   type ModelOptionsAccess,
   type ModelOptionsServerAccess,
 } from '@model/computeModelOptions';
+import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/fastModels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AgentCategory } from '@shared/schemas/agent';
 
@@ -249,6 +250,7 @@ describe('computeModelOptionsData relay quota state', () => {
       `${Math.round(CODEX_SUBSCRIPTION_CONTEXT_WINDOW / 1000)}K`,
     );
     expect(model.cost).toBe('$0.000/$0.000');
+    expect(model.hint).not.toContain(FAST_FIRST_RESPONSE_HINT);
     expect(model.disabled).toBe(false);
   });
 
