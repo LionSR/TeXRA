@@ -1,12 +1,10 @@
-import {
-  diff_match_patch,
-  DIFF_DELETE,
-  DIFF_INSERT,
-} from 'diff-match-patch';
+import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
 
 import { countLines } from './stringUtils';
 
-type Diff = ReturnType<InstanceType<typeof diff_match_patch>['diff_main']>[number];
+type Diff = ReturnType<
+  InstanceType<typeof diff_match_patch>['diff_main']
+>[number];
 
 /**
  * Tally added/removed line counts from a diff-match-patch diff list.
