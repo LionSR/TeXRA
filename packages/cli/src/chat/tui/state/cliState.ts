@@ -393,7 +393,7 @@ function parentStreamMapUpdate(
   for (const { childStreamId, parentStreamId } of updates) {
     if (!childStreamId) continue;
     const readable = out ?? current;
-    if (parentStreamId == null || childStreamId === parentStreamId) {
+    if (parentStreamId == null) {
       if (!readable.has(childStreamId)) continue;
       out ??= new Map(current);
       out.delete(childStreamId);
