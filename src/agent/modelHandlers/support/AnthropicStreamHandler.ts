@@ -48,10 +48,6 @@ interface AnthropicStreamState {
   pendingSearches: Map<string, { index: number; input: string }>;
   /** Track web fetch: tool_use_id → { index, accumulated input JSON } */
   pendingFetches: Map<string, { index: number; input: string }>;
-  /** Track emitted search IDs to prevent duplicate logging in flow */
-  emittedSearchIds: Set<string>;
-  /** Track emitted fetch IDs to prevent duplicate logging in flow */
-  emittedFetchIds: Set<string>;
   /** Flag to prevent processing events after finalize */
   finalized: boolean;
 }
@@ -111,8 +107,6 @@ export class AnthropicStreamHandler {
     lastBlockIndex: -1,
     pendingSearches: new Map(),
     pendingFetches: new Map(),
-    emittedSearchIds: new Set(),
-    emittedFetchIds: new Set(),
     finalized: false,
   };
   private readonly diagnostics: StreamDiagnosticsState = {
@@ -143,20 +137,6 @@ export class AnthropicStreamHandler {
     stream.on('streamEvent', (event: BetaRawMessageStreamEvent) => {
       this.handleStreamEvent(event);
     });
-  }
-
-  /**
-   * Gets the set of emitted search IDs for duplicate prevention in flow.
-   */
-  getEmittedSearchIds(): Set<string> {
-    return this.state.emittedSearchIds;
-  }
-
-  /**
-   * Gets the set of emitted fetch IDs for duplicate prevention in flow.
-   */
-  getEmittedFetchIds(): Set<string> {
-    return this.state.emittedFetchIds;
   }
 
   /**
@@ -206,8 +186,6 @@ export class AnthropicStreamHandler {
     // Clear state to prevent memory leaks
     this.state.pendingSearches.clear();
     this.state.pendingFetches.clear();
-    this.state.emittedSearchIds.clear();
-    this.state.emittedFetchIds.clear();
   }
 
   /**
@@ -373,7 +351,6 @@ export class AnthropicStreamHandler {
         callId: block.tool_use_id,
         status: 'completed',
       });
-      this.state.emittedSearchIds.add(block.tool_use_id);
     }
 
     // Clean up
@@ -412,7 +389,6 @@ export class AnthropicStreamHandler {
     // Emit to progress view
     if (result.url || result.status === 'failed') {
       this.emitWebFetchResult(result);
-      this.state.emittedFetchIds.add(block.tool_use_id);
     }
 
     // Clean up
