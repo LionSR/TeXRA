@@ -161,18 +161,32 @@ interface ProcessPrepResult {
   accumulatedOutput: string;
 }
 
-interface ProcessResult {
+interface ProcessResultCommon {
   stopReason: ProviderStopReason;
-  newResponse?: string;
-  processedResponse?: string;
-  bestConnector?: string;
   thinkingContent?: string | null;
   useStreaming: boolean;
   responseUsage: ProviderUsage;
   normalizedUsage?: NormalizedUsage;
-  updatedLastResponse?: string;
-  updatedAccumulatedOutput?: string;
 }
+
+/**
+ * Discriminated on `hasResponse`: `newResponse`/`processedResponse`/
+ * `bestConnector`/`updatedLastResponse`/`updatedAccumulatedOutput` are only
+ * ever set together (see the `if (newResponse)` block below), so modeling
+ * them as one correlated variant instead of five independently-optional
+ * fields removes the need to re-derive that correlation with separate null
+ * checks in `post()`.
+ */
+type ProcessResult =
+  | (ProcessResultCommon & { hasResponse: false })
+  | (ProcessResultCommon & {
+      hasResponse: true;
+      newResponse: string;
+      processedResponse: string;
+      bestConnector: string;
+      updatedLastResponse: string;
+      updatedAccumulatedOutput: string;
+    });
 
 type ProcessNodeResult = SkippableNodeResult<ProcessResult>;
 
@@ -288,39 +302,40 @@ class ResponseProcessNode<C> extends BaseNode<
         });
       }
 
-      let processedResponse: string | undefined;
-      let bestConnector: string | undefined;
-      let updatedLastResponse: string | undefined;
-      let updatedAccumulatedOutput: string | undefined;
+      const common = {
+        stopReason,
+        thinkingContent,
+        useStreaming,
+        responseUsage,
+        normalizedUsage,
+      };
 
-      if (newResponse) {
-        // Text cleanup (replacementEngine.applyAll) is applied once inside each
-        // handler's extractResponse, so newResponse is already cleaned here.
-        // Re-applying would run non-idempotent custom replacements twice.
-        processedResponse = newResponse;
-
-        const connector = await this.services.bestConnectionMethod(
-          prepRes.lastResponse.slice(-K_SLICE),
-          processedResponse.slice(0, K_SLICE),
-        );
-        bestConnector = connector.connector;
-        updatedLastResponse = processedResponse;
-        updatedAccumulatedOutput =
-          prepRes.accumulatedOutput + (bestConnector ?? '') + processedResponse;
+      if (!newResponse) {
+        return { kind: 'success', value: { ...common, hasResponse: false } };
       }
+
+      // Text cleanup (replacementEngine.applyAll) is applied once inside each
+      // handler's extractResponse, so newResponse is already cleaned here.
+      // Re-applying would run non-idempotent custom replacements twice.
+      const processedResponse = newResponse;
+
+      const connector = await this.services.bestConnectionMethod(
+        prepRes.lastResponse.slice(-K_SLICE),
+        processedResponse.slice(0, K_SLICE),
+      );
+      const bestConnector = connector.connector;
+      const updatedAccumulatedOutput =
+        prepRes.accumulatedOutput + bestConnector + processedResponse;
 
       return {
         kind: 'success',
         value: {
-          stopReason,
+          ...common,
+          hasResponse: true,
           newResponse,
           processedResponse,
           bestConnector,
-          thinkingContent,
-          useStreaming,
-          responseUsage,
-          normalizedUsage,
-          updatedLastResponse,
+          updatedLastResponse: processedResponse,
           updatedAccumulatedOutput,
         },
       };
@@ -349,25 +364,21 @@ class ResponseProcessNode<C> extends BaseNode<
       round.normalizedUsage = result.normalizedUsage;
     }
 
-    if (result.updatedLastResponse != null) {
-      workspace.assembly.lastResponse = result.updatedLastResponse;
-    }
-
-    if (result.updatedAccumulatedOutput != null) {
-      workspace.assembly.accumulatedOutput = result.updatedAccumulatedOutput;
-    }
-
     shared.stopReason = result.stopReason;
-    shared.processedResponse = result.processedResponse;
 
-    if (!result.processedResponse) {
+    if (!result.hasResponse) {
+      shared.processedResponse = undefined;
       shared.endTurn = false;
       shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
+    workspace.assembly.lastResponse = result.updatedLastResponse;
+    workspace.assembly.accumulatedOutput = result.updatedAccumulatedOutput;
+    shared.processedResponse = result.processedResponse;
+
     const outputLocation = shared.outputLocation!;
-    const connector = result.bestConnector ?? '';
+    const connector = result.bestConnector;
 
     await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
 
