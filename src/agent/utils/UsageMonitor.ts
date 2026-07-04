@@ -14,6 +14,7 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import { roundTo } from '@utils/core';
+import type { UsageLogStats } from '@telemetry/UsageLogTypes';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 
 /**
@@ -243,16 +244,16 @@ export class UsageMonitor {
    */
   private async logToBackend(
     totalResponseTimeMs: number,
-    usage: {
-      inputTokens: number;
-      outputTokens: number;
-      cachedInputTokens?: number;
-      cacheMissInputTokens?: number;
-      cacheCreationInputTokens?: number;
-      reasoningTokens?: number;
-      cost: number;
-      usageRoute?: UsageRoute;
-    },
+    usage: Pick<
+      UsageLogStats,
+      | 'inputTokens'
+      | 'outputTokens'
+      | 'cachedInputTokens'
+      | 'cacheMissInputTokens'
+      | 'cacheCreationInputTokens'
+      | 'reasoningTokens'
+      | 'cost'
+    > & { usageRoute?: UsageRoute },
   ): Promise<void> {
     try {
       const { config } = this.modelInfo;

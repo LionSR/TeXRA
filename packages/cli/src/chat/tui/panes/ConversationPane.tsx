@@ -79,7 +79,7 @@ function renderConversationPaneEntry({
         />
       );
     }
-    if (entry.role === 'tool' && entry.toolUse) {
+    if (entry.role === 'tool') {
       return <ToolUseRow toolUse={entry.toolUse} width={width} />;
     }
     if (entry.role === 'assistant') {

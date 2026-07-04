@@ -280,27 +280,21 @@ export const TranscriptEntry = memo(function TranscriptEntry({
       );
     }
     case 'tool':
-      if (entry.toolUse) {
-        return (
-          <ToolUseRow
-            fillWidth={fillWidth}
-            toolUse={entry.toolUse}
-            width={width}
-          />
-        );
-      }
-      break;
+      return (
+        <ToolUseRow
+          fillWidth={fillWidth}
+          toolUse={entry.toolUse}
+          width={width}
+        />
+      );
     case 'process':
-      if (entry.process) {
-        return (
-          <ProcessEntryRow
-            fillWidth={fillWidth}
-            process={entry.process}
-            width={width}
-          />
-        );
-      }
-      break;
+      return (
+        <ProcessEntryRow
+          fillWidth={fillWidth}
+          process={entry.process}
+          width={width}
+        />
+      );
   }
   return (
     <Box marginBottom={ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS}>
@@ -430,7 +424,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
       />
     );
   }
-  if (entry.role === 'tool' && entry.toolUse) {
+  if (entry.role === 'tool') {
     const cols = entryCols(width, 2);
     return (
       <Box flexDirection="column" paddingX={1}>
@@ -444,7 +438,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
       </Box>
     );
   }
-  if (entry.role === 'process' && entry.process) {
+  if (entry.role === 'process') {
     const cols = entryCols(width, 2);
     return (
       <Box flexDirection="column" paddingX={1}>

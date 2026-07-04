@@ -69,9 +69,8 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
     case 'user':
       return terminalVisibleTranscriptText(entry.text).trim().length > 0;
     case 'process':
-      return entry.process !== undefined;
     case 'tool':
-      return entry.toolUse !== undefined;
+      return true;
   }
 }
 
