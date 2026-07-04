@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
+import { UsageRouteSchema } from '@shared/schemas';
 
 const UsageLogMetadataSchema = z.object({
   model: z.string(),
@@ -9,13 +10,8 @@ const UsageLogMetadataSchema = z.object({
   agentName: z.string().optional(),
   agentCategory: z.enum(AgentCategory).optional(),
   usedRelay: z.boolean().optional(),
-  /**
-   * True when the round ran on the user's ChatGPT subscription (Codex backend):
-   * recorded so analytics can account for subscription usage even though its
-   * `cost` is 0. Distinguishes a free subscription round from any other
-   * zero-cost row.
-   */
-  viaChatGptSubscription: z.boolean().optional(),
+  /** Canonical route used to account for relay/API-key/subscription usage. */
+  usageRoute: UsageRouteSchema.optional(),
   streamId: z.string().optional(),
 });
 

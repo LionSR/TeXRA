@@ -45,8 +45,9 @@ function optional<T extends z.ZodType>(schema: T) {
 const optionalString = optional(z.string());
 const optionalNonnegativeInt = optional(z.int().nonnegative());
 const optionalBoolean = optional(z.boolean());
+const UsageRouteSchema = z.enum(['chatgpt-subscription', 'relay', 'api-key']);
 
-const UsageLogEntrySchema = z.object({
+const UsageLogEntryInputSchema = z.object({
   timestamp: z.iso.datetime(),
   model: z.string(),
   provider: z.string(),
@@ -60,6 +61,7 @@ const UsageLogEntrySchema = z.object({
   cachedInputTokens: optionalNonnegativeInt,
   reasoningTokens: optionalNonnegativeInt,
   usedRelay: optionalBoolean,
+  usageRoute: optional(UsageRouteSchema),
   viaChatGptSubscription: z
     .boolean()
     .nullish()
@@ -74,6 +76,15 @@ const UsageLogEntrySchema = z.object({
   editorType: optionalString,
 });
 
+const UsageLogEntrySchema = UsageLogEntryInputSchema.transform(
+  ({ viaChatGptSubscription, ...entry }) => ({
+    ...entry,
+    usageRoute:
+      entry.usageRoute ??
+      (viaChatGptSubscription ? 'chatgpt-subscription' : undefined),
+  }),
+);
+
 const UsageBatchSchema = z.object({
   entries: z.array(z.unknown()),
   batchId: z.uuid(),
@@ -85,13 +96,15 @@ const UsageDestinations = {
   paid: {
     table: 'usage_logs',
     rpc: 'usage_logs_upsert',
-    accepts: (entry: UsageLogEntry) => !entry.viaChatGptSubscription,
+    accepts: (entry: UsageLogEntry) =>
+      entry.usageRoute !== 'chatgpt-subscription',
     toRows: toDbRows,
   },
   subscription: {
     table: 'subscription_usage_logs',
     rpc: 'subscription_usage_logs_upsert',
-    accepts: (entry: UsageLogEntry) => entry.viaChatGptSubscription,
+    accepts: (entry: UsageLogEntry) =>
+      entry.usageRoute === 'chatgpt-subscription',
     toRows: (
       userId: string,
       batchId: string,
