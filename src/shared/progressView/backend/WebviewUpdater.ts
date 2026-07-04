@@ -11,7 +11,8 @@ import type {
   ProgressViewPlacement,
   ProgressViewOutboundMessage,
   StreamMetadata,
-  StreamStatus,
+  StreamPhase,
+  StreamSubstate,
   StreamTabId,
   StreamTabInfo,
   Plan,
@@ -239,14 +240,16 @@ export class WebviewUpdater {
    */
   updateStreamStatus(
     stream: StreamTabId,
-    status: StreamStatus,
+    status: StreamPhase,
     lastTimestamp?: number,
+    substate?: StreamSubstate,
   ): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream,
       status,
       lastTimestamp,
+      ...(substate ? { substate } : {}),
     });
   }
 
@@ -381,8 +384,9 @@ export class WebviewUpdater {
    */
   sendStreamMetadata(
     state: ProgressViewState,
-    statuses?: Map<string, StreamStatus>,
+    statuses?: Map<string, StreamPhase>,
     theme?: 'dark' | 'light',
+    substates?: Map<string, StreamSubstate>,
   ): ActiveStreamId {
     // Send every stream so streamById stays comprehensive for consumers like
     // BackgroundTasksPanel that need to render cross-filter subagent children
@@ -432,6 +436,7 @@ export class WebviewUpdater {
       streamMetadata[name] = buildStreamMetadata({
         kind: agentCategory,
         status: statuses?.get(name),
+        substate: substates?.get(name),
         lastTimestamp: state.streamLogs.getLastTimestamp(name),
         conversationProgress: current?.conversationProgress,
         activeSubagents: current?.activeSubagents,

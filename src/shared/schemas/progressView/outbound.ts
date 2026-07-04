@@ -21,7 +21,11 @@ import {
   ToolEditPermissionSchema,
   UserQuestionPermissionSchema,
 } from '../prompts';
-import { StreamStatusSchema, StreamTabInfoSchema } from '../stream';
+import {
+  StreamPhaseSchema,
+  StreamSubstateSchema,
+  StreamTabInfoSchema,
+} from '../stream';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
@@ -84,7 +88,8 @@ export const UpdateStreamDescriptionMessageSchema =
 
 export const UpdateStreamStatusMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS),
-  status: StreamStatusSchema,
+  status: StreamPhaseSchema,
+  substate: StreamSubstateSchema.optional(),
   lastTimestamp: z.number().optional(),
 });
 

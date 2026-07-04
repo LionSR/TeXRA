@@ -1,4 +1,4 @@
-import type { StreamStatus, StreamTabId } from '@shared/schemas';
+import type { StreamLifecycleStatus, StreamTabId } from '@shared/schemas';
 
 import { syncStreamLog } from './subscribeStreamLog';
 import {
@@ -49,7 +49,7 @@ export function projectStreamTranscript(
 /** Project a stream after a status transition. Final statuses promote rows. */
 export function projectStreamTranscriptForStatus(
   streamId: StreamTabId,
-  status: StreamStatus,
+  status: StreamLifecycleStatus,
 ): void {
   projectStreamTranscript(streamId, {
     finalize: isFinalTranscriptStatus(status),

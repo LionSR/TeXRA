@@ -4,11 +4,12 @@ import * as path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
@@ -129,9 +130,12 @@ describe('ExecutionsTool', () => {
     );
 
     try {
-      session.executions.trackAgentExecution(handle, {
-        status: STREAM_STATUS.WAITING,
-      });
+      session.executions.track(handle);
+      seedStreamStatusForTest(
+        session.status,
+        childStreamId,
+        STREAM_PHASE.WAITING,
+      );
       mocks.readMeta.mockResolvedValue({
         timestamp: '2026-06-15T09:36:02.345Z',
         category: 'toolUse',

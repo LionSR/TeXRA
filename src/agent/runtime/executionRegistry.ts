@@ -14,13 +14,16 @@ import {
   interruptRegistry,
   type InterruptRegistry,
 } from '@agent/runtime/InterruptRegistry';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import {
-  EXECUTION_STATUS,
+  isInFlightStatus,
+  isLiveElapsedStatus,
+} from '@common/constants/streamStatus';
+import {
+  STREAM_PHASE,
   STREAM_STATUS,
-  LIVE_ELAPSED_STREAM_STATUSES,
+  STREAM_SUBSTATE,
   type ActiveChildInfo,
-  type StreamStatus,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
@@ -51,8 +54,6 @@ export interface StopAgentStreamOptions {
   readonly runtimeHost?: AgentRuntimeHost;
 }
 
-const USER_STOP_TERMINAL_STATUS = EXECUTION_STATUS.INTERRUPTED;
-
 export type StopAgentChildPolicy = 'cascade' | 'detach';
 
 export type StopAgentStreamResult =
@@ -82,11 +83,11 @@ export interface KillExecutionOptions {
 }
 
 export interface TrackAgentExecutionOptions {
-  readonly status?: StreamStatus;
+  readonly status?: StreamPhase;
 }
 
 export interface FinishAgentExecutionOptions {
-  readonly status: StreamStatus;
+  readonly status: StreamPhase;
 }
 
 interface TerminateOptions {
@@ -107,7 +108,7 @@ export type ToolUseFollowUpTarget =
     }
   | {
       readonly kind: 'no_session';
-      readonly streamStatus: StreamStatus | undefined;
+      readonly streamStatus: StreamPhase | undefined;
     };
 
 export type ManualCompactionRequestResult =
@@ -222,9 +223,15 @@ export class ExecutionRegistry {
     options: TrackAgentExecutionOptions = {},
   ): void {
     if (options.status) {
-      this.streamStatus.set(handle.childStreamId, options.status, {
-        runtimeHost: handle.runtimeHost,
-      });
+      this.streamStatus.transition(
+        handle.childStreamId,
+        options.status,
+        'lifecycle',
+        {
+          runtimeHost: handle.runtimeHost,
+          trace: handle.trace,
+        },
+      );
     }
     this.track(handle);
   }
@@ -236,16 +243,20 @@ export class ExecutionRegistry {
    */
   updateAgentExecutionStatus(
     handle: AgentExecutionHandle,
-    status: StreamStatus,
+    status: StreamPhase,
   ): boolean {
     if (this.handles.get(handle.executionId) !== handle) return false;
-    if (this.streamStatus.get(handle.childStreamId) === STREAM_STATUS.STOPPED) {
-      return false;
-    }
-    this.streamStatus.set(handle.childStreamId, status, {
+    const previous = this.streamStatus.get(handle.childStreamId);
+    const cause =
+      status === STREAM_PHASE.WAITING
+        ? 'wait'
+        : status === STREAM_PHASE.RUNNING && previous === STREAM_PHASE.WAITING
+          ? 'resume'
+          : 'lifecycle';
+    return this.streamStatus.transition(handle.childStreamId, status, cause, {
       runtimeHost: handle.runtimeHost,
+      trace: handle.trace,
     });
-    return true;
   }
 
   /** Remove an execution handle and notify waiters. */
@@ -295,29 +306,27 @@ export class ExecutionRegistry {
     handle: AgentExecutionHandle,
     options: FinishAgentExecutionOptions,
   ): void {
-    const currentStatus = this.streamStatus.get(handle.childStreamId);
-    const shouldUpdateStatus =
-      currentStatus !== STREAM_STATUS.STOPPED &&
-      currentStatus !== options.status;
-
-    // READY clears the status store. Do it after untracking so the status
-    // listener cannot summarize the still-tracked child via the RUNNING
-    // fallback before the removal update.
-    if (options.status !== STREAM_STATUS.READY && shouldUpdateStatus) {
-      this.streamStatus.set(handle.childStreamId, options.status, {
-        runtimeHost: handle.runtimeHost,
-      });
-    }
-
     if (this.handles.get(handle.executionId) === handle) {
       this.untrackHandle(handle);
     } else {
       this.notifyWaiters(handle.executionId);
     }
 
-    if (options.status === STREAM_STATUS.READY && shouldUpdateStatus) {
-      this.streamStatus.set(handle.childStreamId, options.status, {
-        runtimeHost: handle.runtimeHost,
+    const emitOptions = {
+      runtimeHost: handle.runtimeHost,
+      trace: handle.trace,
+    };
+    const terminalized = this.streamStatus.transitionToTerminal(
+      handle.childStreamId,
+      options.status,
+      emitOptions,
+    );
+    if (!terminalized) {
+      handle.trace?.warn('Failed to finalize waiting stream status', {
+        data: {
+          streamId: handle.childStreamId,
+          status: options.status,
+        },
       });
     }
   }
@@ -329,10 +338,10 @@ export class ExecutionRegistry {
   getStatus(handle: ExecutionHandle): ExecutionStatusInfo {
     const status =
       handle instanceof AgentExecutionHandle
-        ? (this.streamStatus.get(handle.childStreamId) ?? STREAM_STATUS.RUNNING)
-        : STREAM_STATUS.RUNNING;
+        ? (this.streamStatus.get(handle.childStreamId) ?? STREAM_PHASE.RUNNING)
+        : STREAM_PHASE.RUNNING;
 
-    if (!LIVE_ELAPSED_STREAM_STATUSES.has(status)) {
+    if (!isLiveElapsedStatus(status)) {
       return { status, elapsed: null };
     }
 
@@ -416,10 +425,10 @@ export class ExecutionRegistry {
     const context = this.getToolUseFlowContext(streamId);
     if (context) return { kind: 'active', context };
 
-    if (status === STREAM_STATUS.RESUMING) {
+    if (this.streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING) {
       return { kind: 'queue', reason: 'resuming' };
     }
-    if (status === STREAM_STATUS.WAITING) {
+    if (status === STREAM_PHASE.WAITING) {
       return { kind: 'queue', reason: 'waiting' };
     }
     if (hasActiveChildren) {
@@ -622,10 +631,14 @@ export class ExecutionRegistry {
     if (!runtimeHost) {
       return { kind: 'no_target', streamId, childPolicy };
     }
-    this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, {
-      runtimeHost,
-      terminalStatus: USER_STOP_TERMINAL_STATUS,
-    });
+    this.streamStatus.transition(
+      streamId,
+      STREAM_PHASE.CANCELLED,
+      'user-stop',
+      {
+        runtimeHost,
+      },
+    );
     return { kind: 'marked_stopped', streamId, childPolicy };
   }
 
@@ -704,10 +717,12 @@ export class ExecutionRegistry {
         continue;
       }
       const { status, elapsed } = this.getStatus(handle);
+      const summaryStatus =
+        status === STREAM_PHASE.CANCELLED ? STREAM_STATUS.STOPPED : status;
       const info: ActiveChildInfo = {
         executionId: handle.executionId,
         agentName: handle.agentName,
-        status,
+        status: summaryStatus,
         startedAt: handle.startedAt,
         elapsed: elapsed ?? null,
       };
@@ -743,10 +758,15 @@ export class ExecutionRegistry {
       const interruptible = this.interrupts.get(handle.childStreamId);
       if (!interruptible) return false;
       interruptible.interrupt();
-      this.streamStatus.set(handle.childStreamId, STREAM_STATUS.STOPPED, {
-        runtimeHost: handle.runtimeHost,
-        terminalStatus: USER_STOP_TERMINAL_STATUS,
-      });
+      this.streamStatus.transition(
+        handle.childStreamId,
+        STREAM_PHASE.CANCELLED,
+        'user-stop',
+        {
+          runtimeHost: handle.runtimeHost,
+          trace: handle.trace,
+        },
+      );
       return true;
     }
 
@@ -765,10 +785,14 @@ export class ExecutionRegistry {
     if (!interruptible) return false;
     interruptible.interrupt();
     if (runtimeHost) {
-      this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, {
-        runtimeHost,
-        terminalStatus: USER_STOP_TERMINAL_STATUS,
-      });
+      this.streamStatus.transition(
+        streamId,
+        STREAM_PHASE.CANCELLED,
+        'user-stop',
+        {
+          runtimeHost,
+        },
+      );
     }
     return true;
   }

@@ -11,6 +11,7 @@ import {
   StreamLogStore,
   type StreamSnapshotStore,
 } from '@transcript';
+import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
@@ -93,6 +94,7 @@ import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
   MESSAGE_TYPES,
+  STREAM_PHASE,
   STREAM_STATUS,
   TODO_STATUS,
   type StorageKey,
@@ -106,7 +108,7 @@ const child1 = 'child-1' as StreamTabId;
 const child2 = 'child-2' as StreamTabId;
 
 afterEach(() => {
-  StreamStatusService.clearAll({ emit: false });
+  clearAllStreamStatusesForTest(StreamStatusService);
   resetCliState();
 });
 
@@ -227,18 +229,23 @@ describe('cliState Phase 4 fields', () => {
       }));
       patchStream(root, (s) => ({ ...s, activeSubagents: [] }));
 
-      StreamStatusService.set(child1, STREAM_STATUS.ERROR, {
-        runtimeHost: wrapped,
-      });
+      StreamStatusService.transition(
+        child1,
+        STREAM_PHASE.FAILED,
+        'restart-repair',
+        {
+          runtimeHost: wrapped,
+        },
+      );
 
       const parent = cliState.streams.get().get(root);
       expect(parent?.activeSubagents).toEqual([]);
-      expect(parent?.childStreams[0]?.status).toBe(STREAM_STATUS.ERROR);
+      expect(parent?.childStreams[0]?.status).toBe(STREAM_PHASE.FAILED);
       expect(visibleSubagentRows(parent!)).toMatchObject([
         {
           executionId: 'agent-1',
           childStreamId: child1,
-          status: STREAM_STATUS.ERROR,
+          status: STREAM_PHASE.FAILED,
         },
       ]);
     } finally {
@@ -692,7 +699,7 @@ describe('CLI TUI row allocation', () => {
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: true,
-        status: STREAM_STATUS.RESUMING,
+        status: STREAM_PHASE.RUNNING,
         todos: [],
       }),
     ).toBe(true);
@@ -708,7 +715,7 @@ describe('CLI TUI row allocation', () => {
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: false,
-        status: STREAM_STATUS.STOPPED,
+        status: STREAM_PHASE.COMPLETED,
         todos: [openTodo],
       }),
     ).toBe(false);
@@ -1253,7 +1260,7 @@ describe('CLI TUI row allocation', () => {
           runPromise,
           streamId: root,
         },
-        STREAM_STATUS.INITIALIZING,
+        STREAM_PHASE.RUNNING,
       ),
     ).toBe(true);
     expect(
@@ -1263,7 +1270,7 @@ describe('CLI TUI row allocation', () => {
           runPromise,
           streamId: root,
         },
-        STREAM_STATUS.RESUMING,
+        STREAM_PHASE.RUNNING,
       ),
     ).toBe(true);
     expect(
@@ -1283,7 +1290,7 @@ describe('CLI TUI row allocation', () => {
           runPromise,
           streamId: root,
         },
-        STREAM_STATUS.ERROR,
+        STREAM_PHASE.FAILED,
       ),
     ).toBe(false);
     expect(
@@ -1293,7 +1300,7 @@ describe('CLI TUI row allocation', () => {
           runPromise,
           streamId: root,
         },
-        STREAM_STATUS.STOPPED,
+        STREAM_PHASE.CANCELLED,
       ),
     ).toBe(false);
     expect(
@@ -1336,7 +1343,7 @@ describe('CLI TUI row allocation', () => {
           runPromise: undefined,
           streamId: root,
         },
-        STREAM_STATUS.INITIALIZING,
+        STREAM_PHASE.RUNNING,
       ),
     ).toBe(true);
     expect(
@@ -1421,7 +1428,7 @@ describe('CLI TUI row allocation', () => {
           executionId: 'child-exec-1',
           agentName: 'critic',
           childStreamId: child1,
-          status: STREAM_STATUS.STOPPED,
+          status: STREAM_PHASE.COMPLETED,
         },
       ],
     }));
@@ -1448,7 +1455,7 @@ describe('CLI TUI row allocation', () => {
         },
       ],
     }));
-    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.STOPPED }));
+    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.CANCELLED }));
     setParentStream(child1, root);
 
     cliState.activeStreamId.set(child1);
@@ -1465,7 +1472,7 @@ describe('CLI TUI row allocation', () => {
       focusedChildInputDisabledMessage({
         activeStreamId: root,
         parentStream: cliState.parentStream.get(),
-        status: STREAM_STATUS.STOPPED,
+        status: STREAM_PHASE.COMPLETED,
       }),
     ).toBeUndefined();
 
@@ -1490,7 +1497,7 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: cliState.parentStream.get(),
         shortcutModifierLabel: 'Esc',
-        status: STREAM_STATUS.STOPPED,
+        status: STREAM_PHASE.COMPLETED,
       }),
     ).toBe(
       'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc s to choose another.',
@@ -1501,7 +1508,7 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: cliState.parentStream.get(),
         shortcutModifierLabel: 'Alt',
-        status: STREAM_STATUS.STOPPED,
+        status: STREAM_PHASE.COMPLETED,
       }),
     ).toBe(
       'Subagent is no longer accepting follow-ups; press Tab to switch streams or Alt-s to choose another.',
@@ -1512,7 +1519,7 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: cliState.parentStream.get(),
         shortcutModifierLabel: 'Esc',
-        status: STREAM_STATUS.STOPPED,
+        status: STREAM_PHASE.COMPLETED,
         subagentControlsAvailable: false,
       }),
     ).toBe(
@@ -1524,7 +1531,7 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: cliState.parentStream.get(),
         shortcutModifierLabel: 'Esc',
-        status: STREAM_STATUS.STOPPED,
+        status: STREAM_PHASE.COMPLETED,
         subagentControlsAvailable: false,
         taskControlsAvailable: true,
       }),
@@ -1537,7 +1544,7 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: cliState.parentStream.get(),
         shortcutModifierLabel: 'Esc',
-        status: STREAM_STATUS.STOPPED,
+        status: STREAM_PHASE.COMPLETED,
         taskControlsAvailable: true,
       }),
     ).toBe(
@@ -1559,17 +1566,22 @@ describe('CLI TUI row allocation', () => {
           executionId: 'child-exec-1',
           agentName: 'critic',
           childStreamId: child1,
-          status: STREAM_STATUS.STOPPED,
+          status: STREAM_PHASE.COMPLETED,
         },
       ],
     }));
-    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.STOPPED }));
+    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.CANCELLED }));
     setParentStream(child1, root);
 
     try {
-      StreamStatusService.set(child1, STREAM_STATUS.RUNNING, {
-        runtimeHost: wrapped,
-      });
+      StreamStatusService.transition(
+        child1,
+        STREAM_PHASE.RUNNING,
+        'restart-repair',
+        {
+          runtimeHost: wrapped,
+        },
+      );
 
       cliState.activeStreamId.set(child1);
       expect(cliState.streams.get().get(child1)?.status).toBe(
@@ -1609,16 +1621,21 @@ describe('CLI TUI row allocation', () => {
     setParentStream(child1, root);
 
     try {
-      StreamStatusService.set(child1, STREAM_STATUS.STOPPED, {
-        runtimeHost: wrapped,
-      });
+      StreamStatusService.transition(
+        child1,
+        STREAM_PHASE.CANCELLED,
+        'restart-repair',
+        {
+          runtimeHost: wrapped,
+        },
+      );
 
       cliState.activeStreamId.set(child1);
       expect(cliState.streams.get().get(child1)?.status).toBe(
-        STREAM_STATUS.STOPPED,
+        STREAM_PHASE.CANCELLED,
       );
       expect(cliState.streams.get().get(root)?.childStreams[0]?.status).toBe(
-        STREAM_STATUS.STOPPED,
+        STREAM_PHASE.CANCELLED,
       );
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'reject',

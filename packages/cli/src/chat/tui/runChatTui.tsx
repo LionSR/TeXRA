@@ -55,8 +55,8 @@ import { isLiveElapsedStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   STREAM_STATUS,
-  type StreamStatus,
   type ExecutionId,
+  type StreamLifecycleStatus,
   type StreamTabId,
 } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
@@ -423,7 +423,7 @@ export async function runChat(
   const followUpQueue = new PQueue({ concurrency: 1 });
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
-  const rootStreamStatus = (): StreamStatus | undefined =>
+  const rootStreamStatus = (): StreamLifecycleStatus | undefined =>
     session.streamId
       ? cliState.streams.get().get(session.streamId)?.status
       : undefined;

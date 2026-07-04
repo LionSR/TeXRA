@@ -6,6 +6,10 @@ import { describe, it, afterEach } from 'vitest';
 
 // Local imports - agent
 import { createFakePlatform } from '@test/support/FakePlatform';
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -313,9 +317,11 @@ describe('ToolUseFollowUp', () => {
     const waitingStreamId = 'parent-stream-wake-waiting' as StreamTabId;
 
     await initResumePlatform({ tryResumeStream: async () => false });
-    StreamStatusService.set(waitingStreamId, STREAM_STATUS.WAITING, {
-      emit: false,
-    });
+    seedStreamStatusForTest(
+      StreamStatusService,
+      waitingStreamId,
+      STREAM_STATUS.WAITING,
+    );
 
     try {
       const result = await sendFollowUp(
@@ -335,7 +341,7 @@ describe('ToolUseFollowUp', () => {
         'queued while waiting',
       ]);
     } finally {
-      StreamStatusService.clear(waitingStreamId, { emit: false });
+      clearStreamStatusForTest(StreamStatusService, waitingStreamId);
       ToolUseFollowUpQueue.release(waitingStreamId);
     }
   });

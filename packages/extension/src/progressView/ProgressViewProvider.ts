@@ -297,6 +297,7 @@ export class ProgressViewProvider
       this.state,
       this.eventHandler.getAllStreamStatuses(),
       theme,
+      this.eventHandler.getAllStreamSubstates(),
     );
 
     // Skip content sync when streams exist but filter excludes all of them

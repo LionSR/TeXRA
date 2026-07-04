@@ -8,7 +8,7 @@ import {
 } from '@cli/runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { EXECUTION_STATUS, STREAM_STATUS } from '@shared/schemas';
+import { STREAM_PHASE, STREAM_STATUS } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   getAgent: vi.fn(),
@@ -229,8 +229,8 @@ describe('CLI run progress renderer', () => {
 
     renderer?.handle('updateStreamStatus', {
       streamId: 'stream-1',
-      status: STREAM_STATUS.STOPPED,
-      previousStatus: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.CANCELLED,
+      previousStatus: STREAM_PHASE.RUNNING,
     });
     expect(clearCount).toBe(1);
   });
@@ -469,8 +469,8 @@ describe('CLI run progress renderer', () => {
 
     renderer?.handle('updateStreamStatus', {
       streamId: 'root-stream',
-      status: STREAM_STATUS.STOPPED,
-      previousStatus: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.CANCELLED,
+      previousStatus: STREAM_PHASE.RUNNING,
     });
     expect(clearCount).toBe(1);
   });
@@ -664,9 +664,8 @@ describe('CLI run progress renderer', () => {
     now = 11000;
     renderer?.handle('updateStreamStatus', {
       streamId: 'root-stream',
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.COMPLETED,
       previousStatus: STREAM_STATUS.RUNNING,
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
     });
     renderer?.handle('updateStreamDescription', {
       streamId: 'root-stream',
@@ -722,9 +721,8 @@ describe('CLI run progress renderer', () => {
     );
     renderer?.handle('updateStreamStatus', {
       streamId: 'root-stream',
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.CANCELLED,
       previousStatus: STREAM_STATUS.RUNNING,
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
     });
 
     expect(output).toBe('orchestrator · 0s\norchestrator · interrupted · 0s\n');
@@ -862,8 +860,7 @@ describe('CLI run progress renderer', () => {
       );
       host.emit('updateStreamStatus', {
         streamId: 'stream-1',
-        status: STREAM_STATUS.RUNNING,
-        previousStatus: STREAM_STATUS.READY,
+        status: STREAM_PHASE.RUNNING,
       });
       await host.close();
       host.emit('updateStreamDescription', {

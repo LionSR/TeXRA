@@ -16,12 +16,11 @@ import {
 import {
   legacyEndGroupStatusForOutcome,
   projectRunOutcome,
-  terminalStreamStatusForOutcome,
 } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,
-  STREAM_STATUS,
+  STREAM_PHASE,
   toRetryErrorInfo,
   type RunOutcome,
   type StreamTabId,
@@ -102,6 +101,44 @@ function endParentStageSafely(
   }
 }
 
+function transitionRunStart(ctx: AgentLaunchContext): void {
+  const options = {
+    runtimeHost: ctx.runtimeHost,
+    trace: ctx.logger,
+  };
+  if (
+    ctx.streamStatus.transition(
+      ctx.streamId,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
+      options,
+    )
+  ) {
+    return;
+  }
+  const resumed = ctx.streamStatus.transition(
+    ctx.streamId,
+    STREAM_PHASE.RUNNING,
+    'resume',
+    options,
+  );
+  if (resumed) {
+    return;
+  }
+  if (ctx.streamStatus.clearRunningSubstate(ctx.streamId, 'resume', options)) {
+    return;
+  }
+  if (ctx.streamStatus.get(ctx.streamId) === STREAM_PHASE.RUNNING) {
+    return;
+  }
+  logger.warn('Failed to transition run to RUNNING', {
+    data: {
+      agentIdentifier: ctx.config.agent,
+      streamId: ctx.streamId,
+    },
+  });
+}
+
 /**
  * Wraps a flow runner with full agent run lifecycle management: execution
  * registry tracking, stream-status transitions, error classification, user
@@ -158,9 +195,7 @@ export async function runFlowWithLifecycle(
     // The lifecycle owns every stream-status transition: RUNNING here,
     // terminal states in the success/error arms below. Runners must not
     // set stream status themselves.
-    ctx.streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
-      runtimeHost: ctx.runtimeHost,
-    });
+    transitionRunStart(ctx);
     const result = await runner(handle);
     // The flow's outcome is the canonical terminal fact; everything below is
     // one row of the projection table. No other layer may re-derive these.
@@ -219,15 +254,15 @@ export async function runFlowWithLifecycle(
     // re-throw) for an already-completed run.
     try {
       session.executions.untrack(ctx.executionId);
-      if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
-        ctx.streamStatus.set(
-          streamId,
-          terminalStreamStatusForOutcome(result.outcome),
-          {
-            runtimeHost: ctx.runtimeHost,
-            terminalStatus: projection.executionStatus,
-          },
-        );
+      if (
+        !ctx.streamStatus.transitionToTerminal(streamId, result.outcome, {
+          runtimeHost: ctx.runtimeHost,
+          trace: ctx.logger,
+        })
+      ) {
+        logger.warn('Failed to set terminal stream status', {
+          data: { agentIdentifier, streamId, status: result.outcome },
+        });
       }
     } catch (cleanupErr) {
       logger.warn('Post-completion cleanup threw', {
@@ -293,10 +328,16 @@ export async function runFlowWithLifecycle(
       );
     }
     try {
-      ctx.streamStatus.set(streamId, terminalStreamStatusForOutcome(outcome), {
-        runtimeHost: ctx.runtimeHost,
-        terminalStatus: projection.executionStatus,
-      });
+      if (
+        !ctx.streamStatus.transitionToTerminal(streamId, outcome, {
+          runtimeHost: ctx.runtimeHost,
+          trace: ctx.logger,
+        })
+      ) {
+        logger.warn('Failed to set terminal error status', {
+          data: { agentIdentifier, streamId, status: outcome },
+        });
+      }
     } catch (statusErr) {
       logger.warn('Failed to set terminal error status', {
         data: { agentIdentifier, error: statusErr },

@@ -97,7 +97,10 @@ import {
   hasUsableApiKey,
 } from '@model/apiProviders';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
-import { type StreamStatus, type TokenUsageStats } from '@shared/schemas';
+import {
+  type StreamLifecycleStatus,
+  type TokenUsageStats,
+} from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
@@ -717,7 +720,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const disposeStreamStatusListener = bus.on(
     'updateStreamStatus',
-    ({ streamId, status }: { streamId: string; status: StreamStatus }) => {
+    ({
+      streamId,
+      status,
+    }: {
+      streamId: string;
+      status: StreamLifecycleStatus;
+    }) => {
       statusBarUsageTracker.updateStreamStatus(streamId, status);
       updateStatusBarTooltip();
       updateStatusBarText();

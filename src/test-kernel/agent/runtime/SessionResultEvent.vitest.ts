@@ -3,6 +3,7 @@ import { ModelProvider } from 'llm-zoo';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -22,6 +23,7 @@ import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   RUN_OUTCOME,
+  STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
   type StorageKey,
@@ -152,7 +154,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       });
       expect(results[0].error).toBeUndefined();
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -160,12 +162,12 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     const logger = new TraceEmitter();
     const results = collectResults(logger);
     const { ctx, streamStatus } = createCtx({ logger });
-    // A status subscriber that throws on the terminal (STOPPED) transition, not
-    // the initial RUNNING one — models a host emit / status listener throwing
+    // A status subscriber that throws on the terminal (COMPLETED) transition,
+    // not the initial RUNNING one — models a host emit / status listener throwing
     // during post-completion cleanup. The run already emitted `completed`, so
     // this must NOT re-enter the catch arm and publish a second `failed`.
     const off = streamStatus.onDidChange((change) => {
-      if (change.status === STREAM_STATUS.STOPPED) {
+      if (change.status === STREAM_PHASE.COMPLETED) {
         throw new Error('status listener boom');
       }
     });
@@ -182,7 +184,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results[0].outcome).toBe('completed');
     } finally {
       off();
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -210,7 +212,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         executionId: ctx.executionId,
       });
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -243,7 +245,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         executionId: ctx.executionId,
       });
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -276,7 +278,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         executionId: ctx.executionId,
       });
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -310,7 +312,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         executionId: ctx.executionId,
       });
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -342,7 +344,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         executionId: ctx.executionId,
       });
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -351,7 +353,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     const results = collectResults(logger);
     const { ctx, streamStatus } = createCtx({ logger });
     const off = streamStatus.onDidChange((change) => {
-      if (change.status === STREAM_STATUS.ERROR) {
+      if (change.status === STREAM_PHASE.FAILED) {
         throw new Error('status listener boom');
       }
     });
@@ -369,7 +371,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       });
     } finally {
       off();
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -394,7 +396,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         executionId: ctx.executionId,
       });
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -421,7 +423,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         outcome: 'failed',
       });
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -439,7 +441,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].outcome).toBe('cancelled');
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -455,7 +457,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results[0].outcome).toBe('cancelled');
       expect(results[0].error?.kind).toBe('abort');
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -476,7 +478,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results[0].error?.kind).toBeDefined();
       expect(results[0].usage).toBeDefined();
     } finally {
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
     }
   });
 
@@ -505,7 +507,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       });
     } finally {
       detach();
-      streamStatus.clear(ctx.streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, ctx.streamId);
       session.dispose();
     }
   });

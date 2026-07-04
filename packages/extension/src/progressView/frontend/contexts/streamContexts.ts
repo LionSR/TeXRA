@@ -11,7 +11,7 @@ import { createContext } from '@lit/context';
 import type {
   LogMessageData,
   InquiryThreadUpdatedEvent,
-  StreamStatus,
+  StreamLifecycleStatus,
   StreamTabId,
   StreamTabInfo,
   TaskGroup,
@@ -68,7 +68,7 @@ export interface StreamLogContextValue {
   /** Stream name for switch detection in LogList */
   streamName: string | null;
   /** Current active stream status for pre-output empty states. */
-  streamStatus: StreamStatus | null;
+  streamStatus: StreamLifecycleStatus | null;
   /** Render log output in terminal style (monospace, no timestamps, etc). */
   terminalMode: boolean;
 }

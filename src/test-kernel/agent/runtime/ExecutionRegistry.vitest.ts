@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import {
   AgentExecutionHandle,
   ExecutionRegistry,
@@ -11,11 +12,7 @@ import {
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
-import {
-  EXECUTION_STATUS,
-  STREAM_STATUS,
-  type StreamTabId,
-} from '@shared/schemas';
+import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
 
@@ -66,7 +63,7 @@ describe('executionRegistry', () => {
       expect(registry.kill(executionId)).toBe(true);
 
       expect(interrupt).toHaveBeenCalledOnce();
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
     } finally {
       registry.dispose();
       interrupts.unregister(childStreamId);
@@ -119,8 +116,8 @@ describe('executionRegistry', () => {
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).toHaveBeenCalledOnce();
-      expect(streamStatus.get(rootStreamId)).toBe(STREAM_STATUS.STOPPED);
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(
         explicit.events
           .filter((event) => event.event === 'updateStreamStatus')
@@ -128,8 +125,7 @@ describe('executionRegistry', () => {
       ).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            status: STREAM_STATUS.STOPPED,
-            terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+            status: STREAM_PHASE.CANCELLED,
           }),
         ]),
       );
@@ -179,8 +175,8 @@ describe('executionRegistry', () => {
 
       expect(childInterrupt).toHaveBeenCalledOnce();
       expect(grandchildInterrupt).toHaveBeenCalledOnce();
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
-      expect(streamStatus.get(grandchildStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(streamStatus.get(grandchildStreamId)).toBe(STREAM_PHASE.CANCELLED);
     } finally {
       registry.dispose();
       interrupts.unregister(childStreamId);
@@ -233,7 +229,7 @@ describe('executionRegistry', () => {
 
       expect(childInterrupt).toHaveBeenCalledOnce();
       expect(grandchildInterrupt).not.toHaveBeenCalled();
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
       expect(
         registry.getAgentHandleByStream(grandchildStreamId)?.parentStreamId,
@@ -328,7 +324,7 @@ describe('executionRegistry', () => {
       expect(registry.getActiveChildren(childStreamId).subagents).toEqual([
         expect.objectContaining({ childStreamId: grandchildStreamId }),
       ]);
-      expect(streamStatus.get(rootStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBeUndefined();
       expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
       expect(explicit.events).toContainEqual({
@@ -365,10 +361,9 @@ describe('executionRegistry', () => {
       });
 
       expect(interrupt).toHaveBeenCalledOnce();
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(explicit.events.at(-1)?.payload).toMatchObject({
-        status: STREAM_STATUS.STOPPED,
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        status: STREAM_PHASE.CANCELLED,
       });
     } finally {
       registry.dispose();
@@ -391,10 +386,9 @@ describe('executionRegistry', () => {
         streamId,
         childPolicy: 'cascade',
       });
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(explicit.events.at(-1)?.payload).toMatchObject({
-        status: STREAM_STATUS.STOPPED,
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        status: STREAM_PHASE.CANCELLED,
       });
     } finally {
       registry.dispose();
@@ -427,7 +421,11 @@ describe('executionRegistry', () => {
     const executionId = 'exec-owned-status-test';
 
     try {
-      streamStatus.set(childStreamId, STREAM_STATUS.WAITING, { emit: false });
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
       registry.track(
         new AgentExecutionHandle(
           executionId,
@@ -507,14 +505,28 @@ describe('executionRegistry', () => {
       ).toBe(true);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.WAITING);
 
-      streamStatus.set(childStreamId, STREAM_STATUS.STOPPED, { emit: false });
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_PHASE.CANCELLED,
+      );
+      expect(registry.getActiveChildren(parentStreamId).subagents).toEqual([
+        expect.objectContaining({
+          executionId,
+          status: STREAM_STATUS.STOPPED,
+        }),
+      ]);
       expect(
         registry.updateAgentExecutionStatus(handle, STREAM_STATUS.RUNNING),
       ).toBe(false);
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
 
       registry.untrack(executionId);
-      streamStatus.set(childStreamId, STREAM_STATUS.WAITING, { emit: false });
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
       expect(
         registry.updateAgentExecutionStatus(handle, STREAM_STATUS.RUNNING),
       ).toBe(false);
@@ -542,14 +554,64 @@ describe('executionRegistry', () => {
 
     try {
       registry.track(handle);
-      streamStatus.set(childStreamId, STREAM_STATUS.STOPPED, { emit: false });
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_PHASE.CANCELLED,
+      );
 
       registry.finishAgentExecution(handle, {
-        status: STREAM_STATUS.READY,
+        status: STREAM_PHASE.COMPLETED,
       });
 
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(registry.getHandle(executionId)).toBeUndefined();
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('finishes waiting agent executions through a lifecycle terminal phase', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const parentStreamId = 'parent-finish-waiting-agent-test' as StreamTabId;
+    const childStreamId = 'child-finish-waiting-agent-test' as StreamTabId;
+    const executionId = 'exec-finish-waiting-agent-test';
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+      explicit.host,
+    );
+
+    try {
+      registry.trackAgentExecution(handle, { status: STREAM_PHASE.RUNNING });
+
+      expect(
+        registry.updateAgentExecutionStatus(handle, STREAM_PHASE.WAITING),
+      ).toBe(true);
+
+      registry.finishAgentExecution(handle, {
+        status: STREAM_PHASE.COMPLETED,
+      });
+
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.COMPLETED);
+      expect(registry.getHandle(executionId)).toBeUndefined();
+      expect(
+        explicit.events
+          .filter((event) => event.event === 'updateStreamStatus')
+          .slice(-2),
+      ).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({ status: STREAM_PHASE.RUNNING }),
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({ status: STREAM_PHASE.COMPLETED }),
+        }),
+      ]);
     } finally {
       registry.dispose();
     }
@@ -579,10 +641,10 @@ describe('executionRegistry', () => {
       ).length;
 
       registry.finishAgentExecution(handle, {
-        status: STREAM_STATUS.ERROR,
+        status: STREAM_PHASE.FAILED,
       });
 
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.ERROR);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.FAILED);
       expect(
         explicit.events.filter(
           (event) => event.event === 'updateActiveSubagents',
@@ -810,42 +872,52 @@ describe('executionRegistry', () => {
       );
       activeHandle.attachToolUseFlow(context);
       registry.track(activeHandle);
-      streamStatus.set(activeStreamId, STREAM_STATUS.RUNNING, {
-        emit: false,
-      });
+      seedStreamStatusForTest(
+        streamStatus,
+        activeStreamId,
+        STREAM_STATUS.RUNNING,
+      );
 
       expect(registry.getToolUseFollowUpTarget(activeStreamId)).toEqual({
         kind: 'active',
         context,
       });
 
-      streamStatus.set(resumingStreamId, STREAM_STATUS.RESUMING, {
-        emit: false,
-      });
+      seedStreamStatusForTest(
+        streamStatus,
+        resumingStreamId,
+        STREAM_STATUS.RESUMING,
+      );
       expect(registry.getToolUseFollowUpTarget(resumingStreamId)).toEqual({
         kind: 'queue',
         reason: 'resuming',
       });
 
-      streamStatus.set(waitingStreamId, STREAM_STATUS.WAITING, {
-        emit: false,
-      });
+      seedStreamStatusForTest(
+        streamStatus,
+        waitingStreamId,
+        STREAM_STATUS.WAITING,
+      );
       expect(registry.getToolUseFollowUpTarget(waitingStreamId)).toEqual({
         kind: 'queue',
         reason: 'waiting',
       });
 
-      streamStatus.set(stoppedStreamId, STREAM_STATUS.STOPPED, {
-        emit: false,
-      });
+      seedStreamStatusForTest(
+        streamStatus,
+        stoppedStreamId,
+        STREAM_PHASE.CANCELLED,
+      );
       expect(registry.getToolUseFollowUpTarget(stoppedStreamId)).toEqual({
         kind: 'no_session',
-        streamStatus: STREAM_STATUS.STOPPED,
+        streamStatus: STREAM_PHASE.CANCELLED,
       });
 
-      streamStatus.set(parentStreamId, STREAM_STATUS.STOPPED, {
-        emit: false,
-      });
+      seedStreamStatusForTest(
+        streamStatus,
+        parentStreamId,
+        STREAM_PHASE.CANCELLED,
+      );
       registry.track(
         new AgentExecutionHandle(
           'exec-follow-up-child-test',
@@ -925,9 +997,14 @@ describe('executionRegistry', () => {
     registry.dispose();
     explicit.events.length = 0;
 
-    streamStatus.set(childStreamId, STREAM_STATUS.WAITING, {
-      runtimeHost: explicit.host,
-    });
+    streamStatus.transition(
+      childStreamId,
+      STREAM_PHASE.WAITING,
+      'restart-repair',
+      {
+        runtimeHost: explicit.host,
+      },
+    );
 
     expect(
       explicit.events.some((entry) => entry.event === 'updateActiveSubagents'),

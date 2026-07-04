@@ -7,6 +7,10 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
+import {
   isResumeInFlight,
   resolveAndResumeStream,
   type ResumeStreamPorts,
@@ -41,7 +45,7 @@ describe('resolveAndResumeStream', () => {
   });
 
   afterEach(() => {
-    StreamStatusService.clear(STREAM, { emit: false });
+    clearStreamStatusForTest(StreamStatusService, STREAM);
   });
 
   it('routes a tool-use snapshot to the resume port', async () => {
@@ -86,7 +90,11 @@ describe('resolveAndResumeStream', () => {
     // `resumeInFlight` (held here) cannot catch that, so the post-retrieval
     // re-check must bail before touching the resume ports.
     retrieveSessionResumeDataMock.mockImplementation(async () => {
-      StreamStatusService.set(STREAM, STREAM_STATUS.RUNNING, { emit: false });
+      seedStreamStatusForTest(
+        StreamStatusService,
+        STREAM,
+        STREAM_STATUS.RUNNING,
+      );
       return { type: 'toolUse', snapshot: { streamId: STREAM } };
     });
     const ports = basePorts();
@@ -97,7 +105,7 @@ describe('resolveAndResumeStream', () => {
   });
 
   it('skips resume without resolving when the stream is already active', async () => {
-    StreamStatusService.set(STREAM, STREAM_STATUS.RUNNING, { emit: false });
+    seedStreamStatusForTest(StreamStatusService, STREAM, STREAM_STATUS.RUNNING);
     const ports = basePorts();
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);

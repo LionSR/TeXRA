@@ -16,7 +16,11 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
-import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  STREAM_STATUS,
+  type StreamLifecycleStatus,
+} from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { selectStyles } from '@shared/styles/selectStyles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
@@ -96,7 +100,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) status: StreamStatus | null = null;
+  @property({ attribute: false }) status: StreamLifecycleStatus | null = null;
   @property({ type: Boolean }) hasOutputFiles = false;
   @property({ attribute: false }) options: FollowupOptionsState | null = null;
   @property({ attribute: false }) streamModel: string | null = null;
@@ -210,8 +214,9 @@ export class WorkflowToolUseFollowupSection extends LitElement {
       this.hasOutputFiles &&
       (this.status == null ||
         this.status === STREAM_STATUS.READY ||
-        this.status === STREAM_STATUS.ERROR ||
-        this.status === STREAM_STATUS.STOPPED)
+        this.status === STREAM_PHASE.FAILED ||
+        this.status === STREAM_PHASE.COMPLETED ||
+        this.status === STREAM_PHASE.CANCELLED)
     );
   }
 

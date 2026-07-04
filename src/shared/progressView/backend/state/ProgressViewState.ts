@@ -7,7 +7,7 @@ import {
 } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   defaultSession,
   type SessionHandle,
@@ -134,6 +134,8 @@ export class ProgressViewState {
   private _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
+  readonly streamStatus: StreamStatusMachine;
+
   private readonly logger: AgentTrace;
   private readonly session: SessionHandle;
 
@@ -144,6 +146,7 @@ export class ProgressViewState {
   ) {
     this.logger = createChannelTrace('ProgressViewState');
     this.session = session;
+    this.streamStatus = session.status;
     this._prefs = new PersistedState(
       createBackendStorage(storage),
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
@@ -187,7 +190,7 @@ export class ProgressViewState {
    * call this on the stream being moved away from to close the loop.
    */
   releasePreviousActive(streamId: StreamTabId): void {
-    if (!isInFlightStatus(StreamStatusService.get(streamId))) {
+    if (!isInFlightStatus(this.streamStatus.get(streamId))) {
       this.streamLogs.releaseEntries(streamId);
     }
   }
@@ -315,7 +318,7 @@ export class ProgressViewState {
 
   async clearStream(stream: StreamTabId): Promise<void> {
     // Clear in-memory state
-    StreamStatusService.clear(stream, { emit: false });
+    this.streamStatus.clearStream(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
@@ -341,7 +344,7 @@ export class ProgressViewState {
     );
 
     // Clear in-memory state
-    StreamStatusService.clearAll({ emit: false });
+    this.streamStatus.clearAll();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();
