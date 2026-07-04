@@ -8,7 +8,11 @@ import {
   extractToolAttachments,
   formatToolResultAsText,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
+import {
+  MAX_TOOL_RESULT_TEXT_LENGTH,
+  TOOL_RESULT_TRUNCATION_HEAD_CHARS,
+  TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+} from '@agent/modelHandlers/contextManagementConstants';
 
 describe('checkToolResultTextLimit', () => {
   it('returns null for text within limit', () => {
@@ -21,12 +25,21 @@ describe('checkToolResultTextLimit', () => {
     assert.equal(checkToolResultTextLimit(text), null);
   });
 
-  it('returns error message for text exceeding limit', () => {
-    const text = 'a'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH + 100);
+  it('keeps head and tail with an elision marker for text exceeding limit', () => {
+    const head = 'HEAD_MARKER_'.repeat(500); // well over the head budget
+    const tail = 'TAIL_MARKER_'.repeat(5000); // well over the tail budget
+    const middle = 'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH);
+    const text = head + middle + tail;
+
     const result = checkToolResultTextLimit(text);
     assert.ok(result !== null);
     assert.ok(result.includes('Tool result too large'));
-    assert.ok(result.includes('exceeded by'));
+    assert.ok(result.includes('characters elided'));
+    // Head/tail content survives; the elided middle does not.
+    assert.ok(result.startsWith('Tool result too large'));
+    assert.ok(result.includes(head.slice(0, TOOL_RESULT_TRUNCATION_HEAD_CHARS)));
+    assert.ok(result.includes(tail.slice(-TOOL_RESULT_TRUNCATION_TAIL_CHARS)));
+    assert.ok(!result.includes('x'.repeat(1000)));
   });
 
   it('respects custom max length', () => {
@@ -34,7 +47,7 @@ describe('checkToolResultTextLimit', () => {
     assert.equal(checkToolResultTextLimit(text, 200), null);
     const error = checkToolResultTextLimit(text, 100);
     assert.ok(error !== null);
-    assert.ok(error.includes('exceeded by 50'));
+    assert.ok(error.includes('Tool result too large'));
   });
 });
 
@@ -95,14 +108,20 @@ describe('formatToolResultAsText', () => {
     assert.ok(result.includes('Attachments: file.pdf'));
   });
 
-  it('returns error when result exceeds limit', () => {
-    const largeOutput = 'a'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH + 100);
+  it('keeps head and tail when result exceeds limit, not a discard stub', () => {
+    const head = 'HEAD_MARKER_'.repeat(500);
+    const tail = 'TAIL_MARKER_'.repeat(5000);
+    const largeOutput = head + 'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) + tail;
     const result = formatToolResultAsText({
       status: 'executed',
       output: largeOutput,
     });
     assert.ok(result.includes('Tool result too large'));
-    assert.ok(!result.includes('aaa')); // Should not contain original content
+    assert.ok(result.includes('characters elided'));
+    assert.ok(!result.includes('was not included'));
+    assert.ok(result.includes('HEAD_MARKER_'));
+    assert.ok(result.includes('TAIL_MARKER_'));
+    assert.ok(!result.includes('x'.repeat(1000)));
   });
 
   it('returns normal result when within limit', () => {
