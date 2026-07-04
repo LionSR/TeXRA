@@ -90,7 +90,7 @@ vi.mock('@cli/runtime/runModel', () => ({
     quietLogs: true,
     renderRunProgress: false,
   })),
-  resolveCliRunModel: vi.fn(
+  selectCliRunModel: vi.fn(
     async (_context: CliContext, model: string | undefined) =>
       model ?? 'deepseekT',
   ),
