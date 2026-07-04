@@ -8,11 +8,7 @@ import { when } from 'lit/directives/when.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas
-import {
-  resolveUsageRoute,
-  type TokenUsageStats,
-  type UsageRoute,
-} from '@shared/schemas';
+import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
@@ -290,7 +286,7 @@ export class UsagePanel extends LitElement {
   }
 
   private renderCostRoute(cost: number): TemplateResult {
-    const route = resolveUsageRoute(this.usage);
+    const route = this.usage?.usageRoute;
     const badge = usageRouteBadge(route);
     if (!badge) return html`${formatCostUsd(cost)}`;
 
@@ -346,7 +342,7 @@ export class UsagePanel extends LitElement {
   private buildUsageLabel(): string {
     if (!this.usage) return '';
     const { inputTokens, outputTokens, cost } = this.usage;
-    const costLabel = usageCostLabel(cost, resolveUsageRoute(this.usage));
+    const costLabel = usageCostLabel(cost, this.usage.usageRoute);
     return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${costLabel}`;
   }
 }
