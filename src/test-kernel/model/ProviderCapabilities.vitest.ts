@@ -25,10 +25,9 @@ const gpt55Config: ModelConfig = {
 };
 
 describe('provider capabilities', () => {
-  it('resolves ChatGPT subscription profile from model and auth mode', () => {
+  it('resolves ChatGPT subscription profile from model routing context', () => {
     const capabilities = resolveProviderCapabilities({
       model: gpt55Config,
-      authMode: 'chatgpt-subscription',
       useOpenRouter: false,
     });
 
