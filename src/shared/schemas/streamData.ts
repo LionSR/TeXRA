@@ -20,7 +20,7 @@ import { z } from 'zod';
 
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
-  TokenUsageStatsSchema,
+  TokenUsageStatsBaseSchema,
   UsageRouteSchema,
   emptyUsageStats,
   isEmptyUsage,
@@ -259,7 +259,7 @@ function isNumericUsageField(schema: z.ZodType): boolean {
 }
 
 const numericUsageParsingShape = Object.fromEntries(
-  Object.entries(TokenUsageStatsSchema.shape)
+  Object.entries(TokenUsageStatsBaseSchema.shape)
     .filter(([, schema]) => isNumericUsageField(schema))
     .map(([key, schema]) => [
       key,
@@ -270,13 +270,21 @@ const numericUsageParsingShape = Object.fromEntries(
 );
 
 /** Parsing schema with safe number coercion. */
-const TokenUsageStatsParsingBaseSchema = z.object({
-  ...numericUsageParsingShape,
-  viaChatGptSubscription: z.boolean().catch(false).prefault(false),
-  usageRoute: UsageRouteSchema.optional().catch(undefined),
-  // The numeric fields are derived from `TokenUsageStatsSchema.shape` above;
-  // TypeScript cannot recover the required keys through `Object.fromEntries`.
-}) as unknown as z.ZodType<TokenUsageStats>;
+const TokenUsageStatsParsingBaseSchema = z
+  .object({
+    ...numericUsageParsingShape,
+    viaChatGptSubscription: z.boolean().catch(false).prefault(false),
+    usageRoute: UsageRouteSchema.optional().catch(undefined),
+    // The numeric fields are derived from `TokenUsageStatsBaseSchema.shape` above;
+    // TypeScript cannot recover the required keys through `Object.fromEntries`.
+  })
+  .transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats => {
+    const stats = usage as TokenUsageStats;
+    const usageRoute =
+      stats.usageRoute ??
+      (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
+    return usageRoute == null ? stats : { ...stats, usageRoute };
+  }) as z.ZodType<TokenUsageStats>;
 
 export const TokenUsageStatsParsingSchema =
   TokenUsageStatsParsingBaseSchema.catch(emptyUsageStats());

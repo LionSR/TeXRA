@@ -282,7 +282,6 @@ describe('collectResumeUsage', () => {
       cacheReadInputTokens: 10,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,
-      viaChatGptSubscription: false,
       reasoningTokens: 5,
     });
   });
@@ -311,7 +310,6 @@ describe('collectResumeUsage', () => {
       cacheReadInputTokens: 0,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,
-      viaChatGptSubscription: false,
     });
   });
 });

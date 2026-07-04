@@ -11,7 +11,6 @@ import type {
   ExtendedTokenUsageStats,
   StorageKey,
   StreamTabId,
-  TokenUsageStats,
   UsageRoute,
 } from '@shared/schemas';
 import { roundTo } from '@utils/core';
@@ -121,9 +120,7 @@ export class UsageMonitor {
       const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
       const roundCost = latestUsage?.cost ?? 0;
       const toolUseTokens = latestUsage?.toolUsePromptTokens ?? 0;
-      const viaChatGptSubscription =
-        latestUsage?.viaChatGptSubscription ?? false;
-      const usageRoute = this.resolveUsageRoute(viaChatGptSubscription);
+      const usageRoute = latestUsage?.usageRoute ?? this.currentUsageRoute();
 
       const { capabilities } = this.modelInfo;
       const supportsCaching =
@@ -158,7 +155,6 @@ export class UsageMonitor {
           reasoningTokens: roundReasoningTokens,
         }),
         ...(toolUseTokens > 0 && { toolUseTokens }),
-        ...(viaChatGptSubscription && { viaChatGptSubscription: true }),
         ...(usageRoute != null && { usageRoute }),
       };
 
@@ -194,9 +190,6 @@ export class UsageMonitor {
         cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
-        // Free ChatGPT-subscription round: still logged (cost is 0), but marked
-        // so analytics can tell it apart from any other zero-cost row.
-        viaChatGptSubscription,
         usageRoute,
       });
     } catch (error) {
@@ -222,10 +215,7 @@ export class UsageMonitor {
     return (totals.totalCacheReadInputTokens / totalCacheableTokens) * 100;
   }
 
-  private resolveUsageRoute(
-    viaChatGptSubscription: boolean,
-  ): UsageRoute | undefined {
-    if (viaChatGptSubscription) return 'chatgpt-subscription';
+  private currentUsageRoute(): UsageRoute | undefined {
     try {
       return this.usesRelayRoute() ? 'relay' : 'api-key';
     } catch (error) {
@@ -261,7 +251,6 @@ export class UsageMonitor {
       cacheCreationInputTokens?: number;
       reasoningTokens?: number;
       cost: number;
-      viaChatGptSubscription?: boolean;
       usageRoute?: UsageRoute;
     },
   ): Promise<void> {
@@ -275,10 +264,7 @@ export class UsageMonitor {
         usage.cacheMissInputTokens ??
         Math.max(0, usage.inputTokens - cachedInputTokens);
 
-      const usedRelay =
-        usage.usageRoute != null
-          ? usage.usageRoute === 'relay'
-          : !usage.viaChatGptSubscription && this.usesRelayRoute();
+      const usedRelay = usage.usageRoute === 'relay';
 
       UsageLogService.log({
         model: config.fullName,
@@ -296,9 +282,7 @@ export class UsageMonitor {
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usedRelay,
-        ...(usage.viaChatGptSubscription && {
-          viaChatGptSubscription: true,
-        }),
+        ...(usage.usageRoute != null && { usageRoute: usage.usageRoute }),
         streamId: this.context.streamId,
       });
 

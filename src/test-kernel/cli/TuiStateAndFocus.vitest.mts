@@ -2875,7 +2875,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       cacheReadInputTokens: 35,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 7,
-      viaChatGptSubscription: false,
     });
   });
 
