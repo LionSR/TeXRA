@@ -9,7 +9,7 @@ import { StorageFS } from '@utils/files';
 import { byStringProp } from '@utils/core/comparators';
 import { isObject } from '@utils/core/typeGuards';
 import { isDirectory } from '@utils/files/fsEntryType';
-import { resolveStoragePath } from '@utils/files/taskRunStorage';
+import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
 
 import type { CliHistoryFile } from '../history';
 
@@ -35,7 +35,7 @@ function isHistoryKvFile(name: string): boolean {
 export async function listGeneratedFiles(
   id: ExecutionId,
 ): Promise<CliHistoryFile[]> {
-  const runDir = await resolveStoragePath(id);
+  const runDir = await findExistingRunStoragePath(id);
   if (!runDir) return [];
   return walkStorageDirectory(runDir, '', HISTORY_FILE_SCAN_DEPTH);
 }
