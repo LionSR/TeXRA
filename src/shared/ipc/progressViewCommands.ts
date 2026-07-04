@@ -8,6 +8,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   CLEAN_STREAM: 'cleanStream',
   STOP_STREAM: 'stopStream',
   UPDATE_STREAMS: 'updateStreams',
+  UPDATE_STREAM_METADATA: 'updateStreamMetadata',
   DELETE_ALL: 'deleteAll',
 
   LOG_DELTA: 'logDelta',

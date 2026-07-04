@@ -164,6 +164,7 @@ type ProgressMessage = {
   reset?: boolean;
   streams?: Array<{ name: string; creationTimestamp: number }>;
   streamStates?: Record<string, unknown>;
+  streamState?: unknown;
 };
 
 function mockLoggerModule(): void {
@@ -669,10 +670,12 @@ describe('DesktopProgressBridge', () => {
 
       expect(
         messages.map((message) => (message as ProgressMessage).command),
-      ).toEqual([PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]);
+      ).toEqual([PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA]);
       expect(
-        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS)[0]
-          ?.streamStates?.['new-stream'],
+        progressMessages(
+          messages,
+          PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+        )[0]?.streamState,
       ).toMatchObject({ status: STREAM_STATUS.RUNNING });
     } finally {
       bridge.dispose();

@@ -6,7 +6,12 @@
 import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  createStreamState,
+  STREAM_STATUS,
+  type StreamTabId,
+  type StreamTabInfo,
+} from '@shared/schemas';
 import {
   EMPTY_STREAM_META,
   reduceStreamMeta,
@@ -18,6 +23,7 @@ import {
   isToolUseState,
   type ProcessOutputMap,
 } from '../store';
+import { mergeBackendOwnedState } from './streamStateMerge';
 import type { HandlerRegistry } from '../messageHandlerTypes';
 
 /**
@@ -42,7 +48,72 @@ export function takePendingDescription(
  */
 const WEBVIEW_OUTPUT_CAP = { maxChars: 100_000, retainChars: 80_000 } as const;
 
+function compareByNewestCreationTime(
+  a: StreamTabInfo,
+  b: StreamTabInfo,
+): number {
+  return (
+    b.creationTimestamp - a.creationTimestamp || a.name.localeCompare(b.name)
+  );
+}
+
+function upsertSortedStreamInfo(
+  streams: Map<StreamTabId, StreamTabInfo>,
+  streamInfo: StreamTabInfo,
+): Map<StreamTabId, StreamTabInfo> {
+  const streamsWithoutPatch = [...streams.values()].filter(
+    (stream) => stream.name !== streamInfo.name,
+  );
+  const ordered = [...streamsWithoutPatch, streamInfo].toSorted(
+    compareByNewestCreationTime,
+  );
+
+  return new Map(ordered.map((stream) => [stream.name, stream]));
+}
+
 export const streamMetaHandlers: HandlerRegistry = {
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA]: (data, ctx) => {
+    const name = data.streamInfo.name;
+    const pending = takePendingDescription(name);
+
+    ctx.setState((prev) => {
+      const existingInfo = prev.streamById.get(name);
+      const description =
+        data.streamInfo.description ?? pending ?? existingInfo?.description;
+      const streamInfo =
+        description !== data.streamInfo.description
+          ? { ...data.streamInfo, description }
+          : data.streamInfo;
+      const existingState = prev.streamStates.get(name);
+      const mergedState = existingState
+        ? mergeBackendOwnedState(existingState, data.streamState)
+        : createStreamState(data.streamState.kind, data.streamState);
+
+      return create(prev, (draft) => {
+        if (
+          !existingInfo ||
+          existingInfo.creationTimestamp !== streamInfo.creationTimestamp
+        ) {
+          draft.streamById = upsertSortedStreamInfo(
+            prev.streamById,
+            streamInfo,
+          );
+        } else {
+          draft.streamById.set(name, streamInfo);
+        }
+
+        draft.streamStates.set(name, mergedState);
+
+        if (data.activeStream !== undefined) {
+          draft.activeStreamId = data.activeStream || null;
+        }
+        if (data.agentFilter !== undefined) {
+          draft.streamFilter = data.agentFilter;
+        }
+      });
+    });
+  },
+
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
     const { stream, status, lastTimestamp, substate } = data;
     const state = ctx.getState();
