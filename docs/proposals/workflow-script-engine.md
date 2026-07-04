@@ -193,7 +193,12 @@ structured JSON at every edge, plain-code joins, one consolidated result.
    (`ToolUseDispatchNode`; per-tool `parallelSafe` flag or read-only
    allowlist). Safety fix plus the cheap latency win; no new dependencies.
    Prerequisite: the single shared abort-controller slot must become
-   per-call.
+   per-call. *Landed (2026-07-04)*: contiguous runs of read-only tool calls
+   dispatch concurrently under a shared semaphore with a batch-scoped abort
+   controller; duplicate parallel calls fan out the primary's result instead
+   of burning a model turn on a synthetic error; subagent report persistence
+   runs concurrently with parent delivery; and `FollowUpQueue` coalesces
+   contiguous synthetic follow-ups into one turn.
 2. **`outputSchema` / `structured` on `executeAgent` + `AgentFlowResult`.**
    Independently useful; the load-bearing prerequisite for scripted
    map-reduce.

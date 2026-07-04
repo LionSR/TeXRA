@@ -14,27 +14,28 @@ import {
 import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export const DUPLICATE_CALL_ERROR =
-  'Duplicate parallel call skipped — same tool name and arguments as an earlier call in this batch. ' +
-  'To run identical calls, invoke them sequentially in separate responses.';
-
 /**
- * Identify duplicate parallel tool calls (same name + identical arguments).
- * Returns the set of `callId`s that should be skipped (all but the first
- * occurrence of each unique call signature).
+ * Map duplicate parallel tool calls (same name + identical arguments) to
+ * their primary occurrence. Returns duplicate `callId` → first-occurrence
+ * `callId`; only the primary executes, and duplicates receive a copy of its
+ * result — a byte-identical call has a known answer, so re-asking the model
+ * to retry sequentially would burn a full round-trip for nothing.
  */
-export function findDuplicateCallIds(toolCalls: SdkToolCall[]): Set<string> {
-  const seen = new Set<string>();
-  const duplicates = new Set<string>();
+export function mapDuplicateCallsToPrimary(
+  toolCalls: SdkToolCall[],
+): Map<string, string> {
+  const primaryBySignature = new Map<string, string>();
+  const duplicateToPrimary = new Map<string, string>();
   for (const call of toolCalls) {
     const key = call.name + '\0' + stableStringify(call.input);
-    if (seen.has(key)) {
-      duplicates.add(call.callId);
+    const primary = primaryBySignature.get(key);
+    if (primary !== undefined) {
+      duplicateToPrimary.set(call.callId, primary);
     } else {
-      seen.add(key);
+      primaryBySignature.set(key, call.callId);
     }
   }
-  return duplicates;
+  return duplicateToPrimary;
 }
 
 /** Parse tool input, handling JSON strings and other formats from model providers. */

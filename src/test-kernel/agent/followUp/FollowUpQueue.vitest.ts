@@ -45,6 +45,26 @@ describe('FollowUpQueue', () => {
     });
   });
 
+  it('coalesces a contiguous run of synthetic follow-ups into one batch', async () => {
+    const queue = new FollowUpQueue();
+
+    queue.enqueueSynthetic('maintenance one');
+    queue.enqueueSynthetic('maintenance two');
+    queue.enqueue({ text: 'user text' });
+
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: [
+        { text: 'maintenance one', origin: 'synthetic' },
+        { text: 'maintenance two', origin: 'synthetic' },
+      ],
+      synthetic: true,
+    });
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: [{ text: 'user text', origin: 'user' }],
+      synthetic: false,
+    });
+  });
+
   it('carries media file paths on their own visible batch items', async () => {
     const queue = new FollowUpQueue();
 

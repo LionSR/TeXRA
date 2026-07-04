@@ -406,11 +406,12 @@ export async function executeSubagent(
       workingDirectory,
       memoryMisses: result?.memoryMisses,
     });
-    await writeSubagentReport(executionId, msg);
-    await deliverTerminalFollowUp({
-      text: msg,
-      origin: 'subagent_result',
-    });
+    // Persist concurrently with delivery — the best-effort report write
+    // must not delay the parent's wakeup.
+    await Promise.all([
+      deliverTerminalFollowUp({ text: msg, origin: 'subagent_result' }),
+      writeSubagentReport(executionId, msg),
+    ]);
   }
 
   const promise = executeAgent(configPayload, executionId, {
@@ -460,14 +461,15 @@ export async function executeSubagent(
           workingDirectory,
         },
       );
-      // Best-effort persist — must never block delivery or abort the subagent.
-      await writeSubagentReport(executionId, msg);
-      // Claim only the enqueue step: formatting/storage failures before this
-      // still leave onCompleted/onError available as terminal fallbacks.
-      return await deliverTerminalFollowUp({
-        text: msg,
-        origin: 'subagent_result',
-      });
+      // Claim only the enqueue step: formatting failures before this still
+      // leave onCompleted/onError available as terminal fallbacks. The
+      // best-effort report persist (it swallows its own errors) runs
+      // concurrently so the disk write never delays the parent's wakeup.
+      const [delivered] = await Promise.all([
+        deliverTerminalFollowUp({ text: msg, origin: 'subagent_result' }),
+        writeSubagentReport(executionId, msg),
+      ]);
+      return delivered;
     },
     onCompleted: async (result) => {
       settleSubagentCost(result);
@@ -477,11 +479,12 @@ export async function executeSubagent(
         result,
         { startedAt, workingDirectory },
       );
-      await writeSubagentReport(executionId, msg);
-      await deliverTerminalFollowUp({
-        text: msg,
-        origin: 'subagent_result',
-      });
+      // Persist concurrently with delivery — the best-effort report write
+      // must not delay the parent's wakeup.
+      await Promise.all([
+        deliverTerminalFollowUp({ text: msg, origin: 'subagent_result' }),
+        writeSubagentReport(executionId, msg),
+      ]);
     },
     onError: (err, result) => deliverSubagentError(err, result),
   });

@@ -2,8 +2,6 @@ export { journalKey } from './journal';
 export { parseWorkflowScript, WorkflowScriptParseError } from './parseScript';
 export type { ParsedWorkflowScript } from './parseScript';
 export { runWorkflowScript } from './runWorkflowScript';
-export { createSemaphore } from './semaphore';
-export type { Semaphore } from './semaphore';
 export {
   WorkflowScriptMetaSchema,
   WorkflowScriptPhaseSchema,

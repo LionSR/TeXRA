@@ -1,7 +1,8 @@
+import { createSemaphore } from '@utils/core/semaphore';
+
 import { journalKey } from './journal';
 import { parseWorkflowScript } from './parseScript';
 import { runScriptInSandbox } from './sandbox';
-import { createSemaphore } from './semaphore';
 import type {
   WorkflowAgentCallOptions,
   WorkflowJournalEntry,

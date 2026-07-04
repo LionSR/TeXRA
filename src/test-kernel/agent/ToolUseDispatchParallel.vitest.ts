@@ -1,0 +1,234 @@
+// Third-party imports
+import { strict as assert } from 'node:assert';
+import { describe, it, beforeAll } from 'vitest';
+
+// Local imports
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { createRunTrace } from '@transcript';
+import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
+import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { StreamTabId } from '@shared/schemas';
+import type { ToolResult } from '@shared/schemas/toolResult';
+
+import { withTestRunContext } from './progressTestUtils';
+
+interface DispatchProbe {
+  events: string[];
+  inFlight: number;
+  maxInFlight: number;
+}
+
+function probeTool(
+  probe: DispatchProbe,
+  name: string,
+  delayMs: number,
+): ITool {
+  return {
+    definition: { name, description: name, parameters: {} },
+    async call(input: unknown): Promise<ToolResult> {
+      const tag = `${name}:${JSON.stringify(input)}`;
+      probe.events.push(`start ${tag}`);
+      probe.inFlight += 1;
+      probe.maxInFlight = Math.max(probe.maxInFlight, probe.inFlight);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      probe.inFlight -= 1;
+      probe.events.push(`end ${tag}`);
+      return { status: 'executed', output: `${tag} ok` };
+    },
+  } as ITool;
+}
+
+function makeCall(
+  callId: string,
+  name: string,
+  input: Record<string, unknown>,
+): SdkToolCall {
+  return {
+    provider: 'openai',
+    callId,
+    name,
+    input,
+    raw: {},
+  } as unknown as SdkToolCall;
+}
+
+interface HarnessOptions {
+  tools: Record<string, ITool>;
+  checkInterruption?: () => boolean;
+  setAbortController?: (controller: AbortController | null) => void;
+}
+
+function dispatchHarness(opts: HarnessOptions) {
+  const runTrace = createRunTrace('DispatchParallelTest' as StreamTabId);
+  const services = {
+    logger: runTrace.trace,
+    toolRegistry: new MapToolRegistry(opts.tools),
+    checkInterruption: opts.checkInterruption ?? (() => false),
+    setAbortController: opts.setAbortController ?? (() => {}),
+    run: AgentRunStateSnapshotSchema.parse({}),
+    workspace: AgentWorkspaceState.create(),
+  } as unknown as ToolUseRoundServices<unknown>;
+  const node = new ToolUseDispatchNode<unknown>();
+  node.setServices(services);
+  return { node, dispose: () => runTrace.dispose() };
+}
+
+/** prep() then the batch executor, mirroring BatchNode's _run sequence. */
+async function runDispatch(
+  node: ToolUseDispatchNode<unknown>,
+  calls: SdkToolCall[],
+): Promise<unknown[]> {
+  const shared = { toolCalls: calls, shouldStop: false, messages: [] };
+  const prepped = await (
+    node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
+  ).prep(shared);
+  return await withTestRunContext(noopAgentRuntimeHost, 'dispatch-test', () =>
+    (
+      node as unknown as { _exec(items: unknown[]): Promise<unknown[]> }
+    )._exec(prepped),
+  );
+}
+
+type ExecResult = {
+  call: SdkToolCall;
+  result: ToolResult;
+  editedFiles: unknown[];
+} | null;
+
+describe('ToolUseDispatchNode parallel dispatch', () => {
+  beforeAll(async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({ workspacePath: '/workspace' }));
+  });
+
+  it('executes contiguous parallel-safe calls concurrently, preserving order', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const { node, dispose } = dispatchHarness({
+      tools: {
+        grep: probeTool(probe, 'grep', 25),
+        read_file: probeTool(probe, 'read_file', 25),
+      },
+    });
+    try {
+      const results = (await runDispatch(node, [
+        makeCall('c1', 'grep', { pattern: 'a' }),
+        makeCall('c2', 'read_file', { path: 'b' }),
+      ])) as ExecResult[];
+
+      assert.equal(probe.maxInFlight, 2, 'safe calls should overlap');
+      assert.equal(results.length, 2);
+      assert.equal(results[0]?.call.callId, 'c1');
+      assert.equal(results[1]?.call.callId, 'c2');
+      assert.equal(results[0]?.result.status, 'executed');
+      assert.equal(results[1]?.result.status, 'executed');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('treats non-safe tools as ordering barriers', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const { node, dispose } = dispatchHarness({
+      tools: {
+        read_file: probeTool(probe, 'read_file', 20),
+        write_file: probeTool(probe, 'write_file', 10),
+      },
+    });
+    try {
+      await runDispatch(node, [
+        makeCall('c1', 'read_file', { n: 1 }),
+        makeCall('c2', 'write_file', { n: 2 }),
+        makeCall('c3', 'read_file', { n: 3 }),
+      ]);
+
+      assert.equal(probe.maxInFlight, 1, 'barrier should force sequential');
+      assert.deepEqual(probe.events, [
+        'start read_file:{"n":1}',
+        'end read_file:{"n":1}',
+        'start write_file:{"n":2}',
+        'end write_file:{"n":2}',
+        'start read_file:{"n":3}',
+        'end read_file:{"n":3}',
+      ]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('executes duplicate parallel calls once and fans the result out', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const { node, dispose } = dispatchHarness({
+      tools: { grep: probeTool(probe, 'grep', 5) },
+    });
+    try {
+      const results = (await runDispatch(node, [
+        makeCall('c1', 'grep', { pattern: 'same' }),
+        makeCall('c2', 'grep', { pattern: 'same' }),
+        makeCall('c3', 'grep', { pattern: 'other' }),
+      ])) as ExecResult[];
+
+      const startCount = probe.events.filter((e) =>
+        e.startsWith('start '),
+      ).length;
+      assert.equal(startCount, 2, 'duplicate must not execute the tool again');
+
+      assert.equal(results[1]?.call.callId, 'c2');
+      assert.equal(results[1]?.result.status, 'executed');
+      // The duplicate shares the primary's output, not an error.
+      assert.equal(
+        results[1]?.result.status === 'executed'
+          ? results[1].result.output
+          : undefined,
+        results[0]?.result.status === 'executed'
+          ? results[0].result.output
+          : 'missing',
+      );
+      assert.deepEqual(
+        results[1]?.editedFiles,
+        [],
+        'duplicate must not re-track edits',
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('registers one batch abort controller that cancels concurrent calls', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const registered: (AbortController | null)[] = [];
+    const { node, dispose } = dispatchHarness({
+      tools: {
+        grep: probeTool(probe, 'grep', 60),
+        read_file: probeTool(probe, 'read_file', 60),
+      },
+      setAbortController: (controller) => registered.push(controller),
+    });
+    try {
+      const pending = runDispatch(node, [
+        makeCall('c1', 'grep', { pattern: 'a' }),
+        makeCall('c2', 'read_file', { path: 'b' }),
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      const batchController = registered[0];
+      assert.ok(batchController, 'batch controller should be registered');
+      batchController.abort();
+
+      const results = (await pending) as ExecResult[];
+      assert.deepEqual(
+        results,
+        [null, null],
+        'aborted concurrent calls should resolve to null',
+      );
+      // Exactly one controller for the whole batch, cleared afterwards.
+      assert.deepEqual(registered, [batchController, null]);
+    } finally {
+      dispose();
+    }
+  });
+});
