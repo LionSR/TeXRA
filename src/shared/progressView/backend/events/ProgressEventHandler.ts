@@ -20,6 +20,7 @@ import {
   WebviewUpdater,
   type LogContentExtras,
 } from '@shared/progressView/backend/WebviewUpdater';
+import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
 import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
 import {
   ProgressViewState,
@@ -608,16 +609,44 @@ export class ProgressEventHandler {
     this.state.streamLogs.ensureStream(streamId);
     // Persisted streams may be in stream logs but missing from _streamStates;
     // getOrCreateStreamState is idempotent so safe to call unconditionally.
-    const category = this.getStreamCategory(streamId) ?? AgentCategory.Workflow;
+    const streamCategory = this.getStreamCategory(streamId);
+    const category = streamCategory ?? AgentCategory.Workflow;
     this.state.getOrCreateStreamState(streamId, category);
 
     if (isNewStream) {
-      this.maybeUpdateFilterForCategory(category);
+      const previousFilter = this.state.agentCategoryFilter;
+      this.maybeUpdateFilterForCategory(streamCategory);
+      const filterChanged = this.state.agentCategoryFilter !== previousFilter;
       const matchesFilter =
         this.state.agentCategoryFilter === 'all' ||
         this.state.agentCategoryFilter === category;
       if (!this.state.activeStream && matchesFilter) {
         this.state.activeStream = streamId;
+      }
+      let activeStream: ActiveStreamId | undefined =
+        !this.state.activeStream || this.state.activeStream === streamId
+          ? this.state.activeStream
+          : undefined;
+      if (filterChanged) {
+        const selectableStreams = buildStreamInfos(
+          this.state,
+          this.state.agentCategoryFilter,
+        ).map((stream) => stream.name);
+        const nextActiveStream =
+          selectableStreams.length === 0
+            ? ''
+            : this.state.pickValidActiveStream(selectableStreams);
+        const previousActiveStream = this.state.activeStream;
+        if (nextActiveStream !== previousActiveStream) {
+          this.state.activeStream = nextActiveStream;
+          if (
+            previousActiveStream &&
+            previousActiveStream !== nextActiveStream
+          ) {
+            this.state.releasePreviousActive(previousActiveStream);
+          }
+        }
+        activeStream = nextActiveStream;
       }
       const statusesForRefresh = this.state.streamStatus.getAll();
       statusesForRefresh.set(streamId, status);
@@ -633,10 +662,7 @@ export class ProgressEventHandler {
         statusesForRefresh,
         substatesForRefresh,
         {
-          activeStream:
-            !this.state.activeStream || this.state.activeStream === streamId
-              ? this.state.activeStream
-              : undefined,
+          activeStream,
           agentFilter: this.state.agentCategoryFilter,
         },
       );

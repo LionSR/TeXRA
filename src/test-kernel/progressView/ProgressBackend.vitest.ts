@@ -9,6 +9,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
+  STREAM_PHASE,
   type ProgressViewOutboundMessage,
 } from '@shared/schemas';
 import {
@@ -306,6 +307,107 @@ describe('ProgressBackend', () => {
       }
     } finally {
       subscription.dispose();
+      backend.dispose();
+    }
+  });
+
+  it('does not switch category filters for unknown-category status streams', () => {
+    const messages: ProgressViewOutboundMessage[] = [];
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+    });
+
+    try {
+      backend.state.streamLogs.ensureStream('tool-stream');
+      backend.state.updateStreamHints('tool-stream', {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.getOrCreateStreamState(
+        'tool-stream',
+        AgentCategory.ToolUse,
+      );
+      backend.state.activeStream = 'tool-stream';
+      backend.state.agentCategoryFilter = 'toolUse';
+
+      backend.eventHandler.setStreamStatus(
+        'unknown-stream',
+        STREAM_PHASE.RUNNING,
+      );
+
+      const patch = messages.find(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+          message.streamInfo.name === 'unknown-stream',
+      );
+      expect(backend.state.agentCategoryFilter).toBe('toolUse');
+      expect(backend.state.activeStream).toBe('tool-stream');
+      expect(patch).toMatchObject({
+        agentFilter: 'toolUse',
+        activeStream: undefined,
+        streamInfo: {
+          name: 'unknown-stream',
+          agentCategory: AgentCategory.Workflow,
+        },
+      });
+    } finally {
+      backend.dispose();
+    }
+  });
+
+  it('revalidates the active stream when status registration changes the filter', () => {
+    const messages: ProgressViewOutboundMessage[] = [];
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+    });
+
+    try {
+      backend.state.streamLogs.ensureStream('tool-stream');
+      backend.state.updateStreamHints('tool-stream', {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.getOrCreateStreamState(
+        'tool-stream',
+        AgentCategory.ToolUse,
+      );
+      backend.state.activeStream = 'tool-stream';
+      backend.state.agentCategoryFilter = 'toolUse';
+      backend.state.updateStreamHints('workflow-stream', {
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      backend.eventHandler.setStreamStatus(
+        'workflow-stream',
+        STREAM_PHASE.RUNNING,
+      );
+
+      const patch = messages.find(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+          message.streamInfo.name === 'workflow-stream',
+      );
+      expect(backend.state.agentCategoryFilter).toBe('workflow');
+      expect(backend.state.activeStream).toBe('workflow-stream');
+      expect(patch).toMatchObject({
+        agentFilter: 'workflow',
+        activeStream: 'workflow-stream',
+        streamInfo: {
+          name: 'workflow-stream',
+          agentCategory: AgentCategory.Workflow,
+        },
+      });
+    } finally {
       backend.dispose();
     }
   });
