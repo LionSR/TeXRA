@@ -698,40 +698,58 @@ Every `pollOne` hand-copies the same skeleton per tracked resource: build
 copied verbatim across all three files) → **a seed branch
 (`if (!state.initialized) { …; state.initialized = true; return }` —
 `PRPollingSource.ts:459`, `RepoPollingSource.ts:272`,
-`IssuePollingSource.ts:214`) that is a line-for-line copy of the diff branch
-with the `emit()` calls deleted** → the dedup/trim unit
+`IssuePollingSource.ts:214`) that mirrors the diff branch's seen-id / cursor
+bookkeeping with the `emit()` calls removed** → the dedup/trim unit
 (`seen.has/add` + `shouldDropBotEvent` + `trimSet(…, MAX_SEEN_IDS)` +
 `getNewestTimestamp`, `PRPollingSource.ts:535-574`) repeated once per resource
-(4× PR, 3× Repo, 2× Issue, ~9 copies). The seed↔diff parity is enforced only
-by copy-paste discipline: a fix landed in one branch (e.g. bot filtering) can
-silently miss its seed twin, and each new event resource re-derives the whole
-seed/diff/trim quartet by hand.
+(4× PR, 3× Repo, 2× Issue, ~9 copies). The shared bookkeeping parity is
+enforced only by copy-paste discipline: a fix landed in one branch (e.g. bot
+filtering) can silently miss its seed twin, and each new event resource
+re-derives the whole seed/diff/trim quartet by hand.
+
+Note the seed branch is **not** pure diff-minus-`emit`: it also does
+cursor-specific initialization the diff path doesn't — e.g.
+`RepoPollingSource.ts:280` seeds `prUpdatedAtByNumber` (with a comment
+explaining it prevents a next-tick merge-probe stampede) while the diff path
+delegates mergeability to `probeMergeableStates`. Any consolidation must
+preserve these seed-only init behaviors rather than assume strict parity.
 
 **Fix:** a declarative `DedupedResource<T>` on `PollingSourceBase` owning
 `{ seenIds, sinceCursor }` and exposing `seed(items)` / `diff(items, emit)`, so
-`pollOne` reduces to `resource.seed(data)` (init) or
-`resource.diff(data, c => emit(format(c)))`; wrap the parse-or-skip block in one
+`pollOne`'s shared bookkeeping reduces to `resource.seed(data)` (init) or
+`resource.diff(data, c => emit(format(c)))` — with seed-only side effects
+(cursor pre-seeding) kept as explicit per-resource init, not folded into the
+generic `seed`; wrap the parse-or-skip block in one
 `validateOrSkip(res, schema, label)` base helper; hoist the three identical
 `backoffBaseMs`/`backoffMaxMs`/`maxFailureDurationMs` config literals
 (`PollingSourceBase.ts:45-47`) into a shared default. Warrants its own tracked
 issue — larger than a quick win, independent of the architecture program.
 
-### D2. Edit/Write/TextEditor: the approve-and-write pipeline copied 5× (~60–100 LoC)
+### D2. Edit/Write/TextEditor: the approve-and-write pipeline re-inlined 4× (~60–100 LoC)
 
-The read-gate → approval → write → diff-note sequence is written five times:
+The read-gate → approval → write → diff-note sequence
+(`requireFileReadForEdit` → `requestApprovedEditContent` → reject-check →
+`writeApprovedContent` → `recordToolFileRead` → assemble the
+`{summary, output, userPatch, edits[]}` result) is re-inlined in four places:
 `EditTool.ts` (`:72,:104,:116,:122`), `WriteTool.ts` (`:53,:64,:76,:82`), and
-**three times inside** `TextEditorTool.ts` (str_replace `:302-328`, create
-`:363-410`, insert `:597-624`) — `requireFileReadForEdit` → `requestApprovedEditContent`
-→ reject-check → `writeApprovedContent` → `recordToolFileRead` → assemble the
-`{summary, output, userPatch, edits[]}` result. TextEditorTool's `str_replace`
-is essentially EditTool and its `create` is essentially WriteTool, re-inlined.
-Any change to the approval/return contract must land in five places.
+**twice inside** `TextEditorTool.ts` — `create` (`:302-328`) and `undoEdit`
+(`:597-624`). TextEditorTool's `create` is essentially WriteTool re-inlined;
+`undoEdit` re-inlines it again. Any change to the approval/return contract must
+land in all four.
+
+TextEditorTool's other two edit commands, `strReplace` (`:415`) and `insert`
+(`:508`), have **already** factored the pipeline into the in-file helpers
+`prepareEditContent` (`:356`) and `approveAndWriteEdit` (`:380`) — they are the
+consolidated precedent, not additional copies. The real target is to promote
+that in-file helper to a cross-tool one so `create`/`undoEdit`, EditTool, and
+WriteTool all route through it.
 
 This is **distinct from F5 (#6975)**, which fixes the `ToolResult` _status
-contract_; F5 does not dedupe this execution pipeline. **Fix:** one
+contract_; F5 does not dedupe this execution pipeline. **Fix:** one shared
 `applyApprovedEdit({path, originalContent, proposedContent, sourceTool})` helper
-returning the assembled result; each command computes only `proposedContent` and
-delegates. Best landed alongside F5 while these files are open.
+(generalizing TextEditorTool's existing `approveAndWriteEdit`); each command
+computes only `proposedContent` and delegates. Best landed alongside F5 while
+these files are open.
 
 ### D3. Extends A1/F3 — two model-handler hoists it does not name
 
@@ -745,14 +763,27 @@ capabilities) leaves two adjacent copy-paste seams untouched:
   `openRouterNative:281` (the "parity with the other streaming providers"
   comments admit it). A protected `runProgressStreaming()` template method on
   `ModelHandler` would own stream creation + the try/finally finalize + the
-  catch block; providers pass only their per-chunk `consume`.
-- **Byte-identical message construction, OpenAI ↔ OpenRouterNative.**
+  catch block; providers pass only their per-chunk `consume`. **Carve-out:**
+  `modelHandlerOpenAIResponse` is not pure catch-and-annotate — before the
+  outer catch it can recover the Responses-API result via
+  `retrieveAfterUnhandledStreamEvent` (`:1896,:1966,:1973`) and finalize
+  normally. The template must expose an optional provider `recover(streamError)`
+  hook (default: none) so a Responses stream interrupt still recovers rather
+  than being forced straight to `annotateStreamFailure`.
+- **Near-identical message construction, OpenAI ↔ OpenRouterNative.**
   `initializeMessages` / `createRoundMessages` / `createUserFollowUpMessages`
-  are the same algorithm line-for-line (`openai:674,:741,:777` vs
-  `openRouterNative:362,:425,:457`); OpenRouter's message model _is_ the OpenAI
-  chat shape (~120–160 LoC). Extract a shared `openAiCompatibleMessages` helper
-  into the existing `src/agent/modelHandlers/support/` collaborator directory
-  (alongside `UsageNormalizer`, `MediaAttachmentProcessor`).
+  run the same algorithm (`openai:674,:741,:777` vs
+  `openRouterNative:362,:425,:457`); OpenRouter's message model has the OpenAI
+  chat shape (~120–160 LoC). It is **not** byte-identical — the media-failure
+  log call diverges (`openai:757` `logSdkError` vs `openRouterNative:441`
+  `this.logger.error`) and a prior audit explicitly rejected treating the
+  OpenRouter SDK surface as the OpenAI base over real type/shape differences.
+  So the hoist is a shared helper over the **truly common algorithmic pieces**
+  (role selection, media-append gating, "append to last user message vs new"),
+  parameterized on the per-provider message/part types and the error-log call —
+  not a merge that re-couples the two SDK surfaces. Extract into the existing
+  `src/agent/modelHandlers/support/` collaborator directory (alongside
+  `UsageNormalizer`, `MediaAttachmentProcessor`).
 
 Fold both into F3's sub-debt list rather than tracking separately.
 
@@ -764,11 +795,21 @@ Fold both into F3's sub-debt list rather than tracking separately.
 find package` triad → find native binary → append WSL hint) that
   `probeSdkBinaryAvailable` (`:205`) already shares for their `check`. Add a
   matching `describeSdkTool({importSdk, findBinary, pkgName, …})` helper.
-- **Reasoning-gate reimplemented vs the base helper (~20–40 LoC).** The one-shot
+- **Reasoning-gate: only the one-shot guard is duplicated, not the payload
+  (~20–40 LoC).** The guard
   `if (workspaceState && !workspaceState.reasoning.thinkingAdded) { …; thinkingAdded = true }`
-  guard is inlined in `anthropic:1234`, `googleGenAI:801`,
-  `googleInteractions:1001` even though `ModelHandler.applyStringReasoningToWorkspaceState`
-  (`:1241`) already encapsulates it (OpenAI/OpenRouter use it). Fold into F4.
+  is inlined in `anthropic:1234`, `googleGenAI:801`, `googleInteractions:1001`.
+  But these are **not** foldable into the string-only base helper
+  `ModelHandler.applyStringReasoningToWorkspaceState` (`:1241`), which stores a
+  plain `{ type: 'thinking', thinking: string }` block (correct for
+  OpenAI/OpenRouter). The structured providers legitimately store richer,
+  continuation-critical payloads the string helper would discard —
+  Anthropic keeps the full SDK `thinkingBlocks` (`:1241-1244`) and Gemini keeps
+  per-part `thoughtSignature` (`googleGenAI:802-806`). The duplication is only
+  the guard-and-set-once bookkeeping, so the fix is a typed
+  `applyReasoningBlocks(blocks, workspaceState)` that takes already-constructed
+  provider blocks and applies the one-shot guard — **not** routing these through
+  the string helper. Fold into F4, scoped to the guard only.
 
 ---
 
