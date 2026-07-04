@@ -9,8 +9,6 @@ import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { clamp } from '@utils/core';
 import { formatPercent } from '@utils/text/stringUtils';
 
-import { profileViewStyles } from './styles';
-
 const WARNING_THRESHOLD_PCT = 80;
 
 type QuotaState = 'ok' | 'warning' | 'exhausted';
@@ -41,7 +39,6 @@ function quotaNote(
 export class RelayQuotaMeter extends LitElement {
   static override styles = [
     designTokens,
-    profileViewStyles,
     css`
       :host {
         display: block;

@@ -14,7 +14,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import {
   commonViewStyles,
   designTokens,
-  requestPanelStyles,
+  requestPanelSharedStyles,
 } from '@shared/styles';
 
 // Local imports - shared schemas
@@ -25,9 +25,17 @@ import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
 
+// Local imports - styles
+import { retryRequestPanelStyles } from './RetryRequestPanel.styles';
+
 @customElement('retry-request-panel')
 export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
-  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    requestPanelSharedStyles,
+    retryRequestPanelStyles,
+  ];
 
   override handleKeyboardShortcut(key: string): boolean {
     const data = this.permission.data;
