@@ -198,6 +198,13 @@ describe('OpenAI model handler routing', () => {
     requiresResponsesAPI: true,
   };
 
+  const signedInCodexSession = (): CodexSession => ({
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    expiresAtMs: Date.now() + 60_000,
+    accountId: 'account-id',
+  });
+
   it('keeps Codex-eligible subscription models on the Responses compatibility key', async () => {
     await initFakePlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
@@ -235,12 +242,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('preserves the API fullName on Codex handler config even when shortName is absent', async () => {
-    const codexSession: CodexSession = {
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      expiresAtMs: Date.now() + 60_000,
-      accountId: 'account-id',
-    };
+    const codexSession = signedInCodexSession();
     await initFakePlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
       secrets: {
@@ -263,12 +265,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('uses the Codex endpoint for a signed-in preferred subscription even when relay access is selected', async () => {
-    const codexSession: CodexSession = {
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      expiresAtMs: Date.now() + 60_000,
-      accountId: 'account-id',
-    };
+    const codexSession = signedInCodexSession();
     await initFakePlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
       globalState: { 'texra.useIncludedModelAccess': true },
@@ -290,12 +287,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('does not let the Codex subscription override an explicit legacy OpenAI compatibility key', async () => {
-    const codexSession: CodexSession = {
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      expiresAtMs: Date.now() + 60_000,
-      accountId: 'account-id',
-    };
+    const codexSession = signedInCodexSession();
     await initFakePlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
       secrets: {
@@ -318,12 +310,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('keeps Responses-compatible resumes on the Codex endpoint when subscription access is preferred', async () => {
-    const codexSession: CodexSession = {
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      expiresAtMs: Date.now() + 60_000,
-      accountId: 'account-id',
-    };
+    const codexSession = signedInCodexSession();
     await initFakePlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
       globalState: {

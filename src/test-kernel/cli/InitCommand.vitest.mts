@@ -65,8 +65,15 @@ function modelAccess(
   };
 }
 
-async function makeTempProject(): Promise<string> {
-  return fs.mkdtemp(path.join(os.tmpdir(), 'texra-init-test-'));
+async function withTempProject<T>(
+  run: (root: string) => Promise<T>,
+): Promise<T> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-init-test-'));
+  try {
+    return await run(root);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 }
 
 function expectUnavailableDefaultRecovery(output: string): void {
@@ -248,8 +255,7 @@ describe('CLI init command', () => {
   });
 
   it('emits valid NDJSON for non-interactive init', async () => {
-    const root = await makeTempProject();
-    try {
+    await withTempProject(async (root) => {
       const workspaceRoot = await fs.realpath(root);
       const result = await runCli([
         '--cwd',
@@ -304,14 +310,11 @@ describe('CLI init command', () => {
       await expect(
         fs.readFile(path.join(root, '.gitignore'), 'utf8'),
       ).resolves.toBe('.texra/\n');
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('keeps the legacy text init summary for human output', async () => {
-    const root = await makeTempProject();
-    try {
+    await withTempProject(async (root) => {
       const workspaceRoot = await fs.realpath(root);
       const result = await runCli([
         '--cwd',
@@ -332,9 +335,7 @@ describe('CLI init command', () => {
       );
       expect(stdout).toContain('  agent: assistant');
       expect(stdout).toContain('Next: run `texra` for the launcher');
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('points non-interactive init at model recovery when the default model is unavailable', async () => {
@@ -350,8 +351,7 @@ describe('CLI init command', () => {
         },
       }),
     ]);
-    const root = await makeTempProject();
-    try {
+    await withTempProject(async (root) => {
       const result = await runCli([
         '--cwd',
         root,
@@ -366,9 +366,7 @@ describe('CLI init command', () => {
       expect(result.exitCode).toBe(0);
       expect(stderr).toBe('');
       expectUnavailableDefaultRecovery(stdout);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('points init at model recovery when the fallback default has no access entry', async () => {
@@ -384,8 +382,7 @@ describe('CLI init command', () => {
         },
       }),
     ]);
-    const root = await makeTempProject();
-    try {
+    await withTempProject(async (root) => {
       const result = await runCli([
         '--cwd',
         root,
@@ -400,8 +397,6 @@ describe('CLI init command', () => {
       expect(result.exitCode).toBe(0);
       expect(stderr).toBe('');
       expectUnavailableDefaultRecovery(stdout);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 });

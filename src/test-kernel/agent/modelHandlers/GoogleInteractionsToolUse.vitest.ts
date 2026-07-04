@@ -105,6 +105,21 @@ function fakeClient(events: Interactions.InteractionSSEEvent[]): unknown {
   };
 }
 
+/** Drive a single `createResponse` round from a canned SSE event list, using
+ * the single-turn "go" user message every non-store:false test in this file
+ * sends. */
+function createGoResponse(
+  handler: ModelHandlerGoogleInteractions,
+  events: Interactions.InteractionSSEEvent[],
+) {
+  return handler.createResponse({
+    client: fakeClient(events) as never,
+    messages: [{ type: 'user_input', content: [{ type: 'text', text: 'go' }] }],
+    temperature: 0,
+    tools: [],
+  });
+}
+
 describe('ModelHandlerGoogleInteractions tool use', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -162,14 +177,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       },
     ];
 
-    const result = await handler.createResponse({
-      client: fakeClient(events) as never,
-      messages: [
-        { type: 'user_input', content: [{ type: 'text', text: 'go' }] },
-      ],
-      temperature: 0,
-      tools: [],
-    });
+    const result = await createGoResponse(handler, events);
 
     const calls = handler.extractToolUse(result.response);
     expect(calls).toHaveLength(2);
@@ -228,16 +236,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     ];
 
     const workspace = fakeWorkspace();
-    const response = (
-      await handler.createResponse({
-        client: fakeClient(events) as never,
-        messages: [
-          { type: 'user_input', content: [{ type: 'text', text: 'go' }] },
-        ],
-        temperature: 0,
-        tools: [],
-      })
-    ).response;
+    const response = (await createGoResponse(handler, events)).response;
 
     // Mirror the cycle: reasoning is captured into the workspace before dispatch.
     handler.processThinkingBlock(response, workspace);
@@ -384,14 +383,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       },
     ];
 
-    const result = await handler.createResponse({
-      client: fakeClient(events) as never,
-      messages: [
-        { type: 'user_input', content: [{ type: 'text', text: 'go' }] },
-      ],
-      temperature: 0,
-      tools: [],
-    });
+    const result = await createGoResponse(handler, events);
 
     const calls = handler.extractToolUse(result.response);
     expect(calls).toHaveLength(1);
@@ -458,16 +450,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       },
     ];
 
-    const response = (
-      await handler.createResponse({
-        client: fakeClient(events) as never,
-        messages: [
-          { type: 'user_input', content: [{ type: 'text', text: 'go' }] },
-        ],
-        temperature: 0,
-        tools: [],
-      })
-    ).response;
+    const response = (await createGoResponse(handler, events)).response;
 
     const workspace = fakeWorkspace();
     handler.processThinkingBlock(response, workspace);
