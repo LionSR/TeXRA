@@ -233,9 +233,9 @@ async function writeThreadManifest(
   manifest: ExternalInquiryThreadManifest,
 ): Promise<void> {
   await GlobalStorageFS.ensureDir(threadDir(manifest.threadId));
-  await GlobalStorageFS.writeJson(
+  await GlobalStorageFS.writeAtomic(
     threadManifestPath(manifest.threadId),
-    manifest,
+    JSON.stringify(manifest, null, 2),
   );
 }
 
