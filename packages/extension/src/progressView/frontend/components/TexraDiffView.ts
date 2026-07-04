@@ -3,9 +3,6 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 
-// Local imports - errors
-import { extractErrorMessage } from '@common/errors';
-
 // Local imports - shared modules
 import { themeContext } from '@shared/BaseWebviewApp';
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -13,6 +10,9 @@ import { DESKTOP_THEME_KIND } from '@shared/constants/desktopTheme';
 
 // Local imports - shared Web Awesome helpers
 import { renderLoadingState } from '@shared/wa/loadingState';
+
+// Local imports - errors
+import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 type MonacoModule = typeof import('monaco-editor/esm/vs/editor/editor.api.js');
 type MonacoWorkerModule = { default: new () => Worker };
