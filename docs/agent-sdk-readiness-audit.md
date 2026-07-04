@@ -3124,12 +3124,17 @@ remove.
   only; the functional `debug/info/warn/error` API is the deep `@logger/logUtils` path, ~70+ callers — the
   barrel still misrepresents its module). Low, cosmetic.
 - **P25-5 (Anthropic inline compaction-threshold read) — unchanged, present**
-  (`modelHandlerAnthropic.ts:512` still reads `texra.model.compactionThresholdPercent` inline instead of the
+  (`modelHandlerAnthropic.ts` still reads `texra.model.compactionThresholdPercent` inline instead of the
   base `getCompactionThresholdPercent()`). One-line DRY when next touching the file. **False positive to
   record:** a review bot (`texra-review`, deepseek) claimed `getCompactionThresholdPercent` "does not exist
-  anywhere" — verified **wrong first-hand**: it is defined `protected` at `ModelHandler.ts:864` and called in
-  6 places (`ModelHandler.ts:881`, `modelHandlerOpenAI.ts:571`, `modelHandlerOpenAIResponse.ts:757/789/1449`).
-  The method exists; the inline Anthropic read genuinely bypasses it. Claim stands as written.
+  anywhere" — verified **wrong first-hand**: `grep -rn getCompactionThresholdPercent src/agent/modelHandlers`
+  finds it defined `protected` on the base `ModelHandler` and called from **5 sites** — one in
+  `ModelHandler` itself and four across `modelHandlerOpenAI` / `modelHandlerOpenAIResponse`. The method
+  exists; the inline Anthropic read genuinely bypasses it. Claim stands. _(Exact line numbers are omitted
+  deliberately: this shallow branch checks out at `1ab46ab`, but the reviewers see the PR's merge-with-main
+  state where `ModelHandler.ts` sits ~56 lines lower — the method is at `:864` on this branch and `:920` on
+  the merged tree, both correct to their own checkout. A grep by symbol name is stable across both; line
+  pins are not.)_
 - **P25-6 (registry one-time migrations on the lookup hot-path) — unchanged** (not re-inspected in depth this
   pass; carried forward as recorded).
 
