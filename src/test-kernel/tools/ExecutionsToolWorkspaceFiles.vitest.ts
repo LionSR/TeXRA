@@ -57,6 +57,18 @@ const config = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
+/** Creates a temp workspace dir for the test body, then always removes it. */
+async function withTempWorkspace(
+  run: (workspace: string) => Promise<void>,
+): Promise<void> {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'texra-exec-files-'));
+  try {
+    await run(workspace);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+}
+
 describe('ExecutionsTool', () => {
   beforeEach(async () => {
     const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
@@ -217,8 +229,7 @@ describe('ExecutionsTool', () => {
   });
 
   it('lists and reads persisted workspace files for tool-use executions', async () => {
-    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-exec-files-'));
-    try {
+    await withTempWorkspace(async (workspace) => {
       await writeFile(path.join(workspace, 'review.md'), '# report\n');
       mocks.readConfig.mockResolvedValue({
         ...config,
@@ -239,14 +250,11 @@ describe('ExecutionsTool', () => {
         'Read /executions/abc123/workspace-files/review.md',
       );
       expect(readResult.output).toContain('# report');
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
-    }
+    });
   });
 
   it('refuses unrecorded workspace file reads', async () => {
-    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-exec-files-'));
-    try {
+    await withTempWorkspace(async (workspace) => {
       await writeFile(path.join(workspace, 'secret.md'), 'secret');
       mocks.readConfig.mockResolvedValue({
         ...config,
@@ -260,14 +268,11 @@ describe('ExecutionsTool', () => {
 
       expect(result.isError).toBe(true);
       expect(result.error).toContain('Workspace file not found');
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
-    }
+    });
   });
 
   it('reads recorded files inside a top-level workspace directory', async () => {
-    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-exec-files-'));
-    try {
+    await withTempWorkspace(async (workspace) => {
       await mkdir(path.join(workspace, 'workspace'));
       await writeFile(path.join(workspace, 'review.md'), 'wrong');
       await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');
@@ -286,8 +291,6 @@ describe('ExecutionsTool', () => {
       );
       expect(result.output).toContain('nested');
       expect(result.output).not.toContain('wrong');
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
-    }
+    });
   });
 });

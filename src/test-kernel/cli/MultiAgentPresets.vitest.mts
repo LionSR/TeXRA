@@ -36,6 +36,10 @@ function agent(
   };
 }
 
+function findPreset(id: string) {
+  return findCliMultiAgentPreset(cliMultiAgentPresets(undefined), id)!;
+}
+
 describe('CLI multi-agent presets', () => {
   it('lists planned built-in team presets with stable counts', () => {
     const presets = cliMultiAgentPresets(undefined);
@@ -68,10 +72,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('lists missing preset members as unavailable when no team can launch', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -93,10 +94,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('omits the login recovery hint after a remote agent load was attempted', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -114,10 +112,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('marks missing team roots as unavailable', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -135,10 +130,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('keeps degraded presets launchable when they still have delegation', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -152,10 +144,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('formats compact launcher summaries from planned availability', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [agent('correct', AgentCategory.Workflow)],
       toolUseAgents: [
@@ -174,10 +163,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('formats run warnings from planned missing team members', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -193,10 +179,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('omits degraded run warnings when only the root is available', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -210,10 +193,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('marks complete built-in teams available', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: preset.workflowAgents.map((name) =>
         agent(name, AgentCategory.Workflow),
@@ -235,10 +215,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('launches the software-engineer team on its bundled engineer root', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'software-engineer',
-    )!;
+    const preset = findPreset('software-engineer');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: preset.toolUseAgents.map((name) =>
@@ -261,10 +238,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('keeps unavailable preset facts separate from launcher guidance', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [],
@@ -281,10 +255,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('formats team launch block messages from the planned preset state', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
@@ -302,10 +273,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('formats explicit non-delegating team roots without old fallback wording', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'mathematician',
-    )!;
+    const preset = findPreset('mathematician');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
@@ -325,10 +293,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('rejects launch block message formatting for launchable plans', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: preset.toolUseAgents.map((name) =>
@@ -380,10 +345,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('serializes planned availability for machine-readable list output', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -420,10 +382,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('includes planned availability in ndjson preset records', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
@@ -516,10 +475,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('formats an inspection plan with root and missing members', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [
         agent('correct', AgentCategory.Workflow),
@@ -559,10 +515,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('omits inspection login recovery hint after a remote agent load was attempted', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [agent('review', AgentCategory.ToolUse)],
@@ -577,10 +530,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('plans a preset run with canonical visibility keys and an orchestrator root', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [
         agent('correct', AgentCategory.Workflow),
@@ -605,10 +555,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('flags a gap when a built-in preset has members but no root', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     // A local-only registry can expose team members before relay-served
     // orchestrators are available. The members should still count as available,
     // but they should not be promoted to the built-in team root.
@@ -622,10 +569,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('does not select built-in team specialists as implicit roots', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -646,10 +590,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('keeps delegating built-in specialists as members instead of roots', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -756,10 +697,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('reports no gaps when every preset member resolves', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: preset.toolUseAgents.map((name) =>
@@ -777,10 +715,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('flags a gap when no root agent can be selected', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [],
@@ -791,10 +726,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('adds an explicit root override to the visible tool-use team', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -819,10 +751,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('allows a preset member when explicitly requested as the root', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
+    const preset = findPreset('physicist');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
@@ -837,10 +766,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('tracks a missing root override as a plan gap', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
+    const preset = findPreset('lean-project');
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: preset.toolUseAgents.map((name) =>

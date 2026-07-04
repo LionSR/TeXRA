@@ -94,6 +94,57 @@ function createDeferred(): {
   return { promise, resolve };
 }
 
+type RendererListener = (
+  event: { sender: unknown },
+  message: unknown,
+) => void;
+
+function createIpcMainMock(onMessage: (listener: RendererListener) => void) {
+  return {
+    on: vi.fn((_channel: string, listener: RendererListener) => {
+      onMessage(listener);
+    }),
+    off: vi.fn(),
+  };
+}
+
+function createNativeThemeMock(
+  options: {
+    shouldUseDarkColors?: boolean;
+    shouldUseHighContrastColors?: boolean;
+    onUpdated?: (listener: () => void) => void;
+  } = {},
+) {
+  return {
+    shouldUseDarkColors: options.shouldUseDarkColors ?? false,
+    shouldUseHighContrastColors: options.shouldUseHighContrastColors ?? false,
+    on: vi.fn((_event: 'updated', listener: () => void) => {
+      options.onUpdated?.(listener);
+    }),
+    off: vi.fn(),
+  };
+}
+
+function createWindowMock(
+  sends: Array<{ channel: string; message: unknown }>,
+  onClosed?: (listener: () => void) => void,
+) {
+  const webContents = {
+    isDestroyed: () => false,
+    send: vi.fn((channel: string, message: unknown) =>
+      sends.push({ channel, message }),
+    ),
+  };
+  const window = {
+    isDestroyed: () => false,
+    once: vi.fn((_event: 'closed', listener: () => void) => {
+      onClosed?.(listener);
+    }),
+    webContents,
+  };
+  return { window, webContents };
+}
+
 describe('desktop main-view IPC', () => {
   afterEach(() => {
     vi.doUnmock('electron');
@@ -103,23 +154,17 @@ describe('desktop main-view IPC', () => {
   });
 
   it('pushes theme and debug state over the fixed host bridge channel', async () => {
-    let rendererListener:
-      ((event: { sender: unknown }, message: unknown) => void) | undefined;
+    let rendererListener: RendererListener | undefined;
     let themeListener: (() => void) | undefined;
-    const ipcMain = {
-      on: vi.fn((channel, listener) => {
-        rendererListener = listener;
-      }),
-      off: vi.fn(),
-    };
-    const nativeTheme = {
+    const ipcMain = createIpcMainMock((listener) => {
+      rendererListener = listener;
+    });
+    const nativeTheme = createNativeThemeMock({
       shouldUseDarkColors: true,
-      shouldUseHighContrastColors: false,
-      on: vi.fn((_event: 'updated', listener: () => void) => {
+      onUpdated: (listener) => {
         themeListener = listener;
-      }),
-      off: vi.fn(),
-    };
+      },
+    });
     const {
       ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
       ELECTRON_WEBVIEW_PUSH_CHANNEL,
@@ -145,18 +190,10 @@ describe('desktop main-view IPC', () => {
       ),
     };
     const executeAgent = vi.fn(async (_message: unknown) => {});
-    const webContents = {
-      isDestroyed: () => false,
-      send: vi.fn((channel, message) => sends.push({ channel, message })),
-    };
     const closedListeners: Array<() => void> = [];
-    const window = {
-      isDestroyed: () => false,
-      once: vi.fn((_event: 'closed', listener: () => void) => {
-        closedListeners.push(listener);
-      }),
-      webContents,
-    };
+    const { window, webContents } = createWindowMock(sends, (listener) => {
+      closedListeners.push(listener);
+    });
 
     const ipc = installDesktopMainViewIpc(window, {
       debugMode: true,
@@ -397,32 +434,15 @@ describe('desktop main-view IPC', () => {
   });
 
   it('uses desktop auth status when posting main-view startup login state', async () => {
-    let rendererListener:
-      ((event: { sender: unknown }, message: unknown) => void) | undefined;
-    const ipcMain = {
-      on: vi.fn((channel, listener) => {
-        rendererListener = listener;
-      }),
-      off: vi.fn(),
-    };
-    const nativeTheme = {
-      shouldUseDarkColors: false,
-      shouldUseHighContrastColors: false,
-      on: vi.fn(),
-      off: vi.fn(),
-    };
+    let rendererListener: RendererListener | undefined;
+    const ipcMain = createIpcMainMock((listener) => {
+      rendererListener = listener;
+    });
+    const nativeTheme = createNativeThemeMock();
     const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
       await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
     const sends: Array<{ channel: string; message: unknown }> = [];
-    const webContents = {
-      isDestroyed: () => false,
-      send: vi.fn((channel, message) => sends.push({ channel, message })),
-    };
-    const window = {
-      isDestroyed: () => false,
-      once: vi.fn(),
-      webContents,
-    };
+    const { window, webContents } = createWindowMock(sends);
 
     installDesktopMainViewIpc(window, {
       getAuthStatus: async () => ({ authenticated: true }),
@@ -468,20 +488,11 @@ describe('desktop main-view IPC', () => {
   });
 
   it('waits for desktop model-list refresh before posting main-view model options', async () => {
-    let rendererListener:
-      ((event: { sender: unknown }, message: unknown) => void) | undefined;
-    const ipcMain = {
-      on: vi.fn((channel, listener) => {
-        rendererListener = listener;
-      }),
-      off: vi.fn(),
-    };
-    const nativeTheme = {
-      shouldUseDarkColors: false,
-      shouldUseHighContrastColors: false,
-      on: vi.fn(),
-      off: vi.fn(),
-    };
+    let rendererListener: RendererListener | undefined;
+    const ipcMain = createIpcMainMock((listener) => {
+      rendererListener = listener;
+    });
+    const nativeTheme = createNativeThemeMock();
     const modelListRefresh = createDeferred();
     vi.doMock('@agent/index/agentRegistry', () => ({
       computeAgentOptionsData: vi.fn(async () => ({
@@ -495,15 +506,7 @@ describe('desktop main-view IPC', () => {
     const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
       await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
     const sends: Array<{ channel: string; message: unknown }> = [];
-    const webContents = {
-      isDestroyed: () => false,
-      send: vi.fn((channel, message) => sends.push({ channel, message })),
-    };
-    const window = {
-      isDestroyed: () => false,
-      once: vi.fn(),
-      webContents,
-    };
+    const { window, webContents } = createWindowMock(sends);
 
     installDesktopMainViewIpc(window, {
       modelListRefresh: modelListRefresh.promise,

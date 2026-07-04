@@ -143,15 +143,12 @@ describe('OpenAI Responses background abort handling', () => {
       } as unknown as AgentTrace,
     });
 
-    let thrown: unknown;
-    try {
-      await target.waitForBackgroundCompletion(
+    const thrown = await target
+      .waitForBackgroundCompletion(
         { responses: { retrieve: vi.fn() } } as unknown as OpenAI,
         { id: 'resp_timeout', status: 'in_progress' },
-      );
-    } catch (err) {
-      thrown = err;
-    }
+      )
+      .catch((err: unknown) => err);
 
     expect(thrown).toBeInstanceOf(Error);
     expect(requiresFlowAutoRetry(thrown)).toBe(true);
