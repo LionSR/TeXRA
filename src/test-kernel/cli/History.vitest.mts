@@ -46,7 +46,7 @@ vi.mock('@agent/storage', async () => {
 });
 
 vi.mock('@utils/files/taskRunStorage', () => ({
-  resolveStoragePath: vi.fn(async () => undefined),
+  findExistingRunStoragePath: vi.fn(async () => undefined),
 }));
 
 vi.mock('@cli/runtime/toolUseResumeData', () => ({
