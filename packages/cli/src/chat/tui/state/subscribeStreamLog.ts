@@ -137,11 +137,10 @@ function entriesEqual(
   ) {
     return false;
   }
-  if (prev.role === 'tool') {
-    if (!prev.toolUse || !next.toolUse) return prev.toolUse === next.toolUse;
+  if (prev.role === 'tool' && next.role === 'tool') {
     return toolUseEqual(prev.toolUse, next.toolUse);
   }
-  if (prev.role === 'process') {
+  if (prev.role === 'process' && next.role === 'process') {
     return prev.process === next.process;
   }
   return true;
@@ -149,14 +148,14 @@ function entriesEqual(
 
 function logEntryRole(
   messageType: string | undefined,
-): ConversationEntry['role'] {
+): 'assistant' | 'error' | 'user' {
   if (messageType === MESSAGE_TYPES.USER_MESSAGE) return 'user';
   if (messageType === MESSAGE_TYPES.ERROR) return 'error';
   return 'assistant';
 }
 
 function renderLogEntryText(
-  role: ConversationEntry['role'],
+  role: 'assistant' | 'error' | 'user',
   text: string,
 ): string {
   switch (role) {
@@ -168,8 +167,6 @@ function renderLogEntryText(
       return appendCliApiSwitchHint(text);
     case 'user':
       return summarizeFollowupMessage(text);
-    default:
-      return text;
   }
 }
 
@@ -181,7 +178,7 @@ function renderLogEntry(
     // Cache hit: same `data` reference as last sync, no re-normalize.
     // Promotion to `<Static>` is decided later by `finalizeSettledPrefix`
     // over the ordered slice, so a cache hit just returns `prev` as-is.
-    if (prev?.toolUse && toolUseSourceCache.get(prev) === entry.data) {
+    if (prev?.role === 'tool' && toolUseSourceCache.get(prev) === entry.data) {
       return prev;
     }
 

@@ -67,7 +67,7 @@ const SESSION_META = {
 
 function entry(
   id: string,
-  role: ConversationEntry['role'],
+  role: 'assistant' | 'error' | 'user',
   text: string,
   finalized: boolean,
 ): ConversationEntry {
@@ -78,7 +78,7 @@ function toolEntry(
   id: string,
   status: NormalizedToolUse['status'],
   outputText = status === 'completed' ? 'ok' : '',
-): ConversationEntry {
+): Extract<ConversationEntry, { role: 'tool' }> {
   return {
     id,
     role: 'tool',
@@ -99,7 +99,10 @@ function toolEntry(
   };
 }
 
-function compactExecutionsEntry(id: string, path: string): ConversationEntry {
+function compactExecutionsEntry(
+  id: string,
+  path: string,
+): Extract<ConversationEntry, { role: 'tool' }> {
   return {
     id,
     role: 'tool',
@@ -120,7 +123,9 @@ function compactExecutionsEntry(id: string, path: string): ConversationEntry {
   };
 }
 
-function processEntry(id: string): ConversationEntry {
+function processEntry(
+  id: string,
+): Extract<ConversationEntry, { role: 'process' }> {
   return {
     id,
     role: 'process',
