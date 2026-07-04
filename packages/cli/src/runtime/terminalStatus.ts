@@ -7,6 +7,7 @@ import {
 } from '@common/constants/streamStatus';
 import {
   EXECUTION_STATUS,
+  executionStatusToRunOutcome,
   type ExecutionStatus,
   type RunOutcome,
 } from '@shared/schemas';
@@ -60,19 +61,24 @@ export function cliTerminalStatus(
 export function createCliRunResult<T extends ExecuteAgentResult>(
   result: T,
   extras: {
+    readonly terminalStatus?: ExecutionStatus;
     readonly workingDirectory?: string;
     readonly runDirectory?: string;
     readonly copiedOutput?: string;
     readonly copiedOutputs?: string[];
   } = {},
 ): T extends ExecuteAgentResult ? CliRunResultFor<T> : never {
-  const terminalStatus = runOutcomeToExecutionStatus(result.outcome);
+  const { terminalStatus: resolvedTerminalStatus, ...metadata } = extras;
+  const terminalStatus =
+    resolvedTerminalStatus ?? runOutcomeToExecutionStatus(result.outcome);
+  const terminalOutcome =
+    executionStatusToRunOutcome(terminalStatus) ?? result.outcome;
   return {
     ...result,
     status: terminalStatus,
-    endGroupStatus: legacyEndGroupStatusForOutcome(result.outcome),
+    endGroupStatus: legacyEndGroupStatusForOutcome(terminalOutcome),
     terminalStatus,
-    ...extras,
+    ...metadata,
   } as T extends ExecuteAgentResult ? CliRunResultFor<T> : never;
 }
 
