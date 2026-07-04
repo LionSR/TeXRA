@@ -3,6 +3,10 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -26,6 +30,7 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
+  STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
   type StorageKey,
@@ -200,7 +205,7 @@ describe('runFlowWithLifecycle', () => {
           fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
         ).toBe(expectedDone);
       } finally {
-        streamStatus.clear(streamId, { emit: false });
+        clearStreamStatusForTest(streamStatus, streamId);
       }
     });
   }
@@ -211,9 +216,11 @@ describe('runFlowWithLifecycle', () => {
     );
 
     try {
-      StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
-        emit: false,
-      });
+      seedStreamStatusForTest(
+        StreamStatusService,
+        streamId,
+        STREAM_STATUS.WAITING,
+      );
 
       // The lifecycle owns the whole transition (RUNNING on entry, terminal
       // on exit) against the ctx-owned registry; the module-global
@@ -225,11 +232,60 @@ describe('runFlowWithLifecycle', () => {
         streamId,
       }));
 
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
       expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.WAITING);
     } finally {
-      streamStatus.clear(streamId, { emit: false });
-      StreamStatusService.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
+      clearStreamStatusForTest(StreamStatusService, streamId);
+    }
+  });
+
+  it('admits run start from a stale terminal phase via resume semantics', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-stale-terminal-start',
+    );
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.FAILED);
+
+      await runFlowWithLifecycle(ctx, async () => {
+        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+        return {
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+        };
+      });
+
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('clears a stale resuming substate when a resumed run starts', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-resuming-substate-start',
+    );
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RESUMING);
+
+      await runFlowWithLifecycle(ctx, async () => {
+        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+        expect(streamStatus.getSubstate(streamId)).toBeUndefined();
+        return {
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+        };
+      });
+
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 
@@ -253,11 +309,11 @@ describe('runFlowWithLifecycle', () => {
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(onError).toHaveBeenCalledOnce();
       expect(onError.mock.calls[0][1]).toEqual(result);
     } finally {
-      streamStatus.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 
@@ -279,12 +335,12 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.ERROR);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
       expect(onError).toHaveBeenCalledOnce();
       expect(executionRegistry.getHandle(executionId)).toBeUndefined();
     } finally {
       executionRegistry.untrack(executionId);
-      streamStatus.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 
@@ -298,19 +354,19 @@ describe('runFlowWithLifecycle', () => {
         outcome: RUN_OUTCOME.COMPLETED,
         terminal: EXECUTION_STATUS.COMPLETED,
         stageEnd: 'stopped',
-        stream: STREAM_STATUS.STOPPED,
+        stream: STREAM_PHASE.COMPLETED,
       },
       {
         outcome: RUN_OUTCOME.CANCELLED,
         terminal: EXECUTION_STATUS.INTERRUPTED,
         stageEnd: 'stopped',
-        stream: STREAM_STATUS.STOPPED,
+        stream: STREAM_PHASE.CANCELLED,
       },
       {
         outcome: RUN_OUTCOME.FAILED,
         terminal: EXECUTION_STATUS.ERROR,
         stageEnd: 'error',
-        stream: STREAM_STATUS.ERROR,
+        stream: STREAM_PHASE.FAILED,
       },
     ] as const;
 
@@ -337,7 +393,7 @@ describe('runFlowWithLifecycle', () => {
         expect(stageEnd).toHaveBeenCalledWith(expected.stageEnd);
         expect(streamStatus.get(streamId)).toBe(expected.stream);
       } finally {
-        streamStatus.clear(streamId, { emit: false });
+        clearStreamStatusForTest(streamStatus, streamId);
       }
     }
   });
@@ -360,9 +416,9 @@ describe('runFlowWithLifecycle', () => {
         EXECUTION_STATUS.INTERRUPTED,
       );
       expect(stageEnd).toHaveBeenCalledWith('stopped');
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
     } finally {
-      streamStatus.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 
@@ -385,9 +441,30 @@ describe('runFlowWithLifecycle', () => {
         EXECUTION_STATUS.ERROR,
       );
       expect(stageEnd).toHaveBeenCalledWith('error');
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.ERROR);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
     } finally {
-      streamStatus.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('terminalizes a waiting stream when the lifecycle catch path fails', async () => {
+    const { streamId, streamStatus, ctx } = lifecycleFixture(
+      'outcome-waiting-thrown-error',
+    );
+
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => {
+          expect(
+            streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait'),
+          ).toBe(true);
+          throw new Error('wait node failed');
+        }),
+      ).rejects.toThrow('wait node failed');
+
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 
@@ -405,7 +482,7 @@ describe('runFlowWithLifecycle', () => {
     const onError = vi.fn();
 
     try {
-      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
 
       const result = await runFlowWithLifecycle(
         ctx,
@@ -422,7 +499,7 @@ describe('runFlowWithLifecycle', () => {
       );
     } finally {
       executionRegistry.untrack(executionId);
-      streamStatus.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 });

@@ -280,6 +280,9 @@ export function attachTranscriptRecorder(
         });
         return;
 
+      case 'status':
+        return;
+
       case 'context.state': {
         const utilizationPercent =
           (event.inputTokens / event.contextWindow) * 100;

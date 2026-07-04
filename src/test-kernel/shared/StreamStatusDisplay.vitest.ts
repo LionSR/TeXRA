@@ -34,6 +34,30 @@ describe('stream status display labels', () => {
     expect(formatStreamStatusLabel(undefined, { missingLabel: '-' })).toBe('-');
   });
 
+  it('uses substate display keys for current running phases', () => {
+    expect(
+      formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
+        style: 'progressHeader',
+        substate: STREAM_SUBSTATE.STARTING,
+      }),
+    ).toBe('Initializing');
+    expect(
+      formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
+        style: 'cli',
+        substate: STREAM_SUBSTATE.RESUMING,
+      }),
+    ).toBe('resuming');
+    expect(
+      streamStatusDisplayKey(STREAM_PHASE.RUNNING, STREAM_SUBSTATE.STARTING),
+    ).toBe(STREAM_SUBSTATE.STARTING);
+    expect(
+      streamStatusIndicatorClass(
+        STREAM_PHASE.RUNNING,
+        STREAM_SUBSTATE.RESUMING,
+      ),
+    ).toBe('is-resuming');
+  });
+
   it.each([
     [STREAM_STATUS.INITIALIZING, STREAM_SUBSTATE.STARTING, 'is-starting'],
     [STREAM_STATUS.RESUMING, STREAM_SUBSTATE.RESUMING, 'is-resuming'],

@@ -17,6 +17,7 @@ import {
   STREAM_STATUS,
   STREAM_SUBSTATE,
   type ConversationProgress,
+  type StreamSubstate,
   type StreamTabInfo,
 } from '@shared/schemas';
 import {
@@ -321,6 +322,7 @@ export class StreamHeader extends LitElement {
 
   @property({ attribute: false }) stream: StreamTabInfo | null = null;
   @property({ attribute: false }) status: string = STREAM_STATUS.READY;
+  @property({ attribute: false }) substate: StreamSubstate | undefined;
   @property({ attribute: false }) progress: ConversationProgress | undefined;
   @property({ attribute: false }) yoloActive = false;
   @property({ attribute: false }) superYoloActive = false;
@@ -336,8 +338,9 @@ export class StreamHeader extends LitElement {
     const status = this.status || STREAM_STATUS.READY;
     const statusLabel = formatStreamStatusLabel(status, {
       style: 'progressHeader',
+      ...(this.substate ? { substate: this.substate } : {}),
     });
-    const statusClass = streamStatusIndicatorClass(status);
+    const statusClass = streamStatusIndicatorClass(status, this.substate);
     const hasExecutionId = Boolean(this.stream.executionId);
     const agentCategory = this.stream.agentCategory;
     const toolbarButtons =
@@ -354,6 +357,7 @@ export class StreamHeader extends LitElement {
         const { disabled, hidden } = this.getButtonState(
           btn.id,
           status,
+          this.substate,
           hasExecutionId,
         );
         const isActive = Boolean(
@@ -442,9 +446,10 @@ export class StreamHeader extends LitElement {
   private getButtonState(
     buttonId: string,
     status: string,
+    substate: StreamSubstate | undefined,
     hasExecutionId: boolean,
   ): { disabled: boolean; hidden: boolean } {
-    const displayKey = streamStatusDisplayKey(status);
+    const displayKey = streamStatusDisplayKey(status, substate);
     const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
       : undefined;

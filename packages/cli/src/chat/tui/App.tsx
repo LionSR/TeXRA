@@ -12,7 +12,7 @@ import {
 } from '@common/constants/streamStatus';
 import {
   TODO_STATUS,
-  type StreamStatus,
+  type StreamLifecycleStatus,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -310,7 +310,7 @@ export function shouldShowTodosPlanPanel({
 }: {
   readonly foregroundOpen: boolean;
   readonly hasPlan: boolean;
-  readonly status: StreamStatus | undefined;
+  readonly status: StreamLifecycleStatus | undefined;
   readonly todos: readonly TodoItem[];
 }): boolean {
   if (foregroundOpen) return false;

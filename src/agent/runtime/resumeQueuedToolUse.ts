@@ -1,7 +1,11 @@
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
+  type StreamTabId,
+} from '@shared/schemas';
 import { resumeToolUseFromSnapshot } from './executeAgent';
 import { StreamStatusService } from './StreamStatusService';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
@@ -51,8 +55,13 @@ export async function resumeQueuedToolUseSnapshot(
   runtimeHost: AgentRuntimeHost,
   options: ResumeQueuedToolUseOptions,
 ): Promise<boolean> {
+  const streamStatus = options.session?.status ?? StreamStatusService;
+
   ToolUseFollowUpQueue.acquire(streamId);
-  StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, { runtimeHost });
+  streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
+    runtimeHost,
+    substate: STREAM_SUBSTATE.RESUMING,
+  });
 
   const seed = options.extraFollowUps ?? [];
   let followUps: readonly FollowUpQueueInput[] = seed;
@@ -85,8 +94,10 @@ export async function resumeQueuedToolUseSnapshot(
     // Only the early-failure path leaves the stream RESUMING (a started run
     // owns its own status); settle it back to WAITING before surfacing the
     // error so a blocking host dialog cannot hold the stream in RESUMING.
-    if (StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING) {
-      StreamStatusService.set(streamId, STREAM_STATUS.WAITING, { runtimeHost });
+    if (streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING) {
+      streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait', {
+        runtimeHost,
+      });
     }
   }
 

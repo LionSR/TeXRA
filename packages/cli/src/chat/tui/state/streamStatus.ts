@@ -8,6 +8,7 @@ export function applyStreamStatusChange(change: StreamStatusChange): void {
   setStreamStatusInCliState({
     streamId: change.streamId,
     status: change.status,
+    ...(change.substate ? { substate: change.substate } : {}),
   });
 }
 

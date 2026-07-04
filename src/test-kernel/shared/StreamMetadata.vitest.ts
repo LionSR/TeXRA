@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AgentCategory,
+  STREAM_SUBSTATE,
   STREAM_STATUS,
   type ActiveChildInfo,
 } from '@shared/schemas';
@@ -9,17 +10,19 @@ import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 
 describe('buildStreamMetadata', () => {
   it('fills backend-owned defaults for a stream state metadata payload', () => {
-    expect(buildStreamMetadata({ kind: AgentCategory.Workflow })).toMatchObject(
-      {
-        kind: AgentCategory.Workflow,
-        status: STREAM_STATUS.READY,
-        conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
-        activeSubagents: [],
-        finishedSubagentCount: 0,
-        activeProcesses: [],
-        finishedProcessCount: 0,
-      },
-    );
+    const metadata = buildStreamMetadata({ kind: AgentCategory.Workflow });
+
+    expect(metadata).toMatchObject({
+      kind: AgentCategory.Workflow,
+      status: STREAM_STATUS.READY,
+      conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
+      activeSubagents: [],
+      finishedSubagentCount: 0,
+      activeProcesses: [],
+      finishedProcessCount: 0,
+    });
+    expect(Object.hasOwn(metadata, 'substate')).toBe(true);
+    expect(metadata.substate).toBeUndefined();
   });
 
   it('preserves supplied status, progress, child badges, and timestamps', () => {
@@ -33,6 +36,7 @@ describe('buildStreamMetadata', () => {
       buildStreamMetadata({
         kind: AgentCategory.ToolUse,
         status: STREAM_STATUS.RUNNING,
+        substate: STREAM_SUBSTATE.STARTING,
         lastTimestamp: 123,
         conversationProgress: { conversationTurns: 2, toolCallCount: 5 },
         activeSubagents: [child],
@@ -43,6 +47,7 @@ describe('buildStreamMetadata', () => {
     ).toEqual({
       kind: AgentCategory.ToolUse,
       status: STREAM_STATUS.RUNNING,
+      substate: STREAM_SUBSTATE.STARTING,
       lastTimestamp: 123,
       conversationProgress: { conversationTurns: 2, toolCallCount: 5 },
       activeSubagents: [child],

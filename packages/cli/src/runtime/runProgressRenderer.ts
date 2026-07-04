@@ -8,12 +8,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local imports - shared schemas
-import {
-  EXECUTION_STATUS,
-  STREAM_STATUS,
-  type ExecutionStatus,
-  type StreamStatus,
-} from '@shared/schemas';
+import { STREAM_PHASE, STREAM_STATUS, type StreamPhase } from '@shared/schemas';
 
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
@@ -135,10 +130,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           const data = payload as ProgressEventPayloads['updateStreamStatus'];
           if (!this.isRootStream(data.streamId)) return true;
           const { status } = data;
-          this.state.phase = formatRunProgressStatus(
-            status,
-            data.terminalStatus,
-          );
+          this.state.phase = formatRunProgressStatus(status);
           this.rootStreamTerminal = isTerminalStreamStatus(status);
           if (this.rootStreamTerminal) {
             this.state.activeProcesses = undefined;
@@ -308,17 +300,18 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 }
 
-function isTerminalStreamStatus(status: StreamStatus): boolean {
-  return status === STREAM_STATUS.STOPPED || status === STREAM_STATUS.ERROR;
+function isTerminalStreamStatus(status: StreamPhase): boolean {
+  return (
+    status === STREAM_PHASE.COMPLETED ||
+    status === STREAM_PHASE.CANCELLED ||
+    status === STREAM_PHASE.FAILED
+  );
 }
 
-function formatRunProgressStatus(
-  status: StreamStatus,
-  terminalStatus?: ExecutionStatus,
-): string {
-  if (status !== STREAM_STATUS.STOPPED) return status;
-  if (terminalStatus === EXECUTION_STATUS.COMPLETED) return 'done';
-  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) return 'interrupted';
+function formatRunProgressStatus(status: StreamPhase): string {
+  if (status === STREAM_PHASE.COMPLETED) return 'done';
+  if (status === STREAM_PHASE.CANCELLED) return 'interrupted';
+  if (status === STREAM_PHASE.FAILED) return STREAM_STATUS.ERROR;
   return status;
 }
 

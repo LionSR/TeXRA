@@ -9,7 +9,7 @@ import {
   followUpDisplayText,
 } from '@agent/followUp/followUpMessages';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import { STREAM_STATUS } from '@shared/schemas';
+import { STREAM_PHASE } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
@@ -120,8 +120,9 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     if (!session.hasQueuedFollowUp()) {
-      streamStatus.set(streamId, STREAM_STATUS.WAITING, {
+      streamStatus.transitionToWaiting(streamId, 'wait', {
         runtimeHost,
+        trace: this.services.logger,
       });
     }
 
@@ -169,8 +170,9 @@ export class ToolUseWaitNode<C> extends Node<
       shared.deliveredToOrchestrator = true;
     }
 
-    streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
+    streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
       runtimeHost,
+      trace: logger,
     });
 
     // Synthesized continuations don't come from the user queue, so they

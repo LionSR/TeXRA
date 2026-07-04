@@ -10,10 +10,14 @@
  */
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentErrorKind } from '@common/errors';
+import type { StreamTransitionCause } from '@common/constants/streamStatus';
 import type {
   EndGroupStatus,
   RetryErrorInfo,
   RunOutcome,
+  StreamPhase,
+  StreamSubstate,
+  StreamTabId,
 } from '@shared/schemas';
 
 /** Status assigned to a tool call when it completes. */
@@ -119,6 +123,16 @@ export interface UsageEvent extends StageStamp {
   readonly recordTranscript?: boolean;
 }
 
+/** Stream lifecycle phase change emitted by the session-owned status machine. */
+export interface StatusEvent extends StageStamp {
+  readonly type: 'status';
+  readonly streamId: StreamTabId;
+  readonly phase: StreamPhase;
+  readonly previousPhase?: StreamPhase;
+  readonly cause: StreamTransitionCause;
+  readonly substate?: StreamSubstate;
+}
+
 /** Context window utilisation snapshot. */
 export interface ContextStateEvent extends StageStamp {
   readonly type: 'context.state';
@@ -203,6 +217,7 @@ export type AgentEvent =
   | ToolStartEvent
   | ToolEndEvent
   | UsageEvent
+  | StatusEvent
   | ContextStateEvent
   | StreamStartEvent
   | StreamChunkEvent

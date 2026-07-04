@@ -6,7 +6,8 @@ import {
   type AgentCategory,
   type ConversationProgress,
   type StreamMetadata,
-  type StreamStatus,
+  type StreamLifecycleStatus,
+  type StreamSubstate,
 } from '@shared/schemas';
 
 /**
@@ -15,7 +16,8 @@ import {
  */
 export interface StreamMetadataInputs {
   kind: AgentCategory;
-  status?: StreamStatus;
+  status?: StreamLifecycleStatus;
+  substate?: StreamSubstate;
   lastTimestamp?: number;
   conversationProgress?: ConversationProgress;
   activeSubagents?: ActiveChildInfo[];
@@ -30,6 +32,7 @@ export function buildStreamMetadata(
   return {
     kind: inputs.kind,
     status: inputs.status ?? DEFAULT_STREAM_METADATA_STATUS,
+    substate: inputs.substate,
     lastTimestamp: inputs.lastTimestamp,
     conversationProgress: inputs.conversationProgress ?? {
       ...DEFAULT_CONVERSATION_PROGRESS,

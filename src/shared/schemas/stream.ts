@@ -229,6 +229,22 @@ export function streamPhaseToStreamStatus(phase: StreamPhase): StreamStatus {
   }
 }
 
+export type StreamLifecycleStatus = StreamPhase | typeof STREAM_STATUS.READY;
+
+export function streamStatusToLifecycleStatus(
+  status: StreamStatus,
+): StreamLifecycleStatus {
+  return status === STREAM_STATUS.READY
+    ? STREAM_STATUS.READY
+    : streamStatusToPhase(status);
+}
+
+export const StreamLifecycleStatusSchema = z.union([
+  StreamPhaseSchema,
+  z.literal(STREAM_STATUS.READY),
+  StreamStatusSchema.transform(streamStatusToLifecycleStatus),
+]);
+
 export const WORKTREE_PR_STATE = {
   OPEN: 'open',
   MERGED: 'merged',

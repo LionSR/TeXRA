@@ -14,7 +14,7 @@ import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { STREAM_STATUS } from '@shared/schemas';
+import { STREAM_PHASE } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 
 const logger = createChannelTrace('followUpCommand');
@@ -25,7 +25,7 @@ async function lazyDetectWaitingStatus(
   streamId: StreamTabId,
 ): Promise<boolean> {
   const currentStatus = StreamStatusService.get(streamId);
-  if (currentStatus === STREAM_STATUS.WAITING) {
+  if (currentStatus === STREAM_PHASE.WAITING) {
     return true;
   }
   if (!shouldProbePersistedFlowForFollowUp(currentStatus)) {
@@ -47,12 +47,19 @@ async function lazyDetectWaitingStatus(
   try {
     const hasFlow = await hasPersistedFlowRecord(executionId);
     if (hasFlow) {
-      StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
-        runtimeHost: extensionAgentRuntimeHost,
-      });
-      logger.debug(`Lazy detected waiting session for stream: ${streamId}`);
+      const repaired = StreamStatusService.transitionToWaiting(
+        streamId,
+        'restart-repair',
+        {
+          runtimeHost: extensionAgentRuntimeHost,
+        },
+      );
+      if (repaired) {
+        logger.debug(`Lazy detected waiting session for stream: ${streamId}`);
+      }
+      return repaired;
     }
-    return hasFlow;
+    return false;
   } finally {
     inFlightDetections.delete(streamId);
   }

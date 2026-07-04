@@ -23,6 +23,8 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   createStreamState,
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
   STREAM_STATUS,
   type ProgressViewOutboundMessage,
   type StreamTabId,
@@ -148,6 +150,112 @@ describe('process output frontend state', () => {
     const outputs = getState().processOutputs.get(streamId);
     expect(outputs?.has('active-process')).toBe(true);
     expect(outputs?.has('stale-process')).toBe(false);
+  });
+
+  it('updates and clears stream substate with status changes', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    state.streamById.set(streamId, {
+      name: streamId,
+      label: 'stream-a',
+      agentCategory: AgentCategory.Workflow,
+      creationTimestamp: 1,
+    });
+    state.streamStates.set(
+      streamId,
+      createStreamState(AgentCategory.Workflow, {
+        status: STREAM_PHASE.RUNNING,
+      } satisfies Partial<StreamState>),
+    );
+    const { ctx, getState } = createContext(state);
+
+    dispatch(
+      streamMetaHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+        stream: streamId,
+        status: STREAM_PHASE.RUNNING,
+        substate: STREAM_SUBSTATE.STARTING,
+      },
+      ctx,
+    );
+
+    expect(getState().streamStates.get(streamId)?.substate).toBe(
+      STREAM_SUBSTATE.STARTING,
+    );
+
+    dispatch(
+      streamMetaHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+        stream: streamId,
+        status: STREAM_PHASE.COMPLETED,
+      },
+      ctx,
+    );
+
+    expect(getState().streamStates.get(streamId)?.status).toBe(
+      STREAM_PHASE.COMPLETED,
+    );
+    expect(getState().streamStates.get(streamId)?.substate).toBeUndefined();
+  });
+
+  it('clears stream substate when full metadata sync omits it', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    state.activeStreamId = streamId;
+    state.streamById.set(streamId, {
+      name: streamId,
+      label: 'stream-a',
+      agentCategory: AgentCategory.Workflow,
+      creationTimestamp: 1,
+    });
+    state.streamStates.set(
+      streamId,
+      createStreamState(AgentCategory.Workflow, {
+        status: STREAM_PHASE.RUNNING,
+        substate: STREAM_SUBSTATE.STARTING,
+      } satisfies Partial<StreamState>),
+    );
+    const { ctx, getState } = createContext(state);
+
+    dispatch(
+      streamLifecycleHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        streams: [
+          {
+            name: streamId,
+            label: 'stream-a',
+            agentCategory: AgentCategory.Workflow,
+            creationTimestamp: 1,
+          },
+        ],
+        activeStream: streamId,
+        agentFilter: 'all',
+        streamStates: {
+          [streamId]: {
+            kind: AgentCategory.Workflow,
+            status: STREAM_PHASE.COMPLETED,
+            lastTimestamp: 2,
+            conversationProgress: {
+              conversationTurns: 0,
+              toolCallCount: 0,
+            },
+            activeSubagents: [],
+            finishedSubagentCount: 0,
+            activeProcesses: [],
+            finishedProcessCount: 0,
+          },
+        },
+      },
+      ctx,
+    );
+
+    expect(getState().streamStates.get(streamId)?.status).toBe(
+      STREAM_PHASE.COMPLETED,
+    );
+    expect(getState().streamStates.get(streamId)?.substate).toBeUndefined();
   });
 
   it('clears a stream parent when update parent stream receives null', () => {

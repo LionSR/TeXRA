@@ -45,7 +45,8 @@ import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import {
-  STREAM_STATUS,
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
   type ExecutionId,
   type StorageKey,
   type StreamTabId,
@@ -68,13 +69,10 @@ import {
   shouldWarnMediaNeedsVision,
 } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
-import {
-  StreamStatusService,
-  type StreamStatusRegistry,
-} from './StreamStatusService';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { attachConversationProgressHub } from './conversationProgressHub';
 import { attachSessionRunFactProjector } from './SessionRunFactProjector';
+import type { StreamStatusRegistry } from './StreamStatusService';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -130,10 +128,13 @@ export interface AgentLaunchInput {
 }
 
 const STATUS_MESSAGES: Record<string, string> = {
-  [STREAM_STATUS.INITIALIZING]: 'already launching',
-  [STREAM_STATUS.RESUMING]: 'resuming',
-  [STREAM_STATUS.RUNNING]: 'already running',
-  [STREAM_STATUS.WAITING]: 'waiting for retry',
+  [STREAM_SUBSTATE.STARTING]: 'already launching',
+  [STREAM_SUBSTATE.RESUMING]: 'resuming',
+  [STREAM_PHASE.RUNNING]: 'already running',
+  [STREAM_PHASE.WAITING]: 'waiting for retry',
+  [STREAM_PHASE.COMPLETED]: 'completed',
+  [STREAM_PHASE.CANCELLED]: 'stopped',
+  [STREAM_PHASE.FAILED]: 'failed',
 };
 
 /**
@@ -486,7 +487,12 @@ function acquireStreamOrThrow(
     return;
   }
 
-  const status = streamStatus.get(streamId) ?? '';
+  const substate = streamStatus.getSubstate(streamId);
+  const status =
+    substate === STREAM_SUBSTATE.STARTING ||
+    substate === STREAM_SUBSTATE.RESUMING
+      ? substate
+      : (streamStatus.get(streamId) ?? '');
   const statusMsg = STATUS_MESSAGES[status] || 'already running';
   throw new AgentError(
     `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
@@ -497,12 +503,12 @@ function acquireStreamOrThrow(
  * Saga-style compensation for a failed stream activation.
  *
  *  - Pre-activation failure (no `activatedStreamId`): the UI tab was never
- *    registered. Release the reserved lock if we held it; the caller won't
- *    ever see a stream.
+ *    registered. Release the reserved lock if we held it, and publish a
+ *    terminal rollback only if acquisition already emitted a visible status.
  *
  *  - Post-activation failure (`activatedStreamId` set): the UI tab is
- *    visible. Surface the failure on it and transition to ERROR so the
- *    tab doesn't hang in INITIALIZING.
+ *    visible. Surface the failure on it and transition to FAILED so the
+ *    tab doesn't hang in STARTING.
  */
 function compensateFailedActivation(args: {
   configPayload: AgentConfigPayload;
@@ -538,14 +544,28 @@ function compensateFailedActivation(args: {
         { operation: `start ${configPayload.agent}` },
       );
     }
-    streamStatus.set(activatedStreamId, STREAM_STATUS.ERROR, {
-      runtimeHost,
-    });
+    if (
+      !streamStatus.transitionToTerminal(
+        activatedStreamId,
+        STREAM_PHASE.FAILED,
+        {
+          runtimeHost,
+          trace: runTrace?.trace,
+        },
+      )
+    ) {
+      runTrace?.trace.warn('Failed to mark activation failure terminal', {
+        data: {
+          agentIdentifier: configPayload.agent,
+          streamId: activatedStreamId,
+        },
+      });
+    }
     return;
   }
 
   if (reservedStreamId) {
-    streamStatus.releaseIfInitializing(reservedStreamId, {
+    streamStatus.releaseIfReserved(reservedStreamId, {
       runtimeHost,
     });
   }
@@ -563,7 +583,8 @@ export async function buildAgentLaunchContext(
   input: AgentLaunchInput,
 ): Promise<AgentLaunchContext> {
   const { configPayload, runtimeHost } = input;
-  const streamStatus = StreamStatusService;
+  const launchSession = input.session ?? currentSession();
+  const streamStatus = launchSession.status;
   const executionId = input.executionId ?? generateExecutionId();
   if (
     !input.streamTabIdOverride &&
@@ -591,7 +612,7 @@ export async function buildAgentLaunchContext(
   let runTrace: RunTrace | undefined;
   try {
     const ctx = await assembleAgentLaunchContext(
-      input,
+      { ...input, session: launchSession },
       executionId,
       streamStatus,
       runtimeHost,

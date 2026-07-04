@@ -3,6 +3,7 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
+import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -199,7 +200,7 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
         defaultSession().executions.getHandle(executionId),
       ).toBeUndefined();
     } finally {
-      streamStatus.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
       sessionB.dispose();
     }
   });

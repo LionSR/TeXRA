@@ -44,7 +44,7 @@ const WEBVIEW_OUTPUT_CAP = { maxChars: 100_000, retainChars: 80_000 } as const;
 
 export const streamMetaHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
-    const { stream, status, lastTimestamp } = data;
+    const { stream, status, lastTimestamp, substate } = data;
     const state = ctx.getState();
     const isActiveStream = stream === state.activeStreamId;
     const shouldFocus = isActiveStream && status === STREAM_STATUS.WAITING;
@@ -59,6 +59,11 @@ export const streamMetaHandlers: HandlerRegistry = {
       const resolvedTimestamp = lastTimestamp ?? current.lastTimestamp;
       const updatedState = create(current, (draft) => {
         draft.status = status;
+        if (substate) {
+          draft.substate = substate;
+        } else {
+          delete draft.substate;
+        }
         draft.lastTimestamp = resolvedTimestamp;
         if (isToolUseState(current) && shouldFocus) {
           (draft as typeof current).ui.shouldFocusFollowUp = true;

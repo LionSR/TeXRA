@@ -15,7 +15,8 @@ import { isLiveElapsedStatus } from '@common/constants/streamStatus';
 import {
   STREAM_STATUS,
   type ConversationProgress,
-  type StreamStatus,
+  type StreamLifecycleStatus,
+  type StreamSubstate,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
@@ -72,6 +73,7 @@ interface StatusBarSegment {
 
 export interface StatusBarDisplayInput {
   readonly status: string | undefined;
+  readonly substate?: StreamSubstate;
   /** Milliseconds since the running turn began. When set and `status` is
    *  `running`, the bar shows a live `Ns` segment so a long token-less
    *  "thinking" turn still reads as alive. Omitted in tests/headless. */
@@ -609,7 +611,7 @@ function approvalPolicySegment(
 }
 
 interface StatusBarVisibleStream {
-  readonly status: StreamStatus | undefined;
+  readonly status: StreamLifecycleStatus | undefined;
 }
 
 interface StatusBarStreamTarget {
@@ -683,7 +685,10 @@ export function buildStatusBarDisplay(
       });
     }
   } else {
-    left.push({ text: formatCliStatusLabel(input.status), color: 'dim' });
+    left.push({
+      text: formatCliStatusLabel(input.status, input.substate),
+      color: 'dim',
+    });
     if (
       input.status === STREAM_STATUS.RUNNING &&
       input.elapsedMs !== undefined
@@ -878,6 +883,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
 
   const display = buildStatusBarDisplay({
     status: statusSlice?.status,
+    substate: statusSlice?.substate,
     elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
     pendingExitHint,
     pendingExitResumeId,

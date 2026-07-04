@@ -41,6 +41,7 @@ export class ProcessStreamContent extends LitElement {
       <stream-header
         .stream=${streamInfo}
         .status=${streamState.status}
+        .substate=${streamState.substate}
         .progress=${streamState.conversationProgress}
         .yoloActive=${Boolean(toolUse?.toolEditBypass)}
         .superYoloActive=${Boolean(toolUse?.superYoloBypass)}

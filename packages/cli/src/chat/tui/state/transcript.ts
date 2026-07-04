@@ -1,6 +1,6 @@
 import { getDefaultStreamLogStore } from '@transcript';
 import { isTerminalStatus } from '@common/constants/streamStatus';
-import { type StreamStatus, type StreamTabId } from '@shared/schemas';
+import { type StreamLifecycleStatus, type StreamTabId } from '@shared/schemas';
 
 import {
   cliState,
@@ -21,7 +21,7 @@ export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
  * (not re-declared) so the membership stays single-sourced across all hosts.
  */
 export function isFinalTranscriptStatus(
-  status: StreamStatus | undefined,
+  status: StreamLifecycleStatus | undefined,
 ): boolean {
   return isTerminalStatus(status);
 }

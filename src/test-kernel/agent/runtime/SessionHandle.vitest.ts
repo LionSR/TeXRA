@@ -25,6 +25,7 @@ import {
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -69,6 +70,7 @@ describe('SessionHandle', () => {
     expect(defaultSession().executions).toBe(executionRegistry);
     expect(defaultSession().coordinators).toBe(runCoordinatorBridge);
     expect(defaultSession().subscriptions).toBe(executionSubscriptionBinder);
+    expect(defaultSession().status).toBe(StreamStatusService);
     expect(defaultSession().events).toBeDefined();
     expect(defaultSession().flushers).toBe(getActiveFlushers());
     expect(defaultSession().hostChannel).toBeUndefined();
@@ -81,6 +83,7 @@ describe('SessionHandle', () => {
       expect(fresh.executions).not.toBe(executionRegistry);
       expect(fresh.coordinators).not.toBe(runCoordinatorBridge);
       expect(fresh.subscriptions).not.toBe(executionSubscriptionBinder);
+      expect(fresh.status).not.toBe(StreamStatusService);
       expect(fresh.events).not.toBe(defaultSession().events);
       expect(fresh.flushers).not.toBe(getActiveFlushers());
       expect(fresh.hostChannel).toBeUndefined();
