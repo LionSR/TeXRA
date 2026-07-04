@@ -12,8 +12,8 @@ import {
   modelSelectItemsForCliMode,
   noRunnableModelAccessReason,
   runnableCliModelAccessEntries,
-  resolveCliModelAccessEntry,
-  resolveCliRunnableModel,
+  loadCliModelAccessEntry,
+  selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -64,7 +64,7 @@ function model(
 }
 
 type ResolveCliRunnableModelOptions = Parameters<
-  typeof resolveCliRunnableModel
+  typeof selectCliRunnableModel
 >[1];
 
 function resolveModelFromAccessList(
@@ -72,7 +72,7 @@ function resolveModelFromAccessList(
   model: string,
   options: Omit<ResolveCliRunnableModelOptions, 'accessList'>,
 ) {
-  return resolveCliRunnableModel(model, { ...options, accessList });
+  return selectCliRunnableModel(model, { ...options, accessList });
 }
 
 const INTERACTIVE_RECOVERY = {
@@ -870,7 +870,7 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliRunnableModel('haiku3', {
+      selectCliRunnableModel('haiku3', {
         fallbackSource: 'override',
         apiMode: 'included',
         accessList: [],
@@ -893,7 +893,7 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliRunnableModel('haiku3', {
+      selectCliRunnableModel('haiku3', {
         fallbackSource: 'override',
         apiMode: 'included',
         accessList: [],
@@ -1221,7 +1221,7 @@ describe('CLI model access resolution', () => {
       ]);
 
     await expect(
-      resolveCliRunnableModel('HIDDENFIXTUREMODEL', {
+      selectCliRunnableModel('HIDDENFIXTUREMODEL', {
         fallbackSource: 'override',
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
@@ -1242,7 +1242,7 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliRunnableModel('hiddenFixtureModel', {
+      selectCliRunnableModel('hiddenFixtureModel', {
         fallbackSource: 'override',
         apiMode: 'personal',
         accessList: [
@@ -1276,7 +1276,7 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliModelAccessEntry('HIDDENFIXTUREMODEL', {
+      loadCliModelAccessEntry('HIDDENFIXTUREMODEL', {
         apiMode: 'personal',
         accessList: [model('sonnet46T')],
       }),
@@ -1315,7 +1315,7 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliModelAccessEntry('User Facing Fixture', {
+      loadCliModelAccessEntry('User Facing Fixture', {
         apiMode: 'personal',
         accessList: [model('sonnet46T')],
       }),
@@ -1341,7 +1341,7 @@ describe('CLI model access resolution', () => {
       .mockResolvedValueOnce([]);
 
     await expect(
-      resolveCliRunnableModel('hiddenFixtureModel', {
+      selectCliRunnableModel('hiddenFixtureModel', {
         fallbackSource: 'override',
       }),
     ).rejects.toThrow(
