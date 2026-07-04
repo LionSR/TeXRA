@@ -14,6 +14,7 @@ export type SessionEvent =
 
 export interface SessionEventSubscriptionFilter {
   readonly scope?: SessionEvent['scope'];
+  readonly streamId?: StreamTabId;
   readonly types?: readonly AgentEvent['type'][];
 }
 
@@ -22,6 +23,7 @@ export type SessionEventSubscriber = (event: SessionEvent) => void;
 interface SubscriberRegistration {
   readonly subscriber: SessionEventSubscriber;
   readonly scope?: SessionEvent['scope'];
+  readonly streamId?: StreamTabId;
   readonly types?: ReadonlySet<AgentEvent['type']>;
 }
 
@@ -38,11 +40,20 @@ function isDevAssertionMode(): boolean {
  */
 export class SessionEventHub {
   private readonly subscribers = new Set<SubscriberRegistration>();
-  private runScopeSubscriberCount = 0;
+  private readonly runScopeSubscriberCountsByStream = new Map<
+    StreamTabId,
+    number
+  >();
 
   emit(event: SessionEvent): void {
     for (const registration of this.subscribers) {
       if (registration.scope && registration.scope !== event.scope) continue;
+      if (
+        registration.streamId &&
+        (event.scope !== 'run' || registration.streamId !== event.streamId)
+      ) {
+        continue;
+      }
       if (
         registration.types &&
         (event.scope !== 'run' || !registration.types.has(event.event.type))
@@ -64,17 +75,32 @@ export class SessionEventHub {
     const registration: SubscriberRegistration = {
       subscriber,
       scope: filter.scope,
+      streamId: filter.scope === 'session' ? undefined : filter.streamId,
       types: filter.types ? new Set(filter.types) : undefined,
     };
     this.subscribers.add(registration);
-    if (filter.scope !== 'session') {
-      this.runScopeSubscriberCount += 1;
+    if (registration.streamId) {
+      this.runScopeSubscriberCountsByStream.set(
+        registration.streamId,
+        (this.runScopeSubscriberCountsByStream.get(registration.streamId) ??
+          0) + 1,
+      );
     }
 
     return () => {
       if (!this.subscribers.delete(registration)) return;
-      if (filter.scope !== 'session') {
-        this.runScopeSubscriberCount -= 1;
+      if (registration.streamId) {
+        const nextCount =
+          (this.runScopeSubscriberCountsByStream.get(registration.streamId) ??
+            1) - 1;
+        if (nextCount > 0) {
+          this.runScopeSubscriberCountsByStream.set(
+            registration.streamId,
+            nextCount,
+          );
+        } else {
+          this.runScopeSubscriberCountsByStream.delete(registration.streamId);
+        }
       }
     };
   }
@@ -85,9 +111,9 @@ export class SessionEventHub {
    * violation so startup can continue; tests and opt-in dev runs throw.
    */
   assertRunSubscribersAttachedBeforeActivation(streamId: StreamTabId): void {
-    if (this.runScopeSubscriberCount > 0) return;
+    if ((this.runScopeSubscriberCountsByStream.get(streamId) ?? 0) > 0) return;
 
-    const message = `No run-scoped session event subscribers attached before activating ${streamId}`;
+    const message = `No run-scoped session event subscribers attached for ${streamId} before activation`;
     if (isDevAssertionMode()) {
       throw new Error(message);
     }

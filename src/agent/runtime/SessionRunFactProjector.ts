@@ -60,6 +60,6 @@ export function attachSessionRunFactProjector(
         event.data as ProgressEventPayloads[typeof factName],
       );
     },
-    { scope: 'run', types: ['domain', 'usage'] },
+    { scope: 'run', streamId: projectedStreamId, types: ['domain', 'usage'] },
   );
 }

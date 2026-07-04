@@ -77,24 +77,6 @@ export function createChildStream(
   const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
   const { runtimeHost } = options;
 
-  // Register the child stream (state, logs, hints) without switching the
-  // active tab. Background child streams (bash, codex) shouldn't yank the
-  // user away from whatever they're viewing — the tab simply appears.
-  runtimeHost.emit('setActiveStream', {
-    streamId: childStreamId,
-    agentCategory: options.streamCategory,
-    suppressViewSwitch: true,
-  });
-  runtimeHost.emit('setTaskState', {
-    streamId: childStreamId,
-    executionId,
-    taskState: agentConfigToTaskState(options.config),
-  });
-  runtimeHost.emit('updateStreamDescription', {
-    streamId: childStreamId,
-    description: truncateWithEllipsis(options.description, 80),
-  });
-
   // Capture the run's session at creation (inside the parent run's ALS); the
   // status-update and finalize closures below fire later, possibly outside it.
   const session = currentSession();
@@ -113,6 +95,26 @@ export function createChildStream(
     detachSessionTrace();
     runTrace.dispose();
   };
+  session.events.assertRunSubscribersAttachedBeforeActivation(childStreamId);
+
+  // Register the child stream (state, logs, hints) without switching the
+  // active tab. Background child streams (bash, codex) shouldn't yank the
+  // user away from whatever they're viewing — the tab simply appears.
+  runtimeHost.emit('setActiveStream', {
+    streamId: childStreamId,
+    agentCategory: options.streamCategory,
+    suppressViewSwitch: true,
+  });
+  runtimeHost.emit('setTaskState', {
+    streamId: childStreamId,
+    executionId,
+    taskState: agentConfigToTaskState(options.config),
+  });
+  runtimeHost.emit('updateStreamDescription', {
+    streamId: childStreamId,
+    description: truncateWithEllipsis(options.description, 80),
+  });
+
   const handle = new AgentExecutionHandle(
     executionId,
     parentStreamId,
