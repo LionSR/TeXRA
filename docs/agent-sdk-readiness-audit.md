@@ -3106,7 +3106,7 @@ remove.
   `__texraModelHandlerCompatibilityKey` property and its tagged-type read-back remain (`ModelFactory.ts:43-49`).
   The declarative source landed; the monkey-patch tagging did not go away. Keep open.
 - **P25-2 (`@agent/types/index.ts` pass-through shim) — unchanged, present** (`export type { FileOpResult }
-  from '@shared/schemas/…'` still re-forwards).
+from '@shared/schemas/…'` still re-forwards).
 - **P25-3 (`core/usage/ResponseUsage.ts` provider-SDK type re-export block) — unchanged** (not re-opened this
   pass; still the low-priority forwarding-only trim).
 - **P25-4 (`@logger/index.ts` exposes one symbol) — unchanged, confirmed** (`export { createChannelTrace }`
@@ -3178,7 +3178,7 @@ delete** — load-bearing); (5) decompose the multi-phase workflow agents (gated
 
 **Net for 2026-07-04:** thesis reaffirmed for the twenty-first pass — incremental, not structural. The one
 material development is that **§4's observability-unification direction is now landing in code** (`cbf5a39`
-routes run facts through the trace/session-event-hub seam instead of a direct `bus.emit`) — movement *with*
+routes run facts through the trace/session-event-hub seam instead of a direct `bus.emit`) — movement _with_
 the audit — which simultaneously makes the two-channel duplication concrete enough to record as **P26-1**
 (the `runFact.*` stringly round-trip + the dead `SessionFact = never` arm). Three independent fresh-eyes
 agents re-reached the standing verdict and re-surfaced every recurring trap (the `IModelHandler` width for the
