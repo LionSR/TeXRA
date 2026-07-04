@@ -10,8 +10,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { ensureError, normalizeProviderError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import {
-  EXECUTION_STATUS,
-  STREAM_STATUS,
+  STREAM_PHASE,
   toRetryErrorInfo,
   type RetryErrorInfo,
 } from '@shared/schemas';
@@ -263,8 +262,9 @@ export abstract class RetryableInvocationNode<
 
     logErrorData(logger, `${operationName} failed`, formatted);
 
-    streamStatus.set(streamId, STREAM_STATUS.WAITING, {
+    streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait', {
       runtimeHost,
+      trace: logger,
     });
     const result = await session.coordinators.waitForRetry(streamId, {
       operation: operationName,
@@ -275,8 +275,9 @@ export abstract class RetryableInvocationNode<
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');
-      streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
+      streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
         runtimeHost,
+        trace: logger,
       });
       return { shouldRetry: true, userCancelled: false };
     }
@@ -286,9 +287,9 @@ export abstract class RetryableInvocationNode<
         ? 'Retry timed out (no response)'
         : 'Retry cancelled by user';
     logProgressStatus(logger, message);
-    streamStatus.set(streamId, STREAM_STATUS.STOPPED, {
+    streamStatus.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop', {
       runtimeHost,
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      trace: logger,
     });
     return { shouldRetry: false, userCancelled: true };
   }

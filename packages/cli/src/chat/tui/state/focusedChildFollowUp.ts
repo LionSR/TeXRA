@@ -3,7 +3,7 @@ import {
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
 import { isInFlightStatus } from '@common/constants/streamStatus';
-import type { StreamStatus, StreamTabId } from '@shared/schemas';
+import type { StreamLifecycleStatus, StreamTabId } from '@shared/schemas';
 
 import { resolveChildControlDisplayTargets } from './childControls';
 import { activeStreamScope } from './streamViews';
@@ -40,7 +40,7 @@ export function focusedChildInputDisabledMessage(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly shortcutModifierLabel?: string;
-  readonly status: StreamStatus | undefined;
+  readonly status: StreamLifecycleStatus | undefined;
   readonly subagentControlsAvailable?: boolean;
   readonly taskControlsAvailable?: boolean;
 }): string | undefined {

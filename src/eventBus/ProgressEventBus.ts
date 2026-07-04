@@ -9,7 +9,6 @@ import type {
   CompileFailure,
   ConversationProgress,
   ExecutionId,
-  ExecutionStatus,
   ExternalInquiryPermission,
   FileLocation,
   InquiryThreadUpdatedEvent,
@@ -17,7 +16,8 @@ import type {
   PlanApprovalPermission,
   RetryPermission,
   StorageKey,
-  StreamStatus,
+  StreamPhase,
+  StreamSubstate,
   StreamTabId,
   TokenUsageStats,
   ToolEditPermission,
@@ -93,11 +93,11 @@ export interface ProgressEventPayloads {
   setActiveStream: SetActiveStreamPayload;
   updateStreamStatus: {
     streamId: StreamTabId;
-    status: StreamStatus;
-    /** Previous status before this update, for detecting transitions */
-    previousStatus: StreamStatus;
-    /** Terminal execution outcome when the stream ended, if known. */
-    terminalStatus?: ExecutionStatus;
+    status: StreamPhase;
+    /** Previous phase before this update, for detecting transitions. */
+    previousStatus?: StreamPhase;
+    /** Narrower in-flight display state for launch/resume overlays. */
+    substate?: StreamSubstate;
   };
   addOutputFiles: StreamScopedPayload & {
     filesByRound: { [key: number]: OutputFileInfo[] };

@@ -45,6 +45,7 @@ import {
   finalizeAssistantTranscriptEntries,
 } from '@cli/chat/tui/state/transcript';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
+import { STREAM_PHASE } from '@shared/schemas';
 import {
   STREAM_STATUS,
   TOOL_USE_STATUS,
@@ -185,9 +186,14 @@ describe('CLI conversation transcript splitting', () => {
     const dispose = subscribeStreamStatus();
 
     try {
-      StreamStatusService.set(STREAM_ID, STREAM_STATUS.READY, {
-        runtimeHost: { emit: () => undefined },
-      });
+      StreamStatusService.transition(
+        STREAM_ID,
+        STREAM_PHASE.COMPLETED,
+        'restart-repair',
+        {
+          runtimeHost: { emit: () => undefined },
+        },
+      );
 
       expect(
         cliState.streams
@@ -216,9 +222,14 @@ describe('CLI conversation transcript splitting', () => {
     const dispose = subscribeStreamStatus();
 
     try {
-      StreamStatusService.set(STREAM_ID, STREAM_STATUS.RUNNING, {
-        runtimeHost: { emit: () => undefined },
-      });
+      StreamStatusService.transition(
+        STREAM_ID,
+        STREAM_PHASE.RUNNING,
+        'resume',
+        {
+          runtimeHost: { emit: () => undefined },
+        },
+      );
 
       expect(cliState.streams.get().get(STREAM_ID)?.status).toBe(
         STREAM_STATUS.RUNNING,

@@ -4,7 +4,7 @@ import {
   isInFlightStatus,
   isTerminalStatus,
 } from '@common/constants/streamStatus';
-import type { StreamStatus } from '@shared/schemas/stream';
+import type { StreamLifecycleStatus } from '@shared/schemas/stream';
 import type { TokenUsageStats } from '@shared/schemas/usage';
 
 export interface StatusBarUsageTotals {
@@ -22,10 +22,13 @@ const ZERO_USAGE: StatusBarUsageTotals = {
 /** Tracks active streams and usage totals for the extension status bar. */
 export class StatusBarUsageTracker {
   private readonly activeStreams = new Set<string>();
-  private readonly streamStatuses = new Map<string, StreamStatus>();
+  private readonly streamStatuses = new Map<string, StreamLifecycleStatus>();
   private readonly usageByStream = new Map<string, StatusBarUsageTotals>();
 
-  public updateStreamStatus(streamId: string, status: StreamStatus): void {
+  public updateStreamStatus(
+    streamId: string,
+    status: StreamLifecycleStatus,
+  ): void {
     if (isActiveStatus(status)) {
       this.activeStreams.add(streamId);
     } else {

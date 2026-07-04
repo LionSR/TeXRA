@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
+  clearAllStreamStatusesForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
+import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
@@ -14,7 +18,7 @@ import {
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { onFollowUpSent, sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
 
 const streamId = 'stream:follow-up' as StreamTabId;
@@ -30,7 +34,7 @@ describe('tool-use follow-up progress events', () => {
       executionRegistry.untrack(executionId);
     }
     trackedExecutionIds.clear();
-    StreamStatusService.clearAll({ emit: false });
+    clearAllStreamStatusesForTest(StreamStatusService);
   });
 
   function trackToolUseFlow({
@@ -107,14 +111,18 @@ describe('tool-use follow-up progress events', () => {
     const { host } = createRecordingHost();
     const appendFollowUp = vi.fn();
 
-    StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, { emit: false });
+    seedStreamStatusForTest(
+      StreamStatusService,
+      streamId,
+      STREAM_PHASE.COMPLETED,
+    );
     trackToolUseFlow({ host, appendFollowUp });
 
     const result = await sendFollowUp(streamId, 'late follow-up');
 
     expect(result).toEqual({
       status: 'no_session',
-      streamStatus: STREAM_STATUS.STOPPED,
+      streamStatus: STREAM_PHASE.COMPLETED,
     });
     expect(appendFollowUp).not.toHaveBeenCalled();
   });
@@ -122,9 +130,11 @@ describe('tool-use follow-up progress events', () => {
   it('queues follow-ups for resuming streams through registry admission', async () => {
     const resumingStreamId = 'stream:resuming-follow-up' as StreamTabId;
 
-    StreamStatusService.set(resumingStreamId, STREAM_STATUS.RESUMING, {
-      emit: false,
-    });
+    seedStreamStatusForTest(
+      StreamStatusService,
+      resumingStreamId,
+      STREAM_STATUS.RESUMING,
+    );
 
     try {
       const result = await sendFollowUp(
@@ -157,9 +167,11 @@ describe('tool-use follow-up progress events', () => {
       noopAgentRuntimeHost,
     );
 
-    StreamStatusService.set(parentStreamId, STREAM_STATUS.STOPPED, {
-      emit: false,
-    });
+    seedStreamStatusForTest(
+      StreamStatusService,
+      parentStreamId,
+      STREAM_STATUS.STOPPED,
+    );
     executionRegistry.track(handle);
 
     try {

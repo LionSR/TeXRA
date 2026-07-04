@@ -14,6 +14,7 @@ import {
   createWorkflowStreamState,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  STREAM_PHASE,
   STREAM_STATUS,
   type LogMessageData,
   type OutputFileInfo,
@@ -166,21 +167,21 @@ const SAMPLE_STREAM_STATES: Map<string, StreamState> = new Map([
   [
     'figures',
     createWorkflowStreamState({
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.COMPLETED,
       lastTimestamp: BASE_TIME - 10 * 60_000,
     }),
   ],
   [
     'review',
     createWorkflowStreamState({
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.COMPLETED,
       lastTimestamp: BASE_TIME - 52 * 60_000,
     }),
   ],
   [
     'bib',
     createWorkflowStreamState({
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.COMPLETED,
       lastTimestamp: BASE_TIME - 2 * 60 * 60_000,
     }),
   ],

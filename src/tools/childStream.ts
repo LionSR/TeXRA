@@ -20,7 +20,7 @@ import { deriveRunOutcome } from '@common/constants/streamStatus';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
-import { STREAM_STATUS } from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_PHASE, STREAM_STATUS } from '@shared/schemas';
 
 // Local imports - utils
 import { formatDuration } from '@utils/core';
@@ -125,7 +125,7 @@ export function createChildStream(
   );
   if (options.toolName) handle.toolName = options.toolName;
   session.executions.trackAgentExecution(handle, {
-    status: STREAM_STATUS.RUNNING,
+    status: STREAM_PHASE.RUNNING,
   });
 
   return {
@@ -136,19 +136,19 @@ export function createChildStream(
     waitForInput: () => {
       session.executions.updateAgentExecutionStatus(
         handle,
-        STREAM_STATUS.WAITING,
+        STREAM_PHASE.WAITING,
       );
     },
     beginTurn: () => {
       session.executions.updateAgentExecutionStatus(
         handle,
-        STREAM_STATUS.RUNNING,
+        STREAM_PHASE.RUNNING,
       );
     },
     failTurn: () => {
       session.executions.updateAgentExecutionStatus(
         handle,
-        STREAM_STATUS.ERROR,
+        STREAM_PHASE.FAILED,
       );
     },
     finalize: (finalizeOptions) => {
@@ -203,7 +203,7 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   const currentStatus = session.executions.getStatus(handle).status;
   let finalStatus: ChildStreamTerminalStatus;
   if (
-    currentStatus === STREAM_STATUS.STOPPED ||
+    currentStatus === STREAM_PHASE.CANCELLED ||
     requestedStatus === STREAM_STATUS.STOPPED
   ) {
     finalStatus = STREAM_STATUS.STOPPED;
@@ -238,7 +238,14 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     ...(error ? { error } : {}),
   });
 
-  session.executions.finishAgentExecution(handle, { status: finalStatus });
+  session.executions.finishAgentExecution(handle, {
+    status:
+      outcome === RUN_OUTCOME.FAILED
+        ? STREAM_PHASE.FAILED
+        : outcome === RUN_OUTCOME.CANCELLED
+          ? STREAM_PHASE.CANCELLED
+          : STREAM_PHASE.COMPLETED,
+  });
   disposeTrace();
 
   if (options?.autoClose) {

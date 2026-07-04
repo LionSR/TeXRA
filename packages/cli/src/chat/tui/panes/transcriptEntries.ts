@@ -2,7 +2,7 @@ import stripAnsi from 'strip-ansi';
 
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { isLiveElapsedStatus } from '@common/constants/streamStatus';
-import { type StreamStatus } from '@shared/schemas';
+import { type StreamLifecycleStatus } from '@shared/schemas';
 
 import type { ConversationEntry } from '../state/cliState';
 
@@ -85,7 +85,7 @@ export function nextRenderableTranscriptEntry(
 export function userPromptAwaitsLiveContinuation(
   entries: readonly ConversationEntry[],
   index: number,
-  status: StreamStatus | undefined,
+  status: StreamLifecycleStatus | undefined,
 ): boolean {
   const entry = entries[index];
   if (
@@ -101,7 +101,7 @@ export function userPromptAwaitsLiveContinuation(
 
 export function splitTranscriptEntries(
   entries: readonly ConversationEntry[],
-  status: StreamStatus | undefined,
+  status: StreamLifecycleStatus | undefined,
 ): {
   readonly finalized: ConversationEntry[];
   /** Non-finalized entries in original stream order. The renderer must

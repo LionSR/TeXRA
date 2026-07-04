@@ -9,8 +9,9 @@ import type { StreamState } from '@progressView/frontend/store';
 import {
   AgentCategory,
   createStreamState,
+  STREAM_PHASE,
   STREAM_STATUS,
-  type StreamStatus,
+  type StreamLifecycleStatus,
   type StreamTabInfo,
 } from '@shared/schemas';
 
@@ -24,7 +25,7 @@ function stream(name: string, parentStreamId?: string): StreamTabInfo {
   };
 }
 
-function streamState(status: StreamStatus): StreamState {
+function streamState(status: StreamLifecycleStatus): StreamState {
   return createStreamState(AgentCategory.ToolUse, { status });
 }
 
@@ -53,8 +54,8 @@ describe('progress stream tree policy', () => {
       ['root', [stream('child-a', 'root'), stream('child-b', 'root')]],
     ]);
     const streamStates = new Map([
-      ['child-a', streamState(STREAM_STATUS.STOPPED)],
-      ['child-b', streamState(STREAM_STATUS.ERROR)],
+      ['child-a', streamState(STREAM_PHASE.CANCELLED)],
+      ['child-b', streamState(STREAM_PHASE.FAILED)],
     ]);
 
     const projection = computeStreamTreeProjection({
@@ -74,7 +75,7 @@ describe('progress stream tree policy', () => {
       ['child', [stream('grandchild', 'child')]],
     ]);
     const streamStates = new Map([
-      ['child', streamState(STREAM_STATUS.STOPPED)],
+      ['child', streamState(STREAM_PHASE.CANCELLED)],
       ['grandchild', streamState(STREAM_STATUS.RUNNING)],
     ]);
 
@@ -112,7 +113,7 @@ describe('progress stream tree policy', () => {
   it('allows users to keep a finished parent expanded', () => {
     const childStreamsByParent = new Map([['root', [stream('child', 'root')]]]);
     const streamStates = new Map([
-      ['child', streamState(STREAM_STATUS.STOPPED)],
+      ['child', streamState(STREAM_PHASE.CANCELLED)],
     ]);
 
     const projection = computeStreamTreeProjection({
@@ -130,8 +131,8 @@ describe('progress stream tree policy', () => {
       ['child', [stream('root', 'child')]],
     ]);
     const streamStates = new Map([
-      ['root', streamState(STREAM_STATUS.STOPPED)],
-      ['child', streamState(STREAM_STATUS.STOPPED)],
+      ['root', streamState(STREAM_PHASE.CANCELLED)],
+      ['child', streamState(STREAM_PHASE.CANCELLED)],
     ]);
 
     assert.equal(
@@ -147,7 +148,7 @@ describe('progress stream tree policy', () => {
   it('guards direct self-loops', () => {
     const childStreamsByParent = new Map([['root', [stream('root', 'root')]]]);
     const streamStates = new Map([
-      ['root', streamState(STREAM_STATUS.STOPPED)],
+      ['root', streamState(STREAM_PHASE.CANCELLED)],
     ]);
 
     assert.equal(

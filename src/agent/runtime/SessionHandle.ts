@@ -41,7 +41,10 @@ import {
   ExecutionSubscriptionBinder,
   executionSubscriptionBinder,
 } from './ExecutionSubscriptionBinder';
-import { StreamStatusService } from './StreamStatusService';
+import {
+  StreamStatusMachine,
+  StreamStatusService,
+} from './StreamStatusService';
 import { SessionEventHub } from './SessionEventHub';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -56,6 +59,7 @@ export type SessionHandleInit = Partial<
     | 'coordinators'
     | 'subscriptions'
     | 'events'
+    | 'status'
     | 'flushers'
     | 'hostChannel'
   >
@@ -80,6 +84,8 @@ export class SessionHandle {
   readonly subscriptions: ExecutionSubscriptionBinder;
   /** Session-scoped one-way fact plane. */
   readonly events: SessionEventHub;
+  /** Session-scoped status plane; wraps shared status data during migration. */
+  readonly status: StreamStatusMachine;
   /** This session's trace-flush callbacks (drained on dispose / shutdown). */
   readonly flushers: Set<() => void>;
   /**
@@ -92,9 +98,10 @@ export class SessionHandle {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
     const interrupts = init.interrupts ?? new InterruptRegistry();
+    const status = init.status ?? new StreamStatusMachine();
     const executions =
       init.executions ??
-      new ExecutionRegistry({ interrupts, streamStatus: StreamStatusService });
+      new ExecutionRegistry({ interrupts, streamStatus: status });
     const coordinators =
       init.coordinators ?? new RunCoordinatorBridge(executions);
 
@@ -116,6 +123,7 @@ export class SessionHandle {
       });
     this.subscriptions = subscriptions;
     this.events = init.events ?? new SessionEventHub();
+    this.status = status;
     // A fresh session owns its own flusher set; the default session aliases the
     // process-module set so `createRunTrace`'s default writes still drain.
     this.flushers = init.flushers ?? new Set<() => void>();
@@ -278,6 +286,7 @@ export function defaultSession(): SessionHandle {
     executions: executionRegistry,
     coordinators: runCoordinatorBridge,
     subscriptions: executionSubscriptionBinder,
+    status: StreamStatusService,
     flushers: getActiveFlushers(),
   }));
 }

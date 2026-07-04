@@ -41,6 +41,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
       <stream-header
         .stream=${streamInfo}
         .status=${currentState.status}
+        .substate=${currentState.substate}
         .progress=${currentState.conversationProgress}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
         .superYoloActive=${Boolean(currentState.superYoloBypass)}

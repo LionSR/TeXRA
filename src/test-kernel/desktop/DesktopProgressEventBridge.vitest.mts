@@ -119,8 +119,8 @@ async function loadBridgeModule(): Promise<
   }));
   vi.doMock('@agent/runtime/StreamStatusService', () => ({
     StreamStatusService: {
-      set: vi.fn(),
-      get: vi.fn(() => STREAM_STATUS.STOPPED),
+      transition: vi.fn(),
+      get: vi.fn(() => STREAM_PHASE.CANCELLED),
       isActiveOrResuming: vi.fn(() => false),
     },
   }));
@@ -176,6 +176,10 @@ describe('DesktopProgressEventBridge', () => {
   function createBridge(overrides: Partial<BridgeOptions> = {}) {
     return module.createDesktopProgressEventBridge({
       state: makeMockState(),
+      streamStatus: {
+        get: vi.fn(() => STREAM_PHASE.CANCELLED),
+        transition: vi.fn(() => true),
+      },
       streamSnapshotStore: undefined,
       sendMessage: () => {},
       logger: makeLogger(),
@@ -284,6 +288,35 @@ describe('DesktopProgressEventBridge', () => {
       }
     });
 
+    it('hydrates stream status through the injected session status plane', () => {
+      const streamStatus = {
+        get: vi.fn(() => STREAM_PHASE.CANCELLED),
+        transition: vi.fn(() => true),
+      };
+
+      const bridge = createBridge({
+        streamStatus,
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [
+            createSnapshot({
+              streamId: 'status-ghost',
+              lastKnownStatus: STREAM_PHASE.WAITING,
+            }),
+          ],
+        }),
+      });
+
+      try {
+        expect(streamStatus.transition).toHaveBeenCalledWith(
+          'status-ghost',
+          STREAM_PHASE.WAITING,
+          'restart-repair',
+        );
+      } finally {
+        bridge.dispose();
+      }
+    });
+
     it('does not resurrect streams that became live in this bridge', () => {
       const ensureStream = vi.fn();
       const bridge = createBridge({
@@ -310,7 +343,7 @@ describe('DesktopProgressEventBridge', () => {
         bridge.onProgressEvent('updateStreamStatus', {
           streamId: 'live-stream',
           status: STREAM_STATUS.RUNNING,
-          previousStatus: STREAM_STATUS.STOPPED,
+          previousStatus: STREAM_PHASE.CANCELLED,
         });
         bridge.hydrateRestoredStreams();
 
@@ -397,6 +430,10 @@ describe('DesktopProgressEventBridge', () => {
 
     it('removes ghost and persists snapshot on updateStreamStatus', async () => {
       const upsert = vi.fn(async () => {});
+      const streamStatus = {
+        get: vi.fn(() => STREAM_PHASE.WAITING),
+        transition: vi.fn(() => true),
+      };
 
       const bridge = createBridge({
         state: makeMockState({
@@ -409,6 +446,7 @@ describe('DesktopProgressEventBridge', () => {
             ensureLoaded: vi.fn(async () => {}),
           },
         }),
+        streamStatus,
         streamSnapshotStore: createSnapshotStore({
           hydrated: [createSnapshot({ streamId: 'status-stream' })],
           upsert,
@@ -419,12 +457,17 @@ describe('DesktopProgressEventBridge', () => {
         bridge.onProgressEvent('updateStreamStatus', {
           streamId: 'status-stream',
           status: STREAM_STATUS.RUNNING,
-          previousStatus: STREAM_STATUS.STOPPED,
+          previousStatus: STREAM_PHASE.CANCELLED,
         });
 
         expect(bridge.hasRestoredStream('status-stream')).toBe(false);
         await settleMicrotasks();
-        expect(upsert).toHaveBeenCalled();
+        expect(upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            streamId: 'status-stream',
+            lastKnownStatus: STREAM_PHASE.WAITING,
+          }),
+        );
       } finally {
         bridge.dispose();
       }
