@@ -3,7 +3,7 @@
  * dropped path, follow-up turn semantics, legacy manifest migration,
  * and listing filters.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import {
@@ -279,5 +279,59 @@ describe('InquiryStorage', () => {
       ).toString('utf8'),
     ) as { turns: Array<{ answer?: string }> };
     expect(persisted.turns[0]?.answer).toBe('Legacy A');
+  });
+
+  it('returns a hydrated legacy manifest when write-back fails', async () => {
+    const platform = (await import('@platform/platform')).platform();
+    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0022`;
+    const manifestPath = `${threadDir}/manifest.json`;
+    const legacy = {
+      threadId: 'ei_aabbccdd0022',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-02T00:00:00.000Z',
+      turns: [
+        {
+          turnIndex: 1,
+          timestamp: '2025-01-01T00:00:00.000Z',
+          question: 'Legacy Q',
+          questionRelativePath: 't1/question.txt',
+          answerRelativePath: 't1/answer.txt',
+        },
+      ],
+    };
+    await platform.fs.createDirectory(threadDir);
+    await platform.fs.createDirectory(`${threadDir}/t1`);
+    await platform.fs.writeFile(
+      `${threadDir}/t1/answer.txt`,
+      Buffer.from('Legacy A', 'utf8'),
+    );
+    await platform.fs.writeFile(
+      manifestPath,
+      Buffer.from(JSON.stringify(legacy), 'utf8'),
+    );
+    const originalWriteFile = platform.fs.writeFile.bind(platform.fs);
+    const writeFileSpy = vi
+      .spyOn(platform.fs, 'writeFile')
+      .mockImplementation(async (target, content) => {
+        if (target === manifestPath) {
+          throw new Error('metadata disk full');
+        }
+        await originalWriteFile(target, content);
+      });
+
+    try {
+      const manifest = await readExternalInquiryThread('ei_aabbccdd0022');
+      expect(manifest).not.toBeNull();
+      expect(manifestToTranscript(manifest!)).toMatchObject([
+        { turnIndex: 1, question: 'Legacy Q', answer: 'Legacy A' },
+      ]);
+    } finally {
+      writeFileSpy.mockRestore();
+    }
+
+    const persisted = JSON.parse(
+      Buffer.from(await platform.fs.readFile(manifestPath)).toString('utf8'),
+    ) as { turns: Array<{ answer?: string }> };
+    expect(persisted.turns[0]?.answer).toBeUndefined();
   });
 });
