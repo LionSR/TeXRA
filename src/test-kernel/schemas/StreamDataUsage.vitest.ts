@@ -23,7 +23,6 @@ describe('stream data usage parsing', () => {
       cacheReadInputTokens: 0,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,
-      viaChatGptSubscription: false,
     });
   });
 
@@ -55,40 +54,28 @@ describe('stream data usage parsing', () => {
       cacheReadInputTokens: 3,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,
-      viaChatGptSubscription: true,
       usageRoute: 'chatgpt-subscription',
     });
+    expect(usage.get('run')).not.toHaveProperty('viaChatGptSubscription');
   });
 
-  it('marks accumulated usage as subscription usage only when every round is subscription usage', () => {
-    expect(
-      sumUsageStats([
-        emptyUsageStats(),
-        {
-          inputTokens: 10,
-          outputTokens: 2,
-          cost: 0,
-          viaChatGptSubscription: true,
-        },
-        {
-          inputTokens: 1,
-          outputTokens: 1,
-          cost: 0.001,
-          viaChatGptSubscription: false,
-        },
-      ]).viaChatGptSubscription,
-    ).toBe(false);
+  it('normalizes persisted legacy subscription markers to usageRoute', () => {
+    const usage = UsageDataSchema.parse({
+      run: {
+        inputTokens: 10,
+        outputTokens: 2,
+        cost: 0,
+        viaChatGptSubscription: true,
+      },
+    });
 
-    expect(
-      sumUsageStats([
-        {
-          inputTokens: 10,
-          outputTokens: 2,
-          cost: 0,
-          viaChatGptSubscription: true,
-        },
-      ]).viaChatGptSubscription,
-    ).toBe(true);
+    expect(usage.get('run')).toMatchObject({
+      inputTokens: 10,
+      outputTokens: 2,
+      cost: 0,
+      usageRoute: 'chatgpt-subscription',
+    });
+    expect(usage.get('run')).not.toHaveProperty('viaChatGptSubscription');
   });
 
   it('keeps route badges only for unambiguous accumulated usage', () => {
@@ -133,7 +120,7 @@ describe('stream data usage parsing', () => {
           inputTokens: 10,
           outputTokens: 2,
           cost: 0,
-          viaChatGptSubscription: true,
+          usageRoute: 'chatgpt-subscription',
         },
       ]).usageRoute,
     ).toBe('chatgpt-subscription');

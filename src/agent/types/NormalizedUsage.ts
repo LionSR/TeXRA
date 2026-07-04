@@ -4,7 +4,11 @@
  */
 import { z } from 'zod';
 
-import { TokenCountSchema, TokenUsageStatsSchema } from '@shared/schemas';
+import {
+  TokenCountSchema,
+  TokenUsageStatsBaseSchema,
+  UsageRouteSchema,
+} from '@shared/schemas';
 
 /** Provider identifiers for usage tracking. */
 export const UsageProviderSchema = z.enum([
@@ -28,13 +32,13 @@ export type UsageProvider = z.infer<typeof UsageProviderSchema>;
  * Normalized usage statistics from any model provider.
  *
  * Reuses only the required base fields via `.pick()` — the optional cache
- * fields on `TokenUsageStatsSchema` (`cacheReadInputTokens` /
+ * fields on `TokenUsageStatsBaseSchema` (`cacheReadInputTokens` /
  * `cacheCreationInputTokens`) are never populated for a NormalizedUsage; the
  * live cache metrics below (`cachedInputTokens` / `cacheCreationTokens`) are
  * the authoritative names. Extending the full base instead would inherit
  * those dead fields and duplicate `cacheMissInputTokens`.
  */
-export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
+const NormalizedUsageBaseSchema = TokenUsageStatsBaseSchema.pick({
   inputTokens: true,
   outputTokens: true,
   cost: true,
@@ -59,15 +63,19 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
   toolUsePromptTokens: TokenCountSchema.optional(),
   /** Number of server-side tool executions (Anthropic web search) */
   serverToolRequests: TokenCountSchema.optional(),
-  /**
-   * True when this round ran on the user's ChatGPT subscription (Codex
-   * backend), so `cost` is 0 because the tokens are covered by the
-   * subscription rather than billed. Carried through to usage logging and the
-   * UI so subscription rounds are recorded but clearly shown as free.
-   */
-  viaChatGptSubscription: z.boolean().optional(),
+  /** Canonical route used for usage display and telemetry. */
+  usageRoute: UsageRouteSchema.optional(),
   /** Original API response payload (for debugging) */
   _native: z.unknown().optional(),
+});
+
+export const NormalizedUsageSchema = NormalizedUsageBaseSchema.extend({
+  viaChatGptSubscription: z.boolean().optional(),
+}).transform(({ viaChatGptSubscription, ...usage }) => {
+  const usageRoute =
+    usage.usageRoute ??
+    (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
+  return usageRoute == null ? usage : { ...usage, usageRoute };
 });
 
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;

@@ -10,23 +10,30 @@ export const UsageRouteSchema = z.enum([
 
 export type UsageRoute = z.infer<typeof UsageRouteSchema>;
 
-export const TokenUsageStatsSchema = z.strictObject({
+export const TokenUsageStatsBaseSchema = z.strictObject({
   inputTokens: TokenCountSchema,
   outputTokens: TokenCountSchema,
   cost: z.number().nonnegative(),
   cacheReadInputTokens: TokenCountSchema.optional(),
   cacheMissInputTokens: TokenCountSchema.optional(),
   cacheCreationInputTokens: TokenCountSchema.optional(),
-  viaChatGptSubscription: z.boolean().optional(),
   usageRoute: UsageRouteSchema.optional(),
 });
 
-export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
+export type TokenUsageStats = z.infer<typeof TokenUsageStatsBaseSchema>;
 
-type UsageRouteInput = Pick<
-  TokenUsageStats,
-  'usageRoute' | 'viaChatGptSubscription'
->;
+const TokenUsageStatsInputSchema = TokenUsageStatsBaseSchema.extend({
+  viaChatGptSubscription: z.boolean().optional(),
+});
+
+export const TokenUsageStatsSchema = TokenUsageStatsInputSchema.transform(
+  ({ viaChatGptSubscription, ...usage }): TokenUsageStats => {
+    const usageRoute =
+      usage.usageRoute ??
+      (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
+    return usageRoute == null ? usage : { ...usage, usageRoute };
+  },
+);
 
 type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
   Pick<TokenUsageStats, 'usageRoute'>;
@@ -40,7 +47,6 @@ export function emptyUsageStats(): EmptyUsageStats {
     cacheReadInputTokens: 0,
     cacheMissInputTokens: 0,
     cacheCreationInputTokens: 0,
-    viaChatGptSubscription: false,
   };
 }
 
@@ -60,24 +66,12 @@ export function isEmptyUsage(usage: TokenUsageStats): boolean {
   return !hasUsageActivity(usage);
 }
 
-export function resolveUsageRoute(
-  usage: UsageRouteInput | null | undefined,
-): UsageRoute | undefined {
-  return (
-    usage?.usageRoute ??
-    (usage?.viaChatGptSubscription === true
-      ? 'chatgpt-subscription'
-      : undefined)
-  );
-}
-
 /** Accumulates usage stats from an iterable into a single total. */
 export function sumUsageStats(
   items: Iterable<TokenUsageStats>,
 ): TokenUsageStats {
   const total = emptyUsageStats();
   let sawUsageActivity = false;
-  let allRoundsViaChatGptSubscription = true;
   let commonUsageRoute: UsageRoute | undefined;
   let sawUsageRoute = false;
   let hasMixedOrMissingUsageRoute = false;
@@ -94,11 +88,8 @@ export function sumUsageStats(
       (usage.cacheCreationInputTokens ?? 0);
     if (hasUsageActivity(usage)) {
       sawUsageActivity = true;
-      allRoundsViaChatGptSubscription =
-        allRoundsViaChatGptSubscription &&
-        usage.viaChatGptSubscription === true;
 
-      const usageRoute = resolveUsageRoute(usage);
+      const usageRoute = usage.usageRoute;
       if (usageRoute == null) {
         hasMixedOrMissingUsageRoute = true;
       } else if (!sawUsageRoute) {
@@ -110,10 +101,6 @@ export function sumUsageStats(
       }
     }
   }
-  // Only true when every non-empty accumulated round used the subscription;
-  // zero baselines are neutral, while API-key or relay rounds make the total mixed.
-  total.viaChatGptSubscription =
-    sawUsageActivity && allRoundsViaChatGptSubscription;
   if (
     sawUsageActivity &&
     sawUsageRoute &&
@@ -134,7 +121,7 @@ export type RunUsageMap = z.infer<typeof RunUsageMapSchema>;
  * Extended token usage with per-round deltas. Note: percentageCached is
  * calculated from accumulated session totals for overall caching effectiveness.
  */
-export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
+export const ExtendedTokenUsageStatsSchema = TokenUsageStatsBaseSchema.extend({
   elapsedTime: z.number().nonnegative().optional(),
   percentageCached: z.number().nonnegative().optional(),
   reasoningTokens: TokenCountSchema.optional(),

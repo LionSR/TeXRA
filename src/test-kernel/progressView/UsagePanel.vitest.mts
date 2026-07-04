@@ -5,7 +5,11 @@ import { describe, expect, it } from 'vitest';
 import type { UsagePanel } from '@progressView/frontend/components/UsagePanel';
 
 // Local imports - shared schemas
-import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
+import {
+  TokenUsageStatsSchema,
+  type TokenUsageStats,
+  type UsageRoute,
+} from '@shared/schemas';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
@@ -45,12 +49,13 @@ function usageAriaLabel(element: UsagePanel): string {
 
 describe('usage-panel route badges', () => {
   it('shows subscription-backed usage as Free · ChatGPT', async () => {
-    const element = await mountUsagePanel(
-      usage({
-        cost: 0,
-        viaChatGptSubscription: true,
-      }),
-    );
+    const legacyUsage = TokenUsageStatsSchema.parse({
+      inputTokens: 1200,
+      outputTokens: 80,
+      cost: 0,
+      viaChatGptSubscription: true,
+    });
+    const element = await mountUsagePanel(legacyUsage);
 
     expect(panelText(element)).toContain('Free · ChatGPT');
     expect(usageAriaLabel(element)).toContain('Free via ChatGPT');
