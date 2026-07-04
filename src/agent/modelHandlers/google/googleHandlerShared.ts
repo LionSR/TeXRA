@@ -4,18 +4,10 @@ import { GoogleGenAI, type File } from '@google/genai';
 import { ReasoningEffort } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  hasEndTag,
-  type AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
-import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import type { FileLocation } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
-import { flexibleFS } from '@utils/files';
 
-import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
 import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 
@@ -256,81 +248,4 @@ export async function uploadGoogleMediaEntries<T>(
     );
   }
   return parts;
-}
-
-export interface GooglePseudoPrefillAdapter<M> {
-  readonly logger: AgentTrace;
-  appendPseudoPrefillToUserStep(messages: M[], pseudoPrefillMsg: string): void;
-  pushModelText(messages: M[], text: string): void;
-  addContinue(
-    messages: M[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
-  ): void;
-}
-
-/**
- * Shared `initializeOutputAndPrefill` body for Google handlers without
- * assistant prefill support.
- */
-export async function initializeGooglePseudoPrefillOutputAndPrefill<M>(
-  adapter: GooglePseudoPrefillAdapter<M>,
-  agentSetting: AgentSetting,
-  messages: M[],
-  workspaceState: AgentWorkspaceState,
-  outputLocation: FileLocation,
-  prefill: string,
-): Promise<[boolean, M[]]> {
-  adapter.logger.debug('Initializing output and prefill.', {
-    data: {
-      outputPath: outputLocation.absolutePath,
-      prefillPreview: prefill.slice(0, 100),
-    },
-  });
-
-  if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
-    adapter.logger.debug(
-      `Output file ${outputLocation.absolutePath} does not exist or is empty.`,
-    );
-    workspaceState.assembly.accumulatedOutput = prefill;
-
-    if (prefill.length === 0) {
-      adapter.logger.debug(
-        'No prefill provided; skipping pseudo-prefill instruction',
-      );
-      return [false, messages];
-    }
-
-    const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
-    adapter.appendPseudoPrefillToUserStep(messages, pseudoPrefillMsg);
-    adapter.logger.debug('Added pseudo-prefill message.', {
-      data: pseudoPrefillMsg,
-    });
-    return [false, messages];
-  }
-
-  adapter.logger.debug(
-    `Output file ${outputLocation.absolutePath} exists and is non-trivial. Reading content.`,
-  );
-
-  const { fileContent } = await prepareExistingOutputContent(
-    outputLocation,
-    workspaceState,
-    adapter.logger,
-  );
-
-  adapter.pushModelText(messages, fileContent);
-
-  if (hasEndTag(agentSetting, fileContent)) {
-    adapter.logger.debug(
-      'End tag detected in existing file content - skipping generation.',
-    );
-    return [true, messages];
-  }
-
-  adapter.logger.debug(
-    'Existing file content found without end tag - continuing generation.',
-  );
-  adapter.addContinue(messages, workspaceState, agentSetting);
-  return [false, messages];
 }

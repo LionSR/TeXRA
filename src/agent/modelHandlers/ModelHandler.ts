@@ -1,10 +1,15 @@
-// Local imports - agent
+// Standard library imports
+import { dirname } from 'node:path';
+
+// Third-party imports
 import {
   type ModelConfig,
   ModelProvider,
   type ModelCapabilities,
   ReasoningEffort,
 } from 'llm-zoo';
+
+// Local imports - agent
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
 import {
@@ -15,6 +20,7 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
+  hasEndTag,
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import type {
@@ -48,11 +54,19 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
+import { AbsoluteFS, flexibleFS } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import {
   getProviderStreaming,
   getGlobalStreaming,
 } from '@utils/config/providerConfig';
-import { getConfig } from '@utils/config/configUtils';
+import {
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+  TOOL_USE_SAFETY_BUFFER,
+  TOOL_USE_MAX_OUTPUT_FACTOR,
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+} from './contextManagementConstants';
 import { computeUtilizationPercent } from './support/contextUtilization';
 import { logCompactionEvent } from './support/compactionLogging';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
@@ -69,13 +83,8 @@ import {
   GOOGLE_FINISH,
   OPENAI_CHAT_FINISH,
 } from './types/StopReasonTypes';
-import {
-  computeReducedMaxTokens,
-  TOKEN_SAFETY_BUFFER,
-  TOOL_USE_SAFETY_BUFFER,
-  TOOL_USE_MAX_OUTPUT_FACTOR,
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-} from './contextManagementConstants';
+import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { isTokenLimitStopReason } from './utils/stopReasonUtils';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -103,6 +112,19 @@ const DEFAULT_CONTINUE_LIMIT = 10;
 // Default token limits
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
+
+type UserTextPlacement = 'last-user' | 'continuation';
+
+interface AssistantTextAppendOptions {
+  /**
+   * True when the current trailing user/system message may be the synthetic
+   * continuation prompt. Providers decide whether to append to the previous
+   * assistant turn and whether the trailing prompt should be removed.
+   */
+  readonly afterContinuationPrompt?: boolean;
+  /** Provider fallback when converting an existing assistant message shape. */
+  readonly fallbackText?: string;
+}
 
 // Stop markers that signal a completed turn across providers.
 const END_TURN_REASONS: ProviderStopReason[] = [
@@ -834,6 +856,28 @@ export abstract class ModelHandler<
   ): ExtractResponseResult;
 
   /**
+   * Append provider-shaped user text. `last-user` is for pseudo-prefill
+   * instructions that should join the current request; `continuation` is for the
+   * synthetic "cut off" prompt added between model calls.
+   */
+  protected abstract appendUserText(
+    messages: M[],
+    text: string,
+    placement: UserTextPlacement,
+  ): void;
+
+  /**
+   * Append text to the existing assistant/model turn when the provider message
+   * shape allows it. Returns false when the base template should create a fresh
+   * assistant message instead.
+   */
+  protected abstract appendTextToLastAssistantMessage(
+    messages: M[],
+    text: string,
+    options?: AssistantTextAppendOptions,
+  ): boolean;
+
+  /**
    * Manages continuation for truncated responses in multi-turn conversations
    * with prefill support. Most models with prefill don't need special handling,
    * so the default is a no-op. Override in subclasses only if custom behavior is
@@ -851,11 +895,21 @@ export abstract class ModelHandler<
    * Manages continuation for truncated responses in multi-turn conversations without prefill support.
    * Updates messages array and tool state for next turn.
    */
-  abstract addContinueMessageWithoutPrefill(
+  addContinueMessageWithoutPrefill(
     messages: M[],
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-  ): void;
+  ): void {
+    const continuationPrompt = this.createContinuationPrompt(
+      workspaceState,
+      agentSetting,
+    );
+
+    this.logger.debug('Adding continuation message to conversation', {
+      data: { continuationMessage: continuationPrompt },
+    });
+    this.appendUserText(messages, continuationPrompt, 'continuation');
+  }
 
   /**
    * Configured client-side compaction threshold, as a percentage of the context
@@ -965,14 +1019,94 @@ export abstract class ModelHandler<
    * Sets up output file and handles content prefilling.
    * @returns Promise resolving to [isComplete: generation complete, messages: updated message array]
    */
-  abstract initializeOutputAndPrefill(
-    agentConfig: AgentConfig,
+  async initializeOutputAndPrefill(
+    _agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: M[],
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
     prefill: string,
-  ): Promise<[boolean, M[]]>;
+  ): Promise<[boolean, M[]]> {
+    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
+      if (this.capabilities.supportsAssistantPrefill) {
+        if (prefill.length === 0) {
+          this.logger.debug(
+            'No prefill provided; skipping assistant prefill message',
+          );
+          return [false, messages];
+        }
+
+        this.logger.debug('Adding prefill message', { data: prefill });
+        workspaceState.assembly.accumulatedOutput = `${prefill}\n`;
+        await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
+        await flexibleFS.write(
+          outputLocation,
+          workspaceState.assembly.accumulatedOutput,
+        );
+        messages.push(this.createAssistantMessageForPrefillText(prefill));
+        return [false, messages];
+      }
+
+      if (this.shouldStorePseudoPrefillAsOutput) {
+        workspaceState.assembly.accumulatedOutput = prefill;
+      }
+
+      if (prefill.length === 0) {
+        this.logger.debug(
+          'No prefill provided; skipping pseudo-prefill instruction',
+        );
+        return [false, messages];
+      }
+
+      const pseudoPrefill = this.createPseudoPrefillPrompt(prefill);
+      this.appendUserText(messages, pseudoPrefill, 'last-user');
+      this.logger.debug('Added pseudo-prefill message', {
+        data: pseudoPrefill,
+      });
+      return [false, messages];
+    }
+
+    const { fileContent } = await prepareExistingOutputContent(
+      outputLocation,
+      workspaceState,
+      this.logger,
+    );
+
+    messages.push(this.createAssistantMessageForPrefillText(fileContent));
+
+    if (hasEndTag(agentSetting, fileContent)) {
+      this.logger.debug(
+        'End tag detected - skipping model call (response already added above)',
+      );
+      return [true, messages];
+    }
+
+    this.logger.debug(
+      'Output file exists but no end tag found - continuing from file',
+    );
+
+    if (
+      !this.capabilities.supportsAssistantPrefill &&
+      this.shouldPrependPrefillOnResumeWithoutAssistantPrefill &&
+      !fileContent.includes(prefill)
+    ) {
+      workspaceState.assembly.accumulatedOutput = prefill + fileContent;
+      await flexibleFS.write(
+        outputLocation,
+        workspaceState.assembly.accumulatedOutput,
+      );
+    }
+
+    if (!this.capabilities.supportsAssistantPrefill) {
+      this.addContinueMessageWithoutPrefill(
+        messages,
+        workspaceState,
+        agentSetting,
+      );
+    }
+
+    return [false, messages];
+  }
 
   /**
    * Calculates API usage cost based on token counts and provider pricing.
@@ -996,33 +1130,98 @@ export abstract class ModelHandler<
    * Updates model message content with response for models with prefill support.
    * Handles cache control and content formatting.
    */
-  abstract updateMessageContentWithPrefill(
+  updateMessageContentWithPrefill(
     messages: M[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
-  ): void;
+  ): void {
+    const text = bestConnector + newResponse;
+    if (
+      this.appendTextToLastAssistantMessage(messages, text, {
+        fallbackText: workspaceState.assembly.accumulatedOutput,
+      })
+    ) {
+      return;
+    }
+
+    messages.push(this.createAssistantMessageForPrefillText(text));
+  }
 
   /**
    * Updates model message content with response for models without prefill support.
    * Handles cache control and content formatting.
    */
-  abstract updateMessageContentWithoutPrefill(
+  updateMessageContentWithoutPrefill(
     messages: M[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
-  ): void;
+  ): void {
+    const text = bestConnector + newResponse;
+    if (
+      this.appendTextToLastAssistantMessage(messages, text, {
+        afterContinuationPrompt: true,
+        fallbackText: workspaceState.assembly.accumulatedOutput,
+      })
+    ) {
+      return;
+    }
+
+    messages.push(
+      this.createAssistantMessageForAccumulatedOutput(workspaceState),
+    );
+  }
 
   /**
    * Determines if model should continue generating based on response state.
    * @returns Boolean indicating if generation should continue
    */
-  abstract shouldContinue(
+  shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: AgentSetting,
-  ): boolean;
+  ): boolean {
+    const hasResponseEndTag = hasEndTag(agentSetting, newResponse);
+    const shouldContinue =
+      isTokenLimitStopReason(stopReason) && !hasResponseEndTag;
+
+    this.logger.debug(
+      shouldContinue
+        ? `Should continue: token limit reached and end tag '${agentSetting.endTag}' is missing.`
+        : `Should not continue: StopReason='${stopReason}', HasEndTag='${hasResponseEndTag}'.`,
+    );
+    return shouldContinue;
+  }
+
+  /** Provider hook for pseudo-prefill prompt wording. */
+  protected createPseudoPrefillPrompt(prefill: string): string {
+    return `Organize your response with xml tags. Start your response with:\n${prefill}`;
+  }
+
+  /** Whether pseudo-prefill should seed accumulated output before the model call. */
+  protected get shouldStorePseudoPrefillAsOutput(): boolean {
+    return false;
+  }
+
+  /** Whether resume should rewrite missing prefill into existing output files. */
+  protected get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
+    return false;
+  }
+
+  /** Provider hook for fresh assistant turns after a no-prefill response. */
+  protected createAssistantMessageForAccumulatedOutput(
+    workspaceState: AgentWorkspaceState,
+  ): M {
+    return this.createAssistantMessage(
+      workspaceState.assembly.accumulatedOutput,
+    );
+  }
+
+  /** Provider hook for assistant text used as prefill/resume context. */
+  protected createAssistantMessageForPrefillText(text: string): M {
+    return this.createAssistantMessage(text);
+  }
 
   /**
    * Extracts thinking content from model responses
