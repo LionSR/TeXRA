@@ -178,7 +178,9 @@ export async function checkToolInstalled(
   // Get the config object - either passed directly or looked up by string key
   const toolName = typeof toolOrConfig === 'string' ? toolOrConfig : null;
   const config: ToolConfig | undefined =
-    typeof toolOrConfig === 'string' ? TOOL_CONFIGS[toolOrConfig] : toolOrConfig;
+    typeof toolOrConfig === 'string'
+      ? TOOL_CONFIGS[toolOrConfig]
+      : toolOrConfig;
 
   if (!config) {
     if (showError) {

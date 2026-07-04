@@ -82,9 +82,7 @@ export function attachFlowAutoRetryRequired(err: unknown): void {
 export function requiresFlowAutoRetry(err: unknown): boolean {
   return (
     findInCauseChain(err, (current) =>
-      flowAutoRetryRequiredMetadata.detect(current) === true
-        ? true
-        : undefined,
+      flowAutoRetryRequiredMetadata.detect(current) === true ? true : undefined,
     ) ?? false
   );
 }
