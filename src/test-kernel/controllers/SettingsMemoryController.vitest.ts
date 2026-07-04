@@ -110,7 +110,7 @@ function createController(options?: {
       setMemoryEnabled: async (enabled) => {
         memoryEnabled = enabled;
       },
-      resolveStoragePath: (storagePath) => `mem/${storagePath}`,
+      memoryStoragePath: (storagePath) => `mem/${storagePath}`,
       storage,
       maxPinnedMemories: 3,
       parseMemoryFile,

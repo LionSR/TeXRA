@@ -48,7 +48,7 @@ import { assertNoParentTraversal } from '@tools/pathResolution';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { clamp, unique } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
-import { resolveStoragePath } from '@utils/files/taskRunStorage';
+import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import {
   formatResultCount,
@@ -821,7 +821,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   }
 
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
-    const runDir = await resolveStoragePath(executionId);
+    const runDir = await findExistingRunStoragePath(executionId);
     if (!runDir) {
       return {
         status: 'executed',
@@ -856,7 +856,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   ): Promise<ToolResult> {
     const displayPath = `/executions/${executionId}/files/${filePath}`;
     assertNoParentTraversal(filePath);
-    const fullPath = await resolveStoragePath(executionId, filePath);
+    const fullPath = await findExistingRunStoragePath(executionId, filePath);
     if (!fullPath) {
       throw new ToolError(`File not found: ${displayPath}`);
     }
