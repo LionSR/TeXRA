@@ -9,6 +9,7 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import {
   EXECUTION_STATUS,
@@ -456,6 +457,42 @@ describe('executeCliConfig', () => {
         terminalStatus: EXECUTION_STATUS.COMPLETED,
         workingDirectory: '/tmp/project',
         lastResponse: 'Done.',
+      },
+    });
+  });
+
+  it('uses the resolved terminal status for tool-use JSON output', async () => {
+    const { AgentCategory } =
+      await import('@agent/core/definition/AgentDataclass');
+    const { executeCliToolUseConfig } =
+      await import('@cli/runtime/runExecution');
+    mocks.runAgent.mockResolvedValueOnce({
+      category: AgentCategory.ToolUse,
+      executionId: 'exec-1',
+      outcome: 'completed',
+      lastResponse: 'Done.',
+    });
+    mocks.readCliTerminalStatus.mockResolvedValueOnce(
+      EXECUTION_STATUS.INTERRUPTED,
+    );
+
+    const result = await executeCliToolUseConfig(
+      toolUseConfig(),
+      cliContext(),
+      {
+        registerExecution: true,
+        stopAfterCycle: true,
+      },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      exitCode: CliExitCode.Interrupted,
+      displayResult: {
+        status: EXECUTION_STATUS.INTERRUPTED,
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        endGroupStatus: 'stopped',
+        workingDirectory: '/tmp/project',
       },
     });
   });

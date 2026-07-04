@@ -94,6 +94,28 @@ describe('CLI workflow output resolution', () => {
     ).rejects.toThrow(/b\.tex/);
   });
 
+  it('uses resolved interrupted status for missing workflow output results', async () => {
+    const cwd = await makeTempDir();
+
+    const displayResult = await resolveWorkflowOutput(
+      'out.tex',
+      undefined,
+      workflowResult([]),
+      testContext(cwd),
+      {
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      },
+    );
+
+    expect(displayResult).toMatchObject({
+      status: EXECUTION_STATUS.INTERRUPTED,
+      endGroupStatus: END_GROUP_STATUS.STOPPED,
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      workingDirectory: cwd,
+    });
+    expect(Object.hasOwn(displayResult, 'copiedOutput')).toBe(false);
+  });
+
   it('copies every expected --output-dir workflow output', async () => {
     const cwd = await makeTempDir();
     const runA1 = join(cwd, 'run', 'r1', 'a.tex');
