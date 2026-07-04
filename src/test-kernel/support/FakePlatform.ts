@@ -1,6 +1,9 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { createFsFromVolume, Volume, type IFs } from 'memfs';
+
 // Local imports - platform
 import {
   FileType,
@@ -22,19 +25,6 @@ import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { AgentDirectoriesPort } from '@platform/interfaces/agentDirectories';
 
-type FakeFileRecord =
-  | {
-      type: typeof FileType.Directory;
-      ctime: number;
-      mtime: number;
-    }
-  | {
-      type: typeof FileType.File;
-      ctime: number;
-      mtime: number;
-      content: Uint8Array;
-    };
-
 export type RecordingLogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface RecordingLogEntry {
@@ -46,20 +36,8 @@ function fakeFsError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
 }
 
-function now(): number {
-  return Date.now();
-}
-
-function cloneBytes(content: Uint8Array): Uint8Array {
-  return new Uint8Array(content);
-}
-
 function normalizePath(target: string): string {
   return path.posix.resolve('/', target.replaceAll('\\', '/'));
-}
-
-function parentPath(target: string): string {
-  return path.posix.dirname(normalizePath(target));
 }
 
 function relativeChildPath(
@@ -81,51 +59,35 @@ function hasChildPath(parent: string, candidate: string): boolean {
   return relativeChildPath(parent, candidate) !== undefined;
 }
 
-function directChildName(
-  parent: string,
-  candidate: string,
-): string | undefined {
-  return relativeChildPath(parent, candidate)?.split(path.posix.sep).at(0);
-}
+type FileTypeProbe = {
+  isSymbolicLink(): boolean;
+  isFile(): boolean;
+  isDirectory(): boolean;
+};
 
-function fileSize(record: FakeFileRecord): number {
-  return record.type === FileType.File ? record.content.byteLength : 0;
-}
+type DirectoryEntryProbe = FileTypeProbe & { name: string };
 
-function fileStat(record: FakeFileRecord): FileStat {
-  return {
-    type: record.type,
-    ctime: record.ctime,
-    mtime: record.mtime,
-    size: fileSize(record),
-  };
-}
-
-function cloneRecord(record: FakeFileRecord): FakeFileRecord {
-  if (record.type === FileType.File) {
-    return {
-      ...record,
-      content: cloneBytes(record.content),
-    };
+async function resolveSymlinkType(fs: IFs, target: string): Promise<number> {
+  let targetType: number = FileType.Unknown;
+  try {
+    const stats = await fs.promises.stat(target);
+    if (stats.isFile()) targetType = FileType.File;
+    else if (stats.isDirectory()) targetType = FileType.Directory;
+  } catch {
+    // Dangling symlink: preserve the symlink bit with an unknown target type.
   }
-  return { ...record };
+  return FileType.SymbolicLink | targetType;
 }
 
-function copyRecord(record: FakeFileRecord): FakeFileRecord {
-  const timestamp = now();
-  if (record.type === FileType.File) {
-    return {
-      type: FileType.File,
-      ctime: timestamp,
-      mtime: timestamp,
-      content: cloneBytes(record.content),
-    };
-  }
-  return {
-    type: FileType.Directory,
-    ctime: timestamp,
-    mtime: timestamp,
-  };
+async function fileTypeFor(
+  fs: IFs,
+  entry: FileTypeProbe,
+  target: string,
+): Promise<number> {
+  if (entry.isSymbolicLink()) return resolveSymlinkType(fs, target);
+  if (entry.isFile()) return FileType.File;
+  if (entry.isDirectory()) return FileType.Directory;
+  return FileType.Unknown;
 }
 
 export class FakeConfigProvider implements ConfigProvider {
@@ -280,35 +242,44 @@ export class FakeStateStore implements StateStore {
 }
 
 export class FakeFileSystemProvider implements FileSystemProvider {
-  private readonly records = new Map<string, FakeFileRecord>();
+  private readonly fs: IFs;
 
   constructor(files: Record<string, string | Uint8Array> = {}) {
-    this.createDirectorySync('/');
+    this.fs = createFsFromVolume(new Volume());
+    this.fs.mkdirSync('/', { recursive: true });
     for (const [target, content] of Object.entries(files)) {
       this.setFile(target, content);
     }
   }
 
   async stat(target: string): Promise<FileStat> {
-    return fileStat(this.requireRecord(target));
+    const normalized = normalizePath(target);
+    const lstats = await this.fs.promises.lstat(normalized);
+    const type = await fileTypeFor(this.fs, lstats, normalized);
+    const stats = lstats.isSymbolicLink()
+      ? await this.fs.promises.stat(normalized).catch(() => lstats)
+      : lstats;
+    return {
+      type,
+      ctime: Number(stats.ctimeMs),
+      mtime: Number(stats.mtimeMs),
+      size: Number(stats.size),
+    };
   }
 
-  async isSymlink(_target: string): Promise<boolean> {
-    // FakeFileSystemProvider does not model symlinks.
-    return false;
+  async isSymlink(target: string): Promise<boolean> {
+    const stats = await this.fs.promises.lstat(normalizePath(target));
+    return stats.isSymbolicLink();
   }
 
   async realPath(target: string): Promise<string> {
-    this.requireRecord(target);
-    return normalizePath(target);
+    const resolved = await this.fs.promises.realpath(normalizePath(target));
+    return resolved.toString();
   }
 
   async readFile(target: string): Promise<Uint8Array> {
-    const record = this.requireRecord(target);
-    if (record.type !== FileType.File) {
-      throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
-    }
-    return cloneBytes(record.content);
+    const content = await this.fs.promises.readFile(normalizePath(target));
+    return typeof content === 'string' ? Buffer.from(content) : content;
   }
 
   async readFileChunk(
@@ -321,25 +292,23 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   }
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
-    this.writeFileSync(target, content, { overwrite: true });
+    await this.fs.promises.writeFile(
+      normalizePath(target),
+      Buffer.from(content),
+    );
   }
 
   async writeFileAtomic(target: string, content: Uint8Array): Promise<void> {
     // In-memory: the temp+rename of a real atomic write has no observable
     // intermediate state here, so a direct write is equivalent.
-    this.writeFileSync(target, content, { overwrite: true });
+    await this.writeFile(target, content);
   }
 
   async appendFile(target: string, content: Uint8Array): Promise<void> {
-    const existing = this.records.get(normalizePath(target));
-    if (existing && existing.type !== FileType.File) {
-      throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
-    }
-    const base = existing?.content ?? new Uint8Array(0);
-    const merged = new Uint8Array(base.length + content.length);
-    merged.set(base, 0);
-    merged.set(content, base.length);
-    this.writeFileSync(target, merged, { overwrite: true });
+    await this.fs.promises.appendFile(
+      normalizePath(target),
+      Buffer.from(content),
+    );
   }
 
   async delete(
@@ -350,50 +319,33 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     if (normalized === '/') {
       throw fakeFsError('EPERM', 'Cannot delete filesystem root');
     }
-    const record = this.records.get(normalized);
-    if (!record) {
-      return;
-    }
-
-    if (record.type === FileType.File) {
-      this.records.delete(normalized);
-      return;
-    }
-
-    const children = this.childPaths(normalized);
-    if (children.length > 0 && !options?.recursive) {
-      throw fakeFsError('ENOTEMPTY', `Directory is not empty: ${target}`);
-    }
-    for (const child of children) {
-      this.records.delete(child);
-    }
-    if (normalized !== '/') {
-      this.records.delete(normalized);
-    }
+    await this.fs.promises.rm(normalized, {
+      recursive: options?.recursive ?? false,
+      force: true,
+    });
   }
 
   async createDirectory(target: string): Promise<void> {
-    this.createDirectorySync(target);
+    await this.fs.promises.mkdir(normalizePath(target), { recursive: true });
   }
 
   async readDirectory(target: string): Promise<[string, number][]> {
     const normalized = normalizePath(target);
-    const record = this.requireRecord(normalized);
-    if (record.type !== FileType.Directory) {
-      throw fakeFsError('ENOTDIR', `Path is not a directory: ${target}`);
-    }
-
-    const entries = new Map<string, number>();
-    for (const candidate of this.records.keys()) {
-      const name = directChildName(normalized, candidate);
-      if (name == null) continue;
-      const childPath = path.posix.join(normalized, name);
-      const childRecord = this.records.get(childPath);
-      entries.set(name, childRecord?.type ?? FileType.Directory);
-    }
-    return [...entries.entries()].sort(([left], [right]) =>
-      left.localeCompare(right),
+    const entries = await this.fs.promises.readdir(normalized, {
+      withFileTypes: true,
+    });
+    const dirents = entries as DirectoryEntryProbe[];
+    const resolved = await Promise.all(
+      dirents.map(async (entry) => {
+        const type = await fileTypeFor(
+          this.fs,
+          entry,
+          path.posix.join(normalized, entry.name),
+        );
+        return [entry.name, type] as [string, number];
+      }),
     );
+    return resolved.toSorted(([left], [right]) => left.localeCompare(right));
   }
 
   async copy(
@@ -403,38 +355,31 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   ): Promise<void> {
     const normalizedSource = normalizePath(source);
     const normalizedDest = normalizePath(dest);
-    const sourceRecord = this.requireRecord(normalizedSource);
-    if (normalizedSource === normalizedDest) {
-      throw fakeFsError(
-        'EINVAL',
-        sourceRecord.type === FileType.Directory
-          ? `Cannot copy a directory onto itself: ${source} -> ${dest}`
-          : `Cannot copy a file onto itself: ${source} -> ${dest}`,
-      );
-    }
-
-    if (sourceRecord.type === FileType.File) {
-      this.assertWritableTarget(normalizedDest, options?.overwrite);
-      this.writeFileSync(normalizedDest, sourceRecord.content, {
-        overwrite: options?.overwrite,
+    const sourceStats = await this.fs.promises.stat(normalizedSource);
+    if (sourceStats.isDirectory()) {
+      if (normalizedSource === normalizedDest) {
+        throw fakeFsError(
+          'ERR_FS_CP_EINVAL',
+          `Cannot copy a path onto itself: ${source} -> ${dest}`,
+        );
+      }
+      if (hasChildPath(normalizedSource, normalizedDest)) {
+        throw fakeFsError(
+          'ERR_FS_CP_EINVAL',
+          `Cannot copy a directory into itself: ${source} -> ${dest}`,
+        );
+      }
+      await this.fs.promises.cp(normalizedSource, normalizedDest, {
+        recursive: true,
+        force: options?.overwrite ?? false,
+        errorOnExist: !(options?.overwrite ?? false),
+        dereference: options?.dereference ?? false,
       });
       return;
     }
 
-    this.assertNotSelfDescendant(normalizedSource, normalizedDest, 'copy');
-    this.assertDirectoryCopyRootTarget(normalizedDest);
-    this.createDirectorySync(normalizedDest);
-    for (const child of this.childPaths(normalizedSource)) {
-      const relative = path.posix.relative(normalizedSource, child);
-      const childDest = path.posix.join(normalizedDest, relative);
-      const childRecord = this.requireRecord(child);
-      this.assertDirectoryCopyChildTarget(
-        childDest,
-        childRecord,
-        options?.overwrite,
-      );
-      this.records.set(childDest, copyRecord(childRecord));
-    }
+    const flag = options?.overwrite ? 0 : this.fs.constants.COPYFILE_EXCL;
+    await this.fs.promises.copyFile(normalizedSource, normalizedDest, flag);
   }
 
   async rename(
@@ -444,215 +389,40 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   ): Promise<void> {
     const normalizedSource = normalizePath(source);
     const normalizedDest = normalizePath(dest);
-    const sourceRecord = this.requireRecord(normalizedSource);
-    if (normalizedSource === normalizedDest) {
-      return;
-    }
-
-    this.assertWritableTarget(normalizedDest, options?.overwrite);
-
-    if (sourceRecord.type === FileType.File) {
-      const existing = this.records.get(normalizedDest);
-      if (existing?.type === FileType.Directory) {
-        throw fakeFsError('EISDIR', `Path is a directory: ${dest}`);
+    if (!options?.overwrite) {
+      try {
+        await this.fs.promises.lstat(normalizedDest);
+        throw fakeFsError('EEXIST', `Target already exists: ${dest}`);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
       }
-      this.assertParentDirectoryExists(normalizedDest);
-      this.records.set(normalizedDest, cloneRecord(sourceRecord));
-      this.records.delete(normalizedSource);
-      return;
     }
-
-    this.assertNotSelfDescendant(normalizedSource, normalizedDest, 'rename');
-    this.assertDirectoryRenameTarget(normalizedDest);
-    this.assertParentDirectoryExists(normalizedDest);
-    this.createDirectorySync(normalizedDest);
-    for (const child of this.childPaths(normalizedSource)) {
-      const relative = path.posix.relative(normalizedSource, child);
-      const childDest = path.posix.join(normalizedDest, relative);
-      this.records.set(childDest, cloneRecord(this.requireRecord(child)));
+    const sourceStats = await this.fs.promises.lstat(normalizedSource);
+    if (
+      sourceStats.isDirectory() &&
+      hasChildPath(normalizedSource, normalizedDest)
+    ) {
+      throw fakeFsError(
+        'EINVAL',
+        `Cannot rename a directory into itself: ${source} -> ${dest}`,
+      );
     }
-    await this.delete(normalizedSource, { recursive: true });
+    await this.fs.promises.rename(normalizedSource, normalizedDest);
   }
 
   exists(target: string): boolean {
-    return this.records.has(normalizePath(target));
+    return this.fs.existsSync(normalizePath(target));
   }
 
   setFile(target: string, content: string | Uint8Array): void {
-    this.writeFileSync(target, stringToBytes(content), {
-      createParent: true,
-      overwrite: true,
-    });
+    const normalized = normalizePath(target);
+    this.fs.mkdirSync(path.posix.dirname(normalized), { recursive: true });
+    this.fs.writeFileSync(normalized, Buffer.from(stringToBytes(content)));
   }
 
   getText(target: string): string {
-    return Buffer.from(this.requireFile(target).content).toString('utf8');
-  }
-
-  private requireRecord(target: string): FakeFileRecord {
-    const normalized = normalizePath(target);
-    const record = this.records.get(normalized);
-    if (!record) {
-      throw fakeFsError('ENOENT', `File not found: ${target}`);
-    }
-    return record;
-  }
-
-  private requireFile(
-    target: string,
-  ): Extract<FakeFileRecord, { content: Uint8Array }> {
-    const record = this.requireRecord(target);
-    if (record.type !== FileType.File) {
-      throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
-    }
-    return record;
-  }
-
-  private writeFileSync(
-    target: string,
-    content: Uint8Array,
-    options: { createParent?: boolean; overwrite?: boolean } = {},
-  ): void {
-    const normalized = normalizePath(target);
-    const existing = this.records.get(normalized);
-    if (existing?.type === FileType.Directory) {
-      throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
-    }
-    if (existing && !options.overwrite) {
-      throw fakeFsError('EEXIST', `Target already exists: ${target}`);
-    }
-
-    const parent = parentPath(normalized);
-    if (options.createParent) {
-      this.createDirectorySync(parent);
-    } else {
-      const parentRecord = this.records.get(parent);
-      if (!parentRecord) {
-        throw fakeFsError('ENOENT', `Parent directory not found: ${parent}`);
-      }
-      if (parentRecord.type !== FileType.Directory) {
-        throw fakeFsError(
-          'ENOTDIR',
-          `Parent path is not a directory: ${parent}`,
-        );
-      }
-    }
-
-    const timestamp = now();
-    this.records.set(normalized, {
-      type: FileType.File,
-      ctime: timestamp,
-      mtime: timestamp,
-      content: cloneBytes(content),
-    });
-  }
-
-  private createDirectorySync(target: string): void {
-    const normalized = normalizePath(target);
-    const existing = this.records.get(normalized);
-    if (existing?.type === FileType.File) {
-      throw fakeFsError('ENOTDIR', `Path is a file: ${target}`);
-    }
-
-    const parts = normalized.split(path.posix.sep).filter(Boolean);
-    let current: string = path.posix.sep;
-    this.ensureDirectoryRecord(current);
-    for (const part of parts) {
-      current = path.posix.join(current, part);
-      this.ensureDirectoryRecord(current);
-    }
-  }
-
-  private ensureDirectoryRecord(target: string): void {
-    const existing = this.records.get(target);
-    if (existing?.type === FileType.File) {
-      throw fakeFsError('ENOTDIR', `Path is a file: ${target}`);
-    }
-    if (!existing) {
-      const timestamp = now();
-      this.records.set(target, {
-        type: FileType.Directory,
-        ctime: timestamp,
-        mtime: timestamp,
-      });
-    }
-  }
-
-  private childPaths(parent: string): string[] {
-    return [...this.records.keys()].filter((candidate) =>
-      hasChildPath(parent, candidate),
-    );
-  }
-
-  private assertWritableTarget(target: string, overwrite?: boolean): void {
-    if (!overwrite && this.records.has(target)) {
-      throw fakeFsError('EEXIST', `Target already exists: ${target}`);
-    }
-  }
-
-  private assertNotSelfDescendant(
-    source: string,
-    dest: string,
-    operation: string,
-  ): void {
-    if (hasChildPath(source, dest)) {
-      throw fakeFsError(
-        'EINVAL',
-        `Cannot ${operation} a directory into itself: ${source} -> ${dest}`,
-      );
-    }
-  }
-
-  private assertDirectoryRenameTarget(dest: string): void {
-    const destRecord = this.records.get(dest);
-    if (destRecord?.type === FileType.File) {
-      throw fakeFsError('ENOTDIR', `Path is a file: ${dest}`);
-    }
-    if (
-      destRecord?.type === FileType.Directory &&
-      this.childPaths(dest).length > 0
-    ) {
-      throw fakeFsError('ENOTEMPTY', `Directory is not empty: ${dest}`);
-    }
-  }
-
-  private assertDirectoryCopyRootTarget(dest: string): void {
-    const destRecord = this.records.get(dest);
-    if (destRecord?.type === FileType.File) {
-      throw fakeFsError('ENOTDIR', `Path is a file: ${dest}`);
-    }
-  }
-
-  private assertDirectoryCopyChildTarget(
-    dest: string,
-    sourceRecord: FakeFileRecord,
-    overwrite?: boolean,
-  ): void {
-    const destRecord = this.records.get(dest);
-    if (!destRecord) {
-      return;
-    }
-    if (destRecord.type === sourceRecord.type) {
-      if (sourceRecord.type === FileType.File && !overwrite) {
-        throw fakeFsError('EEXIST', `Target already exists: ${dest}`);
-      }
-      return;
-    }
-    if (destRecord.type === FileType.Directory) {
-      throw fakeFsError('EISDIR', `Path is a directory: ${dest}`);
-    }
-    throw fakeFsError('ENOTDIR', `Path is a file: ${dest}`);
-  }
-
-  private assertParentDirectoryExists(target: string): void {
-    const parent = parentPath(target);
-    const parentRecord = this.records.get(parent);
-    if (!parentRecord) {
-      throw fakeFsError('ENOENT', `Parent directory not found: ${parent}`);
-    }
-    if (parentRecord.type !== FileType.Directory) {
-      throw fakeFsError('ENOTDIR', `Parent path is not a directory: ${parent}`);
-    }
+    const content = this.fs.readFileSync(normalizePath(target));
+    return typeof content === 'string' ? content : content.toString('utf8');
   }
 }
 
