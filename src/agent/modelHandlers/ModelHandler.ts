@@ -93,7 +93,6 @@ import { isTokenLimitStopReason } from './utils/stopReasonUtils';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
 import type {
-  IModelHandler,
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
@@ -149,7 +148,7 @@ export abstract class ModelHandler<
   T extends SdkToolCall = SdkToolCall,
   C = unknown,
   Resp = unknown,
-> implements IModelHandler<M, U, T, C, Resp> {
+> {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;
