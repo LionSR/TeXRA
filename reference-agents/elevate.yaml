@@ -6,9 +6,6 @@ settings:
   documentTag: documents
   endTag: </documents>
   outputExt: tex
-  prefills:
-    - <scratchpad>
-    - <scratchpad>
 
 prompts:
   systemPrompt: |
