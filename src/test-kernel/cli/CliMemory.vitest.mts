@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   cliMemoryItemDescription,
+  cliMemoryStoragePathFromInput,
   formatCliMemoryList,
-  resolveCliMemoryStoragePath,
 } from '@cli/runtime/memory';
 import { memorySelectWindow } from '@cli/chat/tui/forms/MemoryListForm';
 import type { MemoryViewItem } from '@shared/schemas';
@@ -60,12 +60,12 @@ describe('CLI memory formatting', () => {
       'memories\\project.md',
       'project.md',
     ]) {
-      expect(resolveCliMemoryStoragePath(input)).toBe('memories/project.md');
+      expect(cliMemoryStoragePathFromInput(input)).toBe('memories/project.md');
     }
   });
 
   it('rejects absolute paths outside the memory display root', () => {
-    expect(() => resolveCliMemoryStoragePath('/memoriesExtra')).toThrow(
+    expect(() => cliMemoryStoragePathFromInput('/memoriesExtra')).toThrow(
       'Invalid memory path',
     );
   });
