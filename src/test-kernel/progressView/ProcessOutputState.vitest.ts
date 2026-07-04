@@ -97,6 +97,100 @@ function dispatch(
 }
 
 describe('process output frontend state', () => {
+  it('patches one stream metadata record without replacing siblings', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const siblingId = 'stream-b' as StreamTabId;
+    const state = createInitialState();
+    state.activeStreamId = streamId;
+    state.streamFilter = 'workflow';
+    state.streamById.set(siblingId, {
+      name: siblingId,
+      label: 'old sibling',
+      agentCategory: AgentCategory.ToolUse,
+      creationTimestamp: 2,
+    });
+    state.streamById.set(streamId, {
+      name: streamId,
+      label: 'stream-a',
+      agentCategory: AgentCategory.Workflow,
+      creationTimestamp: 1,
+    });
+    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
+    state.streamStates.set(
+      siblingId,
+      createStreamState(AgentCategory.ToolUse, {
+        status: STREAM_PHASE.RUNNING,
+        activeSubagents: [
+          {
+            executionId: 'old-child',
+            agentName: 'old child',
+          },
+        ],
+      } satisfies Partial<StreamState>),
+    );
+    const { ctx, getState } = createContext(state);
+
+    dispatch(
+      streamMetaHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+        streamInfo: {
+          name: siblingId,
+          label: 'search',
+          agent: 'search',
+          model: 'deepseekproT',
+          agentCategory: AgentCategory.ToolUse,
+          creationTimestamp: 2,
+        },
+        streamState: {
+          kind: AgentCategory.ToolUse,
+          status: STREAM_PHASE.WAITING,
+          lastTimestamp: 9,
+          conversationProgress: {
+            conversationTurns: 2,
+            toolCallCount: 3,
+          },
+          activeSubagents: [],
+          finishedSubagentCount: 1,
+          activeProcesses: [
+            {
+              executionId: 'process-a',
+              agentName: 'bash',
+            },
+          ],
+          finishedProcessCount: 0,
+        },
+        activeStream: siblingId,
+        agentFilter: 'toolUse',
+      },
+      ctx,
+    );
+
+    expect(getState().streamById.get(streamId)?.label).toBe('stream-a');
+    expect(getState().streamById.get(siblingId)).toMatchObject({
+      label: 'search',
+      model: 'deepseekproT',
+    });
+    expect(getState().streamStates.get(siblingId)).toMatchObject({
+      status: STREAM_PHASE.WAITING,
+      lastTimestamp: 9,
+      conversationProgress: {
+        conversationTurns: 2,
+        toolCallCount: 3,
+      },
+      finishedSubagentCount: 1,
+      activeProcesses: [
+        {
+          executionId: 'process-a',
+          agentName: 'bash',
+        },
+      ],
+    });
+    expect(getState().activeStreamId).toBe(siblingId);
+    expect(getState().streamFilter).toBe('toolUse');
+    expect([...getState().streamById.keys()]).toEqual([siblingId, streamId]);
+  });
+
   it('appends output without pruning sibling process entries', () => {
     const streamId = 'stream-a' as StreamTabId;
     const { ctx, getState } = createContext(createProcessState(streamId));
