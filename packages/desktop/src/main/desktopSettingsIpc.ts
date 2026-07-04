@@ -1,4 +1,5 @@
 import { platform, tryPlatform } from '@platform/platform';
+import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import {
@@ -83,7 +84,6 @@ import {
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
-import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,

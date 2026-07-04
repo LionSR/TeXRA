@@ -26,8 +26,8 @@ import type {
 import {
   WorkspaceFS,
   createRunStorageLocation,
+  findRunDir,
   pathToLocation,
-  resolveRunDir,
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
@@ -85,7 +85,7 @@ export async function scanRunDirForOutputs(
   extraBaseFiles?: string[],
 ): Promise<Map<number, OutputFileInfo[]> | null> {
   try {
-    const runDirAbsolute = await resolveRunDir(executionId);
+    const runDirAbsolute = await findRunDir(executionId);
     if (!runDirAbsolute) return null;
 
     const fs = platform().fs;

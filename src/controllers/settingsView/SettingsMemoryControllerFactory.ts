@@ -7,6 +7,8 @@
  * free of tool-layer implementation imports.
  */
 
+import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
+
 // Local imports - shared state
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
@@ -22,7 +24,6 @@ import {
   parseFrontmatter,
   setPinnedMeta,
 } from '@tools/memory/memoryMeta';
-import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 
 // Local imports - file system
 import { StorageFS } from '@utils/files';
@@ -59,7 +60,7 @@ export function createSettingsMemoryController(
       (async (enabled) => {
         await globalState.update(GlobalStateKey.MEMORY_ENABLED, enabled);
       }),
-    resolveStoragePath: resolveMemoryStoragePath,
+    memoryStoragePath: resolveMemoryStoragePath,
     storage: StorageFS,
     maxPinnedMemories: MAX_PINNED_MEMORIES,
     parseMemoryFile: parseFrontmatter,

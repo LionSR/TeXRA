@@ -8,7 +8,7 @@ import * as logger from '@logger/logUtils';
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - utilities
-import { ensureRunDir, getRunDir, resolveRunDir } from '@utils/files';
+import { ensureRunDir, findRunDir, getRunDir } from '@utils/files';
 
 /** Agent + model for the run that produced a file, used to build the
  *  legacy `<base>_<agent>_r<round>_<model>` postfix when accepting a copy. */
@@ -72,7 +72,7 @@ export class ProgressWorkflowFileActionsController {
       let directoryToReveal: string | undefined;
 
       if (executionId) {
-        directoryToReveal = await resolveRunDir(executionId);
+        directoryToReveal = await findRunDir(executionId);
         if (!directoryToReveal) {
           await ensureRunDir(executionId);
           directoryToReveal = getRunDir(executionId);
