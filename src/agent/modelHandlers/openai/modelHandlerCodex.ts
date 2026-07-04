@@ -356,10 +356,8 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
 
   /**
    * Tag subscription rounds so downstream usage logging and the UI can record
-   * them while making clear they are free (the cost above is already 0). The
-   * flag rides {@link NormalizedUsage} through `latestUsage` to
-   * {@link UsageMonitor}; on the API-key fallback it is omitted and real cost
-   * applies.
+   * them while making clear they are free (the cost above is already 0). On the
+   * API-key fallback the route is omitted and real cost applies.
    */
   public override normalizeUsage(
     rawUsage: ResponseUsage,
@@ -367,7 +365,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   ): NormalizedUsage {
     const usage = super.normalizeUsage(rawUsage, responseTimeMs);
     return this.usingSubscription()
-      ? { ...usage, viaChatGptSubscription: true }
+      ? { ...usage, usageRoute: 'chatgpt-subscription' }
       : usage;
   }
 

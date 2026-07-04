@@ -287,16 +287,16 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
   });
 
-  it('tags normalized usage as a free subscription round while the preference is on', async () => {
+  it('tags normalized usage with the subscription route while the preference is on', async () => {
     await initFakePlatformWithSubscription();
 
     const handler = new ModelHandlerCodex(config);
     handler.setAgentCategory(AgentCategory.ToolUse);
     const usage = handler.normalizeUsage(RAW_USAGE, 1000);
 
-    // Recorded (tokens present) but free and marked, so logging/UI can tell it
+    // Recorded (tokens present) but free and routed, so logging/UI can tell it
     // apart from any other zero-cost row.
-    expect(usage.viaChatGptSubscription).toBe(true);
+    expect(usage.usageRoute).toBe('chatgpt-subscription');
     expect(usage.cost).toBe(0);
     expect(usage.inputTokens).toBe(1_000_000);
   });
@@ -309,7 +309,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     await setPreferCodexSubscription(false);
     const usage = handler.normalizeUsage(RAW_USAGE, 1000);
 
-    expect(usage.viaChatGptSubscription).toBeUndefined();
+    expect(usage.usageRoute).toBeUndefined();
     expect(usage.cost).toBeGreaterThan(0);
   });
 });

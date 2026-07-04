@@ -84,7 +84,7 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
     }
   });
 
-  it('forwards the ChatGPT subscription marker to progress usage events', async () => {
+  it('forwards the ChatGPT subscription route to progress usage events', async () => {
     const { dispose, events, monitor } = createMonitorWithEvents();
     try {
       const state = AgentRunStateSnapshotSchema.parse({});
@@ -94,7 +94,7 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
         cost: 0,
         responseTimeMs: 50,
         provider: 'openai-response',
-        viaChatGptSubscription: true,
+        usageRoute: 'chatgpt-subscription',
       });
 
       await monitor.recordUsage(state);
@@ -102,12 +102,14 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
       const usageEvent = events.find(
         (event) => event.event === 'updateStreamUsage',
       );
-      expect(usageEvent?.payload).toMatchObject({
+      const usagePayload = usageEvent?.payload as
+        { usage?: Record<string, unknown> } | undefined;
+      expect(usagePayload).toMatchObject({
         usage: {
-          viaChatGptSubscription: true,
           usageRoute: 'chatgpt-subscription',
         },
       });
+      expect(usagePayload?.usage).not.toHaveProperty('viaChatGptSubscription');
     } finally {
       dispose();
     }
