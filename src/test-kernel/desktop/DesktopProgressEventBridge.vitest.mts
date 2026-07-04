@@ -61,6 +61,19 @@ function createSnapshotStore(
   };
 }
 
+/** Build a minimal mock `streamLogs` slice, overridable per test. */
+function createStreamLogs(overrides: Record<string, any> = {}): any {
+  return {
+    ensureStream: vi.fn(),
+    keys: () => [].values(),
+    has: () => false,
+    getFirstTimestamp: () => undefined,
+    getLastTimestamp: () => undefined,
+    ensureLoaded: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
 /**
  * Build a minimal mock state object.  We use `as any` because the real
  * ProgressViewState is a large, deeply-typed class and we only need a
@@ -69,14 +82,7 @@ function createSnapshotStore(
 function makeMockState(overrides: Record<string, any> = {}): any {
   return {
     activeStream: '',
-    streamLogs: {
-      ensureStream: vi.fn(),
-      keys: () => [].values(),
-      has: () => false,
-      getFirstTimestamp: () => undefined,
-      getLastTimestamp: () => undefined,
-      ensureLoaded: vi.fn(async () => {}),
-    },
+    streamLogs: createStreamLogs(),
     updateStreamHints: vi.fn(),
     snapshots: {
       getTaskState: vi.fn(() => undefined),
@@ -247,14 +253,7 @@ describe('DesktopProgressEventBridge', () => {
 
       const bridge = createBridge({
         state: makeMockState({
-          streamLogs: {
-            ensureStream,
-            keys: () => [].values(),
-            has: () => false,
-            getFirstTimestamp: () => undefined,
-            getLastTimestamp: () => undefined,
-            ensureLoaded: vi.fn(async () => {}),
-          },
+          streamLogs: createStreamLogs({ ensureStream }),
           updateStreamHints,
         }),
         streamSnapshotStore: createSnapshotStore({
@@ -321,14 +320,7 @@ describe('DesktopProgressEventBridge', () => {
       const ensureStream = vi.fn();
       const bridge = createBridge({
         state: makeMockState({
-          streamLogs: {
-            ensureStream,
-            keys: () => [].values(),
-            has: () => false,
-            getFirstTimestamp: () => undefined,
-            getLastTimestamp: () => undefined,
-            ensureLoaded: vi.fn(async () => {}),
-          },
+          streamLogs: createStreamLogs({ ensureStream }),
         }),
         streamSnapshotStore: createSnapshotStore({
           hydrated: [
@@ -397,14 +389,10 @@ describe('DesktopProgressEventBridge', () => {
 
       const bridge = createBridge({
         state: makeMockState({
-          streamLogs: {
-            ensureStream: vi.fn(),
-            keys: () => [].values(),
+          streamLogs: createStreamLogs({
             has: () => true,
-            getFirstTimestamp: () => undefined,
             getLastTimestamp: () => 3_000,
-            ensureLoaded: vi.fn(async () => {}),
-          },
+          }),
         }),
         streamSnapshotStore: createSnapshotStore({
           hydrated: [createSnapshot({ streamId: 'task-stream' })],
@@ -437,14 +425,10 @@ describe('DesktopProgressEventBridge', () => {
 
       const bridge = createBridge({
         state: makeMockState({
-          streamLogs: {
-            ensureStream: vi.fn(),
-            keys: () => [].values(),
+          streamLogs: createStreamLogs({
             has: () => true,
-            getFirstTimestamp: () => undefined,
             getLastTimestamp: () => 3_000,
-            ensureLoaded: vi.fn(async () => {}),
-          },
+          }),
         }),
         streamStatus,
         streamSnapshotStore: createSnapshotStore({

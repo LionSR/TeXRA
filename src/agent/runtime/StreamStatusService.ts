@@ -279,9 +279,7 @@ export class StreamStatusMachine {
         substate: STREAM_SUBSTATE.STARTING,
       };
     }
-    const state = this.phases.get(stream);
-    if (state) return state;
-    return undefined;
+    return this.phases.get(stream);
   }
 
   private publishStatus(

@@ -2,7 +2,7 @@
 
 import { EventEmitter } from 'node:events';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createRunTrace,
@@ -1752,6 +1752,21 @@ describe('finalizeSettledPrefix', () => {
 });
 
 describe('CLI transcript state', () => {
+  // Several tests below log through `createRunTrace`/`syncStreamLog`, which
+  // read and write the *default* stream log store. Give every test in this
+  // block a fresh store up front and restore the original afterward, so
+  // store-backed tests don't need to repeat that swap individually.
+  let previousStore: StreamLogStore;
+
+  beforeEach(() => {
+    previousStore = getDefaultStreamLogStore();
+    setDefaultStreamLogStore(new StreamLogStore());
+  });
+
+  afterEach(() => {
+    setDefaultStreamLogStore(previousStore);
+  });
+
   it('renders orchestrator follow-ups without protocol tags', () => {
     expect(
       stripOrchestratorFollowup(
@@ -1764,253 +1779,189 @@ describe('CLI transcript state', () => {
   });
 
   it('summarizes subagent protocol continuations in the visible transcript', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('Please solve the problem.', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
+    logger.info(
+      '<subagent-result id="abc" agent="review" category="toolUse" status="completed">\nDone.\n</subagent-result>',
+      { messageType: MESSAGE_TYPES.USER_MESSAGE },
+    );
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('Please solve the problem.', {
-        messageType: MESSAGE_TYPES.USER_MESSAGE,
-      });
-      logger.info(
-        '<subagent-result id="abc" agent="review" category="toolUse" status="completed">\nDone.\n</subagent-result>',
-        { messageType: MESSAGE_TYPES.USER_MESSAGE },
-      );
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        'Please solve the problem.',
-        '✓ review completed',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'Please solve the problem.',
+      '✓ review completed',
+    ]);
   });
 
   it('summarizes embedded subagent progress blocks in assistant transcript text', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info(
+      [
+        'Waiting for the child.',
+        '<subagent-progress id="abc" agent="prover" type="todos">',
+        '[{"content":"check","status":"completed"},{"content":"prove","status":"in_progress"}]',
+        '</subagent-progress>',
+        '<subagent-progress id="abc" agent="prover" type="activity">Subagent prover is proving completeness.</subagent-progress>',
+      ].join('\n'),
+      { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
+    );
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info(
-        [
-          'Waiting for the child.',
-          '<subagent-progress id="abc" agent="prover" type="todos">',
-          '[{"content":"check","status":"completed"},{"content":"prove","status":"in_progress"}]',
-          '</subagent-progress>',
-          '<subagent-progress id="abc" agent="prover" type="activity">Subagent prover is proving completeness.</subagent-progress>',
-        ].join('\n'),
-        { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
-      );
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        [
-          'Waiting for the child.',
-          '⟳ prover · todos · 1 done, 1 active, 0 pending',
-          '⟳ prover · Subagent prover is proving completeness.',
-        ].join('\n'),
-      ]);
-      expect(entries[0]?.text).not.toContain('<subagent-progress');
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      [
+        'Waiting for the child.',
+        '⟳ prover · todos · 1 done, 1 active, 0 pending',
+        '⟳ prover · Subagent prover is proving completeness.',
+      ].join('\n'),
+    ]);
+    expect(entries[0]?.text).not.toContain('<subagent-progress');
   });
 
   it('normalizes common HTML before assistant text reaches the live transcript', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info(
+      '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
+      { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
+    );
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info(
-        '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
-        { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
-      );
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        '### Verification Report\n\nThe proof is **fully verified**.',
-      ]);
-      expect(entries[0]?.text).not.toContain('<h3>');
-      expect(entries[0]?.text).not.toContain('<b>');
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      '### Verification Report\n\nThe proof is **fully verified**.',
+    ]);
+    expect(entries[0]?.text).not.toContain('<h3>');
+    expect(entries[0]?.text).not.toContain('<b>');
   });
 
   it('bounds long subagent result responses in the visible transcript', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    const response = Array.from(
+      { length: 20 },
+      (_, index) => `proof line ${index + 1}`,
+    ).join('\n');
+    logger.info(
+      [
+        '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
+        '<wall-time>2m</wall-time>',
+        '<response>',
+        response,
+        '</response>',
+        '</subagent-result>',
+      ].join('\n'),
+      { messageType: MESSAGE_TYPES.USER_MESSAGE },
+    );
 
-    try {
-      const logger = createRunTrace(root).trace;
-      const response = Array.from(
-        { length: 20 },
-        (_, index) => `proof line ${index + 1}`,
-      ).join('\n');
-      logger.info(
-        [
-          '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
-          '<wall-time>2m</wall-time>',
-          '<response>',
-          response,
-          '</response>',
-          '</subagent-result>',
-        ].join('\n'),
-        { messageType: MESSAGE_TYPES.USER_MESSAGE },
-      );
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries).toHaveLength(1);
-      expect(entries[0]?.text).toContain('✓ prover completed · 2m');
-      expect(entries[0]?.text).toContain('proof line 12');
-      expect(entries[0]?.text).not.toContain('proof line 13');
-      expect(entries[0]?.text).toContain(
-        '… 8 more lines; open the subagent transcript for the full response',
-      );
-      expect(entries[0]?.text).not.toContain('<subagent-result');
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.text).toContain('✓ prover completed · 2m');
+    expect(entries[0]?.text).toContain('proof line 12');
+    expect(entries[0]?.text).not.toContain('proof line 13');
+    expect(entries[0]?.text).toContain(
+      '… 8 more lines; open the subagent transcript for the full response',
+    );
+    expect(entries[0]?.text).not.toContain('<subagent-result');
   });
 
   it('mirrors error log entries into the transcript', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.error('Model request failed', {
+      messageType: MESSAGE_TYPES.ERROR,
+    });
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.error('Model request failed', {
-        messageType: MESSAGE_TYPES.ERROR,
-      });
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({
-        role: 'error',
-        text: 'Model request failed',
-        finalized: true,
-      });
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      role: 'error',
+      text: 'Model request failed',
+      finalized: true,
+    });
   });
 
   it('tracks hidden thinking activity without rendering thinking text', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
 
-    try {
-      const logger = createRunTrace(root).trace;
-      const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
+    // Opening the stream alone marks the phase — hidden reasoning (e.g.
+    // gpt-5 without summaries) may never produce a text delta.
+    syncStreamLog(root);
 
-      // Opening the stream alone marks the phase — hidden reasoning (e.g.
-      // gpt-5 without summaries) may never produce a text delta.
-      syncStreamLog(root);
+    let slice = cliState.streams.get().get(root);
+    expect(slice?.thinkingActive).toBe(true);
+    expect(slice?.entries).toEqual([]);
 
-      let slice = cliState.streams.get().get(root);
-      expect(slice?.thinkingActive).toBe(true);
-      expect(slice?.entries).toEqual([]);
+    thinking.append('private reasoning summary');
 
-      thinking.append('private reasoning summary');
+    syncStreamLog(root);
 
-      syncStreamLog(root);
+    slice = cliState.streams.get().get(root);
+    expect(slice?.thinkingActive).toBe(true);
+    expect(slice?.entries).toEqual([]);
 
-      slice = cliState.streams.get().get(root);
-      expect(slice?.thinkingActive).toBe(true);
-      expect(slice?.entries).toEqual([]);
+    thinking.finalize();
+    syncStreamLog(root);
 
-      thinking.finalize();
-      syncStreamLog(root);
+    slice = cliState.streams.get().get(root);
+    expect(slice?.thinkingActive).toBe(false);
+    expect(slice?.entries).toEqual([]);
 
-      slice = cliState.streams.get().get(root);
-      expect(slice?.thinkingActive).toBe(false);
-      expect(slice?.entries).toEqual([]);
+    const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    output.append('Visible answer.');
 
-      const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-      output.append('Visible answer.');
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      slice = cliState.streams.get().get(root);
-      expect(slice?.thinkingActive).toBe(false);
-      expect(slice?.entries.map((entry) => entry.text)).toEqual([
-        'Visible answer.',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    slice = cliState.streams.get().get(root);
+    expect(slice?.thinkingActive).toBe(false);
+    expect(slice?.entries.map((entry) => entry.text)).toEqual([
+      'Visible answer.',
+    ]);
   });
 
   it('does not project empty assistant responses into transcript rows', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+    syncStreamLog(root);
 
-      syncStreamLog(root);
+    let slice = cliState.streams.get().get(root);
+    expect(slice?.entries ?? []).toEqual([]);
 
-      let slice = cliState.streams.get().get(root);
-      expect(slice?.entries ?? []).toEqual([]);
+    logger.info('Visible answer.', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
 
-      logger.info('Visible answer.', {
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      });
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      slice = cliState.streams.get().get(root);
-      expect(slice?.entries.map((entry) => entry.text)).toEqual([
-        'Visible answer.',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    slice = cliState.streams.get().get(root);
+    expect(slice?.entries.map((entry) => entry.text)).toEqual([
+      'Visible answer.',
+    ]);
   });
 
   it('trims leading blank assistant rows at turn start', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('Why?', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    logger.info('\n\n  The answer starts here.', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('Why?', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      logger.info('\n\n  The answer starts here.', {
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      });
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        'Why?',
-        '  The answer starts here.',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'Why?',
+      '  The answer starts here.',
+    ]);
   });
 
   // Regression: a sync tick that fires after `finalizeAssistantTranscriptEntries`
@@ -2020,37 +1971,29 @@ describe('CLI transcript state', () => {
   // `splitTranscriptEntries` once status flipped to WAITING and silently
   // disappear from the transcript.
   it('preserves the finalized flag through a post-finalize sync tick', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('streaming assistant chunk', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    syncStreamLog(root);
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('streaming assistant chunk', {
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      });
-      syncStreamLog(root);
+    // Stream-level finalize promotes the deferred-finalization entries.
+    patchStream(root, (slice) => ({
+      ...slice,
+      entries: slice.entries.map((entry) =>
+        entry.role === 'assistant' ? { ...entry, finalized: true } : entry,
+      ),
+    }));
 
-      // Stream-level finalize promotes the deferred-finalization entries.
-      patchStream(root, (slice) => ({
-        ...slice,
-        entries: slice.entries.map((entry) =>
-          entry.role === 'assistant' ? { ...entry, finalized: true } : entry,
-        ),
-      }));
+    // A second sync after finalize must not regress the flag.
+    syncStreamLog(root);
 
-      // A second sync after finalize must not regress the flag.
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({
-        role: 'assistant',
-        finalized: true,
-      });
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      role: 'assistant',
+      finalized: true,
+    });
   });
 
   it('adds a final assistant response only when the stream log did not render it', () => {
@@ -2108,228 +2051,167 @@ describe('CLI transcript state', () => {
   });
 
   it('keeps repeated final responses from distinct turns visible', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
+    logger.info('second prompt', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(root, 'Done.', 'final:second');
 
-      logger.info('second prompt', {
-        messageType: MESSAGE_TYPES.USER_MESSAGE,
-      });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(root, 'Done.', 'final:second');
+    logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    syncStreamLog(root);
 
-      logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        'first prompt',
-        'Done.',
-        'second prompt',
-        'Done.',
-        'third prompt',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'first prompt',
+      'Done.',
+      'second prompt',
+      'Done.',
+      'third prompt',
+    ]);
   });
 
   it('does not duplicate a final response already present in the stream log', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('Done.', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('Done.', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual(['Done.']);
-      expect(entries[0]?.synthetic).toBeUndefined();
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual(['Done.']);
+    expect(entries[0]?.synthetic).toBeUndefined();
   });
 
   it('lets the stream-log assistant own final text even when fallback text differs', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(
+      root,
+      '| x | Check |\n|---|---|\n| 3 | 1 \\checkmark |',
+      'final:first',
+    );
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(
-        root,
-        '| x | Check |\n|---|---|\n| 3 | 1 \\checkmark |',
-        'final:first',
-      );
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
-      ]);
-      expect(entries[0]?.synthetic).toBeUndefined();
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
+    ]);
+    expect(entries[0]?.synthetic).toBeUndefined();
   });
 
   it('does not let a pre-tool stream assistant suppress final fallback text', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    logger.info('', {
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName: 'bash',
+        input: { command: 'true' },
+        output: { summary: 'Executed: true', output: 'ok' },
+        status: 'completed',
+      },
+    });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(
+      root,
+      'Final answer after the tool.',
+      'final:first',
+    );
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      });
-      logger.info('', {
-        messageType: MESSAGE_TYPES.TOOL_USE,
-        data: {
-          toolName: 'bash',
-          input: { command: 'true' },
-          output: { summary: 'Executed: true', output: 'ok' },
-          status: 'completed',
-        },
-      });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(
-        root,
-        'Final answer after the tool.',
-        'final:first',
-      );
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.role)).toEqual([
-        'assistant',
-        'tool',
-        'assistant',
-      ]);
-      expect(entries.map((entry) => entry.text)).toEqual([
-        '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
-        '',
-        'Final answer after the tool.',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.role)).toEqual([
+      'assistant',
+      'tool',
+      'assistant',
+    ]);
+    expect(entries.map((entry) => entry.text)).toEqual([
+      '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
+      '',
+      'Final answer after the tool.',
+    ]);
   });
 
   it('dedupes fallback text that already appeared before a tool row', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('Intermediate result ✓', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    logger.info('', {
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName: 'bash',
+        input: { command: 'true' },
+        output: { summary: 'Executed: true', output: 'ok' },
+        status: 'completed',
+      },
+    });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(
+      root,
+      'Intermediate result \\checkmark',
+      'final:matching',
+    );
+    appendAssistantTranscriptIfMissing(
+      root,
+      'Final answer after the tool.',
+      'final:actual',
+    );
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('Intermediate result ✓', {
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      });
-      logger.info('', {
-        messageType: MESSAGE_TYPES.TOOL_USE,
-        data: {
-          toolName: 'bash',
-          input: { command: 'true' },
-          output: { summary: 'Executed: true', output: 'ok' },
-          status: 'completed',
-        },
-      });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(
-        root,
-        'Intermediate result \\checkmark',
-        'final:matching',
-      );
-      appendAssistantTranscriptIfMissing(
-        root,
-        'Final answer after the tool.',
-        'final:actual',
-      );
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        'Intermediate result ✓',
-        '',
-        'Final answer after the tool.',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'Intermediate result ✓',
+      '',
+      'Final answer after the tool.',
+    ]);
   });
 
   it('does not let a prior-turn stream assistant suppress fallback text', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    logger.info('Done ✓', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+    syncStreamLog(root);
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      logger.info('Done ✓', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
-      syncStreamLog(root);
+    logger.info('second prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(root, 'Done \\checkmark', 'final:2');
 
-      logger.info('second prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(root, 'Done \\checkmark', 'final:2');
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        'first prompt',
-        'Done ✓',
-        'second prompt',
-        'Done \\checkmark',
-      ]);
-      expect(entries.at(-1)).toMatchObject({
-        synthetic: true,
-        syntheticKind: 'final',
-      });
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'first prompt',
+      'Done ✓',
+      'second prompt',
+      'Done \\checkmark',
+    ]);
+    expect(entries.at(-1)).toMatchObject({
+      synthetic: true,
+      syntheticKind: 'final',
+    });
   });
 
   it('projects a turn boundary without duplicating fallback assistant text', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('What is 1 + 1?', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
+    logger.info('2', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('What is 1 + 1?', {
-        messageType: MESSAGE_TYPES.USER_MESSAGE,
-      });
-      logger.info('2', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+    projectStreamTranscript(root, {
+      fallbackAssistant: { text: '2', idPrefix: 'final:turn' },
+      finalize: true,
+    });
 
-      projectStreamTranscript(root, {
-        fallbackAssistant: { text: '2', idPrefix: 'final:turn' },
-        finalize: true,
-      });
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        'What is 1 + 1?',
-        '2',
-      ]);
-      expect(entries.map((entry) => entry.finalized)).toEqual([true, true]);
-      expect(entries.some((entry) => entry.id === 'final:turn:root')).toBe(
-        false,
-      );
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual(['What is 1 + 1?', '2']);
+    expect(entries.map((entry) => entry.finalized)).toEqual([true, true]);
+    expect(entries.some((entry) => entry.id === 'final:turn:root')).toBe(false);
   });
 
   it('keeps repeated local slash-command responses visible', () => {
@@ -2453,89 +2335,63 @@ describe('CLI transcript state', () => {
   });
 
   it('flushes pending model-response chunks before transcript sync', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    stream.append('A short final answer.');
 
-    try {
-      const logger = createRunTrace(root).trace;
-      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-      stream.append('A short final answer.');
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        'A short final answer.',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'A short final answer.',
+    ]);
   });
 
   it('finalizes a delayed first model-response sync after the stream is idle', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('A delayed final answer.', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    patchStream(root, (slice) => ({
+      ...slice,
+      status: STREAM_STATUS.WAITING,
+    }));
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('A delayed final answer.', {
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      });
-      patchStream(root, (slice) => ({
-        ...slice,
-        status: STREAM_STATUS.WAITING,
-      }));
+    syncStreamLog(root);
 
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({
-        role: 'assistant',
-        text: 'A delayed final answer.',
-        finalized: true,
-      });
-      const split = splitTranscriptEntries(entries, STREAM_STATUS.WAITING);
-      expect(split.finalized.map((entry) => entry.id)).toEqual([
-        entries[0]?.id,
-      ]);
-      expect(split.pending).toEqual([]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      role: 'assistant',
+      text: 'A delayed final answer.',
+      finalized: true,
+    });
+    const split = splitTranscriptEntries(entries, STREAM_STATUS.WAITING);
+    expect(split.finalized.map((entry) => entry.id)).toEqual([entries[0]?.id]);
+    expect(split.pending).toEqual([]);
   });
 
   it('keeps repeated local slash-command responses after stream-log syncs', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    syncStreamLog(root);
+    cliState.activeStreamId.set(root);
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-      cliState.activeStreamId.set(root);
+    appendLocalAssistantTranscript('Available commands: /help');
+    logger.info('partial response', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    syncStreamLog(root);
 
-      appendLocalAssistantTranscript('Available commands: /help');
-      logger.info('partial response', {
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      });
-      syncStreamLog(root);
+    appendLocalAssistantTranscript('Available commands: /help');
+    syncStreamLog(root);
 
-      appendLocalAssistantTranscript('Available commands: /help');
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(
-        entries
-          .filter((entry) => entry.syntheticKind === 'local')
-          .map((entry) => entry.text),
-      ).toEqual(['Available commands: /help', 'Available commands: /help']);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(
+      entries
+        .filter((entry) => entry.syntheticKind === 'local')
+        .map((entry) => entry.text),
+    ).toEqual(['Available commands: /help', 'Available commands: /help']);
   });
 
   it('keeps a model response live when local output follows it', () => {
@@ -2686,61 +2542,45 @@ describe('CLI transcript state', () => {
   });
 
   it('preserves synthetic final responses across later log syncs', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('1+1', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('1+1', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
+    logger.info('next prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    syncStreamLog(root);
 
-      logger.info('next prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        '1+1',
-        'The answer is 2.',
-        'next prompt',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      '1+1',
+      'The answer is 2.',
+      'next prompt',
+    ]);
   });
 
   it('orders multiple synthetic responses relative to their stream-log anchors', () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace(root).trace;
+    logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(root, 'first answer', 'final-1');
 
-    try {
-      const logger = createRunTrace(root).trace;
-      logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(root, 'first answer', 'final-1');
+    logger.info('second prompt', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
+    syncStreamLog(root);
+    appendAssistantTranscriptIfMissing(root, 'second answer', 'final-2');
 
-      logger.info('second prompt', {
-        messageType: MESSAGE_TYPES.USER_MESSAGE,
-      });
-      syncStreamLog(root);
-      appendAssistantTranscriptIfMissing(root, 'second answer', 'final-2');
+    logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    syncStreamLog(root);
 
-      logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual([
-        'first prompt',
-        'first answer',
-        'second prompt',
-        'second answer',
-        'third prompt',
-      ]);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'first prompt',
+      'first answer',
+      'second prompt',
+      'second answer',
+      'third prompt',
+    ]);
   });
 });
 

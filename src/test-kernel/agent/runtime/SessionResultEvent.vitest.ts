@@ -120,6 +120,19 @@ function collectResults(logger: TraceEmitter): ResultEvent[] {
   return results;
 }
 
+/** Fresh logger + result collector + launch context, wired together. */
+function setupResultCase(): {
+  logger: TraceEmitter;
+  results: ResultEvent[];
+  ctx: AgentLaunchContext;
+  streamStatus: StreamStatusRegistry;
+} {
+  const logger = new TraceEmitter();
+  const results = collectResults(logger);
+  const { ctx, streamStatus } = createCtx({ logger });
+  return { logger, results, ctx, streamStatus };
+}
+
 describe('terminal result event (SDK Step 7d PR 6)', () => {
   beforeAll(async () => {
     const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
@@ -134,9 +147,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('emits exactly one completed result on a successful run', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     try {
       await runFlowWithLifecycle(ctx, async () => ({
         category: 'toolUse',
@@ -159,9 +170,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('emits exactly one completed result even if terminal stream-status cleanup throws', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     // A status subscriber that throws on the terminal (COMPLETED) transition,
     // not the initial RUNNING one — models a host emit / status listener throwing
     // during post-completion cleanup. The run already emitted `completed`, so
@@ -189,9 +198,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('emits the completed result even if ending the parent stage throws', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
       throw new Error('stage listener boom');
     });
@@ -217,8 +224,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('exposes the per-run handle via onRun and settles handle.result (F-2)', async () => {
-    const logger = new TraceEmitter();
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { logger, ctx, streamStatus } = setupResultCase();
     let handle: AgentRunHandle | undefined;
     try {
       await runFlowWithLifecycle(
@@ -250,9 +256,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('keeps running when onRun throws synchronously', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
         runFlowWithLifecycle(
@@ -283,9 +287,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('keeps running when onRun rejects asynchronously', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
         runFlowWithLifecycle(
@@ -317,9 +319,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('keeps the completed result when the completion hook throws', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
         runFlowWithLifecycle(
@@ -349,9 +349,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('emits the failed result before terminal error status listeners run', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     const off = streamStatus.onDidChange((change) => {
       if (change.status === STREAM_PHASE.FAILED) {
         throw new Error('status listener boom');
@@ -376,9 +374,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('emits the failed result even if ending the parent stage throws', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
       throw new Error('stage listener boom');
     });
@@ -401,8 +397,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('settles handle.result as failed on a thrown run (always resolves)', async () => {
-    const logger = new TraceEmitter();
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus } = setupResultCase();
     let handle: AgentRunHandle | undefined;
     try {
       await expect(
@@ -428,9 +423,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('maps a returned cancellation to a cancelled result (sibling of failed)', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     try {
       await runFlowWithLifecycle(ctx, async () => ({
         category: 'toolUse',
@@ -446,9 +439,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('emits a cancelled result with kind=abort on a thrown abort', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     try {
       await runFlowWithLifecycle(ctx, async () => {
         throw new DOMException('Request aborted', 'AbortError');
@@ -462,9 +453,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('emits a failed result with usage on an unexpected throw after a round', async () => {
-    const logger = new TraceEmitter();
-    const results = collectResults(logger);
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { ctx, streamStatus, results } = setupResultCase();
     // Record one round of usage so the failed result still carries totals.
     await ctx.usageMonitor.recordUsage(AgentRunStateSnapshotSchema.parse({}));
     try {

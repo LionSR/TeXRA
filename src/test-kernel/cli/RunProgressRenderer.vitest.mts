@@ -112,6 +112,16 @@ function toolUseTaskState(
   };
 }
 
+function outputBuffer(): { write: (chunk: string) => void; text: string } {
+  const buffer = {
+    text: '',
+    write: (chunk: string) => {
+      buffer.text += chunk;
+    },
+  };
+  return buffer;
+}
+
 async function captureStreamWrites(
   stream: NodeJS.WriteStream,
   action: () => Promise<void>,
@@ -155,57 +165,51 @@ describe('CLI run progress renderer', () => {
 
   it('renders a single ANSI status line and clears it on close', () => {
     let now = 0;
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(context(), {
       colorEnabled: true,
-      write: (text) => {
-        output += text;
-      },
+      write: output.write,
       nowMs: () => now,
     });
 
     expect(renderer).toBeDefined();
     renderer?.handle('setTaskState', workflowTaskState());
-    expect(output).toBe('\r\x1b[2Kpolish paper.tex · 0s');
+    expect(output.text).toBe('\r\x1b[2Kpolish paper.tex · 0s');
 
     now = 1200;
     renderer?.handle('updateConversationProgress', {
       streamId: 'stream-1',
       progress: { conversationTurns: 2, toolCallCount: 0 },
     });
-    expect(output).toContain('\r\x1b[2K[r2] · polish paper.tex · 1s');
+    expect(output.text).toContain('\r\x1b[2K[r2] · polish paper.tex · 1s');
 
     renderer?.clear();
-    expect(output.endsWith('\r\x1b[2K')).toBe(true);
+    expect(output.text.endsWith('\r\x1b[2K')).toBe(true);
   });
 
   it('keeps long elapsed times in minute-second form', () => {
     let now = 0;
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(context(), {
       colorEnabled: true,
-      write: (text) => {
-        output += text;
-      },
+      write: output.write,
       nowMs: () => now,
     });
 
     now = 3_600_000;
     renderer?.handle('setTaskState', workflowTaskState());
 
-    expect(output).toContain('\r\x1b[2Kpolish paper.tex · 60m 00s');
+    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 60m 00s');
   });
 
   it('ticks the ANSI status line while a root workflow is quiet', () => {
     let now = 0;
-    let output = '';
+    const output = outputBuffer();
     let heartbeat: (() => void) | undefined;
     let clearCount = 0;
     const renderer = createRunProgressRenderer(context(), {
       colorEnabled: true,
-      write: (text) => {
-        output += text;
-      },
+      write: output.write,
       nowMs: () => now,
       setInterval: ((callback: () => void) => {
         heartbeat = callback;
@@ -224,8 +228,8 @@ describe('CLI run progress renderer', () => {
     now = 2300;
     heartbeat?.();
 
-    expect(output).toContain('\r\x1b[2Kpolish paper.tex · 1s');
-    expect(output).toContain('\r\x1b[2Kpolish paper.tex · 2s');
+    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 1s');
+    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 2s');
 
     renderer?.handle('updateStreamStatus', {
       streamId: 'stream-1',
@@ -236,14 +240,12 @@ describe('CLI run progress renderer', () => {
   });
 
   it('summarizes multi-input workflow progress without hiding extra files', () => {
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
       {
         colorEnabled: false,
-        write: (text) => {
-          output += text;
-        },
+        write: output.write,
         nowMs: () => 0,
       },
     );
@@ -255,21 +257,19 @@ describe('CLI run progress renderer', () => {
       }),
     );
 
-    expect(output).toBe('polish number-theory.tex +1 · 0s\n');
+    expect(output.text).toBe('polish number-theory.tex +1 · 0s\n');
   });
 
   it('shows planned workflow rounds before the first model turn', () => {
     mocks.getAgent.mockReturnValue({
       rounds: 2,
     });
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
       {
         colorEnabled: false,
-        write: (text) => {
-          output += text;
-        },
+        write: output.write,
         minIntervalMs: 0,
         nowMs: () => 0,
       },
@@ -285,7 +285,7 @@ describe('CLI run progress renderer', () => {
       'polish',
       AgentCategory.Workflow,
     );
-    expect(output).toBe(
+    expect(output.text).toBe(
       'polish paper.tex · 2 rounds · 0s\n' + '[r1/2] · polish paper.tex · 0s\n',
     );
   });
@@ -294,14 +294,12 @@ describe('CLI run progress renderer', () => {
     mocks.getAgent.mockReturnValue({
       rounds: 2,
     });
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
       {
         colorEnabled: false,
-        write: (text) => {
-          output += text;
-        },
+        write: output.write,
         nowMs: () => 0,
       },
     );
@@ -314,18 +312,16 @@ describe('CLI run progress renderer', () => {
     );
 
     expect(mocks.getAgent).not.toHaveBeenCalled();
-    expect(output).toBe('polish · 0s\n');
+    expect(output.text).toBe('polish · 0s\n');
   });
 
   it('prints phase changes on separate lines when ANSI is disabled', () => {
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
       {
         colorEnabled: false,
-        write: (text) => {
-          output += text;
-        },
+        write: output.write,
         nowMs: () => 0,
       },
     );
@@ -347,7 +343,7 @@ describe('CLI run progress renderer', () => {
       ],
     });
 
-    expect(output).toBe(
+    expect(output.text).toBe(
       'polish paper.tex · 0s\n' +
         'polish paper.tex · drafting · 0s\n' +
         'polish paper.tex · drafting · tool: Bash · 0s\n',
@@ -355,14 +351,12 @@ describe('CLI run progress renderer', () => {
   });
 
   it('keeps the root run visible when child streams update progress', () => {
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
       {
         colorEnabled: false,
-        write: (text) => {
-          output += text;
-        },
+        write: output.write,
         nowMs: () => 0,
       },
     );
@@ -411,7 +405,7 @@ describe('CLI run progress renderer', () => {
       ],
     });
 
-    expect(output).toBe(
+    expect(output.text).toBe(
       'coordinator main.tex · 0s\n' +
         'coordinator main.tex · subagents: reviewer +2 · 0s\n',
     );
@@ -419,14 +413,12 @@ describe('CLI run progress renderer', () => {
 
   it('ticks the ANSI status line while an active subagent is quiet', () => {
     let now = 0;
-    let output = '';
+    const output = outputBuffer();
     let heartbeat: (() => void) | undefined;
     let clearCount = 0;
     const renderer = createRunProgressRenderer(context(), {
       colorEnabled: true,
-      write: (text) => {
-        output += text;
-      },
+      write: output.write,
       nowMs: () => now,
       setInterval: ((callback: () => void) => {
         heartbeat = callback;
@@ -464,8 +456,12 @@ describe('CLI run progress renderer', () => {
     now = 2300;
     heartbeat?.();
 
-    expect(output).toContain('\r\x1b[2Korchestrator · subagent: review · 1s');
-    expect(output).toContain('\r\x1b[2Korchestrator · subagent: review · 2s');
+    expect(output.text).toContain(
+      '\r\x1b[2Korchestrator · subagent: review · 1s',
+    );
+    expect(output.text).toContain(
+      '\r\x1b[2Korchestrator · subagent: review · 2s',
+    );
 
     renderer?.handle('updateStreamStatus', {
       streamId: 'root-stream',
@@ -477,13 +473,11 @@ describe('CLI run progress renderer', () => {
 
   it('keeps heartbeat alive when active child names are unavailable', () => {
     let now = 0;
-    let output = '';
+    const output = outputBuffer();
     let heartbeat: (() => void) | undefined;
     const renderer = createRunProgressRenderer(context(), {
       colorEnabled: true,
-      write: (text) => {
-        output += text;
-      },
+      write: output.write,
       nowMs: () => now,
       setInterval: ((callback: () => void) => {
         heartbeat = callback;
@@ -515,17 +509,15 @@ describe('CLI run progress renderer', () => {
     now = 1200;
     heartbeat?.();
 
-    expect(output).toContain('\r\x1b[2Korchestrator · 1s');
+    expect(output.text).toContain('\r\x1b[2Korchestrator · 1s');
   });
 
   it('stops active-child heartbeat when preserving the live line', () => {
-    let output = '';
+    const output = outputBuffer();
     let clearCount = 0;
     const renderer = createRunProgressRenderer(context(), {
       colorEnabled: true,
-      write: (text) => {
-        output += text;
-      },
+      write: output.write,
       nowMs: () => 0,
       setInterval: (() => {
         return { unref() {} } as unknown as ReturnType<typeof setInterval>;
@@ -558,18 +550,16 @@ describe('CLI run progress renderer', () => {
     renderer?.preserve();
 
     expect(clearCount).toBe(1);
-    expect(output.endsWith('\n')).toBe(true);
+    expect(output.text.endsWith('\n')).toBe(true);
   });
 
   it('can claim the root stream from conversation progress', () => {
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
       {
         colorEnabled: false,
-        write: (text) => {
-          output += text;
-        },
+        write: output.write,
         minIntervalMs: 0,
         nowMs: () => 0,
       },
@@ -588,18 +578,16 @@ describe('CLI run progress renderer', () => {
       }),
     );
 
-    expect(output).toBe('[r2] · running · tools: 4 · 0s\n');
+    expect(output.text).toBe('[r2] · running · tools: 4 · 0s\n');
   });
 
   it('keeps named active children visible when earlier entries are unnamed', () => {
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
       {
         colorEnabled: false,
-        write: (text) => {
-          output += text;
-        },
+        write: output.write,
         nowMs: () => 0,
       },
     );
@@ -622,21 +610,19 @@ describe('CLI run progress renderer', () => {
       ],
     });
 
-    expect(output).toBe(
+    expect(output.text).toBe(
       'polish paper.tex · 0s\npolish paper.tex · tool: latexmk · 0s\n',
     );
   });
 
   it('shows completed terminal stream stops as done', () => {
     let now = 0;
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
       {
         colorEnabled: false,
-        write: (text) => {
-          output += text;
-        },
+        write: output.write,
         minIntervalMs: 0,
         nowMs: () => now,
       },
@@ -690,7 +676,7 @@ describe('CLI run progress renderer', () => {
       ],
     });
 
-    expect(output).toBe(
+    expect(output.text).toBe(
       'orchestrator · 0s\n' +
         'orchestrator · tool: Bash · 0s\n' +
         'orchestrator · done · 11s\n',
@@ -698,14 +684,12 @@ describe('CLI run progress renderer', () => {
   });
 
   it('keeps interrupted terminal stream stops distinct from completion', () => {
-    let output = '';
+    const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
       {
         colorEnabled: false,
-        write: (text) => {
-          output += text;
-        },
+        write: output.write,
         minIntervalMs: 0,
         nowMs: () => 0,
       },
@@ -725,7 +709,9 @@ describe('CLI run progress renderer', () => {
       previousStatus: STREAM_STATUS.RUNNING,
     });
 
-    expect(output).toBe('orchestrator · 0s\norchestrator · interrupted · 0s\n');
+    expect(output.text).toBe(
+      'orchestrator · 0s\norchestrator · interrupted · 0s\n',
+    );
   });
 
   it('uses a separate render flag from platform log suppression', () => {
