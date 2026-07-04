@@ -5,6 +5,7 @@ import {
   completedChildExecutionStatus,
   isChildExecutionErrorStatus,
 } from './childExecutionStatus';
+import { processTailLines } from './childControls';
 import { childExecutionLabel } from './childExecutions';
 import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 import type {
@@ -18,13 +19,8 @@ export const COMPLETED_PROCESS_TAIL_LINES = 20;
 
 function completedProcessTailLines(
   tail: ProcessOutputTail | undefined,
-): string[] {
-  if (!tail) return [];
-  return `${tail.stdout}\n${tail.stderr}`
-    .split('\n')
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-    .slice(-COMPLETED_PROCESS_TAIL_LINES);
+): readonly string[] {
+  return processTailLines(tail).slice(-COMPLETED_PROCESS_TAIL_LINES);
 }
 
 export function buildCompletedProcessTranscript(

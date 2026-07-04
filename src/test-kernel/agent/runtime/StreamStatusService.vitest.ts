@@ -23,6 +23,19 @@ import {
 
 import { createRecordingHost } from '../progressTestUtils';
 
+/** Fresh registry + recording host, keyed to a per-test stream id. */
+function setupMachine(streamId: string): {
+  machine: StreamStatusRegistry;
+  explicit: ReturnType<typeof createRecordingHost>;
+  streamId: StreamTabId;
+} {
+  return {
+    machine: new StreamStatusRegistry(),
+    explicit: createRecordingHost(),
+    streamId: streamId as StreamTabId,
+  };
+}
+
 describe('StreamStatusRegistry', () => {
   const phases = Object.values(STREAM_PHASE) as StreamPhase[];
   const causes = Object.values(
@@ -102,9 +115,9 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('repairs terminal streams to waiting through resume then wait', () => {
-    const machine = new StreamStatusRegistry();
-    const explicit = createRecordingHost();
-    const streamId = 'stream-status-terminal-waiting-repair' as StreamTabId;
+    const { machine, explicit, streamId } = setupMachine(
+      'stream-status-terminal-waiting-repair',
+    );
 
     seedStreamStatusForTest(machine, streamId, STREAM_PHASE.CANCELLED);
 
@@ -138,9 +151,9 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('terminalizes waiting streams through resume then lifecycle', () => {
-    const machine = new StreamStatusRegistry();
-    const explicit = createRecordingHost();
-    const streamId = 'stream-status-waiting-terminal-repair' as StreamTabId;
+    const { machine, explicit, streamId } = setupMachine(
+      'stream-status-waiting-terminal-repair',
+    );
 
     seedStreamStatusForTest(machine, streamId, STREAM_PHASE.WAITING);
 
@@ -174,9 +187,9 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('terminalizes visible streams that were not started yet', () => {
-    const machine = new StreamStatusRegistry();
-    const explicit = createRecordingHost();
-    const streamId = 'stream-status-undefined-terminal-repair' as StreamTabId;
+    const { machine, explicit, streamId } = setupMachine(
+      'stream-status-undefined-terminal-repair',
+    );
 
     expect(
       machine.transitionToTerminal(streamId, STREAM_PHASE.FAILED, {
@@ -207,9 +220,9 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('accepts already-matching terminal outcomes without warning callers', () => {
-    const machine = new StreamStatusRegistry();
-    const explicit = createRecordingHost();
-    const streamId = 'stream-status-matching-terminal' as StreamTabId;
+    const { machine, explicit, streamId } = setupMachine(
+      'stream-status-matching-terminal',
+    );
 
     seedStreamStatusForTest(machine, streamId, STREAM_PHASE.CANCELLED);
 
@@ -224,9 +237,9 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('clears transient running substates without changing phase', () => {
-    const machine = new StreamStatusRegistry();
-    const explicit = createRecordingHost();
-    const streamId = 'stream-status-clear-running-substate' as StreamTabId;
+    const { machine, explicit, streamId } = setupMachine(
+      'stream-status-clear-running-substate',
+    );
 
     seedStreamStatusForTest(machine, streamId, STREAM_STATUS.RESUMING);
 
@@ -252,9 +265,9 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('publishes rollback when a visible reservation is released', () => {
-    const machine = new StreamStatusRegistry();
-    const explicit = createRecordingHost();
-    const streamId = 'stream-status-reservation-rollback' as StreamTabId;
+    const { machine, explicit, streamId } = setupMachine(
+      'stream-status-reservation-rollback',
+    );
 
     expect(machine.tryAcquire(streamId, { runtimeHost: explicit.host })).toBe(
       true,
@@ -285,9 +298,9 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('overlays reservations on stale terminal phases and restores them on rollback', () => {
-    const machine = new StreamStatusRegistry();
-    const explicit = createRecordingHost();
-    const streamId = 'stream-status-reservation-overlay' as StreamTabId;
+    const { machine, explicit, streamId } = setupMachine(
+      'stream-status-reservation-overlay',
+    );
 
     seedStreamStatusForTest(machine, streamId, STREAM_PHASE.COMPLETED);
 

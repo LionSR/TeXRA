@@ -136,6 +136,21 @@ function userStep(text: string): Step {
   return { type: 'user_input', content: [{ type: 'text', text }] };
 }
 
+/** Shorthand for the `handler.createResponse({ client, messages, temperature: 0 })`
+ * call every test in this file makes (the fake `client` never matches the SDK
+ * client type, hence the `as never` cast). */
+function respond(
+  handler: ModelHandlerGoogleInteractions,
+  client: unknown,
+  messages: Step[],
+) {
+  return handler.createResponse({
+    client: client as never,
+    messages,
+    temperature: 0,
+  });
+}
+
 /** Extract the first text of a user_input/model_output step (for slice asserts). */
 function stepText(step: Step): string | undefined {
   return (step as { content?: { text?: string }[] }).content?.[0]?.text;
@@ -166,11 +181,7 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     const client = capturingClient(calls, () => completedEvents('int_1'));
 
     const messages = [userStep('a'), userStep('b')];
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].store).toBe(true);
@@ -187,19 +198,11 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
 
     // Round 1: two steps sent in full, id captured.
     const messages: Step[] = [userStep('a'), userStep('b')];
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     // Round 2: the flow appends two new steps to the same array.
     messages.push(userStep('c'), userStep('d'));
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     expect(calls).toHaveLength(2);
     // First call: full, no chain.
@@ -223,11 +226,7 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     );
 
     const messages: Step[] = [userStep('a')];
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     // Mimic the flow appending the model-generated turn (server-held) + a tool
     // result + a new user turn before the next round.
@@ -246,11 +245,7 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
       } as Step,
       userStep('b'),
     );
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     expect(calls[1].previousId).toBe('int_1');
     // thought + function_call (server-held) are dropped; only the result + new user remain.
@@ -270,18 +265,10 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     );
 
     const messages: Step[] = [userStep('a')];
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     messages.push(userStep('b'));
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     // Second call full-resends both steps, no previous_interaction_id.
     expect(calls[1].previousId).toBeUndefined();
@@ -300,19 +287,11 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     );
 
     const messages: Step[] = [userStep('a')];
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     // The flow appends the model-generated steps; round 2 continues the chain.
     messages.push(userStep('b'));
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     expect(calls[1].store).toBe(true);
     expect(calls[1].previousId).toBe('int_1'); // chained onto the tool round
@@ -335,18 +314,10 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     });
 
     const messages: Step[] = [userStep('a')];
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     messages.push(userStep('b'));
-    const result = await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    const result = await respond(handler, client, messages);
 
     // 3 create calls total: initial + failed-chained + retried-full.
     expect(calls).toHaveLength(3);
@@ -372,20 +343,12 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     });
 
     const messages: Step[] = [userStep('a')];
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     messages.push(userStep('b'));
-    await expect(
-      handler.createResponse({
-        client: client as never,
-        messages,
-        temperature: 0,
-      }),
-    ).rejects.toThrow(/previous_interaction_id/);
+    await expect(respond(handler, client, messages)).rejects.toThrow(
+      /previous_interaction_id/,
+    );
 
     // Exactly 3 create calls: initial + failed-chained + failed-retry (no 4th).
     // The retry sent a full resend (no previous_interaction_id), so it cannot
@@ -410,22 +373,14 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
 
     // Round 1 establishes a chain.
     const messages: Step[] = [userStep('a'), userStep('b'), userStep('c')];
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
     expect(calls[0].previousId).toBeUndefined();
 
     // Round 2: request manual compaction. The handler must clear the chain
     // (full resend, no previous_interaction_id) and return updatedMessages.
     handler.requestCompaction();
     messages.push(userStep('d'), userStep('e'));
-    const result = await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    const result = await respond(handler, client, messages);
 
     expect(result.updatedMessages).toBeDefined();
     expect(result.updatedMessages!.length).toBeLessThan(messages.length);
@@ -438,11 +393,7 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     // i.e. compaction must not permanently disable chaining.
     const compacted = result.updatedMessages!;
     const round3: Step[] = [...compacted, userStep('f')];
-    await handler.createResponse({
-      client: client as never,
-      messages: round3,
-      temperature: 0,
-    });
+    await respond(handler, client, round3);
     expect(calls[2].store).toBe(true);
     expect(calls[2].previousId).toBe('int_2'); // chained onto the compaction response
     expect(calls[2].input).toHaveLength(1); // only the newly appended step
@@ -456,18 +407,10 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     const client = capturingClient(calls, () => completedEvents('int_1'));
 
     const messages: Step[] = [userStep('a')];
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     messages.push(userStep('b'));
-    await handler.createResponse({
-      client: client as never,
-      messages,
-      temperature: 0,
-    });
+    await respond(handler, client, messages);
 
     for (const call of calls) {
       expect(call.store).toBe(false);
@@ -482,22 +425,22 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     // First instance establishes a chain.
     const first = createHandler();
     const callsA: RecordedCall[] = [];
-    await first.createResponse({
-      client: capturingClient(callsA, () => completedEvents('int_1')) as never,
-      messages: [userStep('a')],
-      temperature: 0,
-    });
+    await respond(
+      first,
+      capturingClient(callsA, () => completedEvents('int_1')),
+      [userStep('a')],
+    );
     expect(callsA[0].previousId).toBeUndefined();
 
     // A brand-new instance (simulating resume-from-snapshot) sees the same
     // transcript but has no chain id, so it full-resends with no chaining.
     const restored = createHandler();
     const callsB: RecordedCall[] = [];
-    await restored.createResponse({
-      client: capturingClient(callsB, () => completedEvents('int_2')) as never,
-      messages: [userStep('a'), userStep('b')],
-      temperature: 0,
-    });
+    await respond(
+      restored,
+      capturingClient(callsB, () => completedEvents('int_2')),
+      [userStep('a'), userStep('b')],
+    );
     expect(callsB[0].previousId).toBeUndefined();
     expect(callsB[0].input).toHaveLength(2);
   });
@@ -527,30 +470,22 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
       models: {},
     };
 
-    const inFlight = handler.createResponse({
-      client: client as never,
-      messages: [userStep('a')],
-      temperature: 0,
-    });
+    const inFlight = respond(handler, client, [userStep('a')]);
 
-    await expect(
-      handler.createResponse({
-        client: client as never,
-        messages: [userStep('b')],
-        temperature: 0,
-      }),
-    ).rejects.toThrow(/single-turn/);
+    await expect(respond(handler, client, [userStep('b')])).rejects.toThrow(
+      /single-turn/,
+    );
 
     release();
     await inFlight;
 
     // The guard reset in finally: a serial call now succeeds.
     await expect(
-      handler.createResponse({
-        client: capturingClient([], () => completedEvents('int_2')) as never,
-        messages: [userStep('c')],
-        temperature: 0,
-      }),
+      respond(
+        handler,
+        capturingClient([], () => completedEvents('int_2')),
+        [userStep('c')],
+      ),
     ).resolves.toBeDefined();
   });
 });

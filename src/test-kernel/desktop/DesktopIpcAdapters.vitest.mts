@@ -172,6 +172,15 @@ function createMemoryState() {
   return { values, update, state };
 }
 
+// Shared setup for onboarding tests that only need a fresh memory-backed
+// state store and a postToRenderer spy (no seeded values, no update spy).
+async function createOnboardingHarness() {
+  const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
+  const { state } = createMemoryState();
+  const postToRenderer = vi.fn();
+  return { createDesktopOnboardingIpc, state, postToRenderer };
+}
+
 describe('desktop IPC adapters', () => {
   afterEach(() => {
     vi.doUnmock('electron');
@@ -529,9 +538,8 @@ describe('desktop IPC adapters', () => {
   });
 
   it('derives State 1 (setup) when hasCredential is true on fresh install', async () => {
-    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const { state } = createMemoryState();
-    const postToRenderer = vi.fn();
+    const { createDesktopOnboardingIpc, state, postToRenderer } =
+      await createOnboardingHarness();
     const selectSetupAgent = vi.fn(async () => {});
     const onboarding = createDesktopOnboardingIpc(
       { postToRenderer },
@@ -628,9 +636,8 @@ describe('desktop IPC adapters', () => {
   });
 
   it('calls onboarding run-setup / sign-in-chatgpt callbacks', async () => {
-    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const { state } = createMemoryState();
-    const postToRenderer = vi.fn();
+    const { createDesktopOnboardingIpc, state, postToRenderer } =
+      await createOnboardingHarness();
     const runSetupCalled = vi.fn(async () => {});
     const signInCalled = vi.fn(async () => {});
     const onboarding = createDesktopOnboardingIpc(
@@ -668,9 +675,8 @@ describe('desktop IPC adapters', () => {
   });
 
   it('runs the real kickoff path on ONBOARDING_RUN_SETUP and refreshes after', async () => {
-    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const { state } = createMemoryState();
-    const postToRenderer = vi.fn();
+    const { createDesktopOnboardingIpc, state, postToRenderer } =
+      await createOnboardingHarness();
     const callOrder: string[] = [];
     const selectSetupAgent = vi.fn(async () => {
       callOrder.push('select');
@@ -709,9 +715,8 @@ describe('desktop IPC adapters', () => {
   });
 
   it('opens the getting-started docs on ONBOARDING_OPEN_GETTING_STARTED', async () => {
-    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const { state } = createMemoryState();
-    const postToRenderer = vi.fn();
+    const { createDesktopOnboardingIpc, state, postToRenderer } =
+      await createOnboardingHarness();
     const openGettingStarted = vi.fn(async () => {});
     const onboarding = createDesktopOnboardingIpc(
       { postToRenderer },
@@ -735,9 +740,8 @@ describe('desktop IPC adapters', () => {
   });
 
   it('serializes overlapping funnel refreshes to one consistent terminal state', async () => {
-    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const { state } = createMemoryState();
-    const postToRenderer = vi.fn();
+    const { createDesktopOnboardingIpc, state, postToRenderer } =
+      await createOnboardingHarness();
     // A credential probe that resolves on the next macrotask, so two refreshes
     // started back-to-back genuinely overlap in flight. `selectSetupAgent`
     // would only fire when `previous !== 'setup'`; if the two refreshes

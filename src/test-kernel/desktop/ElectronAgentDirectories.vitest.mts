@@ -6,10 +6,6 @@ import { dirname, join } from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent
-
-// Local imports - common
-
 // Local imports - platform
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';

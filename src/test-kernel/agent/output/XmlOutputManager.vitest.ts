@@ -30,6 +30,27 @@ async function initFakePlatform(files: Record<string, string> = {}) {
   initPlatform(createFakePlatform({ files, workspacePath: '/workspace' }));
 }
 
+function createWorkflowAgentSetting(
+  documentTag: string,
+  overrides: { rounds?: number; defaultOutputFiles?: string[] } = {},
+) {
+  return {
+    agentCategory: AgentCategory.Workflow,
+    documentTag,
+    endTag: '</documents>',
+    temperature: 0,
+    requiredFiles: {},
+    requiredFilesInternal: {},
+    defaultOutputFiles: [],
+    filePatternsContain: [],
+    tools: [],
+    isRewrite: true,
+    rounds: 1,
+    prefills: [],
+    ...overrides,
+  };
+}
+
 function createXmlManager(
   documentTag = 'document',
   inputFiles: string[] = ['paper.tex'],
@@ -39,20 +60,7 @@ function createXmlManager(
   } = {},
 ): XmlOutputManager {
   return new XmlOutputManager(
-    {
-      agentCategory: AgentCategory.Workflow,
-      documentTag,
-      endTag: '</documents>',
-      temperature: 0,
-      requiredFiles: {},
-      requiredFilesInternal: {},
-      defaultOutputFiles: [],
-      filePatternsContain: [],
-      tools: [],
-      isRewrite: true,
-      rounds: 1,
-      prefills: [],
-    },
+    createWorkflowAgentSetting(documentTag),
     {
       inputFiles,
       outputFiles: options.outputFiles ?? [],
@@ -1028,20 +1036,7 @@ Appendix.
       },
     };
     const processor = new OutputFileProcessor({
-      agentSetting: {
-        agentCategory: AgentCategory.Workflow,
-        documentTag: 'documents',
-        endTag: '</documents>',
-        temperature: 0,
-        requiredFiles: {},
-        requiredFilesInternal: {},
-        defaultOutputFiles: [],
-        filePatternsContain: [],
-        tools: [],
-        isRewrite: true,
-        rounds: 1,
-        prefills: [],
-      },
+      agentSetting: createWorkflowAgentSetting('documents'),
       baseFiles: [],
       streamId: 'stream',
       runtimeHost: { emit: vi.fn() } as unknown as AgentRuntimeHost,
@@ -1588,20 +1583,9 @@ Appendix.
     inputFiles: string[] = ['page1.png', 'page2.png'],
   ): XmlOutputManager {
     return new XmlOutputManager(
-      {
-        agentCategory: AgentCategory.Workflow,
-        documentTag: 'documents',
-        endTag: '</documents>',
-        temperature: 0,
-        requiredFiles: {},
-        requiredFilesInternal: {},
+      createWorkflowAgentSetting('documents', {
         defaultOutputFiles: ['ocr_result.tex'],
-        filePatternsContain: [],
-        tools: [],
-        isRewrite: true,
-        rounds: 1,
-        prefills: [],
-      },
+      }),
       {
         inputFiles,
         outputFiles: ['ocr_result.tex'],
@@ -2019,20 +2003,7 @@ Appendix.
     ];
     let roundOutputs: OutputFileInfo[] = [];
     const processor = new OutputFileProcessor({
-      agentSetting: {
-        agentCategory: AgentCategory.Workflow,
-        documentTag: 'documents',
-        endTag: '</documents>',
-        temperature: 0,
-        requiredFiles: {},
-        requiredFilesInternal: {},
-        defaultOutputFiles: [],
-        filePatternsContain: [],
-        tools: [],
-        isRewrite: true,
-        rounds: 2,
-        prefills: [],
-      },
+      agentSetting: createWorkflowAgentSetting('documents', { rounds: 2 }),
       baseFiles: [
         createExternalLocation('/tmp/run/appendices.tex'),
         createExternalLocation('/tmp/run/cost_section.tex'),

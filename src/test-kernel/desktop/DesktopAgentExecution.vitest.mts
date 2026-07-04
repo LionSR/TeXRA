@@ -167,6 +167,14 @@ type ProgressMessage = {
   streamState?: unknown;
 };
 
+/** Shared fixture for the tool-use "search" agentConfig used across several
+ * resume tests below. */
+const SEARCH_TOOL_USE_AGENT_CONFIG = {
+  agent: 'search',
+  model: 'deepseekproT',
+  agentCategory: AgentCategory.ToolUse,
+} as const;
+
 function mockLoggerModule(): void {
   vi.doMock('@logger', () => ({
     createChannelTrace: () => ({
@@ -1521,13 +1529,7 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('does not resume a stream deleted in this desktop session', async () => {
-    const taskState = {
-      agentConfig: {
-        agent: 'search',
-        model: 'deepseekproT',
-        agentCategory: AgentCategory.ToolUse,
-      },
-    };
+    const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'toolUse',
       snapshot: {
@@ -2114,11 +2116,7 @@ describe('DesktopProgressBridge', () => {
       snapshot: {
         executionId: 'exec-1',
         streamId: 'stream-1',
-        agentConfig: {
-          agent: 'search',
-          model: 'deepseekproT',
-          agentCategory: AgentCategory.ToolUse,
-        },
+        agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
       },
     }));
     const resumeToolUseFromSnapshot = vi.fn(async () => {});
@@ -2129,13 +2127,7 @@ describe('DesktopProgressBridge', () => {
     });
     const { ToolUseFollowUpQueue } =
       await import('@agent/followUp/ToolUseFollowUpQueueManager');
-    const taskState = {
-      agentConfig: {
-        agent: 'search',
-        model: 'deepseekproT',
-        agentCategory: AgentCategory.ToolUse,
-      },
-    };
+    const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
 
     try {
       bridge.handleProgressEvent('setTaskState', {
@@ -2197,11 +2189,7 @@ describe('DesktopProgressBridge', () => {
       snapshot: {
         executionId: 'exec-1',
         streamId: 'stream-1',
-        agentConfig: {
-          agent: 'search',
-          model: 'deepseekproT',
-          agentCategory: AgentCategory.ToolUse,
-        },
+        agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
       },
     }));
     const resumeToolUseFromSnapshot = vi.fn(async () => {
@@ -2218,13 +2206,7 @@ describe('DesktopProgressBridge', () => {
       bridge.handleProgressEvent('setTaskState', {
         streamId: 'stream-1',
         executionId: 'exec-1',
-        taskState: {
-          agentConfig: {
-            agent: 'search',
-            model: 'deepseekproT',
-            agentCategory: AgentCategory.ToolUse,
-          },
-        },
+        taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
       ToolUseFollowUpQueue.enqueue(
         'stream-1',
@@ -2280,11 +2262,7 @@ describe('DesktopProgressBridge', () => {
         snapshot: {
           executionId: 'exec-1',
           streamId: 'stream-1',
-          agentConfig: {
-            agent: 'search',
-            model: 'deepseekproT',
-            agentCategory: AgentCategory.ToolUse,
-          },
+          agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
         },
       };
     });
@@ -2294,13 +2272,7 @@ describe('DesktopProgressBridge', () => {
       bridge.handleProgressEvent('setTaskState', {
         streamId: 'stream-1',
         executionId: 'exec-1',
-        taskState: {
-          agentConfig: {
-            agent: 'search',
-            model: 'deepseekproT',
-            agentCategory: AgentCategory.ToolUse,
-          },
-        },
+        taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
 
       const firstResume = bridge.tryResumeStream('stream-1');
