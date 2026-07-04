@@ -10,6 +10,7 @@ import {
   logProgressStatus,
   logSdkError,
 } from '@agent/trace';
+import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -67,7 +68,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../utils/toolAttachmentUtils';
-import { parseToolArguments } from '../utils/parseArguments';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAIResponseTools } from '../toolConversion';
 import { ModelHandler } from '../ModelHandler';
@@ -2498,7 +2498,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       provider: 'openai-response',
       callId: call.call_id,
       name: call.name,
-      input: parseToolArguments(call.arguments, this.logger),
+      input: parseToolInput(call.arguments, call.call_id, this.logger),
       raw: call,
     }));
   }
