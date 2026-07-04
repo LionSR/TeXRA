@@ -6,7 +6,7 @@
  * (unofficial) Codex backend. EXPERIMENTAL — see
  * docs/proposals/chatgpt-subscription-codex-auth.md.
  *
- * Only three things differ from the base Responses handler:
+ * Handler-local differences from the base Responses handler:
  *  1. credential — the OAuth access token is passed as the SDK `apiKey` (the
  *     SDK derives `Authorization: Bearer <token>` from it), refreshed per turn;
  *  2. endpoint + headers — `…/codex/responses`, plus `chatgpt-account-id`,
@@ -23,11 +23,12 @@
  * per request: if the user turns it off mid-run (e.g. the "Use your own API
  * key" switch after a `usage_limit_reached` error), this handler transparently
  * falls back to the base Responses handler's OpenAI API-key path on the same
- * instance — no handler swap needed.
+ * instance — no handler swap needed. Subscription capability differences
+ * (context cap, zero pricing, stateless storage, streaming/background policy)
+ * live in the provider capability profile rather than handler-local predicates.
  */
 import OpenAI from 'openai';
 
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   CODEX_ACCOUNT_ID_HEADER,
   CODEX_BACKEND_BASE_URL,
@@ -35,22 +36,21 @@ import {
   CODEX_BETA_VALUE,
   CODEX_ORIGINATOR,
   CODEX_ORIGINATOR_HEADER,
-  CODEX_SUBSCRIPTION_CONTEXT_WINDOW,
   CodexAuthError,
-  codexBackendModelId,
   codexCoordinator,
   isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
 } from '@auth/codex';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { getWebSocketEnabled } from '@utils/config/providerConfig';
+import {
+  codexBackendModelId,
+  resolveProviderCapabilities,
+  type ProviderCapabilityProfile,
+} from '@model/providerCapabilities';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
-import type {
-  ResponseCreateParamsBase,
-  ResponseUsage,
-} from 'openai/resources/responses/responses';
+import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 const CHANNEL = 'ModelHandlerCodex';
 logger.initialize(CHANNEL);
@@ -192,94 +192,38 @@ const codexFetch = (async (input, init) => {
 
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   /**
-   * The Codex backend has no background mode — a direct probe returns
-   * `400 {"detail":"Unsupported parameter: background"}` even with store:false
-   * and stream:true satisfied (and `400 Store must be set to false` before
-   * that, since background polling needs the server-side state the backend
-   * refuses). So while the subscription drives the request, never enter
-   * background mode and keep the working default streaming path (the shared
-   * `model.useBackgroundResponses` toggle stays default-on for the real OpenAI
-   * Responses models, just not for this backend). This is the single gate the
-   * request path reads — see {@link ModelHandlerOpenAIResponse.isBackgroundModeActive}.
-   * Once the subscription is off, the request runs on the user's OpenAI API key,
-   * where the base handler decides background mode normally.
-   */
-  public override isBackgroundModeActive(): boolean {
-    return this.usingSubscription() ? false : super.isBackgroundModeActive();
-  }
-
-  /**
-   * Clamp the effective context window to the subscription ceiling
-   * ({@link CODEX_SUBSCRIPTION_CONTEXT_WINDOW}) while the subscription drives the
-   * request. Without it the handler trusts the larger llm-zoo `contextWindow`,
-   * so its own token accounting never trips and the first signal of overflow is
-   * the backend's opaque `400 context_length_exceeded`. {@link Math.min} keeps
-   * it a cap so a model already below the cap is left untouched, and the clamp
-   * lifts on the API-key fallback like every other subscription-gated override.
-   */
-  public override getEffectiveContextWindow(): number {
-    const base = super.getEffectiveContextWindow();
-    return this.usingSubscription()
-      ? Math.min(CODEX_SUBSCRIPTION_CONTEXT_WINDOW, base)
-      : base;
-  }
-
-  /**
-   * Whether this handler should still drive the ChatGPT subscription. Re-read
-   * per request (not cached at construction) so that turning the preference off
-   * mid-run — e.g. via the "Use your own API key" retry switch after a
-   * `usage_limit_reached` error — makes the next attempt fall back to the
-   * user's OpenAI API key on this same handler instance. The OpenAI client is
-   * rebuilt every request from `getApiKey()`/`getBaseUrl()`, so re-resolving
-   * here is enough to reroute the in-place retry, mirroring how the base
-   * handler re-resolves relay vs direct credentials per request.
+   * Re-read the active profile per request (not cached at construction) so that
+   * turning the preference off mid-run — e.g. via the "Use your own API key"
+   * retry switch after a `usage_limit_reached` error — makes the next attempt
+   * fall back to the user's OpenAI API key on this same handler instance. The
+   * OpenAI client is rebuilt every request from `getApiKey()`/`getBaseUrl()`, so
+   * re-resolving here is enough to reroute the in-place retry, mirroring how the
+   * base handler re-resolves relay vs direct credentials per request.
    *
-   * EVERY Codex-specific override below is gated on this so the fallback is a
-   * genuine drop to the base handler — once the subscription is off the request
-   * runs against the normal OpenAI Responses endpoint with the base handler's
-   * full capabilities (token counting, compaction, response chaining, file
-   * upload, store:true, WebSocket eligibility), not Codex-restricted ones.
-   *
-   * (Sign-in is intentionally not re-checked: the switch flips this preference,
+   * Sign-in is intentionally not re-checked: the switch flips this preference,
    * not the stored session, and an auth lapse still surfaces as an actionable
-   * error from {@link resolveAccessToken}.)
+   * error from {@link resolveAccessToken}.
    *
-   * Also gated on agent category: when {@link isCodexSubscriptionToolUseOnly} is
-   * on, only handlers explicitly tagged as tool-use drive the
-   * subscription. Workflow and untagged helper handlers fall back to the base
-   * API-key / relay path. The Codex backend has no background mode (which
-   * workflow runs lean on) and is less stable for long runs, so workflows stay
-   * on the more robust path until the subscription backend proves itself. The
-   * category is set on launched agents at activation
-   * (`AgentLaunchContext.setAgentCategory`); helpers that never launch as
-   * agents remain untagged and therefore outside the scoped subscription.
+   * The profile owns subscription behavior: context cap, zero-rate pricing,
+   * token-counting/compaction/chaining/file-upload disables, stateless storage,
+   * streaming/background/websocket policy, and usage-route tagging. Once the
+   * profile is inactive the inherited OpenAI Responses API-key behavior applies.
    */
-  private usingSubscription(): boolean {
-    if (!isPreferCodexSubscription()) return false;
-    if (isCodexSubscriptionToolUseOnly()) return this.isToolUseMode();
-    return true;
+  protected override getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
+    if (!isPreferCodexSubscription()) return null;
+    if (isCodexSubscriptionToolUseOnly() && !this.isToolUseMode()) return null;
+    return resolveProviderCapabilities({
+      model: this.config,
+      authMode: 'chatgpt-subscription',
+      useOpenRouter: false,
+      agentCategory: this.getAgentCategory(),
+    });
   }
 
-  // The Codex backend is streaming-only (`400 Stream must be set to true`
-  // otherwise) and has no background mode, so the subscription always streams.
-  // After the fallback to the API key, the base streaming logic applies.
-  public override getStreamingConfig(): boolean {
-    return this.usingSubscription() ? true : super.getStreamingConfig();
-  }
-
-  /**
-   * Allow WebSocket transport against the Codex backend whenever the SAME global
-   * `texra.websocket.openai` toggle is on (`getWebSocketEnabled()`) — no
-   * Codex-specific flag. The SDK derives the WebSocket URL + auth from the
-   * (Codex) client, so this targets the Codex endpoint; whether that endpoint
-   * speaks WebSocket is what's being tested. Gated on the subscription: once it
-   * is off, the base rule (default OpenAI endpoint only) applies, so WebSocket
-   * is never attempted against a relay/proxy/custom base URL.
-   */
-  protected override isWebSocketModeEnabled(): boolean {
-    return this.usingSubscription()
-      ? getWebSocketEnabled()
-      : super.isWebSocketModeEnabled();
+  private hasSubscriptionProfile(): boolean {
+    return (
+      this.getActiveProviderCapabilities()?.authMode === 'chatgpt-subscription'
+    );
   }
 
   /**
@@ -293,7 +237,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   protected override prepareWireParams(
     params: ResponseCreateParamsBase,
   ): ResponseCreateParamsBase {
-    if (!this.usingSubscription()) return params;
+    if (!this.hasSubscriptionProfile()) return params;
     // `rewriteCodexRequestBody` works on the parsed JSON body (a plain record),
     // matching the HTTP `codexFetch` path; the SDK param type has no index
     // signature, so round-trip it through `Record` at this single boundary.
@@ -301,92 +245,24 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return rewritten as ResponseCreateParamsBase;
   }
 
-  // The Codex backend has no `/responses/input_tokens` or `/compact` endpoint
-  // (they return 403); rely on the handler's heuristic fallbacks instead. After
-  // the fallback to the OpenAI API key the base capabilities are restored.
-  public override get supportsTokenCounting(): boolean {
-    return this.usingSubscription() ? false : super.supportsTokenCounting;
-  }
-
-  protected override shouldFailWhenFallbackOutputBudgetIsReduced(
-    inputEstimate: number,
-    _maxOutputTokens: number,
-    contextWindow: number,
-    buffer: number,
-  ): boolean {
-    return this.usingSubscription() && inputEstimate + buffer >= contextWindow;
-  }
-
-  public override get supportsManualCompaction(): boolean {
-    return this.usingSubscription() ? false : super.supportsManualCompaction;
-  }
-
-  protected override get supportsResponseChaining(): boolean {
-    return this.usingSubscription() ? false : super.supportsResponseChaining;
-  }
-
-  // The Codex backend keeps no server-side state: it mandates store:false
-  // (verified by probe — store:true returns `400 Store must be set to false`)
-  // and has no background mode to require otherwise. This drives the base
-  // request `store` field and gates the encrypted-reasoning replay path: with no
-  // previous_response_id chaining, reasoning continuity comes from replaying
-  // `reasoning.encrypted_content` blobs in each turn's input instead. Once the
-  // subscription is off entirely, the base store:true + chaining is restored.
-  protected override get storesResponsesServerSide(): boolean {
-    return this.usingSubscription() ? false : super.storesResponsesServerSide;
-  }
-
-  protected override get supportsInlineInputFileUpload(): boolean {
-    return this.usingSubscription()
-      ? false
-      : super.supportsInlineInputFileUpload;
-  }
-
-  protected override get supportsToolResultFileUpload(): boolean {
-    return this.usingSubscription()
-      ? false
-      : super.supportsToolResultFileUpload;
-  }
-
-  /** Subscription usage consumes ChatGPT quota, not TeXRA-tracked API spend;
-   *  once switched to the API key, fall back to real per-token pricing. */
-  public override computePrice(responseUsage: ResponseUsage): number {
-    return this.usingSubscription() ? 0 : super.computePrice(responseUsage);
-  }
-
-  /**
-   * Tag subscription rounds so downstream usage logging and the UI can record
-   * them while making clear they are free (the cost above is already 0). On the
-   * API-key fallback the route is omitted and real cost applies.
-   */
-  public override normalizeUsage(
-    rawUsage: ResponseUsage,
-    responseTimeMs: number,
-  ): NormalizedUsage {
-    const usage = super.normalizeUsage(rawUsage, responseTimeMs);
-    return this.usingSubscription()
-      ? { ...usage, usageRoute: 'chatgpt-subscription' }
-      : usage;
-  }
-
   /** OAuth access token in place of an API key (becomes the Bearer header),
    *  or the user's OpenAI API key once the subscription preference is off. */
   protected override async getApiKey(): Promise<string> {
-    return this.usingSubscription()
+    return this.hasSubscriptionProfile()
       ? this.resolveAccessToken()
       : super.getApiKey();
   }
 
-  /** The Codex backend while the subscription is active (also disables the
-   *  WebSocket transport path), else the default OpenAI base from the parent. */
+  /** The Codex backend while the subscription is active, else the default
+   *  OpenAI base from the parent. */
   public override getBaseUrl(): string | null {
-    return this.usingSubscription()
+    return this.hasSubscriptionProfile()
       ? CODEX_BACKEND_BASE_URL
       : super.getBaseUrl();
   }
 
   protected override async createOpenAIClient(): Promise<OpenAI> {
-    if (!this.usingSubscription()) {
+    if (!this.hasSubscriptionProfile()) {
       // Preference switched off (e.g. after a usage limit) — route this request
       // through the user's OpenAI API key via the standard Responses client.
       this.logger.debug(
