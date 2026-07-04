@@ -49,6 +49,14 @@ export const UpdateStreamsMessageSchema = z.object({
   streamStates: z.record(z.string(), StreamMetadataSchema).optional(),
 });
 
+export const UpdateStreamMetadataMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA),
+  streamInfo: StreamTabInfoSchema,
+  streamState: StreamMetadataSchema,
+  activeStream: z.union([StreamTabIdSchema, z.literal('')]).optional(),
+  agentFilter: AgentCategoryFilterSchema.optional(),
+});
+
 export const SetActiveStreamMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
@@ -327,6 +335,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
   'command',
   [
     UpdateStreamsMessageSchema,
+    UpdateStreamMetadataMessageSchema,
     SetActiveStreamMessageSchema,
     UpdateConversationProgressMessageSchema,
     UpdateStreamBadgesMessageSchema,
