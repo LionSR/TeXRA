@@ -12,7 +12,7 @@ import { writeTextStdout } from '../runtime/logSinks';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
-  resolveCliMemoryStoragePath,
+  cliMemoryStoragePathFromInput,
 } from '../runtime/memory';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -46,7 +46,7 @@ async function runMemoryShow(
     return CliExitCode.Success;
   }
 
-  const storagePath = resolveCliMemoryStoragePath(inputPath);
+  const storagePath = cliMemoryStoragePathFromInput(inputPath);
   const preview = await loadMemoryPreview(storagePath);
   const record = {
     path: toDisplayPath(storagePath),

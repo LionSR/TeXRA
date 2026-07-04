@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // r0/r1 outputs on disk (the same source the `--run-id` path scans).
 const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
-  resolveRunDir: vi.fn(),
+  findRunDir: vi.fn(),
   readOutputFiles: vi.fn(),
 }));
 
@@ -25,7 +25,7 @@ vi.mock('@agent/storage', async (importActual) => ({
 
 vi.mock('@utils/files', async (importActual) => ({
   ...(await importActual<typeof import('@utils/files')>()),
-  resolveRunDir: mocks.resolveRunDir,
+  findRunDir: mocks.findRunDir,
 }));
 
 vi.mock('@transcript', async (importActual) => {
@@ -95,7 +95,7 @@ describe('discoverLatestExecutionOutputs', () => {
     mocks.listExecutions.mockResolvedValue([
       matchingExecution('exec-headless'),
     ]);
-    mocks.resolveRunDir.mockResolvedValue(runDir);
+    mocks.findRunDir.mockResolvedValue(runDir);
 
     const result = await discoverLatestExecutionOutputs({
       agent: 'polish',
@@ -107,14 +107,14 @@ describe('discoverLatestExecutionOutputs', () => {
     expect([...(result?.rounds.keys() ?? [])].sort((a, b) => a - b)).toEqual([
       0, 1,
     ]);
-    expect(mocks.resolveRunDir).toHaveBeenCalledWith('exec-headless');
+    expect(mocks.findRunDir).toHaveBeenCalledWith('exec-headless');
   });
 
   it('returns null when neither the snapshot nor the run directory has outputs', async () => {
     const emptyDir = await makeTempDir();
 
     mocks.listExecutions.mockResolvedValue([matchingExecution('exec-empty')]);
-    mocks.resolveRunDir.mockResolvedValue(emptyDir);
+    mocks.findRunDir.mockResolvedValue(emptyDir);
 
     const result = await discoverLatestExecutionOutputs({
       agent: 'polish',

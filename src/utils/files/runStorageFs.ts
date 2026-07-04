@@ -2,98 +2,77 @@
 import * as path from 'node:path';
 import { promises as fs } from 'node:fs';
 
+import {
+  LEGACY_RUNS_STORAGE_DIR,
+  resolveExistingRunStoragePath,
+  resolveRunOriginalSnapshotPath,
+  resolveRunStoragePath,
+  resolveRunStorageRelativePath,
+  RUNS_STORAGE_DIR,
+} from '@platform/defaults/workspaceStorage';
 import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { type ExecutionId } from '@shared/schemas';
+import { type ExecutionId, type RunStorageFileLocation } from '@shared/schemas';
 import { getPathSegments } from '@utils/core/pathCore';
+import { createRunStorageLocation } from './fileLocation';
 import { StorageFS } from './storageFS';
 
 export const CHANNEL = 'taskRunStorage';
 
-/**
- * Directory for all per-execution artifacts (KV data, debug JSONs, logs, workflow outputs, etc.).
- * NOTE: This is 'executions', NOT 'taskRuns'. Name kept for import compatibility;
- * the legacy 'taskRuns' directory is LEGACY_RUNS_DIR below.
- */
-export const TASK_RUNS_DIR = 'executions';
+export const TASK_RUNS_DIR = RUNS_STORAGE_DIR;
 
-/** Legacy directory name — checked as read fallback for pre-consolidation data. */
-export const LEGACY_RUNS_DIR = 'taskRuns';
+export const LEGACY_RUNS_DIR = LEGACY_RUNS_STORAGE_DIR;
 
-/**
- * Get the full path to a specific execution's run directory.
- * @param id - The execution ID
- * @returns The full path to the run directory (always under TASK_RUNS_DIR)
- */
 export function getRunDir(id: ExecutionId): string {
-  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id));
+  return StorageFS.fullPath(resolveRunStoragePath(id));
 }
 
-/**
- * Absolute path of the immutable pre-run snapshot for a base file. The
- * snapshot is captured by {@link TaskRunFileService.prepareRunWorkspace}
- * before any agent modifications, so diffs against it remain accurate
- * even for in-place workflows where the live workspace file has since
- * been overwritten by the agent.
- *
- * Returns the candidate path unconditionally; callers should `stat` it
- * before reading because `prepareRunWorkspace` skips files that were
- * absent or non-regular at snapshot time.
- */
 export function getOriginalSnapshotPath(
   executionId: ExecutionId,
   workspaceRelativePath: string,
 ): string {
   return StorageFS.fullPath(
-    path.join(TASK_RUNS_DIR, executionId, 'original', workspaceRelativePath),
+    resolveRunOriginalSnapshotPath(executionId, workspaceRelativePath),
   );
 }
 
-/**
- * Resolve a storage-relative path, checking `executions/` first then
- * legacy `taskRuns/`. Returns the storage-relative path that exists,
- * or `undefined` if neither location has the target.
- */
-export async function resolveStoragePath(
+export async function findExistingRunStoragePath(
   ...segments: string[]
 ): Promise<string | undefined> {
-  const primary = path.join(TASK_RUNS_DIR, ...segments);
-  if (await StorageFS.exists(primary)) return primary;
-  const legacy = path.join(LEGACY_RUNS_DIR, ...segments);
-  if (await StorageFS.exists(legacy)) return legacy;
-  return undefined;
+  return resolveExistingRunStoragePath(
+    segments,
+    StorageFS.exists.bind(StorageFS),
+  );
 }
 
-/**
- * Resolve the full filesystem path for an execution's run directory,
- * checking `executions/` first then legacy `taskRuns/`.
- * Returns `undefined` if neither location exists.
- */
-export async function resolveRunDir(
-  id: ExecutionId,
-): Promise<string | undefined> {
-  const rel = await resolveStoragePath(id);
+export async function findRunDir(id: ExecutionId): Promise<string | undefined> {
+  const rel = await findExistingRunStoragePath(id);
   return rel ? StorageFS.fullPath(rel) : undefined;
 }
 
-/**
- * Ensure an execution's run directory exists, creating it if necessary.
- * Also ensures the parent executions directory exists.
- * @param id - The execution ID
- */
 export async function ensureRunDir(id: ExecutionId): Promise<void> {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
-  await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, id));
+  await StorageFS.ensureDir(resolveRunStoragePath(id));
 }
 
-/**
- * @internal Used internally by TaskRunFileService
- */
 export function getRunStorageAbsolutePath(
   id: ExecutionId,
   workspaceRelative: string,
 ): string {
-  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id, workspaceRelative));
+  return StorageFS.fullPath(resolveRunStoragePath(id, workspaceRelative));
+}
+
+export function runStorageLocationFromAbsolutePath(
+  absolutePath: string,
+  executionId: ExecutionId,
+): RunStorageFileLocation | undefined {
+  if (!path.isAbsolute(absolutePath)) return undefined;
+  const relativePath = resolveRunStorageRelativePath(
+    absolutePath,
+    getRunDir(executionId),
+  );
+  if (!relativePath) return undefined;
+  return createRunStorageLocation(absolutePath, relativePath, executionId);
 }
 
 export async function ensureParentDir(filePath: string): Promise<void> {
