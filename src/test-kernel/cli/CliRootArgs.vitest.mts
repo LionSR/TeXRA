@@ -91,6 +91,36 @@ function storedConfig(
   };
 }
 
+async function initNodeBackedPlatform(options: {
+  storagePath: string;
+  globalStoragePath: string;
+}): Promise<void> {
+  const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
+    await Promise.all([
+      import('@platform/platform'),
+      import('@platform/defaults/nodeFilesystem'),
+      import('@test/support/FakePlatform'),
+    ]);
+  initPlatform(
+    createFakePlatform(
+      {
+        workspacePath: process.cwd(),
+        storagePath: options.storagePath,
+        globalStoragePath: options.globalStoragePath,
+      },
+      { fs: nodeFilesystem },
+    ),
+  );
+}
+
+async function initDefaultFakePlatform(): Promise<void> {
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  initPlatform(createFakePlatform());
+}
+
 describe('CLI root argument routing', () => {
   it('routes top-level --logout to the logout subcommand', () => {
     expect(normalizeRootShortcuts(['--logout'])).toEqual(['logout']);
@@ -1165,8 +1195,16 @@ describe('runCli usage output stream routing', () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let platformStorageRoot = '';
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    platformStorageRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'texra-cli-root-'),
+    );
+    await initNodeBackedPlatform({
+      storagePath: path.join(platformStorageRoot, 'storage'),
+      globalStoragePath: path.join(platformStorageRoot, 'global-storage'),
+    });
     stdout = '';
     stderr = '';
     stdoutSpy = vi
@@ -1200,11 +1238,16 @@ describe('runCli usage output stream routing', () => {
       });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+    if (platformStorageRoot) {
+      await fs.rm(platformStorageRoot, { recursive: true, force: true });
+      platformStorageRoot = '';
+    }
+    await initDefaultFakePlatform();
   });
 
   it('routes usage text to stderr (not stdout) on a usage error', async () => {
