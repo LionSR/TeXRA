@@ -136,4 +136,26 @@ describe('StreamLog', () => {
 
     expect(log.getDirtyTextDeltas()).toEqual([]);
   });
+
+  it('keeps only text appended while a full entry replay is in flight', () => {
+    const log = new StreamLog();
+    log.append({
+      id: 'message',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      text: 'prefix ',
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+
+    log.appendText('message', 'hello');
+    const [entry] = log.getRange(0, log.head);
+    if (!entry) throw new Error('expected delivered entry');
+    log.appendText('message', ' world');
+    log.ackDirtyTextDeltas([], [entry]);
+
+    expect(log.getDirtyTextDeltas()).toEqual([
+      { id: 'message', appendText: ' world' },
+    ]);
+  });
 });

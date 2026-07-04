@@ -241,6 +241,54 @@ describe('WebviewBridge', () => {
     bridge.dispose();
   });
 
+  it('does not resend streamed text already covered by an in-flight full entry', async () => {
+    const store = new StreamLogStore();
+    const activeStream = 'active' as StreamTabId;
+    const firstDelivery = deferredBoolean();
+    const sendMessage = vi
+      .fn()
+      .mockReturnValueOnce(firstDelivery.promise)
+      .mockResolvedValue(true);
+    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+
+    bridge.syncStream(activeStream);
+    store.append(activeStream, logEntry('active-1', '', 100));
+    store.appendText(activeStream, 'active-1', 'hello');
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenLastCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId: activeStream,
+      entries: [
+        expect.objectContaining({
+          id: 'active-1',
+          text: 'hello',
+        }),
+      ],
+      updates: [],
+      textDeltas: [],
+    });
+
+    store.appendText(activeStream, 'active-1', ' world');
+    await vi.advanceTimersByTimeAsync(20);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    firstDelivery.resolve(true);
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage).toHaveBeenLastCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId: activeStream,
+      entries: [],
+      updates: [],
+      textDeltas: [{ id: 'active-1', appendText: ' world' }],
+    });
+
+    bridge.dispose();
+  });
+
   it('ships streamed text as O(L) append deltas instead of full updates', async () => {
     const store = new StreamLogStore();
     const activeStream = 'active' as StreamTabId;
