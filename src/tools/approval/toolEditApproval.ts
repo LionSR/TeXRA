@@ -10,7 +10,7 @@ import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
   applyPatchToText,
-  diffTextByChar,
+  diffTextByCharWithSemanticCleanup,
   DIFF_DELETE,
   DIFF_EQUAL,
   DIFF_INSERT,
@@ -131,9 +131,8 @@ export function emitToolEditApprovalPrompt(
 // ============================================================================
 
 function createSemanticDiffs(original: string, proposed: string): TextDiff[] {
-  return diffTextByChar(original, proposed, {
+  return diffTextByCharWithSemanticCleanup(original, proposed, {
     checkLines: true,
-    cleanupSemantic: true,
   });
 }
 
