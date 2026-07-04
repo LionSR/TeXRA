@@ -5,7 +5,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   isCodexSignedIn,
   isPreferCodexSubscription,
-  shouldUseCodexSubscriptionForAgentCategory,
+  resolveCodexSubscriptionCapabilitiesForAgentCategory,
 } from '@auth/codex';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -24,6 +24,7 @@ import {
 } from './modelOptionsBasic';
 import { getVisibleModels } from './modelOptionsState';
 import { shouldRouteModelThroughOpenRouter } from './openRouterRouting';
+import type { ProviderCapabilityProfile } from './providerCapabilities';
 import type { PlatformSecrets } from '@platform/secrets';
 
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
@@ -54,6 +55,7 @@ interface ModelAvailabilityStatus {
   label: string;
   available: boolean;
   requiresKey: boolean;
+  providerCapabilities?: ProviderCapabilityProfile;
 }
 
 /**
@@ -177,15 +179,19 @@ async function resolveModelAvailability(
   // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
   // the host is not signed in, continue through the normal API-key/relay paths
   // so the switch cannot disable models that are otherwise runnable.
-  if (
-    ctx.codexSignedIn &&
-    shouldUseCodexSubscriptionForAgentCategory(
-      config,
-      ctx.useOpenRouter,
-      ctx.agentCategory,
-    )
-  ) {
-    return availabilityStatus('subscription-access');
+  if (ctx.codexSignedIn) {
+    const subscriptionCapabilities =
+      resolveCodexSubscriptionCapabilitiesForAgentCategory(
+        config,
+        ctx.useOpenRouter,
+        ctx.agentCategory,
+      );
+    if (subscriptionCapabilities) {
+      return {
+        ...availabilityStatus('subscription-access'),
+        providerCapabilities: subscriptionCapabilities,
+      };
+    }
   }
 
   // OpenRouter routing is intentionally outside included access; a configured
@@ -331,8 +337,16 @@ async function buildModelOptionData(
   }
 
   const availability = await resolveModelAvailability(model, config, ctx);
+  const optionConfig = availability.providerCapabilities
+    ? {
+        ...config,
+        contextWindow: availability.providerCapabilities.contextWindow,
+        inputPrice: availability.providerCapabilities.inputPrice,
+        outputPrice: availability.providerCapabilities.outputPrice,
+      }
+    : config;
   return {
-    ...buildBaseModelOption(model, config),
+    ...buildBaseModelOption(model, optionConfig),
     availability: availability.kind,
     availabilityLabel: availability.label,
     requiresKey: availability.requiresKey,
