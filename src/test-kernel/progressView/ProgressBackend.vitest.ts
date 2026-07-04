@@ -311,7 +311,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('does not switch category filters for unknown-category status streams', () => {
+  it('does not switch category filters for unknown-category status streams', async () => {
     const messages: ProgressViewOutboundMessage[] = [];
     const backend = new ProgressBackend({
       storage: new MemoryMementoStorage(),
@@ -335,7 +335,7 @@ describe('ProgressBackend', () => {
       backend.state.activeStream = 'tool-stream';
       backend.state.agentCategoryFilter = 'toolUse';
 
-      backend.eventHandler.setStreamStatus(
+      await backend.eventHandler.setStreamStatus(
         'unknown-stream',
         STREAM_PHASE.RUNNING,
       );
@@ -360,7 +360,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('revalidates the active stream when status registration changes the filter', () => {
+  it('revalidates and syncs the active stream when status registration changes the filter', async () => {
     const messages: ProgressViewOutboundMessage[] = [];
     const backend = new ProgressBackend({
       storage: new MemoryMementoStorage(),
@@ -383,11 +383,22 @@ describe('ProgressBackend', () => {
       );
       backend.state.activeStream = 'tool-stream';
       backend.state.agentCategoryFilter = 'toolUse';
+      backend.state.streamLogs.ensureStream('workflow-existing');
+      backend.state.updateStreamHints('workflow-existing', {
+        agentCategory: AgentCategory.Workflow,
+      });
+      backend.state.getOrCreateStreamState(
+        'workflow-existing',
+        AgentCategory.Workflow,
+      );
       backend.state.updateStreamHints('workflow-stream', {
         agentCategory: AgentCategory.Workflow,
       });
+      vi.spyOn(backend.state, 'pickValidActiveStream').mockReturnValue(
+        'workflow-existing',
+      );
 
-      backend.eventHandler.setStreamStatus(
+      await backend.eventHandler.setStreamStatus(
         'workflow-stream',
         STREAM_PHASE.RUNNING,
       );
@@ -398,14 +409,23 @@ describe('ProgressBackend', () => {
           message.streamInfo.name === 'workflow-stream',
       );
       expect(backend.state.agentCategoryFilter).toBe('workflow');
-      expect(backend.state.activeStream).toBe('workflow-stream');
+      expect(backend.state.activeStream).toBe('workflow-existing');
       expect(patch).toMatchObject({
         agentFilter: 'workflow',
-        activeStream: 'workflow-stream',
+        activeStream: 'workflow-existing',
         streamInfo: {
           name: 'workflow-stream',
           agentCategory: AgentCategory.Workflow,
         },
+      });
+      expect(
+        messages.find(
+          (message) =>
+            message.command === PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+        ),
+      ).toMatchObject({
+        stream: 'workflow-existing',
+        action: 'render',
       });
     } finally {
       backend.dispose();
