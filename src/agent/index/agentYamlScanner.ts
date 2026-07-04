@@ -11,11 +11,11 @@ import {
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';
 import { filterNotNull } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LEGACY_AGENT_ALIASES } from './agentRegistryConstants';
 import type { AgentEntry } from './agentEntry';
 

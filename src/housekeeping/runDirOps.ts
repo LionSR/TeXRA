@@ -3,12 +3,12 @@ import * as path from 'node:path';
 
 // Local imports
 import { platform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import { getCleanAgentName } from '@shared/schemas/agent';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { findRunDir } from '@utils/files/taskRunStorage';
 
 import { HISTORY_DIR } from './constants';

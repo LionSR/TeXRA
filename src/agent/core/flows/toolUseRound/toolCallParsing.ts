@@ -5,13 +5,13 @@ import { z } from 'zod';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
-import { toErrorMessage } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@shared/schemas/toolResult';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export const DUPLICATE_CALL_ERROR =
   'Duplicate parallel call skipped — same tool name and arguments as an earlier call in this batch. ' +

@@ -25,7 +25,6 @@
 
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
-import { toErrorMessage } from '@common/errors';
 import * as logUtils from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -53,6 +52,7 @@ import {
 } from '@tools/delegationAgentAvailability';
 import { withDelegationWorktreeAvailability } from '@tools/delegationWorktreeAvailability';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   toolInjectionRegistry,
   type ToolInjectionRegistry,

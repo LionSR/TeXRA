@@ -2,10 +2,10 @@
 import micromatch from 'micromatch';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors';
+import { ToolError } from '@shared/schemas/toolResult';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - tools
-import { ToolError } from '@shared/schemas/toolResult';
 
 /**
  * Compile a glob pattern into a matcher that operates on POSIX-style paths.

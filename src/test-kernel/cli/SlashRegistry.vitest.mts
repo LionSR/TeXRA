@@ -26,7 +26,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import { toErrorMessage } from '@common/errors';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const INCLUDED_CHAT_SESSION: SessionMeta = {
   agent: 'chat',

@@ -5,8 +5,8 @@ import { createInterface } from 'node:readline/promises';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
 // Local imports - errors
-import { toErrorMessage } from '@common/errors/errorMessage';
 import type { LogLevel } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Minimal structured-log primitives. The CLI uses these to format every

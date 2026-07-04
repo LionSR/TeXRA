@@ -8,7 +8,6 @@ import ky from 'ky';
 import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
-import { ensureError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { ToolResult } from '@shared/schemas/toolResult';
 import {
@@ -18,6 +17,7 @@ import {
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';
