@@ -14,9 +14,7 @@ import {
 
 // Local imports - agent
 import { logProgressStatus, logSdkError } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -43,7 +41,6 @@ import { getShortDisplayPath } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import {
-  initializeGooglePseudoPrefillOutputAndPrefill,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
@@ -1038,141 +1035,65 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // Stop / continue (PORT — keyed on Interaction status, not FinishReason)
   // ===========================================================================
 
-  shouldContinue(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-    agentSetting: AgentSetting,
-  ): boolean {
-    // The Interactions truncation status ('incomplete') is normalized to
-    // GOOGLE_FINISH.MAX_TOKENS in extractResponse (analogous to chat's
-    // MAX_TOKENS): the response was cut short by the output budget.
-    const truncated = stopReason === GOOGLE_FINISH.MAX_TOKENS;
-    const containsEndTag = hasEndTag(agentSetting, newResponse);
-
-    if (truncated && !containsEndTag) {
-      this.logger.debug(
-        `Should continue: truncated (MAX_TOKENS) and end tag '${agentSetting.endTag}' is missing.`,
-      );
-      return true;
-    }
-    this.logger.debug(
-      `Should not continue: StopReason='${stopReason}', HasEndTag='${containsEndTag}'.`,
-    );
-    return false;
+  protected override get shouldStorePseudoPrefillAsOutput(): boolean {
+    return true;
   }
 
-  addContinueMessageWithPrefill(
-    _messages: Step[],
-    _workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
-  ): void {
-    this.logger.debug(
-      "Interactions handler does not support assistant prefill continuation. Using 'WithoutPrefill'.",
-    );
+  protected override createPseudoPrefillPrompt(prefill: string): string {
+    return `Organize your response with XML tags. Start your response with:\n${prefill}`;
   }
 
-  addContinueMessageWithoutPrefill(
+  protected appendUserText(
     messages: Step[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
+    text: string,
+    placement: 'last-user' | 'continuation',
   ): void {
-    const prompt = this.createContinuationPrompt(workspaceState, agentSetting);
-    this.logger.debug('Adding continuation message.');
+    const last = messages.at(-1);
+    if (placement === 'last-user' && last?.type === 'user_input') {
+      (last.content ??= []).push(this.textContent(text));
+      return;
+    }
+
     messages.push({
       type: 'user_input',
-      content: [this.textContent(prompt)],
+      content: [this.textContent(text)],
     } satisfies UserInputStep);
   }
 
-  updateMessageContentWithPrefill(
-    _messages: Step[],
-    _bestConnector: string,
-    _newResponse: string,
-    _workspaceState: AgentWorkspaceState,
-  ): void {
-    this.logger.debug(
-      "Interactions handler does not support assistant prefill update. Using 'WithoutPrefill'.",
-    );
-  }
-
-  updateMessageContentWithoutPrefill(
+  protected appendTextToLastAssistantMessage(
     messages: Step[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    this.logger.debug(
-      'Updating message history for Google Interactions (no prefill).',
-    );
-
-    const last = messages.at(-1);
+    text: string,
+    options: { afterContinuationPrompt?: boolean } = {},
+  ): boolean {
+    const trailingStep = messages.at(-1);
     if (
-      last?.type === 'user_input' &&
-      this.containCutOffMessage(joinTextContent(last.content ?? []))
+      options.afterContinuationPrompt &&
+      trailingStep?.type === 'user_input'
     ) {
-      messages.pop();
-      this.logger.debug('Removed user continuation prompt.');
+      if (
+        this.containCutOffMessage(joinTextContent(trailingStep.content ?? []))
+      ) {
+        messages.pop();
+        this.logger.debug('Removed user continuation prompt.');
+      } else {
+        return false;
+      }
     }
 
     const modelStep = messages.at(-1);
-    if (modelStep?.type === 'model_output') {
-      const content = (modelStep.content ??= []);
-      const lastText = content.findLast(isTextContent);
-      if (lastText) {
-        lastText.text = (lastText.text ?? '') + bestConnector + newResponse;
-      } else {
-        content.push(this.textContent(bestConnector + newResponse));
-        this.logger.warn(
-          'Added new text content to last model_output step as none existed.',
-        );
-      }
+    if (modelStep?.type !== 'model_output') return false;
+
+    const content = (modelStep.content ??= []);
+    const lastText = content.findLast(isTextContent);
+    if (lastText) {
+      lastText.text = (lastText.text ?? '') + text;
     } else {
-      this.logger.debug('Adding new model_output step for the response.');
-      messages.push(
-        this.createAssistantMessage(workspaceState.assembly.accumulatedOutput),
+      content.push(this.textContent(text));
+      this.logger.warn(
+        'Added new text content to last model_output step as none existed.',
       );
     }
-  }
-
-  async initializeOutputAndPrefill(
-    _agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
-    messages: Step[],
-    workspaceState: AgentWorkspaceState,
-    outputLocation: FileLocation,
-    prefill: string,
-  ): Promise<[boolean, Step[]]> {
-    return initializeGooglePseudoPrefillOutputAndPrefill<Step>(
-      {
-        logger: this.logger,
-        // Interactions has no assistant-prefill, so carry the intended start as
-        // a user_input step (mirrors the chat handler).
-        appendPseudoPrefillToUserStep: (msgs, pseudoPrefillMsg) => {
-          const last = msgs.at(-1);
-          if (last?.type === 'user_input') {
-            (last.content ??= []).push(this.textContent(pseudoPrefillMsg));
-          } else {
-            msgs.push({
-              type: 'user_input',
-              content: [this.textContent(pseudoPrefillMsg)],
-            } satisfies UserInputStep);
-          }
-        },
-        pushModelText: (msgs, text) => {
-          msgs.push(this.createAssistantMessage(text));
-          this.logger.debug(
-            `Added existing file content as a model_output step.`,
-          );
-        },
-        addContinue: (msgs, ws, setting) =>
-          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
-      },
-      agentSetting,
-      messages,
-      workspaceState,
-      outputLocation,
-      prefill,
-    );
+    return true;
   }
 
   // ===========================================================================

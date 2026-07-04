@@ -18,9 +18,7 @@ import {
 // Local imports - agent
 import { logSdkError } from '@agent/trace';
 import type { StreamHandle } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -41,7 +39,6 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { getShortDisplayPath } from '@utils/files';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import {
-  initializeGooglePseudoPrefillOutputAndPrefill,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
@@ -78,7 +75,6 @@ import type {
 } from '@google/genai';
 
 // Type imports
-import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -725,147 +721,61 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
   }
 
-  addContinueMessageWithPrefill(
-    _messages: Content[],
-    _workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
-  ): void {
-    this.logger.debug(
-      "Native Google SDK handler does not support assistant prefill continuation. Using 'WithoutPrefill'.",
-    );
+  protected override get shouldStorePseudoPrefillAsOutput(): boolean {
+    return true;
   }
 
-  addContinueMessageWithoutPrefill(
+  protected override createPseudoPrefillPrompt(prefill: string): string {
+    return `Organize your response with XML tags. Start your response with:\n${prefill}`;
+  }
+
+  protected appendUserText(
     messages: Content[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
+    text: string,
+    placement: 'last-user' | 'continuation',
   ): void {
-    const userMessageContinuation = this.createContinuationPrompt(
-      workspaceState,
-      agentSetting,
-    );
-    this.logger.debug(`Adding continuation message.`);
-    messages.push(
-      createUserContent(createPartFromText(userMessageContinuation)),
-    );
-  }
-
-  updateMessageContentWithPrefill(
-    _messages: Content[],
-    _bestConnector: string,
-    _newResponse: string,
-    _workspaceState: AgentWorkspaceState,
-  ): void {
-    this.logger.debug(
-      "Native Google SDK handler does not support assistant prefill update. Using 'WithoutPrefill'.",
-    );
-  }
-
-  updateMessageContentWithoutPrefill(
-    messages: Content[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    this.logger.debug(
-      'Updating message history for Google GenAI (no prefill).',
-    );
     const lastMessage = messages.at(-1);
-    if (
-      lastMessage?.role === 'user' &&
-      this.containCutOffMessage(
-        (lastMessage.parts ?? [])
-          .filter(isTextPart)
-          .map((part) => part.text)
-          .join(''),
-      )
-    ) {
-      messages.pop();
-      this.logger.debug('Removed user continuation prompt.');
+    if (placement === 'last-user' && lastMessage?.role === 'user') {
+      (lastMessage.parts ??= []).push(createPartFromText(text));
+      return;
+    }
+
+    messages.push(createUserContent(createPartFromText(text)));
+  }
+
+  protected appendTextToLastAssistantMessage(
+    messages: Content[],
+    text: string,
+    options: { afterContinuationPrompt?: boolean } = {},
+  ): boolean {
+    const trailingMessage = messages.at(-1);
+    if (options.afterContinuationPrompt && trailingMessage?.role === 'user') {
+      const trailingText = (trailingMessage.parts ?? [])
+        .filter(isTextPart)
+        .map((part) => part.text)
+        .join('');
+      if (this.containCutOffMessage(trailingText)) {
+        messages.pop();
+        this.logger.debug('Removed user continuation prompt.');
+      } else {
+        return false;
+      }
     }
 
     const modelMessage = messages.at(-1);
-    if (modelMessage?.role === 'model') {
-      const parts = (modelMessage.parts ??= []);
-      const lastTextPart = parts.findLast(isTextPart);
-      if (lastTextPart) {
-        lastTextPart.text =
-          (lastTextPart.text ?? '') + bestConnector + newResponse;
-      } else {
-        parts.push(createPartFromText(bestConnector + newResponse));
-        this.logger.warn(
-          'Added new text part to last model message as none existed.',
-        );
-      }
+    if (modelMessage?.role !== 'model') return false;
+
+    const parts = (modelMessage.parts ??= []);
+    const lastTextPart = parts.findLast(isTextPart);
+    if (lastTextPart) {
+      lastTextPart.text = (lastTextPart.text ?? '') + text;
     } else {
-      this.logger.debug('Adding new model message for the response.');
-      messages.push(
-        createModelContent(
-          createPartFromText(workspaceState.assembly.accumulatedOutput),
-        ),
+      parts.push(createPartFromText(text));
+      this.logger.warn(
+        'Added new text part to last model message as none existed.',
       );
     }
-  }
-
-  async initializeOutputAndPrefill(
-    _agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
-    messages: Content[],
-    workspaceState: AgentWorkspaceState,
-    outputLocation: FileLocation,
-    prefill: string,
-  ): Promise<[boolean, Content[]]> {
-    return initializeGooglePseudoPrefillOutputAndPrefill<Content>(
-      {
-        logger: this.logger,
-        // Google's Chat API requires alternating user/model turns, so the
-        // pseudo-prefill rides on the last user message (or a new one).
-        appendPseudoPrefillToUserStep: (msgs, pseudoPrefillMsg) => {
-          const lastMessage = msgs.at(-1);
-          if (lastMessage?.role === 'user') {
-            (lastMessage.parts ??= []).push(
-              createPartFromText(pseudoPrefillMsg),
-            );
-          } else {
-            msgs.push(createUserContent(createPartFromText(pseudoPrefillMsg)));
-          }
-        },
-        pushModelText: (msgs, text) => {
-          msgs.push(createModelContent(createPartFromText(text)));
-          this.logger.debug(
-            `Added existing file content to messages as 'model' role.`,
-          );
-        },
-        addContinue: (msgs, ws, setting) =>
-          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
-      },
-      agentSetting,
-      messages,
-      workspaceState,
-      outputLocation,
-      prefill,
-    );
-  }
-
-  shouldContinue(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-    agentSetting: AgentSetting,
-  ): boolean {
-    // Google SDK uses the FinishReason enum for stop reasons
-    const hitTokenLimit = stopReason === FinishReason.MAX_TOKENS;
-    const containsEndTag = hasEndTag(agentSetting, newResponse);
-
-    if (hitTokenLimit && !containsEndTag) {
-      this.logger.debug(
-        `Should continue: MAX_TOKENS reached and end tag '${agentSetting.endTag}' is missing.`,
-      );
-      return true;
-    }
-    this.logger.debug(
-      `Should not continue: StopReason='${stopReason}', HasEndTag='${containsEndTag}'.`,
-    );
-    return false;
+    return true;
   }
 
   processThinkingBlock(

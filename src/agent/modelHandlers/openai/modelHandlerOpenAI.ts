@@ -7,8 +7,6 @@ import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/pa
 
 // Local imports - agent components
 import { logSdkError } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -34,7 +32,6 @@ import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
-import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 import { tagOpenAISdkError } from './openAISdkError';
 
 // Local file imports
@@ -52,7 +49,6 @@ import {
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
-import { shouldContinueOnLengthStop } from '../utils/stopReasonUtils';
 import { ModelHandler } from '../ModelHandler';
 import {
   BaseReasoningStreamAggregator,
@@ -83,7 +79,6 @@ import type {
   DeepSeekToolCall,
   OpenAIToolCall,
 } from '../types/IModelHandler';
-import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 
 type ChatCompletionRequestBase = Omit<
@@ -977,63 +972,74 @@ export class ModelHandlerOpenAI<
     return { text: newResponse, usage: responseObject.usage, stopReason };
   }
 
-  /** Manages continuation for models without prefill support by adding a continuation prompt. */
-  addContinueMessageWithoutPrefill(
-    messages: ChatCompletionMessageParam[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
-  ): void {
-    const userMessageContinuation = this.createContinuationPrompt(
-      workspaceState,
-      agentSetting,
-    );
-
-    this.logger.debug('Adding continuation message to conversation', {
-      data: { continuationMessage: userMessageContinuation },
-    });
-
-    const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-    messages.push({
-      role,
-      content: [{ type: 'text', text: userMessageContinuation }],
-    });
+  protected override get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
+    return true;
   }
 
-  /** Initializes output file and handles prefill content. */
-  async initializeOutputAndPrefill(
-    _agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
+  protected appendUserText(
     messages: ChatCompletionMessageParam[],
-    workspaceState: AgentWorkspaceState,
-    outputLocation: FileLocation,
-    prefill: string,
-  ): Promise<[boolean, ChatCompletionMessageParam[]]> {
-    return initializeOpenAiCompatibleOutputAndPrefill(
-      {
-        logger: this.logger,
-        appendPseudoPrefill: (msgs, pseudoPrefillMsg) => {
-          const lastMessage = msgs.at(-1);
-          if (lastMessage && Array.isArray(lastMessage.content)) {
-            lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
-          } else if (lastMessage && typeof lastMessage.content === 'string') {
-            lastMessage.content = [
-              { type: 'text', text: lastMessage.content },
-              { type: 'text', text: pseudoPrefillMsg },
-            ];
-          }
-        },
-        pushAssistantText: (msgs, text) => {
-          msgs.push({ role: 'assistant', content: [{ type: 'text', text }] });
-        },
-        addContinue: (msgs, ws, setting) =>
-          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
-      },
-      agentSetting,
-      messages,
-      workspaceState,
-      outputLocation,
-      prefill,
-    );
+    text: string,
+    placement: 'last-user' | 'continuation',
+  ): void {
+    if (placement === 'continuation') {
+      const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
+      messages.push({ role, content: [{ type: 'text', text }] });
+      return;
+    }
+
+    const lastMessage = messages.at(-1);
+    if (lastMessage && Array.isArray(lastMessage.content)) {
+      lastMessage.content.push({ type: 'text', text });
+      return;
+    }
+    if (lastMessage && typeof lastMessage.content === 'string') {
+      lastMessage.content = [
+        { type: 'text', text: lastMessage.content },
+        { type: 'text', text },
+      ];
+      return;
+    }
+    messages.push({ role: 'user', content: [{ type: 'text', text }] });
+  }
+
+  protected appendTextToLastAssistantMessage(
+    messages: ChatCompletionMessageParam[],
+    text: string,
+    options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
+  ): boolean {
+    let targetIndex = messages.length - 1;
+    const trailingMessage = messages.at(-1);
+
+    if (options.afterContinuationPrompt) {
+      if (
+        !trailingMessage ||
+        (trailingMessage.role !== 'user' && trailingMessage.role !== 'system')
+      ) {
+        return false;
+      }
+      if (!this.containCutOffMessage(trailingMessage.content)) {
+        return false;
+      }
+      targetIndex = messages.length - 2;
+    }
+
+    const targetMessage = messages.at(targetIndex);
+    if (!isAssistantMessage(targetMessage)) {
+      return false;
+    }
+
+    if (Array.isArray(targetMessage.content)) {
+      targetMessage.content.push({ type: 'text', text });
+    } else {
+      targetMessage.content = [
+        { type: 'text', text: options.fallbackText ?? text },
+      ];
+    }
+
+    if (options.afterContinuationPrompt && trailingMessage?.role === 'user') {
+      messages.pop();
+    }
+    return true;
   }
 
   /** Computes cost based on token usage and model pricing. */
@@ -1061,124 +1067,6 @@ export class ModelHandlerOpenAI<
       this.usageProvider,
       this.standardPricingConfig(),
     );
-  }
-
-  /** Updates message content for models with prefill support. */
-  updateMessageContentWithPrefill(
-    messages: ChatCompletionMessageParam[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    this.logger.debug(
-      'Updating message content for OpenAI models with prefill support',
-    );
-
-    const lastMessage = messages.at(-1);
-
-    if (isAssistantMessage(lastMessage)) {
-      if (Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({
-          type: 'text',
-          text: bestConnector + newResponse,
-        });
-      } else {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: workspaceState.assembly.accumulatedOutput,
-          },
-        ];
-      }
-    } else if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
-      this.logger.debug(
-        ' Last message is a user or system message - unexpected format',
-      );
-      // Add a new assistant message
-      messages.push({
-        role: 'assistant',
-        content: [{ type: 'text', text: bestConnector + newResponse }],
-      });
-    }
-  }
-
-  /** Updates message content for models without prefill support. */
-  updateMessageContentWithoutPrefill(
-    messages: ChatCompletionMessageParam[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    this.logger.debug(
-      'Updating message content for OpenAI models without prefill support',
-    );
-
-    // For OpenAI models without prefill, the last message is always a user/system message
-    const lastMessage = messages.at(-1);
-    const secondLastMessage = messages.at(-2);
-
-    if (
-      !lastMessage ||
-      (lastMessage.role !== 'user' && lastMessage.role !== 'system')
-    ) {
-      this.logger.error(
-        'Last message is not a user or system message - unexpected format',
-      );
-      return;
-    }
-    this.logger.debug('Last message is a user/system message');
-
-    if (this.containCutOffMessage(lastMessage.content)) {
-      this.logger.debug(
-        'Last message is a user message asking to continue after cut off',
-      );
-      // Then the last message is a user message
-      // So the second last message must be an assistant message
-      if (isAssistantMessage(secondLastMessage)) {
-        if (Array.isArray(secondLastMessage.content)) {
-          secondLastMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          });
-        } else {
-          this.logger.error('Second last message content is not a list');
-          secondLastMessage.content = [
-            {
-              type: 'text',
-              text: workspaceState.assembly.accumulatedOutput,
-            },
-          ];
-        }
-
-        // Remove the user continuation prompt to keep the conversation clean
-        if (messages.at(-1)?.role === 'user') {
-          messages.pop();
-        } else {
-          this.logger.error(
-            'Last message is not a user message - unexpected format',
-          );
-        }
-      }
-    } else {
-      this.logger.debug(
-        'Last message is a request message rather than a ask to continue after cut off',
-      );
-      messages.push({
-        role: 'assistant',
-        content: [
-          { type: 'text', text: workspaceState.assembly.accumulatedOutput },
-        ],
-      });
-    }
-  }
-
-  /** Determines if generation should continue based on response content. */
-  shouldContinue(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-    agentSetting: AgentSetting,
-  ): boolean {
-    return shouldContinueOnLengthStop(stopReason, newResponse, agentSetting);
   }
 
   /**

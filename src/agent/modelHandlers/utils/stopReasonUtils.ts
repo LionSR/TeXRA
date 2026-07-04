@@ -1,5 +1,6 @@
 // Local imports - stop reasons
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+
 // Internal imports
 import {
   ANTHROPIC_STOP,
@@ -8,10 +9,6 @@ import {
   OPENAI_CHAT_FINISH,
   OPENAI_COMPLETION_FINISH,
 } from '@agent/modelHandlers/types/StopReasonTypes';
-import {
-  type AgentSetting,
-  hasEndTag,
-} from '@agent/core/definition/AgentDataclass';
 
 /** Known stop reasons that indicate token limit was hit */
 const TOKEN_LIMIT_STOP_REASONS: readonly ProviderStopReason[] = [
@@ -30,24 +27,6 @@ const TOKEN_LIMIT_KEYWORDS = [
   'token_limit',
   'length',
 ];
-
-/**
- * Shared continuation predicate for OpenAI-family handlers (OpenAI, OpenRouter).
- *
- * Returns true when the stop reason is a token-length cutoff and the response
- * does not already contain the agent's end tag, meaning generation should
- * resume with a continuation prompt.
- */
-export function shouldContinueOnLengthStop(
-  stopReason: ProviderStopReason,
-  newResponse: string,
-  agentSetting: AgentSetting,
-): boolean {
-  return (
-    stopReason === OPENAI_CHAT_FINISH.LENGTH &&
-    !hasEndTag(agentSetting, newResponse)
-  );
-}
 
 /**
  * Determines whether a provider stop reason represents a token limit hit.
