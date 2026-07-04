@@ -241,8 +241,41 @@ export class StreamLog {
   ): void {
     for (const entry of fullEntries) {
       const index = this.indexById.get(entry.id);
-      if (index !== undefined && this.entries[index] === entry) {
+      if (index === undefined) {
         this.dirtyTextDeltas.delete(entry.id);
+        continue;
+      }
+
+      if (this.entries[index] === entry) {
+        this.dirtyTextDeltas.delete(entry.id);
+        continue;
+      }
+
+      const current = this.dirtyTextDeltas.get(entry.id);
+      if (!current) continue;
+      const currentEntry = this.entries[index];
+      const currentText =
+        typeof currentEntry.text === 'string' ? currentEntry.text : '';
+      const deliveredText = typeof entry.text === 'string' ? entry.text : '';
+      // A full-entry frame covers all appended text between the stable base
+      // prefix and the delivered text, even if later appends replaced the row.
+      const baseLength = currentText.length - current.appendText.length;
+      const deliveredDeltaLength = deliveredText.length - baseLength;
+
+      if (
+        baseLength >= 0 &&
+        deliveredDeltaLength > 0 &&
+        currentText.endsWith(current.appendText) &&
+        currentText.startsWith(deliveredText)
+      ) {
+        if (deliveredDeltaLength >= current.appendText.length) {
+          this.dirtyTextDeltas.delete(entry.id);
+          continue;
+        }
+        this.dirtyTextDeltas.set(entry.id, {
+          id: entry.id,
+          appendText: current.appendText.slice(deliveredDeltaLength),
+        });
       }
     }
 
