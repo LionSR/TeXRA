@@ -34,7 +34,10 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 // Local imports - utils
 import { getShortDisplayPath } from '@utils/files';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
@@ -58,7 +61,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
   loadAttachmentBuffer,
-  type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { toGoogleTools } from '../toolConversion';
 import type {
@@ -902,7 +904,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    */
   private async buildFunctionResponsePart(
     call: GoogleToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
   ): Promise<Part> {
     let attachmentParts: FunctionResponsePart[] = [];
@@ -960,7 +962,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
     call: GoogleToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1015,7 +1017,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
-    results: ToolResultPayload[],
+    results: ToolResult[],
     attachmentsPerCall: ToolFileAttachment[][],
     workspaceState?: AgentWorkspaceState,
     text?: string,

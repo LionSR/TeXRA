@@ -87,7 +87,7 @@ describe('ExecutionsTool', () => {
         timeout,
       });
 
-      expect(result.isError).not.toBe(true);
+      expect(result.status).toBe('executed');
       expect(result.error).toBeUndefined();
       expect(result.output).toBe('No execution history found.');
     },
@@ -100,7 +100,7 @@ describe('ExecutionsTool', () => {
       timeout: Number.NaN,
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toContain('Invalid input');
   });
 
@@ -109,7 +109,7 @@ describe('ExecutionsTool', () => {
       path: '/executions/abc123def456/files/../../../../../../etc/passwd',
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toContain("must not contain '..'");
   });
 
@@ -258,7 +258,7 @@ describe('ExecutionsTool', () => {
         path: '/executions/abc123/workspace-files/secret.md',
       });
 
-      expect(result.isError).toBe(true);
+      expect(result.status).toBe('error');
       expect(result.error).toContain('Workspace file not found');
     } finally {
       await rm(workspace, { recursive: true, force: true });

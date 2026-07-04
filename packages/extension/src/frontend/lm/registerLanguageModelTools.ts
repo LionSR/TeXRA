@@ -27,8 +27,8 @@ const LM_TOOL_NAMES: Record<string, string> = {
 
 /** Flatten a TeXRA ToolResult into the plain text VS Code chat expects. */
 function toResultText(result: ToolResult): string {
-  if (result.isError || result.error) {
-    return result.error ?? result.output ?? 'Tool reported an error.';
+  if (result.status === 'error') {
+    return result.error;
   }
   return result.output ?? result.summary ?? '(no output)';
 }

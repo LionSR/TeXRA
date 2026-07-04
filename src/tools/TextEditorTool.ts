@@ -221,6 +221,7 @@ export class TextEditorTool extends defineTool({
           .join('\n');
 
         return {
+          status: 'executed',
           summary: `Listed directory: ${displayPath}`,
           output: formattedContents,
         };
@@ -336,6 +337,7 @@ export class TextEditorTool extends defineTool({
         : `File created successfully at: ${displayPath}`;
 
       return {
+        status: 'executed',
         summary: `Created file ${displayPath}`,
         output,
         userPatch: approval.userPatch,
@@ -492,6 +494,7 @@ export class TextEditorTool extends defineTool({
       );
 
       return {
+        status: 'executed',
         summary: `Updated ${displayPath}`,
         output,
         userPatch: approval.userPatch,
@@ -568,6 +571,7 @@ export class TextEditorTool extends defineTool({
       );
 
       return {
+        status: 'executed',
         summary: `Inserted text into ${displayPath}`,
         output,
         userPatch: approval.userPatch,
@@ -634,6 +638,7 @@ export class TextEditorTool extends defineTool({
         : baseOutput;
 
       return {
+        status: 'executed',
         summary: `Undid edit on ${displayPath}`,
         output,
         userPatch: approval.userPatch,

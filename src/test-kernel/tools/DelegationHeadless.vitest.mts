@@ -302,11 +302,14 @@ describe('headless delegation', () => {
     );
 
     expect(result.summary).toBe("Subagent 'review' failed");
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toBe('review model failed');
-    expect(result.output).toContain('<subagent-error');
-    expect(result.output).toContain('review model failed');
-    expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
+    expect(mocks.writeReport).toHaveBeenCalledWith(
+      expect.stringContaining('<subagent-error'),
+    );
+    expect(mocks.writeReport).toHaveBeenCalledWith(
+      expect.stringContaining('review model failed'),
+    );
     expect(recordSubagentCost).toHaveBeenCalledTimes(1);
     expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
   });
@@ -339,7 +342,7 @@ describe('headless delegation', () => {
     );
 
     expect(result.summary).toBe("Subagent 'review' failed");
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toBe('review model failed');
     expect(recordSubagentCost).toHaveBeenCalledTimes(1);
     expect(recordSubagentCost).toHaveBeenCalledWith(0.57);
@@ -420,12 +423,12 @@ describe('headless delegation', () => {
     );
 
     expect(result.summary).toBe("User rejected delegation to 'review'");
-    expect(result.isError).toBe(true);
-    expect(result.output).toContain('No feedback provided.');
-    expect(result.output).toContain(
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('No feedback provided.');
+    expect(result.error).toContain(
       'Do not retry the same or equivalent delegation',
     );
-    expect(result.output).toContain('continue directly with available context');
+    expect(result.error).toContain('continue directly with available context');
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
@@ -466,7 +469,7 @@ describe('headless delegation', () => {
       () => callDelegateReview(),
     );
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.summary).toBe(
       "Approved model override 'gpt5' is not available",
     );
@@ -509,7 +512,7 @@ describe('headless delegation', () => {
       () => callDelegateReview(),
     );
 
-    expect(result.isError).toBeFalsy();
+    expect(result.status).toBe('executed');
     expect(result.summary).toBe("Launched 'review' (async)");
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'gpt5' }),

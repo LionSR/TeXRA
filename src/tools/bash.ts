@@ -199,6 +199,7 @@ export class BashTool extends defineTool({
     if (result.success) {
       const preview = truncateWithEllipsis(command, 60);
       return {
+        status: 'executed',
         summary: `Executed: ${preview} (exit 0, ${duration})`,
         output: result.stdout ?? '',
       };
@@ -415,6 +416,7 @@ export class BashTool extends defineTool({
     })();
 
     return {
+      status: 'executed',
       summary: `Launched background: ${preview}`,
       output: [
         `Command launched in background.`,

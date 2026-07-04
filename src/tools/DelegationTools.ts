@@ -299,6 +299,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       case 'sent':
         deliveryState.markPending();
         return {
+          status: 'executed',
           summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
             `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
@@ -308,6 +309,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       case 'queued':
         deliveryState.markPending();
         return {
+          status: 'executed',
           summary: `Follow-up queued for '${handle.agentName}'`,
           output: [
             `Follow-up instruction queued for '${handle.agentName}' (${result.reason}). The subagent will process it and deliver a new result automatically.`,

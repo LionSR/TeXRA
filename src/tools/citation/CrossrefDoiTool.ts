@@ -3,7 +3,7 @@ import { type Work } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
@@ -22,7 +22,7 @@ export class CrossrefDoiTool extends defineTool({
   description: 'Look up detailed metadata for a DOI using Crossref.',
   schema: CrossrefDoiInputSchema,
 }) {
-  protected async execute(input: CrossrefDoiInput) {
+  protected async execute(input: CrossrefDoiInput): Promise<ToolResult> {
     const trimmedDoi = requireNonEmptyString(input.doi, 'DOI');
 
     const response = await wrapApiCall(async () => {
@@ -56,6 +56,7 @@ export class CrossrefDoiTool extends defineTool({
     };
 
     return {
+      status: 'executed',
       summary: `Retrieved: DOI ${metadata.doi}`,
       output: JSON.stringify(metadata, null, 2),
     };

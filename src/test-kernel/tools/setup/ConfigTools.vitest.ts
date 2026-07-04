@@ -42,7 +42,7 @@ describe('ConfigTools — read_config', () => {
 
     const result = await tool.call({ key: 'texra.bib.zoteroPort' });
 
-    assert.ok(!('isError' in result) || !result.isError);
+    assert.equal(result.status, 'executed');
     assert.match(result.output ?? '', /23119/);
   });
 
@@ -53,7 +53,7 @@ describe('ConfigTools — read_config', () => {
 
     const result = await tool.call({ key: 'editor.fontSize' });
 
-    assert.ok(result.isError, 'should report an error');
+    assert.equal(result.status, 'error');
   });
 });
 
@@ -71,7 +71,7 @@ describe('ConfigTools — update_config allowlist', () => {
       target: 'user',
     });
 
-    assert.ok(!('isError' in result) || !result.isError);
+    assert.equal(result.status, 'executed');
     assert.equal(updates.length, 1);
     assert.equal(updates[0].key, 'texra.bib.zoteroPort');
     assert.equal(updates[0].value, 23200);
@@ -93,7 +93,7 @@ describe('ConfigTools — update_config allowlist', () => {
       target: 'user',
     });
 
-    assert.ok(result.isError, 'should reject off-allowlist key');
+    assert.equal(result.status, 'error');
     assert.equal(updates.length, 0, 'must not call platform.update');
   });
 
@@ -108,7 +108,7 @@ describe('ConfigTools — update_config allowlist', () => {
       target: 'user',
     });
 
-    assert.ok(result.isError, 'string value should be rejected');
+    assert.equal(result.status, 'error');
     assert.equal(updates.length, 0);
   });
 
@@ -124,7 +124,7 @@ describe('ConfigTools — update_config allowlist', () => {
         value: port,
         target: 'user',
       });
-      assert.ok(result.isError, `${port} should be rejected`);
+      assert.equal(result.status, 'error');
     }
 
     assert.equal(updates.length, 0);
