@@ -146,7 +146,54 @@ describe('ProgressBackend', () => {
     backend.dispose();
   });
 
-  it('refreshes stream metadata when inactive stream task state arrives', async () => {
+  it('sends the full metadata set once for full-view sync', () => {
+    const messages: ProgressViewOutboundMessage[] = [];
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+    });
+
+    for (let i = 0; i < 20; i += 1) {
+      backend.state.streamLogs.ensureStream(`history-${i}`);
+    }
+
+    backend.webviewUpdater.sendStreamMetadata(
+      backend.state,
+      backend.eventHandler.getAllStreamStatuses(),
+      undefined,
+      backend.eventHandler.getAllStreamSubstates(),
+    );
+
+    expect(
+      messages.filter(
+        (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      ),
+    ).toHaveLength(1);
+    expect(
+      messages.filter(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      ),
+    ).toHaveLength(0);
+
+    const fullSync = messages.find(
+      (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+    );
+    if (fullSync?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS) {
+      expect(fullSync.streams).toHaveLength(20);
+    } else {
+      throw new Error('Expected full stream metadata sync');
+    }
+
+    backend.dispose();
+  });
+
+  it('patches one stream for subagent registration and run-start metadata', async () => {
     const messages: ProgressViewOutboundMessage[] = [];
     const backend = new ProgressBackend({
       storage: new MemoryMementoStorage(),
@@ -160,6 +207,10 @@ describe('ProgressBackend', () => {
     const subscription = backend.setupEventListeners(bus);
 
     try {
+      for (let i = 0; i < 20; i += 1) {
+        backend.state.streamLogs.ensureStream(`history-${i}`);
+      }
+
       bus.emit('setActiveStream', {
         streamId: 'root',
         agentCategory: AgentCategory.Workflow,
@@ -168,10 +219,11 @@ describe('ProgressBackend', () => {
         expect(
           messages.some(
             (message) =>
-              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
           ),
         ).toBe(true),
       );
+      messages.length = 0;
 
       bus.emit('setActiveStream', {
         streamId: 'child',
@@ -180,13 +232,20 @@ describe('ProgressBackend', () => {
       });
       await vi.waitFor(() =>
         expect(
-          messages.some(
+          messages.find(
             (message) =>
-              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS &&
-              message.streams.some((stream) => stream.name === 'child'),
+              message.command ===
+                PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+              message.streamInfo.name === 'child',
           ),
-        ).toBe(true),
+        ).toBeDefined(),
       );
+      expect(
+        messages.some(
+          (message) =>
+            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        ),
+      ).toBe(false);
       messages.length = 0;
 
       bus.emit('setTaskState', {
@@ -199,21 +258,52 @@ describe('ProgressBackend', () => {
         expect(
           messages.find(
             (message) =>
-              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
           ),
         ).toMatchObject({
-          activeStream: 'root',
-          streams: expect.arrayContaining([
-            expect.objectContaining({
-              name: 'child',
-              label: 'search',
-              agent: 'search',
-              model: 'deepseekproT',
-              executionId: 'exec-child',
-            }),
-          ]),
+          streamInfo: {
+            name: 'child',
+            label: 'search',
+            agent: 'search',
+            model: 'deepseekproT',
+            executionId: 'exec-child',
+          },
         }),
       );
+      expect(
+        messages.some(
+          (message) =>
+            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        ),
+      ).toBe(false);
+
+      const patch = messages.find(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      );
+      messages.length = 0;
+
+      backend.webviewUpdater.sendStreamMetadata(
+        backend.state,
+        backend.eventHandler.getAllStreamStatuses(),
+        undefined,
+        backend.eventHandler.getAllStreamSubstates(),
+      );
+      const fullSync = messages.find(
+        (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      );
+
+      if (
+        patch?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+        fullSync?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS
+      ) {
+        expect(
+          fullSync.streams.find((stream) => stream.name === 'child'),
+        ).toEqual(patch.streamInfo);
+        expect(fullSync.streamStates?.child).toEqual(patch.streamState);
+      } else {
+        throw new Error('Expected patch and full sync messages');
+      }
     } finally {
       subscription.dispose();
       backend.dispose();

@@ -346,11 +346,17 @@ export class ProgressEventHandler {
 
     const filterChanged = this.state.agentCategoryFilter !== previousFilter;
     if (!wasKnownStream || filterChanged) {
-      this.webviewUpdater.sendStreamMetadata(
+      this.webviewUpdater.updateStreamMetadata(
         this.state,
+        streamId,
         this.state.streamStatus.getAll(),
-        undefined,
         this.state.streamStatus.getAllSubstates(),
+        {
+          activeStream: shouldSwitch ? this.state.activeStream : undefined,
+          agentFilter: filterChanged
+            ? this.state.agentCategoryFilter
+            : undefined,
+        },
       );
     } else if (shouldSwitch) {
       this.webviewUpdater.setActiveStream(streamId);
@@ -383,16 +389,19 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      // sendStreamMetadata rebuilds StreamTabInfo[] for all visible streams.
-      // This fires once per run start (not during streaming) so the O(N)
-      // cost is acceptable. We need it here because setTaskState may change
-      // agentConfig (agent name, model, label) which the frontend tabs display,
-      // including for background subagents that are not the active stream.
-      this.webviewUpdater.sendStreamMetadata(
+      // setTaskState may change agentConfig (agent name, model, label), which
+      // the frontend tabs display even for background subagents. Patch only
+      // the affected stream instead of rebuilding all historical stream tabs.
+      this.webviewUpdater.updateStreamMetadata(
         this.state,
+        streamId,
         this.state.streamStatus.getAll(),
-        undefined,
         this.state.streamStatus.getAllSubstates(),
+        {
+          agentFilter: isActiveStream
+            ? this.state.agentCategoryFilter
+            : undefined,
+        },
       );
     }
   }
@@ -603,7 +612,13 @@ export class ProgressEventHandler {
     this.state.getOrCreateStreamState(streamId, category);
 
     if (isNewStream) {
-      this.maybeUpdateFilterForCategory(this.getStreamCategory(streamId));
+      this.maybeUpdateFilterForCategory(category);
+      const matchesFilter =
+        this.state.agentCategoryFilter === 'all' ||
+        this.state.agentCategoryFilter === category;
+      if (!this.state.activeStream && matchesFilter) {
+        this.state.activeStream = streamId;
+      }
       const statusesForRefresh = this.state.streamStatus.getAll();
       statusesForRefresh.set(streamId, status);
       const substatesForRefresh = this.state.streamStatus.getAllSubstates();
@@ -612,11 +627,18 @@ export class ProgressEventHandler {
       } else {
         substatesForRefresh.delete(streamId);
       }
-      this.webviewUpdater.sendStreamMetadata(
+      this.webviewUpdater.updateStreamMetadata(
         this.state,
+        streamId,
         statusesForRefresh,
-        undefined,
         substatesForRefresh,
+        {
+          activeStream:
+            !this.state.activeStream || this.state.activeStream === streamId
+              ? this.state.activeStream
+              : undefined,
+          agentFilter: this.state.agentCategoryFilter,
+        },
       );
     } else {
       const lastTimestamp = this.state.streamLogs.getLastTimestamp(streamId);

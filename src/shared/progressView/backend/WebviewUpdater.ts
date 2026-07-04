@@ -19,7 +19,10 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
+import {
+  buildStreamInfo,
+  buildStreamInfos,
+} from '@shared/progressView/backend/streamInfoUtils';
 import {
   type ActiveStreamId,
   ProgressViewState,
@@ -85,6 +88,9 @@ export interface SyncStreamContentPayload extends LogContentExtras {
  * Targets a single active webview at a time (sidebar OR editor panel).
  */
 export class WebviewUpdater {
+  private readonly streamInfoCache = new Map<StreamTabId, StreamTabInfo>();
+  private readonly streamMetadataCache = new Map<StreamTabId, StreamMetadata>();
+
   constructor(
     private readonly send: ProgressViewMessageSender,
     private readonly hasTarget: () => boolean,
@@ -115,6 +121,36 @@ export class WebviewUpdater {
       activeStream,
       agentFilter,
       streamStates,
+    });
+  }
+
+  updateStreamMetadata(
+    state: ProgressViewState,
+    streamId: StreamTabId,
+    statuses?: Map<string, StreamPhase>,
+    substates?: Map<string, StreamSubstate>,
+    options?: {
+      activeStream?: ActiveStreamId;
+      agentFilter?: AgentCategoryFilter;
+    },
+  ): void {
+    const streamInfo = buildStreamInfo(state, streamId, 'all');
+    if (!streamInfo) return;
+
+    const streamState = this.buildStreamMetadataForStream(
+      state,
+      streamInfo,
+      statuses,
+      substates,
+    );
+    this.cacheStreamSnapshot(streamInfo, streamState);
+
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      streamInfo,
+      streamState,
+      activeStream: options?.activeStream,
+      agentFilter: options?.agentFilter,
     });
   }
 
@@ -429,22 +465,20 @@ export class WebviewUpdater {
     }
 
     // Send lightweight metadata — only backend-owned fields the frontend merges.
-    const allStates = state.getAllStreamStates();
     const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
-    for (const { name, agentCategory } of streams) {
-      const current = allStates.get(name);
-      streamMetadata[name] = buildStreamMetadata({
-        kind: agentCategory,
-        status: statuses?.get(name),
-        substate: substates?.get(name),
-        lastTimestamp: state.streamLogs.getLastTimestamp(name),
-        conversationProgress: current?.conversationProgress,
-        activeSubagents: current?.activeSubagents,
-        finishedSubagentCount: current?.finishedSubagentCount,
-        activeProcesses: current?.activeProcesses,
-        finishedProcessCount: current?.finishedProcessCount,
-      });
+    const liveStreams = new Set<StreamTabId>();
+    for (const streamInfo of streams) {
+      liveStreams.add(streamInfo.name);
+      const metadata = this.buildStreamMetadataForStream(
+        state,
+        streamInfo,
+        statuses,
+        substates,
+      );
+      streamMetadata[streamInfo.name] = metadata;
+      this.cacheStreamSnapshot(streamInfo, metadata);
     }
+    this.pruneStreamSnapshotCache(liveStreams);
 
     this.updateStreams(
       streams,
@@ -458,5 +492,41 @@ export class WebviewUpdater {
 
   isAvailable(): boolean {
     return this.hasTarget();
+  }
+
+  private buildStreamMetadataForStream(
+    state: ProgressViewState,
+    streamInfo: StreamTabInfo,
+    statuses?: Map<string, StreamPhase>,
+    substates?: Map<string, StreamSubstate>,
+  ): StreamMetadata {
+    const current = state.getStreamState(streamInfo.name);
+    return buildStreamMetadata({
+      kind: streamInfo.agentCategory,
+      status: statuses?.get(streamInfo.name),
+      substate: substates?.get(streamInfo.name),
+      lastTimestamp: state.streamLogs.getLastTimestamp(streamInfo.name),
+      conversationProgress: current?.conversationProgress,
+      activeSubagents: current?.activeSubagents,
+      finishedSubagentCount: current?.finishedSubagentCount,
+      activeProcesses: current?.activeProcesses,
+      finishedProcessCount: current?.finishedProcessCount,
+    });
+  }
+
+  private cacheStreamSnapshot(
+    streamInfo: StreamTabInfo,
+    metadata: StreamMetadata,
+  ): void {
+    this.streamInfoCache.set(streamInfo.name, streamInfo);
+    this.streamMetadataCache.set(streamInfo.name, metadata);
+  }
+
+  private pruneStreamSnapshotCache(liveStreams: Set<StreamTabId>): void {
+    for (const streamId of this.streamInfoCache.keys()) {
+      if (liveStreams.has(streamId)) continue;
+      this.streamInfoCache.delete(streamId);
+      this.streamMetadataCache.delete(streamId);
+    }
   }
 }
