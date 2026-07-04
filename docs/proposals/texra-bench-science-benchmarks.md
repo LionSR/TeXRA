@@ -65,6 +65,8 @@ In-process pooling via fresh `SessionHandle` instances (per `docs/proposals/sess
 
 Every run declares `scaffold: minimal | texra`, hash-locked into the evidence pack header. `texra` runs the task through the full TeXRA agent (house system prompts, LaTeX style rules, reflection rounds); `minimal` strips house prompting to a bare task harness. This cleanly separates "measure the model" from "measure the model + TeXRA scaffold" — the ambiguity that quietly invalidates most agentic benchmark comparisons. Reports never mix scaffolds in one table.
 
+**`minimal` is the headline condition** (Bitter Lesson, §13): published leaderboard numbers are minimal-scaffold; `texra`-scaffold results are a secondary table measuring the scaffold's value-add. Scaffolding is human knowledge engineered around the model, and its contribution historically washes out as raw capability grows — a benchmark whose headline number bakes in a scaffold measures a wasting asset.
+
 ---
 
 ## 3. Core abstractions and file formats
@@ -97,7 +99,7 @@ Version semantics (from the benchmark-lifecycle lens): a MAJOR bump means scores
 
 ### 3.2 Task
 
-Six task kinds, discriminated on `kind`: `derivation`, `proof`, `error-injection`, `paper-artifact`, `data-analysis`, `literature`.
+The harness contract is deliberately general — a task is `workspace in → artifacts out → graders emit verdicts` — and the six task kinds (`derivation`, `proof`, `error-injection`, `paper-artifact`, `data-analysis`, `literature`) are **conventions over that contract, not harness code**: each kind is just a documented default grader stack (§6.2) plus schema fields those graders read. New kinds require no runner changes (Bitter Lesson, §13; this is the same property that made Terminal-Bench's environment + instruction + verifier contract adoptable, §12).
 
 ```yaml
 # suites/texra-sci-v1/tasks/qft-oneloop-vacuum/task.yaml
@@ -245,6 +247,16 @@ texra bench verify bench-results/texra-sci-v1@1.2.0
 # Interop: Inspect EvalLog export and subprocess embedding
 texra bench export bench-results/texra-sci-v1@1.2.0 --format inspect-evallog --out logs/
 texra bench exec-sample --stdio < sample.json    # one sample JSON in, AgentEvent NDJSON out
+
+# Interop: emit a suite as Harbor/Terminal-Bench task directories (environment +
+# instruction.md + verifier script wrapping `texra bench grade --cell`, writing
+# reward.json) so labs run TeXRA science tasks under the harness they already use
+texra bench export suites/texra-sci-v1 --format harbor-task --out harbor-tasks/
+
+# RL rollout mode: same tasks, graders emit scalar rewards per episode as NDJSON —
+# the verifier stack doubles as a reward function for RL on verifiable science tasks
+texra bench rollout suites/texra-sci-v1/suite.yaml --model <endpoint> \
+  --episodes 512 --reward-from graders --output-format ndjson
 ```
 
 **Exit-code contract** (reusing `packages/cli/src/runtime/exitCodes.ts`): scores are data, not exit codes (from the mvp-wedge lens). `bench run` exits 0 even when models score poorly; non-zero means harness/infra failure (1 harness error, 2 usage, 3 model/network after retries exhausted, 124 cancelled, 130 interrupted, 143 terminated). CI gating is explicit opt-in: `bench report --fail-under 0.6` or `bench diff --gate`. `bench validate` exits 1 on any integrity failure — that is the suite-CI contract.
@@ -292,12 +304,12 @@ Everything else is additive code in `src/bench/` (a VS Code-free zone, obeying t
 `GraderVerdictSchema` is a discriminated union on `type`: `compile | cas-assert | lean-check | diff-align | issue-match | numeric | struct-match | rubric-judge | human`. Verifiers lead; judges fill gaps under a declared **check-veto precedence policy** (from the scoring-verification lens): a programmatic verifier's `fail` caps the cell score regardless of judge enthusiasm, and a judge only runs on compile-passing artifacts.
 
 - **`compile`** — hard gate via `compileCheck.ts`. Fail ⇒ score 0, later graders skipped.
-- **`cas-assert`** — checkpoint identities. The task prompt mandates `\benchstep{k}{...}` markers; the grader extracts claimed intermediates with `src/latex/latexParsingUtils.ts` and verifies each with `executeWolframCode` (or the SymPy engine for the license-free subset). Partial credit = fraction passed under a monotone prefix rule (a wrong step voids later credit unless independently re-derived). Verdicts are three-valued; CAS timeout ⇒ `unverifiable`, escalated.
+- **`cas-assert`** — CAS-verified equivalence. **The headline check is outcome-level**: the task's final claimed result (a designated `\benchresult{...}` expression or `<answer>` block) is verified equivalent to gold with `executeWolframCode` (or the SymPy engine for the license-free subset), robust to renotation. Optional `\benchstep{k}{...}` checkpoint markers are graded as a **diagnostic track only** (fraction passed under a monotone prefix rule) — never part of the headline score, because mandating human derivation structure penalizes alien-but-valid solution paths and rewards imitation over correctness (Bitter Lesson, §13). Verdicts are three-valued; CAS timeout ⇒ `unverifiable`, escalated.
 - **`lean-check`** — `runLakeCommand` against a pinned mathlib toolchain; binary per lemma, aggregated. The Lean LSP/Loogle tools are available _to the solver_ in tool-use mode — the benchmark measures interactive theorem proving, not one-shot emission.
 - **`diff-align`** — math-aware latexdiff between the model's fix and gold: changes inside injected spans must match the gold fix; changes outside are penalized (anti-rewrite-everything). Used only where edits are expected to be local.
 - **`issue-match`** — reported `ReviewIssue`s matched to gold defects with a ±N-line window → precision/recall/F1. Grading like a referee report.
 - **`numeric` / `struct-match`** — tolerance on Zod-parsed `<answer>` blocks; exact/set match for literature tasks.
-- **`rubric-judge`** — a grading agent (pinned model, temperature 0, prompt versioned as agent YAML in-repo) run through the same `executeCliConfig` path as solvers, so every judge call has its own executionId, transcript, wire ledger, and itemized cost (from the scoring-verification lens). Judgments are cached keyed by `(cellDigest, judgeDigest)` so judged scores replay deterministically until the judge identity changes (from the reproducibility-provenance lens). Weight bounded ≤ 0.4; verifier-only and judged scores are always reported separately.
+- **`rubric-judge`** — a grading agent (pinned model, temperature 0, prompt versioned as agent YAML in-repo) run through the same `executeCliConfig` path as solvers, so every judge call has its own executionId, transcript, wire ledger, and itemized cost (from the scoring-verification lens). Judgments are cached keyed by `(cellDigest, judgeDigest)` so judged scores replay deterministically until the judge identity changes (from the reproducibility-provenance lens). Weight bounded ≤ 0.4 **and expected to trend toward 0** as verifier coverage grows — each suite MINOR release should convert judge-graded criteria into executable checks where possible, and judge prompts stay simple (grade against gold, cite evidence) rather than elaborately rubric-engineered: judge quality improves with judge-model scale, and the regrade-from-evidence design (§7.3) lets every judge-model upgrade re-score history for free (Bitter Lesson, §13). Verifier-only and judged scores are always reported separately.
 
 ### 6.2 Task-kind → grader mapping
 
@@ -383,6 +395,8 @@ First-class from Stage 1, not an afterthought — the pack format and graders, n
 2. **`exec-sample` stdio protocol**: one sample JSON on stdin, AgentEvent NDJSON on stdout, a final sample-result record last — so Inspect, lm-eval, or any internal harness drives TeXRA as a subprocess without adopting a new runner. This rides the already-sacred byte-stable headless parity.
 3. **Plugin ports** (from the harness-architecture lens): `commandSolver` / `commandScorer` speak JSON-on-stdio, letting a lab drive its internal model stack and graders through TeXRA benchmark packs without adopting TeXRA's providers at all.
 4. **Provider surface**: the four in-repo handler stacks plus OpenRouter for long-tail models; internal checkpoints via the `models.bench.yaml` openai-compatible overlay (Section 5).
+5. **Harbor / Terminal-Bench task export** (see §12): `bench export --format harbor-task` emits each task as a Harbor-conformant directory — container environment, `instruction.md`, and a `tests/test.sh` verifier that invokes `texra bench grade --cell` and writes `reward.json` to `/logs/verifier/` — so the suite runs unmodified under the agentic-eval harness frontier labs have already standardized on. The oracle `solution/` folder is generated from `refs/gold-solution.tex`, satisfying Harbor's solvability check with the same artifact our `bench validate` gold-scores-1.0 gate uses.
+6. **RL rollouts**: `bench rollout` exposes the grader stack as a scalar reward function over episodes (reward = verifier score; judge residual excluded by default), because the Harbor lesson is that the eval harness that doubles as training infrastructure is the one that gets adopted — labs want verifiable-reward science environments for RL at least as much as they want leaderboards.
 
 ---
 
@@ -413,6 +427,7 @@ First-class from Stage 1, not an afterthought — the pack format and graders, n
 - Public **TeXRA-Sci-100** release (versioned, licensed, per-task provenance) plus a held-out private split; public–private gap monitoring per model per release.
 - SymPy `cas-assert` engine for the Wolfram-license-free subset; Wolfram-required tasks tagged and filterable.
 - Human-adjudication grader kind with escalation queue.
+- `bench export --format harbor-task` (§12) so the public suite is runnable under Harbor from its first release; `bench rollout` alpha exposing graders as RL rewards.
 
 ### Stage 3 — Frontier-lab integration (quarter 3)
 
@@ -427,7 +442,7 @@ First-class from Stage 1, not an afterthought — the pack format and graders, n
 
 ## 10. Non-goals
 
-- **Not a general eval harness.** No MMLU-style Q&A hosting, no attempt to replace Inspect/lm-eval/HELM — we export to them and embed under them.
+- **Not a general eval harness.** No MMLU-style Q&A hosting, no attempt to replace Inspect/lm-eval/HELM/Harbor — we export to them and embed under them.
 - **No leaderboard web service.** Reports are files (MD/HTML/JSON); hosting is out of scope.
 - **No bitwise model determinism claims.** Providers don't offer it; we measure variance instead.
 - **No new sandbox technology.** Hermeticity = published container + existing tool-availability gating; we do not build an isolation layer.
@@ -448,3 +463,49 @@ First-class from Stage 1, not an afterthought — the pack format and graders, n
 7. **In-process pooling timeline.** What test-lock criteria (per-cell `SessionHandle`, no process-global approval state) must `docs/proposals/session-handle-7d-design.md` satisfy before the subprocess supervisor gets an in-process fast path?
 8. **Private-split governance.** Who holds the held-out split, under what disclosure agreement, and how are labs prevented from overfitting to it across quarterly releases (rotation cadence, one-shot access)?
 9. **Inspect schema pinning.** EvalLog evolves; how aggressively do we track upstream `inspect_ai` versions vs. pinning a conformance target per bench release?
+
+---
+
+## 12. Comparison with Terminal-Bench / Harbor
+
+Terminal-Bench is the closest existing artifact to what this proposal builds, and the most instructive adoption case study: released May 2025, adopted by essentially every frontier lab within months, re-released as Terminal-Bench 2.0 in November 2025 (89 tasks, ~3 reviewer-hours of human auditing each, frontier models under 65%) alongside **Harbor**, a ground-up rewrite of the harness for containerized agent evals and RL rollout generation at cloud scale.
+
+### What Terminal-Bench gets right (and we adopt)
+
+| Terminal-Bench / Harbor                                                                                 | TeXRA Bench equivalent                                                                                              |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| A task is a container env + `instruction.md` + executable verifier writing a reward file — nothing else | General `workspace → artifacts → grader verdicts` contract (§3.2); task kinds are conventions, not harness code     |
+| Oracle `solution/solve.sh` must pass the verifier before a task ships                                   | `refs/gold-solution` must score 1.0 under `bench validate` (§6.3), plus sabotage baselines TB doesn't have          |
+| Binary, executable, outcome-level verification — no LLM judge in the headline metric                    | Compile gates + CAS/Lean outcome checks headline; judge residual bounded, separately reported, trending to 0 (§6.1) |
+| Isolated Docker per task; pinned images                                                                 | Hermetic container + `env.json` fingerprints (§7.4)                                                                 |
+| Dataset registry with versioned pinning (`terminal-bench@2.0`)                                          | Suite semver with digest-gated comparability (§3.1, §7.1)                                                           |
+| Harbor doubles as an RL-rollout generator — evals and training environments from one task format        | `bench rollout` exposing graders as scalar rewards (§4, §8)                                                         |
+| Agent adapters (Claude Code, Terminus, Codex CLI, …) — harness is agent-agnostic                        | `scaffold: minimal` headline + `exec-sample` stdio + `commandSolver` port (§2, §8)                                  |
+
+### Where the two genuinely differ
+
+1. **Domain and verifier depth.** Terminal-Bench verifies _terminal-observable end states_ (files, processes, exit codes) — its verifier vocabulary is shell + pytest. Science tasks need verifiers no generic container check provides: CAS equivalence robust to renotation, Lean proof checking, LaTeX compile-and-structural-diff, referee-style issue matching. That verifier library — not the runner — is TeXRA Bench's reason to exist.
+2. **Grading is data, not just exit codes.** TB emits a reward file per task; we emit content-addressed `ScoreRecord`s with evidence pointers, three-valued verdicts (`unverifiable` ≠ fail), and regrade-from-archive. This is what makes score disputes auditable and grader bugs a zero-cost migration (§7.3) — a real gap in TB, where a verifier bug means re-running agents.
+3. **Statistics.** TB reports accuracy; task-level binary outcomes on 89 tasks leave ranking noise unquantified. Our stats core (cluster bootstrap, paired tests, MDE-floored gates, §6.5) is a differentiator — but §13 warns against letting measurement sophistication substitute for task supply.
+4. **Contamination strategy.** TB's defense is task freshness at curation time; ours is structural (`refs/` isolation, canaries, post-cutoff renewable injection supply, public/private split monitoring, §7.6).
+5. **Multi-round / long-horizon structure.** TB is one-shot agent-in-a-box; our reflection-flow machinery yields per-round self-correction curves (§6.5) as a first-class capability measurement.
+
+### The adoption lesson we take seriously
+
+Terminal-Bench did not win because its measurement science was sophisticated — it won because (a) the task contract was so simple that hundreds of people could author tasks, (b) the harness doubled as RL training infrastructure exactly when labs were scaling RL on verifiable rewards, and (c) quality control was legible (oracle-solvable, human-audited, hard: frontier <65%). The implications for TeXRA Bench are codified in §13, and the concrete interop commitment is `bench export --format harbor-task` (§8): a lab that already runs Harbor should be able to run TeXRA-Sci without adopting our runner at all. We compete on verifiers and task supply, not on the harness.
+
+---
+
+## 13. The Bitter Lesson, applied to benchmark design
+
+Sutton's Bitter Lesson: general methods that leverage computation beat human-knowledge engineering, every time the compute arrives. A benchmark is not exempt — hand-engineered structure in _how we grade_, _what solution shape we demand_, and _how tasks are made_ is human knowledge that models will route around, saturate, or expose as bias. Revised principles, applied throughout this document:
+
+1. **Outcome over process.** The headline score verifies the _end state_ (final result CAS-equivalent to gold, proof compiles, defect fixed, artifact compiles and matches structurally) — never adherence to a human solution path. `\benchstep` checkpoint grading is demoted to a diagnostic track (§6.1): forcing models to show human-shaped work penalizes alien-but-valid derivations, and "the model derived it a way no human would" is a finding, not a rubric violation.
+2. **A general contract, thin harness.** One task contract (`workspace → artifacts → executable verdicts`); task kinds are grader-stack conventions, not runner code (§3.2). Every piece of taxonomy baked into the harness is structure someone must undo later; every convention layered on a general contract is free to replace.
+3. **Task supply must scale with compute, not curation.** Artisanal suites bootstrap; the _generation pipeline_ is the product. `bench inject` (§7.6) — machine-minted, machine-verified, gold-by-construction tasks from post-cutoff papers — is the asset that compounds: more compute → more tasks, fresher tasks, harder tasks. Hand-curated rubrics scale with reviewer-hours; injection scales with FLOPs. Stage 2 priorities reflect this.
+4. **No difficulty ceiling by construction.** Difficulty must be a _dial_ (longer horizons, harder source papers, more subtle injected defects, deeper proof obligations), not a fixed curated level — otherwise the benchmark saturates and dies. Verification asymmetry is what makes this safe: checking a result is cheap even when producing it is superhuman, so tasks can outgrow their authors. (Gold solutions are required only where verifiers need them; proof tasks need only the statement.)
+5. **Scaffold-minimal headline.** Scaffolds are human knowledge wrapped around the model and their value decays with capability; headline numbers are `minimal`-scaffold, with the TeXRA scaffold measured as an explicit, separately-reported delta (§2).
+6. **Judges: eliminate, then scale — don't engineer.** Prefer converting judged criteria into executable checks each release; where a judge remains, use a simple prompt with a strong pinned model rather than elaborate rubric engineering, keep its weight bounded and trending to 0, and let judge-model upgrades improve grading retroactively via regrade-from-evidence (§6.1, §7.3). Calibration certificates (§6.4) remain — as _measurement_ of the judge, not as a bureaucratic substitute for verifiers.
+7. **Be RL-ready.** Verifiable outcome rewards on science tasks are training fuel, not just leaderboard fodder. The same graders that score evals emit episode rewards through `bench rollout` (§4) — the Harbor lesson: infrastructure that feeds training loops gets adopted; leaderboards alone get cited.
+
+What this explicitly does **not** mean: abandoning rigor machinery (lockfiles, wire ledger, stats core) — reproducibility is what makes scaled, machine-generated evaluation _trustworthy_, and it costs no model-knowledge assumptions. The Bitter Lesson cuts against hand-engineering the _content_ of evaluation, not against engineering its _evidence_.
