@@ -45,7 +45,7 @@ export interface UploadedAnthropicAttachment {
   mediaType?: string;
 }
 
-export interface UploadToolAttachmentsResult {
+interface UploadToolAttachmentsResult {
   uploaded: UploadedAnthropicAttachment[];
   unsupported: ToolFileAttachment[];
   pageLimitExceeded: ToolFileAttachment[];

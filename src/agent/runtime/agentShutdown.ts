@@ -1,16 +1,12 @@
-// Local imports - platform
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
 } from '@platform/interfaces/lifecycle';
-
-// Local imports - tools
 import {
   claudeAgentSessions,
   codexThreads,
 } from '@tools/agentCliSessionStores';
 
-// Local imports - runtime
 import { executionRegistry } from './executionRegistry';
 
 /**

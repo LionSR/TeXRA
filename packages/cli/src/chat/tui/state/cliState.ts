@@ -247,12 +247,12 @@ export function bumpCodexPreferenceVersion(): void {
   );
 }
 
+export function patchSessionMeta(patch: Partial<SessionMeta>): void {
+  cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), ...patch });
+}
+
 export function setCliSessionModelOverride(model: string): void {
-  cliState.sessionMeta.set({
-    ...cliState.sessionMeta.get(),
-    model,
-    modelSource: 'explicit-override',
-  });
+  patchSessionMeta({ model, modelSource: 'explicit-override' });
 }
 
 export const NO_BYPASS: BypassState = {

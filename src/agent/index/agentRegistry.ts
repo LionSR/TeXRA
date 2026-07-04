@@ -690,8 +690,7 @@ function filterVisible(
  * Ensures cache is loaded first.
  */
 export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload> {
-  if (initPromise) await initPromise;
-  if (!initialized || !cacheIncludesRemote) await loadAgents();
+  await loadAgents();
 
   return {
     workflow: entriesToOptionData(

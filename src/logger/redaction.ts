@@ -65,16 +65,13 @@ export const PROVIDER_KEY_REDACTION_RULES = {
   glm: OPENAI_COMPATIBLE_REDACTION,
 } as const satisfies Record<ApiKeyProviderId, ProviderKeyRedactionRule>;
 
-const PROVIDER_KEY_PATTERNS = Object.values(PROVIDER_KEY_REDACTION_RULES)
-  .flatMap((rule) => rule.patterns)
-  .filter((pattern, index, patterns) => {
-    const key = `${pattern.source}/${pattern.flags}`;
-    return (
-      patterns.findIndex(
-        (candidate) => `${candidate.source}/${candidate.flags}` === key,
-      ) === index
-    );
-  });
+const PROVIDER_KEY_PATTERNS = [
+  ...new Map(
+    Object.values(PROVIDER_KEY_REDACTION_RULES)
+      .flatMap((rule) => rule.patterns)
+      .map((pattern) => [`${pattern.source}/${pattern.flags}`, pattern] as const),
+  ).values(),
+];
 
 export interface LogRedactionOptions {
   readonly homeDir?: string | undefined;

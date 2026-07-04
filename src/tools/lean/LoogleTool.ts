@@ -53,10 +53,7 @@ export type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;
 const LoogleHitSchema = z.looseObject({
   name: z.string(),
   type: z.string(),
-  module: z
-    .string()
-    .nullish()
-    .transform((value) => value ?? ''),
+  module: z.string().prefault(''),
   // Loogle may omit, null, or empty `doc`; formatHit already guards on truthiness.
   doc: z.string().nullish(),
 });
