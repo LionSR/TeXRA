@@ -309,14 +309,16 @@ describe('InquiryStorage', () => {
       manifestPath,
       Buffer.from(JSON.stringify(legacy), 'utf8'),
     );
-    const originalWriteFile = platform.fs.writeFile.bind(platform.fs);
-    const writeFileSpy = vi
-      .spyOn(platform.fs, 'writeFile')
+    const originalWriteFileAtomic = platform.fs.writeFileAtomic.bind(
+      platform.fs,
+    );
+    const writeFileAtomicSpy = vi
+      .spyOn(platform.fs, 'writeFileAtomic')
       .mockImplementation(async (target, content) => {
         if (target === manifestPath) {
           throw new Error('metadata disk full');
         }
-        await originalWriteFile(target, content);
+        await originalWriteFileAtomic(target, content);
       });
 
     try {
@@ -325,8 +327,12 @@ describe('InquiryStorage', () => {
       expect(manifestToTranscript(manifest!)).toMatchObject([
         { turnIndex: 1, question: 'Legacy Q', answer: 'Legacy A' },
       ]);
+      expect(writeFileAtomicSpy).toHaveBeenCalledWith(
+        manifestPath,
+        expect.any(Uint8Array),
+      );
     } finally {
-      writeFileSpy.mockRestore();
+      writeFileAtomicSpy.mockRestore();
     }
 
     const persisted = JSON.parse(
