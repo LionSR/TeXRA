@@ -252,7 +252,7 @@ function isSettledEntry(
     case 'process':
       return true;
     case 'tool':
-      return entry.toolUse?.status === TOOL_USE_STATUS.COMPLETED;
+      return entry.toolUse.status === TOOL_USE_STATUS.COMPLETED;
     case 'assistant':
       return (
         !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1
