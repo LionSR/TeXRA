@@ -3,7 +3,7 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import type { UsageRoute } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 
-export type ProviderAuthMode = 'api-key' | 'chatgpt-subscription';
+export type ProviderAuthMode = 'chatgpt-subscription';
 
 export interface OpenAIResponseProviderCapabilities {
   readonly backgroundMode: 'base' | 'disabled';
@@ -80,16 +80,6 @@ export function isCodexSubscriptionEligible(fullName: string): boolean {
   return /codex/i.test(fullName);
 }
 
-const openAIApiKeyCapabilities: ProviderCapabilityResolver = ({ model }) => {
-  if (model.provider !== ModelProvider.OPENAI) return null;
-  return {
-    authMode: 'api-key',
-    contextWindow: model.contextWindow,
-    inputPrice: model.inputPrice,
-    outputPrice: model.outputPrice,
-  };
-};
-
 const openAIChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({
   model,
   useOpenRouter,
@@ -130,7 +120,6 @@ export const ProviderCapabilities: Partial<
   >
 > = {
   [ModelProvider.OPENAI]: {
-    'api-key': openAIApiKeyCapabilities,
     'chatgpt-subscription': openAIChatGptSubscriptionCapabilities,
   },
 };
