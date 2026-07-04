@@ -7,8 +7,8 @@ import {
   generateCodeVerifier,
   generateOAuthState,
   generatePkcePair,
-  isCodexSubscriptionEligible,
 } from '@auth/codex';
+import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 
