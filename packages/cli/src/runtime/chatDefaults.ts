@@ -184,27 +184,35 @@ export async function resolveChatDefaults(
   let model: string | undefined;
   let agentSource = sourceForOverride(overrideAgent, envAgent);
   let modelSource: ChatDefaultValueSource | undefined;
+  const directModel = overrideModel || envModel;
+  const skipDefaultTierIo = Boolean(agent && directModel);
 
-  // Tiers are independent I/O — fan out in parallel.
-  // Workspace defaults use the same .texra/config.json reader as the CLI
-  // context so startup does not depend on platform initialization.
-  const [workspace, user, history] = await Promise.all([
-    loadWorkspaceDefaults(init.cwd),
-    loadUserDefaults(),
-    loadHistoryDefaults(),
-  ]);
-  const tiers: ReadonlyArray<
-    readonly [ChatDefaultValueSource, PartialDefaults]
-  > = [
-    ['workspace-config', workspace],
-    ['user-config', user],
-    ['history', history],
-  ];
+  let workspace: PartialDefaults = {};
+  let user: PartialDefaults = {};
+  let history: PartialDefaults = {};
 
-  for (const [source, defaults] of tiers) {
-    if (!agent && defaults.agent) {
-      agent = defaults.agent;
-      agentSource = source;
+  if (!skipDefaultTierIo) {
+    // Tiers are independent I/O — fan out in parallel.
+    // Workspace defaults use the same .texra/config.json reader as the CLI
+    // context so startup does not depend on platform initialization.
+    [workspace, user, history] = await Promise.all([
+      loadWorkspaceDefaults(init.cwd),
+      loadUserDefaults(),
+      loadHistoryDefaults(),
+    ]);
+    const tiers: ReadonlyArray<
+      readonly [ChatDefaultValueSource, PartialDefaults]
+    > = [
+      ['workspace-config', workspace],
+      ['user-config', user],
+      ['history', history],
+    ];
+
+    for (const [source, defaults] of tiers) {
+      if (!agent && defaults.agent) {
+        agent = defaults.agent;
+        agentSource = source;
+      }
     }
   }
 
