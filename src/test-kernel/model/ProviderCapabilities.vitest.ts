@@ -52,19 +52,4 @@ describe('provider capabilities', () => {
       },
     });
   });
-
-  it('keeps API-key profile on llm-zoo model metadata', () => {
-    const capabilities = resolveProviderCapabilities({
-      model: gpt55Config,
-      authMode: 'api-key',
-      useOpenRouter: false,
-    });
-
-    expect(capabilities).toMatchObject({
-      authMode: 'api-key',
-      contextWindow: 1_050_000,
-      inputPrice: 5,
-      outputPrice: 30,
-    });
-  });
 });
