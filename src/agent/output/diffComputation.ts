@@ -5,8 +5,6 @@
  * using the diff-match-patch library.
  */
 
-import { diff_match_patch } from 'diff-match-patch';
-
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
@@ -18,6 +16,7 @@ import {
   getComparablePath,
   WorkspaceFS,
 } from '@utils/files';
+import { diffLineChanges } from '@utils/text/diff';
 import { countLines } from '@utils/text/stringUtils';
 
 import { traceFileLineage } from './lineageMapping';
@@ -48,18 +47,8 @@ async function computeDiffStats(
       flexibleFS.read(outputLocation),
     ]);
 
-    const dmp = new diff_match_patch();
-    const diffs = dmp.diff_main(baseContent, outContent);
-    let added = 0;
-    let removed = 0;
-    for (const [op, text] of diffs) {
-      if (op === 1) {
-        added += countLines(text);
-      } else if (op === -1) {
-        removed += countLines(text);
-      }
-    }
-    return { added, removed };
+    // Preserve diff-match-patch's omitted-argument default: checkLines=true.
+    return diffLineChanges(baseContent, outContent, { checkLines: true });
   } catch (err) {
     logger.debug(
       CHANNEL,
