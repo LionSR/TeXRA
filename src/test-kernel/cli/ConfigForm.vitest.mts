@@ -332,7 +332,7 @@ describe('/config slash command wiring', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
-      modelSource: 'builtin',
+      modelSource: 'builtin-default',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       approvalPolicy: 'ask',
