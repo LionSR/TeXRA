@@ -59,25 +59,26 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
  */
 export async function selectDesktopSetupModel(): Promise<string | null> {
   const secrets = platform().secrets;
+  const useOpenRouter = getUseOpenRouter();
 
-  if (getUseOpenRouter()) {
-    if (isNonEmptyString(await lookupApiKey(secrets, 'openRouter'))) {
-      return (
-        decideRunModel([
-          {
-            model: SETUP_MODEL_BY_PROVIDER.openRouter,
-            reason: 'router-config',
-          },
-        ])?.model ?? null
-      );
-    }
+  const routerModel =
+    useOpenRouter && isNonEmptyString(await lookupApiKey(secrets, 'openRouter'))
+      ? SETUP_MODEL_BY_PROVIDER.openRouter
+      : null;
+  if (useOpenRouter && !routerModel) {
     return null;
   }
 
   return (
     decideRunModel([
       {
-        model: await selectSetupCredentialModelExcludingOpenRouter(secrets),
+        model: routerModel,
+        reason: 'router-config',
+      },
+      {
+        model: useOpenRouter
+          ? null
+          : await selectSetupCredentialModelExcludingOpenRouter(secrets),
         reason: 'credential',
       },
     ])?.model ?? null

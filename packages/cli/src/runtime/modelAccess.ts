@@ -33,28 +33,20 @@ export interface CliRunnableModelResolution {
 
 type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
 
-export type CliModelSelectionSource =
-  'override' | 'env' | 'config' | 'workspace' | 'user' | 'history' | 'builtin';
-
-const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
-  override: 'reject',
-  env: 'reject',
-  config: 'notice',
-  workspace: 'notice',
-  user: 'notice',
+const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
+  'explicit-override': 'reject',
+  environment: 'reject',
+  'agent-config': 'notice',
+  'command-config': 'notice',
+  'workspace-config': 'notice',
+  'user-config': 'notice',
   history: 'notice',
-  builtin: 'silent',
-} satisfies Record<CliModelSelectionSource, CliModelFallbackMode>;
-
-const CLI_MODEL_DECISION_REASON_BY_SOURCE = {
-  override: 'explicit-override',
-  env: 'environment',
-  config: 'command-config',
-  workspace: 'workspace-config',
-  user: 'user-config',
-  history: 'history',
-  builtin: 'builtin-default',
-} satisfies Record<CliModelSelectionSource, RunModelDecisionReason>;
+  'parent-run': 'notice',
+  'router-config': 'reject',
+  credential: 'reject',
+  'builtin-default': 'silent',
+  'access-list-default': 'silent',
+} satisfies Record<RunModelDecisionReason, CliModelFallbackMode>;
 
 export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
@@ -71,8 +63,8 @@ export interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
   'apiMode' | 'agentCategory' | 'accessList'
 > {
-  /** Source category that owns unavailable-model fallback behavior. */
-  readonly fallbackSource: CliModelSelectionSource;
+  /** Decision reason that owns unavailable-model fallback behavior. */
+  readonly fallbackReason?: RunModelDecisionReason;
   readonly noAvailableModelsMessage?: string;
 }
 
@@ -600,38 +592,75 @@ function formatUnavailableModelMessage(
   return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options)}`;
 }
 
-function cliModelDecisionCandidate(
-  model: string,
-  source: CliModelSelectionSource,
-): RunModelCandidate {
-  return {
-    model,
-    reason: CLI_MODEL_DECISION_REASON_BY_SOURCE[source],
-    fallbackMode: CLI_MODEL_FALLBACK_MODE_BY_SOURCE[source],
-  };
+type NormalizedCliModelCandidate = RunModelCandidate & {
+  readonly model: string;
+};
+
+function rawCliModelDecisionCandidates(
+  request: string | readonly RunModelCandidate[],
+  options: CliRunnableModelOptions,
+): readonly RunModelCandidate[] {
+  if (typeof request !== 'string') return request;
+  if (!options.fallbackReason) {
+    throw new Error('fallbackReason is required for single-model resolution');
+  }
+  return [{ model: request, reason: options.fallbackReason }];
 }
 
 export async function selectCliRunnableModel(
-  model: string,
+  request: string | readonly RunModelCandidate[],
   options: CliRunnableModelOptions,
 ): Promise<CliRunnableModelResolution> {
   const models = await loadCliModelAccessList(options);
-  const trimmed = model.trim();
-  const modelEntry = await loadCliModelAccessEntry(trimmed, {
-    apiMode: options.apiMode,
-    agentCategory: options.agentCategory,
-    accessList: models,
-  });
-  const modelsWithHiddenEntry = withModelAccess(models, modelEntry);
+  const requestedCandidates: NormalizedCliModelCandidate[] =
+    rawCliModelDecisionCandidates(request, options).flatMap((candidate) => {
+      const model = candidate.model?.trim();
+      return model
+        ? [
+            {
+              ...candidate,
+              model,
+              fallbackMode:
+                candidate.fallbackMode ??
+                CLI_MODEL_FALLBACK_MODE_BY_REASON[candidate.reason],
+            },
+          ]
+        : [];
+    });
+  const requestedModels = [
+    ...new Set(requestedCandidates.map((candidate) => candidate.model)),
+  ];
+  const hiddenEntries = await Promise.allSettled(
+    requestedModels.map((model) =>
+      loadCliModelAccessEntry(model, {
+        apiMode: options.apiMode,
+        agentCategory: options.agentCategory,
+        accessList: models,
+      }),
+    ),
+  );
+  const entryErrorByModel = new Map<string, unknown>();
+  let modelsWithHiddenEntry = models;
+  for (const [index, result] of hiddenEntries.entries()) {
+    const model = requestedModels[index];
+    if (!model) continue;
+    if (result.status === 'fulfilled') {
+      modelsWithHiddenEntry = withModelAccess(
+        modelsWithHiddenEntry,
+        result.value,
+      );
+    } else {
+      entryErrorByModel.set(model, result.reason);
+    }
+  }
   const runnableEntries = runnableCliModelAccessEntries(
     modelsWithHiddenEntry,
     options.apiMode,
   );
   const availableIds = modelIds(runnableEntries);
-  const entry = findCliModelAccessEntry(modelsWithHiddenEntry, trimmed);
   const decision = decideRunModel(
     [
-      cliModelDecisionCandidate(trimmed, options.fallbackSource),
+      ...requestedCandidates,
       { model: availableIds[0], reason: 'access-list-default' },
     ],
     (candidate) => findCliModelAccessEntry(runnableEntries, candidate) != null,
@@ -645,9 +674,17 @@ export async function selectCliRunnableModel(
       return { model: selectedModel };
     }
 
+    const fallbackLoadError = entryErrorByModel.get(
+      decision.fallbackFrom.model,
+    );
+    if (fallbackLoadError) throw fallbackLoadError;
+
     const unavailableMessage = formatUnavailableModelMessage(
       decision.fallbackFrom.model,
-      entry,
+      findCliModelAccessEntry(
+        modelsWithHiddenEntry,
+        decision.fallbackFrom.model,
+      ),
       availableIds,
       options,
     );
@@ -657,9 +694,19 @@ export async function selectCliRunnableModel(
     };
   }
 
+  const selectedLoadError = decision
+    ? entryErrorByModel.get(decision.model)
+    : undefined;
+  if (selectedLoadError) throw selectedLoadError;
+
+  const requestedModel =
+    (decision?.model ??
+      requestedCandidates[0]?.model ??
+      (typeof request === 'string' ? request.trim() : '')) ||
+    '<empty>';
   const unavailableMessage = formatUnavailableModelMessage(
-    trimmed,
-    entry,
+    requestedModel,
+    findCliModelAccessEntry(modelsWithHiddenEntry, requestedModel),
     availableIds,
     options,
   );

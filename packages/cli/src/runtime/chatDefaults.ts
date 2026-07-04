@@ -1,7 +1,10 @@
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { decideRunModel } from '@model/runModelDecision';
+import {
+  decideRunModel,
+  type RunModelDecisionReason,
+} from '@model/runModelDecision';
 import { toNewestFirstByTimestamp } from '@utils/core';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
@@ -16,7 +19,6 @@ import {
   isImplicitDefaultEligible,
   pickDefaultToolUseAgent,
 } from './defaultAgents';
-import type { CliModelSelectionSource } from './modelAccess';
 
 /**
  * A configured or environment agent value, trimmed and dropped if it can't be
@@ -43,13 +45,16 @@ export interface ChatDefaults {
 export type ChatDefaultSource =
   'workspace' | 'user' | 'history' | 'builtin' | 'mixed';
 
-export type ChatDefaultValueSource =
-  | 'override'
-  | 'env'
-  | Extract<
-      CliModelSelectionSource,
-      'workspace' | 'user' | 'history' | 'builtin'
-    >;
+/** Chat default value sources are the shared run-model decision reasons. */
+export type ChatDefaultValueSource = Extract<
+  RunModelDecisionReason,
+  | 'explicit-override'
+  | 'environment'
+  | 'workspace-config'
+  | 'user-config'
+  | 'history'
+  | 'builtin-default'
+>;
 
 interface PartialDefaults {
   readonly agent?: string;
@@ -104,16 +109,33 @@ function deriveSource(sources: {
   readonly agent: ChatDefaultValueSource;
   readonly model: ChatDefaultValueSource;
 }): ChatDefaultSource {
-  const source = sources.agent === sources.model ? sources.agent : 'mixed';
-  return source === 'override' || source === 'env' ? 'mixed' : source;
+  const agentSource = chatDefaultSource(sources.agent);
+  const modelSource = chatDefaultSource(sources.model);
+  return agentSource === modelSource ? agentSource : 'mixed';
+}
+
+function chatDefaultSource(source: ChatDefaultValueSource): ChatDefaultSource {
+  switch (source) {
+    case 'workspace-config':
+      return 'workspace';
+    case 'user-config':
+      return 'user';
+    case 'history':
+      return 'history';
+    case 'builtin-default':
+      return 'builtin';
+    case 'explicit-override':
+    case 'environment':
+      return 'mixed';
+  }
 }
 
 function sourceForOverride(
   override: string | undefined,
   env: string | undefined,
 ): ChatDefaultValueSource | undefined {
-  if (override) return 'override';
-  if (env) return 'env';
+  if (override) return 'explicit-override';
+  if (env) return 'environment';
   return undefined;
 }
 
@@ -124,8 +146,8 @@ function buildChatDefaults(init: {
   readonly modelSource: ChatDefaultValueSource | undefined;
   readonly visibleToolUseAgents?: readonly { readonly name: string }[];
 }): ChatDefaults {
-  const agentSource = init.agentSource ?? 'builtin';
-  const modelSource = init.modelSource ?? 'builtin';
+  const agentSource = init.agentSource ?? 'builtin-default';
+  const modelSource = init.modelSource ?? 'builtin-default';
   return {
     agent: init.agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
     model: init.model ?? BUILTIN_DEFAULT_CHAT_MODEL,
@@ -159,19 +181,9 @@ export async function resolveChatDefaults(
   const envAgent = usableConfiguredAgent(init.envAgent);
   const envModel = init.envModel?.trim();
   let agent = overrideAgent || envAgent;
-  let model = overrideModel || envModel;
+  let model: string | undefined;
   let agentSource = sourceForOverride(overrideAgent, envAgent);
-  let modelSource = sourceForOverride(overrideModel, envModel);
-
-  if (agent && model) {
-    return buildChatDefaults({
-      agent,
-      model,
-      agentSource,
-      modelSource,
-      visibleToolUseAgents: init.visibleToolUseAgents,
-    });
-  }
+  let modelSource: ChatDefaultValueSource | undefined;
 
   // Tiers are independent I/O — fan out in parallel.
   // Workspace defaults use the same .texra/config.json reader as the CLI
@@ -184,8 +196,8 @@ export async function resolveChatDefaults(
   const tiers: ReadonlyArray<
     readonly [ChatDefaultValueSource, PartialDefaults]
   > = [
-    ['workspace', workspace],
-    ['user', user],
+    ['workspace-config', workspace],
+    ['user-config', user],
     ['history', history],
   ];
 
@@ -194,10 +206,11 @@ export async function resolveChatDefaults(
       agent = defaults.agent;
       agentSource = source;
     }
-    if (agent && model) break;
   }
 
   const modelDecision = decideRunModel([
+    { model: overrideModel, reason: 'explicit-override' },
+    { model: envModel, reason: 'environment' },
     { model: workspace.model, reason: 'workspace-config' },
     { model: user.model, reason: 'user-config' },
     { model: history.model, reason: 'history' },
@@ -205,14 +218,8 @@ export async function resolveChatDefaults(
   ]);
   if (!model && modelDecision) {
     model = modelDecision.model;
-    modelSource =
-      modelDecision.reason === 'workspace-config'
-        ? 'workspace'
-        : modelDecision.reason === 'user-config'
-          ? 'user'
-          : modelDecision.reason === 'history'
-            ? 'history'
-            : 'builtin';
+    // The candidate list above only uses reasons in ChatDefaultValueSource.
+    modelSource = modelDecision.reason as ChatDefaultValueSource;
   }
 
   return buildChatDefaults({

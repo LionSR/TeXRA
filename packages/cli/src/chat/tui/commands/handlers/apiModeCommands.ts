@@ -31,7 +31,7 @@ async function reconcileRootModelAfterApiModeChange(
 
   const { model: currentModel, modelSource } = cliState.sessionMeta.get();
   const selection = await selectCliRunnableModel(currentModel, {
-    fallbackSource: modelSource,
+    fallbackReason: modelSource,
     apiMode,
     noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
       apiMode,
