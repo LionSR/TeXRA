@@ -244,8 +244,9 @@ describe('MainApp persistence and restore characterization', () => {
     expect(fileState.checkboxValues.autoExtractTikzFigure).toBe(true);
 
     // No execute unless explicitly requested.
-    expect(posted.filter((m) => m.command === MAIN_VIEW_COMMANDS.EXECUTE))
-      .toHaveLength(0);
+    expect(
+      posted.filter((m) => m.command === MAIN_VIEW_COMMANDS.EXECUTE),
+    ).toHaveLength(0);
   });
 
   it('migrates the legacy instruction to the workflow slot when restoring a workflow session', async () => {
