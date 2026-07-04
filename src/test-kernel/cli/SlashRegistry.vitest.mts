@@ -31,7 +31,7 @@ import { toErrorMessage } from '@common/errors';
 const INCLUDED_CHAT_SESSION: SessionMeta = {
   agent: 'chat',
   model: 'deepseekT',
-  modelSource: 'builtin',
+  modelSource: 'builtin-default',
   cwd: '/tmp/workspace',
   apiMode: 'included',
   approvalPolicy: 'ask',
@@ -285,7 +285,7 @@ describe('slashRegistry', () => {
     expect(modelNode.props).toMatchObject({ selectable: true });
     expect(cliState.sessionMeta.get()).toMatchObject({
       model: 'gpt55',
-      modelSource: 'override',
+      modelSource: 'explicit-override',
     });
   });
 
@@ -293,7 +293,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'gpt54',
-      modelSource: 'override',
+      modelSource: 'explicit-override',
       cwd: '/tmp/workspace',
       apiMode: 'personal',
       approvalPolicy: 'ask',
