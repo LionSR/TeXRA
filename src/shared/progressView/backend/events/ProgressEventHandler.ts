@@ -582,14 +582,14 @@ export class ProgressEventHandler {
     };
   }
 
-  setStreamStatus(
+  async setStreamStatus(
     streamId: StreamTabId,
     status: StreamPhase,
     // Kept until Stage 5 removes the legacy bus projection; the status machine
     // now owns repair writes, so this projection no longer consumes it.
     _previousStatus?: StreamPhase,
     substate?: StreamSubstate,
-  ): void {
+  ): Promise<void> {
     // Keep memory bounded by stream status:
     //  - returning to in-flight (e.g., background resume) eagerly rehydrates
     //    previously-released entries so pending appends from the agent
@@ -627,6 +627,7 @@ export class ProgressEventHandler {
         !this.state.activeStream || this.state.activeStream === streamId
           ? this.state.activeStream
           : undefined;
+      let activeStreamToSync: ActiveStreamId | undefined;
       if (filterChanged) {
         const selectableStreams = buildStreamInfos(
           this.state,
@@ -639,6 +640,7 @@ export class ProgressEventHandler {
         const previousActiveStream = this.state.activeStream;
         if (nextActiveStream !== previousActiveStream) {
           this.state.activeStream = nextActiveStream;
+          activeStreamToSync = nextActiveStream;
           if (
             previousActiveStream &&
             previousActiveStream !== nextActiveStream
@@ -666,6 +668,9 @@ export class ProgressEventHandler {
           agentFilter: this.state.agentCategoryFilter,
         },
       );
+      if (activeStreamToSync !== undefined) {
+        await this.syncFilterDrivenActiveStreamContent(activeStreamToSync);
+      }
     } else {
       const lastTimestamp = this.state.streamLogs.getLastTimestamp(streamId);
       this.webviewUpdater.updateStreamStatus(
@@ -675,6 +680,24 @@ export class ProgressEventHandler {
         substate,
       );
     }
+  }
+
+  private async syncFilterDrivenActiveStreamContent(
+    stream: ActiveStreamId,
+  ): Promise<void> {
+    if (!stream) {
+      if (this.state.activeStream === '') {
+        this.syncStreamContent('');
+      }
+      return;
+    }
+
+    await this.state.streamLogs.ensureLoaded(stream);
+
+    // A newer tab switch may have happened while the released log was loading.
+    if (this.state.activeStream !== stream) return;
+
+    this.syncStreamContent(stream, { includeActiveState: true });
   }
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
