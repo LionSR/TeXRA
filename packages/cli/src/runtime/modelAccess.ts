@@ -1,5 +1,10 @@
 // Local imports - model surfaces
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  decideRunModel,
+  type RunModelCandidate,
+  type RunModelDecisionReason,
+} from '@model/runModelDecision';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 
@@ -40,6 +45,16 @@ const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
   history: 'notice',
   builtin: 'silent',
 } satisfies Record<CliModelSelectionSource, CliModelFallbackMode>;
+
+const CLI_MODEL_DECISION_REASON_BY_SOURCE = {
+  override: 'explicit-override',
+  env: 'environment',
+  config: 'command-config',
+  workspace: 'workspace-config',
+  user: 'user-config',
+  history: 'history',
+  builtin: 'builtin-default',
+} satisfies Record<CliModelSelectionSource, RunModelDecisionReason>;
 
 export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
@@ -531,7 +546,7 @@ async function loadCliModelAccessList(
   );
 }
 
-export async function resolveCliModelAccessEntry(
+export async function loadCliModelAccessEntry(
   model: string,
   options: CliModelAccessEntryOptions = {},
 ): Promise<CliModelAccess | undefined> {
@@ -585,56 +600,68 @@ function formatUnavailableModelMessage(
   return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options)}`;
 }
 
-function resolveCliRunnableModelFromAccessList(
-  models: readonly CliModelAccess[],
+function cliModelDecisionCandidate(
+  model: string,
+  source: CliModelSelectionSource,
+): RunModelCandidate {
+  return {
+    model,
+    reason: CLI_MODEL_DECISION_REASON_BY_SOURCE[source],
+    fallbackMode: CLI_MODEL_FALLBACK_MODE_BY_SOURCE[source],
+  };
+}
+
+export async function selectCliRunnableModel(
   model: string,
   options: CliRunnableModelOptions,
-): CliRunnableModelResolution {
-  const fallbackMode =
-    CLI_MODEL_FALLBACK_MODE_BY_SOURCE[options.fallbackSource];
+): Promise<CliRunnableModelResolution> {
+  const models = await loadCliModelAccessList(options);
   const trimmed = model.trim();
+  const modelEntry = await loadCliModelAccessEntry(trimmed, {
+    apiMode: options.apiMode,
+    agentCategory: options.agentCategory,
+    accessList: models,
+  });
+  const modelsWithHiddenEntry = withModelAccess(models, modelEntry);
   const runnableEntries = runnableCliModelAccessEntries(
-    models,
+    modelsWithHiddenEntry,
     options.apiMode,
   );
-  const entry = findCliModelAccessEntry(models, trimmed);
-  const runnableEntry = findCliModelAccessEntry(runnableEntries, trimmed);
-  if (runnableEntry) return { model: runnableEntry.model.value };
-
   const availableIds = modelIds(runnableEntries);
+  const entry = findCliModelAccessEntry(modelsWithHiddenEntry, trimmed);
+  const decision = decideRunModel(
+    [
+      cliModelDecisionCandidate(trimmed, options.fallbackSource),
+      { model: availableIds[0], reason: 'access-list-default' },
+    ],
+    (candidate) => findCliModelAccessEntry(runnableEntries, candidate) != null,
+  );
+
+  if (decision && !decision.unavailable) {
+    const selectedModel =
+      findCliModelAccessEntry(runnableEntries, decision.model)?.model.value ??
+      decision.model;
+    if (!decision.fallbackFrom || decision.fallbackFrom.mode === 'silent') {
+      return { model: selectedModel };
+    }
+
+    const unavailableMessage = formatUnavailableModelMessage(
+      decision.fallbackFrom.model,
+      entry,
+      availableIds,
+      options,
+    );
+    return {
+      model: selectedModel,
+      notice: `${unavailableMessage} Using "${selectedModel}" instead.`,
+    };
+  }
+
   const unavailableMessage = formatUnavailableModelMessage(
     trimmed,
     entry,
     availableIds,
     options,
   );
-  if (fallbackMode === 'reject' || availableIds.length === 0) {
-    throw new Error(unavailableMessage);
-  }
-
-  const fallback = availableIds[0]!;
-  if (fallbackMode === 'silent') return { model: fallback };
-  return {
-    model: fallback,
-    notice: `${unavailableMessage} Using "${fallback}" instead.`,
-  };
-}
-
-export async function resolveCliRunnableModel(
-  model: string,
-  options: CliRunnableModelOptions,
-): Promise<CliRunnableModelResolution> {
-  const models = await loadCliModelAccessList(options);
-  const trimmed = model.trim();
-  const modelEntry = await resolveCliModelAccessEntry(trimmed, {
-    apiMode: options.apiMode,
-    agentCategory: options.agentCategory,
-    accessList: models,
-  });
-
-  return resolveCliRunnableModelFromAccessList(
-    withModelAccess(models, modelEntry),
-    trimmed,
-    options,
-  );
+  throw new Error(unavailableMessage);
 }

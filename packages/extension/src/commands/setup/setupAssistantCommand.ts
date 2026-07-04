@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { resolveSetupModelExcludingOpenRouter } from '@controllers/onboarding/setupLaunch';
+import { selectSetupCredentialModelExcludingOpenRouter } from '@controllers/onboarding/setupLaunch';
 import { platform } from '@platform/platform';
 import { loadAgents } from '@agent/index';
 import { registerExecution } from '@agent/storage';
@@ -24,6 +24,7 @@ import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
+import { decideRunModel } from '@model/runModelDecision';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
@@ -40,86 +41,50 @@ logger.initialize(CHANNEL);
 const SETUP_INSTRUCTION =
   'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
 
-/**
- * Result of launch-model resolution. `requiresOpenRouter` signals that the
- * chosen model needs the global `useOpenRouter` routing flag flipped on;
- * the actual flip/restore is handled by the caller via `withOpenRouterFlag`
- * so that any failure — even in pre-execution setup like `registerExecution`
- * — still restores the prior value.
- */
 interface LaunchModelResolution {
   model: string;
   requiresOpenRouter: boolean;
 }
 
 /**
- * Pick a model the setup agent can actually call, given the credentials
- * the user currently has AND the global `useOpenRouter` routing flag
- * (already validated by the caller). Pure: never mutates state.
- *
- * Returns `null` when every resolution path fails — e.g. the user is
- * signed in with Included Access but their tier excludes every model we
- * know how to route, and they've added no direct or OpenRouter key.
- * The caller surfaces that as a clear preflight error rather than
- * launching with a model that will crash on tier enforcement.
- *
- * Order:
- *   0. If the global `useOpenRouter` flag is already on, use the
- *      OpenRouter-routed default (the caller's `ensureRoutingConfigured`
- *      already validated a key is present).
- *   1. Otherwise, ChatGPT subscription, Researcher Access, then a direct
- *      provider key — the host-shared priority scan in
- *      `resolveSetupModelExcludingOpenRouter` (see that function for the
- *      ChatGPT/Researcher Access/direct-key detail).
- *   2. Only if `openRouter` is the sole provider with a key, report a
- *      router-backed default and let the caller temporarily flip the flag.
+ * Pure model selection. The caller already validated that a globally-enabled
+ * OpenRouter route has a key; the OR-only fallback still needs a scoped flag
+ * flip before launch.
  */
-async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
-  // When global OR routing is on, every model call is re-routed through
-  // OpenRouter at the ModelFactory level regardless of what we pick for
-  // "direct" here — so a server-side or direct-provider pick would be
-  // silently misrouted (and possibly land on a model OR doesn't carry).
-  // `ensureRoutingConfigured` has already validated an OR key is
-  // present, so we can short-circuit to the OR-routed default. Returning
-  // `requiresOpenRouter: true` is a no-op in the flip helper when the
-  // global flag is already on, so this doesn't mutate anything.
-  if (getUseOpenRouter()) {
-    return {
-      model: SETUP_MODEL_BY_PROVIDER.openRouter,
-      requiresOpenRouter: true,
-    };
-  }
-
-  const model = await resolveSetupModelExcludingOpenRouter(platform().secrets);
-  if (model) {
-    return { model, requiresOpenRouter: false };
-  }
-
-  // Only OpenRouter key present. The `openRouter` entry is statically
-  // declared in `SETUP_MODEL_BY_PROVIDER`, so no fallback model is needed.
-  if (await SecretManager.hasUsableApiKey('openRouter')) {
-    return {
-      model: SETUP_MODEL_BY_PROVIDER.openRouter,
-      requiresOpenRouter: true,
-    };
-  }
-
-  return null;
+async function selectLaunchModel(): Promise<LaunchModelResolution | null> {
+  const useOpenRouter = getUseOpenRouter();
+  const openRouterModel =
+    useOpenRouter || (await SecretManager.hasUsableApiKey('openRouter'))
+      ? SETUP_MODEL_BY_PROVIDER.openRouter
+      : undefined;
+  const decision = decideRunModel([
+    {
+      model: useOpenRouter ? openRouterModel : undefined,
+      reason: 'router-config',
+    },
+    {
+      model: await selectSetupCredentialModelExcludingOpenRouter(
+        platform().secrets,
+      ),
+      reason: 'credential',
+    },
+    {
+      model: useOpenRouter ? undefined : openRouterModel,
+      reason: 'access-list-default',
+    },
+  ]);
+  if (!decision) return null;
+  return {
+    model: decision.model,
+    requiresOpenRouter:
+      decision.reason === 'router-config' ||
+      decision.reason === 'access-list-default',
+  };
 }
 
 /**
- * Temporarily flip the `useOpenRouter` flag *on* for the scoped callback
- * and always restore in a `finally`. Only used in the narrow OR-only
- * case — i.e. the user has no server-side access and no direct provider
- * key, only an OpenRouter key. In that state, any other agent they could
- * launch concurrently would also need OpenRouter routing (they have no
- * other credential), so the global flip matches what the user wants
- * anyway and can't break a concurrent non-OR agent.
- *
- * The reverse direction (flag on, direct provider picked) is *not*
- * handled here — it's caught at preflight and surfaced as a settings
- * misconfiguration the user must resolve, so we never mutate shared
- * routing state against a user who deliberately enabled OpenRouter.
+ * Temporarily flip `useOpenRouter` on for the OR-only launch path and always
+ * restore it, including failures before `executeAgent` starts.
  */
 async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
   const prior = globalSM.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
@@ -140,14 +105,8 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Pre-flight: ensure the user has a *usable* credential before we launch
- * the setup agent. Direct uses of `SecretManager.anyApiKeyExists` would
- * report a blank `PROVIDER_API_KEY=""` env var as present, which then
- * fails in `resolveLaunchModel` with a confusing "No model is available"
- * modal. `hasAnyUsableSetupCredential()` mirrors the adapter-level check:
- * active ChatGPT subscription for Codex, at least one provider with a
- * non-blank key, or valid server-side access. Keeps preflight and launch
- * agreed on what "has a credential" means.
+ * Pre-flight uses adapter-level checks so blank env keys do not count as
+ * credentials and then fail later as "No model is available."
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
   if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
@@ -299,7 +258,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
       return 'not-started';
     }
 
-    const resolution = await resolveLaunchModel();
+    const resolution = await selectLaunchModel();
     if (!resolution) {
       // Edge case: signed in with Included Access but tier excludes every
       // setup-model candidate, and no direct/OR keys to fall back on.

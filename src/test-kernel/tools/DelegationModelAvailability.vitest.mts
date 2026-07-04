@@ -4,7 +4,7 @@ import type { ToolDefinition } from '@model';
 import type { ModelOptionData } from '@shared/schemas';
 import {
   availableModelNamesFromOptions,
-  resolveDelegationModelFromAvailableNames,
+  selectDelegationModelFromAvailableNames,
   withDelegationModelAvailability,
 } from '@tools/delegationModelAvailability';
 
@@ -80,7 +80,7 @@ describe('delegation model availability', () => {
 
   it('rejects an explicitly requested model that is not currently available', () => {
     expect(() =>
-      resolveDelegationModelFromAvailableNames({
+      selectDelegationModelFromAvailableNames({
         requestedModel: 'opus48T',
         parentModel: 'sonnet46T',
         availableModels: ['sonnet46T', 'deepseekT'],
@@ -92,14 +92,14 @@ describe('delegation model availability', () => {
 
   it('uses the parent model only when it is available', () => {
     expect(
-      resolveDelegationModelFromAvailableNames({
+      selectDelegationModelFromAvailableNames({
         parentModel: 'sonnet46T',
         availableModels: ['deepseekT', 'sonnet46T'],
       }),
     ).toBe('sonnet46T');
 
     expect(
-      resolveDelegationModelFromAvailableNames({
+      selectDelegationModelFromAvailableNames({
         parentModel: 'opus48T',
         availableModels: ['deepseekT', 'sonnet46T'],
       }),
@@ -108,7 +108,7 @@ describe('delegation model availability', () => {
 
   it('rejects delegation when no models are currently available', () => {
     expect(() =>
-      resolveDelegationModelFromAvailableNames({
+      selectDelegationModelFromAvailableNames({
         parentModel: 'opus48T',
         availableModels: [],
       }),
