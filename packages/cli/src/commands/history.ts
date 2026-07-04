@@ -1,5 +1,10 @@
 import { defineCommand } from 'citty';
 
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
+import { formatChatAsHtml } from '@agent/export/htmlExport/htmlFormatter';
+import type { ChatExportInput } from '@agent/export/schemas';
+import { getExecutionStore } from '@agent/storage';
 import { type ExecutionId } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -78,6 +83,57 @@ async function runHistoryShow(
     ndjson: { kind: 'history-detail', detail: details },
     text: formatCliHistoryDetailsText(details),
   });
+  return CliExitCode.Success;
+}
+
+/**
+ * Export a stored conversation to stdout as a standalone document.
+ *
+ * Mirrors the extension's ChatExportController.buildExportInput so the CLI
+ * and the extension render the same conversation identically; the HTML path
+ * reuses the Lit-SSR chat exporter (headless rendering engine for traces).
+ */
+async function runHistoryExport(
+  context: CliContext,
+  id: ExecutionId,
+  format: 'html' | 'md',
+  options: { assetsHref?: string } = {},
+): Promise<number> {
+  await initLocalCliPlatform(context);
+  const store = getExecutionStore(id);
+  const [rawConfig, conversation, meta] = await Promise.all([
+    store.readConfig(),
+    store.readConversation(),
+    store.readMeta(),
+  ]);
+  if (!rawConfig || !conversation) {
+    writeTextStderr(
+      !rawConfig
+        ? `No stored config for execution ${id}.`
+        : `No stored conversation for execution ${id}.`,
+    );
+    return CliExitCode.Usage;
+  }
+  const config = AgentConfigSchema.parse(rawConfig);
+  const exportInput: ChatExportInput = {
+    timestamp: meta?.timestamp ?? new Date().toISOString(),
+    description: meta?.description,
+    config: {
+      agent: config.agent,
+      model: config.model,
+      instruction: config.instruction,
+      inputFiles: config.inputFiles,
+      mediaFiles: config.mediaFiles,
+      contextFiles: config.contextFiles,
+      outputFiles: config.outputFiles,
+    },
+    messages: conversation,
+  };
+  const content =
+    format === 'html'
+      ? formatChatAsHtml(exportInput, { assetsHref: options.assetsHref })
+      : formatChatAsMarkdown(exportInput);
+  process.stdout.write(content);
   return CliExitCode.Success;
 }
 
@@ -179,12 +235,35 @@ const historyShowCommand = defineCliCommand({
       description:
         'Show the full stored conversation instead of only the final preview',
     },
+    export: {
+      type: 'string',
+      valueHint: 'html|md',
+      description:
+        'Export the stored conversation to stdout as a standalone html or md document',
+    },
+    assets: {
+      type: 'string',
+      valueHint: 'href',
+      description: 'Assets href for --export html (defaults to ./assets)',
+    },
   },
   run: (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
       writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
       return Promise.resolve(CliExitCode.Usage);
+    }
+    const exportFormat = optString(ctx.args.export);
+    if (exportFormat !== undefined) {
+      if (exportFormat !== 'html' && exportFormat !== 'md') {
+        writeTextStderr(
+          `Invalid export format: ${exportFormat} (use html or md)`,
+        );
+        return Promise.resolve(CliExitCode.Usage);
+      }
+      return runHistoryExport(context, id, exportFormat, {
+        assetsHref: optString(ctx.args.assets),
+      });
     }
     return runHistoryShow(context, id, { full: ctx.args.full === true });
   },
