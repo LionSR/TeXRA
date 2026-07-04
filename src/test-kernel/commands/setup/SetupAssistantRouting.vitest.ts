@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   showInformationMessage: vi.fn<() => Promise<unknown>>(),
   showErrorMessage: vi.fn<() => Promise<unknown>>(),
   executeCommand: vi.fn<() => Promise<unknown>>(),
+  selectSetupCredentialModelExcludingOpenRouter:
+    vi.fn<() => Promise<string | null>>(),
   logError: vi.fn(),
 }));
 
@@ -38,6 +40,11 @@ vi.mock('@agent/runtime/executionRegistry', () => ({
   executionRegistry: {
     getAgentHandles: () => agentHandles(),
   },
+}));
+
+vi.mock('@controllers/onboarding/setupLaunch', () => ({
+  selectSetupCredentialModelExcludingOpenRouter:
+    mocks.selectSetupCredentialModelExcludingOpenRouter,
 }));
 
 vi.mock('@auth/codex', () => ({
@@ -161,6 +168,7 @@ await import('vscode');
 await import('@utils/config/providerConfig');
 await import('@frontend/secretManager');
 await import('@agent/runtime/executionRegistry');
+await import('@controllers/onboarding/setupLaunch');
 await import('@auth/codex');
 await import('@auth/serverKeys');
 await import('@common/state');
@@ -180,6 +188,9 @@ describe('setup assistant routing check ordering', () => {
     mocks.showInformationMessage.mockReset();
     mocks.showErrorMessage.mockReset();
     mocks.executeCommand.mockReset();
+    mocks.selectSetupCredentialModelExcludingOpenRouter
+      .mockReset()
+      .mockResolvedValue(null);
     mocks.logError.mockReset();
     // Default: no OpenRouter, no keys — safe baseline.
     mocks.getUseOpenRouter.mockReturnValue(false);
@@ -243,5 +254,23 @@ describe('setup assistant routing check ordering', () => {
     expect(mocks.createQuickPick).not.toHaveBeenCalled();
     expect(mocks.showErrorMessage).not.toHaveBeenCalled();
     expect(result).toBe('launched');
+  });
+
+  it('does not scan non-OpenRouter credentials when OpenRouter routing is already on', async () => {
+    mocks.getUseOpenRouter.mockReturnValue(true);
+    mocks.hasUsableApiKey.mockImplementation(
+      async (provider: string) => provider === 'openRouter',
+    );
+    mocks.selectSetupCredentialModelExcludingOpenRouter.mockRejectedValue(
+      new Error('credential scan unavailable'),
+    );
+
+    const result = await launchSetupAssistant();
+
+    expect(result).toBe('launched');
+    expect(
+      mocks.selectSetupCredentialModelExcludingOpenRouter,
+    ).not.toHaveBeenCalled();
+    expect(mocks.showErrorMessage).not.toHaveBeenCalled();
   });
 });
