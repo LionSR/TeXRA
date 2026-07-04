@@ -37,7 +37,7 @@ import {
 } from '@tools/approval';
 import {
   availableModelNamesFromOptions,
-  resolveDelegationModelFromAvailableNames,
+  selectDelegationModelFromAvailableNames,
 } from '@tools/delegationModelAvailability';
 
 // Local imports - delegation
@@ -49,7 +49,7 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'continue directly with available context, or ask the user a clarifying question.',
 ].join(' ');
 
-export async function resolveAvailableDelegationModel(input: {
+export async function selectAvailableDelegationModel(input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
   readonly agentCategory: AgentCategory;
@@ -57,7 +57,7 @@ export async function resolveAvailableDelegationModel(input: {
   const modelOptions = await computeModelOptionsData(undefined, undefined, {
     agentCategory: input.agentCategory,
   });
-  return resolveDelegationModelFromAvailableNames({
+  return selectDelegationModelFromAvailableNames({
     ...input,
     availableModels: availableModelNamesFromOptions(modelOptions),
   });
@@ -175,14 +175,14 @@ export async function proposeAndExecute(
     throw new Error(`Unexpected non-approve proposal result: ${result.action}`);
   }
   // Route an approved model override through the same availability gate the
-  // initial delegation uses (resolveAvailableDelegationModel), so a model that
+  // initial delegation uses (selectAvailableDelegationModel), so a model that
   // is unavailable in the active API mode fails synchronously here instead of
   // launching and then failing asynchronously. Re-selecting the proposed model
   // needs no re-check — it was already resolved when the proposal was built.
   let modelOverride: string | undefined;
   if (result.model && result.model !== proposal.model) {
     try {
-      modelOverride = await resolveAvailableDelegationModel({
+      modelOverride = await selectAvailableDelegationModel({
         requestedModel: result.model,
         parentModel: proposal.model,
         agentCategory: proposal.agentCategory,
