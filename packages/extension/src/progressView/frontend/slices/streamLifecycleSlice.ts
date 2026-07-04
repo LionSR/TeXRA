@@ -43,11 +43,14 @@ function mergeBackendOwnedState(
     });
   }
   // Overlay every backend-owned field from metadata (its own keys include
-  // every BackendOwnedFieldsSchema field plus `kind`, which the guard above
-  // already ensures matches `existing.kind`) so a new field added to that
-  // schema is picked up here without also updating this call site.
+  // every required BackendOwnedFieldsSchema field plus `kind`, which the guard
+  // above already ensures matches `existing.kind`) so a new field added to
+  // that schema is picked up here without also updating this call site.
   return create(existing, (draft) => {
     Object.assign(draft, metadata);
+    if (!Object.hasOwn(metadata, 'substate')) {
+      delete draft.substate;
+    }
   });
 }
 

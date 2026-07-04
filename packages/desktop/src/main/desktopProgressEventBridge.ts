@@ -11,12 +11,10 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   STREAM_PHASE,
-  streamPhaseToStreamStatus,
-  streamStatusToPhase,
   type ProgressViewOutboundMessage,
   type RestoredStreamSnapshot,
   type StreamTabId,
@@ -34,6 +32,8 @@ import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 export interface DesktopProgressEventBridgeOptions {
   /** The owning bridge's progress-view state. */
   state: ProgressViewState;
+  /** Session-owned stream status plane for this desktop window. */
+  streamStatus: Pick<StreamStatusMachine, 'get' | 'transition'>;
   /** Snapshot store for cross-launch persistence (may be undefined). */
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   /** Sends a progress-view outbound message to the renderer. */
@@ -181,10 +181,10 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
         parentStreamId: snapshot.parentStreamId,
         description: snapshot.description,
       });
-      StreamStatusService.set(
+      this.opts.streamStatus.transition(
         snapshot.streamId,
-        streamPhaseToStreamStatus(snapshot.lastKnownStatus),
-        { emit: false },
+        snapshot.lastKnownStatus,
+        'restart-repair',
       );
     }
   }
@@ -390,7 +390,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     const taskState = this.opts.state.snapshots.getTaskState(streamId);
     const info = buildStreamInfo(this.opts.state, streamId, 'all');
     const restored = this.restoredStreams.get(streamId);
-    const currentStatus = StreamStatusService.get(streamId);
+    const currentStatus = this.opts.streamStatus.get(streamId);
     const snapshot: RestoredStreamSnapshot = {
       streamId,
       label: info?.label ?? restored?.label ?? streamId,
@@ -401,9 +401,8 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
         AgentCategory.Workflow,
       inputFile: info?.inputFile || restored?.inputFile,
       instruction: taskState?.agentConfig.instruction || restored?.instruction,
-      lastKnownStatus: currentStatus
-        ? streamStatusToPhase(currentStatus)
-        : (restored?.lastKnownStatus ?? STREAM_PHASE.COMPLETED),
+      lastKnownStatus:
+        currentStatus ?? restored?.lastKnownStatus ?? STREAM_PHASE.COMPLETED,
       description: info?.description ?? restored?.description,
       executionId: info?.executionId ?? restored?.executionId,
       parentStreamId: info?.parentStreamId ?? restored?.parentStreamId,

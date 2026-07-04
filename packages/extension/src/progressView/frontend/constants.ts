@@ -1,5 +1,5 @@
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { STREAM_STATUS, type AgentCategoryFilter } from '@shared/schemas';
+import { STREAM_PHASE, type AgentCategoryFilter } from '@shared/schemas';
 
 /**
  * DOM element IDs used across the progress view.
@@ -52,10 +52,8 @@ export const GROUP_DOM_IDS = Object.freeze({
 });
 
 export const ACTIVE_STREAM_STATUSES: ReadonlySet<string> = new Set([
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.RESUMING,
-  STREAM_STATUS.WAITING,
+  STREAM_PHASE.RUNNING,
+  STREAM_PHASE.WAITING,
 ]);
 
 const STOP_STREAM_BUTTON = Object.freeze({

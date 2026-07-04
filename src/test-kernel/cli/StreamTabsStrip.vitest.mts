@@ -15,6 +15,7 @@ import {
 } from '@cli/chat/tui/panes/StreamTabsStrip';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import {
+  STREAM_PHASE,
   STREAM_STATUS,
   type ActiveChildInfo,
   type StreamTabId,
@@ -336,7 +337,7 @@ describe('CLI stream tabs strip', () => {
       [
         root,
         slice('root', {
-          status: STREAM_STATUS.STOPPED,
+          status: STREAM_PHASE.CANCELLED,
           childStreams: [
             child({
               executionId: 'r1',
@@ -346,7 +347,7 @@ describe('CLI stream tabs strip', () => {
           ],
         }),
       ],
-      [child1, slice('child-1', { status: STREAM_STATUS.STOPPED })],
+      [child1, slice('child-1', { status: STREAM_PHASE.CANCELLED })],
     ]);
 
     const items = streamTabsDisplayItems({
@@ -379,7 +380,7 @@ describe('CLI stream tabs strip', () => {
           ],
         }),
       ],
-      [child1, slice('child-1', { status: STREAM_STATUS.ERROR })],
+      [child1, slice('child-1', { status: STREAM_PHASE.FAILED })],
     ]);
 
     const items = streamTabsDisplayItems({

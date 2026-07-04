@@ -163,6 +163,7 @@ export async function handleTuiSlashCommand(
           approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
+          substate: slice?.substate,
           goal: activeStreamId
             ? GoalStore.getForStream(activeStreamId)
             : undefined,

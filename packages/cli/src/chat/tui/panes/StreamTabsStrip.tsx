@@ -190,6 +190,7 @@ export function streamTabsDisplayItems(init: {
     const slice = view.slice;
     const status = formatStreamStatusLabel(slice?.status, {
       style: 'cliCompact',
+      ...(slice?.substate ? { substate: slice.substate } : {}),
     });
     return {
       id: view.id,

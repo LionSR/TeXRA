@@ -7,7 +7,11 @@ import {
   OutputFileInfoSchema,
   roundIndexedRecord,
 } from './output';
-import { STREAM_STATUS, StreamStatusSchema } from './stream';
+import {
+  STREAM_STATUS,
+  StreamLifecycleStatusSchema,
+  StreamSubstateSchema,
+} from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
@@ -56,7 +60,8 @@ export const DEFAULT_FINISHED_CHILD_COUNT = 0;
 // Contains only backend-owned fields that mergeBackendOwnedState() actually reads.
 
 const BackendOwnedFieldsSchema = z.object({
-  status: StreamStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
+  status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
+  substate: StreamSubstateSchema.optional(),
   lastTimestamp: z.number().optional(),
   conversationProgress: ConversationProgressSchema.prefault(
     DEFAULT_CONVERSATION_PROGRESS,

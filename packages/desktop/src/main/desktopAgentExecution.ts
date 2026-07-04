@@ -34,7 +34,6 @@ import {
   getAllActiveExecutionIds,
   SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import {
   sendFollowUp,
@@ -55,15 +54,14 @@ import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   STREAM_PHASE,
-  STREAM_STATUS,
   type AgentProposalPermission,
   type AgentCategoryFilter,
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
   type StreamPhase,
+  type StreamSubstate,
   type StreamTabId,
-  streamStatusesWithTrait,
 } from '@shared/schemas';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
@@ -113,7 +111,6 @@ const DESKTOP_UNAVAILABLE_TOOLS: readonly DesktopUnavailableTool[] = [
   'inline_comment',
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
 ];
-const RESTART_REPAIR_STATUSES = streamStatusesWithTrait('inFlight');
 const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
   STREAM_PHASE.RUNNING,
   STREAM_PHASE.WAITING,
@@ -305,6 +302,7 @@ export class DesktopProgressBridge {
     // → rail-update translation.  See #6329.
     this.progressEvents = createDesktopProgressEventBridge({
       state: this.state,
+      streamStatus: this.session.status,
       streamSnapshotStore: options.streamSnapshotStore,
       sendMessage: (message) => this.send(message),
       logger: this.logger,
@@ -647,25 +645,58 @@ export class DesktopProgressBridge {
     waitingStreams: ReadonlySet<StreamTabId>,
   ): StreamTabId[] {
     const affectedStreams: StreamTabId[] = [];
+    const statusEmitOptions = {
+      runtimeHost: this.runtimeHost,
+      trace: this.logger,
+    };
     for (const streamId of repairStreams) {
-      const currentStatus = StreamStatusService.get(streamId);
-      if (!currentStatus || !RESTART_REPAIR_STATUSES.has(currentStatus)) {
+      const currentStatus = this.session.status.get(streamId);
+      if (!currentStatus || !RESTART_REPAIR_PHASES.has(currentStatus)) {
         continue;
       }
       if (waitingStreams.has(streamId)) {
-        StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
-          emit: false,
-        });
+        this.session.status.transition(
+          streamId,
+          STREAM_PHASE.WAITING,
+          'restart-repair',
+          statusEmitOptions,
+        );
         this.logger.debug(
           `Stream ${streamId} restored to WAITING after reload`,
         );
         continue;
       }
-      StreamStatusService.set(streamId, STREAM_STATUS.ERROR, { emit: false });
-      affectedStreams.push(streamId);
-      this.logger.debug(
-        `Stream ${streamId} set to ERROR during desktop restart recovery`,
+      let markedFailed = this.session.status.transition(
+        streamId,
+        STREAM_PHASE.FAILED,
+        'restart-repair',
+        statusEmitOptions,
       );
+      if (!markedFailed && currentStatus === STREAM_PHASE.WAITING) {
+        markedFailed =
+          this.session.status.transition(
+            streamId,
+            STREAM_PHASE.RUNNING,
+            'resume',
+            statusEmitOptions,
+          ) &&
+          this.session.status.transition(
+            streamId,
+            STREAM_PHASE.FAILED,
+            'lifecycle',
+            statusEmitOptions,
+          );
+      }
+      if (markedFailed) {
+        affectedStreams.push(streamId);
+        this.logger.debug(
+          `Stream ${streamId} set to FAILED during desktop restart recovery`,
+        );
+      } else {
+        this.logger.warn(
+          `Failed to repair stream ${streamId} during desktop restart recovery`,
+        );
+      }
     }
     return affectedStreams;
   }
@@ -681,10 +712,10 @@ export class DesktopProgressBridge {
       if (executionId && activeExecutionIds.has(executionId)) {
         continue;
       }
-      const currentStatus = StreamStatusService.get(streamId);
+      const currentStatus = this.session.status.get(streamId);
       if (
         RESTART_REPAIR_PHASES.has(snapshot.lastKnownStatus) ||
-        (currentStatus != null && RESTART_REPAIR_STATUSES.has(currentStatus))
+        (currentStatus != null && RESTART_REPAIR_PHASES.has(currentStatus))
       ) {
         repairStreams.add(streamId);
       }
@@ -763,12 +794,12 @@ export class DesktopProgressBridge {
         this.syncFullView();
       }
     } catch (error) {
-      const waitingStreams = new Set(
-        [...this.progressEvents.restoredStreams.keys()].filter(
-          (streamId) =>
-            StreamStatusService.get(streamId) === STREAM_STATUS.WAITING,
-        ),
-      );
+      const waitingStreams = new Set<StreamTabId>();
+      for (const [streamId, status] of this.session.status.entries()) {
+        if (status === STREAM_PHASE.WAITING) {
+          waitingStreams.add(streamId);
+        }
+      }
       this.progressEvents.hydrateRestoredStreams();
       const activeExecutionIds = new Set(getAllActiveExecutionIds());
       const allExecutionIds = this.getRestartRepairExecutionIdMap();
@@ -823,10 +854,20 @@ export class DesktopProgressBridge {
     this.progressEvents.onProgressEvent(event, payload);
   }
 
+  private streamStatusSnapshot(): Map<StreamTabId, StreamPhase> {
+    return this.session.status.getAll();
+  }
+
+  private streamSubstateSnapshot(): Map<StreamTabId, StreamSubstate> {
+    return this.session.status.getAllSubstates();
+  }
+
   syncFullView(): void {
     const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.backend.eventHandler.getAllStreamStatuses(),
+      this.streamStatusSnapshot(),
+      undefined,
+      this.streamSubstateSnapshot(),
     );
     this.syncStreamContent(activeStream);
   }
@@ -842,7 +883,9 @@ export class DesktopProgressBridge {
     this.state.activeStream = streamId;
     this.backend.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.backend.eventHandler.getAllStreamStatuses(),
+      this.streamStatusSnapshot(),
+      undefined,
+      this.streamSubstateSnapshot(),
     );
     this.backend.webviewUpdater.setActiveStream(streamId);
     this.syncStreamContent(streamId);
@@ -852,7 +895,9 @@ export class DesktopProgressBridge {
     this.state.agentCategoryFilter = filter;
     const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.backend.eventHandler.getAllStreamStatuses(),
+      this.streamStatusSnapshot(),
+      undefined,
+      this.streamSubstateSnapshot(),
     );
     this.syncStreamContent(activeStream);
   }
@@ -881,7 +926,9 @@ export class DesktopProgressBridge {
     });
     const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.backend.eventHandler.getAllStreamStatuses(),
+      this.streamStatusSnapshot(),
+      undefined,
+      this.streamSubstateSnapshot(),
     );
     this.syncStreamContent(activeStream);
   }
@@ -922,7 +969,9 @@ export class DesktopProgressBridge {
     this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
     this.backend.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.backend.eventHandler.getAllStreamStatuses(),
+      this.streamStatusSnapshot(),
+      undefined,
+      this.streamSubstateSnapshot(),
     );
   }
 

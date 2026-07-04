@@ -11,7 +11,7 @@ import {
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
-import { STREAM_STATUS } from '@shared/schemas';
+import { STREAM_PHASE, STREAM_STATUS } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
 const COMPLETED_REVIEW_FOLLOWUP =
@@ -585,7 +585,7 @@ describe('CLI StatusBar display model', () => {
     ).toBe('exit');
 
     const baseDisplayInput = statusInput({
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.CANCELLED,
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
       ctrlCAction: 'stop root',
@@ -627,11 +627,11 @@ describe('CLI StatusBar display model', () => {
     } as StreamSlice;
     const childSlice = {
       streamId: child,
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.CANCELLED,
     } as StreamSlice;
     const grandchildSlice = {
       streamId: grandchild,
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.CANCELLED,
     } as StreamSlice;
     const streams = new Map<StreamSlice['streamId'], StreamSlice>([
       [root, rootSlice],
@@ -777,11 +777,11 @@ describe('CLI StatusBar display model', () => {
 
     const stoppedRootSlice = {
       streamId: root,
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.CANCELLED,
     } as StreamSlice;
     const stoppedChildSlice = {
       streamId: child,
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.CANCELLED,
     } as StreamSlice;
     const stoppedStreams = new Map<StreamSlice['streamId'], StreamSlice>([
       [root, stoppedRootSlice],
@@ -834,7 +834,7 @@ describe('CLI StatusBar display model', () => {
       status: STREAM_STATUS.RUNNING,
     } as StreamSlice;
     const childSlice = {
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.CANCELLED,
     } as StreamSlice;
     const waitingChildSlice = {
       status: STREAM_STATUS.WAITING,

@@ -1,6 +1,5 @@
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
@@ -9,10 +8,11 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
-  STREAM_STATUS,
+  STREAM_PHASE,
   type ConversationProgress,
   type GoalStatus,
-  type StreamStatus,
+  type StreamPhase,
+  type StreamSubstate,
   type StreamTabId,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
@@ -106,8 +106,10 @@ export class ProgressEventHandler {
         // Stream lifecycle — these handlers use this.state/this.webviewUpdater
         // (same objects as ctx), so ctx is unused but required by the signature.
         setActiveStream: (_, payload) => this.handleSetActiveStream(payload),
-        updateStreamStatus: (_, { streamId, status, previousStatus }) =>
-          this.setStreamStatus(streamId, status, previousStatus),
+        updateStreamStatus: (
+          _,
+          { streamId, status, previousStatus, substate },
+        ) => this.setStreamStatus(streamId, status, previousStatus, substate),
         setTaskState: (_, data) => this.handleSetTaskState(data),
         updateConversationProgress: (_, data) =>
           this.handleUpdateConversationProgress(data),
@@ -346,7 +348,9 @@ export class ProgressEventHandler {
     if (!wasKnownStream || filterChanged) {
       this.webviewUpdater.sendStreamMetadata(
         this.state,
-        StreamStatusService.getAll(),
+        this.state.streamStatus.getAll(),
+        undefined,
+        this.state.streamStatus.getAllSubstates(),
       );
     } else if (shouldSwitch) {
       this.webviewUpdater.setActiveStream(streamId);
@@ -386,7 +390,9 @@ export class ProgressEventHandler {
       // including for background subagents that are not the active stream.
       this.webviewUpdater.sendStreamMetadata(
         this.state,
-        StreamStatusService.getAll(),
+        this.state.streamStatus.getAll(),
+        undefined,
+        this.state.streamStatus.getAllSubstates(),
       );
     }
   }
@@ -466,9 +472,14 @@ export class ProgressEventHandler {
   }
 
   private markAllRunningTasksAsCancelled(): void {
-    for (const [stream, status] of StreamStatusService.entries()) {
-      if (status === STREAM_STATUS.RUNNING) {
-        StreamStatusService.set(stream, STREAM_STATUS.STOPPED, { emit: false });
+    for (const [stream, status] of this.state.streamStatus.entries()) {
+      if (status === STREAM_PHASE.RUNNING) {
+        this.state.streamStatus.transition(
+          stream,
+          STREAM_PHASE.CANCELLED,
+          'restart-repair',
+          { trace: this.logger },
+        );
       }
     }
   }
@@ -563,13 +574,12 @@ export class ProgressEventHandler {
 
   setStreamStatus(
     streamId: StreamTabId,
-    status: StreamStatus,
-    previousStatus?: StreamStatus,
+    status: StreamPhase,
+    // Kept until Stage 5 removes the legacy bus projection; the status machine
+    // now owns repair writes, so this projection no longer consumes it.
+    _previousStatus?: StreamPhase,
+    substate?: StreamSubstate,
   ): void {
-    if (previousStatus === undefined) {
-      StreamStatusService.set(streamId, status, { emit: false });
-    }
-
     // Keep memory bounded by stream status:
     //  - returning to in-flight (e.g., background resume) eagerly rehydrates
     //    previously-released entries so pending appends from the agent
@@ -594,12 +604,28 @@ export class ProgressEventHandler {
 
     if (isNewStream) {
       this.maybeUpdateFilterForCategory(this.getStreamCategory(streamId));
-      const statusesForRefresh = StreamStatusService.getAll();
+      const statusesForRefresh = this.state.streamStatus.getAll();
       statusesForRefresh.set(streamId, status);
-      this.webviewUpdater.sendStreamMetadata(this.state, statusesForRefresh);
+      const substatesForRefresh = this.state.streamStatus.getAllSubstates();
+      if (substate) {
+        substatesForRefresh.set(streamId, substate);
+      } else {
+        substatesForRefresh.delete(streamId);
+      }
+      this.webviewUpdater.sendStreamMetadata(
+        this.state,
+        statusesForRefresh,
+        undefined,
+        substatesForRefresh,
+      );
     } else {
       const lastTimestamp = this.state.streamLogs.getLastTimestamp(streamId);
-      this.webviewUpdater.updateStreamStatus(streamId, status, lastTimestamp);
+      this.webviewUpdater.updateStreamStatus(
+        streamId,
+        status,
+        lastTimestamp,
+        substate,
+      );
     }
   }
 
@@ -611,29 +637,39 @@ export class ProgressEventHandler {
     );
   }
 
-  getAllStreamStatuses(): Map<StreamTabId, StreamStatus> {
-    return StreamStatusService.getAll();
+  getAllStreamStatuses(): Map<StreamTabId, StreamPhase> {
+    return this.state.streamStatus.getAll();
+  }
+
+  getAllStreamSubstates(): Map<StreamTabId, StreamSubstate> {
+    return this.state.streamStatus.getAllSubstates();
   }
 
   resetRunningTasksToError(waitingStreams: Set<StreamTabId>): StreamTabId[] {
     const affectedStreams: StreamTabId[] = [];
 
-    for (const [streamId, status] of StreamStatusService.entries()) {
-      if (status !== STREAM_STATUS.RUNNING) continue;
+    for (const [streamId, status] of this.state.streamStatus.entries()) {
+      if (status !== STREAM_PHASE.RUNNING) continue;
 
       if (waitingStreams.has(streamId)) {
-        StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
-          emit: false,
-        });
+        this.state.streamStatus.transition(
+          streamId,
+          STREAM_PHASE.WAITING,
+          'restart-repair',
+          { trace: this.logger },
+        );
         this.logger.debug(
           `Stream ${streamId} restored to WAITING after reload`,
         );
         continue;
       }
 
-      StreamStatusService.set(streamId, STREAM_STATUS.ERROR, {
-        emit: false,
-      });
+      this.state.streamStatus.transition(
+        streamId,
+        STREAM_PHASE.FAILED,
+        'restart-repair',
+        { trace: this.logger },
+      );
       affectedStreams.push(streamId);
       this.logger.debug(
         `Stream ${streamId} set to ERROR during restart recovery`,

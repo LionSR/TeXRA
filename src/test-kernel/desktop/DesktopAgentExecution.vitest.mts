@@ -2,7 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent state
+import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
+import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 
 // Local imports - progress schemas
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
@@ -71,8 +73,15 @@ type BridgeWithSession = TestableBridge & {
     coordinators: {
       cleanupAllRequests(): void;
     };
+    status: StreamStatusMachine;
   };
 };
+
+function bridgeStatus(
+  bridge: TestableBridge,
+): BridgeWithSession['session']['status'] {
+  return (bridge as BridgeWithSession).session.status;
+}
 
 type DesktopExecution = {
   handleExecute(message: unknown): Promise<void>;
@@ -160,6 +169,7 @@ type ProgressMessage = {
 function mockLoggerModule(): void {
   vi.doMock('@logger', () => ({
     createChannelTrace: () => ({
+      emit: vi.fn(),
       debug: () => {},
       info: () => {},
       warn: () => {},
@@ -695,33 +705,33 @@ describe('DesktopProgressBridge', () => {
         }),
       ]),
     });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       await vi.waitFor(() => {
         expect(detectWaitingStreams).toHaveBeenCalledOnce();
-        expect(StreamStatusService.get('waiting-stream')).toBe(
+        expect(bridgeStatus(bridge).get('waiting-stream')).toBe(
           STREAM_STATUS.WAITING,
         );
-        expect(StreamStatusService.get('dead-stream')).toBe(
-          STREAM_STATUS.ERROR,
+        expect(bridgeStatus(bridge).get('dead-stream')).toBe(
+          STREAM_PHASE.FAILED,
         );
       });
 
-      const streamSync = progressMessages(
-        messages,
-        PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-      ).at(-1);
-      expect(streamSync?.streamStates?.['waiting-stream']).toMatchObject({
-        status: STREAM_STATUS.WAITING,
-      });
-      expect(streamSync?.streamStates?.['dead-stream']).toMatchObject({
-        status: STREAM_STATUS.ERROR,
+      await vi.waitFor(() => {
+        const streamSync = progressMessages(
+          messages,
+          PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        ).at(-1);
+        expect(streamSync?.streamStates?.['waiting-stream']).toMatchObject({
+          status: STREAM_STATUS.WAITING,
+        });
+        expect(streamSync?.streamStates?.['dead-stream']).toMatchObject({
+          status: STREAM_PHASE.FAILED,
+        });
       });
     } finally {
-      StreamStatusService.clear('waiting-stream', { emit: false });
-      StreamStatusService.clear('dead-stream', { emit: false });
+      bridgeStatus(bridge).clearStream('waiting-stream');
+      bridgeStatus(bridge).clearStream('dead-stream');
       bridge.dispose();
     }
   });
@@ -782,18 +792,42 @@ describe('DesktopProgressBridge', () => {
         }),
       ]),
     });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       await vi.waitFor(() => {
         expect(detectWaitingStreams).toHaveBeenCalledOnce();
-        expect(StreamStatusService.get('broken-stream')).toBe(
-          STREAM_STATUS.ERROR,
+        expect(bridgeStatus(bridge).get('broken-stream')).toBe(
+          STREAM_PHASE.FAILED,
         );
       });
     } finally {
-      StreamStatusService.clear('broken-stream', { emit: false });
+      bridgeStatus(bridge).clearStream('broken-stream');
+      bridge.dispose();
+    }
+  });
+
+  it('marks restored waiting streams as failed when no waiting session remains', async () => {
+    const detectWaitingStreams = vi.fn(async () => new Set<StreamTabId>());
+    const bridge = await createBridge([], {
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'stale-waiting-stream',
+          executionId: 'abc123',
+          lastKnownStatus: STREAM_PHASE.WAITING,
+        }),
+      ]),
+    });
+
+    try {
+      await vi.waitFor(() => {
+        expect(detectWaitingStreams).toHaveBeenCalledOnce();
+        expect(bridgeStatus(bridge).get('stale-waiting-stream')).toBe(
+          STREAM_PHASE.FAILED,
+        );
+      });
+    } finally {
+      bridgeStatus(bridge).clearStream('stale-waiting-stream');
       bridge.dispose();
     }
   });
@@ -823,22 +857,20 @@ describe('DesktopProgressBridge', () => {
         }),
       ]),
     });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       await vi.waitFor(() => {
         expect(detectWaitingStreams).toHaveBeenCalledOnce();
-        expect(StreamStatusService.get('active-stream')).toBe(
+        expect(bridgeStatus(bridge).get('active-stream')).toBe(
           STREAM_STATUS.RUNNING,
         );
-        expect(StreamStatusService.get('dead-stream')).toBe(
-          STREAM_STATUS.ERROR,
+        expect(bridgeStatus(bridge).get('dead-stream')).toBe(
+          STREAM_PHASE.FAILED,
         );
       });
     } finally {
-      StreamStatusService.clear('active-stream', { emit: false });
-      StreamStatusService.clear('dead-stream', { emit: false });
+      bridgeStatus(bridge).clearStream('active-stream');
+      bridgeStatus(bridge).clearStream('dead-stream');
       bridge.dispose();
     }
   });
@@ -874,22 +906,20 @@ describe('DesktopProgressBridge', () => {
         }),
       ]),
     });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       await vi.waitFor(() => {
         expect(detectWaitingStreams).toHaveBeenCalledOnce();
-        expect(StreamStatusService.get('active-stream')).toBe(
+        expect(bridgeStatus(bridge).get('active-stream')).toBe(
           STREAM_STATUS.RUNNING,
         );
-        expect(StreamStatusService.get('dead-stream')).toBe(
-          STREAM_STATUS.ERROR,
+        expect(bridgeStatus(bridge).get('dead-stream')).toBe(
+          STREAM_PHASE.FAILED,
         );
       });
     } finally {
-      StreamStatusService.clear('active-stream', { emit: false });
-      StreamStatusService.clear('dead-stream', { emit: false });
+      bridgeStatus(bridge).clearStream('active-stream');
+      bridgeStatus(bridge).clearStream('dead-stream');
       bridge.dispose();
     }
   });
@@ -912,8 +942,6 @@ describe('DesktopProgressBridge', () => {
         }),
       ]),
     });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
@@ -921,13 +949,13 @@ describe('DesktopProgressBridge', () => {
       finishDetection(new Set<StreamTabId>(['race-stream']));
 
       await vi.waitFor(() => {
-        expect(StreamStatusService.get('race-stream')).toBe(
+        expect(bridgeStatus(bridge).get('race-stream')).toBe(
           STREAM_STATUS.RUNNING,
         );
       });
     } finally {
       finishDetection(new Set());
-      StreamStatusService.clear('race-stream', { emit: false });
+      bridgeStatus(bridge).clearStream('race-stream');
       bridge.dispose();
     }
   });
@@ -998,15 +1026,13 @@ describe('DesktopProgressBridge', () => {
       .spyOn(streamLogs, 'endRunningGroupsForStreams')
       .mockRejectedValueOnce(new Error('group close failed'))
       .mockResolvedValueOnce(['waiting-stream']);
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
       finishDetection(new Set<StreamTabId>(['waiting-stream']));
 
       await vi.waitFor(() => {
-        expect(StreamStatusService.get('waiting-stream')).toBe(
+        expect(bridgeStatus(bridge).get('waiting-stream')).toBe(
           STREAM_STATUS.WAITING,
         );
         expect(closeSpy).toHaveBeenCalledTimes(2);
@@ -1017,7 +1043,7 @@ describe('DesktopProgressBridge', () => {
       });
     } finally {
       finishDetection(new Set());
-      StreamStatusService.clear('waiting-stream', { emit: false });
+      bridgeStatus(bridge).clearStream('waiting-stream');
       bridge.dispose();
     }
   });
@@ -1033,18 +1059,16 @@ describe('DesktopProgressBridge', () => {
         }),
       ]),
     });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       await vi.waitFor(() => {
         expect(detectWaitingStreams).toHaveBeenCalledWith(new Map());
-        expect(StreamStatusService.get('no-execution-stream')).toBe(
-          STREAM_STATUS.ERROR,
+        expect(bridgeStatus(bridge).get('no-execution-stream')).toBe(
+          STREAM_PHASE.FAILED,
         );
       });
     } finally {
-      StreamStatusService.clear('no-execution-stream', { emit: false });
+      bridgeStatus(bridge).clearStream('no-execution-stream');
       bridge.dispose();
     }
   });
@@ -1972,8 +1996,6 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       runAgent,
     });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
@@ -1993,7 +2015,7 @@ describe('DesktopProgressBridge', () => {
       );
       expectWorkflowResume(runAgent, taskState, executionId);
     } finally {
-      StreamStatusService.clear('stream-1', { emit: false });
+      bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }
   });
@@ -2060,8 +2082,6 @@ describe('DesktopProgressBridge', () => {
         }),
       ]),
     });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
@@ -2080,7 +2100,7 @@ describe('DesktopProgressBridge', () => {
       );
       expectWorkflowResume(runAgent, taskState, executionId);
     } finally {
-      StreamStatusService.clear('stream-1', { emit: false });
+      bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }
   });
@@ -2106,8 +2126,6 @@ describe('DesktopProgressBridge', () => {
     });
     const { ToolUseFollowUpQueue } =
       await import('@agent/followUp/ToolUseFollowUpQueueManager');
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
     const taskState = {
       agentConfig: {
         agent: 'search',
@@ -2165,7 +2183,7 @@ describe('DesktopProgressBridge', () => {
       });
     } finally {
       ToolUseFollowUpQueue.release('stream-1');
-      StreamStatusService.clear('stream-1', { emit: false });
+      bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }
   });
@@ -2192,8 +2210,6 @@ describe('DesktopProgressBridge', () => {
     });
     const { ToolUseFollowUpQueue } =
       await import('@agent/followUp/ToolUseFollowUpQueueManager');
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       bridge.handleProgressEvent('setTaskState', {
@@ -2217,10 +2233,10 @@ describe('DesktopProgressBridge', () => {
       expect(ToolUseFollowUpQueue.getAll('stream-1')).toEqual([
         'queued follow-up',
       ]);
-      expect(StreamStatusService.get('stream-1')).toBe(STREAM_STATUS.WAITING);
+      expect(bridgeStatus(bridge).get('stream-1')).toBe(STREAM_STATUS.WAITING);
     } finally {
       ToolUseFollowUpQueue.release('stream-1');
-      StreamStatusService.clear('stream-1', { emit: false });
+      bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }
   });
@@ -2228,18 +2244,18 @@ describe('DesktopProgressBridge', () => {
   it('does not launch a duplicate resume for active streams', async () => {
     const retrieveSessionResumeData = vi.fn(async () => null);
     const bridge = await createBridge([], { retrieveSessionResumeData });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
-      StreamStatusService.set('stream-1', STREAM_STATUS.RUNNING, {
-        emit: false,
-      });
+      seedStreamStatusForTest(
+        bridgeStatus(bridge),
+        'stream-1',
+        STREAM_STATUS.RUNNING,
+      );
 
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
       expect(retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
-      StreamStatusService.clear('stream-1', { emit: false });
+      bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }
   });
@@ -2270,8 +2286,6 @@ describe('DesktopProgressBridge', () => {
       };
     });
     const bridge = await createBridge([], { retrieveSessionResumeData });
-    const { StreamStatusService } =
-      await import('@agent/runtime/StreamStatusService');
 
     try {
       bridge.handleProgressEvent('setTaskState', {
@@ -2293,7 +2307,7 @@ describe('DesktopProgressBridge', () => {
       await expect(firstResume).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledTimes(1);
     } finally {
-      StreamStatusService.clear('stream-1', { emit: false });
+      bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }
   });

@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import {
   canAcquireStreamReservation,
-  canReleaseStreamReservation,
   canTransitionStreamPhase,
   deriveRunOutcome,
   groupEndStatusForOutcome,
@@ -25,7 +24,6 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_STATUS,
-  STREAM_SUBSTATE,
   StreamPhaseSchema,
   streamStatusesWithTrait,
   type RunOutcome,
@@ -115,8 +113,10 @@ describe('stream phase transition table', () => {
       [STREAM_TRANSITION_CAUSE.RESUME]: [],
       [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
       [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [
+        STREAM_PHASE.RUNNING,
         STREAM_PHASE.WAITING,
         STREAM_PHASE.FAILED,
+        STREAM_PHASE.CANCELLED,
       ],
     },
     [STREAM_PHASE.WAITING]: {
@@ -124,7 +124,7 @@ describe('stream phase transition table', () => {
       [STREAM_TRANSITION_CAUSE.WAIT]: [],
       [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
       [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
-      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [],
+      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [STREAM_PHASE.WAITING],
     },
     [STREAM_PHASE.COMPLETED]: {
       [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [],
@@ -161,12 +161,17 @@ describe('stream phase transition table', () => {
     }
   });
 
-  it('admits only lifecycle starts from idle', () => {
+  it('admits only named start causes from idle', () => {
     for (const cause of causes) {
       for (const to of phases) {
         expect(canTransitionStreamPhase(undefined, to, cause)).toBe(
-          cause === STREAM_TRANSITION_CAUSE.LIFECYCLE &&
-            to === STREAM_PHASE.RUNNING,
+          (cause === STREAM_TRANSITION_CAUSE.LIFECYCLE &&
+            to === STREAM_PHASE.RUNNING) ||
+            (cause === STREAM_TRANSITION_CAUSE.RESUME &&
+              to === STREAM_PHASE.RUNNING) ||
+            (cause === STREAM_TRANSITION_CAUSE.USER_STOP &&
+              to === STREAM_PHASE.CANCELLED) ||
+            cause === STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
         );
       }
     }
@@ -179,19 +184,6 @@ describe('stream phase transition table', () => {
     expect(canAcquireStreamReservation(STREAM_PHASE.COMPLETED)).toBe(true);
     expect(canAcquireStreamReservation(STREAM_PHASE.CANCELLED)).toBe(true);
     expect(canAcquireStreamReservation(STREAM_PHASE.FAILED)).toBe(true);
-
-    for (const phase of [undefined, ...phases]) {
-      for (const substate of [
-        undefined,
-        STREAM_SUBSTATE.STARTING,
-        STREAM_SUBSTATE.RESUMING,
-      ]) {
-        expect(canReleaseStreamReservation({ phase, substate })).toBe(
-          phase === STREAM_PHASE.RUNNING &&
-            substate === STREAM_SUBSTATE.STARTING,
-        );
-      }
-    }
   });
 });
 

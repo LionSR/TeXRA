@@ -50,7 +50,8 @@ export const streamTabStyles = css`
     border-left-color: var(--color-success);
   }
 
-  .tab-container.status-error {
+  .tab-container.status-error,
+  .tab-container.status-failed {
     border-left-color: var(--color-error);
   }
 
@@ -60,11 +61,14 @@ export const streamTabStyles = css`
   }
 
   .tab-container.status-stopped,
+  .tab-container.status-completed,
+  .tab-container.status-cancelled,
   .tab-container.status-ready {
     border-left-color: var(--color-border);
   }
 
-  .tab-container.status-initializing {
+  .tab-container.status-initializing,
+  .tab-container.status-starting {
     border-left-color: var(--color-warning);
   }
 

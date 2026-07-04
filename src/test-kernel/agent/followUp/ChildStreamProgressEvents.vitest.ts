@@ -2,12 +2,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
+  STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
   type StreamTabId,
@@ -63,7 +68,7 @@ describe('child stream progress events', () => {
       failedChildStreamId,
       normalizedErrorChildStreamId,
     ]) {
-      StreamStatusService.clear(streamId, { emit: false });
+      clearStreamStatusForTest(StreamStatusService, streamId);
     }
   });
 
@@ -121,7 +126,7 @@ describe('child stream progress events', () => {
       payload: {
         streamId: childStreamId,
         status: STREAM_STATUS.RUNNING,
-        previousStatus: STREAM_STATUS.READY,
+        cause: 'lifecycle',
       },
     });
     expect(events[4].payload).toEqual({
@@ -144,8 +149,9 @@ describe('child stream progress events', () => {
       event: 'updateStreamStatus',
       payload: {
         streamId: childStreamId,
-        status: STREAM_STATUS.READY,
+        status: STREAM_PHASE.COMPLETED,
         previousStatus: STREAM_STATUS.RUNNING,
+        cause: 'lifecycle',
       },
     });
     expect(events[8]).toEqual({
@@ -181,10 +187,10 @@ describe('child stream progress events', () => {
     expect(statuses).toEqual([
       STREAM_STATUS.WAITING,
       STREAM_STATUS.RUNNING,
-      STREAM_STATUS.ERROR,
+      STREAM_PHASE.FAILED,
     ]);
     expect(StreamStatusService.get(loopChildStreamId)).toBe(
-      STREAM_STATUS.ERROR,
+      STREAM_PHASE.FAILED,
     );
     expect(active.events.at(-1)).toEqual({
       event: 'updateActiveSubagents',
@@ -211,9 +217,11 @@ describe('child stream progress events', () => {
     const handle =
       defaultSession().executions.getAgentHandleByStream(stoppedChildStreamId);
     expect(handle).toBeDefined();
-    StreamStatusService.set(stoppedChildStreamId, STREAM_STATUS.STOPPED, {
-      emit: false,
-    });
+    seedStreamStatusForTest(
+      StreamStatusService,
+      stoppedChildStreamId,
+      STREAM_PHASE.CANCELLED,
+    );
     active.events.splice(0);
 
     childStream.waitForInput();
@@ -222,7 +230,7 @@ describe('child stream progress events', () => {
     childStream.finalize({ status: STREAM_STATUS.ERROR });
 
     expect(StreamStatusService.get(stoppedChildStreamId)).toBe(
-      STREAM_STATUS.STOPPED,
+      STREAM_PHASE.CANCELLED,
     );
     expect(
       active.events.filter((entry) => entry.event === 'updateStreamStatus'),
@@ -303,7 +311,7 @@ describe('child stream progress events', () => {
     });
 
     expect(StreamStatusService.get(normalizedErrorChildStreamId)).toBe(
-      STREAM_STATUS.ERROR,
+      STREAM_PHASE.FAILED,
     );
     await expect(handle?.result).resolves.toMatchObject({
       type: 'result',

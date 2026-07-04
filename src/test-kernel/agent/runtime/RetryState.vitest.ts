@@ -2,6 +2,10 @@
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports - agent runtime
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { NonIterableObject } from '@agent/node';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
@@ -27,6 +31,7 @@ import {
 } from '@agent/runtime/AgentRuntimeHost';
 import { attachFlowAutoRetryRequired } from '@common/errors/sdkErrorUtils';
 import {
+  STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
   type StreamTabId,
@@ -203,17 +208,19 @@ describe('RetryState', () => {
     waitForRetry.mockResolvedValueOnce({ action: 'retry' });
 
     try {
-      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
-      StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
-        emit: false,
-      });
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(
+        StreamStatusService,
+        streamId,
+        STREAM_PHASE.CANCELLED,
+      );
 
       await withRetryRunContext(streamId, waitForRetry, () =>
         node.promptFor(new Error('temporary provider failure')),
       );
 
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
-      expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(waitForRetry).toHaveBeenCalledWith(
         streamId,
         expect.objectContaining({
@@ -221,8 +228,8 @@ describe('RetryState', () => {
         }),
       );
     } finally {
-      streamStatus.clear(streamId, { emit: false });
-      StreamStatusService.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
+      clearStreamStatusForTest(StreamStatusService, streamId);
     }
   });
 
@@ -233,7 +240,7 @@ describe('RetryState', () => {
     const { node, streamStatus } = createRetryNode(streamId);
 
     try {
-      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
 
       const prompt = withSessionRetryRunContext(streamId, session, retry, () =>
         node.promptFor(new Error('temporary provider failure')),
@@ -250,7 +257,7 @@ describe('RetryState', () => {
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
     } finally {
       session.dispose();
-      streamStatus.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 
@@ -263,15 +270,15 @@ describe('RetryState', () => {
       waitForRetry.mockResolvedValueOnce({ action });
 
       try {
-        streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
+        seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
 
         await withRetryRunContext(streamId, waitForRetry, () =>
           node.promptFor(new Error('temporary provider failure')),
         );
 
-        expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       } finally {
-        streamStatus.clear(streamId, { emit: false });
+        clearStreamStatusForTest(streamStatus, streamId);
       }
     },
   );

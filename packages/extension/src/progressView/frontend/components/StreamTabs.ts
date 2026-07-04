@@ -14,6 +14,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports
 import {
   STREAM_STATUS,
+  type StreamSubstate,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -22,6 +23,10 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
+import {
+  formatStreamStatusLabel,
+  streamStatusDisplayKey,
+} from '@shared/streams/streamStatusDisplay';
 import {
   AGENT_DECORATORS,
   getAgentCategoryDecorator,
@@ -55,11 +60,11 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 function buildTooltip(
   info: StreamTabInfo,
   lastTimestamp: number | undefined,
-  status: string,
+  statusLabel: string,
 ): string {
   const mainLine = [
     info.label,
-    `Status: ${status}`,
+    `Status: ${statusLabel}`,
     info.model && `Model: ${info.modelLabel ?? info.model}`,
     info.inputFile && `Input: ${info.inputFile}`,
   ]
@@ -92,6 +97,7 @@ export class StreamTab extends LitElement {
 
   @property({ attribute: false }) info!: StreamTabInfo;
   @property({ type: String }) status: string = STREAM_STATUS.READY;
+  @property({ attribute: false }) substate: StreamSubstate | undefined;
   @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
   @property({ type: Boolean }) active = false;
   @property({ type: Boolean }) compact = false;
@@ -108,6 +114,7 @@ export class StreamTab extends LitElement {
     if (
       !changed.has('info') &&
       !changed.has('status') &&
+      !changed.has('substate') &&
       !changed.has('lastTimestamp')
     )
       return;
@@ -115,12 +122,18 @@ export class StreamTab extends LitElement {
       this._agentDecorator = getAgentCategoryDecorator(this.info.agentCategory);
     }
     const status = this.status || STREAM_STATUS.READY;
-    this._tooltip = buildTooltip(this.info, this.lastTimestamp, status);
+    const statusLabel =
+      formatStreamStatusLabel(status, {
+        style: 'progressHeader',
+        ...(this.substate ? { substate: this.substate } : {}),
+      }) ?? status;
+    this._tooltip = buildTooltip(this.info, this.lastTimestamp, statusLabel);
   }
 
   override render(): TemplateResult {
     const stream = this.info;
     const status = this.status || STREAM_STATUS.READY;
+    const statusKey = streamStatusDisplayKey(status, this.substate) ?? status;
     const tooltip = this._tooltip;
     const agentDecorator = this._agentDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
@@ -133,7 +146,7 @@ export class StreamTab extends LitElement {
           'is-active': this.active,
           'is-compact': this.compact,
           'has-children': hasChildren,
-          [`status-${status}`]: Boolean(status),
+          [`status-${statusKey}`]: Boolean(statusKey),
           'has-pending-approval': this.hasPendingApproval,
         })}
       >
@@ -324,6 +337,10 @@ export class StreamTabs extends LitElement {
     return this.streamStates.get(name)?.status ?? STREAM_STATUS.READY;
   }
 
+  private getSubstate(name: StreamTabId): StreamSubstate | undefined {
+    return this.streamStates.get(name)?.substate;
+  }
+
   private getTimestamp(name: StreamTabId): number | undefined {
     return this.streamStates.get(name)?.lastTimestamp;
   }
@@ -368,6 +385,7 @@ export class StreamTabs extends LitElement {
         .info=${stream}
         .compact=${options.compact}
         .status=${this.getStatus(stream.name)}
+        .substate=${this.getSubstate(stream.name)}
         .lastTimestamp=${this.getTimestamp(stream.name)}
         ?active=${stream.name === this.activeStreamId}
         .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}
