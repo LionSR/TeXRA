@@ -39,13 +39,13 @@ export interface LoadedCliConfig {
   readonly warnings: readonly string[];
 }
 
-export function isKnownCliModel(model: string): boolean {
+export function isCliSupportedModelId(model: string): boolean {
   const config = MODEL_CONFIGS[model];
   return config != null && config.provider !== ModelProvider.COPILOT;
 }
 
 export function knownCliModelIds(): string[] {
-  return Object.keys(MODEL_CONFIGS).filter(isKnownCliModel);
+  return Object.keys(MODEL_CONFIGS).filter(isCliSupportedModelId);
 }
 
 function normalizeCliModelLookupKey(value: string): string {
@@ -65,7 +65,7 @@ function modelLookupKeys(id: string): string[] {
 export function resolveKnownCliModelId(model: string): string | undefined {
   const trimmed = model.trim();
   if (!trimmed) return undefined;
-  if (isKnownCliModel(trimmed)) return trimmed;
+  if (isCliSupportedModelId(trimmed)) return trimmed;
 
   const lower = trimmed.toLowerCase();
   const ids = knownCliModelIds();
@@ -89,7 +89,7 @@ export function resolveKnownCliModelId(model: string): string | undefined {
 }
 
 const NonEmptyStringSchema = z.string().trim().min(1);
-const ModelSchema = NonEmptyStringSchema.refine(isKnownCliModel, {
+const ModelSchema = NonEmptyStringSchema.refine(isCliSupportedModelId, {
   message: 'unknown model',
 });
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
@@ -287,7 +287,7 @@ export function resolveConfiguredAgent(
   return config?.[command]?.agent ?? config?.agent;
 }
 
-export function resolveConfiguredModel(
+export function commandConfigModel(
   config: CliConfigValues | undefined,
   command: 'chat' | 'run',
 ): string | undefined {

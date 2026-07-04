@@ -12,7 +12,7 @@ import {
   getCliModelAccessList,
   formatNoListableModelsMessage,
   listableModelAccessEntries,
-  resolveCliModelAccessEntry,
+  loadCliModelAccessEntry,
   type CliModelListOptions,
 } from '../runtime/modelAccess';
 import { knownCliModelIds } from '../runtime/cliConfig';
@@ -92,10 +92,10 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     return CliExitCode.ModelOrNetworkError;
   }
 
-  let entry: Awaited<ReturnType<typeof resolveCliModelAccessEntry>>;
+  let entry: Awaited<ReturnType<typeof loadCliModelAccessEntry>>;
   try {
     entry = await suppressCliFetchStackLogs(() =>
-      resolveCliModelAccessEntry(id, {
+      loadCliModelAccessEntry(id, {
         apiMode: result.apiMode,
         agentCategory: AgentCategory.ToolUse,
         accessList: result.models,
