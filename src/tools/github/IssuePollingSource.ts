@@ -23,9 +23,11 @@ import {
   formatIssueReopened,
   formatIssueSubscriptionError,
 } from './formatIssueEvent';
-import { getNewestTimestamp, trimSet, withSince } from './formatUtils';
+import { getNewestTimestamp, withSince } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
+  DedupedResource,
+  DEFAULT_POLLING_BACKOFF_CONFIG,
   PollingSourceBase,
   type BasePollSubscriptionState,
 } from './PollingSourceBase';
@@ -57,9 +59,8 @@ interface SubscriptionState extends BasePollSubscriptionState {
   slug: string;
   initialized: boolean;
   state: 'open' | 'closed' | undefined;
-  seenCommentIds: Set<number>;
+  comments: DedupedResource<GhIssueComment>;
   etags: { issue?: string; comments?: string };
-  sinceCursor?: string;
 }
 
 function createInitialState(issue: IssueKey): SubscriptionState {
@@ -70,9 +71,12 @@ function createInitialState(issue: IssueKey): SubscriptionState {
     runtimeHostByListener: new Map(),
     initialized: false,
     state: undefined,
-    seenCommentIds: new Set(),
+    comments: new DedupedResource<GhIssueComment>({
+      getId: (comment: GhIssueComment) => comment.id,
+      getCursor: getNewestTimestamp,
+      maxSeenIds: MAX_SEEN_IDS,
+    }),
     etags: {},
-    sinceCursor: undefined,
     lastSuccessAt: Date.now(),
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
@@ -85,9 +89,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
       name: 'IssuePollingSource',
       pollIntervalMs: 30_000,
       maxConcurrent: 10,
-      backoffBaseMs: 60_000,
-      backoffMaxMs: 3_600_000,
-      maxFailureDurationMs: 24 * 3_600_000,
+      ...DEFAULT_POLLING_BACKOFF_CONFIG,
     });
   }
 
@@ -136,7 +138,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     const issuePath = `/repos/${issue.owner}/${issue.repo}/issues/${issue.issueNumber}`;
     const commentsUrl = withSince(
       `${issuePath}/comments?per_page=100`,
-      state.sinceCursor,
+      state.comments.sinceCursor,
     );
 
     // The two endpoints are independent — fetch in parallel.
@@ -151,8 +153,12 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
       // the independent comments fetch below — a malformed issue payload must
       // not block comment delivery. Never throw: a throw would stall
       // lastSuccessAt and risk the 24 h detach of a live subscription.
-      const parsedIssue = GhIssueSchema.safeParse(issueRes.data);
-      if (parsedIssue.success) {
+      const parsedIssue = this.validateOrSkip(
+        issueRes,
+        GhIssueSchema,
+        `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: malformed issue payload`,
+      );
+      if (parsedIssue?.status === 200) {
         const issueData = parsedIssue.data;
         state.etags.issue = issueRes.etag;
         const newState = issueData.state;
@@ -182,40 +188,30 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
           );
         }
         state.state = newState;
-      } else {
-        this.logger.warn(
-          `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: malformed issue payload`,
-          { data: parsedIssue.error },
-        );
       }
     }
 
     // Parse the comments array once; both the seeding and diff branches below
     // consume `comments`. Non-throwing: on a malformed payload, log + skip this
-    // tick. state.etags.comments and state.sinceCursor are advanced only inside
+    // tick. state.etags.comments and the comments cursor are advanced only inside
     // the guarded branches, so a skip re-fetches next tick (no If-None-Match)
     // and lastSuccessAt still advances → no 24 h detach. A bad single element
     // triggers a whole-array skip instead of a mid-loop TypeError throw.
     let comments: GhIssueComment[] | undefined;
     if (commentsRes.status === 200) {
-      const parsedComments = GhIssueCommentArraySchema.safeParse(
-        commentsRes.data,
+      const parsedComments = this.validateOrSkip(
+        commentsRes,
+        GhIssueCommentArraySchema,
+        `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,
       );
-      if (!parsedComments.success) {
-        this.logger.warn(
-          `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,
-          { data: parsedComments.error },
-        );
-        return;
-      }
+      if (!parsedComments) return;
       comments = parsedComments.data;
     }
 
     if (!state.initialized) {
       if (commentsRes.status === 200 && comments) {
         state.etags.comments = commentsRes.etag;
-        for (const c of comments) state.seenCommentIds.add(c.id);
-        state.sinceCursor = getNewestTimestamp(comments);
+        state.comments.seed(comments);
       }
       state.initialized = true;
       return;
@@ -223,14 +219,10 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
 
     if (commentsRes.status === 200 && comments) {
       state.etags.comments = commentsRes.etag;
-      for (const c of comments) {
-        if (state.seenCommentIds.has(c.id)) continue;
-        state.seenCommentIds.add(c.id);
-        if (shouldDropBotEvent(c.user)) continue;
+      state.comments.diff(comments, (c) => {
+        if (shouldDropBotEvent(c.user)) return;
         this.emit(state, formatIssueComment(state.slug, issue.issueNumber, c));
-      }
-      state.sinceCursor = getNewestTimestamp(comments) ?? state.sinceCursor;
-      trimSet(state.seenCommentIds, MAX_SEEN_IDS);
+      });
     }
   }
 }
