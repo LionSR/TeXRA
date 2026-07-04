@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { TraceEmitter, type StatusEvent } from '@agent/trace';
 import {
-  projectStatusEvent,
-  StreamStatusRegistry,
+  StreamStatusMachine,
+  type StreamStatusChange,
 } from '@agent/runtime/StreamStatusService';
 import {
   canTransitionStreamPhase,
@@ -25,26 +25,26 @@ import { createRecordingHost } from '../progressTestUtils';
 
 /** Fresh registry + recording host, keyed to a per-test stream id. */
 function setupMachine(streamId: string): {
-  machine: StreamStatusRegistry;
+  machine: StreamStatusMachine;
   explicit: ReturnType<typeof createRecordingHost>;
   streamId: StreamTabId;
 } {
   return {
-    machine: new StreamStatusRegistry(),
+    machine: new StreamStatusMachine(),
     explicit: createRecordingHost(),
     streamId: streamId as StreamTabId,
   };
 }
 
-describe('StreamStatusRegistry', () => {
+describe('StreamStatusMachine', () => {
   const phases = Object.values(STREAM_PHASE) as StreamPhase[];
   const causes = Object.values(
     STREAM_TRANSITION_CAUSE,
   ) as StreamTransitionCause[];
 
   it('keeps stream status state per instance', () => {
-    const first = new StreamStatusRegistry();
-    const second = new StreamStatusRegistry();
+    const first = new StreamStatusMachine();
+    const second = new StreamStatusMachine();
     const streamId = 'stream-status-instance-test' as StreamTabId;
 
     seedStreamStatusForTest(first, streamId, STREAM_STATUS.WAITING);
@@ -54,8 +54,8 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('keeps listeners per instance', () => {
-    const first = new StreamStatusRegistry();
-    const second = new StreamStatusRegistry();
+    const first = new StreamStatusMachine();
+    const second = new StreamStatusMachine();
     const explicit = createRecordingHost();
     const streamId = 'stream-status-listener-test' as StreamTabId;
     const changes: string[] = [];
@@ -75,7 +75,7 @@ describe('StreamStatusRegistry', () => {
     for (const from of [undefined, ...phases]) {
       for (const to of phases) {
         for (const cause of causes) {
-          const machine = new StreamStatusRegistry();
+          const machine = new StreamStatusMachine();
           const streamId =
             `stream-status-table:${from ?? 'none'}:${to}:${cause}` as StreamTabId;
           if (from) seedStreamStatusForTest(machine, streamId, from);
@@ -92,7 +92,7 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('keeps reservations outside the transition table', () => {
-    const machine = new StreamStatusRegistry();
+    const machine = new StreamStatusMachine();
     const streamId = 'stream-status-reservation-test' as StreamTabId;
 
     expect(machine.tryAcquire(streamId)).toBe(true);
@@ -104,7 +104,7 @@ describe('StreamStatusRegistry', () => {
     expect(machine.tryAcquire(streamId)).toBe(false);
 
     machine.releaseIfReserved(streamId);
-    expect(machine.get(streamId)).toBeUndefined();
+    expect(machine.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
 
     expect(machine.tryAcquire(streamId)).toBe(true);
     expect(machine.transition(streamId, STREAM_PHASE.WAITING, 'wait')).toBe(
@@ -264,6 +264,29 @@ describe('StreamStatusRegistry', () => {
     ]);
   });
 
+  it('rolls back reservation state identically with and without observers', () => {
+    const hidden = new StreamStatusMachine();
+    const observed = new StreamStatusMachine();
+    const streamId =
+      'stream-status-observer-independent-rollback' as StreamTabId;
+    const changes: StreamStatusChange[] = [];
+
+    observed.onDidChange((change) => changes.push(change));
+
+    expect(hidden.tryAcquire(streamId)).toBe(true);
+    expect(observed.tryAcquire(streamId)).toBe(true);
+
+    hidden.releaseIfReserved(streamId);
+    observed.releaseIfReserved(streamId);
+
+    expect(hidden.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+    expect(observed.get(streamId)).toBe(hidden.get(streamId));
+    expect(changes.map((change) => change.status)).toEqual([
+      STREAM_PHASE.RUNNING,
+      STREAM_PHASE.CANCELLED,
+    ]);
+  });
+
   it('publishes rollback when a visible reservation is released', () => {
     const { machine, explicit, streamId } = setupMachine(
       'stream-status-reservation-rollback',
@@ -331,12 +354,12 @@ describe('StreamStatusRegistry', () => {
   });
 
   it('projects status trace events to updateStreamStatus payloads', () => {
-    const machine = new StreamStatusRegistry();
+    const machine = new StreamStatusMachine();
     const explicit = createRecordingHost();
     const trace = new TraceEmitter();
     const streamId = 'stream-status-projection-test' as StreamTabId;
     const statusEvents: StatusEvent[] = [];
-    const changes: ReturnType<typeof projectStatusEvent>[] = [];
+    const changes: StreamStatusChange[] = [];
 
     trace.subscribe((event) => {
       if (event.type === 'status') statusEvents.push(event);
@@ -350,7 +373,6 @@ describe('StreamStatusRegistry', () => {
       }),
     ).toBe(true);
 
-    const projected = projectStatusEvent(statusEvents[0]!);
     expect(statusEvents[0]).toMatchObject({
       type: 'status',
       streamId,
@@ -358,8 +380,14 @@ describe('StreamStatusRegistry', () => {
       cause: 'lifecycle',
     });
     expect(explicit.events).toEqual([
-      { event: 'updateStreamStatus', payload: projected },
+      { event: 'updateStreamStatus', payload: changes[0] },
     ]);
-    expect(changes).toEqual([projected]);
+    expect(changes).toEqual([
+      {
+        streamId,
+        status: STREAM_PHASE.RUNNING,
+        cause: 'lifecycle',
+      },
+    ]);
   });
 });

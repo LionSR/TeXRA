@@ -169,8 +169,13 @@ export function canTransitionStreamPhase(
     case STREAM_TRANSITION_CAUSE.WAIT:
       return from === STREAM_PHASE.RUNNING && to === STREAM_PHASE.WAITING;
     case STREAM_TRANSITION_CAUSE.RESUME:
+      // WAITING terminalization is explicit choreography: WAITING resumes to
+      // RUNNING, then lifecycle writes the terminal outcome. RUNNING->RUNNING
+      // clears display-only resume substate through the same table-checked path.
       return (
-        (from === undefined || from === STREAM_PHASE.WAITING) &&
+        (from === undefined ||
+          from === STREAM_PHASE.WAITING ||
+          from === STREAM_PHASE.RUNNING) &&
         to === STREAM_PHASE.RUNNING
       );
     case STREAM_TRANSITION_CAUSE.RESTART_REPAIR:
