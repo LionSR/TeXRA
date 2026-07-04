@@ -217,7 +217,10 @@ return b`,
 
   it('blocks Date.now() and Math.random() inside scripts', async () => {
     await expect(
-      runWorkflowScript({ script: `${META}return Date.now()`, runAgent: echoRunner }),
+      runWorkflowScript({
+        script: `${META}return Date.now()`,
+        runAgent: echoRunner,
+      }),
     ).rejects.toThrow(/Date\.now\(\) is unavailable/);
     await expect(
       runWorkflowScript({
@@ -265,7 +268,10 @@ return null`,
 
   it('rejects invalid primitive usage with clear errors', async () => {
     await expect(
-      runWorkflowScript({ script: `${META}return await agent('')`, runAgent: echoRunner }),
+      runWorkflowScript({
+        script: `${META}return await agent('')`,
+        runAgent: echoRunner,
+      }),
     ).rejects.toThrow(/non-empty string prompt/);
     await expect(
       runWorkflowScript({

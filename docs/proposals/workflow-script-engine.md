@@ -38,20 +38,24 @@ export const meta = {
   name: 'draft-chapter',
   description: 'Draft sections in parallel, then merge with shared notation',
   phases: [{ title: 'Draft' }, { title: 'Merge' }],
-}
-phase('Draft')
-const drafts = await parallel(args.sections.map((s) => () =>
-  agent(`Draft the "${s.title}" section.`, {
-    label: `draft:${s.title}`,
-    inputFiles: s.notes,
-    schema: DRAFT_SUMMARY_SCHEMA,
-  })))
-phase('Merge')
-const valid = drafts.filter(Boolean)
+};
+phase('Draft');
+const drafts = await parallel(
+  args.sections.map(
+    (s) => () =>
+      agent(`Draft the "${s.title}" section.`, {
+        label: `draft:${s.title}`,
+        inputFiles: s.notes,
+        schema: DRAFT_SUMMARY_SCHEMA,
+      }),
+  ),
+);
+phase('Merge');
+const valid = drafts.filter(Boolean);
 return await agent('Merge these drafts, unify notation.', {
   agentName: 'merge',
   inputFiles: valid.flatMap((d) => d.outputs.map((o) => o.path)),
-})
+});
 ```
 
 ### Primitives
@@ -77,7 +81,7 @@ return await agent('Merge these drafts, unify notation.', {
 The engine's `agent()` wraps the in-band subagent execution path
 (`src/tools/delegation/subagentExecution.ts`, `stopAfterCycle` branch) and
 consumes `executeAgent`'s `onCompleted(result)` / `onError` callbacks —
-receiving `AgentFlowResult` *before* it is flattened to the XML follow-up
+receiving `AgentFlowResult` _before_ it is flattened to the XML follow-up
 string. The FollowUpQueue channel remains untouched for LLM-driven
 delegation; scripted runs bypass it entirely.
 

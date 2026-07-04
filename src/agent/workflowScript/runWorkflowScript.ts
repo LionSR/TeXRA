@@ -47,7 +47,9 @@ export async function runWorkflowScript(
     rawOptions?: unknown,
   ): Promise<unknown> {
     if (typeof prompt !== 'string' || prompt.trim().length === 0) {
-      throw new Error('agent(prompt, options?) requires a non-empty string prompt.');
+      throw new Error(
+        'agent(prompt, options?) requires a non-empty string prompt.',
+      );
     }
     const callOptions = normalizeAgentOptions(rawOptions, currentPhase);
     const index = callCounter;
@@ -94,7 +96,9 @@ export async function runWorkflowScript(
 
   async function parallelPrimitive(thunks: unknown): Promise<unknown[]> {
     if (!Array.isArray(thunks)) {
-      throw new Error('parallel(thunks) requires an array of zero-arg functions.');
+      throw new Error(
+        'parallel(thunks) requires an array of zero-arg functions.',
+      );
     }
     if (thunks.length > MAX_FANOUT) {
       throw new Error(`parallel() accepts at most ${MAX_FANOUT} items.`);
@@ -174,7 +178,8 @@ export async function runWorkflowScript(
       currentPhase = String(title);
       emit({ type: 'phase', title: currentPhase });
     },
-    args: options.args === undefined ? undefined : structuredClone(options.args),
+    args:
+      options.args === undefined ? undefined : structuredClone(options.args),
   };
 
   const result = await runScriptInSandbox(body, globals, {
@@ -220,7 +225,9 @@ function normalizeAgentOptions(
       !Array.isArray(source.inputFiles) ||
       source.inputFiles.some((file) => typeof file !== 'string')
     ) {
-      throw new Error('agent() option "inputFiles" must be an array of strings.');
+      throw new Error(
+        'agent() option "inputFiles" must be an array of strings.',
+      );
     }
     options.inputFiles = [...(source.inputFiles as string[])];
   }

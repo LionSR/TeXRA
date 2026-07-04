@@ -45,9 +45,9 @@ export async function runScriptInSandbox(
     { ...globals },
     { codeGeneration: { strings: false, wasm: false } },
   );
-  new vm.Script(DETERMINISM_PRELUDE, { filename: 'workflow-prelude.js' }).runInContext(
-    context,
-  );
+  new vm.Script(DETERMINISM_PRELUDE, {
+    filename: 'workflow-prelude.js',
+  }).runInContext(context);
 
   let script: vm.Script;
   try {
@@ -80,7 +80,9 @@ async function withTimeout(
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
           reject(
-            new Error(`Workflow script ${label} timed out after ${timeoutMs}ms`),
+            new Error(
+              `Workflow script ${label} timed out after ${timeoutMs}ms`,
+            ),
           );
         }, timeoutMs);
       }),

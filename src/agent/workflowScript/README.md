@@ -13,12 +13,15 @@ export const meta = {
   name: 'draft-chapter',
   description: 'Draft sections in parallel, then merge',
   phases: [{ title: 'Draft' }, { title: 'Merge' }],
-}
-phase('Draft')
-const sections = await parallel(args.sections.map((s) => () =>
-  agent(`Draft the "${s}" section.`, { label: `draft:${s}` })))
-phase('Merge')
-return concat(sections, { separator: '\n\n' })
+};
+phase('Draft');
+const sections = await parallel(
+  args.sections.map(
+    (s) => () => agent(`Draft the "${s}" section.`, { label: `draft:${s}` }),
+  ),
+);
+phase('Merge');
+return concat(sections, { separator: '\n\n' });
 ```
 
 - `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
