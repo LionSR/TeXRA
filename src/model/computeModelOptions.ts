@@ -346,7 +346,7 @@ async function buildModelOptionData(
       }
     : config;
   return {
-    ...buildBaseModelOption(model, optionConfig),
+    ...buildBaseModelOption(model, optionConfig, config),
     availability: availability.kind,
     availabilityLabel: availability.label,
     requiresKey: availability.requiresKey,
