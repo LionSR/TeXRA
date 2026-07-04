@@ -40,7 +40,7 @@ interface StreamPhaseState {
   readonly substate?: StreamSubstate;
 }
 
-export function projectStatusEvent(event: StatusEvent): StreamStatusChange {
+function projectStatusEvent(event: StatusEvent): StreamStatusChange {
   return {
     streamId: event.streamId,
     status: event.phase,
@@ -91,18 +91,14 @@ export class StreamStatusMachine {
     if (!this.reservations.has(stream)) return;
     const rollbackPhase =
       this.phases.get(stream)?.phase ?? STREAM_PHASE.CANCELLED;
-    if (options.runtimeHost || options.trace || this.statusListeners.size > 0) {
-      if (
-        this.transition(
-          stream,
-          rollbackPhase,
-          STREAM_TRANSITION_CAUSE.LIFECYCLE,
-          options,
-        )
-      ) {
-        return;
-      }
-      this.reservations.delete(stream);
+    if (
+      this.transition(
+        stream,
+        rollbackPhase,
+        STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        options,
+      )
+    ) {
       return;
     }
     this.reservations.delete(stream);
@@ -117,13 +113,7 @@ export class StreamStatusMachine {
     if (state?.phase !== STREAM_PHASE.RUNNING || !state.substate) {
       return false;
     }
-    this.phases.set(stream, { phase: STREAM_PHASE.RUNNING });
-    this.publishStatus(stream, STREAM_PHASE.RUNNING, {
-      ...options,
-      cause,
-      previousPhase: STREAM_PHASE.RUNNING,
-    });
-    return true;
+    return this.transition(stream, STREAM_PHASE.RUNNING, cause, options);
   }
 
   transition(

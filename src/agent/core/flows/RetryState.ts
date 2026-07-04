@@ -5,7 +5,7 @@ import { StatusCodes } from 'http-status-codes';
 import { Node, type NonIterableObject } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ensureError, normalizeProviderError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
@@ -42,7 +42,7 @@ export type InvocationResult<TSuccess> =
   | { kind: 'skipped' };
 
 interface RetryableNodeServices {
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: () => Promise<void>;
