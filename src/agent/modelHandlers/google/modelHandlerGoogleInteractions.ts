@@ -33,7 +33,10 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 
 // Local imports - utils
 import { filterNotNull, isNonEmptyString, isObject } from '@utils/core';
@@ -66,7 +69,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
   loadAttachmentBuffer,
-  type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { convertToolSchema, toGoogleTools } from '../toolConversion';
 import { GOOGLE_FINISH } from '../types/StopReasonTypes';
@@ -1103,7 +1105,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
     call: GoogleToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1145,7 +1147,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
-    results: ToolResultPayload[],
+    results: ToolResult[],
     attachmentsPerCall: ToolFileAttachment[][],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1243,7 +1245,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   /** Build a `function_result` step, embedding tool-result images inline. */
   private async buildFunctionResultStep(
     call: GoogleToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
   ): Promise<FunctionResultStep> {
     const subcontent: FunctionResultSubcontent[] = [];

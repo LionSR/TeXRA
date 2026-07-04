@@ -156,10 +156,9 @@ export function buildBashApprovalRejectedResult(
   const message = `User rejected bash command: ${preview}`;
   const feedback = userMessage?.trim();
   return {
-    output: message,
+    status: 'error',
     summary: message,
     error: message,
-    isError: true,
     userInstruction: feedback || DEFAULT_BASH_REJECTION_INSTRUCTION,
   };
 }

@@ -13,6 +13,7 @@
 import { z } from 'zod';
 
 // Local imports - core
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import { filterNotNull } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -155,7 +156,10 @@ export class ZoteroCollectionsTool extends defineTool({
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroCollectionsInputSchema,
 }) {
-  protected async execute({ query, library }: ZoteroCollectionsInput) {
+  protected async execute({
+    query,
+    library,
+  }: ZoteroCollectionsInput): Promise<ToolResult> {
     const port = getZoteroPort();
 
     const libraries = await callBetterBibTeX(
@@ -167,6 +171,7 @@ export class ZoteroCollectionsTool extends defineTool({
 
     if (libraries.length === 0) {
       return {
+        status: 'executed',
         summary: 'No libraries found in Zotero.',
         output:
           'No libraries found. Is Zotero running with items in your library?',
@@ -182,6 +187,7 @@ export class ZoteroCollectionsTool extends defineTool({
     if (targetLibraries.length === 0) {
       const available = libraries.map((lib) => lib.name).join(', ');
       return {
+        status: 'executed',
         summary: `Library "${library}" not found.`,
         output: `Library "${library}" not found. Available libraries: ${available}`,
       };
@@ -210,12 +216,14 @@ export class ZoteroCollectionsTool extends defineTool({
     const context = query ? ` matching "${query}"` : '';
     if (outputParts.length === 0) {
       return {
+        status: 'executed',
         summary: `No collections found${context}.`,
         output: `No collections found${context}.`,
       };
     }
 
     return {
+      status: 'executed',
       summary: `Found ${formatResultCount(totalCollections, 'collection')}${context} across ${formatResultCount(librariesWithResults, 'library', 'libraries')}.`,
       output: outputParts.join('\n'),
     };

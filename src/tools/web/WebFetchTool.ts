@@ -219,6 +219,7 @@ export class WebFetchTool extends defineTool({
     }
 
     return {
+      status: 'executed',
       summary: `Fetched: ${url}`,
       output: sections.join('\n\n'),
     };

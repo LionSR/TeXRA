@@ -25,7 +25,7 @@ import { z } from 'zod';
 // Local imports - core
 import pTimeout from 'p-timeout';
 import { toErrorMessage } from '@common/errors';
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { isTimeoutError } from '@tools/timeouts';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
@@ -329,7 +329,10 @@ export class ZoteroAddTool extends defineTool({
     'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by DOI (recommended), URL, or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files). Use itemType "preprint" for arXiv papers and preprints — never "webpage".',
   schema: ZoteroAddInputSchema,
 }) {
-  protected async execute({ items, collection }: ZoteroAddInput) {
+  protected async execute({
+    items,
+    collection,
+  }: ZoteroAddInput): Promise<ToolResult> {
     const port = getZoteroPort();
 
     // Check if Zotero is running (throws ToolError if not)
@@ -406,6 +409,7 @@ export class ZoteroAddTool extends defineTool({
         : `Added ${successCount} ${pluralize(successCount, 'item')}, failed to add ${errorCount} ${pluralize(errorCount, 'item')} to Zotero.`;
 
     return {
+      status: 'executed',
       summary,
       output,
     };

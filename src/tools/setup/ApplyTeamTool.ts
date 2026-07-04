@@ -128,6 +128,6 @@ ${describeTeams()}`,
       ...(signInNote ? [signInNote] : []),
     ].join(' ');
 
-    return { summary, output: lines.join('\n') };
+    return { status: 'executed', summary, output: lines.join('\n') };
   }
 }

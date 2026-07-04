@@ -83,6 +83,7 @@ export class SetApiKeyTool extends defineTool({
 
     const masked = maskKey(input.key);
     return {
+      status: 'executed',
       summary: `Stored ${provider} API key (${masked})`,
       output: `Stored API key for provider "${provider}" in SecretStorage as ${masked}. You can now run agents that use ${provider} models.`,
     };

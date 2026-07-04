@@ -7,7 +7,7 @@ import {
 import { z } from 'zod';
 
 // Local imports
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@utils/text/stringUtils';
@@ -55,7 +55,7 @@ export class CrossrefSearchTool extends defineTool({
   description: 'Search Crossref works and return top matches.',
   schema: CrossrefSearchInputSchema,
 }) {
-  protected async execute(input: CrossrefSearchInput) {
+  protected async execute(input: CrossrefSearchInput): Promise<ToolResult> {
     const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
 
     const options: ExtendedQueryWorksParams = {
@@ -100,6 +100,7 @@ export class CrossrefSearchTool extends defineTool({
     };
 
     return {
+      status: 'executed',
       summary: `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"`,
       output: JSON.stringify(payload, null, 2),
     };

@@ -228,7 +228,7 @@ export class ReadFileTool extends defineTool({
       ? `${copy.rangeOutput} ${copy.coreOutput}`
       : copy.coreOutput;
 
-    return { summary, output, files: [attachment] };
+    return { status: 'executed', summary, output, files: [attachment] };
   }
 }
 

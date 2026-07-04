@@ -195,6 +195,7 @@ export function resumeAgentCliSession(
 
   const preview = truncateWithEllipsis(prompt, 60);
   return {
+    status: 'executed',
     summary: `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
     output: [
       `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`,
@@ -255,6 +256,7 @@ export async function launchAgentCliSession(
   await params.startLoop({ childStream, executionId });
 
   return {
+    status: 'executed',
     summary: params.summary,
     output: [
       params.launchedLine,

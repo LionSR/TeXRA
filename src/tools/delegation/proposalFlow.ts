@@ -116,19 +116,20 @@ function proposalResultToToolResult(
         ? `\nUser feedback: ${feedback}`
         : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
       return {
+        status: 'error',
         summary: `User rejected delegation to '${agentName}'`,
-        output: `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
-        isError: true,
+        error: `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
       };
     }
     case 'timeout':
       return {
+        status: 'error',
         summary: `Delegation to '${agentName}' timed out`,
-        output: `Delegation to '${agentName}' timed out waiting for user approval.\nYour delegation was: ${echo}`,
-        isError: true,
+        error: `Delegation to '${agentName}' timed out waiting for user approval.\nYour delegation was: ${echo}`,
       };
     case 'setup':
       return {
+        status: 'executed',
         summary: `User opened '${agentName}' for editing`,
         output: `Delegation opened for editing. The user will run it manually when ready.\nYour delegation was: ${echo}`,
       };
@@ -188,9 +189,9 @@ export async function proposeAndExecute(
       });
     } catch (err) {
       return {
+        status: 'error',
         summary: `Approved model override '${result.model}' is not available`,
-        output: `Cannot launch with model '${result.model}': ${toErrorMessage(err)} Re-propose the delegation.`,
-        isError: true,
+        error: `Cannot launch with model '${result.model}': ${toErrorMessage(err)} Re-propose the delegation.`,
       };
     }
   }
@@ -206,9 +207,9 @@ export async function proposeAndExecute(
   // synchronously instead of after an async launch.
   if (agentOverride && !resolvedAgentOverride) {
     return {
+      status: 'error',
       summary: `Approved agent override '${agentOverride}' is not available`,
-      output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
-      isError: true,
+      error: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
     };
   }
 

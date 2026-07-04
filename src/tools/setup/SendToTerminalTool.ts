@@ -79,6 +79,6 @@ export class SendToTerminalTool extends defineTool({
       ? '\n\n' + tailWithEllipsis(output, OUTPUT_PREVIEW_MAX)
       : '';
 
-    return { summary, output: summary + tail };
+    return { status: 'executed', summary, output: summary + tail };
   }
 }
