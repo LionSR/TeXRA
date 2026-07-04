@@ -17,6 +17,7 @@ import {
   type Plan,
   type StorageKey,
   type StreamTabId,
+  type SyncStreamContentPayload,
   type TodoItem,
 } from '@shared/schemas';
 import {
@@ -26,10 +27,7 @@ import {
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import type { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
-import type {
-  SyncStreamContentPayload,
-  WebviewUpdater,
-} from '@shared/progressView/backend/WebviewUpdater';
+import type { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 
 class MemoryMementoStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();
