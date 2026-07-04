@@ -90,6 +90,7 @@
     "globals": "^17.7.0",
     "jsdom": "^29.1.1",
     "knip": "^6.24.0",
+    "memfs": "^4.57.8",
     "nunjucks": "^3.2.4",
     "prettier": "^3.9.4",
     "typescript": "^6.0.3",

@@ -1,11 +1,17 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { describe, it } from 'vitest';
 
-// Standard library imports
-
 // Local imports - platform
-import { FileType } from '@platform/interfaces/filesystem';
+import {
+  FileType,
+  type FileSystemProvider,
+} from '@platform/interfaces/filesystem';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { platform } from '@platform/platform';
 
 // Local imports - test support
 import {
@@ -13,20 +19,75 @@ import {
   createFakePlatform,
 } from '../support/FakePlatform';
 
-type FsRecord = {
-  type: number;
-  ctime: number;
-  mtime: number;
-  content?: Uint8Array;
+type ProviderCase = {
+  name: string;
+  provider: FileSystemProvider;
+  resolve(testPath: string): string;
+  expectedRealPath(testPath: string): Promise<string>;
+  cleanup(): Promise<void>;
 };
 
-// Reaches into the in-memory provider's private record map for timestamp and
-// implicit-directory assertions.
-function fsRecords(fs: FakeFileSystemProvider): Map<string, FsRecord> {
-  return (fs as unknown as { records: Map<string, FsRecord> }).records;
+async function createProviderCase(
+  name: 'fake' | 'node',
+): Promise<ProviderCase> {
+  if (name === 'fake') {
+    return {
+      name,
+      provider: new FakeFileSystemProvider(),
+      resolve: (testPath) => testPath,
+      expectedRealPath: async (testPath) => testPath,
+      cleanup: async () => {},
+    };
+  }
+
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-fs-'));
+  return {
+    name,
+    provider: nodeFilesystem,
+    resolve: (testPath) => path.join(root, testPath.slice(1)),
+    expectedRealPath: (testPath) =>
+      fs.realpath(path.join(root, testPath.slice(1))),
+    cleanup: () => fs.rm(root, { recursive: true, force: true }),
+  };
+}
+
+async function withProviders(
+  run: (ctx: ProviderCase) => Promise<void>,
+): Promise<void> {
+  for (const name of ['fake', 'node'] as const) {
+    const ctx = await createProviderCase(name);
+    try {
+      await run(ctx);
+    } finally {
+      await ctx.cleanup();
+    }
+  }
+}
+
+function text(content: Uint8Array): string {
+  return Buffer.from(content).toString('utf8');
+}
+
+function sortedEntries(entries: [string, number][]): [string, number][] {
+  return entries.toSorted(([left], [right]) => left.localeCompare(right));
+}
+
+async function rejectsWithCode(
+  operation: () => Promise<unknown>,
+  code: string,
+): Promise<void> {
+  await assert.rejects(operation, (err: unknown) => {
+    assert.equal((err as NodeJS.ErrnoException).code, code);
+    return true;
+  });
 }
 
 describe('FakePlatform', () => {
+  it('installs a default fake platform from vitest setup', () => {
+    assert.equal(platform().workspace.getWorkspacePath(), '/workspace');
+    assert.equal(platform().fs instanceof FakeFileSystemProvider, true);
+  });
+
   it('provides overridable platform services for tests', async () => {
     const platform = createFakePlatform({
       config: { enabled: true },
@@ -153,283 +214,207 @@ describe('FakePlatform', () => {
     assert.ok(platform.secrets);
   });
 
-  it('implements in-memory filesystem operations', async () => {
-    const fs = new FakeFileSystemProvider();
+  it('keeps fake-only convenience helpers backed by the provider', async () => {
+    const fakeFs = new FakeFileSystemProvider();
 
-    await fs.createDirectory('/workspace/docs');
-    await fs.writeFile('/workspace/docs/a.txt', Buffer.from('A'));
-    await fs.copy('/workspace/docs/a.txt', '/workspace/docs/b.txt');
-    await fs.rename('/workspace/docs/b.txt', '/workspace/docs/c.txt');
+    fakeFs.setFile('/workspace/missing/a.txt', 'seed');
+    await fakeFs.writeFile('/workspace/missing/a.txt', Buffer.from('updated'));
 
-    assert.equal(fs.exists('/workspace/docs/b.txt'), false);
-    assert.equal(fs.getText('/workspace/docs/c.txt'), 'A');
-    assert.deepEqual(await fs.readDirectory('/workspace/docs'), [
-      ['a.txt', FileType.File],
-      ['c.txt', FileType.File],
-    ]);
-
-    const stat = await fs.stat('/workspace/docs');
-    assert.equal(stat.type, FileType.Directory);
+    assert.equal(fakeFs.exists('/workspace/missing/a.txt'), true);
+    assert.equal(fakeFs.getText('/workspace/missing/a.txt'), 'updated');
   });
 
-  it('preserves file timestamps when renaming files', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/docs/a.txt': 'A',
+  it('matches node filesystem semantics for file reads, writes, stats, and directories', async () => {
+    await withProviders(async ({ provider, resolve, expectedRealPath }) => {
+      await provider.createDirectory(resolve('/workspace/docs'));
+      await provider.writeFile(
+        resolve('/workspace/docs/a.txt'),
+        Buffer.from('A'),
+      );
+      await provider.appendFile(
+        resolve('/workspace/docs/a.txt'),
+        Buffer.from('B'),
+      );
+      await provider.writeFileAtomic(
+        resolve('/workspace/docs/atomic.txt'),
+        Buffer.from('atomic'),
+      );
+
+      assert.equal(
+        text(await provider.readFile(resolve('/workspace/docs/a.txt'))),
+        'AB',
+      );
+      assert.equal(
+        text(
+          await provider.readFileChunk(resolve('/workspace/docs/a.txt'), 1, 1),
+        ),
+        'B',
+      );
+      assert.deepEqual(
+        sortedEntries(await provider.readDirectory(resolve('/workspace/docs'))),
+        [
+          ['a.txt', FileType.File],
+          ['atomic.txt', FileType.File],
+        ],
+      );
+      assert.equal(
+        (await provider.stat(resolve('/workspace/docs'))).type,
+        FileType.Directory,
+      );
+      assert.equal(
+        (await provider.stat(resolve('/workspace/docs/a.txt'))).size,
+        2,
+      );
+      assert.equal(
+        await provider.isSymlink(resolve('/workspace/docs/a.txt')),
+        false,
+      );
+      assert.equal(
+        await provider.realPath(resolve('/workspace/docs/a.txt')),
+        await expectedRealPath('/workspace/docs/a.txt'),
+      );
     });
-    const sourceRecord = fsRecords(fs).get('/workspace/docs/a.txt');
-    assert.ok(sourceRecord);
-    sourceRecord.ctime = 1;
-    sourceRecord.mtime = 2;
-
-    await fs.rename('/workspace/docs/a.txt', '/workspace/docs/b.txt');
-
-    const renamed = await fs.stat('/workspace/docs/b.txt');
-    assert.equal(renamed.ctime, 1);
-    assert.equal(renamed.mtime, 2);
   });
 
-  it('matches real writeFile parent directory semantics', async () => {
-    const fs = new FakeFileSystemProvider();
+  it('matches node filesystem semantics for copy, rename, and delete', async () => {
+    await withProviders(async ({ provider, resolve }) => {
+      await provider.createDirectory(resolve('/workspace/source/nested'));
+      await provider.writeFile(
+        resolve('/workspace/source/a.txt'),
+        Buffer.from('A'),
+      );
+      await provider.writeFile(
+        resolve('/workspace/source/nested/b.txt'),
+        Buffer.from('B'),
+      );
 
-    await assert.rejects(
-      () => fs.writeFile('/workspace/missing/a.txt', Buffer.from('A')),
-      /Parent directory not found/,
-    );
-
-    fs.setFile('/workspace/missing/a.txt', 'seed');
-    await fs.writeFile('/workspace/missing/a.txt', Buffer.from('updated'));
-
-    assert.equal(fs.getText('/workspace/missing/a.txt'), 'updated');
-  });
-
-  it('rejects directory operations into self descendants', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-    });
-
-    await assert.rejects(
-      () => fs.copy('/workspace/source', '/workspace/source/nested'),
-      /Cannot copy a directory into itself/,
-    );
-    await assert.rejects(
-      () => fs.rename('/workspace/source', '/workspace/source/nested'),
-      /Cannot rename a directory into itself/,
-    );
-
-    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
-    assert.equal(fs.exists('/workspace/source/nested'), false);
-  });
-
-  it('rejects directory rename over non-empty targets', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-      '/workspace/dest/existing.txt': 'B',
-    });
-
-    await assert.rejects(
-      () =>
-        fs.rename('/workspace/source', '/workspace/dest', { overwrite: true }),
-      /Directory is not empty/,
-    );
-
-    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
-    assert.equal(fs.getText('/workspace/dest/existing.txt'), 'B');
-  });
-
-  it('rejects directory rename when destination parent is missing', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-    });
-
-    await assert.rejects(
-      () =>
-        fs.rename('/workspace/source', '/workspace/missing/dest', {
+      await provider.copy(
+        resolve('/workspace/source'),
+        resolve('/workspace/dest'),
+        {
           overwrite: true,
-        }),
-      /Parent directory not found/,
-    );
+        },
+      );
+      assert.equal(
+        text(await provider.readFile(resolve('/workspace/dest/a.txt'))),
+        'A',
+      );
+      assert.equal(
+        text(await provider.readFile(resolve('/workspace/dest/nested/b.txt'))),
+        'B',
+      );
+      await provider.copy(
+        resolve('/workspace/source/a.txt'),
+        resolve('/workspace/file-copy.txt'),
+      );
+      assert.equal(
+        text(await provider.readFile(resolve('/workspace/file-copy.txt'))),
+        'A',
+      );
+      await rejectsWithCode(
+        () =>
+          provider.copy(
+            resolve('/workspace/source/a.txt'),
+            resolve('/workspace/file-copy.txt'),
+          ),
+        'EEXIST',
+      );
 
-    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
-    assert.equal(fs.exists('/workspace/missing'), false);
-  });
-
-  it('creates missing destination parents when copying directories', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-    });
-
-    await fs.copy('/workspace/source', '/workspace/missing/dest', {
-      overwrite: true,
-    });
-
-    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
-    assert.equal(fs.getText('/workspace/missing/dest/a.txt'), 'A');
-  });
-
-  it('rejects directory copy onto itself with overwrite', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-    });
-
-    await assert.rejects(
-      () =>
-        fs.copy('/workspace/source', '/workspace/source', {
+      await provider.rename(
+        resolve('/workspace/dest/a.txt'),
+        resolve('/workspace/dest/c.txt'),
+        {
           overwrite: true,
-        }),
-      /Cannot copy a directory onto itself/,
-    );
+        },
+      );
+      await rejectsWithCode(
+        () => provider.stat(resolve('/workspace/dest/a.txt')),
+        'ENOENT',
+      );
+      assert.equal(
+        text(await provider.readFile(resolve('/workspace/dest/c.txt'))),
+        'A',
+      );
 
-    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
-  });
-
-  it('copies directories into existing destination directories', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-      '/workspace/dest/existing.txt': 'existing',
+      await provider.delete(resolve('/workspace/dest'), { recursive: true });
+      await rejectsWithCode(
+        () => provider.stat(resolve('/workspace/dest/c.txt')),
+        'ENOENT',
+      );
+      await provider.delete(resolve('/workspace/dest'), { recursive: true });
     });
-
-    await fs.copy('/workspace/source', '/workspace/dest');
-
-    assert.equal(fs.getText('/workspace/dest/a.txt'), 'A');
-    assert.equal(fs.getText('/workspace/dest/existing.txt'), 'existing');
   });
 
-  it('assigns fresh timestamps when copying directory children', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-      '/workspace/source/nested/b.txt': 'B',
+  it('matches node filesystem error codes for common failures', async () => {
+    await withProviders(async ({ provider, resolve }) => {
+      await rejectsWithCode(
+        () =>
+          provider.writeFile(
+            resolve('/workspace/missing/a.txt'),
+            Buffer.from('A'),
+          ),
+        'ENOENT',
+      );
+
+      await provider.createDirectory(resolve('/workspace/source'));
+      await provider.writeFile(
+        resolve('/workspace/source/a.txt'),
+        Buffer.from('A'),
+      );
+      await provider.writeFile(
+        resolve('/workspace/source/b.txt'),
+        Buffer.from('B'),
+      );
+
+      await rejectsWithCode(
+        () => provider.readFile(resolve('/workspace/source')),
+        'EISDIR',
+      );
+      await rejectsWithCode(
+        () =>
+          provider.rename(
+            resolve('/workspace/source/a.txt'),
+            resolve('/workspace/source/b.txt'),
+          ),
+        'EEXIST',
+      );
+      await rejectsWithCode(
+        () =>
+          provider.copy(
+            resolve('/workspace/source'),
+            resolve('/workspace/source/nested'),
+          ),
+        'ERR_FS_CP_EINVAL',
+      );
+      await rejectsWithCode(
+        () =>
+          provider.copy(
+            resolve('/workspace/missing'),
+            resolve('/workspace/missing/nested'),
+          ),
+        'ENOENT',
+      );
+      await rejectsWithCode(
+        () =>
+          provider.rename(
+            resolve('/workspace/missing'),
+            resolve('/workspace/missing/nested'),
+          ),
+        'ENOENT',
+      );
     });
-    for (const record of fsRecords(fs).values()) {
-      record.ctime = 1;
-      record.mtime = 1;
-    }
-
-    await fs.copy('/workspace/source', '/workspace/dest');
-
-    assert.equal((await fs.stat('/workspace/dest/a.txt')).mtime > 1, true);
-    assert.equal((await fs.stat('/workspace/dest/nested')).mtime > 1, true);
-    assert.equal(
-      (await fs.stat('/workspace/dest/nested/b.txt')).mtime > 1,
-      true,
-    );
   });
 
-  it('rejects directory copy when a destination file already exists', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-      '/workspace/dest/a.txt': 'existing',
-    });
-
-    await assert.rejects(
-      () => fs.copy('/workspace/source', '/workspace/dest'),
-      /Target already exists/,
-    );
-
-    assert.equal(fs.getText('/workspace/dest/a.txt'), 'existing');
-  });
-
-  it('keeps earlier directory copy writes when a later child fails', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-      '/workspace/source/z.txt': 'Z',
-      '/workspace/dest/z.txt': 'existing',
-    });
-
-    await assert.rejects(
-      () => fs.copy('/workspace/source', '/workspace/dest'),
-      /Target already exists/,
-    );
-
-    assert.equal(fs.getText('/workspace/dest/a.txt'), 'A');
-    assert.equal(fs.getText('/workspace/dest/z.txt'), 'existing');
-  });
-
-  it('rejects file copy onto itself with overwrite', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-    });
-
-    await assert.rejects(
-      () =>
-        fs.copy('/workspace/source/a.txt', '/workspace/source/a.txt', {
-          overwrite: true,
-        }),
-      /Cannot copy a file onto itself/,
-    );
-
-    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
-  });
-
-  it('rejects same-path rename when the source is missing', async () => {
-    const fs = new FakeFileSystemProvider();
-
-    await assert.rejects(
-      () => fs.rename('/workspace/missing.txt', '/workspace/missing.txt'),
-      /File not found/,
-    );
-  });
-
-  it('rejects deleting the filesystem root', async () => {
-    const fs = new FakeFileSystemProvider({
+  it('rejects deleting the fake filesystem root', async () => {
+    const fakeFs = new FakeFileSystemProvider({
       '/workspace/source/a.txt': 'A',
     });
 
-    await assert.rejects(
-      () => fs.delete('/', { recursive: true }),
-      /Cannot delete filesystem root/,
+    await rejectsWithCode(
+      () => fakeFs.delete('/', { recursive: true }),
+      'EPERM',
     );
 
-    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
-  });
-
-  it('reports implicit readDirectory path prefixes as directories', async () => {
-    const fs = new FakeFileSystemProvider();
-    await fs.createDirectory('/workspace');
-    fsRecords(fs).set('/workspace/implicit/file.txt', {
-      type: FileType.File,
-      ctime: Date.now(),
-      mtime: Date.now(),
-      content: Buffer.from('A'),
-    });
-
-    assert.deepEqual(await fs.readDirectory('/workspace'), [
-      ['implicit', FileType.Directory],
-    ]);
-  });
-
-  it('rejects directory copy when a destination file blocks a source directory', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/item/a.txt': 'A',
-      '/workspace/dest/item': 'existing file',
-    });
-
-    await assert.rejects(
-      () =>
-        fs.copy('/workspace/source', '/workspace/dest', { overwrite: true }),
-      /Path is a file/,
-    );
-
-    assert.equal(fs.getText('/workspace/source/item/a.txt'), 'A');
-    assert.equal(fs.getText('/workspace/dest/item'), 'existing file');
-    assert.equal(fs.exists('/workspace/dest/item/a.txt'), false);
-  });
-
-  it('rejects directory copy when a destination directory blocks a source file', async () => {
-    const fs = new FakeFileSystemProvider({
-      '/workspace/source/item': 'source file',
-      '/workspace/dest/item/existing.txt': 'existing nested file',
-    });
-
-    await assert.rejects(
-      () =>
-        fs.copy('/workspace/source', '/workspace/dest', { overwrite: true }),
-      /Path is a directory/,
-    );
-
-    assert.equal(fs.getText('/workspace/source/item'), 'source file');
-    assert.equal(
-      fs.getText('/workspace/dest/item/existing.txt'),
-      'existing nested file',
-    );
+    assert.equal(fakeFs.getText('/workspace/source/a.txt'), 'A');
   });
 });

@@ -19,6 +19,7 @@ export default defineConfig({
     environment: 'node',
     include: ['src/test-kernel/**/*.vitest.{ts,mts}'],
     passWithNoTests: false,
+    setupFiles: ['src/test-kernel/support/setupFakePlatform.ts'],
     testTimeout: 10000,
   },
 });
