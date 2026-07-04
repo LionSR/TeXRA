@@ -1,6 +1,6 @@
 # Agent SDK Readiness Audit
 
-_Audit date: 2026-05-28 · Re-verified through 2026-06-29 (§25) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, `src/platform/**`, `packages/core/src/**`, plus extension/CLI entrypoints._
+_Audit date: 2026-05-28 · Re-verified through 2026-07-04 (§26) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, `src/platform/**`, `packages/core/src/**`, plus extension/CLI entrypoints._
 
 This is a **review + refactoring plan**, not an applied refactor. It identifies the
 texra agent core, model handlers, logger, and surface areas; flags abstractions
@@ -3039,9 +3039,11 @@ refactor was applied to the codebase this pass — only the §25 ledger reconcil
 ## 26. Re-verification addendum — 2026-07-04 (twenty-first pass — confirmation; re-pinned to a new branch lineage, §4 observability-unification now landing in code)
 
 A twenty-first pass, run on branch `claude/eager-noether-5uum43` at HEAD **`1ab46ab`** (2026-07-04). Note the
-lineage change: §25's pin `e1bfb60` is **not an ancestor** of this HEAD (`git merge-base --is-ancestor
-e1bfb60 HEAD` exits non-zero — no output, ancestry is reported via exit status), so this is a fresh branch,
-not a fast-forward of §25's. A three-agent
+lineage change: this is a **different feature branch** from §25's `claude/eager-noether-bfxlhs` (whose pin was
+`e1bfb60`) — a fresh feature-branch lineage, not a continuation of §25's branch. (The exact commit-ancestry
+between the two pins is left unstated deliberately: it depends on shared-history depth that a shallow working
+clone truncates, so a local `git merge-base` here is not authoritative — the branch identity is the reliable
+signal.) A three-agent
 fresh-eyes fan-out (independent, source-only, **not** given this document) re-covered the four task areas: an
 `agent/core` + `agent/runtime` + `implementations/flows` abstraction audit, a `modelHandlers/` port + base +
 OpenAI-compatible subclass audit, and a `packages/core` surface + `logger` + `agent/trace` + `eventBus`
@@ -3061,7 +3063,7 @@ this branch as of today:
   `runtime/runFactEvents.ts`, `runtime/SessionRunFactProjector.ts`, and expands `runtime/SessionEventHub.ts`.
   Run-scoped progress facts (`updateTodos`, `updatePlan`, `addOutputFiles`, `updateMissingOutputs`,
   `updateCompileFailures`, `goalPaused`) are now emitted as `AgentTrace` **domain** events under a
-  `runFact.*` key (`emitRunFact`, `runFactEvents.ts:32-42`), re-published through `SessionEventHub`, decoded
+  `runFact.*` key (`emitRunFact`, `runFactEvents.ts:33-42`), re-published through `SessionEventHub`, decoded
   back by string-prefix (`fromRunFactDomainKey`, `SessionRunFactProjector.ts:56`), and re-emitted on
   `runtimeHost.emit(...)`; token usage is projected the same way to `updateStreamUsage`
   (`SessionRunFactProjector.ts:51`). This is the team **executing the §4 direction** — run facts leave the
@@ -3106,16 +3108,28 @@ remove.
   (`ModelFactory.ts:59-101`), but the post-construction non-enumerable brand still exists — the
   `__texraModelHandlerCompatibilityKey` property and its tagged-type read-back remain (`ModelFactory.ts:43-49`).
   The declarative source landed; the monkey-patch tagging did not go away. Keep open.
-- **P25-2 (`@agent/types/index.ts` pass-through shim) — unchanged, present** (`export type { FileOpResult }
-from '@shared/schemas/…'` still re-forwards).
-- **P25-3 (`core/usage/ResponseUsage.ts` provider-SDK type re-export block) — unchanged** (not re-opened this
-  pass; still the low-priority forwarding-only trim).
+- **P25-2 (`@agent/types/index.ts` pass-through shim) — LARGELY TRIMMED since §25** (correction on first-hand
+  re-read at this HEAD). §25 described a 7-symbol re-export plus a local `NormalizedUsage`; the file now
+  re-exports **only** `export type { FileOpResult } from '@shared/schemas/opResults'` (`NormalizedUsage` no
+  longer lives here). A single-symbol pass-through remains — either drop it or fold `FileOpResult` into the
+  importing sites — but the bulk of the P25-2 shim is already gone; not "unchanged." (Flagged by Codex + the
+  `texra-review` bot; verified.)
+- **P25-3 (`core/usage/ResponseUsage.ts` provider-SDK type re-export block) — effectively MOOT / not present
+  as described** (correction). There is **no** bare `export type { CompletionUsage, AnthropicUsage, … }`
+  forwarding block at `:58-66` (those lines are the internal `ResponseUsageBase` interface). The
+  `CompletionUsage` / `AnthropicUsage` symbols that remain are **imports that are load-bearing** —
+  `ExtendedCompletionUsage extends CompletionUsage` (`:29`) and the `NativeUsagePayload` union (`:44-46`) — so
+  there is no forwarding-only surface left to trim. Close P25-3. (Flagged by Codex; verified first-hand.)
 - **P25-4 (`@logger/index.ts` exposes one symbol) — unchanged, confirmed** (`export { createChannelTrace }`
   only; the functional `debug/info/warn/error` API is the deep `@logger/logUtils` path, ~70+ callers — the
   barrel still misrepresents its module). Low, cosmetic.
 - **P25-5 (Anthropic inline compaction-threshold read) — unchanged, present**
   (`modelHandlerAnthropic.ts:512` still reads `texra.model.compactionThresholdPercent` inline instead of the
-  base `getCompactionThresholdPercent()`). One-line DRY when next touching the file.
+  base `getCompactionThresholdPercent()`). One-line DRY when next touching the file. **False positive to
+  record:** a review bot (`texra-review`, deepseek) claimed `getCompactionThresholdPercent` "does not exist
+  anywhere" — verified **wrong first-hand**: it is defined `protected` at `ModelHandler.ts:864` and called in
+  6 places (`ModelHandler.ts:881`, `modelHandlerOpenAI.ts:571`, `modelHandlerOpenAIResponse.ts:757/789/1449`).
+  The method exists; the inline Anthropic read genuinely bypasses it. Claim stands as written.
 - **P25-6 (registry one-time migrations on the lookup hot-path) — unchanged** (not re-inspected in depth this
   pass; carried forward as recorded).
 
@@ -3185,7 +3199,10 @@ the audit — which simultaneously makes the two-channel duplication concrete en
 agents re-reached the standing verdict and re-surfaced every recurring trap (the `IModelHandler` width for the
 fourteenth time, the config-only subclasses, the two Google handlers, the kept two-headed entry, the §23-N2
 resume duplication) — all re-rebutted or already-tracked. P25-1 moved to **partially-addressed** (declarative
-route keys landed; the monkey-patch brand did not); P25-2–P25-6 unchanged. The tool-definition primitive
+route keys landed; the monkey-patch brand did not); a first-hand re-read this pass **corrected two carried
+labels** — P25-2 is largely trimmed (now a single `FileOpResult` re-export, not the 7-symbol shim) and P25-3
+is effectively moot (no bare forwarding block remains; the surviving imports are load-bearing) — with P25-4–P25-6
+unchanged. The tool-definition primitive
 absent from `@texra/core` is re-recorded as a product-scope/documentation decision, not an abstraction to
 remove. Guardrails intact (7 barrels, vscode-clean agnostic zones, 16 surface exports); no dead shim/barrel
 remains, so **no refactor was applied** this pass — only the §26 ledger reconciliation and the P26-1 record.
