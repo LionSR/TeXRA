@@ -1,7 +1,7 @@
 # Open-Problem Research Roadmap — July 2026
 
 **Status:** Proposal (v2 — freedom-first revision)
-**Theme:** Make TeXRA better at attacking open theoretical math/physics problems, make agents run (much) longer, and make the harness *lighter* as models get stronger — by giving the agent more freedom, not more supervision.
+**Theme:** Make TeXRA better at attacking open theoretical math/physics problems, make agents run (much) longer, and make the harness _lighter_ as models get stronger — by giving the agent more freedom, not more supervision.
 
 ## Method
 
@@ -21,7 +21,7 @@ The full ranking and bracket record are in the appendix. **v2 revision:** the wi
 The bitter lesson, applied to agent harnesses: every place the harness second-guesses the model — fixed round counts, motivational nags, regex rewrites of model output, summaries written on the model's behalf, depth caps, completion gates, "are you stuck?" detectors — is a bet against model capability that stronger models turn into dead weight or active harm. The harness's legitimate jobs are exactly four:
 
 - **Survival.** Persistence, crash-safe resume, process supervision. The agent should be able to run for weeks; the harness's job is that nothing short of the researcher saying "stop" kills the run. (`PersistedFlow` already does the hard part.)
-- **Resources.** One upfront envelope — money, time, workspace scope — and inside it, freedom. Budgets bound *how much*, never *how*. No per-action permission friction inside an approved envelope.
+- **Resources.** One upfront envelope — money, time, workspace scope — and inside it, freedom. Budgets bound _how much_, never _how_. No per-action permission friction inside an approved envelope.
 - **Ground truth.** Deterministic verifiers (Lean, CAS, compilation, execution) exposed as tools and evidence the model cannot fake — offered, not imposed. Ground truth is a resource the agent reaches for, not a filter the harness applies.
 - **Transparency.** The researcher can always see what happened (traces, ledger, costs) — verbatim, never silently rewritten.
 
@@ -29,11 +29,11 @@ Everything else — how to decompose the problem, when to verify, when to hand o
 
 ### 2. Selection machinery is agentic orchestration, not harness code
 
-Tournament / best-of-N / judge / debate mechanisms are run *by the orchestrator agent* using the existing delegation primitives (`delegate_agent`, worktree isolation, FollowUpQueue delivery, cost roll-up) — never encoded as new deterministic flows. The tournament independently converged on this: the one candidate proposing a hardcoded `TournamentFlow` seeded 21st of 23, penalized by the bitter-lesson judge as scaffolding a stronger model makes obsolete. When a better selection strategy emerges, you edit a prompt, not a flow.
+Tournament / best-of-N / judge / debate mechanisms are run _by the orchestrator agent_ using the existing delegation primitives (`delegate_agent`, worktree isolation, FollowUpQueue delivery, cost roll-up) — never encoded as new deterministic flows. The tournament independently converged on this: the one candidate proposing a hardcoded `TournamentFlow` seeded 21st of 23, penalized by the bitter-lesson judge as scaffolding a stronger model makes obsolete. When a better selection strategy emerges, you edit a prompt, not a flow.
 
 ### 3. General methods, not problem-specific strategies
 
-No curated problem-attack heuristics anywhere in the system — not in harness code, not in goal templates, not in agent YAMLs. "Try special cases first," "enumerate these proof techniques," "ladder up from n=2" are the modern equivalents of hand-coded chess features: they help the current model on the problems the author imagined and cap every stronger model on everything else. The tournament's seeding reflected this — strategy-prescribing candidates (Ladder Plans, approach-commitment forcing) ranked near the bottom. Templates state *structural* expectations that are domain-general (keep a notebook, back claims with evidence, spend the budget deliberately) and leave strategy — what to try, in what order, when to diversify, when to abandon — entirely to the agent's judgment on the problem in front of it. Search and learning, not our encoded taste.
+No curated problem-attack heuristics anywhere in the system — not in harness code, not in goal templates, not in agent YAMLs. "Try special cases first," "enumerate these proof techniques," "ladder up from n=2" are the modern equivalents of hand-coded chess features: they help the current model on the problems the author imagined and cap every stronger model on everything else. The tournament's seeding reflected this — strategy-prescribing candidates (Ladder Plans, approach-commitment forcing) ranked near the bottom. Templates state _structural_ expectations that are domain-general (keep a notebook, back claims with evidence, spend the budget deliberately) and leave strategy — what to try, in what order, when to diversify, when to abandon — entirely to the agent's judgment on the problem in front of it. Search and learning, not our encoded taste.
 
 ---
 
@@ -41,41 +41,41 @@ No curated problem-attack heuristics anywhere in the system — not in harness c
 
 These are the purest wins: each deletes harness code that overrides model judgment, and each is independent.
 
-- **Delete the delegation depth gate; budget is the only bound (C6, seed #2).** `maxDepth` (default 1 in `src/tools/delegation/subagentExecution.ts`) forbids exactly the decomposition open problems want — an orchestrator spawning provers that spawn lemma-verifiers. Cost roll-up already propagates through the whole tree, so unbounded-depth-under-bounded-cost is the lighter *and* safer invariant. Also delete hardcoded team-preset rosters: generate `<available_agents>` in the `delegate_agent` description from the live catalog and let the orchestrator compose its own team per problem.
-- **Delete the silent replacement engine (C2, seed #10).** Every provider handler pipes model output through a 3,276-line regex rewrite engine — blind substitution over LaTeX that can corrupt math and hides what the model actually wrote from the trace. Fold the genuinely stylistic rules into the existing `{{LATEX_STYLE_RULES}}` prompt injection; keep rule tables at most as a post-run lint *the model* fixes. Silently mutating a proof is both a correctness risk and a transparency violation.
+- **Delete the delegation depth gate; budget is the only bound (C6, seed #2).** `maxDepth` (default 1 in `src/tools/delegation/subagentExecution.ts`) forbids exactly the decomposition open problems want — an orchestrator spawning provers that spawn lemma-verifiers. Cost roll-up already propagates through the whole tree, so unbounded-depth-under-bounded-cost is the lighter _and_ safer invariant. Also delete hardcoded team-preset rosters: generate `<available_agents>` in the `delegate_agent` description from the live catalog and let the orchestrator compose its own team per problem.
+- **Delete the silent replacement engine (C2, seed #10).** Every provider handler pipes model output through a 3,276-line regex rewrite engine — blind substitution over LaTeX that can corrupt math and hides what the model actually wrote from the trace. Fold the genuinely stylistic rules into the existing `{{LATEX_STYLE_RULES}}` prompt injection; keep rule tables at most as a post-run lint _the model_ fixes. Silently mutating a proof is both a correctness risk and a transparency violation.
 - **Retire the reflection flow — One Loop (C1, seed #9).** Fixed `rounds: 2`, whole-document XML re-emission, a 496-line output parser, and prefill truncation-repair are all hedges against models that couldn't use tools. Run workflow agents (correct/polish/merge/ocr) on the tooluse loop with read/edit/compile tools: the model edits `.tex` files surgically and decides itself whether another pass is needed. ~1,300+ lines deleted; `latexdiff` computed once post-run from base-vs-edited files.
-- **Delete the client-side compaction summarizer (C4, seed #4).** On the OpenAI-compat path the harness compresses the model's own history with a hardcoded 2,000-token summarizer prompt — deciding on the model's behalf which parts of a half-finished derivation matter. Replace with structural truncation at the same 75% threshold: elide old *tool results* to one-line stubs, preserve all assistant reasoning and user turns verbatim, tell the model once that its files/notes/memory are intact and re-readable, and let it recover what it needs. Deletes summarizer retries, mid-compaction interruption state, and cross-provider summary drift.
-- **Shrink the Goal continuation nag to telemetry (part of C3).** The ~25-line "keep pursuing the objective, don't cheat" template is motivation for a model that doesn't need it. Replace with a thin status line — `<goal_status elapsed="2h13m" cost="$4.10/$25"/>` — and state the objective once. Strong models hold an objective for hundreds of turns; what they can actually *use* is budget telemetry to self-pace and plan an endgame.
+- **Delete the client-side compaction summarizer (C4, seed #4).** On the OpenAI-compat path the harness compresses the model's own history with a hardcoded 2,000-token summarizer prompt — deciding on the model's behalf which parts of a half-finished derivation matter. Replace with structural truncation at the same 75% threshold: elide old _tool results_ to one-line stubs, preserve all assistant reasoning and user turns verbatim, tell the model once that its files/notes/memory are intact and re-readable, and let it recover what it needs. Deletes summarizer retries, mid-compaction interruption state, and cross-provider summary drift.
+- **Shrink the Goal continuation nag to telemetry (part of C3).** The ~25-line "keep pursuing the objective, don't cheat" template is motivation for a model that doesn't need it. Replace with a thin status line — `<goal_status elapsed="2h13m" cost="$4.10/$25"/>` — and state the objective once. Strong models hold an objective for hundreds of turns; what they can actually _use_ is budget telemetry to self-pace and plan an endgame.
 
 ## Track 2 — Survival and resources: what "run longer" actually needs
 
 ### Goal budgets: one envelope, then freedom (C3 — top seed, 8.7)
 
-The autonomous Goal loop is literally unbounded today: no cost, token, wall-clock, or cycle cap exists (flagged in `docs/proposals/error-pipeline-and-ownership.md`) — so researchers babysit, which is the real ceiling on run length. Add optional budget fields to `GoalSchema`; enforcement is a comparison at the existing choke point (`maybeBuildGoalContinuation`), since `RunUsageAccumulator` already tracks total cost *including subagent roll-up*. Semantics are pause-not-kill: at 80%, a soft note in the status line; at 100%, a wind-down turn ("bank state into your notebook, pause") through the existing `GoalStore.setStatus('paused')` path with `pausedReason: 'budget_exhausted'` and one-click extend-and-resume.
+The autonomous Goal loop is literally unbounded today: no cost, token, wall-clock, or cycle cap exists (flagged in `docs/proposals/error-pipeline-and-ownership.md`) — so researchers babysit, which is the real ceiling on run length. Add optional budget fields to `GoalSchema`; enforcement is a comparison at the existing choke point (`maybeBuildGoalContinuation`), since `RunUsageAccumulator` already tracks total cost _including subagent roll-up_. Semantics are pause-not-kill: at 80%, a soft note in the status line; at 100%, a wind-down turn ("bank state into your notebook, pause") through the existing `GoalStore.setStatus('paused')` path with `pausedReason: 'budget_exhausted'` and one-click extend-and-resume.
 
-The freedom framing matters: the budget is not a leash, it's what *replaces* the leash. One approved envelope up front (cost + workspace scope), then yolo-grade autonomy inside it — no per-tool permission prompts, no depth caps, no cycle caps. The agent sees its remaining budget in every continuation and allocates it across subagents, models, and verification however it judges best. People let agents run overnight when spend is capped; agents spend budget well when they can see it.
+The freedom framing matters: the budget is not a leash, it's what _replaces_ the leash. One approved envelope up front (cost + workspace scope), then yolo-grade autonomy inside it — no per-tool permission prompts, no depth caps, no cycle caps. The agent sees its remaining budget in every continuation and allocates it across subagents, models, and verification however it judges best. People let agents run overnight when spend is capped; agents spend budget well when they can see it.
 
 ### Goal Daemon: nothing short of "stop" kills the run (C9 — semifinalist)
 
-Multi-day runs die today because the *process* dies — rate-limit storms, laptop sleep, extension-host reloads — not because the model gets lost. `PersistedFlow` already makes mid-run resume correct; the missing piece is who presses resume at 3am. Classify pauses (`pausedReason: provider_error | budget_exhausted | user | handoff`) with backoff timestamps; add `texra goals list|resume` on the existing `resumeExecution.ts` path; `texra goals daemon --interval 5m` (or a two-line systemd unit) polls and resumes eligible goals headlessly. A resumed goal needing a human answer files an async `inquiry` and re-pauses instead of blocking a context for hours.
+Multi-day runs die today because the _process_ dies — rate-limit storms, laptop sleep, extension-host reloads — not because the model gets lost. `PersistedFlow` already makes mid-run resume correct; the missing piece is who presses resume at 3am. Classify pauses (`pausedReason: provider_error | budget_exhausted | user | handoff`) with backoff timestamps; add `texra goals list|resume` on the existing `resumeExecution.ts` path; `texra goals daemon --interval 5m` (or a two-line systemd unit) polls and resumes eligible goals headlessly. A resumed goal needing a human answer files an async `inquiry` and re-pauses instead of blocking a context for hours.
 
 ### Context Rebirth: the agent ends its own context (C8 — quarterfinalist)
 
-`plan(command="handoff")`: the agent deliberately terminates its own context and continues the goal in a fresh execution seeded only from the objective, its notebook, and a self-written handoff brief (reusing the subagent seeding pattern, sequentially). Long runs become a chain of bounded-context legs at full attention instead of one endlessly-compacted conversation; the goal record gains `legs[]` for the progress view. This is freedom over one's own context: *when* to be reborn is the agent's judgment (context feels degraded, a subproblem closed), not a harness threshold. Long-agent postmortems consistently show degradation with context age even under good compaction; rebirth is the clean fix, and it makes compaction quality nearly irrelevant.
+`plan(command="handoff")`: the agent deliberately terminates its own context and continues the goal in a fresh execution seeded only from the objective, its notebook, and a self-written handoff brief (reusing the subagent seeding pattern, sequentially). Long runs become a chain of bounded-context legs at full attention instead of one endlessly-compacted conversation; the goal record gains `legs[]` for the progress view. This is freedom over one's own context: _when_ to be reborn is the agent's judgment (context feels degraded, a subproblem closed), not a harness threshold. Long-agent postmortems consistently show degradation with context age even under good compaction; rebirth is the clean fix, and it makes compaction quality nearly irrelevant.
 
 ### Self-extension: the agent grows its own capabilities
 
-Already mostly present — treat as policy, not new machinery: the agent can write and run its own scripts (`bash`), drive external coding agents (`codex`, `claude_code`), create new agent definitions at runtime (the agentCreator flow), choose models and reasoning effort per delegated subtask (the handler registry abstracts ten providers), and file async questions to the human (`inquiry`) without blocking. The roadmap item is simply to stop gating these behind supervision defaults inside an approved envelope, and to say so in the orchestrator/goal prompts: *you may build the tool you're missing.*
+Already mostly present — treat as policy, not new machinery: the agent can write and run its own scripts (`bash`), drive external coding agents (`codex`, `claude_code`), create new agent definitions at runtime (the agentCreator flow), choose models and reasoning effort per delegated subtask (the handler registry abstracts ten providers), and file async questions to the human (`inquiry`) without blocking. The roadmap item is simply to stop gating these behind supervision defaults inside an approved envelope, and to say so in the orchestrator/goal prompts: _you may build the tool you're missing._
 
 ## Track 3 — The research notebook: agent-owned, mechanically checkable (C7 — champion, revised)
 
 The tournament champion, re-cast freedom-first. The original formulation had the harness enforce a Zod schema, gate `plan(complete)` on lemma statuses, and inject rut-detector interventions — supervision. What survives the freedom filter is better and smaller:
 
-**The agent owns a notebook; the harness only provisions and reads.** One durable state-of-the-problem file per goal under the existing memory root (`/memories/goals/<goalId>/`), maintained by the agent in whatever structure it finds useful — lemma DAG, attempts and dead ends with the exact obstruction, verified ranges, open subproblems. The goal template *teaches* the discipline `prover.yaml` already mandates in prose; no harness code parses or validates the prose.
+**The agent owns a notebook; the harness only provisions and reads.** One durable state-of-the-problem file per goal under the existing memory root (`/memories/goals/<goalId>/`), maintained by the agent in whatever structure it finds useful — lemma DAG, attempts and dead ends with the exact obstruction, verified ranges, open subproblems. The goal template _teaches_ the discipline `prover.yaml` already mandates in prose; no harness code parses or validates the prose.
 
 **The continuation injects the notebook, not conversation archaeology.** `maybeBuildGoalContinuation` gains a `{{notebook}}` variable — the file (or the agent's own digest of it) verbatim. The loop becomes self-healing after total context loss: objective + notebook + budget telemetry is a complete restart state. Compaction pressure drops to near zero (complements the Track 1 summarizer deletion); the context window becomes a cache, the notebook is the state.
 
-**Evidence pointers: a one-line convention, not a schema.** The only machine-readable element: a claim may carry an inline pointer — `[lean: File.lean#theorem_name]`, `[cas: execution-id]`, `[run: execution-id]`, `[cite: doi|arXiv]`. A `texra claims verify` command greps pointers out of the notebook and re-executes each one — re-run `lean_diagnostics` on the named declaration, re-execute the stored WolframScript, re-resolve the DOI — flipping status to verified/stale/broken **with zero model calls**, and rendering a green/amber/red table in the progress view. The researcher's trust cost collapses from "reread the transcript" to "scan the red rows." The agent isn't forced to annotate; unbacked claims simply *show* as unbacked, and a criticize agent (or the researcher) attacks those first. Honesty is made cheap and visible, not compelled.
+**Evidence pointers: a one-line convention, not a schema.** The only machine-readable element: a claim may carry an inline pointer — `[lean: File.lean#theorem_name]`, `[cas: execution-id]`, `[run: execution-id]`, `[cite: doi|arXiv]`. A `texra claims verify` command greps pointers out of the notebook and re-executes each one — re-run `lean_diagnostics` on the named declaration, re-execute the stored WolframScript, re-resolve the DOI — flipping status to verified/stale/broken **with zero model calls**, and rendering a green/amber/red table in the progress view. The researcher's trust cost collapses from "reread the transcript" to "scan the red rows." The agent isn't forced to annotate; unbacked claims simply _show_ as unbacked, and a criticize agent (or the researcher) attacks those first. Honesty is made cheap and visible, not compelled.
 
 **Why now:** weak models couldn't keep an honest notebook, so harnesses compensated with ever-cleverer compaction and validation. Strong models keep accurate notebooks when the template demands evidence — so the harness shrinks: dumber compaction, smaller live context, verification moved out of the model loop into deterministic re-execution. Trust scales with run length instead of decaying.
 
@@ -83,11 +83,11 @@ The tournament champion, re-cast freedom-first. The original formulation had the
 
 The final judges called it "elegant and un-gameable." A single Zod `VerifierReportSchema` in a new host-agnostic `src/agent/verification/` module — per-check entries `{kind: lean_build | lean_sorry_audit | numeric_spotcheck | latex_compile | symbolic_identity, status, evidence}` — wrapping what already exists:
 
-- **Lean:** existing LSP services + a source audit for `sorry` / `admit` / `native_decide` / new axioms — a proof passes only with clean diagnostics *and* a clean axiom audit.
+- **Lean:** existing LSP services + a source audit for `sorry` / `admit` / `native_decide` / new axioms — a proof passes only with clean diagnostics _and_ a clean axiom audit.
 - **Numeric spot-checks:** the attempt emits a `checks.wls` artifact; the harness evaluates the claimed identities at **randomized parameter values drawn by the harness, not the model**, so test points can't be cherry-picked.
 - **LaTeX compile:** the existing `src/latex/` pipeline.
 
-Freedom framing: this is *armament, not audit*. Exposure is a `verify_attempt` tool any agent may invoke on any artifact, plus a report **stapled to every delegated attempt's result** (`formatSubagentDelivery` in `src/tools/subagentResults.ts`) so a parent judging N attempts always sees code-trusted evidence next to each — information the orchestrator weighs, not a filter the harness applies. The one hard rule lives in prompts, not code: verifier evidence outranks self-report.
+Freedom framing: this is _armament, not audit_. Exposure is a `verify_attempt` tool any agent may invoke on any artifact, plus a report **stapled to every delegated attempt's result** (`formatSubagentDelivery` in `src/tools/subagentResults.ts`) so a parent judging N attempts always sees code-trusted evidence next to each — information the orchestrator weighs, not a filter the harness applies. The one hard rule lives in prompts, not code: verifier evidence outranks self-report.
 
 **Lean Lemma Escrow (C12) as a pattern on top:** the prover delegates a load-bearing lemma to the existing `lean` agent — `lean_loogle` Mathlib first (don't re-prove known results), else autoformalize and iterate against `lean_diagnostics` in a worktree — while it keeps attacking the main problem. Promotion to verified is mechanical (clean diagnostics + clean audit), so a hallucinated "I proved it" cannot promote; a refutation is gold — it kills a wrong branch early, in parallel.
 
@@ -95,10 +95,10 @@ Freedom framing: this is *armament, not audit*. Exposure is a `verify_attempt` t
 
 Per principle 2, these ship as agent/prompt patterns plus zero new machinery beyond Tracks 2–4:
 
-- **Best-of-N with independence:** the orchestrator delegates N attempts and is responsible for making them *genuinely independent* — how (different framings, different starting points, different models) is its call per problem, not a taxonomy we author. Diversity, not sampling noise, is where the marginal value of an attempt comes from, and per principle 3 the axes of diversity are the agent's to choose. Failed attempts return "what I learned"; that feeds the next generation. Cross-model diversity (ten providers behind one registry) is a free axis the harness merely makes available.
+- **Best-of-N with independence:** the orchestrator delegates N attempts and is responsible for making them _genuinely independent_ — how (different framings, different starting points, different models) is its call per problem, not a taxonomy we author. Diversity, not sampling noise, is where the marginal value of an attempt comes from, and per principle 3 the axes of diversity are the agent's to choose. Failed attempts return "what I learned"; that feeds the next generation. Cross-model diversity (ten providers behind one registry) is a free axis the harness merely makes available.
 - **Blind judging:** a judge agent gets the problem statement plus each surviving attempt's artifact with model names, costs, and reasoning traces stripped, plus each VerifierReport. Prompt rule: verifier-passing attempts strictly outrank failing ones; the judge only breaks ties among survivors.
 - **Prover–Skeptic:** a skeptic that never sees the prover's chain-of-thought — only the artifact and the problem statement — and must either report a concrete gap (exact line, candidate counterexample) or sign off. When to stop soliciting skeptics is the orchestrator's judgment, not flow logic.
-- **Fresh-context referee (C11, revised to opt-in):** before declaring a goal complete, the *goal template* tells the agent to hand its deliverable + notebook — and nothing else; fresh context is the point — to a referee with `wolfram` + `bash` + `lean_loogle`. Self-verification is the known strong-model failure mode (persuasive to oneself), and the same strength makes a clean-context referee genuinely effective. But it's the agent's discipline (and the researcher's per-goal choice), not a harness interception of `plan(complete)`. The agent decides when it's done; the budget is the only hard boundary.
+- **Fresh-context referee (C11, revised to opt-in):** before declaring a goal complete, the _goal template_ tells the agent to hand its deliverable + notebook — and nothing else; fresh context is the point — to a referee with `wolfram` + `bash` + `lean_loogle`. Self-verification is the known strong-model failure mode (persuasive to oneself), and the same strength makes a clean-context referee genuinely effective. But it's the agent's discipline (and the researcher's per-goal choice), not a harness interception of `plan(complete)`. The agent decides when it's done; the budget is the only hard boundary.
 
 These live in agent YAMLs (`orchestrator`, a hardened `skeptic`, a `referee`) and tool descriptions. Iterating a selection strategy means editing a prompt.
 
@@ -123,30 +123,30 @@ These live in agent YAMLs (`orchestrator`, a hardened `skeptic`, a `referee`) an
 
 **Seeding (3-judge mean, criteria: research impact / bitter-lesson fit / engineering leverage):**
 
-| # | ID | Score | Candidate |
-|---|----|-------|-----------|
-| 1 | C3 | 8.7 | Goal budgets with pause-not-kill semantics |
-| 2 | C6 | 8.0 | Recursive delegation under one budget |
-| 3 | C17 | 8.0 | VerifierReport ground-truth harness |
-| 4 | C4 | 7.7 | Delete client-side compaction summarizer |
-| 5 | C7 | 7.7 | Research Ledger with typed claims |
-| 6 | C8 | 7.7 | Context Rebirth (`plan(handoff)`) |
-| 7 | C9 | 7.7 | Goal Daemon auto-resume |
-| 8 | C12 | 7.7 | Lean Lemma Escrow |
-| 9 | C1 | 7.3 | One Loop (retire reflection flow) |
-| 10 | C2 | 7.3 | Delete the silent replacement engine |
-| 11 | C11 | 7.3 | Completion Gate + rut detector |
-| 12 | C10 | 7.0 | Detached deep-think legs (provider background mode) |
-| 13 | C23 | 6.7 | Night Auditor scheduled adversarial sweep |
-| 14 | C13 | 6.3 | Falsification Engine (counterexample search) |
-| 15 | C20 | 6.3 | Morning Brief research log |
-| 16 | C21 | 6.3 | Ballot checkpoints via inquiry |
-| 17 | C5 | 6.0 | Task cards, not agent zoo |
-| 18 | C16 | 6.0 | Prover–Skeptic adversarial flow |
-| 19 | C14 | 5.7 | Ladder Plans (special-case laddering) |
-| 20 | C22 | 5.7 | Problem Campaigns attack tree |
-| 21 | C15 | 5.3 | TournamentFlow (hardcoded best-of-N flow) |
-| 22 | C19 | 4.3 | Approach-commitment diversity forcing |
-| 23 | C18 | 3.7 | Evolutionary refinement w/ successive halving |
+| #   | ID  | Score | Candidate                                           |
+| --- | --- | ----- | --------------------------------------------------- |
+| 1   | C3  | 8.7   | Goal budgets with pause-not-kill semantics          |
+| 2   | C6  | 8.0   | Recursive delegation under one budget               |
+| 3   | C17 | 8.0   | VerifierReport ground-truth harness                 |
+| 4   | C4  | 7.7   | Delete client-side compaction summarizer            |
+| 5   | C7  | 7.7   | Research Ledger with typed claims                   |
+| 6   | C8  | 7.7   | Context Rebirth (`plan(handoff)`)                   |
+| 7   | C9  | 7.7   | Goal Daemon auto-resume                             |
+| 8   | C12 | 7.7   | Lean Lemma Escrow                                   |
+| 9   | C1  | 7.3   | One Loop (retire reflection flow)                   |
+| 10  | C2  | 7.3   | Delete the silent replacement engine                |
+| 11  | C11 | 7.3   | Completion Gate + rut detector                      |
+| 12  | C10 | 7.0   | Detached deep-think legs (provider background mode) |
+| 13  | C23 | 6.7   | Night Auditor scheduled adversarial sweep           |
+| 14  | C13 | 6.3   | Falsification Engine (counterexample search)        |
+| 15  | C20 | 6.3   | Morning Brief research log                          |
+| 16  | C21 | 6.3   | Ballot checkpoints via inquiry                      |
+| 17  | C5  | 6.0   | Task cards, not agent zoo                           |
+| 18  | C16 | 6.0   | Prover–Skeptic adversarial flow                     |
+| 19  | C14 | 5.7   | Ladder Plans (special-case laddering)               |
+| 20  | C22 | 5.7   | Problem Campaigns attack tree                       |
+| 21  | C15 | 5.3   | TournamentFlow (hardcoded best-of-N flow)           |
+| 22  | C19 | 4.3   | Approach-commitment diversity forcing               |
+| 23  | C18 | 3.7   | Evolutionary refinement w/ successive halving       |
 
 **v2 revision note.** After the bracket, the winners were re-filtered through governing principle 1 (provision, don't supervise). Concretely demoted from harness code to conventions/opt-in tools: the champion's Zod-enforced ledger schema (→ agent-owned notebook + one-line pointer convention), the `plan(complete)` GAP-gate (→ goal-template discipline + opt-in referee), and the rut detector (→ dropped; the notebook's Attempts table serves the purpose without harness intervention). Low-seeded candidates were not all discarded either: C16 (skeptic), C11 (referee), and C15's blind-judging/verifier-dominance rules survive as prompt patterns in Track 5; their proposed harness machinery does not.
