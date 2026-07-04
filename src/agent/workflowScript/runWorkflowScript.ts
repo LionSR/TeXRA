@@ -1,3 +1,5 @@
+import { toErrorMessage } from '@common/errors';
+import { isNonEmptyString } from '@utils/core';
 import { createSemaphore } from '@utils/core/semaphore';
 
 import { journalKey } from './journal';
@@ -47,7 +49,7 @@ export async function runWorkflowScript(
     prompt: unknown,
     rawOptions?: unknown,
   ): Promise<unknown> {
-    if (typeof prompt !== 'string' || prompt.trim().length === 0) {
+    if (!isNonEmptyString(prompt)) {
       throw new Error(
         'agent(prompt, options?) requires a non-empty string prompt.',
       );
@@ -89,7 +91,7 @@ export async function runWorkflowScript(
         index,
         label,
         cached: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       });
       return null;
     }
@@ -200,13 +202,10 @@ function normalizeAgentOptions(
   raw: unknown,
   currentPhase: string | undefined,
 ): WorkflowAgentCallOptions {
-  if (raw === undefined || raw === null) {
-    return currentPhase === undefined ? {} : { phase: currentPhase };
-  }
-  if (typeof raw !== 'object') {
+  if (raw !== undefined && raw !== null && typeof raw !== 'object') {
     throw new Error('agent() options must be an object.');
   }
-  const source = raw as Record<string, unknown>;
+  const source = (raw ?? {}) as Record<string, unknown>;
   const options: WorkflowAgentCallOptions = {};
   for (const field of ['label', 'phase', 'agentName'] as const) {
     const value = source[field];

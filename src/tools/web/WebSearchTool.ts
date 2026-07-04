@@ -51,6 +51,7 @@ interface DuckDuckGoResponse {
 
 export class WebSearchTool extends defineTool({
   name: 'web_search',
+  parallelSafe: true,
   description:
     'Search the web and return top results. Uses the native provider search tool when available; falls back to DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,

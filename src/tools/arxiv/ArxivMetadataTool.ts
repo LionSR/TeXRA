@@ -34,6 +34,7 @@ export type ArxivMetadataInput = z.infer<typeof ArxivMetadataInputSchema>;
 
 export class ArxivMetadataTool extends defineTool({
   name: 'arxiv_metadata',
+  parallelSafe: true,
   description: 'Fetch bibliographic metadata for an arXiv paper.',
   schema: ArxivMetadataInputSchema,
 }) {

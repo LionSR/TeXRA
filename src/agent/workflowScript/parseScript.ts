@@ -2,6 +2,8 @@ import * as vm from 'node:vm';
 
 import { z } from 'zod';
 
+import { toErrorMessage } from '@common/errors';
+
 import { WorkflowScriptMetaSchema, type WorkflowScriptMeta } from './types';
 
 export class WorkflowScriptParseError extends Error {
@@ -41,7 +43,8 @@ export function parseWorkflowScript(source: string): ParsedWorkflowScript {
       'Workflow script must begin with `export const meta = { name, description, ... }`.',
     );
   }
-  const braceStart = source.indexOf('{', match.index + match[0].length - 1);
+  // META_PATTERN ends in `\{`, so the literal opens at the match's last char.
+  const braceStart = match.index + match[0].length - 1;
   const braceEnd = findMatchingBrace(source, braceStart);
   if (braceEnd < 0) {
     throw new WorkflowScriptParseError(
@@ -59,7 +62,7 @@ export function parseWorkflowScript(source: string): ParsedWorkflowScript {
     }).runInContext(vm.createContext({}), { timeout: 250 });
   } catch (error) {
     throw new WorkflowScriptParseError(
-      `meta must be a pure object literal: ${error instanceof Error ? error.message : String(error)}`,
+      `meta must be a pure object literal: ${toErrorMessage(error)}`,
     );
   }
   const parsed = WorkflowScriptMetaSchema.safeParse(rawMeta);

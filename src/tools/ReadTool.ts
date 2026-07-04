@@ -72,6 +72,7 @@ type AttachmentKind = 'pdf' | 'image' | 'document';
 
 export class ReadFileTool extends defineTool({
   name: 'read_file',
+  parallelSafe: true,
   description:
     'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
   schema: ReadInputSchema,

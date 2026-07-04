@@ -64,6 +64,7 @@ export type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
 
 export class ArxivSearchTool extends defineTool({
   name: 'arxiv_search',
+  parallelSafe: true,
   description:
     'Search arXiv for papers and return basic metadata for each hit. Use field="author" for author name searches.',
   schema: ArxivSearchInputSchema,

@@ -1,5 +1,7 @@
 import * as vm from 'node:vm';
 
+import { toErrorMessage } from '@common/errors';
+
 import { WorkflowScriptParseError } from './parseScript';
 
 export interface SandboxOptions {
@@ -24,6 +26,11 @@ Math.random = () => {
 };
 `;
 
+// vm.Script is context-independent; compile the prelude once per process.
+const PRELUDE_SCRIPT = new vm.Script(DETERMINISM_PRELUDE, {
+  filename: 'workflow-prelude.js',
+});
+
 /**
  * Evaluates a workflow script body in a fresh `node:vm` realm with only the
  * injected primitives (plus the realm's own standard built-ins). Dynamic
@@ -45,9 +52,7 @@ export async function runScriptInSandbox(
     { ...globals },
     { codeGeneration: { strings: false, wasm: false } },
   );
-  new vm.Script(DETERMINISM_PRELUDE, {
-    filename: 'workflow-prelude.js',
-  }).runInContext(context);
+  PRELUDE_SCRIPT.runInContext(context);
 
   let script: vm.Script;
   try {
@@ -56,7 +61,7 @@ export async function runScriptInSandbox(
     });
   } catch (error) {
     throw new WorkflowScriptParseError(
-      `Workflow script syntax error: ${error instanceof Error ? error.message : String(error)}`,
+      `Workflow script syntax error: ${toErrorMessage(error)}`,
     );
   }
 

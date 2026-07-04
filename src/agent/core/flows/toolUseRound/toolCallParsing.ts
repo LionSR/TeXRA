@@ -16,23 +16,24 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Map duplicate parallel tool calls (same name + identical arguments) to
- * their primary occurrence. Returns duplicate `callId` → first-occurrence
- * `callId`; only the primary executes, and duplicates receive a copy of its
- * result — a byte-identical call has a known answer, so re-asking the model
- * to retry sequentially would burn a full round-trip for nothing.
+ * their primary occurrence. Returns duplicate `callId` → index of the first
+ * occurrence in `toolCalls`; only the primary executes, and duplicates
+ * receive a copy of its result — a byte-identical call has a known answer,
+ * so re-asking the model to retry sequentially would burn a full round-trip
+ * for nothing.
  */
 export function mapDuplicateCallsToPrimary(
   toolCalls: SdkToolCall[],
-): Map<string, string> {
-  const primaryBySignature = new Map<string, string>();
-  const duplicateToPrimary = new Map<string, string>();
-  for (const call of toolCalls) {
+): Map<string, number> {
+  const primaryBySignature = new Map<string, number>();
+  const duplicateToPrimary = new Map<string, number>();
+  for (const [index, call] of toolCalls.entries()) {
     const key = call.name + '\0' + stableStringify(call.input);
     const primary = primaryBySignature.get(key);
     if (primary !== undefined) {
       duplicateToPrimary.set(call.callId, primary);
     } else {
-      primaryBySignature.set(key, call.callId);
+      primaryBySignature.set(key, index);
     }
   }
   return duplicateToPrimary;

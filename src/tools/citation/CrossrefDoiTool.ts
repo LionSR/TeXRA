@@ -19,6 +19,7 @@ export type CrossrefDoiInput = z.infer<typeof CrossrefDoiInputSchema>;
 
 export class CrossrefDoiTool extends defineTool({
   name: 'crossref_doi',
+  parallelSafe: true,
   description: 'Look up detailed metadata for a DOI using Crossref.',
   schema: CrossrefDoiInputSchema,
 }) {

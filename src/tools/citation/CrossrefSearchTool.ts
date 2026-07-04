@@ -52,6 +52,7 @@ type ExtendedQueryWorksParams = QueryWorksParams & { filter?: string };
 
 export class CrossrefSearchTool extends defineTool({
   name: 'crossref_search',
+  parallelSafe: true,
   description: 'Search Crossref works and return top matches.',
   schema: CrossrefSearchInputSchema,
 }) {

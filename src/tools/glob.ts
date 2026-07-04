@@ -41,6 +41,7 @@ interface GlobMatchInfo {
 
 export class GlobTool extends defineTool({
   name: 'glob',
+  parallelSafe: true,
   description:
     'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
   schema: GlobInputSchema,

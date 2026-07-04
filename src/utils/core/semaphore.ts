@@ -3,9 +3,12 @@ export interface Semaphore {
 }
 
 /**
- * Counting semaphore bounding concurrent agent() executions. A released
- * slot is handed directly to the next waiter (active count unchanged) so a
- * synchronous newcomer cannot steal it and overshoot the limit.
+ * Generic counting semaphore bounding concurrent async tasks (tool dispatch
+ * batches, workflow-script agent() calls). A released slot is handed
+ * directly to the next waiter (active count unchanged) so a synchronous
+ * newcomer cannot steal it and overshoot the limit. Kept hand-rolled
+ * deliberately: p-queue (the in-repo alternative) types `add()` as
+ * `Promise<T | void>`, which would force assertions at every call site.
  */
 export function createSemaphore(limit: number): Semaphore {
   if (!Number.isInteger(limit) || limit < 1) {

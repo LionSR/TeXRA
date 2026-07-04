@@ -193,7 +193,8 @@ structured JSON at every edge, plain-code joins, one consolidated result.
    (`ToolUseDispatchNode`; per-tool `parallelSafe` flag or read-only
    allowlist). Safety fix plus the cheap latency win; no new dependencies.
    Prerequisite: the single shared abort-controller slot must become
-   per-call. *Landed (2026-07-04)*: contiguous runs of read-only tool calls
+   per-call. *Landed (2026-07-04)*: tools declare `parallelSafe` on `ITool`
+   (set via `defineTool`), and contiguous runs of parallel-safe calls
    dispatch concurrently under a shared semaphore with a batch-scoped abort
    controller; duplicate parallel calls fan out the primary's result instead
    of burning a model turn on a synthetic error; subagent report persistence

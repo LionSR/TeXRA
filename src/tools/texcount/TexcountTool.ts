@@ -27,6 +27,7 @@ type TexcountInput = z.infer<typeof TexcountInputSchema>;
 
 export class TexcountTool extends defineTool({
   name: 'texcount',
+  parallelSafe: true,
   description:
     'Run texcount on one or more LaTeX files. Use mode="separate" (default) for individual files, "include" to follow \\input/\\include, or "sum" to aggregate independent sources.',
   schema: TexcountInputSchema,

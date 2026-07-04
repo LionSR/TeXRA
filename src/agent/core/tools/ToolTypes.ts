@@ -14,6 +14,13 @@ import type { ToolResult } from '@shared/schemas/toolResult';
  */
 export interface ITool {
   readonly definition: ToolDefinition;
+  /**
+   * True only for tools that are side-effect-free and approval-free, so
+   * parallel calls in one model response may execute concurrently.
+   * Declared on the tool (not the YAML-overridable definition) so agent
+   * configs cannot mark arbitrary tools parallel-safe.
+   */
+  readonly parallelSafe?: boolean;
   call(rawInput: unknown): Promise<ToolResult>;
 }
 

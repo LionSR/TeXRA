@@ -7,6 +7,8 @@ import {
   type WorkflowAgentInvocation,
   type WorkflowScriptEvent,
 } from '@agent/workflowScript';
+import { delay } from '@utils/core';
+
 
 const META = `export const meta = {
   name: 'test-flow',
@@ -118,7 +120,7 @@ return await parallel([
     const events: WorkflowScriptEvent[] = [];
     const runner = async (invocation: WorkflowAgentInvocation) => {
       if (invocation.prompt === 'slow') {
-        await new Promise((resolve) => setTimeout(resolve, 40));
+        await delay(40);
       }
       return invocation.prompt;
     };
@@ -159,7 +161,7 @@ return await pipeline(
     const runner = async (invocation: WorkflowAgentInvocation) => {
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await delay(10);
       inFlight -= 1;
       return invocation.prompt;
     };

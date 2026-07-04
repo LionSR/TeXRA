@@ -15,6 +15,7 @@ import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
+import { delay } from '@utils/core';
 
 import { withTestRunContext } from './progressTestUtils';
 
@@ -28,15 +29,17 @@ function probeTool(
   probe: DispatchProbe,
   name: string,
   delayMs: number,
+  options: { parallelSafe?: boolean } = {},
 ): ITool {
   return {
     definition: { name, description: name, parameters: {} },
+    parallelSafe: options.parallelSafe,
     async call(input: unknown): Promise<ToolResult> {
       const tag = `${name}:${JSON.stringify(input)}`;
       probe.events.push(`start ${tag}`);
       probe.inFlight += 1;
       probe.maxInFlight = Math.max(probe.maxInFlight, probe.inFlight);
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await delay(delayMs);
       probe.inFlight -= 1;
       probe.events.push(`end ${tag}`);
       return { status: 'executed', output: `${tag} ok` };
@@ -111,8 +114,8 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
     const { node, dispose } = dispatchHarness({
       tools: {
-        grep: probeTool(probe, 'grep', 25),
-        read_file: probeTool(probe, 'read_file', 25),
+        grep: probeTool(probe, 'grep', 25, { parallelSafe: true }),
+        read_file: probeTool(probe, 'read_file', 25, { parallelSafe: true }),
       },
     });
     try {
@@ -136,7 +139,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
     const { node, dispose } = dispatchHarness({
       tools: {
-        read_file: probeTool(probe, 'read_file', 20),
+        read_file: probeTool(probe, 'read_file', 20, { parallelSafe: true }),
         write_file: probeTool(probe, 'write_file', 10),
       },
     });
@@ -164,7 +167,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
   it('executes duplicate parallel calls once and fans the result out', async () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
     const { node, dispose } = dispatchHarness({
-      tools: { grep: probeTool(probe, 'grep', 5) },
+      tools: { grep: probeTool(probe, 'grep', 5, { parallelSafe: true }) },
     });
     try {
       const results = (await runDispatch(node, [
@@ -204,8 +207,8 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     const registered: (AbortController | null)[] = [];
     const { node, dispose } = dispatchHarness({
       tools: {
-        grep: probeTool(probe, 'grep', 60),
-        read_file: probeTool(probe, 'read_file', 60),
+        grep: probeTool(probe, 'grep', 60, { parallelSafe: true }),
+        read_file: probeTool(probe, 'read_file', 60, { parallelSafe: true }),
       },
       setAbortController: (controller) => registered.push(controller),
     });
@@ -214,7 +217,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         makeCall('c1', 'grep', { pattern: 'a' }),
         makeCall('c2', 'read_file', { path: 'b' }),
       ]);
-      await new Promise((resolve) => setTimeout(resolve, 15));
+      await delay(15);
       const batchController = registered[0];
       assert.ok(batchController, 'batch controller should be registered');
       batchController.abort();

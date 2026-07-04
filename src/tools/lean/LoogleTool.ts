@@ -118,6 +118,7 @@ const LOOGLE_API_URL = 'https://loogle.lean-lang.org/json';
  */
 export class LeanLoogleTool extends defineTool({
   name: 'lean_loogle',
+  parallelSafe: true,
   description: `Search for Lean 4 / Mathlib theorems and definitions by type signature or name.
 
 Example queries:

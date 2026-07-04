@@ -105,6 +105,7 @@ export function buildArguments(
 
 export class GrepTool extends defineTool({
   name: 'grep',
+  parallelSafe: true,
   description:
     'Search file contents using regex patterns. output_mode must be "content", "files_with_matches", or "count" (NOT "context"). To show surrounding lines, use -C with output_mode "content".',
   schema: GrepInputSchema,
