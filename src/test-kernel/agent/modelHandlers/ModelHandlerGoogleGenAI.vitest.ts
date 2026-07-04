@@ -466,6 +466,7 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
 
     const attachmentBytes = new Uint8Array([1, 2, 3, 4]);
     const toolResult = {
+      status: 'executed' as const,
       output: 'generated figures',
       files: [
         {

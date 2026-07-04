@@ -142,7 +142,7 @@ describe('Tool edit approval gating', () => {
     });
 
     assert.strictEqual(writeCalled, false);
-    assert.strictEqual(result.isError, true);
+    assert.strictEqual(result.status, 'error');
     assert.strictEqual(
       result.error,
       'User rejected write_file for summary.txt.',
@@ -230,7 +230,7 @@ describe('Tool edit approval gating', () => {
       old_str: 'alpha',
       new_str: 'parent',
     });
-    assert.notStrictEqual(parentEdit.isError, true);
+    assert.strictEqual(parentEdit.status, 'executed');
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
 
     const childEdit = await callTextEditorInRun(tool, 'bbbbbb', {
@@ -239,21 +239,21 @@ describe('Tool edit approval gating', () => {
       old_str: 'parent',
       new_str: 'child',
     });
-    assert.notStrictEqual(childEdit.isError, true);
+    assert.strictEqual(childEdit.status, 'executed');
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'child\n');
 
     const parentUndo = await callTextEditorInRun(tool, 'aaaaaa', {
       command: 'undo_edit',
       path: 'shared.tex',
     });
-    assert.notStrictEqual(parentUndo.isError, true);
+    assert.strictEqual(parentUndo.status, 'executed');
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
 
     const childUndo = await callTextEditorInRun(tool, 'bbbbbb', {
       command: 'undo_edit',
       path: 'shared.tex',
     });
-    assert.notStrictEqual(childUndo.isError, true);
+    assert.strictEqual(childUndo.status, 'executed');
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
   });
 
@@ -277,7 +277,7 @@ describe('Tool edit approval gating', () => {
       new_str: 'beta',
     });
 
-    assert.strictEqual(result.isError, true);
+    assert.strictEqual(result.status, 'error');
     assert.match(result.error ?? '', /old_str must not be empty/);
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
   });

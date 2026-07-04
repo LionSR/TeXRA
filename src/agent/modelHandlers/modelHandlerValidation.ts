@@ -10,7 +10,10 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 // Local imports - tools and utils
 import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 
 // Local imports - model handlers
 import { ModelHandler } from './ModelHandler';
@@ -24,7 +27,6 @@ import type {
   SdkToolCall,
 } from './types/IModelHandler';
 import type { ProviderStopReason } from './types/StopReasonTypes';
-import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 
 interface ValidationResponse {
   text: string;
@@ -201,7 +203,7 @@ export class ModelHandlerValidation extends ModelHandler<
   async createToolUseFollowUpMessages(
     _client: unknown,
     _call: SdkToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     _attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,

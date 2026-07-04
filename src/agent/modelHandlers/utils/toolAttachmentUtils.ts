@@ -1,18 +1,11 @@
-// Third-party imports
-import { z } from 'zod';
-
-import { LineChangesSchema } from '@shared/schemas/lineChanges';
-
 // Local imports - tools (single source of truth for file/attachment schemas)
 import {
   type ToolFileAttachment,
   type ToolResult,
   type FileReference,
   ToolFileAttachmentSchema,
-  FileReferenceSchema,
-  EditRecordSchema,
+  ToolResultSchema,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-  NormalizedToolResultSchema,
 } from '@shared/schemas/toolResult';
 
 // Local imports - utils
@@ -24,39 +17,6 @@ import { MAX_TOOL_RESULT_TEXT_LENGTH } from '../contextManagementConstants';
 
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
 
-// ============================================================================
-// Additional Schemas (specific to tool attachment handling)
-// ============================================================================
-
-/**
- * Schema for records of files edited during tool execution.
- * Specific to logging/tracking edited files in handler context.
- */
-const EditedFileRecordSchema = z.object({
-  /** Path to the edited file */
-  path: z.string(),
-  /** Whether the edit succeeded */
-  ok: z.boolean(),
-  /** Source identifier for the edit */
-  source: z.string(),
-  /** Human readable display name for the source */
-  sourceDisplay: z.string(),
-});
-
-/**
- * Shared fields present in every tool result payload variant.
- */
-const ToolResultPayloadSharedFields = {
-  /** User instruction that was processed */
-  userInstruction: z.string().optional(),
-  /** User-provided patch content */
-  userPatch: z.string().optional(),
-  /** Additional diagnostic information (type varies by context) */
-  diagnostics: z.unknown().optional(),
-  /** Summary added by handlers when attachments are available */
-  attachmentSummary: z.string().optional(),
-};
-
 const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
   'output',
   'summary',
@@ -67,42 +27,6 @@ const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
 ]);
 
 /**
- * Schema for strongly-typed tool result payloads sent to model handlers.
- * Uses a discriminated union on `status` so callers can narrow on
- * `result.status === 'error'` vs `'executed'` and get the right fields.
- * Each variant is a looseObject to preserve unknown keys for forward
- * compatibility.
- *
- * This is what gets passed to handlers: no binary data, properly typed fields.
- */
-export const ToolResultPayloadSchema = z.discriminatedUnion('status', [
-  z.looseObject({
-    status: z.literal('executed'),
-    /** Brief summary of the tool execution result */
-    summary: z.string().optional(),
-    /** Detailed output from the tool */
-    output: z.string().optional(),
-    /** Statistics about line changes made */
-    lineChanges: LineChangesSchema.optional(),
-    /** Records of edits made during tool execution */
-    edits: z.array(EditRecordSchema).optional(),
-    /** File references (binary data stripped) */
-    files: z.array(FileReferenceSchema).optional(),
-    /** Files edited during tool execution (for logging/tracking) */
-    editedFiles: z.array(EditedFileRecordSchema).optional(),
-    ...ToolResultPayloadSharedFields,
-  }),
-  z.looseObject({
-    status: z.literal('error'),
-    /** Error message if tool execution failed */
-    error: z.string().min(1),
-    ...ToolResultPayloadSharedFields,
-  }),
-]);
-
-export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
-
-/**
  * Result from extracting attachments from a tool result.
  * Simple interface - no runtime validation needed for this structure.
  */
@@ -110,7 +34,7 @@ export interface ExtractedToolAttachments {
   /** Extracted file attachments with binary data */
   attachments: ToolFileAttachment[];
   /** Sanitized result payload without binary data */
-  sanitizedResult: ToolResultPayload;
+  sanitizedResult: ToolResult;
 }
 
 /**
@@ -125,10 +49,8 @@ function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
  * Extracts file attachments from a tool result and returns a typed payload.
  * Binary data (base64Data, bytes) is stripped from the result.
  *
- * Uses a Zod looseObject schema so unknown fields are preserved for forward
- * compatibility. The result is first normalized via `NormalizedToolResultSchema`,
- * whose computed discriminator always wins over any stray raw `status` key,
- * so it cannot invalidate the normalized payload.
+ * Uses the source-level `ToolResultSchema` discriminator; tools declare
+ * success vs error before this projection sees the result.
  *
  * @param result - Raw tool result (may contain binary data)
  * @returns Extracted attachments and typed payload (without binary data)
@@ -142,18 +64,8 @@ export function extractToolAttachments(
     ? attachmentsCandidate.filter(isToolFileAttachment)
     : [];
 
-  // Normalize the ambiguous raw result (no reliable `status` field; only
-  // `output`/`summary`/`error`/`isError` set ad hoc by tool implementations)
-  // into a `{ status, ... }` shape. The precedence rules that used to live
-  // here as an inline heuristic now live once, in
-  // `NormalizedToolResultSchema` (shared/schemas/toolResult.ts), so this is
-  // just a parse + narrow on `status`.
-  const normalized = NormalizedToolResultSchema.parse(result);
-  const status = normalized.status;
-
-  // Re-validate against the discriminated union so downstream consumers get
-  // a properly typed, narrowable `ToolResultPayload`.
-  const parsed = ToolResultPayloadSchema.parse(normalized);
+  const parsed = ToolResultSchema.parse(result);
+  const status = parsed.status;
 
   // Build sanitized result, stripping binary data, undefined values, and redundant fields
   const sanitizedResult: Record<string, unknown> = { status };
@@ -162,10 +74,6 @@ export function extractToolAttachments(
     if (value === undefined) continue;
     // Skip binary fields (these belong in files array attachments)
     if (key === 'base64Data' || key === 'bytes') {
-      continue;
-    }
-    // Skip legacy isError once the normalized status discriminator is present.
-    if (key === 'isError') {
       continue;
     }
     // Keep runtime values aligned with the discriminated union shape.
@@ -204,7 +112,7 @@ export function extractToolAttachments(
 
   return {
     attachments,
-    sanitizedResult: ToolResultPayloadSchema.parse(sanitizedResult),
+    sanitizedResult: ToolResultSchema.parse(sanitizedResult),
   };
 }
 
@@ -331,7 +239,7 @@ export function checkToolResultTextLimit(
  * @returns Formatted plain text string (truncated if exceeds limit)
  */
 export function formatToolResultAsText(
-  result: ToolResultPayload,
+  result: ToolResult,
   attachmentSummary?: string,
 ): string {
   const textPieces: string[] = [];

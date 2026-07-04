@@ -399,7 +399,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     const entries = await listExecutions();
 
     if (entries.length === 0) {
-      return { output: 'No execution history found.' };
+      return { status: 'executed', output: 'No execution history found.' };
     }
 
     const { page, start, end, total } = paginateToolListing(
@@ -421,6 +421,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
 
     const header = `Executions (showing ${start}\u2013${end} of ${total}${bgSuffix}, most recent first):`;
     return {
+      status: 'executed',
       output: `${header}\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
     };
   }
@@ -473,7 +474,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         },
       );
 
-      return { output: lines.join('\n') };
+      return { status: 'executed', output: lines.join('\n') };
     }
 
     // Completed execution: full KV fetch
@@ -492,6 +493,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         throw new ToolError(`Execution not found: ${executionId}`);
       }
       return {
+        status: 'executed',
         output: `Execution: ${executionId}\nStatus: completed\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
       };
     }
@@ -532,7 +534,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       },
     );
 
-    return { output: lines.join('\n') };
+    return { status: 'executed', output: lines.join('\n') };
   }
 
   /**
@@ -601,24 +603,24 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
 
     if (ctx?.executionId === executionId) {
       return {
-        output: `Cannot kill your own execution (${executionId}).`,
-        isError: true,
+        status: 'error',
+        error: `Cannot kill your own execution (${executionId}).`,
       };
     }
 
     const target = currentSession().executions.getHandle(executionId);
     if (!target) {
       return {
-        output: `Execution ${executionId} not found or already completed.`,
-        isError: true,
+        status: 'error',
+        error: `Execution ${executionId} not found or already completed.`,
       };
     }
 
     // Scope: can only kill your own children. Deny if no context.
     if (!callerStreamId || target.parentStreamId !== callerStreamId) {
       return {
-        output: `Cannot kill execution ${executionId}: not a child of this session.`,
-        isError: true,
+        status: 'error',
+        error: `Cannot kill execution ${executionId}: not a child of this session.`,
       };
     }
 
@@ -631,9 +633,9 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       )
     ) {
       return {
-        output:
+        status: 'error',
+        error:
           'Killing subagents is disabled. Enable it in Settings > Multi-Agent.',
-        isError: true,
       };
     }
 
@@ -641,11 +643,14 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       detachActiveChildren: detachSubagentsOnStop(),
     });
     if (success) {
-      return { output: `Execution ${executionId} terminated.` };
+      return {
+        status: 'executed',
+        output: `Execution ${executionId} terminated.`,
+      };
     }
     return {
-      output: `Execution ${executionId} could not be terminated.`,
-      isError: true,
+      status: 'error',
+      error: `Execution ${executionId} could not be terminated.`,
     };
   }
 
@@ -669,6 +674,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       throw new ToolError(toErrorMessage(err));
     }
     return {
+      status: 'executed',
       summary: `Subscribed to ${executionId}`,
       output: `Subscribed to ${executionId}. Status, round, and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`,
     };
@@ -686,6 +692,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       executionId,
     );
     return {
+      status: 'executed',
       output: removed
         ? `Unsubscribed from ${executionId}.`
         : `No active subscription to ${executionId} on this stream.`,
@@ -712,11 +719,15 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       if (stdout) sections.push('', '<stdout>', stdout, '</stdout>');
       if (stderr) sections.push('', '<stderr>', stderr, '</stderr>');
       if (!stdout && !stderr) sections.push('', '(no output yet)');
-      return { output: applyViewRange(sections.join('\n'), viewRange) };
+      return {
+        status: 'executed',
+        output: applyViewRange(sections.join('\n'), viewRange),
+      };
     }
 
     // Completed process: temp files already cleaned up
     return {
+      status: 'executed',
       output: `Output for ${executionId} is no longer available (ephemeral output is cleaned up on completion). Use /executions/${executionId}/report to view the result summary.`,
     };
   }
@@ -725,35 +736,41 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     const todos = await getExecutionStore(executionId).readTodos();
 
     if (todos.length === 0) {
-      return { output: `No task list found for execution ${executionId}.` };
+      return {
+        status: 'executed',
+        output: `No task list found for execution ${executionId}.`,
+      };
     }
 
     const lines = formatTodoSection(todos);
     const header = formatTodoHeader(executionId, todos);
 
-    return { output: `${header}\n\n${lines.join('\n')}` };
+    return { status: 'executed', output: `${header}\n\n${lines.join('\n')}` };
   }
 
   private async showReport(executionId: ExecutionId): Promise<ToolResult> {
     const report = await getExecutionStore(executionId).readReport();
     if (!report) {
       return {
+        status: 'executed',
         output: `No report found for execution ${executionId}. Reports are persisted when subagents or background processes complete.`,
       };
     }
-    return { output: report };
+    return { status: 'executed', output: report };
   }
 
   private async showChildren(executionId: ExecutionId): Promise<ToolResult> {
     const children = await getExecutionStore(executionId).readChildren();
     if (children.length === 0) {
       return {
+        status: 'executed',
         output: `No child executions found for ${executionId}.`,
       };
     }
 
     const lines = await this.formatChildren(children);
     return {
+      status: 'executed',
       output: `Children of ${executionId} (${children.length}):\n\n${lines.join('\n')}`,
     };
   }
@@ -770,7 +787,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       config.agent,
       config.agentCategory,
     );
-    return { output: serializeFilteredConfig(config, category) };
+    return {
+      status: 'executed',
+      output: serializeFilteredConfig(config, category),
+    };
   }
 
   private async showConversation(
@@ -789,24 +809,33 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
-      return { output: '(No conversation history available)' };
+      return {
+        status: 'executed',
+        output: '(No conversation history available)',
+      };
     }
 
     const output = applyViewRange(formatConversation(conversation), viewRange);
 
-    return { output };
+    return { status: 'executed', output };
   }
 
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
     const runDir = await resolveStoragePath(executionId);
     if (!runDir) {
-      return { output: 'No files generated for this execution.' };
+      return {
+        status: 'executed',
+        output: 'No files generated for this execution.',
+      };
     }
 
     const entries = await listRunDirectoryFiles(runDir);
 
     if (entries.length === 0) {
-      return { output: 'No files generated for this execution.' };
+      return {
+        status: 'executed',
+        output: 'No files generated for this execution.',
+      };
     }
 
     const lines = entries.map((entry) => {
@@ -815,6 +844,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     });
 
     return {
+      status: 'executed',
       output: `Files in /executions/${executionId}/files:\n\n${lines.join('\n')}`,
     };
   }
@@ -861,6 +891,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
 
     if (entries.length === 0) {
       return {
+        status: 'executed',
         output: `No workspace files recorded for execution ${executionId}.`,
       };
     }
@@ -871,6 +902,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     });
 
     return {
+      status: 'executed',
       output:
         `Workspace files for /executions/${executionId}/workspace-files:\n\n` +
         lines.join('\n'),

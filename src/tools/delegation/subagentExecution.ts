@@ -165,13 +165,13 @@ export function depthGateError(
         'or complete this task directly without delegating.',
       ].join(' ');
   return {
+    status: 'error',
     error: [
       `Delegation depth cap reached (current depth ${gate.depth},`,
       `max depth ${gate.maxDepth}).`,
       reason,
       remediation,
     ].join(' '),
-    isError: true,
     diagnostics: {
       type: 'delegation_depth_cap',
       currentDepth: gate.depth,
@@ -205,10 +205,10 @@ export async function executeSubagent(
   const parentContext = tryUseRunContext();
   if (!parentContext?.runtimeHost) {
     return {
+      status: 'error',
       summary: 'Delegation tool runtime host unavailable',
       error:
         'delegate_agent and delegate_workflow require an active tool runtime host. Run delegation from an active agent session, or ensure the tool run context provides runtimeHost.',
-      isError: true,
       diagnostics: {
         type: 'missing_runtime_host',
         tools: ['delegate_agent', 'delegate_workflow'],
@@ -269,10 +269,9 @@ export async function executeSubagent(
       });
       await writeSubagentReport(executionId, msg);
       return {
+        status: 'error',
         summary: `Subagent '${agentName}' failed`,
-        output: msg,
         error: toErrorMessage(err),
-        isError: true,
       };
     };
     try {
@@ -307,6 +306,7 @@ export async function executeSubagent(
       );
       await writeSubagentReport(executionId, msg);
       return {
+        status: 'executed',
         summary:
           result.outcome === 'cancelled'
             ? `Cancelled '${agentName}'`
@@ -513,6 +513,7 @@ export async function executeSubagent(
     );
   }
   return {
+    status: 'executed',
     summary: `Launched '${agentName}' (async)`,
     output: [
       `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,

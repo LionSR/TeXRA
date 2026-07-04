@@ -237,6 +237,7 @@ function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
   }
 
   return {
+    status: 'executed',
     summary: `Inquiry thread ${manifest.threadId} (${manifest.status}, ${formatResultCount(manifest.turns.length, 'turn')})`,
     output: lines.join('\n'),
   };
@@ -249,6 +250,7 @@ function buildListOutput(
 ): ToolResult {
   if (summaries.length === 0) {
     return {
+      status: 'executed',
       summary: `No inquiry threads (${filterStatus}, scope=${scope})`,
       output: '(no threads)',
     };
@@ -263,6 +265,7 @@ function buildListOutput(
     lines.push(`    "${s.lastQuestionPreview}"`);
   }
   return {
+    status: 'executed',
     summary: `Inquiry threads: ${summaries.length}`,
     output: lines.join('\n'),
   };
@@ -412,6 +415,7 @@ export class ExternalInquiryTool extends defineTool({
       'otherwise proceed with independent work.';
 
     return {
+      status: 'executed',
       summary: `Inquiry dispatched (${persisted.threadId})`,
       output: `status: dispatched\nthread_id: ${persisted.threadId}\n\n${message}`,
     };

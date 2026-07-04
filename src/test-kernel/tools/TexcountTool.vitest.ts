@@ -69,7 +69,7 @@ describe('TexcountTool', () => {
     const tool = new TexcountTool();
     const result = await tool.call({ files: ['missing.tex'], mode: 'sum' });
 
-    assert.strictEqual(result.isError, true);
+    assert.strictEqual(result.status, 'error');
     assert.ok(result.error?.includes('missing.tex'));
   });
 

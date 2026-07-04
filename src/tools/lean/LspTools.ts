@@ -127,9 +127,9 @@ Tips:
         await getLeanLanguageServices().fetchDiagnosticsForFile(file);
       if (!diagnostics) {
         return {
+          status: 'error',
           summary: 'Failed to open file',
-          output: `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
-          isError: true,
+          error: `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
         };
       }
 
@@ -139,13 +139,18 @@ Tips:
       const countsStr = formatCounts(counts);
 
       if (diagnostics.length === 0) {
-        return { summary: '✓ No diagnostics', output: NO_DIAGNOSTICS_HELP };
+        return {
+          status: 'executed',
+          summary: '✓ No diagnostics',
+          output: NO_DIAGNOSTICS_HELP,
+        };
       }
 
       const baseDiagnostics = { ...counts, total: diagnostics.length };
 
       if (command === 'count') {
         return {
+          status: 'executed',
           summary: countsStr,
           output: `${file}: ${countsStr}`,
           diagnostics: baseDiagnostics,
@@ -153,15 +158,16 @@ Tips:
       }
 
       return {
+        status: 'executed',
         summary: countsStr,
         output: formatGroupedSections(diagnostics),
         diagnostics: { ...baseDiagnostics, details: diagnostics },
       };
     } catch (error) {
       return {
+        status: 'error',
         summary: 'Failed to get diagnostics',
-        output: `Error: ${toErrorMessage(error)}\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`,
-        isError: true,
+        error: `Error: ${toErrorMessage(error)}\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`,
       };
     }
   }
@@ -189,20 +195,21 @@ Requires: Lean 4 VS Code extension installed and active.`,
       );
       if (!success) {
         return {
+          status: 'error',
           summary: 'Command failed',
-          output: `Could not execute "${command}". Is the file open and the Lean 4 extension active?`,
-          isError: true,
+          error: `Could not execute "${command}". Is the file open and the Lean 4 extension active?`,
         };
       }
       return {
+        status: 'executed',
         summary: description,
         output: `Executed "${command}" on ${file}`,
       };
     } catch (error) {
       return {
+        status: 'error',
         summary: 'Command failed',
-        output: `Error: ${toErrorMessage(error)}`,
-        isError: true,
+        error: `Error: ${toErrorMessage(error)}`,
       };
     }
   }
@@ -242,20 +249,22 @@ Requires: Lean 4 VS Code extension installed.`,
 
       if (command === 'build') {
         return {
+          status: 'executed',
           summary: description,
           output: `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
         };
       }
 
       return {
+        status: 'executed',
         summary: description,
         output: `Executed "${command}" successfully`,
       };
     } catch (error) {
       return {
+        status: 'error',
         summary: 'Command failed',
-        output: `Error executing "${command}": ${toErrorMessage(error)}`,
-        isError: true,
+        error: `Error executing "${command}": ${toErrorMessage(error)}`,
       };
     }
   }
@@ -298,9 +307,9 @@ Requires: Lean 4 VS Code extension installed and active.`,
       }
     } catch (error) {
       return {
+        status: 'error',
         summary: `Failed to get ${type}`,
-        output: `Error: ${toErrorMessage(error)}`,
-        isError: true,
+        error: `Error: ${toErrorMessage(error)}`,
       };
     }
   }
@@ -319,14 +328,15 @@ Requires: Lean 4 VS Code extension installed and active.`,
 
     if (!data) {
       return {
+        status: 'error',
         summary: 'No goal state',
-        output: `Could not get goal state at ${location}${error ? `\nError: ${error}` : ''}`,
-        isError: true,
+        error: `Could not get goal state at ${location}${error ? `\nError: ${error}` : ''}`,
       };
     }
 
     if (data.goals.length === 0) {
       return {
+        status: 'executed',
         summary: 'No goals',
         output: 'No goals at this position. The proof may be complete here.',
         goalState: { goals: [], count: 0, status: 'noGoals' as const },
@@ -335,6 +345,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
 
     const goalCount = data.goals.length;
     return {
+      status: 'executed',
       summary: `${goalCount} goal${goalCount > 1 ? 's' : ''}`,
       output: data.rendered,
       goalState: {
@@ -359,13 +370,13 @@ Requires: Lean 4 VS Code extension installed and active.`,
 
     if (!data) {
       return {
+        status: 'error',
         summary: 'No term goal',
-        output: `No expected type at ${location}${error ? `\nError: ${error}` : ''}`,
-        isError: true,
+        error: `No expected type at ${location}${error ? `\nError: ${error}` : ''}`,
       };
     }
 
-    return { summary: 'Term goal', output: data.goal };
+    return { status: 'executed', summary: 'Term goal', output: data.goal };
   }
 
   private async executeHover(
@@ -382,21 +393,21 @@ Requires: Lean 4 VS Code extension installed and active.`,
 
     if (!data) {
       return {
+        status: 'error',
         summary: 'No hover info',
-        output: `No information at ${location}${error ? `\nError: ${error}` : ''}`,
-        isError: true,
+        error: `No information at ${location}${error ? `\nError: ${error}` : ''}`,
       };
     }
 
     const text = extractHoverText(data.contents);
     if (!text) {
       return {
+        status: 'error',
         summary: 'No hover info',
-        output: `Empty hover response at ${location}`,
-        isError: true,
+        error: `Empty hover response at ${location}`,
       };
     }
 
-    return { summary: 'Hover info', output: text };
+    return { status: 'executed', summary: 'Hover info', output: text };
   }
 }

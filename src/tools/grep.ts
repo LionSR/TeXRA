@@ -157,6 +157,7 @@ export class GrepTool extends defineTool({
 
     if (totalCount === 0) {
       return {
+        status: 'executed',
         summary: `No matches for "${input.pattern}" in ${display}`,
         output:
           `No matches found for "${input.pattern}" in ${display}. ` +
@@ -175,6 +176,7 @@ export class GrepTool extends defineTool({
     const hasMore = returnedCount < totalCount;
 
     const toolResult: ToolResult = {
+      status: 'executed',
       summary,
       output: paginatedLines.join('\n'),
     };

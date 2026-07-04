@@ -19,7 +19,7 @@ import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 
 // Local imports - logging
 import type { FileLocation } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import { toolError, type ToolResult } from '@shared/schemas/toolResult';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 
@@ -144,7 +144,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     if (this._duplicateCallIds.has(call.callId)) {
       return {
         call,
-        result: { error: DUPLICATE_CALL_ERROR, isError: true as const },
+        result: toolError(DUPLICATE_CALL_ERROR),
         parsedInput: call.input,
         extracted: {
           sanitizedResult: { status: 'error', error: DUPLICATE_CALL_ERROR },
@@ -188,7 +188,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     signal?: AbortSignal,
   ): Promise<ToolResult> {
     if (!tool) {
-      return { error: `Unknown tool ${call.name}`, isError: true };
+      return toolError(`Unknown tool ${call.name}`);
     }
 
     try {
@@ -213,7 +213,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       );
     } catch (err) {
       const { message, diagnostics } = normalizeToolCallError(call.name, err);
-      return { error: message, isError: true, diagnostics };
+      return toolError(message, diagnostics);
     }
   }
 
@@ -302,7 +302,9 @@ export class ToolUseDispatchNode<C> extends BatchNode<
             toolName: call.name,
             input: parsedInput ?? call.raw,
             output:
-              result.error ?? result.output ?? 'Tool execution cancelled.',
+              result.status === 'error'
+                ? result.error
+                : (result.output ?? 'Tool execution cancelled.'),
             isError: true,
           },
           'failed',
@@ -311,8 +313,14 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       return null;
     }
 
-    const trackedEdits = tracker.recordEdits(result.edits);
-    if (!result.lineChanges && trackedEdits.lineChanges) {
+    const trackedEdits = tracker.recordEdits(
+      result.status === 'executed' ? result.edits : undefined,
+    );
+    if (
+      result.status === 'executed' &&
+      !result.lineChanges &&
+      trackedEdits.lineChanges
+    ) {
       result.lineChanges = trackedEdits.lineChanges;
     }
 
@@ -375,7 +383,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     }
 
     // Collect and add valid media file locations
-    if (result.files?.length) {
+    if (result.status === 'executed' && result.files?.length) {
       const validLocations: FileLocation[] = [];
       for (const attachment of result.files) {
         if (!isNonEmptyString(attachment.path)) {

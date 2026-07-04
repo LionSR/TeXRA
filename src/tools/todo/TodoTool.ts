@@ -87,6 +87,7 @@ Best practices:
         'todo_write called without workPlanState in context - todos will not persist or display in UI',
       );
       return {
+        status: 'executed',
         summary: 'Updated todo list (no active session)',
         output: this.formatTodoList(input.todos),
         diagnostics: {
@@ -103,6 +104,7 @@ Best practices:
 
     // Return minimal output - the UI already shows the input, no need to repeat the list
     return {
+      status: 'executed',
       summary: `Todo list updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`,
       output: 'OK',
     };

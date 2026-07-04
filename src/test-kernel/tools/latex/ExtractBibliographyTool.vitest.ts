@@ -96,7 +96,7 @@ describe('ExtractBibliographyTool', () => {
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({ texPath: 'missing.tex' });
 
-    assert.strictEqual(result.isError, true);
+    assert.strictEqual(result.status, 'error');
     assert.ok(result.error?.includes('LaTeX file not found'));
   });
 
