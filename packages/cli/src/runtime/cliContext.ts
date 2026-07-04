@@ -18,7 +18,7 @@ import {
   type CliApiMode,
 } from './apiAccessMode';
 import {
-  isKnownCliModel,
+  isCliSupportedModelId,
   loadWorkspaceCliConfig,
   type CliConfigValues,
 } from './cliConfig';
@@ -347,7 +347,7 @@ function pickEnvModel(
 ): string | undefined {
   const model = envValue(env, 'TEXRA_MODEL');
   if (!model) return undefined;
-  if (isKnownCliModel(model)) return model;
+  if (isCliSupportedModelId(model)) return model;
   warnings.push(`Ignoring invalid TEXRA_MODEL "${model}".`);
   return undefined;
 }

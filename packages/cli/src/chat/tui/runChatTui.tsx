@@ -36,13 +36,13 @@ import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { seedCliRosterFromDefaultTeam } from '@cli/runtime/defaultTeamRoster';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { initCliPlatform } from '@cli/runtime/initPlatform';
+import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
+  selectCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
   type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
-import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
@@ -297,17 +297,16 @@ export async function runChat(
   // never disagree.
   let modelSelection: CliRunnableModelResolution;
   try {
-    modelSelection = await selectCliRootModel({
-      model: defaults.model,
-      modelSource: defaults.modelSource,
+    modelSelection = await selectCliRunnableModel(defaults.model, {
+      fallbackSource: defaults.modelSource,
       apiMode,
       noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         apiMode,
         CHAT_STARTUP_MODEL_RECOVERY,
       ),
       agentCategory: AgentCategory.ToolUse,
-      persistAsHelperModel: true,
     });
+    await setCliHelperModel(modelSelection.model);
   } catch (error: unknown) {
     writeTextStderr(toErrorMessage(error));
     return { exitCode: CliExitCode.Usage };
@@ -562,17 +561,16 @@ export async function runChat(
         const meta = cliState.sessionMeta.get();
         const currentAgent = meta.agent || agent;
         const currentModel = meta.model || model;
-        const selection = await selectCliRootModel({
-          model: currentModel,
-          modelSource: meta.model ? meta.modelSource : defaults.modelSource,
+        const selection = await selectCliRunnableModel(currentModel, {
+          fallbackSource: meta.model ? meta.modelSource : defaults.modelSource,
           apiMode: meta.apiMode,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             meta.apiMode,
             CHAT_API_MODE_MODEL_RECOVERY,
           ),
           agentCategory: AgentCategory.ToolUse,
-          persistAsHelperModel: true,
         });
+        await setCliHelperModel(selection.model);
         if (session.stopRequested) {
           markChatTuiRunCompleted(session);
           return;

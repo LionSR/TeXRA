@@ -33,7 +33,7 @@ import {
 } from '../runtime/multiAgentRunPlan';
 import {
   buildHeadlessRunContext,
-  resolveCliRunModel,
+  selectCliRunModel,
 } from '../runtime/runModel';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -186,7 +186,7 @@ export async function runMultiAgentPreset(
   // A team run drives a tool-use orchestrator, so it follows the `chat`
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
-  const model = await resolveCliRunModel(context, init.model, 'chat');
+  const model = await selectCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context);
   return withExpandedRunInputs(
     init.inputFiles,
