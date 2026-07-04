@@ -3040,10 +3040,11 @@ refactor was applied to the codebase this pass — only the §25 ledger reconcil
 
 A twenty-first pass, run on branch `claude/eager-noether-5uum43` at HEAD **`1ab46ab`** (2026-07-04). Note the
 lineage change: §25's pin `e1bfb60` is **not an ancestor** of this HEAD (`git merge-base --is-ancestor
-e1bfb60 HEAD` → not ancestor), so this is a fresh branch, not a fast-forward of §25's. A three-agent
+e1bfb60 HEAD` exits non-zero — no output, ancestry is reported via exit status), so this is a fresh branch,
+not a fast-forward of §25's. A three-agent
 fresh-eyes fan-out (independent, source-only, **not** given this document) re-covered the four task areas: an
 `agent/core` + `agent/runtime` + `implementations/flows` abstraction audit, a `modelHandlers/` port + base +
-OpenAI-compatible-subclass audit, and a `packages/core` surface + `logger` + `agent/trace` + `eventBus`
+OpenAI-compatible subclass audit, and a `packages/core` surface + `logger` + `agent/trace` + `eventBus`
 observability audit. **All three re-reached the standing verdict independently** — the core agent
 self-concluded "already well-aligned," the model-handler agent "well-factored internally … the problem is the
 port shape, not duplication," the surface agent "genuinely SDK-shaped … heavier … mainly in plumbing
@@ -3064,7 +3065,7 @@ this branch as of today:
   back by string-prefix (`fromRunFactDomainKey`, `SessionRunFactProjector.ts:56`), and re-emitted on
   `runtimeHost.emit(...)`; token usage is projected the same way to `updateStreamUsage`
   (`SessionRunFactProjector.ts:51`). This is the team **executing the §4 direction** — run facts leave the
-  VS-Code-free flow code via the trace/host seam rather than a direct `bus.emit`, consistent with the
+  VS Code-free flow code via the trace/host seam rather than a direct `bus.emit`, consistent with the
   CLAUDE.md "new run-scoped facts extend `AgentTrace` or `ProgressEventPayloads`, never a new `bus.emit`"
   rule. Recorded as movement **with** the audit, not against it.
 
