@@ -1,14 +1,15 @@
 /** Plan approval request panel. */
 
 // Third-party imports
-import { html, nothing, type TemplateResult } from 'lit';
+import { css, html, nothing, type CSSResult, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import {
   commonViewStyles,
   designTokens,
-  requestPanelStyles,
+  requestPanelSharedStyles,
+  sp,
 } from '@shared/styles';
 
 // Local imports - shared utilities
@@ -17,9 +18,27 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
+/**
+ * Styles for the plan approval request panel. Kept inline (rather than a
+ * sibling `.styles.ts` file) since it is a single ~10-line rule.
+ */
+const planApprovalRequestPanelStyles: CSSResult = css`
+  .plan-approval-request__objective {
+    margin: ${sp.small} 0;
+    color: var(--wa-color-text-normal);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+`;
+
 @customElement('plan-approval-request-panel')
 export class PlanApprovalRequestPanel extends BaseFeedbackPanel<'planApproval'> {
-  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    requestPanelSharedStyles,
+    planApprovalRequestPanelStyles,
+  ];
 
   protected override handleExtraKey(key: string): boolean {
     if (key === 'r') {
