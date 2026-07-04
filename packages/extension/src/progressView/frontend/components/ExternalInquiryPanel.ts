@@ -20,6 +20,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
@@ -263,9 +264,9 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
 
   private renderHeader(data: ExternalInquiryPermission): TemplateResult {
     return html`
-      <div class="external-inquiry-request__mode-badge">
+      <wa-badge variant="neutral" appearance="filled">
         ${data.mode === 'followUp' ? 'follow-up' : 'new question'}
-      </div>
+      </wa-badge>
     `;
   }
 
