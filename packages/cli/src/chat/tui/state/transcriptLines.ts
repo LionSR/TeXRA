@@ -83,13 +83,12 @@ function computeTranscriptEntryLines(
 ): readonly string[] {
   switch (entry.role) {
     case 'tool':
-      return entry.toolUse
-        ? wrapLines(toolUseDisplayLines(entry.toolUse, { elide: false }), cols)
-        : [];
+      return wrapLines(
+        toolUseDisplayLines(entry.toolUse, { elide: false }),
+        cols,
+      );
     case 'process':
-      return entry.process
-        ? wrapLines(completedProcessDisplayLines(entry.process), cols)
-        : [];
+      return wrapLines(completedProcessDisplayLines(entry.process), cols);
     case 'user':
       return wrapWithPrefix(entry.text, cols, '› ');
     case 'error':
