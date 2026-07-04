@@ -29,6 +29,8 @@
  */
 // Type-only imports from the leaf trace modules (not the `@agent/trace`
 // barrel, which pulls in TraceEmitter and would cycle back into this logger).
+import { format } from 'date-fns';
+
 import type { AgentTrace, AgentTraceSubscriber } from '@agent/trace/AgentTrace';
 import type { AgentEvent } from '@agent/trace/events';
 import { LOG_LEVELS, MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
@@ -62,10 +64,7 @@ function getKey(channel: string, isAgent: boolean): string {
 }
 
 function getTimestamp(): string {
-  const now = new Date();
-  const pad = (value: number, width = 2): string =>
-    value.toString().padStart(width, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
+  return format(new Date(), 'yyyy-MM-dd HH:mm:ss.SSS');
 }
 
 function createConsoleSink(channel: string): OutputSink {
