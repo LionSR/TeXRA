@@ -88,9 +88,6 @@ export interface SyncStreamContentPayload extends LogContentExtras {
  * Targets a single active webview at a time (sidebar OR editor panel).
  */
 export class WebviewUpdater {
-  private readonly streamInfoCache = new Map<StreamTabId, StreamTabInfo>();
-  private readonly streamMetadataCache = new Map<StreamTabId, StreamMetadata>();
-
   constructor(
     private readonly send: ProgressViewMessageSender,
     private readonly hasTarget: () => boolean,
@@ -143,7 +140,6 @@ export class WebviewUpdater {
       statuses,
       substates,
     );
-    this.cacheStreamSnapshot(streamInfo, streamState);
 
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
@@ -466,9 +462,7 @@ export class WebviewUpdater {
 
     // Send lightweight metadata — only backend-owned fields the frontend merges.
     const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
-    const liveStreams = new Set<StreamTabId>();
     for (const streamInfo of streams) {
-      liveStreams.add(streamInfo.name);
       const metadata = this.buildStreamMetadataForStream(
         state,
         streamInfo,
@@ -476,9 +470,7 @@ export class WebviewUpdater {
         substates,
       );
       streamMetadata[streamInfo.name] = metadata;
-      this.cacheStreamSnapshot(streamInfo, metadata);
     }
-    this.pruneStreamSnapshotCache(liveStreams);
 
     this.updateStreams(
       streams,
@@ -512,21 +504,5 @@ export class WebviewUpdater {
       activeProcesses: current?.activeProcesses,
       finishedProcessCount: current?.finishedProcessCount,
     });
-  }
-
-  private cacheStreamSnapshot(
-    streamInfo: StreamTabInfo,
-    metadata: StreamMetadata,
-  ): void {
-    this.streamInfoCache.set(streamInfo.name, streamInfo);
-    this.streamMetadataCache.set(streamInfo.name, metadata);
-  }
-
-  private pruneStreamSnapshotCache(liveStreams: Set<StreamTabId>): void {
-    for (const streamId of this.streamInfoCache.keys()) {
-      if (liveStreams.has(streamId)) continue;
-      this.streamInfoCache.delete(streamId);
-      this.streamMetadataCache.delete(streamId);
-    }
   }
 }
