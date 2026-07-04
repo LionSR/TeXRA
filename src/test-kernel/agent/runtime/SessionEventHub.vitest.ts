@@ -12,6 +12,7 @@ import { type StreamTabId } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
 
 const streamId = 'stream:hub' as StreamTabId;
+const otherStreamId = 'stream:other' as StreamTabId;
 
 describe('SessionEventHub', () => {
   it('filters high-volume stream chunks away from typed subscribers', () => {
@@ -20,6 +21,7 @@ describe('SessionEventHub', () => {
 
     hub.subscribe((event) => seen.push(event), {
       scope: 'run',
+      streamId,
       types: ['domain'],
     });
 
@@ -27,6 +29,11 @@ describe('SessionEventHub', () => {
       scope: 'run',
       streamId,
       event: { type: 'stream.chunk', id: 'chunk-1', text: 'a' },
+    });
+    hub.emit({
+      scope: 'run',
+      streamId: otherStreamId,
+      event: { type: 'domain', key: 'other-stream', data: { ignored: true } },
     });
     hub.emit({
       scope: 'run',
@@ -41,7 +48,7 @@ describe('SessionEventHub', () => {
     });
   });
 
-  it('asserts that a run-scope subscriber exists before activation', () => {
+  it('asserts that a run-scope subscriber exists for the activating stream', () => {
     const hub = new SessionEventHub();
 
     expect(() =>
@@ -56,11 +63,35 @@ describe('SessionEventHub', () => {
     ).toThrow(/No run-scoped session event subscribers/);
     detachSessionOnly();
 
-    const detachRun = hub.subscribe(() => undefined, { scope: 'run' });
+    const detachUnscopedRun = hub.subscribe(() => undefined, { scope: 'run' });
+    expect(() =>
+      hub.assertRunSubscribersAttachedBeforeActivation(streamId),
+    ).toThrow(/No run-scoped session event subscribers/);
+    detachUnscopedRun();
+
+    const detachOtherRun = hub.subscribe(() => undefined, {
+      scope: 'run',
+      streamId: otherStreamId,
+    });
+    expect(() =>
+      hub.assertRunSubscribersAttachedBeforeActivation(streamId),
+    ).toThrow(/No run-scoped session event subscribers/);
+    expect(() =>
+      hub.assertRunSubscribersAttachedBeforeActivation(otherStreamId),
+    ).not.toThrow();
+    detachOtherRun();
+
+    const detachRun = hub.subscribe(() => undefined, {
+      scope: 'run',
+      streamId,
+    });
     expect(() =>
       hub.assertRunSubscribersAttachedBeforeActivation(streamId),
     ).not.toThrow();
     detachRun();
+    expect(() =>
+      hub.assertRunSubscribersAttachedBeforeActivation(streamId),
+    ).toThrow(/No run-scoped session event subscribers/);
   });
 
   it('projects run facts and usage from trace events to the runtime host', () => {

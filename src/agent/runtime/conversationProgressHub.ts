@@ -49,6 +49,6 @@ export function attachConversationProgressHub(
         progress: sessionEvent.event.data,
       });
     },
-    { scope: 'run', types: ['domain'] },
+    { scope: 'run', streamId, types: ['domain'] },
   );
 }

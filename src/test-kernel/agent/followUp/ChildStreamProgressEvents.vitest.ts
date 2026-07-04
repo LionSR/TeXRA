@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
@@ -23,6 +23,8 @@ import { createRecordingHost } from '../progressTestUtils';
 const executionId = 'exec:child-stream' as ExecutionId;
 const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'bash#exec:child-stream' as StreamTabId;
+const orderingExecutionId = 'exec:child-stream-ordering' as ExecutionId;
+const orderingChildStreamId = 'bash#exec:child-stream-ordering' as StreamTabId;
 const loopExecutionId = 'exec:child-stream-loop' as ExecutionId;
 const loopChildStreamId = 'codex#exec:child-stream-loop' as StreamTabId;
 const stoppedExecutionId = 'exec:child-stream-stopped' as ExecutionId;
@@ -62,6 +64,7 @@ describe('child stream progress events', () => {
   afterEach(() => {
     for (const streamId of [
       childStreamId,
+      orderingChildStreamId,
       loopChildStreamId,
       stoppedChildStreamId,
       cancelledChildStreamId,
@@ -69,6 +72,56 @@ describe('child stream progress events', () => {
       normalizedErrorChildStreamId,
     ]) {
       clearStreamStatusForTest(StreamStatusService, streamId);
+    }
+  });
+
+  it('attaches child run subscribers before activating the stream', () => {
+    const active = createRecordingHost();
+    const session = defaultSession();
+    const sequence: string[] = [];
+    const originalAssert =
+      session.events.assertRunSubscribersAttachedBeforeActivation.bind(
+        session.events,
+      );
+    const assertSpy = vi
+      .spyOn(session.events, 'assertRunSubscribersAttachedBeforeActivation')
+      .mockImplementation((streamId) => {
+        sequence.push(`assert:${streamId}`);
+        expect(active.events.map((entry) => entry.event)).not.toContain(
+          'setActiveStream',
+        );
+        originalAssert(streamId);
+      });
+    const host: AgentRuntimeHost = {
+      emit: (event, payload) => {
+        sequence.push(`emit:${event}`);
+        active.host.emit(event, payload);
+      },
+    };
+
+    try {
+      const childStream = createChildStream(
+        orderingExecutionId,
+        parentStreamId,
+        {
+          runtimeHost: host,
+          streamPrefix: 'bash',
+          streamCategory: AgentCategory.ToolUse,
+          agentName: 'test-agent',
+          description: 'Run a background bash command',
+          config,
+          toolName: 'bash',
+        },
+      );
+      childStream.finalize({ autoClose: true });
+
+      expect(assertSpy).toHaveBeenCalledWith(orderingChildStreamId);
+      expect(sequence.slice(0, 2)).toEqual([
+        `assert:${orderingChildStreamId}`,
+        'emit:setActiveStream',
+      ]);
+    } finally {
+      assertSpy.mockRestore();
     }
   });
 
