@@ -1,0 +1,54 @@
+/**
+ * Chat slice: instruction polish/transcription results and voice-recording
+ * lifecycle pushes.
+ */
+
+// Local imports - shared IPC and schemas
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import type { MainViewHandlerRegistry } from '@shared/schemas';
+
+// Local imports - main view
+import { instruction$, isPolishing$, isRecording$ } from '../mainViewState';
+import { setInstruction, showInformation } from '../mainViewActions';
+import { saveState } from '../persistence';
+
+export const chatHandlers: MainViewHandlerRegistry = {
+  [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (message) => {
+    isPolishing$.set(false);
+    if (message.text.trim()) {
+      setInstruction(message.text);
+      showInformation('Instruction text has been polished!');
+      saveState();
+    }
+  },
+
+  [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (message) => {
+    isPolishing$.set(false);
+    const errorText = message.error ?? '';
+    showInformation(`Error polishing text: ${errorText || 'Unknown error'}`);
+  },
+
+  [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (message) => {
+    if (!message.text) {
+      isRecording$.set(false);
+      return;
+    }
+
+    const current = instruction$.get();
+    const updated = current ? `${current} ${message.text}` : message.text;
+    setInstruction(updated);
+    isRecording$.set(false);
+    showInformation('Instruction text transcribed!');
+    saveState();
+  },
+
+  [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: () => {
+    isRecording$.set(true);
+  },
+  [MAIN_VIEW_COMMANDS.RECORDING_STOPPED]: () => {
+    isRecording$.set(false);
+  },
+  [MAIN_VIEW_COMMANDS.RECORDING_ERROR]: () => {
+    isRecording$.set(false);
+  },
+};
