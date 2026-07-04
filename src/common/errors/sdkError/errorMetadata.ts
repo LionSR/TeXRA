@@ -1,6 +1,7 @@
 import { type ProviderError, type StreamDiagnostics } from '@shared/schemas';
 import { isObject, isString } from '@utils/core';
 
+import { findInCauseChain } from '../errorPredicates';
 import { type SdkErrorMetadata, isSdkErrorMetadata } from './sdkErrorKinds';
 
 /** Factory for symbol-keyed error metadata. Creates matched attach/detect
@@ -79,14 +80,13 @@ export function attachFlowAutoRetryRequired(err: unknown): void {
 }
 
 export function requiresFlowAutoRetry(err: unknown): boolean {
-  for (
-    let current: unknown = err;
-    current != null && typeof current === 'object';
-    current = (current as { cause?: unknown }).cause
-  ) {
-    if (flowAutoRetryRequiredMetadata.detect(current) === true) return true;
-  }
-  return false;
+  return (
+    findInCauseChain(err, (current) =>
+      flowAutoRetryRequiredMetadata.detect(current) === true
+        ? true
+        : undefined,
+    ) ?? false
+  );
 }
 
 export const providerErrorMetadata =
