@@ -75,21 +75,6 @@ export function diffTextByChar(
 }
 
 /**
- * Compute a character diff with semantic cleanup enabled. Callers still choose
- * the `checkLines` mode explicitly.
- */
-export function diffTextByCharWithSemanticCleanup(
-  oldText: string,
-  newText: string,
-  options: Pick<CharDiffOptions, 'checkLines'> = {},
-): TextDiff[] {
-  return diffTextByChar(oldText, newText, {
-    ...options,
-    cleanupSemantic: true,
-  });
-}
-
-/**
  * Compute a line-mode diff by mapping whole lines to synthetic characters
  * before running `diff_main`. By default no semantic cleanup is applied.
  */
