@@ -46,6 +46,7 @@ export interface FileViewOptions {
 
 export interface FileViewResult {
   [key: string]: unknown;
+  status: 'executed';
   output: string;
   summary: string;
 }
@@ -111,7 +112,7 @@ export function formatFileView({
     summary += summarySuffix;
   }
 
-  return { output: segments.join('\n'), summary };
+  return { status: 'executed', output: segments.join('\n'), summary };
 }
 
 /**

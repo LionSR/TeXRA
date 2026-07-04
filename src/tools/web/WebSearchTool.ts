@@ -149,12 +149,14 @@ export class WebSearchTool extends defineTool({
 
     if (results.length === 0) {
       return {
+        status: 'executed',
         summary: `Searched: "${query}" (no results)`,
         output:
           'No results found. Note: This search uses DuckDuckGo Instant Answers API which works best for factual/entity queries. For general web searches, try rephrasing the query or use more specific terms.',
       };
     }
     return {
+      status: 'executed',
       summary: `Searched: "${query}"`,
       output: results.slice(0, max_results).join('\n\n'),
     };

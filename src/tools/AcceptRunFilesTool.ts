@@ -23,7 +23,11 @@ import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import {
+  ToolError,
+  type EditRecord,
+  type ToolResult,
+} from '@shared/schemas/toolResult';
 
 // Local imports - tools
 import { requireRuntimeHost } from '@tools/contextHelpers';
@@ -212,7 +216,7 @@ Optional:
 
     // Phase 2: Request approval and write each file
     const results: string[] = [];
-    const edits: ToolResult['edits'] = [];
+    const edits: EditRecord[] = [];
     const acceptedEntries: {
       outputPath: string;
       originalPath: string;
@@ -288,6 +292,7 @@ Optional:
     if (changed === 0) {
       const summary = `No changes to accept from run ${executionId}`;
       return {
+        status: 'executed',
         summary,
         output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
         edits,
@@ -320,6 +325,7 @@ Optional:
         : '';
     const summary = `Accepted ${accepted}/${changed} changed ${pluralize(changed, 'file')} from run ${executionId}${strippedSuffix}${unchangedSuffix}`;
     return {
+      status: 'executed',
       summary,
       output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
       edits,

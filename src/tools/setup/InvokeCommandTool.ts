@@ -87,6 +87,7 @@ export class InvokeCommandTool extends defineTool({
       input.args.length > 0 ? ` (${input.args.length} arg(s), redacted)` : '';
 
     return {
+      status: 'executed',
       summary: `Invoked ${commandId}${argPreview}`,
       output: `Invoked VS Code command "${commandId}"${argPreview}. If this opens a UI prompt, wait for the user's response before continuing.`,
     };

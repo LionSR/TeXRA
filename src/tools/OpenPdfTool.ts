@@ -62,7 +62,7 @@ export class OpenPdfTool extends defineTool({
   protected async execute(input: OpenPdfInput): Promise<ToolResult> {
     if (!openPdfOpener) {
       return {
-        isError: true,
+        status: 'error',
         error:
           'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
       };
@@ -84,6 +84,7 @@ export class OpenPdfTool extends defineTool({
     });
 
     return {
+      status: 'executed',
       summary: `Opened PDF: ${displayPath}`,
       output: `Opened PDF: ${displayPath}`,
     };

@@ -155,6 +155,7 @@ export class ProbeEnvironmentTool extends defineTool({
     const headline = buildHeadline(summary);
 
     return {
+      status: 'executed',
       summary: headline,
       output:
         headline +

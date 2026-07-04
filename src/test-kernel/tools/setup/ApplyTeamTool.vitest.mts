@@ -92,7 +92,7 @@ describe('apply_team', () => {
   it('applies the starter roster as source-qualified workspace keys', async () => {
     const result = await new ApplyTeamTool().call({ teamId: 'starter' });
 
-    expect(result.isError).toBeFalsy();
+    expect(result.status).toBe('executed');
     const roster = workspaceRoster();
     expect(roster.workflow?.toSorted()).toEqual(STARTER_WORKFLOW);
     // `orchestrator` is remote-only and unresolved while signed out: it is
@@ -119,7 +119,7 @@ describe('apply_team', () => {
   it('reports the relay-served orchestrator as available after sign-in', async () => {
     const result = await new ApplyTeamTool().call({ teamId: 'starter' });
 
-    expect(result.isError).toBeFalsy();
+    expect(result.status).toBe('executed');
     expect(result.summary).toMatch(/sign-in/);
     expect(result.output).toMatch(/orchestrator/);
     expect(result.output).toMatch(/sign-in/);
@@ -128,7 +128,7 @@ describe('apply_team', () => {
   it('rejects an unknown teamId without writing any state', async () => {
     const result = await new ApplyTeamTool().call({ teamId: 'astrologer' });
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     const roster = workspaceRoster();
     expect(roster.workflow).toBeUndefined();
     expect(roster.toolUse).toBeUndefined();

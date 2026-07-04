@@ -9,7 +9,7 @@ import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { GoogleToolCall } from '@agent/modelHandlers/types/IModelHandler';
-import type { ToolResultPayload } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import * as configModule from '@utils/config/configUtils';
 import type { Interactions } from '@google/genai';
 
@@ -248,7 +248,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       input: { q: 'x' },
     });
 
-    const result: ToolResultPayload = {
+    const result: ToolResult = {
       status: 'executed',
       output: 'found it',
     };
@@ -318,7 +318,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
         raw: { id: 'call_2', name: 'fetch', args: { u: 'y' } },
       },
     ];
-    const results: ToolResultPayload[] = [
+    const results: ToolResult[] = [
       { status: 'executed', output: 'a' },
       { status: 'executed', output: 'b' },
     ];

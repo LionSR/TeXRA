@@ -8,6 +8,7 @@ import type { ToolDefinition } from '@model/ToolDefinition';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
+  toolError,
   type ToolResult,
 } from '@shared/schemas/toolResult';
 
@@ -56,24 +57,16 @@ export abstract class BaseTool<T> implements ITool {
       return await this.execute(input);
     } catch (err) {
       if (err instanceof ZodError) {
-        return {
-          error: `Invalid input:\n${z.prettifyError(err)}`,
-          isError: true,
-          diagnostics: {
-            type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-            issues: err.issues,
-            formatted: formatZodIssuesForDiagnostics(err.issues),
-          },
-        };
+        return toolError(`Invalid input:\n${z.prettifyError(err)}`, {
+          type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+          issues: err.issues,
+          formatted: formatZodIssuesForDiagnostics(err.issues),
+        });
       }
       const message = toErrorMessage(err);
       // Only include error name - stack traces waste tokens and aren't actionable by models
       const diagnostics = err instanceof Error ? { name: err.name } : undefined;
-      return {
-        error: message,
-        isError: true,
-        diagnostics,
-      };
+      return toolError(message, diagnostics);
     }
   }
 

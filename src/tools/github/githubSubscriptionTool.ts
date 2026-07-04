@@ -166,6 +166,7 @@ async function execSubscribe(
     const created = bindRepoSubscription(streamId, target, runtimeHost);
     const slug = `${target.owner}/${target.repo}`;
     return {
+      status: 'executed',
       summary: created
         ? `Subscribed to repo ${slug}`
         : `Already subscribed to repo ${slug}`,
@@ -187,6 +188,7 @@ async function execSubscribe(
     const annotationLevelDescription =
       ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
     return {
+      status: 'executed',
       summary: created
         ? `Subscribed to ${slug}`
         : `Already subscribed to ${slug}`,
@@ -229,6 +231,7 @@ async function execSubscribe(
     const annotationLevelDescription =
       ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
     return {
+      status: 'executed',
       summary: created
         ? wasIssuePath
           ? `Subscribed to ${prSlug} (was /issues/${target.issueNumber}; resolved to PR)`
@@ -241,6 +244,7 @@ async function execSubscribe(
   }
   const created = bindIssueSubscription(streamId, target, runtimeHost);
   return {
+    status: 'executed',
     summary: created
       ? `Subscribed to ${issueSlug}`
       : `Already subscribed to ${issueSlug}`,
@@ -277,6 +281,7 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
     const removed = unbindRepoSubscription(streamId, target, runtimeHost);
     const slug = `${target.owner}/${target.repo}`;
     return {
+      status: 'executed',
       summary: removed
         ? `Unsubscribed from repo ${slug}`
         : `Was not subscribed to repo ${slug}`,
@@ -286,6 +291,7 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
     const removed = unbindPRSubscription(streamId, target, runtimeHost);
     const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
     return {
+      status: 'executed',
       summary: removed
         ? `Unsubscribed from ${slug}`
         : `Was not subscribed to ${slug}`,
@@ -305,6 +311,7 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
   );
   const slug = `${target.owner}/${target.repo}/issues/${target.issueNumber}`;
   return {
+    status: 'executed',
     summary:
       issueRemoved || prRemoved
         ? `Unsubscribed from ${slug}`
@@ -328,11 +335,13 @@ function execList(): ToolResult {
   const all = [...repoKeys, ...prKeys, ...issueKeys];
   if (all.length === 0) {
     return {
+      status: 'executed',
       summary: 'No active subscriptions on this stream.',
       output: 'No active subscriptions on this stream.',
     };
   }
   return {
+    status: 'executed',
     summary: `${all.length} active subscription(s).`,
     output: all.map((k) => `- ${k}`).join('\n'),
   };
@@ -498,6 +507,7 @@ async function execFindCurrent(
   }
   const path = `${remote.owner}/${remote.repo}/pulls/${pr.number}`;
   return {
+    status: 'executed',
     summary: path,
     output: `path: ${path}\nurl: ${pr.html_url}\n\nPass this path to command="subscribe" to start watching the PR.`,
   };

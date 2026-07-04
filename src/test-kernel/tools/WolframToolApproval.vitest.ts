@@ -80,7 +80,7 @@ describe('WolframTool approval', () => {
     });
 
     await expect(result).resolves.toMatchObject({
-      isError: true,
+      status: 'error',
       userInstruction: 'Use the requested node check instead.',
     });
     expect(execute).not.toHaveBeenCalled();
@@ -97,7 +97,7 @@ describe('WolframTool approval', () => {
     });
 
     await expect(result).resolves.toMatchObject({
-      isError: true,
+      status: 'error',
       userInstruction: expect.stringContaining('Do not retry'),
     });
     expect(execute).not.toHaveBeenCalled();

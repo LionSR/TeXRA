@@ -29,7 +29,7 @@ describe('setup credential reporting', () => {
 
     const result = await new ProbeEnvironmentTool().call({});
 
-    assert.ok(!result.isError, result.output);
+    assert.equal(result.status, 'executed');
     assert.match(result.output ?? '', /credentials: usable credential/);
     assert.match(result.output ?? '', /"hasAnyUsableCredential": true/);
     assert.match(result.output ?? '', /"anyApiKeySet": false/);
@@ -40,7 +40,7 @@ describe('setup credential reporting', () => {
 
     const result = await new VerifySetupTool().call({});
 
-    assert.ok(!result.isError, result.output);
+    assert.equal(result.status, 'executed');
     assert.match(
       result.output ?? '',
       /Credentials: usable model credential available\./,

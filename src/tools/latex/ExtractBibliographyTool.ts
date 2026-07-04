@@ -7,6 +7,7 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
@@ -47,7 +48,10 @@ export class ExtractBibliographyTool extends defineTool({
     'Collect BibTeX records for citations referenced in a LaTeX document.',
   schema: ExtractBibliographyInputSchema,
 }) {
-  protected async execute({ texPath, bibPath }: ExtractBibliographyInput) {
+  protected async execute({
+    texPath,
+    bibPath,
+  }: ExtractBibliographyInput): Promise<ToolResult> {
     const { path, display } = await resolveLatexFileOrThrow(texPath);
 
     const context = await extractBibliographyContext(path.relative);
@@ -78,6 +82,7 @@ export class ExtractBibliographyTool extends defineTool({
     ) {
       const summary = `No citations or bibliography directives found in ${display}.`;
       return {
+        status: 'executed',
         summary,
         output: formatToolOutput(`BibTeX entries in ${display}`, null),
       };
@@ -91,6 +96,7 @@ export class ExtractBibliographyTool extends defineTool({
           ? `\n\nNote: Missing bibliography files: ${formatPathList(missingBibliographyFiles)}.`
           : '';
       return {
+        status: 'executed',
         summary,
         output: `${baseOutput}${missingNote}`,
       };
@@ -135,6 +141,7 @@ export class ExtractBibliographyTool extends defineTool({
       instructions.length > 0 ? `\n\nNote: ${instructions.join(' ')}` : '';
 
     return {
+      status: 'executed',
       summary,
       output: `${output}${notes}`,
     };

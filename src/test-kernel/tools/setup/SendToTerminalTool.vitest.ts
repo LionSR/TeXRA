@@ -94,7 +94,7 @@ describe('SendToTerminalTool', () => {
       command: 'sudo apt-get install -y perl',
     });
 
-    assert.ok(!result.isError);
+    assert.equal(result.status, 'executed');
     assert.equal(runs.length, 1);
     assert.equal(runs[0].command, 'sudo apt-get install -y perl');
     assert.equal(runs[0].name, 'TeXRA: setup');
@@ -124,7 +124,7 @@ describe('SendToTerminalTool', () => {
       command: 'sudo apt-get install -y fakepkg',
     });
 
-    assert.ok(!result.isError);
+    assert.equal(result.status, 'executed');
     assert.match(result.summary ?? '', /exited 100/);
     assert.match(result.output ?? '', /Unable to locate package/);
   });
@@ -141,7 +141,7 @@ describe('SendToTerminalTool', () => {
       timeout: 1000,
     });
 
-    assert.ok(!result.isError);
+    assert.equal(result.status, 'executed');
     assert.match(result.summary ?? '', /timed out/);
   });
 
@@ -154,7 +154,11 @@ describe('SendToTerminalTool', () => {
       'first\rsecond',
     ]) {
       const result = await tool.call({ command });
-      assert.ok(result.isError, `must reject ${JSON.stringify(command)}`);
+      assert.equal(
+        result.status,
+        'error',
+        `must reject ${JSON.stringify(command)}`,
+      );
     }
     assert.equal(runs.length, 0);
   });
@@ -174,7 +178,7 @@ describe('SendToTerminalTool', () => {
       command: 'sudo apt-get install -y perl',
     });
 
-    assert.ok(!result.isError);
+    assert.equal(result.status, 'executed');
     assert.ok(
       (result.output ?? '').includes('END_MARKER'),
       'tail (success line) must survive truncation',
