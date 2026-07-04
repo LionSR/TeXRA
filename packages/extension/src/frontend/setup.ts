@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import * as vscode from 'vscode';
 
@@ -274,9 +275,7 @@ async function resetLegacyLatexSettings(): Promise<void> {
   const GLOBAL = vscode.ConfigurationTarget.Global;
   const cfg = vscode.workspace.getConfiguration();
 
-  // Deep equality check for arrays/objects
-  const eq = (a: unknown, b: unknown): boolean =>
-    JSON.stringify(a) === JSON.stringify(b);
+  const eq = isDeepStrictEqual;
 
   // Simple settings: reset to undefined if value matches what TeXRA wrote.
   const legacySettings: Array<[string, unknown]> = [
