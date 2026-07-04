@@ -677,7 +677,9 @@ match: MainApp 1,887, `modelHandlerOpenAIResponse` 2,871, `StreamSnapshotStore`
 document or the audit corpus** — the Part-C sweep audited `tools/` broadly but
 never entered the `tools/github/` polling subtree or the edit-tool family, and
 A1's model-handler decomposition names prefill/continuation but not the two
-adjacent hoists below. Same evidence standard; re-verify before acting.
+adjacent hoists below. Same evidence standard; line numbers below are pinned to
+`main` at `73c358f` — re-verify (they drift quickly, especially in
+`modelHandlers/`) before acting.
 
 ### D1. GitHub polling-source family: seed-branch cloned from diff-branch per resource (~150–220 LoC)
 
@@ -718,8 +720,8 @@ issue — larger than a quick win, independent of the architecture program.
 
 The read-gate → approval → write → diff-note sequence is written five times:
 `EditTool.ts` (`:72,:104,:116,:122`), `WriteTool.ts` (`:53,:64,:76,:82`), and
-**three times inside** `TextEditorTool.ts` (str_replace `:301-327`, create
-`:361-408`, insert `:593-620`) — `requireFileReadForEdit` → `requestApprovedEditContent`
+**three times inside** `TextEditorTool.ts` (str_replace `:302-328`, create
+`:363-410`, insert `:597-624`) — `requireFileReadForEdit` → `requestApprovedEditContent`
 → reject-check → `writeApprovedContent` → `recordToolFileRead` → assemble the
 `{summary, output, userPatch, edits[]}` result. TextEditorTool's `str_replace`
 is essentially EditTool and its `create` is essentially WriteTool, re-inlined.
@@ -739,17 +741,18 @@ capabilities) leaves two adjacent copy-paste seams untouched:
 - **Streaming-catch boilerplate across 5 handlers.** The mid-stream failure
   path — `thinking?.finalize(undefined)` + `output?.finalize()` + partial-tail
   extraction + `annotateStreamFailure(err, tail, …)` + rethrow — is copied in
-  `anthropic:724`, `openai:436`, `openaiResponse:1965`, `googleGenAI:523`,
-  `openRouterNative:284` (the "parity with the other streaming providers"
+  `anthropic:723`, `openai:433`, `openaiResponse:2011`, `googleGenAI:521`,
+  `openRouterNative:281` (the "parity with the other streaming providers"
   comments admit it). A protected `runProgressStreaming()` template method on
   `ModelHandler` would own stream creation + the try/finally finalize + the
   catch block; providers pass only their per-chunk `consume`.
 - **Byte-identical message construction, OpenAI ↔ OpenRouterNative.**
   `initializeMessages` / `createRoundMessages` / `createUserFollowUpMessages`
-  are the same algorithm line-for-line (`openai:677,:744,:780` vs
-  `openRouterNative:365,:428,:460`); OpenRouter's message model _is_ the OpenAI
-  chat shape (~120–160 LoC). Extract to `support/openAiCompatibleMessages.ts`,
-  a sibling of the existing `support/openAiCompatiblePrefill.ts`.
+  are the same algorithm line-for-line (`openai:674,:741,:777` vs
+  `openRouterNative:362,:425,:457`); OpenRouter's message model _is_ the OpenAI
+  chat shape (~120–160 LoC). Extract a shared `openAiCompatibleMessages` helper
+  into the existing `src/agent/modelHandlers/support/` collaborator directory
+  (alongside `UsageNormalizer`, `MediaAttachmentProcessor`).
 
 Fold both into F3's sub-debt list rather than tracking separately.
 
@@ -763,9 +766,9 @@ find package` triad → find native binary → append WSL hint) that
   matching `describeSdkTool({importSdk, findBinary, pkgName, …})` helper.
 - **Reasoning-gate reimplemented vs the base helper (~20–40 LoC).** The one-shot
   `if (workspaceState && !workspaceState.reasoning.thinkingAdded) { …; thinkingAdded = true }`
-  guard is inlined in `anthropic:1356`, `googleGenAI:889`,
-  `googleInteractions:1002` even though `ModelHandler.applyStringReasoningToWorkspaceState`
-  (`:1040`) already encapsulates it (OpenAI/OpenRouter use it). Fold into F4.
+  guard is inlined in `anthropic:1234`, `googleGenAI:801`,
+  `googleInteractions:1001` even though `ModelHandler.applyStringReasoningToWorkspaceState`
+  (`:1241`) already encapsulates it (OpenAI/OpenRouter use it). Fold into F4.
 
 ---
 
