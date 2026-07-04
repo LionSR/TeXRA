@@ -111,6 +111,22 @@ export class ModelHandlerValidation extends ModelHandler<
     };
   }
 
+  protected appendUserText(
+    messages: ChatCompletionMessageParam[],
+    text: string,
+    _placement: 'last-user' | 'continuation',
+  ): void {
+    messages.push({ role: 'user', content: text });
+  }
+
+  protected appendTextToLastAssistantMessage(
+    _messages: ChatCompletionMessageParam[],
+    _text: string,
+    _options?: { afterContinuationPrompt?: boolean; fallbackText?: string },
+  ): boolean {
+    return false;
+  }
+
   addContinueMessageWithPrefill(): void {
     // The validation model always produces a complete response.
   }

@@ -10,8 +10,6 @@ import {
   logProgressStatus,
   logSdkError,
 } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -49,7 +47,6 @@ import {
   computeOpenAIResponsePrice,
   normalizeOpenAIResponseUsage,
 } from './openAIUsage';
-import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 import { tagOpenAISdkError } from './openAISdkError';
 import {
   classifyOpenAIBackgroundResumeError,
@@ -65,7 +62,6 @@ import {
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
-import { shouldContinueOnLengthStop } from '../utils/stopReasonUtils';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAIResponseTools } from '../toolConversion';
 import { ModelHandler } from '../ModelHandler';
@@ -103,7 +99,6 @@ import {
   type UploadedOpenAIResponseAttachment,
 } from './openAIResponseFileUploads';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
-import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -2299,148 +2294,74 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     throw createOpenAIBackgroundTerminalError(polled, this.config.provider);
   }
 
-  /** Adds continuation instructions for models without prefill support. */
-  addContinueMessageWithoutPrefill(
-    messages: ResponseInputItem[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
-  ): void {
-    const userMessageContinuation = this.createContinuationPrompt(
-      workspaceState,
-      agentSetting,
-    );
+  protected override get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
+    return true;
+  }
 
-    const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-    const continuationMessage: ResponseInputItem.Message = {
+  protected appendUserText(
+    messages: ResponseInputItem[],
+    text: string,
+    placement: 'last-user' | 'continuation',
+  ): void {
+    if (placement === 'continuation') {
+      const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
+      messages.push({
+        type: 'message',
+        role,
+        content: [createInputText(text)],
+      });
+      return;
+    }
+
+    const lastMessage = messages.at(-1);
+    if (lastMessage) {
+      this.appendInputText(lastMessage, text);
+      return;
+    }
+
+    messages.push({
       type: 'message',
-      role,
-      content: [createInputText(userMessageContinuation)],
-    };
-    messages.push(continuationMessage);
+      role: 'user',
+      content: [createInputText(text)],
+    });
   }
 
-  /** Initializes output file and handles prefill content. */
-  async initializeOutputAndPrefill(
-    _agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
+  protected appendTextToLastAssistantMessage(
     messages: ResponseInputItem[],
-    workspaceState: AgentWorkspaceState,
-    outputLocation: FileLocation,
-    prefill: string,
-  ): Promise<[boolean, ResponseInputItem[]]> {
-    return initializeOpenAiCompatibleOutputAndPrefill(
-      {
-        logger: this.logger,
-        appendPseudoPrefill: (msgs, pseudoPrefillMsg) => {
-          const lastMessage = msgs.at(-1);
-          if (lastMessage) {
-            this.appendInputText(lastMessage, pseudoPrefillMsg);
-          } else {
-            msgs.push({
-              type: 'message',
-              role: 'user',
-              content: [createInputText(pseudoPrefillMsg)],
-            });
-          }
-        },
-        pushAssistantText: (msgs, text) => {
-          msgs.push(this.createAssistantMessage(text));
-        },
-        addContinue: (msgs, ws, setting) =>
-          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
-      },
-      agentSetting,
-      messages,
-      workspaceState,
-      outputLocation,
-      prefill,
-    );
-  }
-
-  /** Updates message content for models with prefill support. */
-  updateMessageContentWithPrefill(
-    messages: ResponseInputItem[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    this.logger.debug(
-      'Updating message content for OpenAI Responses models with prefill support',
-    );
-
-    const lastMessage = messages.at(-1);
-    if (
-      lastMessage &&
-      this.appendAssistantText(lastMessage, `${bestConnector}${newResponse}`)
-    ) {
-      return;
-    }
-
-    messages.push(
-      this.createAssistantMessage(workspaceState.assembly.accumulatedOutput),
-    );
-  }
-
-  /** Updates message content for models without prefill support. */
-  updateMessageContentWithoutPrefill(
-    messages: ResponseInputItem[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    this.logger.debug(
-      'Updating message content for OpenAI Responses models without prefill support',
-    );
-
-    const lastMessage = messages.at(-1);
-    const secondLastMessage = messages.at(-2);
-
-    if (!isMessageItem(lastMessage)) {
-      this.logger.error(
-        'Last message is not a message item - unexpected format',
-      );
-      return;
-    }
-
-    const lastContent = this.getMessageContent(lastMessage);
-
-    if (lastContent && this.containCutOffMessage(lastContent)) {
-      this.logger.debug(
-        'Last message is a user message asking to continue after cut off',
-      );
-      if (secondLastMessage) {
-        const appended = this.appendAssistantText(
-          secondLastMessage,
-          `${bestConnector}${newResponse}`,
-        );
-        const trailingMessage = messages.at(-1);
-        if (isMessageItem(trailingMessage) && trailingMessage.role === 'user') {
-          messages.pop();
-        } else if (!appended) {
-          messages.push(
-            this.createAssistantMessage(
-              workspaceState.assembly.accumulatedOutput,
-            ),
-          );
-        }
-      }
-    } else {
-      this.logger.debug(
-        'Last message is a request message rather than a continuation request',
-      );
-      messages.push(
-        this.createAssistantMessage(workspaceState.assembly.accumulatedOutput),
-      );
-    }
-  }
-
-  /** Determines if generation should continue based on response content. */
-  shouldContinue(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-    agentSetting: AgentSetting,
+    text: string,
+    options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
   ): boolean {
-    return shouldContinueOnLengthStop(stopReason, newResponse, agentSetting);
+    let targetIndex = messages.length - 1;
+    const trailingMessage = messages.at(-1);
+
+    if (options.afterContinuationPrompt) {
+      if (!isMessageItem(trailingMessage)) return false;
+      const lastContent = this.getMessageContent(trailingMessage);
+      if (!lastContent || !this.containCutOffMessage(lastContent)) {
+        return false;
+      }
+      targetIndex = messages.length - 2;
+    }
+
+    const targetMessage = messages.at(targetIndex);
+    if (!targetMessage) return false;
+
+    const appended = this.appendAssistantText(targetMessage, text);
+    if (
+      options.afterContinuationPrompt &&
+      isMessageItem(trailingMessage) &&
+      trailingMessage.role === 'user'
+    ) {
+      messages.pop();
+      return appended;
+    }
+
+    if (!appended && options.fallbackText != null) {
+      messages.push(this.createAssistantMessage(options.fallbackText));
+      return true;
+    }
+
+    return appended;
   }
 
   /**

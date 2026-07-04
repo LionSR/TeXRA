@@ -1,4 +1,4 @@
-import { basename, dirname } from 'node:path';
+import { basename } from 'node:path';
 
 // Third-party imports
 import {
@@ -9,7 +9,6 @@ import {
 
 // Local imports - agent
 import { logSdkError } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   type AgentSetting,
   hasEndTag,
@@ -38,7 +37,6 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
-import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { joinNonEmpty } from '@utils/text/stringUtils';
@@ -65,7 +63,6 @@ import {
   isAnthropicWebSearchResult,
   type ServerToolExtractionResult,
 } from '../types/ServerToolTypes';
-import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
@@ -1018,133 +1015,96 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  /** Manages continuation for models without prefill support by adding a continuation prompt. */
-  addContinueMessageWithoutPrefill(
-    messages: MessageParam[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
-  ): void {
-    const userMessageContinuation = this.createContinuationPrompt(
-      workspaceState,
-      agentSetting,
-    );
-
-    this.logger.debug('Adding continuation message to conversation', {
-      data: userMessageContinuation,
-    });
-    const content: ContentBlockParam[] = [
-      { type: 'text', text: userMessageContinuation },
-    ];
-    messages.push({ role: 'user', content });
+  protected createPseudoPrefillPrompt(prefill: string): string {
+    return `Start your response with:\n${prefill}`;
   }
 
-  /** Initializes output file and handles prefill content, returning [isComplete, updatedMessages]. */
-  async initializeOutputAndPrefill(
-    agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
+  protected createAssistantMessageForPrefillText(text: string): MessageParam {
+    return {
+      role: 'assistant',
+      content: [{ type: 'text', text } as ContentBlockParam],
+    };
+  }
+
+  protected appendUserText(
     messages: MessageParam[],
-    workspaceState: AgentWorkspaceState,
-    outputLocation: FileLocation,
-    prefill: string,
-  ): Promise<[boolean, MessageParam[]]> {
-    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
-      if (this.capabilities.supportsAssistantPrefill) {
-        if (prefill.length === 0) {
-          // Anthropic rejects assistant messages with empty text content blocks.
-          // When an agent declares no prefill, skip pushing the assistant turn
-          // entirely so the model produces its response from a clean slate.
+    text: string,
+    placement: 'last-user' | 'continuation',
+  ): void {
+    if (placement === 'continuation') {
+      messages.push({
+        role: 'user',
+        content: [{ type: 'text', text } as ContentBlockParam],
+      });
+      return;
+    }
+
+    const lastMessage = messages.at(-1);
+    if (lastMessage && Array.isArray(lastMessage.content)) {
+      lastMessage.content.push({
+        type: 'text',
+        text,
+      } as ContentBlockParam);
+      return;
+    }
+
+    messages.push({
+      role: 'user',
+      content: [{ type: 'text', text } as ContentBlockParam],
+    });
+  }
+
+  protected appendTextToLastAssistantMessage(
+    messages: MessageParam[],
+    text: string,
+    options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
+  ): boolean {
+    let targetIndex = messages.length - 1;
+    const trailingMessage = messages.at(-1);
+
+    if (options.afterContinuationPrompt) {
+      if (!trailingMessage || trailingMessage.role !== 'user') return false;
+      if (
+        !Array.isArray(trailingMessage.content) ||
+        !this.containCutOffMessage(trailingMessage.content)
+      ) {
+        return false;
+      }
+      targetIndex = messages.length - 2;
+    }
+
+    const targetMessage = messages.at(targetIndex);
+    if (!targetMessage || targetMessage.role !== 'assistant') return false;
+
+    if (Array.isArray(targetMessage.content)) {
+      if (options.afterContinuationPrompt) {
+        const thinkingCount = targetMessage.content.filter(
+          isAnyThinkingBlockParam,
+        ).length;
+        if (thinkingCount > 0) {
           this.logger.debug(
-            'No prefill provided; skipping assistant prefill message',
+            `Using ${thinkingCount} existing thinking blocks from previous message`,
           );
-          return [false, messages];
-        }
-        this.logger.debug('Adding prefill message', { data: prefill });
-        workspaceState.assembly.accumulatedOutput = `${prefill}\n`;
-        await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
-        await flexibleFS.write(
-          outputLocation,
-          workspaceState.assembly.accumulatedOutput,
-        );
-        messages.push({
-          role: 'assistant',
-          content: [{ type: 'text', text: prefill }],
-        });
-      } else {
-        if (prefill.length === 0) {
-          // No prefill declared --- skip the pseudo-prefill instruction so the
-          // model isn't told `Start your response with:\n` (an empty directive).
-          this.logger.debug(
-            'No prefill provided; skipping pseudo-prefill instruction',
-          );
-        } else {
-          // For thinking-enabled models that don't support assistant prefill,
-          // add prefill as part of the user message like OpenAI handler
-          const pseudoPrefillText = `Start your response with:\n${prefill}`;
-          const lastMsg = messages.at(-1);
-          if (lastMsg && Array.isArray(lastMsg.content)) {
-            lastMsg.content.push({
-              type: 'text',
-              text: pseudoPrefillText,
-            } as ContentBlockParam);
-          }
-          this.logger.debug('Added pseudo prefill message to messages', {
-            data: pseudoPrefillText,
-          });
         }
       }
-      return [false, messages];
+
+      targetMessage.content.push({
+        type: 'text',
+        text,
+      } as ContentBlockParam);
+    } else {
+      targetMessage.content = [
+        {
+          type: 'text',
+          text: options.fallbackText ?? text,
+        } as ContentBlockParam,
+      ];
     }
 
-    // Prepare existing file content (read, clean, extract scratchpad, update state)
-    const { fileContent } = await prepareExistingOutputContent(
-      outputLocation,
-      workspaceState,
-      this.logger,
-    );
-
-    if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug(
-        'End tag detected - adding completed response and skipping model call',
-      );
-      // Add the completed assistant response to conversation
-      // This is critical for multi-round agents on resume - the conversation
-      // must include this round's response for subsequent rounds to have context
-      messages.push({
-        role: 'assistant',
-        content: [{ type: 'text', text: fileContent }],
-      });
-
-      return [true, messages];
+    if (options.afterContinuationPrompt) {
+      messages.pop();
     }
-
-    this.logger.debug(
-      'Output file exists but no end tag found - continuing from file',
-    );
-
-    // For thinking-enabled models that don't support assistant prefill,
-    // add continuation as part of the user message
-
-    const content: ContentBlockParam[] = [{ type: 'text', text: fileContent }];
-    this.logger.debug(
-      `Using existing content as prefill: ${outputLocation.absolutePath}`,
-    );
-    messages.push({ role: 'assistant', content });
-
-    if (!this.capabilities.supportsAssistantPrefill) {
-      // For models that don't support assistant prefill, we need to:
-      // add a continuation message in addition
-      this.addContinueMessageWithoutPrefill(
-        messages,
-        workspaceState,
-        agentSetting,
-      );
-
-      this.logger.debug(
-        `Added existing content as assistant message and continuation prompt`,
-      );
-    }
-
-    return [false, messages];
+    return true;
   }
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
@@ -1169,93 +1129,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  updateMessageContentWithPrefill(
-    messages: MessageParam[],
-    bestConnector: string,
-    newResponse: string,
+  protected createAssistantMessageForAccumulatedOutput(
     workspaceState: AgentWorkspaceState,
-  ): void {
-    const lastMessage = messages.at(-1);
-
-    if (lastMessage && lastMessage.role === 'assistant') {
-      if (Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({
-          type: 'text',
-          text: bestConnector + newResponse,
-        } as ContentBlockParam);
-      } else {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: workspaceState.assembly.accumulatedOutput,
-          } as ContentBlockParam,
-        ];
-      }
-    } else if (lastMessage?.role === 'user') {
-      // No prefill was pushed (agent declared empty prefill). Add the model's
-      // response as a new assistant message so multi-round conversation history
-      // is preserved.
-      messages.push({
-        role: 'assistant',
-        content: [
-          {
-            type: 'text',
-            text: bestConnector + newResponse,
-          } as ContentBlockParam,
-        ],
-      });
-    }
-  }
-
-  updateMessageContentWithoutPrefill(
-    messages: MessageParam[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    // For thinking-enabled anthropic models that don't support assistant prefill,
-    // handle like OpenAI models where the last message is always a user message
-    const lastMessage = messages.at(-1);
-    const secondLastMessage = messages.at(-2);
-
-    if (!lastMessage || lastMessage.role !== 'user') {
-      this.logger.error(
-        'Last message is not a user message - unexpected format',
-      );
-      return;
-    }
-
-    // Handle continuation after cutoff - append to the previous assistant message
-    if (this.containCutOffMessage(lastMessage.content)) {
-      this.logger.debug(
-        'Last message is a user message asking to continue after cutoff',
-      );
-
-      if (!secondLastMessage || secondLastMessage.role !== 'assistant') {
-        return;
-      }
-
-      if (Array.isArray(secondLastMessage.content)) {
-        const thinkingCount = secondLastMessage.content.filter(
-          isAnyThinkingBlockParam,
-        ).length;
-        if (thinkingCount > 0) {
-          this.logger.debug(
-            `Using ${thinkingCount} existing thinking blocks from previous message`,
-          );
-        }
-
-        secondLastMessage.content.push({
-          type: 'text',
-          text: bestConnector + newResponse,
-        } as ContentBlockParam);
-      }
-
-      messages.pop();
-      return;
-    }
-
-    // Handle new request - create a new assistant message
+  ): MessageParam {
     this.logger.debug('Creating new assistant message for fresh request');
     const content: ContentBlockParam[] = [];
 
@@ -1277,7 +1153,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       text: workspaceState.assembly.accumulatedOutput,
     } as ContentBlockParam);
 
-    messages.push({ role: 'assistant', content });
+    return { role: 'assistant', content };
   }
 
   /** Determines if generation should continue based on stop reason and end tag presence. */
