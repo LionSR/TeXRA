@@ -8,8 +8,6 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import { logSdkError, type StreamHandle } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -32,7 +30,6 @@ import {
   normalizeOpenRouterUsage,
 } from './openRouterUsage';
 import { tagOpenRouterSdkError } from './openRouterSdkError';
-import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
@@ -48,7 +45,6 @@ import {
   OpenRouterStreamAggregator,
   toOpenRouterReasoningEffort,
 } from './openRouterStreaming';
-import { shouldContinueOnLengthStop } from '../utils/stopReasonUtils';
 import { ModelHandler } from '../ModelHandler';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
@@ -71,7 +67,6 @@ import type {
   ExtractResponseResult,
   OpenRouterToolCall,
 } from '../types/IModelHandler';
-import type { ProviderStopReason } from '../types/StopReasonTypes';
 
 // ============================================================================
 // Handler
@@ -724,183 +719,92 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // Stop / continue logic
   // ---------------------------------------------------------------------------
 
-  shouldContinue(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-    agentSetting: AgentSetting,
-  ): boolean {
-    return shouldContinueOnLengthStop(stopReason, newResponse, agentSetting);
+  protected override get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
+    return true;
   }
 
-  addContinueMessageWithoutPrefill(
+  protected appendUserText(
     messages: ChatMessages[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
+    text: string,
+    placement: 'last-user' | 'continuation',
   ): void {
-    const userMessageContinuation = this.createContinuationPrompt(
-      workspaceState,
-      agentSetting,
-    );
-    this.logger.debug('Adding continuation message', {
-      data: userMessageContinuation,
-    });
+    if (placement === 'continuation') {
+      const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
+      messages.push({
+        role,
+        content: [{ type: 'text', text }],
+      } as ChatMessages);
+      return;
+    }
 
-    const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
+    const lastMessage = messages.at(-1);
+    if (lastMessage && Array.isArray(lastMessage.content)) {
+      (lastMessage.content as ChatContentItems[]).push({ type: 'text', text });
+      return;
+    }
+    if (lastMessage && typeof lastMessage.content === 'string') {
+      (lastMessage as ChatUserMessage).content = [
+        { type: 'text', text: lastMessage.content },
+        { type: 'text', text },
+      ];
+      return;
+    }
     messages.push({
-      role,
-      content: [{ type: 'text', text: userMessageContinuation }],
-    });
+      role: 'user',
+      content: [{ type: 'text', text }],
+    } as ChatMessages);
   }
 
   // ---------------------------------------------------------------------------
   // Prefill / output initialization
   // ---------------------------------------------------------------------------
 
-  async initializeOutputAndPrefill(
-    _agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
+  protected appendTextToLastAssistantMessage(
     messages: ChatMessages[],
-    workspaceState: AgentWorkspaceState,
-    outputLocation: FileLocation,
-    prefill: string,
-  ): Promise<[boolean, ChatMessages[]]> {
-    return initializeOpenAiCompatibleOutputAndPrefill(
-      {
-        logger: this.logger,
-        appendPseudoPrefill: (msgs, pseudoPrefillMsg) => {
-          const lastMessage = msgs.at(-1);
-          if (lastMessage && Array.isArray(lastMessage.content)) {
-            (lastMessage.content as ChatContentItems[]).push({
-              type: 'text',
-              text: pseudoPrefillMsg,
-            });
-          } else if (lastMessage && typeof lastMessage.content === 'string') {
-            (lastMessage as ChatUserMessage).content = [
-              { type: 'text', text: lastMessage.content },
-              { type: 'text', text: pseudoPrefillMsg },
-            ];
-          }
-        },
-        pushAssistantText: (msgs, text) => {
-          msgs.push({
-            role: 'assistant',
-            content: [{ type: 'text', text }],
-          } as ChatMessages);
-        },
-        addContinue: (msgs, ws, setting) =>
-          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
-      },
-      agentSetting,
-      messages,
-      workspaceState,
-      outputLocation,
-      prefill,
-    );
-  }
+    text: string,
+    options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
+  ): boolean {
+    let targetIndex = messages.length - 1;
+    const trailingMessage = messages.at(-1);
 
-  updateMessageContentWithPrefill(
-    messages: ChatMessages[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    const lastMessage = messages.at(-1);
+    if (options.afterContinuationPrompt) {
+      if (this.isAnthropicViaOpenRouter) return false;
+      if (
+        !trailingMessage ||
+        (trailingMessage.role !== 'user' && trailingMessage.role !== 'system')
+      ) {
+        return false;
+      }
+      if (!this.containCutOffMessage(trailingMessage.content)) return false;
+      targetIndex = messages.length - 2;
+    }
 
-    if (lastMessage?.role === 'assistant') {
-      const msg = lastMessage as ChatAssistantMessage;
-      if (Array.isArray(msg.content)) {
-        if (this.isAnthropicViaOpenRouter) {
-          // Anthropic prefill: replace the last text part
-          const lastPart = (msg.content as ChatContentItems[]).at(-1);
-          if (lastPart && 'text' in lastPart) {
-            (lastPart as ChatContentText).text = bestConnector + newResponse;
-          }
-        } else {
-          (msg.content as ChatContentItems[]).push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          });
+    const targetMessage = messages.at(targetIndex);
+    if (targetMessage?.role !== 'assistant') return false;
+
+    const message = targetMessage as ChatAssistantMessage;
+    if (Array.isArray(message.content)) {
+      if (this.isAnthropicViaOpenRouter && !options.afterContinuationPrompt) {
+        const lastPart = (message.content as ChatContentItems[]).at(-1);
+        if (lastPart && 'text' in lastPart) {
+          (lastPart as ChatContentText).text = text;
         }
       } else {
-        msg.content = [
-          {
-            type: 'text',
-            text: workspaceState.assembly.accumulatedOutput,
-          },
-        ];
-      }
-    } else if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
-      messages.push({
-        role: 'assistant',
-        content: bestConnector + newResponse,
-      } as ChatMessages);
-    }
-  }
-
-  updateMessageContentWithoutPrefill(
-    messages: ChatMessages[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    // Anthropic via OpenRouter: always push assistant message with accumulated output
-    if (this.isAnthropicViaOpenRouter) {
-      const lastMessage = messages.at(-1);
-      if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
-        messages.push({
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: workspaceState.assembly.accumulatedOutput,
-            },
-          ],
-        } as ChatMessages);
-      }
-      return;
-    }
-
-    const lastMessage = messages.at(-1);
-    const secondLastMessage = messages.at(-2);
-
-    if (
-      !lastMessage ||
-      (lastMessage.role !== 'user' && lastMessage.role !== 'system')
-    ) {
-      this.logger.error(
-        'Last message is not a user or system message - unexpected format',
-      );
-      return;
-    }
-
-    if (this.containCutOffMessage(lastMessage.content)) {
-      if (secondLastMessage?.role === 'assistant') {
-        const msg = secondLastMessage as ChatAssistantMessage;
-        if (Array.isArray(msg.content)) {
-          (msg.content as ChatContentItems[]).push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          });
-        } else {
-          msg.content = [
-            {
-              type: 'text',
-              text: workspaceState.assembly.accumulatedOutput,
-            },
-          ];
-        }
-        if (messages.at(-1)?.role === 'user') {
-          messages.pop();
-        }
+        (message.content as ChatContentItems[]).push({ type: 'text', text });
       }
     } else {
-      messages.push({
-        role: 'assistant',
-        content: [
-          { type: 'text', text: workspaceState.assembly.accumulatedOutput },
-        ],
-      } as ChatMessages);
+      message.content = [
+        {
+          type: 'text',
+          text: options.fallbackText ?? text,
+        },
+      ];
     }
+
+    if (options.afterContinuationPrompt && trailingMessage?.role === 'user') {
+      messages.pop();
+    }
+    return true;
   }
 
   // ---------------------------------------------------------------------------
