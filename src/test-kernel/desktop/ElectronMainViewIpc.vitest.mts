@@ -94,10 +94,7 @@ function createDeferred(): {
   return { promise, resolve };
 }
 
-type RendererListener = (
-  event: { sender: unknown },
-  message: unknown,
-) => void;
+type RendererListener = (event: { sender: unknown }, message: unknown) => void;
 
 function createIpcMainMock(onMessage: (listener: RendererListener) => void) {
   return {

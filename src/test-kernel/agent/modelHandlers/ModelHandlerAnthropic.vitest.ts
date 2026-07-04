@@ -1343,61 +1343,22 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
   });
 
   it('skips assistant prefill message when prefill is empty', async () => {
-    await withTempOutputPath(
-      'anthropic-prefill-empty-',
-      async (outputPath) => {
-        const handler = createAnthropicHandler({
-          supportsAssistantPrefill: true,
-        });
-        stubHandlerForTest(handler);
+    await withTempOutputPath('anthropic-prefill-empty-', async (outputPath) => {
+      const handler = createAnthropicHandler({
+        supportsAssistantPrefill: true,
+      });
+      stubHandlerForTest(handler);
 
-        const agentSetting = createLatexAgentSetting();
-        const userMessage: MessageParam = {
-          role: 'user',
-          content: [{ type: 'text', text: 'revise the document' }],
-        };
-        const messages: MessageParam[] = [userMessage];
-        const workspaceState = AgentWorkspaceState.create();
+      const agentSetting = createLatexAgentSetting();
+      const userMessage: MessageParam = {
+        role: 'user',
+        content: [{ type: 'text', text: 'revise the document' }],
+      };
+      const messages: MessageParam[] = [userMessage];
+      const workspaceState = AgentWorkspaceState.create();
 
-        const [isComplete, updatedMessages] =
-          await handler.initializeOutputAndPrefill(
-            {} as AgentConfig,
-            agentSetting,
-            messages,
-            workspaceState,
-            pathToLocation(outputPath),
-            '',
-          );
-
-        assert.equal(isComplete, false);
-        assert.equal(fs.existsSync(outputPath), false);
-        assert.equal(workspaceState.assembly.accumulatedOutput, '');
-        assert.equal(updatedMessages.length, 1);
-        assert.equal(updatedMessages.at(-1)?.role, 'user');
-      },
-    );
-  });
-
-  it('skips pseudo-prefill instruction when prefill is empty (thinking-only models)', async () => {
-    await withTempOutputPath(
-      'anthropic-pseudo-empty-',
-      async (outputPath) => {
-        const handler = createAnthropicHandler({
-          supportsAssistantPrefill: false,
-        });
-        stubHandlerForTest(handler);
-
-        const agentSetting = createLatexAgentSetting();
-        const userText = 'revise the document';
-        const messages: MessageParam[] = [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: userText }],
-          },
-        ];
-        const workspaceState = AgentWorkspaceState.create();
-
-        const [, updatedMessages] = await handler.initializeOutputAndPrefill(
+      const [isComplete, updatedMessages] =
+        await handler.initializeOutputAndPrefill(
           {} as AgentConfig,
           agentSetting,
           messages,
@@ -1406,12 +1367,45 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
           '',
         );
 
-        assert.equal(updatedMessages.length, 1);
-        const last = updatedMessages.at(-1);
-        assert.equal(last?.role, 'user');
-        assert.deepEqual(last?.content, [{ type: 'text', text: userText }]);
-      },
-    );
+      assert.equal(isComplete, false);
+      assert.equal(fs.existsSync(outputPath), false);
+      assert.equal(workspaceState.assembly.accumulatedOutput, '');
+      assert.equal(updatedMessages.length, 1);
+      assert.equal(updatedMessages.at(-1)?.role, 'user');
+    });
+  });
+
+  it('skips pseudo-prefill instruction when prefill is empty (thinking-only models)', async () => {
+    await withTempOutputPath('anthropic-pseudo-empty-', async (outputPath) => {
+      const handler = createAnthropicHandler({
+        supportsAssistantPrefill: false,
+      });
+      stubHandlerForTest(handler);
+
+      const agentSetting = createLatexAgentSetting();
+      const userText = 'revise the document';
+      const messages: MessageParam[] = [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: userText }],
+        },
+      ];
+      const workspaceState = AgentWorkspaceState.create();
+
+      const [, updatedMessages] = await handler.initializeOutputAndPrefill(
+        {} as AgentConfig,
+        agentSetting,
+        messages,
+        workspaceState,
+        pathToLocation(outputPath),
+        '',
+      );
+
+      assert.equal(updatedMessages.length, 1);
+      const last = updatedMessages.at(-1);
+      assert.equal(last?.role, 'user');
+      assert.deepEqual(last?.content, [{ type: 'text', text: userText }]);
+    });
   });
 });
 
