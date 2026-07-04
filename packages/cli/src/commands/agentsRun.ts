@@ -9,7 +9,7 @@ import {
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   buildHeadlessRunContext,
-  resolveCliRunModel,
+  selectCliRunModel,
 } from '../runtime/runModel';
 import {
   TOOL_USE_AGENT_NAME_DESCRIPTION,
@@ -51,7 +51,7 @@ export async function runToolUseAgent(
   await initLocalCliPlatform(context);
   await resolveCliLaunchAgent(init.agent, 'agentsRun');
 
-  const model = await resolveCliRunModel(context, init.model, 'chat');
+  const model = await selectCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context);
 
   return withExpandedRunInputs(
