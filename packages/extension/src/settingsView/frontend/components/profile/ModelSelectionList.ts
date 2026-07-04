@@ -38,7 +38,7 @@ import {
   type ProviderKeyStatus,
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
-import { profileViewStyles } from './styles';
+import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { ModelSelectionEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
@@ -65,7 +65,7 @@ export class ModelSelectionList extends LitElement {
     designTokens,
     commonViewStyles,
     statusCheckIconStyles,
-    profileViewStyles,
+    modelSelectionListStyles,
   ];
 
   @property({ attribute: false }) models: ModelSelectionItem[] = [];

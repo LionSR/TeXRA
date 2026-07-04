@@ -10,7 +10,7 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import {
   commonViewStyles,
   designTokens,
-  requestPanelStyles,
+  requestPanelSharedStyles,
 } from '@shared/styles';
 
 // Local imports - shared schemas
@@ -29,9 +29,17 @@ import { ProgressEvents } from '../events';
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
+// Local imports - styles
+import { userQuestionPanelStyles } from './UserQuestionPanel.styles';
+
 @customElement('user-question-panel')
 export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
-  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    requestPanelSharedStyles,
+    userQuestionPanelStyles,
+  ];
 
   @state() private selections: Record<string, string[]> = {};
   @state() private freeText: Record<string, string> = {};

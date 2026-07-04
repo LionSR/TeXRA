@@ -17,7 +17,7 @@ import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
 import { API_ACCESS_MODE_OPTIONS } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - profile view styles
-import { profileViewStyles } from './styles';
+import { apiAccessSectionStyles } from './ApiAccessSection.styles';
 
 // Local imports - profile view events
 import { ProfileViewEvents } from './events';
@@ -25,7 +25,7 @@ import type WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-grou
 
 @customElement('api-access-section')
 export class ApiAccessSection extends LitElement {
-  static override styles = [designTokens, profileViewStyles];
+  static override styles = [designTokens, apiAccessSectionStyles];
 
   @property({ attribute: false }) mode: 'included' | 'personal' = 'personal';
 

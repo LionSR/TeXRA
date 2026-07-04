@@ -27,10 +27,11 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import {
   commonViewStyles,
   designTokens,
-  requestPanelStyles,
+  requestPanelSharedStyles,
 } from '@shared/styles';
 
 // Local imports - progress view helpers
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import {
   createEmptyPermissionGroups,
   findPanelForPermission,
@@ -55,7 +56,6 @@ import './ProposalRequestPanel';
 import './PlanApprovalRequestPanel';
 import './ExternalInquiryPanel';
 import './UserQuestionPanel';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 /** Section configuration for rendering permission groups */
 interface SectionConfig {
@@ -123,7 +123,11 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
 
 @customElement('request-panels')
 export class RequestPanels extends LitElement {
-  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    requestPanelSharedStyles,
+  ];
 
   @property({ attribute: false }) permissions: PermissionState[] = [];
 
