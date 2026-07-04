@@ -29,6 +29,10 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import { isGpt5ModelName, isGptFamilyModelName } from '@model/modelNames';
+import type {
+  OpenAIResponseProviderCapabilities,
+  ProviderCapabilityProfile,
+} from '@model/providerCapabilities';
 import replacementEngine from '@replacement/engine';
 
 // Type imports
@@ -264,25 +268,48 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   OpenAI,
   Response
 > {
+  protected getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
+    return null;
+  }
+
+  private getOpenAIResponseCapabilities():
+    OpenAIResponseProviderCapabilities | undefined {
+    return this.getActiveProviderCapabilities()?.openAIResponses;
+  }
+
   private isOpenRouterRoutingEnabled(): boolean {
     return shouldUseOpenRouter(this.config);
+  }
+
+  public override getEffectiveContextWindow(): number {
+    return (
+      this.getActiveProviderCapabilities()?.contextWindow ??
+      super.getEffectiveContextWindow()
+    );
   }
 
   /**
    * OpenAI Response API supports file uploads.
    */
   protected override get supportsToolResultFileUpload(): boolean {
-    return true;
+    return (
+      this.getOpenAIResponseCapabilities()?.supportsToolResultFileUpload ?? true
+    );
   }
 
   /** Whether inline input files can be uploaded before the response request. */
   protected get supportsInlineInputFileUpload(): boolean {
-    return true;
+    return (
+      this.getOpenAIResponseCapabilities()?.supportsInlineInputFileUpload ??
+      true
+    );
   }
 
   /** Whether this backend can retain responses for `previous_response_id`. */
   protected get supportsResponseChaining(): boolean {
-    return true;
+    return (
+      this.getOpenAIResponseCapabilities()?.supportsResponseChaining ?? true
+    );
   }
 
   /**
@@ -297,7 +324,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Single source for the `store` request field and the encrypted-reasoning gate.
    */
   protected get storesResponsesServerSide(): boolean {
-    return true;
+    return (
+      this.getOpenAIResponseCapabilities()?.storesResponsesServerSide ?? true
+    );
   }
 
   /**
@@ -305,6 +334,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Background responses use polling for completed results, incompatible with streaming.
    */
   public override getStreamingConfig(): boolean {
+    if (this.getOpenAIResponseCapabilities()?.streaming === 'forced') {
+      return true;
+    }
     return !this.isBackgroundModeActive() && super.getStreamingConfig();
   }
 
@@ -315,11 +347,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    *
    * Single source of truth for the background-mode decision: the request path
    * (`createResponseImpl`), `getStreamingConfig`, and `storesResponsesServerSide`
-   * all route through this method, so a subclass override (e.g. the Codex
-   * subscription handler forcing it off) takes effect on the actual request —
-   * not just on this predicate.
+   * all route through this method, so provider-profile policy (e.g. the Codex
+   * subscription profile forcing it off) takes effect on the actual request, not
+   * just on this predicate.
    */
   public override isBackgroundModeActive(): boolean {
+    if (this.getOpenAIResponseCapabilities()?.backgroundMode === 'disabled') {
+      return false;
+    }
     return (
       this.backgroundModeSupported &&
       this.isBackgroundModeToggleEnabled() &&
@@ -334,7 +369,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   protected override backgroundModeSupported = true;
 
   override get supportsManualCompaction(): boolean {
-    return !this.isOpenRouterRoutingEnabled();
+    return (
+      this.getOpenAIResponseCapabilities()?.supportsManualCompaction ??
+      !this.isOpenRouterRoutingEnabled()
+    );
   }
 
   /**
@@ -453,6 +491,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * backend) can opt into trying WebSocket against its own base URL.
    */
   protected isWebSocketModeEnabled(): boolean {
+    if (this.getOpenAIResponseCapabilities()?.webSocket === 'global-toggle') {
+      return getWebSocketEnabled();
+    }
     return getWebSocketEnabled() && this.getBaseUrl() === null;
   }
 
@@ -1196,7 +1237,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * for exact token counts instead of heuristics.
    */
   override get supportsTokenCounting(): boolean {
-    return !this.isOpenRouterRoutingEnabled();
+    return (
+      this.getOpenAIResponseCapabilities()?.supportsTokenCounting ??
+      !this.isOpenRouterRoutingEnabled()
+    );
   }
 
   /**
@@ -1212,6 +1256,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     _contextWindow: number,
     _buffer: number,
   ): boolean {
+    if (
+      this.getOpenAIResponseCapabilities()
+        ?.failWhenFallbackOutputBudgetIsReduced
+    ) {
+      return _inputEstimate + _buffer >= _contextWindow;
+    }
     return false;
   }
 
@@ -1387,9 +1437,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // pending response is handled above before this state can be discarded.
     this.compactionResult = undefined;
 
-    // Route through isBackgroundModeActive() so subclass overrides (e.g. the
-    // Codex subscription handler) actually gate the request, not just the
-    // predicate.
+    // Route through isBackgroundModeActive() so provider-profile policy actually
+    // gates the request, not just the predicate.
     const useBackgroundResponses = this.isBackgroundModeActive();
     const streamingToggleEnabled = useBackgroundResponses
       ? super.getStreamingConfig()
@@ -2173,9 +2222,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /** Price computation adapted for Responses API token fields. */
   computePrice(responseUsage: ResponseUsage): number {
+    const providerCapabilities = this.getActiveProviderCapabilities();
     return computeOpenAIResponsePrice(
       responseUsage,
-      this.standardPricingConfig(),
+      providerCapabilities
+        ? {
+            inputPrice: providerCapabilities.inputPrice,
+            outputPrice: providerCapabilities.outputPrice,
+            cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
+          }
+        : this.standardPricingConfig(),
     );
   }
 
@@ -2184,9 +2240,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     rawUsage: ResponseUsage,
     responseTimeMs: number,
   ): NormalizedUsage {
-    return normalizeOpenAIResponseUsage(rawUsage, responseTimeMs, (usage) =>
-      this.computePrice(usage),
+    const usage = normalizeOpenAIResponseUsage(
+      rawUsage,
+      responseTimeMs,
+      (usage) => this.computePrice(usage),
     );
+    const usageRoute = this.getActiveProviderCapabilities()?.usageRoute;
+    return usageRoute == null ? usage : { ...usage, usageRoute };
   }
 
   private isBackgroundPending(response: Response): boolean {

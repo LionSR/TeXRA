@@ -67,17 +67,6 @@ export const CODEX_ORIGINATOR = 'texra';
  */
 export const CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
-/**
- * Context window the ChatGPT-subscription (Codex) backend enforces, regardless
- * of the model's own (larger) API context window in llm-zoo — e.g. gpt-5.5
- * declares 1,050,000 over the OpenAI API but the subscription backend caps the
- * request at 272,000 and answers `400 context_length_exceeded` past it. Matches
- * the Codex CLI's hardcoded `model_context_window`. Applied as a cap (never
- * inflates a smaller model) via the handler's effective-context-window override,
- * gated on the subscription path so the API-key fallback keeps the full window.
- */
-export const CODEX_SUBSCRIPTION_CONTEXT_WINDOW = 272_000;
-
 /** Non-auth request headers for the Codex backend. */
 export const CODEX_ACCOUNT_ID_HEADER = 'chatgpt-account-id';
 export const CODEX_ORIGINATOR_HEADER = 'originator';
@@ -114,50 +103,3 @@ export const CODEX_PREFER_SUBSCRIPTION_KEY =
  */
 export const CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY =
   'texra.chatgptCodex.subscriptionToolUseOnly';
-
-/**
- * OpenAI models the Codex backend currently serves to ChatGPT subscribers. This
- * is a hardcoded mirror of openai/codex's bundled models.json picker set and
- * WILL go stale; the backend also rejects models above the account's tier. Keep
- * it small and easy to edit. Matched against the model id passed to
- * `isCodexSubscriptionEligible`, which callers derive with
- * {@link codexBackendModelId} (`shortName`, else date-pin-stripped `fullName`)
- * so date-pinned llm-zoo names still match these bare Codex backend ids.
- */
-export const CODEX_SUBSCRIPTION_MODEL_FULLNAMES: ReadonlySet<string> = new Set([
-  'gpt-5.5',
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-5.3-codex-spark',
-  'gpt-5.3-codex',
-  'gpt-5.2-codex',
-]);
-
-/** Trailing llm-zoo date pin (`-2026-04-23`) on a model `fullName`. */
-const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
-
-/**
- * The bare model id the Codex backend keys on: the `shortName` when present,
- * else the `fullName` with its llm-zoo date pin stripped (`gpt-5.5-2026-04-23`
- * → `gpt-5.5`). The single source of truth for that mapping, shared by
- * eligibility ({@link isCodexSubscriptionEligible}) and handler dispatch
- * (ModelFactory) so the id a model is judged eligible under is the same id it
- * is dispatched with.
- */
-export function codexBackendModelId(config: {
-  readonly shortName?: string;
-  readonly fullName: string;
-}): string {
-  return config.shortName || config.fullName.replace(CODEX_MODEL_DATE_PIN, '');
-}
-
-/**
- * Whether a model id is eligible to route through the ChatGPT subscription.
- * True for the curated set above, date-pinned variants of those ids, or any
- * `*-codex*` name so newer Codex models are picked up without a code change.
- */
-export function isCodexSubscriptionEligible(fullName: string): boolean {
-  const unpinnedName = fullName.replace(CODEX_MODEL_DATE_PIN, '');
-  if (CODEX_SUBSCRIPTION_MODEL_FULLNAMES.has(unpinnedName)) return true;
-  return /codex/i.test(fullName);
-}

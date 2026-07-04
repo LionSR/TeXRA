@@ -11,6 +11,7 @@ import {
   type CodexSession,
 } from '@auth/codex';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import { CODEX_SUBSCRIPTION_CONTEXT_WINDOW } from '@model/providerCapabilities';
 import {
   computeModelOptionsData,
   getModelUnavailableReason,
@@ -244,6 +245,10 @@ describe('computeModelOptionsData relay quota state', () => {
     const [model] = await computeModelOptionsData(['gpt55'], access);
 
     expect(model.availability).toBe('subscription-access');
+    expect(model.context).toBe(
+      `${Math.round(CODEX_SUBSCRIPTION_CONTEXT_WINDOW / 1000)}K`,
+    );
+    expect(model.cost).toBe('$0.000/$0.000');
     expect(model.disabled).toBe(false);
   });
 
