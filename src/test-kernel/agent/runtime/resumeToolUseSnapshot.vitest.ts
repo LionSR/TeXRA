@@ -6,7 +6,12 @@ vi.mock('@agent/runtime/executeAgent', () => ({
   resumeToolUseFromSnapshot: resumeToolUseFromSnapshotMock,
 }));
 
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -40,7 +45,7 @@ describe('resumeToolUseSnapshot', () => {
 
   afterEach(() => {
     ToolUseFollowUpQueue.release(STREAM);
-    StreamStatusService.clear(STREAM, { emit: false });
+    clearStreamStatusForTest(StreamStatusService, STREAM);
   });
 
   it('drains queued follow-ups, replays them, and notifies the UI', async () => {
@@ -113,9 +118,35 @@ describe('resumeToolUseSnapshot', () => {
     expect(queueUpdates).toHaveLength(2);
   });
 
+  it('uses the supplied session status plane for resume markers', async () => {
+    const failure = new Error('session-scoped resume failed');
+    resumeToolUseFromSnapshotMock.mockRejectedValue(failure);
+    const session = new SessionHandle();
+
+    try {
+      await expect(
+        resumeToolUseSnapshot(snapshot(), {
+          runtimeHost,
+          session,
+          reportFailure: vi.fn(),
+        }),
+      ).resolves.toBe(false);
+
+      expect(session.status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
+      expect(StreamStatusService.get(STREAM)).toBeUndefined();
+    } finally {
+      session.status.clearStream(STREAM);
+      session.dispose();
+    }
+  });
+
   it('leaves the status alone when the started run has taken it over', async () => {
     resumeToolUseFromSnapshotMock.mockImplementation(async () => {
-      StreamStatusService.set(STREAM, STREAM_STATUS.RUNNING, { emit: false });
+      seedStreamStatusForTest(
+        StreamStatusService,
+        STREAM,
+        STREAM_STATUS.RUNNING,
+      );
     });
 
     await expect(

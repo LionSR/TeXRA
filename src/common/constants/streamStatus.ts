@@ -7,13 +7,12 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_STATUS,
-  STREAM_SUBSTATE,
   STREAM_STATUS_TRAITS,
+  StreamPhaseSchema,
   type ExecutionStatus,
   type RunOutcome,
   type StreamPhase,
   type StreamStatus,
-  type StreamSubstate,
 } from '@shared/schemas';
 
 // ============================================================================
@@ -145,23 +144,16 @@ export function canAcquireStreamReservation(
   return !isInFlightPhase(phase);
 }
 
-export function canReleaseStreamReservation(state: {
-  readonly phase: StreamPhase | undefined;
-  readonly substate?: StreamSubstate;
-}): boolean {
-  return (
-    state.phase === STREAM_PHASE.RUNNING &&
-    state.substate === STREAM_SUBSTATE.STARTING
-  );
-}
-
 export function canTransitionStreamPhase(
   from: StreamPhase | undefined,
   to: StreamPhase,
   cause: StreamTransitionCause,
 ): boolean {
   if (cause === STREAM_TRANSITION_CAUSE.USER_STOP) {
-    return isInFlightPhase(from) && to === STREAM_PHASE.CANCELLED;
+    return (
+      (from === undefined || isInFlightPhase(from)) &&
+      to === STREAM_PHASE.CANCELLED
+    );
   }
 
   if (isTerminalOutcomePhase(from)) {
@@ -178,13 +170,17 @@ export function canTransitionStreamPhase(
       return from === STREAM_PHASE.RUNNING && to === STREAM_PHASE.WAITING;
     case STREAM_TRANSITION_CAUSE.RESUME:
       return (
-        (from === STREAM_PHASE.WAITING || isTerminalOutcomePhase(from)) &&
+        (from === undefined || from === STREAM_PHASE.WAITING) &&
         to === STREAM_PHASE.RUNNING
       );
     case STREAM_TRANSITION_CAUSE.RESTART_REPAIR:
+      if (from === undefined) return true;
+      if (from === to) return true;
       return (
         from === STREAM_PHASE.RUNNING &&
-        (to === STREAM_PHASE.WAITING || to === STREAM_PHASE.FAILED)
+        (to === STREAM_PHASE.WAITING ||
+          to === STREAM_PHASE.FAILED ||
+          to === STREAM_PHASE.CANCELLED)
       );
   }
 }
@@ -198,25 +194,45 @@ export function canTransitionStreamPhase(
 // new status lists by hand — add a trait column instead.
 
 /** Check if a status indicates active execution (running or resuming). */
-export function isActiveStatus(status: StreamStatus | undefined): boolean {
-  return status !== undefined && STREAM_STATUS_TRAITS[status].active;
+export function isActiveStatus(status: string | undefined): boolean {
+  const phase = StreamPhaseSchema.safeParse(status);
+  if (phase.success) return isActivePhase(phase.data);
+  return (
+    status !== undefined &&
+    Object.hasOwn(STREAM_STATUS_TRAITS, status) &&
+    STREAM_STATUS_TRAITS[status as StreamStatus].active
+  );
 }
 
 /**
  * Statuses during which an agent cycle may still be appending to the stream
  * and it must not be evicted from memory or acquired by a new run.
  */
-export function isInFlightStatus(status: StreamStatus | undefined): boolean {
-  return status !== undefined && STREAM_STATUS_TRAITS[status].inFlight;
+export function isInFlightStatus(status: string | undefined): boolean {
+  const phase = StreamPhaseSchema.safeParse(status);
+  if (phase.success) return isInFlightPhase(phase.data);
+  return (
+    status !== undefined &&
+    Object.hasOwn(STREAM_STATUS_TRAITS, status) &&
+    STREAM_STATUS_TRAITS[status as StreamStatus].inFlight
+  );
 }
 
 /** Check if a status is terminal (execution ended). */
-export function isTerminalStatus(status: StreamStatus | undefined): boolean {
-  return status !== undefined && STREAM_STATUS_TRAITS[status].terminal;
+export function isTerminalStatus(status: string | undefined): boolean {
+  const phase = StreamPhaseSchema.safeParse(status);
+  if (phase.success) return isTerminalPhase(phase.data);
+  return (
+    status !== undefined &&
+    Object.hasOwn(STREAM_STATUS_TRAITS, status) &&
+    STREAM_STATUS_TRAITS[status as StreamStatus].terminal
+  );
 }
 
 /** Check if elapsed-time displays should keep advancing for this status. */
 export function isLiveElapsedStatus(status: string | undefined): boolean {
+  const phase = StreamPhaseSchema.safeParse(status);
+  if (phase.success) return phase.data === STREAM_PHASE.RUNNING;
   return (
     status !== undefined &&
     Object.hasOwn(STREAM_STATUS_TRAITS, status) &&

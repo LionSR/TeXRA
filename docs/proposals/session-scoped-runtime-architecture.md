@@ -1,6 +1,6 @@
 # Session-scoped runtime architecture: facts, interactions, and status ownership
 
-> **Status:** Partially landed proposal (Stages 0-1; status refreshed
+> **Status:** Partially landed proposal (Stages 0-2; status refreshed
 > 2026-07-04). Companion to the diagnosis in
 > `tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this document is the
 > target design. It covers the event/logger chain, the

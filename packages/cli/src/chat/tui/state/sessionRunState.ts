@@ -3,7 +3,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { isLiveElapsedStatus } from '@common/constants/streamStatus';
 import {
   STREAM_STATUS,
-  type StreamStatus,
+  type StreamLifecycleStatus,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -75,7 +75,7 @@ export function chatTuiCanInterruptActiveRun(
 
 export function chatTuiCanStopActiveRun(
   session: InterruptibleTuiSessionState,
-  status: StreamStatus | undefined,
+  status: StreamLifecycleStatus | undefined,
 ): boolean {
   if (!session.runPromise || session.runCompleted) return false;
   if (!session.streamId) return true;
@@ -84,7 +84,7 @@ export function chatTuiCanStopActiveRun(
 
 export function chatTuiCanStopVisibleRun(
   session: InterruptibleTuiSessionState,
-  status: StreamStatus | undefined,
+  status: StreamLifecycleStatus | undefined,
 ): boolean {
   return (
     chatTuiCanStopActiveRun(session, status) ||
@@ -107,7 +107,7 @@ export function publishChatTuiRootRunStartAvailability(
 export function chatTuiCanSelectModel(input: {
   readonly canStartRootRun: boolean;
   readonly streamId: StreamTabId | undefined;
-  readonly status: StreamStatus | undefined;
+  readonly status: StreamLifecycleStatus | undefined;
   readonly hasActiveToolUseFlow: boolean;
 }): boolean {
   return (

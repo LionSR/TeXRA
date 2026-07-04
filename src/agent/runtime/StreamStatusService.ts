@@ -1,115 +1,268 @@
+import type { AgentTrace, StatusEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
-  isActiveStatus,
-  isInFlightStatus,
+  canAcquireStreamReservation,
+  canTransitionStreamPhase,
+  isActivePhase,
+  isInFlightPhase,
+  STREAM_TRANSITION_CAUSE,
+  type StreamTransitionCause,
 } from '@common/constants/streamStatus';
 import {
-  STREAM_STATUS,
-  type ExecutionStatus,
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
+  type StreamPhase,
+  type StreamSubstate,
   type StreamTabId,
-  type StreamStatus,
 } from '@shared/schemas';
 
 export interface StreamStatusChange {
   streamId: StreamTabId;
-  status: StreamStatus;
-  previousStatus: StreamStatus;
-  terminalStatus?: ExecutionStatus;
+  status: StreamPhase;
+  previousStatus?: StreamPhase;
+  cause: StreamTransitionCause;
+  substate?: StreamSubstate;
 }
 
-interface EmitSetOptions {
-  emit?: true;
-  runtimeHost: AgentRuntimeHost;
-  terminalStatus?: ExecutionStatus;
-}
-
-interface SilentSetOptions {
-  emit: false;
+export interface StreamStatusEmitOptions {
   runtimeHost?: AgentRuntimeHost;
-  terminalStatus?: ExecutionStatus;
+  trace?: AgentTrace;
+  substate?: StreamSubstate;
 }
 
-type SetOptions = EmitSetOptions | SilentSetOptions;
+type WaitingTransitionCause = Extract<
+  StreamTransitionCause,
+  'wait' | 'restart-repair'
+>;
 
-export class StreamStatusRegistry {
-  private readonly statusMemory = new Map<StreamTabId, StreamStatus>();
+interface StreamPhaseState {
+  readonly phase: StreamPhase;
+  readonly substate?: StreamSubstate;
+}
+
+export function projectStatusEvent(event: StatusEvent): StreamStatusChange {
+  return {
+    streamId: event.streamId,
+    status: event.phase,
+    ...(event.previousPhase ? { previousStatus: event.previousPhase } : {}),
+    cause: event.cause,
+    ...(event.substate ? { substate: event.substate } : {}),
+  };
+}
+
+export class StreamStatusMachine {
+  private readonly phases = new Map<StreamTabId, StreamPhaseState>();
+  private readonly reservations = new Set<StreamTabId>();
   private readonly statusListeners = new Set<
     (change: StreamStatusChange) => void
   >();
 
-  get(stream: StreamTabId): StreamStatus | undefined {
-    return this.statusMemory.get(stream);
+  get(stream: StreamTabId): StreamPhase | undefined {
+    return this.stateFor(stream)?.phase;
   }
 
-  tryAcquire(stream: StreamTabId, options: SetOptions): boolean {
-    if (isInFlightStatus(this.statusMemory.get(stream))) {
+  getSubstate(stream: StreamTabId): StreamSubstate | undefined {
+    return this.stateFor(stream)?.substate;
+  }
+
+  tryAcquire(
+    stream: StreamTabId,
+    options: StreamStatusEmitOptions = {},
+  ): boolean {
+    if (this.reservations.has(stream)) return false;
+    if (!canAcquireStreamReservation(this.phases.get(stream)?.phase)) {
       return false;
     }
-    this.set(stream, STREAM_STATUS.INITIALIZING, options);
+    const previousPhase = this.phases.get(stream)?.phase;
+    this.reservations.add(stream);
+    this.publishStatus(stream, STREAM_PHASE.RUNNING, {
+      ...options,
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      ...(previousPhase ? { previousPhase } : {}),
+      substate: STREAM_SUBSTATE.STARTING,
+    });
     return true;
   }
 
-  releaseIfInitializing(stream: StreamTabId, options: SetOptions): void {
-    if (this.statusMemory.get(stream) === STREAM_STATUS.INITIALIZING) {
-      this.clear(stream, options);
+  releaseIfReserved(
+    stream: StreamTabId,
+    options: StreamStatusEmitOptions = {},
+  ): void {
+    if (!this.reservations.has(stream)) return;
+    const rollbackPhase =
+      this.phases.get(stream)?.phase ?? STREAM_PHASE.CANCELLED;
+    if (options.runtimeHost || options.trace || this.statusListeners.size > 0) {
+      if (
+        this.transition(
+          stream,
+          rollbackPhase,
+          STREAM_TRANSITION_CAUSE.LIFECYCLE,
+          options,
+        )
+      ) {
+        return;
+      }
+      this.reservations.delete(stream);
+      return;
     }
+    this.reservations.delete(stream);
   }
 
-  set(stream: StreamTabId, status: StreamStatus, options: SetOptions): void {
-    const previousStatus = this.statusMemory.get(stream) ?? STREAM_STATUS.READY;
-
-    if (status === STREAM_STATUS.READY) {
-      this.statusMemory.delete(stream);
-    } else {
-      this.statusMemory.set(stream, status);
+  clearRunningSubstate(
+    stream: StreamTabId,
+    cause: StreamTransitionCause,
+    options: StreamStatusEmitOptions = {},
+  ): boolean {
+    const state = this.phases.get(stream);
+    if (state?.phase !== STREAM_PHASE.RUNNING || !state.substate) {
+      return false;
     }
+    this.phases.set(stream, { phase: STREAM_PHASE.RUNNING });
+    this.publishStatus(stream, STREAM_PHASE.RUNNING, {
+      ...options,
+      cause,
+      previousPhase: STREAM_PHASE.RUNNING,
+    });
+    return true;
+  }
 
-    if (options.emit !== false) {
-      const change: StreamStatusChange = {
-        streamId: stream,
-        status,
-        previousStatus,
-        ...(options.terminalStatus
-          ? { terminalStatus: options.terminalStatus }
-          : {}),
-      };
-      options.runtimeHost.emit('updateStreamStatus', change);
-      for (const listener of this.statusListeners) {
-        listener(change);
+  transition(
+    stream: StreamTabId,
+    to: StreamPhase,
+    cause: StreamTransitionCause,
+    options: StreamStatusEmitOptions = {},
+  ): boolean {
+    const from = this.phases.get(stream)?.phase;
+    const fromReservation = this.reservations.has(stream);
+    const tableFrom = fromReservation
+      ? to === STREAM_PHASE.RUNNING
+        ? undefined
+        : STREAM_PHASE.RUNNING
+      : from;
+    if (!canTransitionStreamPhase(tableFrom, to, cause)) return false;
+
+    this.reservations.delete(stream);
+    this.phases.set(stream, {
+      phase: to,
+      ...(options.substate ? { substate: options.substate } : {}),
+    });
+    const previousPhase = fromReservation ? STREAM_PHASE.RUNNING : from;
+    this.publishStatus(stream, to, {
+      ...options,
+      cause,
+      ...(previousPhase ? { previousPhase } : {}),
+    });
+    return true;
+  }
+
+  transitionToWaiting(
+    stream: StreamTabId,
+    cause: WaitingTransitionCause,
+    options: StreamStatusEmitOptions = {},
+  ): boolean {
+    if (this.transition(stream, STREAM_PHASE.WAITING, cause, options)) {
+      return true;
+    }
+    if (
+      !this.transition(
+        stream,
+        STREAM_PHASE.RUNNING,
+        STREAM_TRANSITION_CAUSE.RESUME,
+        options,
+      )
+    ) {
+      return false;
+    }
+    return this.transition(stream, STREAM_PHASE.WAITING, cause, options);
+  }
+
+  transitionToTerminal(
+    stream: StreamTabId,
+    to: StreamPhase,
+    options: StreamStatusEmitOptions = {},
+  ): boolean {
+    const current = this.get(stream);
+    if (current === to) {
+      return true;
+    }
+    if (
+      this.transition(stream, to, STREAM_TRANSITION_CAUSE.LIFECYCLE, options)
+    ) {
+      return true;
+    }
+    if (current === undefined) {
+      return (
+        this.transition(
+          stream,
+          STREAM_PHASE.RUNNING,
+          STREAM_TRANSITION_CAUSE.LIFECYCLE,
+          options,
+        ) &&
+        this.transition(stream, to, STREAM_TRANSITION_CAUSE.LIFECYCLE, options)
+      );
+    }
+    if (current !== STREAM_PHASE.WAITING) {
+      return false;
+    }
+    return (
+      this.transition(
+        stream,
+        STREAM_PHASE.RUNNING,
+        STREAM_TRANSITION_CAUSE.RESUME,
+        options,
+      ) &&
+      this.transition(stream, to, STREAM_TRANSITION_CAUSE.LIFECYCLE, options)
+    );
+  }
+
+  clearStream(stream: StreamTabId): void {
+    this.reservations.delete(stream);
+    this.phases.delete(stream);
+  }
+
+  clearAll(): void {
+    this.reservations.clear();
+    this.phases.clear();
+  }
+
+  entries(): IterableIterator<[StreamTabId, StreamPhase]> {
+    return this.getAll().entries();
+  }
+
+  getAll(): Map<StreamTabId, StreamPhase> {
+    const values = new Map<StreamTabId, StreamPhase>();
+    for (const [stream, state] of this.phases) {
+      values.set(stream, state.phase);
+    }
+    for (const stream of this.reservations) {
+      values.set(stream, STREAM_PHASE.RUNNING);
+    }
+    return values;
+  }
+
+  getAllSubstates(): Map<StreamTabId, StreamSubstate> {
+    const values = new Map<StreamTabId, StreamSubstate>();
+    for (const [stream, state] of this.phases) {
+      if (state.substate) {
+        values.set(stream, state.substate);
       }
     }
-  }
-
-  clear(stream: StreamTabId, options: SetOptions): void {
-    this.set(stream, STREAM_STATUS.READY, options);
-  }
-
-  /** Reset every stream to READY. Used by ProgressViewState.clearAll(). */
-  clearAll(options: SetOptions): void {
-    for (const stream of [...this.statusMemory.keys()]) {
-      this.clear(stream, options);
+    for (const stream of this.reservations) {
+      values.set(stream, STREAM_SUBSTATE.STARTING);
     }
-  }
-
-  entries(): IterableIterator<[StreamTabId, StreamStatus]> {
-    return this.statusMemory.entries();
-  }
-
-  getAll(): Map<StreamTabId, StreamStatus> {
-    return new Map(this.statusMemory);
+    return values;
   }
 
   has(stream: StreamTabId): boolean {
-    return this.statusMemory.has(stream);
+    return this.phases.has(stream) || this.reservations.has(stream);
   }
 
   isActiveOrResuming(stream: StreamTabId): boolean {
-    return isActiveStatus(this.statusMemory.get(stream));
+    return isActivePhase(this.get(stream));
   }
 
-  shouldPreserveOnCompletion(stream: StreamTabId): boolean {
-    const status = this.statusMemory.get(stream);
-    return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.STOPPED;
+  isInFlight(stream: StreamTabId): boolean {
+    return isInFlightPhase(this.get(stream));
   }
 
   onDidChange(listener: (change: StreamStatusChange) => void): () => void {
@@ -118,6 +271,47 @@ export class StreamStatusRegistry {
       this.statusListeners.delete(listener);
     };
   }
+
+  private stateFor(stream: StreamTabId): StreamPhaseState | undefined {
+    if (this.reservations.has(stream)) {
+      return {
+        phase: STREAM_PHASE.RUNNING,
+        substate: STREAM_SUBSTATE.STARTING,
+      };
+    }
+    const state = this.phases.get(stream);
+    if (state) return state;
+    return undefined;
+  }
+
+  private publishStatus(
+    stream: StreamTabId,
+    phase: StreamPhase,
+    options: StreamStatusEmitOptions & {
+      cause: StreamTransitionCause;
+      previousPhase?: StreamPhase;
+    },
+  ): void {
+    const event: StatusEvent = {
+      type: 'status',
+      streamId: stream,
+      phase,
+      cause: options.cause,
+      ...(options.previousPhase
+        ? { previousPhase: options.previousPhase }
+        : {}),
+      ...(options.substate ? { substate: options.substate } : {}),
+    };
+    options.trace?.emit(event);
+
+    const change = projectStatusEvent(event);
+    options.runtimeHost?.emit('updateStreamStatus', change);
+    for (const listener of this.statusListeners) {
+      listener(change);
+    }
+  }
 }
 
-export const StreamStatusService = new StreamStatusRegistry();
+export { StreamStatusMachine as StreamStatusRegistry };
+
+export const StreamStatusService = new StreamStatusMachine();

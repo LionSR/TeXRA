@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { createFakePlatform } from '@test/support/FakePlatform';
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
 import { TraceEmitter } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
@@ -20,6 +24,7 @@ import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProj
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import {
   MESSAGE_TYPES,
+  STREAM_PHASE,
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
@@ -45,7 +50,7 @@ describe('ToolUseWaitNode', () => {
       attachedMemoryMisses: memoryMisses,
       checkInterruption: () => interrupted,
       isSubagent: true,
-      logger: { error: vi.fn() },
+      logger: { emit: vi.fn(), error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
       onBeforeWaiting,
       runtimeHost,
@@ -95,7 +100,7 @@ describe('ToolUseWaitNode', () => {
     const services = {
       checkInterruption: () => interrupted,
       isSubagent: true,
-      logger: { error: vi.fn(), info: vi.fn() },
+      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
       modelHandler: {
         createUserFollowUpMessages: vi.fn(async () => []),
         extractAssistantText: () => undefined,
@@ -162,7 +167,7 @@ describe('ToolUseWaitNode', () => {
     const services = {
       checkInterruption: () => true,
       isSubagent: true,
-      logger: { error: vi.fn(), info: vi.fn() },
+      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
       onBeforeWaiting,
       runtimeHost,
@@ -206,7 +211,7 @@ describe('ToolUseWaitNode', () => {
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
-      logger: { info: vi.fn(), warn },
+      logger: { emit: vi.fn(), info: vi.fn(), warn },
       modelHandler: {
         addMediaToUserMessage,
         capabilities: {
@@ -352,7 +357,7 @@ describe('ToolUseWaitNode', () => {
     const services = {
       checkInterruption: () => false,
       isSubagent: false,
-      logger: { error: vi.fn(), info: vi.fn() },
+      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
       modelHandler: {
         createUserFollowUpMessages,
         extractAssistantText: () => undefined,
@@ -369,6 +374,7 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
       const prep = await node.prep(shared);
       const exec = await withTestRunContext(runtimeHost, streamId, () =>
         node.exec(prep),
@@ -384,7 +390,7 @@ describe('ToolUseWaitNode', () => {
         },
       ]);
       expect(waitForFollowUp).not.toHaveBeenCalled();
-      expect(streamStatus.get(streamId)).toBeUndefined();
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
 
       const transition = await withTestRunContext(runtimeHost, streamId, () =>
         node.post(shared, prep, exec),
@@ -437,7 +443,7 @@ describe('ToolUseWaitNode', () => {
     const services = {
       checkInterruption: () => false,
       isSubagent: false,
-      logger: { error: vi.fn(), info: vi.fn() },
+      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
       modelHandler: {
         createUserFollowUpMessages,
         extractAssistantText: () => undefined,
@@ -508,7 +514,7 @@ describe('ToolUseWaitNode', () => {
     const runtimeHost = { emit: vi.fn() };
     const services = {
       checkInterruption: () => false,
-      logger: { error: vi.fn() },
+      logger: { emit: vi.fn(), error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
       runtimeHost,
       session: {
@@ -553,7 +559,7 @@ describe('ToolUseWaitNode', () => {
     const services = {
       checkInterruption: () => false,
       isSubagent: true,
-      logger: { error: vi.fn() },
+      logger: { emit: vi.fn(), error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
       runtimeHost,
       session: {
@@ -595,7 +601,7 @@ describe('ToolUseWaitNode', () => {
     const runtimeHost = { emit: vi.fn() };
     const services = {
       checkInterruption: () => false,
-      logger: { error: vi.fn() },
+      logger: { emit: vi.fn(), error: vi.fn() },
       modelHandler: {
         createUserFollowUpMessages,
         extractAssistantText: () => undefined,
@@ -614,27 +620,85 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
-      StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
-        emit: false,
-      });
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(
+        StreamStatusService,
+        streamId,
+        STREAM_PHASE.CANCELLED,
+      );
 
       const prep = await node.prep(shared);
       const exec = await withTestRunContext(runtimeHost, streamId, () =>
         node.exec(prep),
       );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.WAITING);
-      expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
 
       await withTestRunContext(runtimeHost, streamId, () =>
         node.post(shared, prep, exec),
       );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
-      expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
     } finally {
-      streamStatus.clear(streamId, { emit: false });
-      StreamStatusService.clear(streamId, { emit: false });
+      clearStreamStatusForTest(streamStatus, streamId);
+      clearStreamStatusForTest(StreamStatusService, streamId);
+    }
+  });
+
+  it('repairs retry-cancelled parent cycles to waiting before blocking', async () => {
+    const streamId = 'wait-node-retry-cancelled-wait' as StreamTabId;
+    const streamStatus = new StreamStatusRegistry();
+    const runtimeHost = { emit: vi.fn() };
+    const waitForFollowUp = vi.fn(async () => null);
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: false,
+      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
+      modelHandler: { extractAssistantText: () => undefined },
+      runtimeHost,
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp,
+      },
+      streamId,
+      streamStatus,
+    } as unknown as ToolUseServices;
+    const node = new ToolUseWaitNode().setServices(services);
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.CANCELLED);
+
+      const exec = await withTestRunContext(runtimeHost, streamId, () =>
+        node.exec({
+          afterError: true,
+          lastResponse: undefined,
+          previouslyDeliveredToOrchestrator: false,
+          touchedFiles: [],
+        }),
+      );
+
+      expect(exec.kind).toBe('stop');
+      expect(waitForFollowUp).toHaveBeenCalledOnce();
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateStreamStatus',
+        expect.objectContaining({
+          status: STREAM_PHASE.RUNNING,
+          previousStatus: STREAM_PHASE.CANCELLED,
+          cause: 'resume',
+        }),
+      );
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateStreamStatus',
+        expect.objectContaining({
+          status: STREAM_PHASE.WAITING,
+          previousStatus: STREAM_PHASE.RUNNING,
+          cause: 'wait',
+        }),
+      );
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 
@@ -655,7 +719,7 @@ describe('ToolUseWaitNode', () => {
     const streamStatus = new StreamStatusRegistry();
     const services = {
       checkInterruption: () => false,
-      logger: { error: vi.fn(), info },
+      logger: { emit: vi.fn(), error: vi.fn(), info },
       modelHandler: {
         capabilities: { supportsVision: true },
         createUserFollowUpMessages,
@@ -682,6 +746,11 @@ describe('ToolUseWaitNode', () => {
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
     const node = new ToolUseWaitNode().setServices(services);
+    seedStreamStatusForTest(
+      streamStatus,
+      'test-stream' as StreamTabId,
+      STREAM_PHASE.WAITING,
+    );
 
     const prep = await node.prep(shared);
     const transition = await withTestRunContext(

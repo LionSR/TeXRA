@@ -1,4 +1,5 @@
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import type { StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -25,6 +26,7 @@ export interface CliSessionStatusInput {
   readonly approval: string;
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: string;
+  readonly substate?: StreamSubstate;
   readonly goal?: CliSessionGoalStatus | null;
   readonly queuedFollowUpMessages: readonly string[];
   /** Root execution id, when a run has started. Surfaces the resume command
@@ -36,10 +38,14 @@ export interface CliSessionStatusInput {
   readonly approvalPolicy?: CliApprovalPolicy;
 }
 
-export function formatCliStatusLabel(status: string | undefined): string {
+export function formatCliStatusLabel(
+  status: string | undefined,
+  substate?: StreamSubstate,
+): string {
   return formatStreamStatusLabel(status, {
     style: 'cli',
     missingLabel: '—',
+    ...(substate ? { substate } : {}),
   });
 }
 
@@ -83,7 +89,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),
-    `status: ${formatCliStatusLabel(input.status)}`,
+    `status: ${formatCliStatusLabel(input.status, input.substate)}`,
     ...(input.goal
       ? [
           `goal: ${input.goal.status}`,

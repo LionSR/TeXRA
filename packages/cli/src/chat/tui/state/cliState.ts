@@ -17,7 +17,8 @@ import {
   type ConversationProgress,
   type NormalizedToolUse,
   type Plan,
-  type StreamStatus,
+  type StreamLifecycleStatus,
+  type StreamSubstate,
   type StreamTabId,
   type TodoItem,
   type TokenUsageStats,
@@ -85,7 +86,8 @@ export interface StreamSlice {
    *  from `setTaskState` or `setActiveStream`. Lets the exit hint list only
    *  resumable tool-use subagents (workflows don't resume). */
   readonly category: AgentCategory | undefined;
-  readonly status: StreamStatus | undefined;
+  readonly status: StreamLifecycleStatus | undefined;
+  readonly substate?: StreamSubstate;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
    *  status. Drives the StatusBar's live elapsed-time segment so a long
    *  token-less "thinking" turn still shows liveness. */
@@ -254,6 +256,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     model: undefined,
     category: undefined,
     status: undefined,
+    substate: undefined,
     runStartedAt: undefined,
     description: undefined,
     thinkingActive: false,
@@ -288,23 +291,28 @@ export function patchStream(
 
 function streamSliceWithStatus(
   slice: StreamSlice,
-  status: StreamStatus,
+  status: StreamLifecycleStatus,
+  substate: StreamSubstate | undefined,
   nowMs: number,
 ): StreamSlice {
   const runStartedAt =
     status === STREAM_STATUS.RUNNING
       ? (slice.runStartedAt ?? nowMs)
       : undefined;
-  if (slice.status === status && slice.runStartedAt === runStartedAt) {
+  if (
+    slice.status === status &&
+    slice.substate === substate &&
+    slice.runStartedAt === runStartedAt
+  ) {
     return slice;
   }
-  return { ...slice, status, runStartedAt };
+  return { ...slice, status, substate, runStartedAt };
 }
 
 function updateChildStatusReferences(
   children: readonly ActiveChildInfo[],
   childStreamId: StreamTabId,
-  status: StreamStatus,
+  status: StreamLifecycleStatus,
 ): readonly ActiveChildInfo[] {
   let out: ActiveChildInfo[] | undefined;
   children.forEach((child, index) => {
@@ -320,7 +328,7 @@ function updateChildStatusReferences(
 function withMirroredChildStreamStatus(
   slice: StreamSlice,
   childStreamId: StreamTabId,
-  status: StreamStatus,
+  status: StreamLifecycleStatus,
 ): StreamSlice {
   return mapChildStreamReferenceLists(slice, (children) =>
     updateChildStatusReferences(children, childStreamId, status),
@@ -338,10 +346,12 @@ function withMirroredChildStreamStatus(
 export function setStreamStatusInCliState({
   nowMs = Date.now(),
   status,
+  substate,
   streamId,
 }: {
   readonly nowMs?: number;
-  readonly status: StreamStatus;
+  readonly status: StreamLifecycleStatus;
+  readonly substate?: StreamSubstate;
   readonly streamId: StreamTabId;
 }): void {
   const current = cliState.streams.get();
@@ -351,6 +361,7 @@ export function setStreamStatusInCliState({
   const targetSlice = streamSliceWithStatus(
     existingSlice ?? emptySlice(streamId),
     status,
+    substate,
     nowMs,
   );
   if (targetSlice !== existingSlice) {

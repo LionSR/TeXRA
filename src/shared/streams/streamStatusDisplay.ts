@@ -25,6 +25,7 @@ function phaseDisplayKey(phase: StreamPhase): StreamStatusDisplayKey {
 
 export function streamStatusDisplayState(
   status: string | undefined,
+  substate?: StreamSubstate,
 ): StreamStatusDisplayState {
   if (status == null) return {};
   if (status === STREAM_STATUS.READY) {
@@ -33,32 +34,38 @@ export function streamStatusDisplayState(
 
   const phase = StreamPhaseSchema.safeParse(status);
   if (phase.success) {
-    return { phase: phase.data, key: phaseDisplayKey(phase.data) };
+    return {
+      phase: phase.data,
+      ...(substate ? { substate } : {}),
+      key: substate ?? phaseDisplayKey(phase.data),
+    };
   }
 
   const legacyStatus = StreamStatusSchema.safeParse(status);
   if (!legacyStatus.success) return {};
 
   const legacyPhase = streamStatusToPhase(legacyStatus.data);
-  const substate = streamStatusToSubstate(legacyStatus.data);
+  const legacySubstate = streamStatusToSubstate(legacyStatus.data);
   return {
     phase: legacyPhase,
-    ...(substate ? { substate } : {}),
+    ...(legacySubstate ? { substate: legacySubstate } : {}),
     legacyStatus: legacyStatus.data,
-    key: substate ?? phaseDisplayKey(legacyPhase),
+    key: legacySubstate ?? phaseDisplayKey(legacyPhase),
   };
 }
 
 export function streamStatusDisplayKey(
   status: string | undefined,
+  substate?: StreamSubstate,
 ): StreamStatusDisplayKey | undefined {
-  return streamStatusDisplayState(status).key;
+  return streamStatusDisplayState(status, substate).key;
 }
 
 export function streamStatusIndicatorClass(
   status: string | undefined,
+  substate?: StreamSubstate,
 ): string | undefined {
-  const key = streamStatusDisplayKey(status);
+  const key = streamStatusDisplayKey(status, substate);
   return key ? `is-${key}` : undefined;
 }
 
@@ -108,6 +115,7 @@ export function formatStreamStatusLabel(
   options: {
     readonly style?: StreamStatusLabelStyle;
     readonly missingLabel: string;
+    readonly substate?: StreamSubstate;
   },
 ): string;
 
@@ -116,6 +124,7 @@ export function formatStreamStatusLabel(
   options?: {
     readonly style?: StreamStatusLabelStyle;
     readonly missingLabel?: string;
+    readonly substate?: StreamSubstate;
   },
 ): string;
 
@@ -124,6 +133,7 @@ export function formatStreamStatusLabel(
   options?: {
     readonly style?: StreamStatusLabelStyle;
     readonly missingLabel?: string;
+    readonly substate?: StreamSubstate;
   },
 ): string | undefined;
 
@@ -132,10 +142,11 @@ export function formatStreamStatusLabel(
   options: {
     readonly style?: StreamStatusLabelStyle;
     readonly missingLabel?: string;
+    readonly substate?: StreamSubstate;
   } = {},
 ): string | undefined {
   if (status == null) return options.missingLabel;
-  const state = streamStatusDisplayState(status);
+  const state = streamStatusDisplayState(status, options.substate);
   const legacyLabel = legacyStatusLabel(
     state.legacyStatus,
     options.style ?? 'progressHeader',
