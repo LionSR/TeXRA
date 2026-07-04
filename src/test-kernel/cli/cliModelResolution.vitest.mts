@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildHeadlessRunContext,
-  chooseCliRunModelCandidate,
   selectCliRunModel,
 } from '@cli/runtime/runModel';
 import {
@@ -70,76 +69,57 @@ describe('selectCliRunModel precedence', () => {
     mocks.writeTextStderr.mockReset();
     mocks.initCliPlatform.mockResolvedValue(undefined);
     mocks.getCliApiMode.mockReturnValue('personal');
-    selectCliRunnableModelMock.mockImplementation(async (model) => ({
-      model,
+    selectCliRunnableModelMock.mockImplementation(async (request) => ({
+      model: Array.isArray(request)
+        ? (request.find((candidate) => candidate.model)?.model ??
+          CLI_BUILTIN_DEFAULT_MODEL)
+        : request,
     }));
   });
 
-  it('prefers the explicit model over env and config', () => {
+  it('passes the full run-model candidate list to model access', async () => {
     const context = makeContext({
       envModel: OTHER_MODEL,
       cliConfig: runConfig('deepseekR'),
     });
-    expect(chooseCliRunModelCandidate(context, KNOWN_MODEL, 'run')).toEqual({
-      model: KNOWN_MODEL,
-      source: 'override',
-    });
-  });
 
-  it('falls back to env when no explicit model is given', () => {
-    const context = makeContext({
-      envModel: OTHER_MODEL,
-      cliConfig: runConfig('deepseekR'),
-    });
-    expect(chooseCliRunModelCandidate(context, undefined, 'run')).toEqual({
-      model: OTHER_MODEL,
-      source: 'env',
-    });
-  });
+    await selectCliRunModel(context, KNOWN_MODEL, 'run');
 
-  it('uses the configured model when no explicit or env model', () => {
-    const context = makeContext({ cliConfig: runConfig('deepseekR') });
-    expect(chooseCliRunModelCandidate(context, undefined, 'run')).toEqual({
-      model: 'deepseekR',
-      source: 'config',
-    });
-  });
-
-  it('reads the role-specific config section', () => {
-    const context = makeContext({
-      cliConfig: { chat: { model: OTHER_MODEL }, run: { model: 'deepseekR' } },
-    });
-    expect(chooseCliRunModelCandidate(context, undefined, 'chat')).toEqual({
-      model: OTHER_MODEL,
-      source: 'config',
-    });
-    expect(chooseCliRunModelCandidate(context, undefined, 'run')).toEqual({
-      model: 'deepseekR',
-      source: 'config',
-    });
-  });
-
-  it('falls back to the builtin default when nothing else is set', () => {
-    expect(chooseCliRunModelCandidate(makeContext(), undefined, 'run')).toEqual(
+    expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
+      [
+        { model: KNOWN_MODEL, reason: 'explicit-override' },
+        { model: OTHER_MODEL, reason: 'environment' },
+        { model: 'deepseekR', reason: 'command-config' },
+        { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
+      ],
       {
-        model: CLI_BUILTIN_DEFAULT_MODEL,
-        source: 'builtin',
+        agentCategory: AgentCategory.Workflow,
+        apiMode: 'personal',
       },
     );
   });
 
-  it('suppresses fallback notices for the implicit builtin default', async () => {
-    const context = makeContext();
+  it('reads the role-specific config section', async () => {
+    const context = makeContext({
+      cliConfig: { chat: { model: OTHER_MODEL }, run: { model: 'deepseekR' } },
+    });
 
+    await selectCliRunModel(context, undefined, 'chat');
     await selectCliRunModel(context, undefined, 'run');
 
-    expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
-      CLI_BUILTIN_DEFAULT_MODEL,
-      {
-        agentCategory: AgentCategory.Workflow,
-        apiMode: 'personal',
-        fallbackSource: 'builtin',
-      },
+    expect(selectCliRunnableModelMock).toHaveBeenNthCalledWith(
+      1,
+      expect.arrayContaining([
+        { model: OTHER_MODEL, reason: 'command-config' },
+      ]),
+      expect.objectContaining({ agentCategory: AgentCategory.ToolUse }),
+    );
+    expect(selectCliRunnableModelMock).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([
+        { model: 'deepseekR', reason: 'command-config' },
+      ]),
+      expect.objectContaining({ agentCategory: AgentCategory.Workflow }),
     );
   });
 
@@ -156,8 +136,10 @@ describe('selectCliRunModel precedence', () => {
       'deepseekT',
     );
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
-      'staleConfiguredModel',
-      expect.objectContaining({ fallbackSource: 'config' }),
+      expect.arrayContaining([
+        { model: 'staleConfiguredModel', reason: 'command-config' },
+      ]),
+      expect.objectContaining({ agentCategory: AgentCategory.Workflow }),
     );
     expect(mocks.initCliPlatform).toHaveBeenCalledWith({
       ...context,
@@ -181,26 +163,15 @@ describe('selectCliRunModel precedence', () => {
     await expect(selectCliRunModel(context, 'opus48T', 'run')).rejects.toThrow(
       CliUsageError,
     );
-    expect(selectCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
-      agentCategory: AgentCategory.Workflow,
-      apiMode: 'personal',
-      fallbackSource: 'override',
-    });
-  });
-
-  it('treats TEXRA_MODEL as an explicit model request', async () => {
-    const context = makeContext({
-      envModel: 'opus48T',
-      cliConfig: runConfig('deepseekT'),
-    });
-
-    await selectCliRunModel(context, undefined, 'run');
-
-    expect(selectCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
-      agentCategory: AgentCategory.Workflow,
-      apiMode: 'personal',
-      fallbackSource: 'env',
-    });
+    expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        { model: 'opus48T', reason: 'explicit-override' },
+      ]),
+      {
+        agentCategory: AgentCategory.Workflow,
+        apiMode: 'personal',
+      },
+    );
   });
 });
 
