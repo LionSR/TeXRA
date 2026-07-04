@@ -53,19 +53,21 @@ interface LaunchModelResolution {
  */
 async function selectLaunchModel(): Promise<LaunchModelResolution | null> {
   const useOpenRouter = getUseOpenRouter();
-  const openRouterModel =
-    useOpenRouter || (await SecretManager.hasUsableApiKey('openRouter'))
+  const openRouterModel = useOpenRouter
+    ? SETUP_MODEL_BY_PROVIDER.openRouter
+    : (await SecretManager.hasUsableApiKey('openRouter'))
       ? SETUP_MODEL_BY_PROVIDER.openRouter
       : undefined;
+  const credentialModel = useOpenRouter
+    ? undefined
+    : await selectSetupCredentialModelExcludingOpenRouter(platform().secrets);
   const decision = decideRunModel([
     {
       model: useOpenRouter ? openRouterModel : undefined,
       reason: 'router-config',
     },
     {
-      model: await selectSetupCredentialModelExcludingOpenRouter(
-        platform().secrets,
-      ),
+      model: credentialModel,
       reason: 'credential',
     },
     {
