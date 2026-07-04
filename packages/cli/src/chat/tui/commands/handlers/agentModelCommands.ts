@@ -80,7 +80,7 @@ export async function applyCliModelSelection(
     try {
       const { apiMode } = cliState.sessionMeta.get();
       const selection = await selectCliRunnableModel(nextModel, {
-        fallbackSource: 'override',
+        fallbackReason: 'explicit-override',
         apiMode,
         noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
           apiMode,
