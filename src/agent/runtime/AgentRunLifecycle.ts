@@ -125,9 +125,6 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
   if (resumed) {
     return;
   }
-  if (ctx.streamStatus.clearRunningSubstate(ctx.streamId, 'resume', options)) {
-    return;
-  }
   if (ctx.streamStatus.get(ctx.streamId) === STREAM_PHASE.RUNNING) {
     return;
   }
