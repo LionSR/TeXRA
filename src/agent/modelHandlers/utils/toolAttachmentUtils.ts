@@ -11,9 +11,14 @@ import {
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
+import { appendTail } from '@utils/strings/appendTail';
 
 // Local imports - model handlers
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '../contextManagementConstants';
+import {
+  MAX_TOOL_RESULT_TEXT_LENGTH,
+  TOOL_RESULT_TRUNCATION_HEAD_CHARS,
+  TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+} from '../contextManagementConstants';
 
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
 
@@ -200,12 +205,30 @@ export async function loadAttachmentBuffer(
 }
 
 /**
- * Check if tool result text exceeds the maximum allowed length.
- * Returns an error message if exceeded, otherwise returns null.
+ * Keep the first `maxChars` UTF-16 code units of `text` without splitting a
+ * surrogate pair at the cut point (the low half alone renders as `?`).
+ */
+function takeHead(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  let cut = maxChars;
+  const code = text.charCodeAt(cut);
+  if (code >= 0xdc00 && code <= 0xdfff) cut -= 1;
+  return text.slice(0, cut);
+}
+
+/**
+ * Check if tool result text exceeds the maximum allowed length. Returns a
+ * head+tail replacement (with an explicit elision marker) if exceeded,
+ * otherwise returns null so the caller keeps the original text.
+ *
+ * Head is small (enough to name the invoked engine/file); tail is large
+ * because LaTeX/build errors cluster at the end of long logs — dropping the
+ * entire result (the prior behavior) left repair agents with no error text
+ * on exactly the runs that most needed it.
  *
  * @param text - The text to check
  * @param maxLength - Maximum allowed length (default: MAX_TOOL_RESULT_TEXT_LENGTH)
- * @returns Error message if limit exceeded, null otherwise
+ * @returns Truncated head+tail replacement if limit exceeded, null otherwise
  */
 export function checkToolResultTextLimit(
   text: string,
@@ -215,11 +238,20 @@ export function checkToolResultTextLimit(
     return null;
   }
 
-  const exceededBy = text.length - maxLength;
+  const headLen = Math.min(TOOL_RESULT_TRUNCATION_HEAD_CHARS, text.length);
+  const tailLen = Math.min(
+    TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+    text.length - headLen,
+  );
+  const head = takeHead(text, headLen);
+  const tail = tailLen > 0 ? appendTail('', text, tailLen) : '';
+  const elidedChars = text.length - head.length - tail.length;
+
   return (
     `Tool result too large: ${text.length.toLocaleString()} characters ` +
-    `(limit: ${maxLength.toLocaleString()}, exceeded by ${exceededBy.toLocaleString()}). ` +
-    `The output was not included to prevent context window overflow.`
+    `(limit: ${maxLength.toLocaleString()}). Showing the first ${head.length.toLocaleString()} ` +
+    `and last ${tail.length.toLocaleString()} characters.\n\n` +
+    `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided ...]\n\n${tail}`
   );
 }
 
