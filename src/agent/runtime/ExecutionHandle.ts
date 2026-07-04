@@ -73,6 +73,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   readonly startedAt = Date.now();
   private progress: ExecutionProgress = {};
   private _parentStreamId: StreamTabId;
+  private _deliveryTargetStreamId: StreamTabId | undefined;
   private toolUseFlowContext?: LiveToolUseFlowContext;
 
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
@@ -100,6 +101,8 @@ export class AgentExecutionHandle implements ExecutionHandle {
     readonly trace?: AgentTrace,
   ) {
     this._parentStreamId = parentStreamId;
+    this._deliveryTargetStreamId =
+      parentStreamId === childStreamId ? undefined : parentStreamId;
   }
 
   /** Settle {@link result} with the terminal outcome (idempotent). */
@@ -111,8 +114,17 @@ export class AgentExecutionHandle implements ExecutionHandle {
     return this._parentStreamId;
   }
 
+  get isChildExecution(): boolean {
+    return this._deliveryTargetStreamId !== undefined;
+  }
+
+  get deliveryTargetStreamId(): StreamTabId | undefined {
+    return this._deliveryTargetStreamId;
+  }
+
   /** Promote this subagent to a top-level execution (detach from parent). */
   detach(): void {
+    this._deliveryTargetStreamId = undefined;
     this._parentStreamId = this.childStreamId;
   }
 
@@ -196,10 +208,8 @@ export function isChildExecution(
   parentStreamId: StreamTabId,
 ): boolean {
   if (handle.parentStreamId !== parentStreamId) return false;
-  // AgentExecutionHandles where childStreamId === parentStreamId represent
-  // the parent itself, not a child.
   if (handle instanceof AgentExecutionHandle) {
-    return handle.childStreamId !== parentStreamId;
+    return handle.isChildExecution;
   }
   return true;
 }
