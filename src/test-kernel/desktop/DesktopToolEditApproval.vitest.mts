@@ -66,6 +66,17 @@ async function waitForEmptyDir(dir: string): Promise<void> {
   }
 }
 
+function trackShownApprovals(bus: ProgressEventBusLike): {
+  shown: ProgressEventPayloads['showToolEditPermission'][];
+  offShow: () => void;
+} {
+  const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
+  const offShow = bus.on('showToolEditPermission', (payload) =>
+    shown.push(payload),
+  );
+  return { shown, offShow };
+}
+
 async function loadApprovalModules(workspacePath = '/workspace') {
   vi.resetModules();
   type MockLocation =
@@ -248,10 +259,7 @@ describe('desktop tool edit approval', () => {
         opened.push(filePath);
       },
     });
-    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
-    const offShow = bus.on('showToolEditPermission', (payload) =>
-      shown.push(payload),
-    );
+    const { shown, offShow } = trackShownApprovals(bus);
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -318,10 +326,7 @@ describe('desktop tool edit approval', () => {
       openPath,
       openDiff,
     });
-    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
-    const offShow = bus.on('showToolEditPermission', (payload) =>
-      shown.push(payload),
-    );
+    const { shown, offShow } = trackShownApprovals(bus);
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -369,10 +374,7 @@ describe('desktop tool edit approval', () => {
         opened.push(filePath);
       },
     });
-    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
-    const offShow = bus.on('showToolEditPermission', (payload) =>
-      shown.push(payload),
-    );
+    const { shown, offShow } = trackShownApprovals(bus);
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -435,10 +437,7 @@ describe('desktop tool edit approval', () => {
         messages.push(message);
       },
     });
-    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
-    const offShow = bus.on('showToolEditPermission', (payload) =>
-      shown.push(payload),
-    );
+    const { shown, offShow } = trackShownApprovals(bus);
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -534,10 +533,7 @@ describe('desktop tool edit approval', () => {
       runtimeHost: createBusRuntimeHost(bus),
       tempRoot,
     });
-    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
-    const offShow = bus.on('showToolEditPermission', (payload) =>
-      shown.push(payload),
-    );
+    const { shown, offShow } = trackShownApprovals(bus);
 
     try {
       const resultPromise = requestToolEditApproval({
