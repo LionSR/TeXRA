@@ -236,7 +236,10 @@ export class ProgressViewState {
   clearStreamHints(streamTabId: StreamTabId): void {
     const state = this._sessionState.get(streamTabId);
     if (state) {
-      state.hints = {};
+      state.hints =
+        state.hints.creationTimestamp === undefined
+          ? {}
+          : { creationTimestamp: state.hints.creationTimestamp };
     }
   }
 
