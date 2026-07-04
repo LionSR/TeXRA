@@ -10,9 +10,10 @@ import {
   resolveRunStorageRelativePath,
   RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
-import { isFileNotFoundError, toErrorMessage } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { type ExecutionId, type RunStorageFileLocation } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { createRunStorageLocation } from './fileLocation';
 import { StorageFS } from './storageFS';

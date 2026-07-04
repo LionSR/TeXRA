@@ -42,7 +42,6 @@ import {
 } from '@commands/agent/resumeFromSnapshot';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
-import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -115,6 +114,7 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 // Local imports - components

@@ -2,13 +2,13 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { toErrorMessage } from '@common/errors';
 import { arxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 import { toPosixPath } from '@utils/core/pathCore';
 

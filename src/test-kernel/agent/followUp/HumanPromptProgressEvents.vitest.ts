@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -28,7 +29,6 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { createRecordingHost } from '../progressTestUtils';
-import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
 
 let testApprovalHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)

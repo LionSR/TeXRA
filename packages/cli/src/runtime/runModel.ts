@@ -1,9 +1,9 @@
-import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   decideRunModel,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
 import { AgentCategory } from '@shared/schemas/agent';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
