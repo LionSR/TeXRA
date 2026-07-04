@@ -1,5 +1,8 @@
 import { toErrorMessage } from '@common/errors/errorMessage';
-import { decideRunModel } from '@model/runModelDecision';
+import {
+  decideRunModel,
+  type RunModelDecisionReason,
+} from '@model/runModelDecision';
 import { AgentCategory } from '@shared/schemas/agent';
 
 import {
@@ -25,17 +28,25 @@ export interface CliRunModelCandidate {
   readonly source: CliRunModelCandidateSource;
 }
 
-function cliSourceForDecision(source: string): CliRunModelCandidateSource {
-  switch (source) {
-    case 'explicit-override':
-      return 'override';
-    case 'environment':
-      return 'env';
-    case 'command-config':
-      return 'config';
-    default:
-      return 'builtin';
-  }
+const cliSourceForDecisionReason = {
+  'explicit-override': 'override',
+  environment: 'env',
+  'agent-config': 'builtin',
+  'command-config': 'config',
+  'workspace-config': 'builtin',
+  'user-config': 'builtin',
+  history: 'builtin',
+  'parent-run': 'builtin',
+  'router-config': 'builtin',
+  credential: 'builtin',
+  'builtin-default': 'builtin',
+  'access-list-default': 'builtin',
+} satisfies Record<RunModelDecisionReason, CliRunModelCandidateSource>;
+
+function cliSourceForDecision(
+  source: RunModelDecisionReason,
+): CliRunModelCandidateSource {
+  return cliSourceForDecisionReason[source];
 }
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
