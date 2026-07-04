@@ -13,9 +13,10 @@ import type {
 } from '@agent/core/state/AgentState';
 import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import { ensureError, normalizeProviderError } from '@common/errors';
+import { normalizeProviderError } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { toRetryErrorInfo } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';

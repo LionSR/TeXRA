@@ -4,7 +4,7 @@
 // model doesn't expose as a test seam.
 import { spawn } from 'node:child_process';
 import { platform as osPlatform } from 'node:os';
-import { toErrorMessage } from '@common/errors';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ChildProcess } from 'node:child_process';
 
 export type ClipboardTextWriteResult =

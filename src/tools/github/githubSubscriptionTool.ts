@@ -20,10 +20,10 @@
 import { z } from 'zod';
 
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { toErrorMessage } from '@common/errors';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
 import { defineTool } from '../core/define';

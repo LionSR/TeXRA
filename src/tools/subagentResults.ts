@@ -10,7 +10,7 @@
 
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
-import { normalizeProviderError, toErrorMessage } from '@common/errors';
+import { normalizeProviderError } from '@common/errors';
 import type {
   ActiveChildInfo,
   SubagentProgressUpdate,
@@ -23,6 +23,7 @@ import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
 import { planSummaryLine } from '@shared/schemas/workPlan';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { splitContentLines } from '@utils/text/stringUtils';
 import type { DiffFileInfo } from './subagentDiffs';
 

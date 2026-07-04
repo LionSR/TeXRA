@@ -1,10 +1,10 @@
 // Local imports - tools
+import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import {
   resolveAndFormat,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
-import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
 import { wrapApiCall } from '@tools/utils';
 
 // Local imports - core utilities

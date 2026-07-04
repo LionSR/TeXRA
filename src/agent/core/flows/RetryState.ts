@@ -7,13 +7,14 @@ import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { ensureError, normalizeProviderError } from '@common/errors';
+import { normalizeProviderError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import {
   STREAM_PHASE,
   toRetryErrorInfo,
   type RetryErrorInfo,
 } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;

@@ -3,7 +3,10 @@ import {
   type ErrorLogData,
   type ProviderError,
 } from '@shared/schemas';
-import { extractErrorMessage, toErrorMessage } from '../errorMessage';
+import {
+  extractErrorMessage,
+  toErrorMessage,
+} from '@utils/errors/errorMessage';
 import { isDiskFullError } from '../errorPredicates';
 import {
   detectPartialText,

@@ -10,7 +10,6 @@ import {
   setOnboardingDeclined,
 } from '@controllers/onboarding/onboardingFunnel';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
-import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
 import { loadOptions } from '@frontend/agents/optionsLoader';
@@ -29,6 +28,7 @@ import {
 import { PROVIDER_URLS } from '@shared/constants/providers';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { DiffManager } from './managers/DiffManager';
 import * as executionHandlers from './managers/executionHandlers';

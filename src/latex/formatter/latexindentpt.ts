@@ -2,11 +2,12 @@ import * as path from 'node:path';
 
 import { sync as globSync } from 'glob';
 
-import { isFileNotFoundError, toErrorMessage } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { delay } from '@utils/core';
 import { runToolWithCheck } from '@utils/system';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';

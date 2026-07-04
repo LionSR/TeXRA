@@ -17,11 +17,11 @@ import {
   AgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError } from '@common/errors';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS, TASK_RUNS_DIR } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
