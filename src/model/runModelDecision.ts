@@ -26,6 +26,15 @@ type NormalizedRunModelCandidate = RunModelCandidate & {
   readonly model: string;
 };
 
+export interface RunModelDecision {
+  readonly model: string;
+  readonly reason: RunModelDecisionReason;
+  readonly unavailable?: true;
+  readonly fallbackFrom?: NormalizedRunModelCandidate & {
+    readonly mode: RunModelFallbackMode;
+  };
+}
+
 function normalizeCandidate(
   candidate: RunModelCandidate,
 ): NormalizedRunModelCandidate | null {
@@ -36,7 +45,7 @@ function normalizeCandidate(
 export function decideRunModel(
   candidates: readonly RunModelCandidate[],
   isRunnable: (model: string) => boolean = () => true,
-) {
+): RunModelDecision | null {
   const ordered = candidates
     .map(normalizeCandidate)
     .filter((candidate) => candidate != null)
