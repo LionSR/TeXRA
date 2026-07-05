@@ -29,10 +29,11 @@ export function isRetiredModel(model: string): boolean {
  * table is hand-maintained. What IS derived from the registry, so this table
  * going stale can never silently ship a dead default, is {@link
  * DEFAULT_MODELS} below: it drops any pick the live registry has since
- * retired. {@link MODEL_LIST_VERSION} then hashes that resolved (post-filter)
- * set, so either this table changing or a pick quietly retiring underneath it
- * changes the reconciliation trigger automatically -- no maintainer has to
- * remember to hand-bump a version constant.
+ * retired or deprecated. {@link MODEL_LIST_VERSION} then hashes that resolved
+ * (post-filter) set, so either this table changing or a pick quietly
+ * retiring/deprecating underneath it changes the reconciliation trigger
+ * automatically -- no maintainer has to remember to hand-bump a version
+ * constant.
  */
 const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'gemini35f',
@@ -48,19 +49,27 @@ const PREFERRED_DEFAULT_MODELS: readonly string[] = [
 
 /**
  * Resolve a preferred model list against the live registry, dropping any pick
- * the registry marks retired. Exported (separately from {@link
- * DEFAULT_MODELS}) so tests can exercise the resolution mechanism itself
- * against a known-retired registry entry, without depending on {@link
- * PREFERRED_DEFAULT_MODELS} happening to contain one today.
+ * the registry marks retired or deprecated -- matching the stricter filter
+ * `reconcileEnabledModels` (`modelListRefresh.ts`) already applies before
+ * granting a default to an *existing* user, so a first-time user (or any
+ * direct `DEFAULT_MODELS` consumer, e.g. `SettingsModelSelectionController`)
+ * can't be handed a stale default an existing user would never receive.
+ * Exported (separately from {@link DEFAULT_MODELS}) so tests can exercise the
+ * resolution mechanism itself against known-retired/deprecated registry
+ * entries, without depending on {@link PREFERRED_DEFAULT_MODELS} happening to
+ * contain one today.
  */
 export function resolveDefaultModels(preferred: readonly string[]): string[] {
-  return preferred.filter((model) => !isRetiredModel(model));
+  return preferred.filter(
+    (model) => !isRetiredModel(model) && !isDeprecatedModel(model),
+  );
 }
 
 /**
  * Models that should be present in every user's model list, resolved against
- * the live registry: a preferred pick the registry now marks retired is
- * dropped rather than dangling in the default list with no way back out.
+ * the live registry: a preferred pick the registry now marks retired or
+ * deprecated is dropped rather than dangling in the default list with no way
+ * back out.
  */
 export const DEFAULT_MODELS: string[] = resolveDefaultModels(
   PREFERRED_DEFAULT_MODELS,
@@ -93,7 +102,7 @@ function fnv1aHash(input: string): number {
  * registry-derived set does, rather than only asserting today's value.
  */
 export function computeModelListVersion(models: readonly string[]): number {
-  return MODEL_LIST_HASH_BASE + fnv1aHash([...models].sort().join(','));
+  return MODEL_LIST_HASH_BASE + fnv1aHash(models.toSorted().join(','));
 }
 
 /**
