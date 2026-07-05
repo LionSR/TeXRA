@@ -273,4 +273,66 @@ describe('codex model eligibility', () => {
       ),
     ).toBe(false);
   });
+
+  // #7223 round 3: the old hardcoded `CODEX_SUBSCRIPTION_MODEL_FULLNAMES`
+  // allowlist also listed `gpt-5.4-mini` as Codex-eligible. This exception is
+  // added defensively to `CODEX_DEPRECATED_EXCEPTIONS` even though the live
+  // llm-zoo registry doesn't currently mark it deprecated, so a future
+  // registry update marking it deprecated (once gpt-5.5 or a successor fully
+  // supersedes it) can't silently regress its eligibility the way `gpt-5.4`
+  // itself would have without an exception entry.
+  it('accepts the deprecated-but-still-served gpt-5.4-mini false negative', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.4-mini-2026-03-17',
+          shortName: 'gpt-5.4-mini',
+          deprecated: true,
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  // #7223 round 3: a "Pro" tier variant (e.g. `gpt-5.5-pro`) reports the same
+  // top reasoning-effort tier as its non-Pro sibling, but the Codex backend
+  // does not serve Pro models — only the base release is covered by a
+  // ChatGPT subscription. This must resolve ineligible despite matching the
+  // reasoning-effort-tier heuristic.
+  it('rejects the gpt-5.5-pro false positive despite matching the heuristic', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.5-pro-2026-04-23',
+          shortName: 'gpt-5.5-pro',
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  // #7223 round 3: the Pro-tier exclusion is a systematic naming rule, not a
+  // per-id table — a future Pro release absent from any hardcoded list must
+  // also resolve ineligible, the same way a future top-effort base release
+  // (tested above) resolves eligible without a hardcoded edit.
+  it('rejects a future Pro-variant id absent from any hardcoded list', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.9-pro-2027-01-01',
+          shortName: 'gpt-5.9-pro',
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.MAX,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
 });
