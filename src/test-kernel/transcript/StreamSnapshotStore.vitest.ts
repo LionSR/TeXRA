@@ -2,14 +2,18 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  resolveRunStoragePath,
+  WorkspaceStorageProvider,
+} from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import { getExecutionStore } from '@agent/storage';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import type {
   ExecutionId,
@@ -20,6 +24,7 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
+import { RUN_DESCRIPTOR_SCHEMA_VERSION } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { StorageFS } from '@utils/files';
 
@@ -83,8 +88,19 @@ function outputFile(relativePath: string, round: number): OutputFileInfo {
   };
 }
 
+function toolUseTaskState(agent = 'search', model = 'deepseekproT'): TaskState {
+  return TaskStateSchema.parse({
+    agentConfig: {
+      agent,
+      model,
+      agentCategory: AgentCategory.ToolUse,
+    },
+  });
+}
+
 describe('StreamSnapshotStore', () => {
   afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.all(
       tempDirs
         .splice(0)
@@ -383,6 +399,132 @@ describe('StreamSnapshotStore', () => {
     expect(raw).toMatchObject({
       [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
       [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+    });
+  });
+
+  it('forces the current meta schema version over stale cached meta', async () => {
+    await installPlatform();
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+
+    const internals = store as unknown as {
+      meta: Map<StreamTabId, { schemaVersion: number; description?: string }>;
+    };
+    internals.meta.set(STREAM, { schemaVersion: 0 });
+
+    store.setDescription(STREAM, 'Updated session');
+    await store.flush();
+
+    expect(internals.meta.get(STREAM)).toMatchObject({
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      description: 'Updated session',
+    });
+  });
+
+  it('preserves legacy meta taskState when unrelated meta patches are written', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    const taskState = toolUseTaskState('legacy-search');
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'meta.json'),
+      JSON.stringify({
+        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+        taskState,
+      }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    store.setDescription(STREAM, 'Prior session');
+    await store.flush();
+
+    const raw = (await StorageFS.readJson(path.join(dir, 'meta.json'))) as {
+      schemaVersion?: unknown;
+      taskState?: unknown;
+      description?: unknown;
+    };
+    expect(raw.schemaVersion).toBe(RUN_DESCRIPTOR_SCHEMA_VERSION);
+    expect(raw.taskState).toEqual(taskState);
+    expect(raw.description).toBe('Prior session');
+  });
+
+  it('falls back to legacy taskState when an execution config is unreadable', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    const executionId = 'abc123' as ExecutionId;
+    const taskState = toolUseTaskState('legacy-search');
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'meta.json'),
+      JSON.stringify({
+        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+        executionId,
+        taskState,
+      }),
+    );
+    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+    await StorageFS.write(
+      path.join(resolveRunStoragePath(executionId), 'config.json'),
+      '{',
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.load([STREAM])).resolves.toBeUndefined();
+
+    expect(store.getTaskState(STREAM)).toEqual(taskState);
+    expect(store.getExecutionId(STREAM)).toBe(executionId);
+  });
+
+  it('keeps a runtime run-config update that arrives during async hydration', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    const oldExecutionId = 'abc123' as ExecutionId;
+    const newExecutionId = 'def456' as ExecutionId;
+    const oldTaskState = toolUseTaskState('old-search');
+    const newTaskState = toolUseTaskState('new-search');
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'meta.json'),
+      JSON.stringify({
+        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+        executionId: oldExecutionId,
+      }),
+    );
+    await getExecutionStore(oldExecutionId).writeConfig(
+      oldTaskState.agentConfig,
+    );
+
+    const store = new StreamSnapshotStore();
+    const originalRead = StorageFS.read.bind(StorageFS);
+    const configPath = path.join(
+      resolveRunStoragePath(oldExecutionId),
+      'config.json',
+    );
+    let injectedRuntimeUpdate = false;
+    vi.spyOn(StorageFS, 'read').mockImplementation(async (target: string) => {
+      const raw = await originalRead(target);
+      if (!injectedRuntimeUpdate && target === configPath) {
+        injectedRuntimeUpdate = true;
+        store.setTaskState(STREAM, newTaskState, newExecutionId);
+      }
+      return raw;
+    });
+
+    await store.load([STREAM]);
+    expect(injectedRuntimeUpdate).toBe(true);
+    expect(store.getTaskState(STREAM)).toEqual(newTaskState);
+    expect(store.getExecutionId(STREAM)).toBe(newExecutionId);
+
+    await store.flush();
+    const raw = (await StorageFS.readJson(path.join(dir, 'meta.json'))) as {
+      executionId?: unknown;
+      runDescriptor?: { executionId?: unknown; agent?: unknown };
+    };
+    expect(raw.executionId).toBe(newExecutionId);
+    expect(raw.runDescriptor).toMatchObject({
+      executionId: newExecutionId,
+      agent: 'new-search',
     });
   });
 
