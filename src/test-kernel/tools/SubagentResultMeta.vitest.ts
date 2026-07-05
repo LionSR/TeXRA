@@ -4,7 +4,10 @@ import { ResultMetaSchema } from '@agent/storage';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
-import { buildSubagentResultMeta } from '@tools/subagentResults';
+import {
+  buildSubagentFailureResultMeta,
+  buildSubagentResultMeta,
+} from '@tools/subagentResults';
 
 const OUTPUT: OutputFileSummary = {
   absolutePath: '/ws/executions/abc/r0/output.tex',
@@ -80,6 +83,39 @@ describe('buildSubagentResultMeta', () => {
     });
     expect(meta.outputs).toBeUndefined();
     expect(meta.diffs).toBeUndefined();
+  });
+
+  it('failure manifest overwrites interim success and never claims success', () => {
+    const interim: AgentFlowResult = {
+      category: 'toolUse',
+      outcome: 'completed',
+      lastResponse: 'looked fine before the crash',
+      executionId: 'abcdefabcdef' as ExecutionId,
+      streamId: 'stream:tu' as StreamTabId,
+    };
+    const meta = buildSubagentFailureResultMeta('reviewer', interim, 50);
+    expect(ResultMetaSchema.parse(meta)).toEqual(meta);
+    expect(meta.success).toBe(false);
+    expect(meta.outcome).toBe('failed');
+    // Cancelled runs keep their real outcome.
+    const cancelled = buildSubagentFailureResultMeta(
+      'reviewer',
+      { ...interim, outcome: 'cancelled' },
+      50,
+    );
+    expect(cancelled.outcome).toBe('cancelled');
+    expect(cancelled.success).toBe(false);
+  });
+
+  it('failure manifest without a flow result is minimal but valid', () => {
+    const meta = buildSubagentFailureResultMeta('merge', undefined, 10);
+    expect(ResultMetaSchema.parse(meta)).toEqual(meta);
+    expect(meta).toEqual({
+      agentName: 'merge',
+      outcome: 'failed',
+      success: false,
+      wallTimeMs: 10,
+    });
   });
 
   it('marks non-completed outcomes as unsuccessful', () => {

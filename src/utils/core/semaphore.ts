@@ -14,6 +14,8 @@ export function createSemaphore(limit: number): Semaphore {
   if (!Number.isInteger(limit) || limit < 1) {
     throw new Error(`Semaphore limit must be a positive integer, got ${limit}`);
   }
+  // active == count of currently occupied slots, including slots handed
+  // directly to resumed waiters (which never decrement/re-increment).
   let active = 0;
   const waiters: Array<() => void> = [];
 

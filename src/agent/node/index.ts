@@ -249,6 +249,11 @@ class BatchNode<
   P extends NonIterableObject = NonIterableObject,
   Svc = unknown,
 > extends Node<S, P, Svc> {
+  /**
+   * Subclasses may override `_exec` entirely (e.g. ToolUseDispatchNode's
+   * barrier-scheduled concurrent dispatch); any lifecycle behavior added
+   * here must not assume every subclass routes through this loop.
+   */
   async _exec(items: unknown[]): Promise<unknown[]> {
     if (!Array.isArray(items)) return [];
     const results: unknown[] = [];

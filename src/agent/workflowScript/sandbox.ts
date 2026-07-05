@@ -128,14 +128,20 @@ const BRIDGE_PRELUDE = `
   };
   return {
     installAsync(name, hostInvoke) {
-      define(name, async function (...args) {
-        let payload;
-        try {
-          payload = await hostInvoke(args);
-        } catch (err) {
-          throw toRealmError(err);
-        }
-        return payload === undefined ? undefined : parseJson(payload);
+      define(name, function (...args) {
+        const pending = (async () => {
+          let payload;
+          try {
+            payload = await hostInvoke(args);
+          } catch (err) {
+            throw toRealmError(err);
+          }
+          return payload === undefined ? undefined : parseJson(payload);
+        })();
+        // A call the script abandons without awaiting must not surface as
+        // an unhandled rejection; awaited callers still see the error.
+        pending.catch(() => {});
+        return pending;
       });
     },
     installSync(name, hostInvoke) {

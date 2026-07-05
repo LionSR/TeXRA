@@ -132,6 +132,8 @@ export const ResultMetaSchema = z.object({
   compileFailures: z.array(CompileFailureSummarySchema).optional(),
   /** Agent that produced this result (subagent completions). */
   agentName: z.string().optional(),
+  // New agent categories must be added here, or their manifests fail
+  // validation on read and surface as null.
   category: z.enum(['workflow', 'toolUse']).optional(),
   outcome: RunOutcomeSchema.optional(),
   /** Final assistant text (tool-use agents). */

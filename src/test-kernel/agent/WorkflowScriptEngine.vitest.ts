@@ -58,6 +58,14 @@ describe('parseWorkflowScript', () => {
     ).toThrow(/cannot import/);
   });
 
+  it('rejects meta whose accessors would hang host-side validation', () => {
+    expect(() =>
+      parseWorkflowScript(
+        `export const meta = { get name() { while (true) {} }, description: 'd' }\nreturn 1`,
+      ),
+    ).toThrow(/pure object literal/);
+  });
+
   it('handles braces inside meta strings and comments', () => {
     const { meta } = parseWorkflowScript(
       `export const meta = {
@@ -450,6 +458,46 @@ return await parallel([function () {
       runAgent: echoRunner,
     });
     expect(run.result).toEqual(['blocked']);
+  });
+
+  it('drains agent() calls the script abandoned without awaiting', async () => {
+    let settled = 0;
+    let sawAbort = false;
+    const runner = async (invocation: WorkflowAgentInvocation) => {
+      invocation.signal.addEventListener('abort', () => {
+        sawAbort = true;
+      });
+      await delay(40);
+      settled += 1;
+      return invocation.prompt;
+    };
+    const run = await runWorkflowScript({
+      script: `${META}
+const abandoned = agent('slow')
+return 'done'`,
+      runAgent: runner,
+    });
+    expect(run.result).toBe('done');
+    // The run waited for the straggler to settle (journal is final)...
+    expect(settled).toBe(1);
+    expect(run.journal).toHaveLength(1);
+    // ...and told it to stop consuming quota.
+    expect(sawAbort).toBe(true);
+  });
+
+  it('stops the workflow when a runner surfaces the run abort', async () => {
+    const runner = () => {
+      const abortError = new Error('runner observed abort');
+      abortError.name = 'WorkflowRunAbortError';
+      return Promise.reject(abortError);
+    };
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+return await parallel([() => agent('x')])`,
+        runAgent: runner,
+      }),
+    ).rejects.toThrow(/runner observed abort/);
   });
 
   it('removes Intl so scripts cannot read the wall clock implicitly', async () => {

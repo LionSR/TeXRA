@@ -50,6 +50,7 @@ import {
   type DiffFileInfo,
 } from '@tools/subagentDiffs';
 import {
+  buildSubagentFailureResultMeta,
   buildSubagentResultMeta,
   formatSubagentDelivery,
   formatSubagentError,
@@ -293,12 +294,19 @@ export async function executeSubagent(
       err: unknown,
       memoryMisses?: AgentFlowResult['memoryMisses'],
     ): Promise<ToolResult> => {
+      const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentError(executionId, agentName, err, {
-        wallTimeMs: Date.now() - startedAt,
+        wallTimeMs,
         workingDirectory,
         memoryMisses,
       });
-      await writeSubagentReport(executionId, msg);
+      await Promise.all([
+        writeSubagentReport(executionId, msg),
+        writeSubagentResultMeta(
+          executionId,
+          buildSubagentFailureResultMeta(agentName, undefined, wallTimeMs),
+        ),
+      ]);
       return {
         status: 'error',
         summary: `Subagent '${agentName}' failed`,
@@ -434,10 +442,16 @@ export async function executeSubagent(
     msg: string,
     resultMeta?: ResultMeta,
   ): Promise<boolean> {
+    // The manifest lands BEFORE the wake: a parent chaining on this result
+    // reads /executions/{id}/result the moment the follow-up arrives, so
+    // the small JSON write must not race the delivery. The prose report
+    // duplicates the delivery text, so it stays off the critical path.
+    if (resultMeta) {
+      await writeSubagentResultMeta(executionId, resultMeta);
+    }
     const [delivered] = await Promise.all([
       deliverTerminalFollowUp({ text: msg, origin: 'subagent_result' }),
       writeSubagentReport(executionId, msg),
-      ...(resultMeta ? [writeSubagentResultMeta(executionId, resultMeta)] : []),
     ]);
     return delivered;
   }
@@ -453,12 +467,18 @@ export async function executeSubagent(
     result?: AgentFlowResult,
   ): Promise<void> {
     settleSubagentCost(result);
+    const wallTimeMs = Date.now() - startedAt;
     const msg = formatSubagentError(executionId, agentName, err, {
-      wallTimeMs: Date.now() - startedAt,
+      wallTimeMs,
       workingDirectory,
       memoryMisses: result?.memoryMisses,
     });
-    await persistAndDeliverTerminal(msg);
+    // Overwrite any interim success manifest from onBeforeWaiting so
+    // /executions/{id}/result never claims success for a failed run.
+    await persistAndDeliverTerminal(
+      msg,
+      buildSubagentFailureResultMeta(agentName, result, wallTimeMs),
+    );
   }
 
   const promise = executeAgent(configPayload, executionId, {

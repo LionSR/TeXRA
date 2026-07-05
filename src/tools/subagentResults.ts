@@ -8,8 +8,8 @@
  * (just before injection into model context via FollowUpQueue).
  */
 
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { ResultMeta } from '@agent/storage';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { normalizeProviderError } from '@common/errors';
 import type {
@@ -521,5 +521,30 @@ export function buildSubagentResultMeta(
       result.touchedFiles.length > 0 && {
         touchedFiles: [...result.touchedFiles],
       }),
+  };
+}
+
+/**
+ * Build the failure manifest written when a subagent errors. Overwrites any
+ * interim success manifest persisted at onBeforeWaiting — without this, a
+ * later failure would leave /executions/{id}/result claiming success while
+ * the prose report describes the error, breaking the chaining contract.
+ */
+export function buildSubagentFailureResultMeta(
+  agentName: string,
+  result: AgentFlowResult | undefined,
+  wallTimeMs: number,
+): ResultMeta {
+  if (!result) {
+    return { agentName, outcome: 'failed', success: false, wallTimeMs };
+  }
+  const meta = buildSubagentResultMeta(agentName, result, { wallTimeMs });
+  return {
+    ...meta,
+    success: false,
+    // A nominally completed flow that still reached the error path (e.g. a
+    // delivery crash) is a failure from the parent's perspective; genuine
+    // cancelled/failed outcomes pass through unchanged.
+    outcome: result.outcome === 'completed' ? 'failed' : result.outcome,
   };
 }

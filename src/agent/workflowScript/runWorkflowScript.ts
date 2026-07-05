@@ -70,6 +70,10 @@ export async function runWorkflowScript(
   const journal = new Map<number, WorkflowJournalEntry>();
   const semaphore = createSemaphore(concurrency);
   const runAbort = new AbortController();
+  // agent() invocations the script may have abandoned without awaiting
+  // (e.g. `const p = agent('x'); return 'done'`). Drained on completion so
+  // no runner keeps consuming quota or emitting events after the run ends.
+  const pendingAgentCalls = new Set<Promise<unknown>>();
   let callCounter = 0;
   let currentPhase: string | undefined;
 
@@ -127,6 +131,9 @@ export async function runWorkflowScript(
       emit({ type: 'agent:end', index, label, cached: false });
       return result;
     } catch (error) {
+      // A runner may surface the run abort (it holds runAbort.signal);
+      // that must stop the workflow, not degrade into a null agent result.
+      if (isWorkflowAbort(error)) throw error;
       // A failed agent resolves to null (callers filter with .filter(Boolean))
       // and is deliberately NOT journaled, so a resume retries it.
       emit({
@@ -236,37 +243,55 @@ export async function runWorkflowScript(
   const toPayload = (value: unknown): string | undefined =>
     value === undefined ? undefined : (JSON.stringify(value) ?? 'null');
 
-  const result = await runScriptInSandbox(
-    body,
-    {
-      asyncFns: {
-        agent: async (args) =>
-          toPayload(await agentPrimitive(args[0], args[1])),
-        parallel: async (args) => toPayload(await parallelPrimitive(args[0])),
-        pipeline: async (args) =>
-          toPayload(await pipelinePrimitive(args[0], ...args.slice(1))),
-      },
-      syncFns: {
-        concat: (args) => concatPrimitive(args[0], args[1]),
-        log: (args) => {
-          emit({ type: 'log', message: String(args[0]) });
-          return undefined;
+  let result: unknown;
+  try {
+    result = await runScriptInSandbox(
+      body,
+      {
+        asyncFns: {
+          agent: async (args) => {
+            const invocation = agentPrimitive(args[0], args[1]);
+            pendingAgentCalls.add(invocation);
+            try {
+              return toPayload(await invocation);
+            } finally {
+              pendingAgentCalls.delete(invocation);
+            }
+          },
+          parallel: async (args) => toPayload(await parallelPrimitive(args[0])),
+          pipeline: async (args) =>
+            toPayload(await pipelinePrimitive(args[0], ...args.slice(1))),
         },
-        phase: (args) => {
-          currentPhase = String(args[0]);
-          emit({ type: 'phase', title: currentPhase });
-          return undefined;
+        syncFns: {
+          concat: (args) => concatPrimitive(args[0], args[1]),
+          log: (args) => {
+            emit({ type: 'log', message: String(args[0]) });
+            return undefined;
+          },
+          phase: (args) => {
+            currentPhase = String(args[0]);
+            emit({ type: 'phase', title: currentPhase });
+            return undefined;
+          },
         },
+        argsJson:
+          options.args === undefined ? undefined : JSON.stringify(options.args),
       },
-      argsJson:
-        options.args === undefined ? undefined : JSON.stringify(options.args),
-    },
-    {
-      timeoutMs,
-      filename: `${meta.name}.workflow.js`,
-      onTimeout: () => runAbort.abort(),
-    },
-  );
+      {
+        timeoutMs,
+        filename: `${meta.name}.workflow.js`,
+        onTimeout: () => runAbort.abort(),
+      },
+    );
+  } finally {
+    if (pendingAgentCalls.size > 0) {
+      // The script finished (or threw) with agent() calls still in flight
+      // that it never awaited: cancel them and wait for settlement so the
+      // returned journal is final and nothing runs on after the workflow.
+      runAbort.abort();
+      await Promise.allSettled([...pendingAgentCalls]);
+    }
+  }
 
   return {
     meta,

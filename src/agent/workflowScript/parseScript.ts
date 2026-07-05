@@ -65,8 +65,11 @@ export function parseWorkflowScript(source: string): ParsedWorkflowScript {
   let rawMeta: unknown;
   try {
     // Bare realm with code generation disabled: a non-literal meta
-    // (references to script identifiers, eval tricks) fails here.
-    rawMeta = new vm.Script(`(${literal})`, {
+    // (references to script identifiers, eval tricks) fails here. The JSON
+    // round-trip runs INSIDE the vm timeout so accessor tricks (e.g.
+    // `get name() { while (true) {} }`) hang the sandboxed evaluation, not
+    // the host-side Zod parse, and what reaches the host is plain data.
+    rawMeta = new vm.Script(`JSON.parse(JSON.stringify((${literal})))`, {
       filename: 'workflow-meta.js',
     }).runInContext(
       vm.createContext({}, { codeGeneration: { strings: false, wasm: false } }),
