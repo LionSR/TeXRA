@@ -128,13 +128,15 @@ function toCanonicalTurn(
     attachFiles: raw.attachFiles ?? undefined,
   };
 
-  if (raw.answer) {
+  if (raw.answer != null) {
     return {
       ...base,
       kind: 'answered',
       answer: raw.answer,
-      answeredAt: raw.answeredAt ?? '',
-      answerRelativePath: raw.answerRelativePath ?? '',
+      answeredAt: raw.answeredAt || raw.timestamp,
+      answerRelativePath:
+        raw.answerRelativePath ||
+        normalizeFilePath(path.join(turnDir(raw.turnIndex), 'answer.txt')),
       sessionLinks: raw.sessionLinks ?? undefined,
     };
   }
@@ -144,7 +146,7 @@ function toCanonicalTurn(
       ...base,
       kind: 'answeredUnhydrated',
       answerRelativePath: raw.answerRelativePath,
-      answeredAt: raw.answeredAt ?? undefined,
+      answeredAt: raw.answeredAt || undefined,
       sessionLinks: raw.sessionLinks ?? undefined,
     };
   }
@@ -315,7 +317,7 @@ async function hydrateAnswersFromDisk(
           ...turn,
           kind: 'answered',
           answer: content,
-          answeredAt: turn.answeredAt ?? manifest.updatedAt,
+          answeredAt: turn.answeredAt || manifest.updatedAt,
         };
       } catch {
         // Answer file unreadable/missing — leave the turn unhydrated (benign:
