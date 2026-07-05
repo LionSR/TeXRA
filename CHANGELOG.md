@@ -12,8 +12,10 @@ All notable changes to this project will be documented in this file.
   contiguous batches of side-effect-free tools (file reads, grep/glob, web
   fetch/search, arXiv/Crossref/Zotero/Loogle lookups, texcount) execute
   concurrently, while editing tools keep their strict order. Interrupting a
-  run now also cancels in-flight searches, fetches, and grep subprocesses
-  immediately.
+  run now also cancels in-flight web fetches/searches, Loogle and Zotero
+  requests, grep subprocesses, and glob walks immediately; arXiv/Crossref
+  lookups stop at their next cancellation point (their client libraries are
+  not mid-request abortable).
 - **Duplicate parallel tool calls no longer waste a model turn** — identical
   read-only calls share one execution's result, and identical side-effect
   calls are answered with a clear skip message instead of a retry prompt.
