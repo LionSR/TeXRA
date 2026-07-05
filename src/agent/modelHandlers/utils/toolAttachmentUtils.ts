@@ -11,9 +11,14 @@ import {
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
+import { appendTail } from '@utils/strings/appendTail';
 
 // Local imports - model handlers
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '../contextManagementConstants';
+import {
+  MAX_TOOL_RESULT_TEXT_LENGTH,
+  TOOL_RESULT_TRUNCATION_HEAD_CHARS,
+  TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+} from '../contextManagementConstants';
 
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
 
@@ -129,7 +134,7 @@ export function describeAttachments(
 /**
  * Attachment summary message variants for different handler scenarios.
  */
-export type AttachmentSummaryVariant =
+type AttachmentSummaryVariant =
   /** Handler doesn't upload files - tell model to use read_file */
   | 'metadata-only'
   /** Files were uploaded/included inline - no read instruction needed */
@@ -200,12 +205,44 @@ export async function loadAttachmentBuffer(
 }
 
 /**
- * Check if tool result text exceeds the maximum allowed length.
- * Returns an error message if exceeded, otherwise returns null.
+ * Keep the first `maxChars` UTF-16 code units of `text` without splitting a
+ * surrogate pair at the cut point (the low half alone renders as `?`).
+ */
+function takeHead(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  let cut = maxChars;
+  const code = text.charCodeAt(cut);
+  if (code >= 0xdc00 && code <= 0xdfff) cut -= 1;
+  return text.slice(0, cut);
+}
+
+/**
+ * Fixed textual overhead of the message template below (labels, punctuation,
+ * the elision marker, and the character-count numbers themselves) reserved
+ * out of `maxLength` so head+tail content plus framing never balloons past
+ * the caller's requested limit.
+ */
+const TRUNCATION_FRAME_OVERHEAD_CHARS = 300;
+
+/**
+ * Check if tool result text exceeds the maximum allowed length. Returns a
+ * head+tail replacement (with an explicit elision marker) if exceeded,
+ * otherwise returns null so the caller keeps the original text.
+ *
+ * Head is small (enough to name the invoked engine/file); tail is large
+ * because LaTeX/build errors cluster at the end of long logs — dropping the
+ * entire result (the prior behavior) left repair agents with no error text
+ * on exactly the runs that most needed it.
+ *
+ * The returned string is always bounded by `maxLength`: the default head/tail
+ * budgets (`TOOL_RESULT_TRUNCATION_HEAD_CHARS`/`_TAIL_CHARS`) are scaled down
+ * whenever a smaller custom `maxLength` can't fit them, and a defensive
+ * hard-trim guarantees the invariant even for `maxLength` values too small to
+ * fit the message template itself.
  *
  * @param text - The text to check
  * @param maxLength - Maximum allowed length (default: MAX_TOOL_RESULT_TEXT_LENGTH)
- * @returns Error message if limit exceeded, null otherwise
+ * @returns Truncated head+tail replacement if limit exceeded, null otherwise
  */
 export function checkToolResultTextLimit(
   text: string,
@@ -215,12 +252,37 @@ export function checkToolResultTextLimit(
     return null;
   }
 
-  const exceededBy = text.length - maxLength;
-  return (
-    `Tool result too large: ${text.length.toLocaleString()} characters ` +
-    `(limit: ${maxLength.toLocaleString()}, exceeded by ${exceededBy.toLocaleString()}). ` +
-    `The output was not included to prevent context window overflow.`
+  // `text.length > maxLength` here, so `contentBudget < maxLength < text.length`
+  // — this keeps headLen/tailLen strictly below text.length below, which in
+  // turn keeps elidedChars > 0 (no more "0 characters elided" on near-boundary
+  // sizes where the head budget alone would otherwise cover the whole text).
+  const contentBudget = Math.max(
+    0,
+    maxLength - TRUNCATION_FRAME_OVERHEAD_CHARS,
   );
+  const headBudget = Math.min(TOOL_RESULT_TRUNCATION_HEAD_CHARS, contentBudget);
+  const tailBudget = Math.min(
+    TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+    contentBudget - headBudget,
+  );
+
+  const headLen = Math.min(headBudget, text.length);
+  const tailLen = Math.min(tailBudget, text.length - headLen);
+  const head = takeHead(text, headLen);
+  const tail = tailLen > 0 ? appendTail('', text, tailLen) : '';
+  const elidedChars = text.length - head.length - tail.length;
+
+  const message =
+    `Tool result too large: ${text.length.toLocaleString()} characters ` +
+    `(limit: ${maxLength.toLocaleString()}). Showing the first ${head.length.toLocaleString()} ` +
+    `and last ${tail.length.toLocaleString()} characters.\n\n` +
+    `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided ...]\n\n${tail}`;
+
+  // Defensive backstop: TRUNCATION_FRAME_OVERHEAD_CHARS is an estimate, not an
+  // exact accounting of the template above, so hard-trim as a last resort to
+  // guarantee the maxLength invariant for every input — including maxLength
+  // values too small to fit the template text at all.
+  return message.length > maxLength ? takeHead(message, maxLength) : message;
 }
 
 /**

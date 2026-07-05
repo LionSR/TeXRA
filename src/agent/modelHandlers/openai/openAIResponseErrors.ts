@@ -11,7 +11,7 @@ import type { ProviderError } from '@shared/schemas';
 // Local imports - model handlers
 import { tagOpenAISdkError } from './openAISdkError';
 
-export interface OpenAIBackgroundResumeError {
+interface OpenAIBackgroundResumeError {
   providerError: ProviderError;
   shouldRetainPendingResponse: boolean;
 }

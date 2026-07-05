@@ -65,7 +65,7 @@ function* iterateDocumentSources(messages: MessageParam[]): Generator<{
   }
 }
 
-export interface DocumentSourceAnalysis {
+interface DocumentSourceAnalysis {
   hasFileSource: boolean;
   hasBase64Pdf: boolean;
 }
@@ -128,7 +128,7 @@ export function sanitizeAnthropicFilename(filename: string): string {
   return sanitized.slice(0, 255);
 }
 
-export interface ReplaceDocumentUploadsResult {
+interface ReplaceDocumentUploadsResult {
   uploaded: boolean;
   hasFileReference: boolean;
 }

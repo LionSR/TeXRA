@@ -31,7 +31,6 @@ import {
   RUN_OUTCOME,
   toProviderErrorFromRetry,
   type AgentFileLocation,
-  type EndGroupStatus,
   type RoundOutput,
   type RunOutcome,
   type StorageKey,

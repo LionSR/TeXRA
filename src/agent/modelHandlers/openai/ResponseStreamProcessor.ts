@@ -28,7 +28,7 @@ import type {
 } from 'openai/resources/responses/responses';
 
 /** Collaborators the processor borrows from the owning handler. */
-export interface ResponseStreamProcessorDeps {
+interface ResponseStreamProcessorDeps {
   /** Open a thinking stream for the current reasoning phase (one per phase). */
   createThinkingStream(): StreamHandle;
   /** Open the output stream for the response text. */

@@ -13,7 +13,7 @@ import {
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { withTestRunContext } from '../progressTestUtils';
 
 describe('ToolUseRoundFlow queued follow-ups', () => {
@@ -59,7 +59,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       },
       setAbortController: () => {},
       setting: { temperature: 0, tools: [] },
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
       toolRegistry: new MapToolRegistry({}),
       userVarChannels: { input: {}, transient: {} },
       workspace: AgentWorkspaceState.create(),
@@ -203,7 +203,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       },
       setAbortController: () => {},
       setting: { temperature: 0, tools: [{ name: 'again' }] },
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
       toolRegistry: new MapToolRegistry({
         again: {
           call: vi.fn(async () => ({

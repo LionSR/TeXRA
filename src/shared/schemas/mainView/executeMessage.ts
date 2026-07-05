@@ -22,9 +22,9 @@ export const MainViewExecuteFilesSchema = z.object({
 export type MainViewExecuteFiles = z.infer<typeof MainViewExecuteFilesSchema>;
 
 export const MainViewExecuteSessionSchema = z.object({
-  workingDirectory: z.string().nullable().optional(),
-  cliOutputFile: z.string().nullable().optional(),
-  cliMultiAgentPresetId: z.string().nullable().optional(),
+  workingDirectory: z.string().nullish(),
+  cliOutputFile: z.string().nullish(),
+  cliMultiAgentPresetId: z.string().nullish(),
 });
 export type MainViewExecuteSession = z.infer<
   typeof MainViewExecuteSessionSchema
@@ -39,7 +39,7 @@ export const MainViewExecuteMessageSchema = z.object({
   agent: z.string().optional(),
   model: z.string().optional(),
   instruction: z.string().optional(),
-  displayInstruction: z.string().nullable().optional(),
+  displayInstruction: z.string().nullish(),
   isToolUseAgent: z.boolean().optional(),
   memories: z.array(z.string()).optional(),
   files: MainViewExecuteFilesSchema.optional(),
