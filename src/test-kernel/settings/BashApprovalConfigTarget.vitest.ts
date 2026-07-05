@@ -56,6 +56,19 @@ class RecordingConfigProvider {
   }
 }
 
+/** Index of the `)` matching the `(` at `openParenIndex`, accounting for nesting. */
+function findMatchingParenEnd(source: string, openParenIndex: number): number {
+  let depth = 0;
+  for (let i = openParenIndex; i < source.length; i++) {
+    if (source[i] === '(') depth++;
+    else if (source[i] === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  throw new Error(`No matching ')' found for '(' at index ${openParenIndex}`);
+}
+
 describe('bash-approval config target', () => {
   it('is scoped per-workspace, not global', () => {
     // Bash approval gating is a security-adjacent bypass: disabling it in one
@@ -108,17 +121,23 @@ describe('bash-approval config target', () => {
 
       // Find the actual invocation (identifier immediately followed by `(`),
       // as opposed to the import statement or the command-dispatch-table key
-      // (both of which name the identifier without calling it); slice a small
-      // bounded window after it and make sure the call passes the shared
-      // constant, not a raw 'global'/'workspace' string literal, as its
-      // target argument.
+      // (both of which name the identifier without calling it); slice the
+      // full call expression -- up to its matching closing paren, not a
+      // fixed-width window -- and make sure it passes the shared constant,
+      // not a raw 'global'/'workspace' string literal, as its target
+      // argument. Matching the actual parens (rather than guessing a
+      // character count) keeps this robust if the call site grows more
+      // arguments or wraps onto more lines.
       const callSites = [...source.matchAll(/setBashApprovalEnabled\w*\(/g)];
       assert.ok(
         callSites.length > 0,
         `${relativePath} must call setBashApprovalEnabled`,
       );
-      const callSiteIndex = callSites.at(-1)!.index;
-      const callSiteWindow = source.slice(callSiteIndex, callSiteIndex + 200);
+      const lastCallSite = callSites.at(-1)!;
+      const callSiteIndex = lastCallSite.index;
+      const openParenIndex = callSiteIndex + lastCallSite[0].length - 1;
+      const closeParenIndex = findMatchingParenEnd(source, openParenIndex);
+      const callSiteWindow = source.slice(callSiteIndex, closeParenIndex + 1);
 
       assert.match(
         callSiteWindow,
