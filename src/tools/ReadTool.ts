@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import { buildFileAttachment } from '@tools/attachments';
@@ -78,6 +79,11 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
+    // Local reads finish in milliseconds, so no mid-read cancellation is
+    // needed — but a queued call must not start after the batch aborted.
+    if (getCurrentToolCallContext()?.signal?.aborted) {
+      throw new ToolError('Cancelled before execution.');
+    }
     const root = currentToolRoot();
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,

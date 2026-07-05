@@ -1,6 +1,7 @@
 // Third-party imports
 import { glob } from 'glob';
 import { z } from 'zod';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
 // Local imports - tools
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
@@ -58,6 +59,8 @@ export class GlobTool extends defineTool({
         dot: true,
         nodir: false,
         absolute: false,
+        // Large-tree walks stop promptly when the batch is aborted.
+        signal: getCurrentToolCallContext()?.signal,
         follow: false,
       });
     } catch (err) {
