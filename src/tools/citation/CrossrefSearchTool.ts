@@ -7,16 +7,14 @@ import {
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { abandonOnAbort } from '@tools/cancellation';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import { CROSSREF_CONSTANTS, crossrefClient } from './constants';
-import { waitForRateLimit } from './rateLimiter';
+import { rateLimitedRequest } from './rateLimiter';
 
 const CrossrefSearchInputSchema = z.strictObject({
   query: z.string().describe('Bibliographic search query for Crossref works.'),
@@ -72,19 +70,16 @@ export class CrossrefSearchTool extends defineTool({
       ...(input.filter && { filter: input.filter }),
     };
 
-    const response = await wrapApiCall(async () => {
-      await waitForRateLimit(
-        'crossref',
-        CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
-      );
-      // The Crossref client has no AbortSignal hook, so a cancelled batch
-      // abandons the in-flight search instead of waiting it out.
-      return abandonOnAbort(
-        crossrefClient.works(options),
-        getCurrentToolCallContext()?.signal,
-        'Crossref search',
-      );
-    }, 'Crossref search failed');
+    const response = await wrapApiCall(
+      () =>
+        rateLimitedRequest(
+          'crossref',
+          CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+          'Crossref search',
+          () => crossrefClient.works(options),
+        ),
+      'Crossref search failed',
+    );
 
     if (!response.ok || !response.content?.message) {
       throw new ToolError('Crossref search did not return any items.');
