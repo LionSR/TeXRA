@@ -10,10 +10,7 @@ import {
   type ExecutionMeta,
   type ResultMeta,
 } from '@agent/storage';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
@@ -225,20 +222,25 @@ export type CliHistoryExportInputResult =
  * would still display it, just without a conversation to render). Reporting
  * both as "not found" would mislead a caller whose id is valid but whose
  * execution simply never produced a conversation.
+ *
+ * `store.readConfig()` already validates against `AgentConfigSchema`
+ * internally and falls back to `null` on a schema mismatch (see
+ * `ExecutionKVStore.readValidated`), so `config` here is never a raw,
+ * unvalidated value — no redundant re-parse (and no risk of it throwing on a
+ * corrupt record) is needed.
  */
 export async function readCliHistoryExportInput(
   id: ExecutionId,
 ): Promise<CliHistoryExportInputResult> {
   const store = getExecutionStore(id);
-  const [rawConfig, conversation, meta] = await Promise.all([
+  const [config, conversation, meta] = await Promise.all([
     store.readConfig(),
     store.readConversation(),
     store.readMeta(),
   ]);
-  if (!meta && !rawConfig && !conversation) return { status: 'not_found' };
-  if (!rawConfig || !conversation) return { status: 'incomplete' };
+  if (!meta && !config && !conversation) return { status: 'not_found' };
+  if (!config || !conversation) return { status: 'incomplete' };
 
-  const config = AgentConfigSchema.parse(rawConfig);
   return {
     status: 'ok',
     exportInput: {
@@ -402,6 +404,15 @@ export function formatCliHistoryNotFoundText(
       : `Execution not found: ${id}`,
     'History is scoped by --cwd; use the workspace from the original run or run `texra history list --cwd <workspace>`.',
   ].join('\n');
+}
+
+/**
+ * `--export ''` (or any non-`html`/`md` value) reports this. `JSON.stringify`
+ * keeps the reported value unambiguous — an empty string reads as `""`
+ * instead of collapsing into a confusing double space after the colon.
+ */
+export function formatInvalidExportFormatText(raw: string): string {
+  return `Invalid export format: ${JSON.stringify(raw)} (use html or md)`;
 }
 
 export function cliHistoryNdjsonRecords(

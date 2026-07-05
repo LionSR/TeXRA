@@ -13,11 +13,12 @@ import {
   formatCliHistoryDetailsText,
   formatCliHistoryNotFoundText,
   formatCliHistoryText,
+  formatInvalidExportFormatText,
+  isRemoteCliHistoryExportAssetsHref,
   listCliHistoryEntries,
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
-  isRemoteCliHistoryExportAssetsHref,
   readCliHistoryExportInput,
   resolveCliHistoryExportAssetsHref,
   stageCliHistoryExportAssets,
@@ -279,9 +280,7 @@ const historyShowCommand = defineCliCommand({
     const exportFormat = optString(ctx.args.export);
     if (exportFormat !== undefined) {
       if (exportFormat !== 'html' && exportFormat !== 'md') {
-        writeTextStderr(
-          `Invalid export format: ${exportFormat} (use html or md)`,
-        );
+        writeTextStderr(formatInvalidExportFormatText(exportFormat));
         return Promise.resolve(CliExitCode.Usage);
       }
       return runHistoryExport(context, id, exportFormat, {
