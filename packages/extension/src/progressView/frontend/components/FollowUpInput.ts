@@ -9,6 +9,7 @@ import {
 } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
+import { consume } from '@lit/context';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -24,6 +25,7 @@ import {
 } from '@shared/utils/clipboardImages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { archivedContext } from '../contexts/streamContexts';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 
@@ -107,6 +109,17 @@ export class FollowUpInput extends LitElement {
       }
     `,
   ];
+
+  /**
+   * Read-only trace-viewer export: a finished, archived run has nothing to
+   * follow up with and no live backend to send it to, so render nothing
+   * rather than a functional-looking send box. `<follow-up-input>` renders
+   * inside nested shadow roots (stream-conversation > tool-use-stream-content
+   * > follow-up-input), so a host-page stylesheet cannot reach it — this has
+   * to be an internal check, not host-side CSS.
+   */
+  @consume({ context: archivedContext, subscribe: true })
+  private archived = false;
 
   @property({ type: Boolean, reflect: true }) visible = false;
   @property({ attribute: false }) value = '';
@@ -260,6 +273,7 @@ export class FollowUpInput extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
+    if (this.archived) return nothing;
     return html`
       <wa-details class="panel-collapsible" summary="Followup">
         <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
