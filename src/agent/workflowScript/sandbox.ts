@@ -172,7 +172,10 @@ const BRIDGE_PRELUDE = `
     }
     return realmError;
   };
-  const marshalArgs = (args) => stringifyJson(args) ?? '[]';
+  // args is always the wrapper's rest-parameter array, and JSON.stringify of
+  // an array is always a string (unlike the result path, where a function or
+  // symbol VALUE can make stringify return undefined), so no fallback here.
+  const marshalArgs = (args) => stringifyJson(args);
   return {
     installAsync(name, hostInvoke) {
       define(name, function (...args) {
