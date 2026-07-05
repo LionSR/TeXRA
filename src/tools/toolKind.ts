@@ -51,7 +51,13 @@ export const TOOL_DISPLAY_KIND: Partial<
 };
 
 /** Look up a tool's display kind by its exact (canonical or native) name.
- *  Returns `undefined` for tools that use the generic display treatment. */
+ *  Returns `undefined` for tools that use the generic display treatment.
+ *  Guarded with `Object.hasOwn` so an arbitrary tool name (e.g. `toString`,
+ *  `__proto__`) can't resolve to an inherited `Object.prototype` member
+ *  instead of a real entry. */
 export function toolDisplayKind(toolName: string): ToolDisplayKind | undefined {
-  return TOOL_DISPLAY_KIND[toolName as KnownToolName];
+  const key = toolName as KnownToolName;
+  return Object.hasOwn(TOOL_DISPLAY_KIND, key)
+    ? TOOL_DISPLAY_KIND[key]
+    : undefined;
 }
