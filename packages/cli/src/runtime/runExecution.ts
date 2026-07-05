@@ -1,15 +1,15 @@
-import {
-  AgentCategory,
-  defaultSession,
-  runAgent,
-  tryPlatform,
-  validateExecutionRequest,
-  type AgentConfigPayload,
-  type ValidatedExecutionRequest,
-} from '@texra/core';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { tryPlatform } from '@platform/platform';
 import { StreamSnapshotStore } from '@transcript';
 import { writeTerminalStatus } from '@agent/storage';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  validateExecutionRequest,
+  type ValidatedExecutionRequest,
+} from '@agent/core/state/executionRequests';
+import { runAgent } from '@agent/runtime/runAgent';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import type {
   ProgressEvent,

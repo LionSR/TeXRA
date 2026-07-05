@@ -1,5 +1,9 @@
 # Agent SDK Readiness — Verification Checkpoint (2026-07-05)
 
+> **Packaging note (2026-07-05):** #7099 later demotes/deletes the unused
+> `@texra/core` package. Mentions below are historical checkpoint observations,
+> not current workspace layout.
+
 **Status:** Verification checkpoint. Read alongside the canonical
 [`agent-sdk-readiness.md`](./agent-sdk-readiness.md), the detailed
 [`../agent-sdk-readiness-audit.md`](../agent-sdk-readiness-audit.md), the
@@ -15,8 +19,8 @@ merged train (#7049–#7107) includes a **non-structural** model-handler follow-
 (#7073: `ModelFactory.ts` +5/−2, a `ModelHandler.ts`/`modelHandlerCodex.ts`
 trim) plus diff/schema/sync/dedup work (#7091/#7105/#7107). None of it disturbs
 the four audit areas structurally — the SDK-aligned spine (`IModelHandler`,
-`src/logger/**`, `packages/core/src/index.ts`, `src/agent/trace/**`) is byte-for-
-byte unchanged in shape.
+`src/logger/**`, the then-present `packages/core/src/index.ts`,
+`src/agent/trace/**`) is byte-for-byte unchanged in shape.
 
 ## Why this exists
 
@@ -56,10 +60,10 @@ spine is re-confirmed in-tree at HEAD:
 - **`AgentTrace` emit/subscribe channel** — `src/agent/trace/index.ts` still the
   single `emit()`/`subscribe()` surface; `debug/info/warn/error`, stages, streams
   are sugar over `emit()`, mapping ~1:1 onto the Agent SDK streamed-message model.
-- **No barrel regression** — `src/agent/core/index.ts` remains **absent**;
-  `packages/core/src/index.ts` (`@texra/core`) is the one curated public surface,
-  and the `runAgent` / `runAgentStream` (= aliased `executeAgent`) split is a
-  documented, load-bearing type wall — **not** a redundant entry point.
+- **No barrel regression at checkpoint time** — `src/agent/core/index.ts`
+  remains **absent**. This checkpoint observed the then-present
+  `packages/core/src/index.ts` barrel; #7099 later demotes/deletes that unused
+  package rather than preserving an unenforced SDK surface.
 - **PocketFlow `Node.exec → createFlow().run` shape** and the
   **lead-and-specialists delegation model** — unchanged.
 
@@ -126,7 +130,8 @@ sweep.
    `executionRegistry.ts:41-50` surfaces `ExecutionHandle` / `AgentExecutionHandle`
    / `ProcessExecutionHandle` / `AgentRunHandle` from the sibling `./ExecutionHandle`,
    and external callers (`tools/childStream.ts:7`,
-   `tools/delegation/subagentExecution.ts:17`, `packages/core/src/index.ts:80`)
+   `tools/delegation/subagentExecution.ts:17`, then-current
+   `packages/core/src/index.ts:80`)
    import through it. Same anti-shim smell as candidate #0 above, **but**
    `executionRegistry` legitimately constructs these handles and reads as the
    intended public facade for the execution subsystem — this is the same "facade
@@ -258,8 +263,8 @@ unattended.
 - Spine re-confirmed at HEAD `5d17006`: `PROVIDER_HANDLER_ROUTES` +
   `createModelHandler` (`ModelFactory.ts`), `initPlatform` / `platform`
   (`platform.ts`), `AgentTrace` emit/subscribe (`trace/index.ts`),
-  `src/agent/core/index.ts` **absent** (no barrel regression), `@texra/core`
-  the one curated public surface.
+  `src/agent/core/index.ts` **absent** (no barrel regression), and the
+  then-present `@texra/core` barrel was the one curated public surface.
 - Applied deletion verified: the two `ModelFactory` value re-exports had **0**
   importers through the factory (all 4 `ModelHandlerCompatibilityKeySchema`
   consumers hit the source module; `MODEL_HANDLER_COMPATIBILITY_KEYS` has 0
@@ -279,7 +284,7 @@ ModelFactoryRouting.vitest.ts` — **36 passed**.
   barrel 25 importers vs ~70 `logUtils` / deep `redaction` imports.
 - PR-train non-interference confirmed: `git diff --stat` since the last-known
 spine over `ModelFactory.ts` / `IModelHandler.ts` / `src/logger` /
-`packages/core/src/index.ts` / `src/agent/trace` shows only the #7073
+then-current `packages/core/src/index.ts` / `src/agent/trace` shows only the #7073
 non-structural `ModelFactory.ts` follow-up; the four audit-area interfaces are
 unchanged in shape.
 </content>
