@@ -183,6 +183,32 @@ export function createProgressViewCommandHandlers(
     );
   };
 
+  // Delegated-task auto-approval (super yolo) carries the file-edit shield and
+  // bash along with it. Enabling grants edit-bypass only when it isn't already
+  // on, so it never inverts an independently-granted edit-YOLO; disabling clears
+  // it. Bash always rides silently. Callers own the proposal-state write (toggle
+  // vs force-on) before invoking this so the state event fires first.
+  const applySuperYoloBypass = async (
+    stream: StreamTabId,
+    enabled: boolean,
+  ): Promise<void> => {
+    if (enabled) {
+      if (!isApprovalBypassedForStream(stream)) {
+        setToolEditApprovalSessionBypass(stream, true, runtimeHost);
+      }
+    } else {
+      setToolEditApprovalSessionBypass(stream, false, runtimeHost);
+    }
+    setBashApprovalSessionBypass(stream, enabled, runtimeHost, {
+      silent: true,
+    });
+    await showInfo?.(
+      enabled
+        ? 'Delegated task auto-approval enabled for this stream.'
+        : 'Delegated task auto-approval disabled for this stream.',
+    );
+  };
+
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
       lifecycle.setActiveStream(data.stream),
@@ -241,27 +267,11 @@ export function createProgressViewCommandHandlers(
     // where edit-YOLO and bash inheritance were granted independently).
     [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: (data) =>
       applyCoupledBypass(data.stream, true),
-    [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
-      const isNowEnabled = proposalApprovalState.toggleBypass(
+    [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) =>
+      applySuperYoloBypass(
         data.stream,
-        runtimeHost,
-      );
-      if (isNowEnabled) {
-        if (!isApprovalBypassedForStream(data.stream)) {
-          setToolEditApprovalSessionBypass(data.stream, true, runtimeHost);
-        }
-      } else {
-        setToolEditApprovalSessionBypass(data.stream, false, runtimeHost);
-      }
-      setBashApprovalSessionBypass(data.stream, isNowEnabled, runtimeHost, {
-        silent: true,
-      });
-      await showInfo?.(
-        isNowEnabled
-          ? 'Delegated task auto-approval enabled for this stream.'
-          : 'Delegated task auto-approval disabled for this stream.',
-      );
-    },
+        proposalApprovalState.toggleBypass(data.stream, runtimeHost),
+      ),
     // Inline "Super Yolo (this session)" proposal button: force the
     // delegated-task auto-approval bypass ON. Idempotent like
     // ENABLE_APPROVAL_BYPASS, so selecting it (or the `a` shortcut) on a
@@ -270,15 +280,9 @@ export function createProgressViewCommandHandlers(
     // from the stream header while this prompt was open). Mirrors the toggle's
     // enabled branch: edit bypass rides along only if not already on, bash
     // silently.
-    [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: async (data) => {
+    [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: (data) => {
       proposalApprovalState.setBypass(data.stream, true, runtimeHost);
-      if (!isApprovalBypassedForStream(data.stream)) {
-        setToolEditApprovalSessionBypass(data.stream, true, runtimeHost);
-      }
-      setBashApprovalSessionBypass(data.stream, true, runtimeHost, {
-        silent: true,
-      });
-      await showInfo?.('Delegated task auto-approval enabled for this stream.');
+      return applySuperYoloBypass(data.stream, true);
     },
 
     [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) => {
