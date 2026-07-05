@@ -45,6 +45,7 @@ import {
   buildRunDescriptor,
   type CompileFailure,
   type ExecutionId,
+  type LegacyInstructionEntry,
   type OutputFileInfo,
   type RunDescriptor,
   type Plan,
@@ -71,6 +72,7 @@ import {
 import {
   assembleSnapshot,
   EMPTY_WORK_PLAN,
+  readLegacyInstruction as readLegacyInstructionFromDisk,
   readStreamData,
   type StreamData,
 } from './streamSnapshotRead';
@@ -784,6 +786,23 @@ export class StreamSnapshotStore {
   ): Promise<ExecutionId | undefined> {
     const meta = (await readStreamData(this.kv(stream))).meta;
     return meta?.runDescriptor?.executionId ?? meta?.executionId;
+  }
+
+  /**
+   * Archived pre-#3061 per-run instruction text, if this stream still has
+   * one on disk. See {@link readLegacyInstruction} (streamSnapshotRead.ts)
+   * for why this stays supported. Read-only; never seeds or writes memory.
+   * Uses the in-memory `meta` once seeded (the caller's normal `load()`
+   * ordering) but falls back to a disk read so this is also safe to call
+   * standalone, before a stream has been seeded.
+   */
+  async readLegacyInstruction(
+    stream: StreamTabId,
+  ): Promise<LegacyInstructionEntry | null> {
+    const meta = this.seeded.has(stream)
+      ? this.meta.get(stream)
+      : (await readStreamData(this.kv(stream))).meta;
+    return readLegacyInstructionFromDisk(this.kv(stream), meta);
   }
 
   getParentStreamId(stream: StreamTabId): StreamTabId | undefined {

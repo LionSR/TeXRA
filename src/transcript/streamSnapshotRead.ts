@@ -15,6 +15,7 @@ import * as logger from '@logger/logUtils';
 import {
   CompileFailuresDataSchema,
   ExecutionIdSchema,
+  LegacyInstructionsDataSchema,
   MissingOutputsDataSchema,
   OutputFilesDataSchema,
   PersistedWorkPlanSchema,
@@ -24,7 +25,9 @@ import {
   UsageDataSchema,
   flattenLegacyRuns,
   isLegacyNested,
+  selectPreferredLegacyInstruction,
   type CompileFailure,
+  type LegacyInstructionEntry,
   type OutputFileInfo,
   type StreamSnapshot,
   type StreamTabId,
@@ -100,6 +103,31 @@ export async function readMeta(
     return { ...meta, executionId: undefined };
   }
   return meta;
+}
+
+/**
+ * Read the archived legacy per-run instruction, if any, and pick the run
+ * users most likely expect to see. Read-only fallback for workflow tabs
+ * created before the one-run-per-tab refactor (#3061, 2026-04-19): prefers
+ * the canonical `legacyInstructions.json`, falling back to the older
+ * `runInstructions.json` key from before that refactor renamed the archival
+ * file (same record shape, so no on-disk migration is needed to read it).
+ * `meta.activeRunId` (also legacy, tolerated on read) picks the run that was
+ * active when the tab was last viewed; otherwise the newest entry wins.
+ */
+export async function readLegacyInstruction(
+  kv: KVStore,
+  meta: StreamTabMeta | undefined,
+): Promise<LegacyInstructionEntry | null> {
+  const raw =
+    (await tryRead(kv, STREAM_DATA_KEYS.LEGACY_INSTRUCTIONS)) ??
+    (await tryRead(kv, STREAM_DATA_KEYS.LEGACY_RUN_INSTRUCTIONS));
+  if (raw === undefined) return null;
+
+  const result = LegacyInstructionsDataSchema.safeParse(raw);
+  if (!result.success || Object.keys(result.data).length === 0) return null;
+
+  return selectPreferredLegacyInstruction(result.data, meta?.activeRunId);
 }
 
 /**
