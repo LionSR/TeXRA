@@ -711,6 +711,21 @@ export class ProgressEventHandler {
       if (activeStreamToSync !== undefined) {
         await this.syncFilterDrivenActiveStreamContent(activeStreamToSync);
       }
+    } else if (isNewRunningTransition) {
+      const statusesForRefresh = this.state.streamStatus.getAll();
+      statusesForRefresh.set(streamId, status);
+      const substatesForRefresh = this.state.streamStatus.getAllSubstates();
+      if (substate) {
+        substatesForRefresh.set(streamId, substate);
+      } else {
+        substatesForRefresh.delete(streamId);
+      }
+      this.webviewUpdater.updateStreamMetadata(
+        this.state,
+        streamId,
+        statusesForRefresh,
+        substatesForRefresh,
+      );
     } else {
       const lastTimestamp = this.state.streamLogs.getLastTimestamp(streamId);
       this.webviewUpdater.updateStreamStatus(
