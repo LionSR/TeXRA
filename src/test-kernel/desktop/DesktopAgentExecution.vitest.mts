@@ -831,7 +831,7 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('restores a RUNNING stream with a persisted flow record to WAITING when streamLogs.load() throws', async () => {
-    // Regression test for #6938: the catch-fallback path used to only
+    // Regression test: the catch-fallback path used to only
     // consider streams whose CURRENT in-memory status was already WAITING,
     // missing a stream that was RUNNING at crash time but still has a valid
     // persisted flow record -- wrongly demoting it to FAILED instead of
