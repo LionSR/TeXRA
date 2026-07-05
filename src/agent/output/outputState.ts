@@ -20,6 +20,7 @@ import {
   type CompileFailure,
   type FileLocation,
   type OutputFileInfo,
+  type RoundIndexed,
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
@@ -99,9 +100,9 @@ export function hasCompileFailures(state: OutputState, round: number): boolean {
   return (state.rounds.get(round)?.compileFailures.length ?? 0) > 0;
 }
 
-export function getOutputFilesByRound(state: OutputState): {
-  [key: number]: OutputFileInfo[];
-} {
+export function getOutputFilesByRound(
+  state: OutputState,
+): RoundIndexed<OutputFileInfo> {
   return Object.fromEntries(
     [...state.rounds].map(([round, data]) => [round, data.outputs]),
   );
