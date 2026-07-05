@@ -100,7 +100,7 @@ import type {
   StopConditionsResult,
   TokenCountOptions,
   TokenValidationResult,
-} from './types/IModelHandler';
+} from './types/ModelHandlerContracts';
 import type {
   ServerToolExtractionResult,
   WebFetchResult,
