@@ -187,18 +187,6 @@ export const ToolResultSchema = z.discriminatedUnion('status', [
 ]);
 export type ToolResult = z.infer<typeof ToolResultSchema>;
 
-export function toolError(message: string, diagnostics?: unknown): ToolResult {
-  const normalizedMessage = message.trim();
-  return {
-    status: 'error',
-    error:
-      normalizedMessage.length > 0
-        ? normalizedMessage
-        : 'Tool execution failed.',
-    ...(diagnostics !== undefined ? { diagnostics } : {}),
-  };
-}
-
 export class ToolError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);

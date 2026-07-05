@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { listExecutions } from '@agent/storage';
@@ -45,6 +45,13 @@ vi.mock('@utils/files/storageFS', () => ({
 }));
 
 const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
+
+beforeEach(() => {
+  mockedListExecutions.mockReset();
+  mockedListExecutions.mockResolvedValue([]);
+  mockedReadJson.mockReset();
+  mockedReadJson.mockRejectedValue(new Error('no user defaults'));
+});
 
 async function workspaceWithConfig(config: unknown): Promise<string> {
   const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
@@ -267,6 +274,63 @@ describe('CLI chat defaults', () => {
       agent: 'simplifier',
       agentSource: 'explicit-override',
     });
+  });
+
+  it('skips user and history I/O when explicit overrides resolve agent and model', async () => {
+    const workspace = await workspaceWithConfig({
+      chat: { agent: 'assistant', model: 'sonnet46T' },
+    });
+
+    await expect(
+      resolveChatDefaults({
+        cwd: workspace,
+        agentOverride: 'simplifier',
+        modelOverride: 'deepseekT',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'simplifier',
+      model: 'deepseekT',
+      source: 'mixed',
+      agentSource: 'explicit-override',
+      modelSource: 'explicit-override',
+    });
+    expect(mockedReadJson).not.toHaveBeenCalled();
+    expect(mockedListExecutions).not.toHaveBeenCalled();
+  });
+
+  it('skips user and history I/O when environment resolves agent and model', async () => {
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+        envAgent: 'assistant',
+        envModel: 'sonnet46T',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'assistant',
+      model: 'sonnet46T',
+      source: 'mixed',
+      agentSource: 'environment',
+      modelSource: 'environment',
+    });
+    expect(mockedReadJson).not.toHaveBeenCalled();
+    expect(mockedListExecutions).not.toHaveBeenCalled();
+  });
+
+  it('still loads history when only the agent is directly resolved', async () => {
+    mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
+
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+        agentOverride: 'simplifier',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'simplifier',
+      model: 'sonnet46T',
+      agentSource: 'explicit-override',
+      modelSource: 'history',
+    });
+    expect(mockedListExecutions).toHaveBeenCalledOnce();
   });
 
   it('uses prefixed command-specific workspace defaults', async () => {

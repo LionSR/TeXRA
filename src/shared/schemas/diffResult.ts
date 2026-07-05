@@ -28,8 +28,7 @@ export const DiffResultSchema = DiffMetadataSchema.extend({
 
 export type DiffResult = z.infer<typeof DiffResultSchema>;
 
-/** Flattened display data for rendering latexdiff entries */
-export const DiffResultDisplaySchema = DiffMetadataSchema.extend({
+const DiffResultDisplayShapeSchema = DiffMetadataSchema.extend({
   baseFile: z.string(),
   revisedFile: z.string(),
   diffFile: z.string(),
@@ -38,7 +37,28 @@ export const DiffResultDisplaySchema = DiffMetadataSchema.extend({
   revisedRound: z.number(),
 });
 
-export type DiffResultDisplay = z.infer<typeof DiffResultDisplaySchema>;
+export type DiffResultDisplay = z.infer<typeof DiffResultDisplayShapeSchema>;
+
+function diffResultToDisplay(entry: DiffResult): DiffResultDisplay {
+  return DiffResultDisplayShapeSchema.parse({
+    baseFile: getAbsolutePath(entry.baseLocation),
+    revisedFile: getAbsolutePath(entry.revised.location),
+    diffFile: getAbsolutePath(entry.diffLocation),
+    displayName: getDisplayName(entry.revised, entry.baseLocation),
+    baseRound: entry.baseRound,
+    revisedRound: entry.revised.round,
+    status: entry.status,
+    message: entry.message,
+    runId: entry.runId,
+  });
+}
+
+/**
+ * Transform canonical latexdiff entries into flattened display entries for the
+ * progress view. Use {@link DiffResultDisplay} for the output shape.
+ */
+export const DiffResultDisplaySchema =
+  DiffResultSchema.transform(diffResultToDisplay);
 
 function getAbsolutePath(location: FileLocation | null): string {
   return location?.absolutePath ?? '';
@@ -70,20 +90,6 @@ function getDisplayName(
   return 'unknown';
 }
 
-function transformDiffResultToDisplay(entry: DiffResult): DiffResultDisplay {
-  return {
-    baseFile: getAbsolutePath(entry.baseLocation),
-    revisedFile: getAbsolutePath(entry.revised.location),
-    diffFile: getAbsolutePath(entry.diffLocation),
-    displayName: getDisplayName(entry.revised, entry.baseLocation),
-    baseRound: entry.baseRound,
-    revisedRound: entry.revised.round,
-    status: entry.status,
-    message: entry.message,
-    runId: entry.runId,
-  };
-}
-
 const LegacyLocationSchema = z.looseObject({
   absolutePath: z.string().optional(),
 });
@@ -103,75 +109,113 @@ function parseRoundFromLabel(label: string | undefined): number | null {
   return match ? Number.parseInt(match[1], 10) : null;
 }
 
-/** Legacy DiffResult format - transforms to DiffResultDisplay on parse */
-export const LegacyDiffResultSchema = z
-  .object({
-    locations: LegacyLocationsSchema,
-    basePath: z.string().optional(),
-    revisedPath: z.string().optional(),
-    diffPath: z.string().optional(),
-    baseLabel: z.string().optional(),
-    revisedLabel: z.string().optional(),
-    baseRound: z.number().optional(),
-    revisedRound: z.number().optional(),
-    originalFileName: z.string().optional(),
-    status: z.string().optional(),
-    message: z.string().optional(),
-    runId: z.string().optional(),
-  })
-  .transform((entry): DiffResultDisplay => {
-    // Extract file paths with fallbacks
-    const baseFile =
-      entry.locations?.base?.absolutePath ?? entry.basePath ?? '';
-    const revisedFile =
-      entry.locations?.revised?.absolutePath ?? entry.revisedPath ?? '';
-    const diffFile =
-      entry.locations?.diff?.absolutePath ?? entry.diffPath ?? '';
+const LegacyDiffResultInputBaseSchema = z.looseObject({
+  locations: LegacyLocationsSchema,
+  basePath: z.string().optional(),
+  revisedPath: z.string().optional(),
+  diffPath: z.string().optional(),
+  baseLabel: z.string().optional(),
+  revisedLabel: z.string().optional(),
+  baseRound: z.number().optional(),
+  revisedRound: z.number().optional(),
+  originalFileName: z.string().optional(),
+  status: z.string().optional(),
+  message: z.string().optional(),
+  runId: z.string().optional(),
+});
 
-    // Extract rounds from fields or labels
-    const baseRound =
-      entry.baseRound ?? parseRoundFromLabel(entry.baseLabel) ?? null;
-    const revisedRound =
-      entry.revisedRound ?? parseRoundFromLabel(entry.revisedLabel) ?? 0;
+type LegacyDiffResultInput = z.infer<typeof LegacyDiffResultInputBaseSchema>;
 
-    // Determine display name: originalFileName > stripped label > basename
-    let displayName = entry.originalFileName ?? '';
-    if (!displayName && entry.baseLabel) {
-      displayName = entry.baseLabel.replace(/\s*\[r\d+\]/, '');
-    }
-    if (!displayName && baseFile) {
-      displayName = getBasename(baseFile) || 'unknown';
-    }
-    if (!displayName) {
-      displayName = 'unknown';
-    }
+function hasLegacyDiffIdentity(entry: LegacyDiffResultInput): boolean {
+  return Boolean(
+    entry.locations?.base?.absolutePath ||
+    entry.locations?.revised?.absolutePath ||
+    entry.locations?.diff?.absolutePath ||
+    entry.basePath ||
+    entry.revisedPath ||
+    entry.diffPath ||
+    entry.baseLabel ||
+    entry.originalFileName,
+  );
+}
 
-    return {
-      baseFile,
-      revisedFile,
-      diffFile,
-      displayName,
-      baseRound,
-      revisedRound,
-      status:
-        entry.status === 'success' || entry.status === 'error'
-          ? entry.status
-          : 'error',
-      message: entry.message,
-      runId: entry.runId,
-    };
+const LegacyDiffResultInputSchema = LegacyDiffResultInputBaseSchema.refine(
+  hasLegacyDiffIdentity,
+);
+
+function externalLocation(absolutePath: string): FileLocation {
+  return { kind: 'external', absolutePath };
+}
+
+function nullableExternalLocation(
+  absolutePath: string | undefined,
+): FileLocation | null {
+  return absolutePath ? externalLocation(absolutePath) : null;
+}
+
+function legacyDisplayName(entry: LegacyDiffResultInput): string {
+  if (entry.originalFileName) return entry.originalFileName;
+  if (entry.baseLabel) return entry.baseLabel.replace(/\s*\[r\d+\]/, '');
+  return '';
+}
+
+function legacyPath(
+  location: { absolutePath?: string } | undefined,
+  fallback: string | undefined,
+): string {
+  return location?.absolutePath ?? fallback ?? '';
+}
+
+function legacyDiffResultToCanonical(entry: LegacyDiffResultInput): DiffResult {
+  const baseFile = legacyPath(entry.locations?.base, entry.basePath);
+  const revisedFile = legacyPath(entry.locations?.revised, entry.revisedPath);
+  const diffFile = legacyPath(entry.locations?.diff, entry.diffPath);
+  const baseRound =
+    entry.baseRound ?? parseRoundFromLabel(entry.baseLabel) ?? null;
+  const revisedRound =
+    entry.revisedRound ?? parseRoundFromLabel(entry.revisedLabel) ?? 0;
+  const originalDisplayName = legacyDisplayName(entry);
+
+  return DiffResultSchema.parse({
+    baseLocation: nullableExternalLocation(baseFile),
+    baseRound,
+    revised: {
+      source: revisedFile,
+      location: externalLocation(revisedFile),
+      round: revisedRound,
+      lineage: {
+        original: nullableExternalLocation(originalDisplayName),
+        diffBase: nullableExternalLocation(baseFile),
+        diffFile: nullableExternalLocation(diffFile),
+      },
+      diff: null,
+    },
+    diffLocation: nullableExternalLocation(diffFile),
+    status:
+      entry.status === 'success' || entry.status === 'error'
+        ? entry.status
+        : 'error',
+    message: entry.message,
+    runId: entry.runId,
   });
+}
+
+const LegacyDiffResultDisplaySchema = LegacyDiffResultInputSchema.transform(
+  (entry): DiffResultDisplay => {
+    const display = diffResultToDisplay(legacyDiffResultToCanonical(entry));
+    const displayName = legacyDisplayName(entry);
+    return displayName ? { ...display, displayName } : display;
+  },
+);
+
+const DiffResultEntrySchema = z.union([
+  DiffResultDisplaySchema,
+  LegacyDiffResultDisplaySchema,
+]);
 
 /** Parse a diff result entry from either new or legacy format, or null if neither matches. */
 function parseDiffResultEntry(data: unknown): DiffResultDisplay | null {
-  // Try new format first (canonical)
-  const newResult = DiffResultSchema.safeParse(data);
-  if (newResult.success) {
-    return transformDiffResultToDisplay(newResult.data);
-  }
-
-  // Try legacy format (transforms to display)
-  return LegacyDiffResultSchema.nullable().catch(null).parse(data);
+  return DiffResultEntrySchema.nullable().catch(null).parse(data);
 }
 
 /** Parse an array of diff result entries, skipping invalid ones */
