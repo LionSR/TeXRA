@@ -1102,6 +1102,32 @@ describe('CLI history runtime', () => {
       ).resolves.toEqual({ status: 'incomplete' });
     });
 
+    it('reports "not_found" (not "incomplete") when the stored conversation is an empty array', async () => {
+      // A stored-but-empty conversation array is truthy (`![]` is `false`),
+      // so a naive `!conversation` check would treat it as "present" and
+      // report 'incomplete' here — while `history show` builds no preview
+      // from an empty array and, with config/meta also absent, reports the
+      // same id as not found. The two commands must agree.
+      mocks.readConfig.mockResolvedValue(null);
+      mocks.readConversation.mockResolvedValue([]);
+      mocks.readMeta.mockResolvedValue(null);
+
+      await expect(
+        readCliHistoryExportInput('missing' as ExecutionId),
+      ).resolves.toEqual({ status: 'not_found' });
+      await expect(
+        readCliHistoryDetails('missing' as ExecutionId),
+      ).resolves.toBeNull();
+    });
+
+    it('still reports "incomplete" when config exists but the stored conversation is only an empty array', async () => {
+      mocks.readConversation.mockResolvedValue([]);
+
+      await expect(
+        readCliHistoryExportInput('a1' as ExecutionId),
+      ).resolves.toEqual({ status: 'incomplete' });
+    });
+
     it('stages the bundled HTML export assets into the destination directory', async () => {
       await withTempDir('texra-history-export-src-', async (resourcesPath) => {
         await withTempDir('texra-history-export-dest-', async (cwd) => {

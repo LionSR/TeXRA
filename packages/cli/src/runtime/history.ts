@@ -11,6 +11,7 @@ import {
   type ResultMeta,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
@@ -213,8 +214,10 @@ export type CliHistoryExportInputResult =
 /**
  * Load a stored execution's config + conversation as the format-agnostic
  * {@link ChatExportInput} the html/markdown export formatters consume.
- * Mirrors the extension's `ChatExportController.buildExportInput` so the CLI
- * and extension render the same conversation identically.
+ * Thin CLI-specific wrapper around the shared {@link loadChatExportInput}
+ * loader, which also backs the extension's
+ * `ChatExportController.buildExportInput` — so the CLI and extension render
+ * the same conversation identically.
  *
  * Distinguishes "this execution id has no stored data at all" (`not_found`
  * — the same case `history show` reports as not found) from "this execution
@@ -222,42 +225,15 @@ export type CliHistoryExportInputResult =
  * would still display it, just without a conversation to render). Reporting
  * both as "not found" would mislead a caller whose id is valid but whose
  * execution simply never produced a conversation.
- *
- * `store.readConfig()` already validates against `AgentConfigSchema`
- * internally and falls back to `null` on a schema mismatch (see
- * `ExecutionKVStore.readValidated`), so `config` here is never a raw,
- * unvalidated value — no redundant re-parse (and no risk of it throwing on a
- * corrupt record) is needed.
  */
 export async function readCliHistoryExportInput(
   id: ExecutionId,
 ): Promise<CliHistoryExportInputResult> {
-  const store = getExecutionStore(id);
-  const [config, conversation, meta] = await Promise.all([
-    store.readConfig(),
-    store.readConversation(),
-    store.readMeta(),
-  ]);
+  const { meta, config, conversation, exportInput } =
+    await loadChatExportInput(id);
+  if (exportInput) return { status: 'ok', exportInput };
   if (!meta && !config && !conversation) return { status: 'not_found' };
-  if (!config || !conversation) return { status: 'incomplete' };
-
-  return {
-    status: 'ok',
-    exportInput: {
-      timestamp: meta?.timestamp ?? new Date().toISOString(),
-      description: meta?.description,
-      config: {
-        agent: config.agent,
-        model: config.model,
-        instruction: config.instruction,
-        inputFiles: config.inputFiles,
-        mediaFiles: config.mediaFiles,
-        contextFiles: config.contextFiles,
-        outputFiles: config.outputFiles,
-      },
-      messages: conversation,
-    },
-  };
+  return { status: 'incomplete' };
 }
 
 /**
