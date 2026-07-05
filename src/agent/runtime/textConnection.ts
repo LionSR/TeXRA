@@ -1,4 +1,3 @@
-// Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { MODEL_CONFIGS } from 'llm-zoo';

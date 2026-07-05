@@ -24,7 +24,6 @@ export async function handleTestAgentLoading(): Promise<void> {
   try {
     logger.info(CHANNEL, 'Testing agent loading from registry:');
 
-    // Get the first workflow agent from the registry to test loading
     const agents = getAgentsByCategory(AgentCategory.Workflow);
     if (agents.length === 0) {
       throw new Error('No workflow agents found in registry');
@@ -33,13 +32,11 @@ export async function handleTestAgentLoading(): Promise<void> {
     const testAgent = agents[0];
     logger.info(CHANNEL, `\nTesting agent: ${testAgent.name}`);
 
-    // Resolve the agent
     const resolution = resolveAgent(testAgent.name);
     if (!resolution) {
       throw new Error(`Agent "${testAgent.name}" not found in registry`);
     }
 
-    // Load the YAML directly
     logger.info(CHANNEL, `Loading from: ${resolution.definitionPath}`);
     const rawYaml = await loadYaml(resolution.definitionPath);
     logger.info(
@@ -47,14 +44,12 @@ export async function handleTestAgentLoading(): Promise<void> {
       `Raw YAML loaded: ${JSON.stringify(rawYaml, null, 2)}`,
     );
 
-    // Load with settings and prompts processing
     const [settings, prompts] = await loadAgentSettingAndPrompts(resolution);
     logger.info(CHANNEL, '\nProcessed settings:');
     logger.info(CHANNEL, JSON.stringify(settings, null, 2));
     logger.info(CHANNEL, '\nProcessed prompts:');
     logger.info(CHANNEL, JSON.stringify(prompts, null, 2));
 
-    // Check if this agent has inheritance
     const config = rawYaml as { inherits?: string };
     if (config?.inherits) {
       logger.info(
@@ -73,7 +68,6 @@ export async function handleTestAgentLoading(): Promise<void> {
 
 export async function handleLoadSpecificAgent(): Promise<void> {
   try {
-    // Get agent name from user
     const agentName = await vscode.window.showInputBox({
       prompt: 'Enter the agent name to load (e.g., "polish", "corect")',
       placeHolder: 'agentName',
@@ -98,16 +92,13 @@ export async function handleLoadSpecificAgent(): Promise<void> {
       `Loading from path: ${path.dirname(agentPath.definitionPath)}`,
     );
 
-    // Load and display the agent configuration
     const [settings, prompts] = await loadAgentSettingAndPrompts(agentPath);
 
-    // Display the results
     logger.info(CHANNEL, '\nAgent settings loaded:');
     logger.info(CHANNEL, JSON.stringify(settings, null, 2));
     logger.info(CHANNEL, '\nAgent prompts loaded:');
     logger.info(CHANNEL, JSON.stringify(prompts, null, 2));
 
-    // If the agent inherits from another, show the inheritance chain
     const config = (await loadYaml(agentPath.definitionPath)) as {
       inherits?: string;
     };

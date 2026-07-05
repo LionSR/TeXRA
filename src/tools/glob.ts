@@ -3,7 +3,6 @@ import { glob } from 'glob';
 import { z } from 'zod';
 
 // Local imports - tools
-import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import {
@@ -15,6 +14,7 @@ import {
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 import { toPosixPath } from '@utils/core/pathCore';
 

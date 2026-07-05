@@ -3,9 +3,9 @@ import { StringDecoder } from 'node:string_decoder';
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { delay } from '@utils/core/async';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';

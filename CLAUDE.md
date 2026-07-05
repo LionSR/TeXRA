@@ -94,10 +94,11 @@ This repository is a pnpm workspace:
 - Repo-root `src/` holds host-agnostic core logic, platform interfaces, shared schemas, and test harness code.
 - `packages/extension/` holds the VS Code extension entrypoint, commands, webviews, and packaged resources.
 - `packages/desktop/` holds the Electron desktop shell and adapters around the shared core.
-- `packages/core/` (`@texra/core`) is the curated public SDK surface (`initPlatform`, `runAgent`, `AgentTrace`, etc.) that a host should prefer over deep `@agent/*` / `@platform` imports — not a stub; deep imports still work and aren't being migrated in bulk.
 - `packages/cli/` holds the `texra` terminal client (Ink TUI plus headless `texra run` / `--print` modes).
 - `src/hosts/` defines host capability ports used by both VS Code and Electron integrations.
 - `src/test-kernel/` contains Vitest suites for host-neutral and Electron-facing behavior.
+
+There is currently no `@texra/core` workspace package. Hosts import shared core through the repo-root path aliases until a future SDK surface is enforced with a build and import-boundary lint gate.
 
 ### Source Organization
 

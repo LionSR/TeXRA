@@ -30,7 +30,7 @@ export const ActiveChildInfoSchema = z.object({
   /** Epoch milliseconds when the child execution began. */
   startedAt: z.int().positive().optional(),
   /** Formatted elapsed time (e.g. "1m 23s"). */
-  elapsed: z.string().nullable().optional(),
+  elapsed: z.string().nullish(),
   /** Tool name that spawned this process (e.g. "bash", "codex"). Absent for subagents. */
   toolName: z.string().optional(),
 });

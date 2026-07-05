@@ -13,9 +13,10 @@ import type {
 } from '@agent/core/state/AgentState';
 import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import { ensureError, normalizeProviderError } from '@common/errors';
+import { normalizeProviderError } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { toRetryErrorInfo } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
@@ -73,17 +74,17 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const { shared } = prepRes;
     const context = shared.context!; // Validated in prep()
 
-    const [prefillEndsTurn, initializedMessages] =
+    const [outputAlreadyComplete, initializedMessages] =
       await this.services.modelHandler.initializeOutputAndPrefill(
         this.services.config,
         this.services.setting,
         context.messages,
         prepRes.workspace,
         prepRes.outputLocation,
-        context.prefill,
+        '',
       );
 
-    if (prefillEndsTurn) {
+    if (outputAlreadyComplete) {
       return { outcome: 'completed', endTurn: true };
     }
 

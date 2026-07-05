@@ -15,10 +15,10 @@ import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { StreamSnapshotStore } from '@transcript';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { toErrorMessage } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { configKeyVariants } from '@shared/config/configKeys';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
 import { ElectronSecrets } from './electronSecrets.js';

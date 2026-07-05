@@ -1,7 +1,7 @@
 # Session-scoped runtime architecture: facts, interactions, and status ownership
 
-> **Status:** Partially landed proposal (Stages 0-2; status refreshed
-> 2026-07-04). Companion to the diagnosis in
+> **Status:** Partially landed proposal (Stages 0-2 plus Checkpoint A; status
+> refreshed 2026-07-05). Companion to the diagnosis in
 > `tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this document is the
 > target design. It covers the event/logger chain, the
 > approval/interaction RPC machinery, stream status, and the execution registries
@@ -654,9 +654,9 @@ distinction any group renderer consumes). The mapping is explicit:
 collapse the legacy 2-value helper applies (`{completed,cancelled}→stopped`,
 `failed→error`), renamed so "ok" stops being spelled "stopped".
 
-**Tier 1 — SDK (`@texra/core` / `AgentEvent`).** `StreamStatus` does not
-leak into the SDK today (verified) — keep it that way: the SDK speaks
-`RunOutcome`, `StreamPhase`, and the `AgentEvent` union only.
+**Tier 1 — future SDK package / `AgentEvent`.** `StreamStatus` should not
+leak into a future SDK package: the SDK surface should speak `RunOutcome`,
+`StreamPhase`, and the `AgentEvent` union only.
 `ExecutionListingEntry.terminalStatus` (re-exported as free `string`)
 switches to `outcome?: RunOutcome` with the read shim. The union gaining
 `status`/`child.activity`/`process.output` arms is deliberately breaking for
@@ -724,9 +724,9 @@ ordering they force:
 4. **`requestRetry` must be co-designed with the error-pipeline plan** —
    `error-pipeline-and-ownership.md` T2 names a single retry owner; the
    interactions port is that owner's request surface, not a competitor.
-5. **SDK-breaking event work before publishing `@texra/core`.** All
-   `AgentEvent` arm additions and the `StageEndEvent.status` change are free
-   now, expensive the day the package has external consumers.
+5. **SDK-breaking event work before reintroducing/publishing an SDK package.**
+   All `AgentEvent` arm additions and the `StageEndEvent.status` change are
+   free now, expensive the day a package has external consumers.
 
 **Deliberate behavior changes (visible, and intended):**
 
@@ -772,11 +772,11 @@ ordering they force:
   trace→bus and others still emit directly, relative order between two
   related facts can invert. Stages therefore migrate whole fact _clusters_
   (e.g. status+result together), never half of a causally-linked pair.
-- **Multi-window desktop reality check.** L1–L3's "live bug" severity
-  assumes >1 `DesktopAgentExecution` per process actually ships. The
-  per-window session comments say yes, but verify before paying stages 3–5;
-  if single-window, those stages are pre-payment for a planned feature and
-  should be re-prioritized honestly.
+- **Multi-window desktop reality check.** Checkpoint A recorded the maintainer
+  pre-flight answer on 2026-07-05: for desktop, do the wisest thing. The
+  checkpoint treats multi-window desktop as supported/intended unless current
+  code proves it mechanically impossible, so L1–L3 remain correctness work for
+  stages 3–5 rather than pre-payment.
 - **Collision with the active PR train.** This branch was force-updated
   mid-audit by concurrent maintainer work; the program only works as small,
   independently shippable PRs per stage — a long-lived refactor branch

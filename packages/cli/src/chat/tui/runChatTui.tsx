@@ -52,7 +52,6 @@ import {
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { isLiveElapsedStatus } from '@common/constants/streamStatus';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -61,6 +60,7 @@ import {
 } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   buildInitialChatAgentConfig,
@@ -91,7 +91,7 @@ import {
 } from './render/noColorOutput';
 import { createTuiViewportController } from './render/tuiViewportController';
 import { clearApprovals } from './state/approvalQueue';
-import { cliState, resetCliState } from './state/cliState';
+import { cliState, patchSessionMeta, resetCliState } from './state/cliState';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
@@ -328,10 +328,7 @@ export async function runChat(
   const getApprovalPolicy = (): CliApprovalPolicy => activeApprovalPolicy;
   const setApprovalPolicy = (policy: CliApprovalPolicy): void => {
     activeApprovalPolicy = policy;
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
-      approvalPolicy: policy,
-    });
+    patchSessionMeta({ approvalPolicy: policy });
   };
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (interruptActive, resetSessionForClear,

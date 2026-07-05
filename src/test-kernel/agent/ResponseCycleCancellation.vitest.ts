@@ -50,7 +50,6 @@ function reflectionShared(): ReflectionFlowShared {
     workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
     context: {
       messages: [],
-      prefill: '',
       stateRoundSnapshot: ConversationRoundStateSnapshotSchema.parse({
         roundIndex: 0,
       }),

@@ -1,7 +1,7 @@
 import { platform } from '@platform/platform';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { writeTextStderr } from './logSinks';
 

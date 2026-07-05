@@ -1,4 +1,4 @@
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   DEFAULT_SESSION_EXPIRY_MS,

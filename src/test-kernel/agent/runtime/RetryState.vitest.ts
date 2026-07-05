@@ -22,7 +22,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  StreamStatusRegistry,
+  StreamStatusMachine,
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
 import {
@@ -40,7 +40,7 @@ import {
 interface TestRetryServices {
   streamId: StreamTabId;
   runtimeHost: AgentRuntimeHost;
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
 }
@@ -65,7 +65,7 @@ class ExposedRetryNode extends RetryableInvocationNode<
 
 interface RetryNodeKit {
   node: ExposedRetryNode;
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
   waitForRetry: Mock<
     (
       streamId: string,
@@ -75,7 +75,7 @@ interface RetryNodeKit {
 }
 
 function createRetryNode(streamId: StreamTabId): RetryNodeKit {
-  const streamStatus = new StreamStatusRegistry();
+  const streamStatus = new StreamStatusMachine();
   const waitForRetry = vi.fn<RetryNodeKit['waitForRetry']>();
   const node = new ExposedRetryNode().setServices({
     streamId,
