@@ -714,16 +714,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async handleSetApprovalEnabled(enabled: boolean): Promise<void> {
     // Bash approval is a per-workspace, security-adjacent setting (see
-    // BASH_APPROVAL_CONFIG_TARGET / issue #7085): writing it without a
-    // workspace open would have to fall back to a global write, silently
-    // reintroducing the cross-workspace bypass this constant exists to
-    // prevent. Refuse instead -- this is an expected, non-error condition
-    // (no folder open yet), so inform rather than alarm.
+    // BASH_APPROVAL_CONFIG_TARGET / issue #7085). VS Code throws when
+    // writing a Workspace-target setting with no folder open, so refuse the
+    // write up front rather than let that throw surface -- this is an
+    // expected, non-error condition (no folder open yet), so inform rather
+    // than alarm. Re-send the persisted settings afterwards so the webview's
+    // (optimistically-toggled) switch snaps back to the actual, unwritten
+    // value instead of drifting from it.
     if (!vscode.workspace.workspaceFolders?.length) {
       void showLoggedInfoMessage(
         this.channel,
         'Bash approval is a per-workspace setting. Open a workspace folder before changing it.',
       );
+      await this.withActiveWebview((w) => this.sendApprovalSettings(w));
       return;
     }
     await setBashApprovalEnabledShared(
