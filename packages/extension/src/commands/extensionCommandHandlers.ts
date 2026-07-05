@@ -13,10 +13,7 @@ import {
   definedHandler,
   type CommandHandler,
 } from '@shared/commands/registry';
-import {
-  AgentCategorySchema,
-  type AgentCategory,
-} from '@shared/schemas/agent';
+import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
 import {
   SETTINGS_TAB,
@@ -84,8 +81,7 @@ type HiddenExtensionRegistryCommandId =
   (typeof EXTENSION_HIDDEN_ALIASES)[number];
 
 export type ExtensionRegistryCommandId =
-  | ExtensionRegistryCatalogCommandId
-  | HiddenExtensionRegistryCommandId;
+  ExtensionRegistryCatalogCommandId | HiddenExtensionRegistryCommandId;
 
 /**
  * Runtime mirror of `ExtensionRegistryCatalogCommandId`, used by tests to

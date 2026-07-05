@@ -106,9 +106,9 @@ describe('extension command registry — catalog-driven registration', () => {
   it.each(EXTENSION_HIDDEN_ALIASES)(
     'hidden alias %s is absent from the public catalog',
     (id) => {
-      expect(
-        commandCatalog.some((entry) => (entry.id as string) === id),
-      ).toBe(false);
+      expect(commandCatalog.some((entry) => (entry.id as string) === id)).toBe(
+        false,
+      );
     },
   );
 });
@@ -242,9 +242,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
       'stream-2',
     );
     await expect(Promise.resolve(result)).resolves.toBe(true);
-    expect(actions.compactResponse).toHaveBeenCalledExactlyOnceWith(
-      'stream-2',
-    );
+    expect(actions.compactResponse).toHaveBeenCalledExactlyOnceWith('stream-2');
   });
 
   it('texra.compactResponse rejects empty streamId', () => {
