@@ -887,6 +887,80 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('rechecks active executions after a failed persisted-record lookup in the fallback path', async () => {
+    // Regression test for the "catch-within-catch" gap (issue #7160): the
+    // fallback path's own recheck (see the regression test above) only ran
+    // when detectRaceGuardedWaitingStreams() *resolved*. If
+    // detectWaitingStreams() itself throws on the fallback's second consult,
+    // the catch(detectError) block used to just log a warning and continue
+    // with the pre-existing in-memory waitingStreams -- even if the stream
+    // became active elsewhere while that failed lookup was in flight. It
+    // must still recheck against fresh active execution ids so an
+    // actively-resumed stream isn't handed to
+    // closeRunningTaskGroupsForStreams() below.
+    let activeExecutionIds: readonly string[] = [];
+    let detectCallCount = 0;
+    let rejectSecondDetect!: (error: Error) => void;
+    const secondDetectGate = new Promise<Set<StreamTabId>>((_, reject) => {
+      rejectSecondDetect = reject;
+    });
+    const detectWaitingStreams = vi.fn(async (): Promise<Set<StreamTabId>> => {
+      detectCallCount += 1;
+      if (detectCallCount === 1) {
+        // The primary try path's own consult -- fails immediately so the
+        // repair falls into the degraded catch-fallback path.
+        throw new Error('primary detect failed');
+      }
+      // The fallback's consult -- stays pending until the test simulates
+      // the race, then rejects (below).
+      return secondDetectGate;
+    });
+    const bridge = await createBridge([], {
+      activeExecutionIds: () => activeExecutionIds,
+      detectWaitingStreams,
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'race-stream',
+          executionId: 'abc123',
+          lastKnownStatus: STREAM_PHASE.WAITING,
+        }),
+      ]),
+    });
+    // repairOrphanedStreamsAfterRestart() never emits an UPDATE_STREAMS sync
+    // in the fixed (fully-forgotten) outcome under test, so there is no
+    // message to poll for -- await the repair's own settle signal instead,
+    // which resolves only after its try/catch body (including any awaited
+    // closeRunningTaskGroupsForStreams call) has fully run.
+    const restartRepair = (
+      bridge as unknown as { restartRepair: Promise<void> }
+    ).restartRepair;
+    const streamLogs = bridge.streamLogs as typeof bridge.streamLogs & {
+      endRunningGroupsForStreams: (
+        streamIds: readonly StreamTabId[],
+        now?: number,
+      ) => Promise<StreamTabId[]>;
+    };
+    const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
+
+    try {
+      await vi.waitFor(() =>
+        expect(detectWaitingStreams).toHaveBeenCalledTimes(2),
+      );
+      // Simulate the race: another window (or a headless run) resumes the
+      // stream while the fallback's persisted-record lookup is in flight,
+      // and that lookup then fails.
+      activeExecutionIds = ['abc123'];
+      rejectSecondDetect(new Error('fallback detect failed'));
+      await restartRepair;
+
+      expect(closeSpy).not.toHaveBeenCalled();
+    } finally {
+      rejectSecondDetect(new Error('cleanup'));
+      bridgeStatus(bridge).clearStream('race-stream');
+      bridge.dispose();
+    }
+  });
+
   it('marks restored waiting streams as failed when no waiting session remains', async () => {
     const detectWaitingStreams = vi.fn(async () => new Set<StreamTabId>());
     const bridge = await createBridge([], {
