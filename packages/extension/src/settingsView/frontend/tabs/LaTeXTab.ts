@@ -233,6 +233,16 @@ export class LaTeXTab extends LitElement {
   @property({ type: Boolean }) inlineCriticismEnabled = false;
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
+  /**
+   * Whether the active host's registry supports the inline-criticism
+   * commands (`GET_INLINE_CRITICISM_ENABLED`) — derived via
+   * `isKnownUnsupported` in `SettingsApp`, not the raw `desktopHost` flag,
+   * since this is command availability rather than host-specific UI
+   * (unlike the VS Code settings.json sections below, which genuinely don't
+   * exist on desktop and stay gated on `desktopHost`).
+   */
+  @property({ type: Boolean }) inlineCriticismSupported = false;
+
   private handleApply(field?: SettingInfo['key'], reset = false): void {
     this.dispatchEvent(createEvent('latex-apply-settings', { field, reset }));
   }
@@ -534,7 +544,11 @@ export class LaTeXTab extends LitElement {
                 )}
               `
         }
-        ${this.desktopHost ? nothing : this.renderInlineCriticismSetting()}
+        ${
+          this.inlineCriticismSupported
+            ? this.renderInlineCriticismSetting()
+            : nothing
+        }
         ${this.renderCompileDiffSettings()}
       </div>
     `;
