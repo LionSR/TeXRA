@@ -35,7 +35,10 @@ root.append(conversationView);
 conversationView.addEventListener('toolbar-command', ((e: CustomEvent) =>
   handleToolbarCommand(e, createHostEventHandlerContext())) as EventListener);
 conversationView.addEventListener('permission-action', ((e: CustomEvent) =>
-  handlePermissionAction(e, createHostMessageHandlerContext())) as EventListener);
+  handlePermissionAction(
+    e,
+    createHostMessageHandlerContext(),
+  )) as EventListener);
 conversationView.addEventListener(
   'file-action',
   handleFileAction as EventListener,
