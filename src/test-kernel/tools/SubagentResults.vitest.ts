@@ -149,6 +149,44 @@ describe('formatSubagentDelivery', () => {
     expect(error).toContain('<background-error id="bash&amp;1&quot;&lt;"');
   });
 
+  it('surfaces the head and an elision count only when a stream was truncated', () => {
+    const delivery = formatBashDelivery(
+      'bash-3',
+      'make build',
+      1000,
+      { success: false, stdout: '', stderr: '', exitCode: 1 },
+      'tail output',
+      'tail stderr',
+      'first fatal error',
+      'first fatal stderr',
+      500,
+      250,
+    );
+
+    expect(delivery).toContain('<output-head>first fatal error</output-head>');
+    expect(delivery).toContain(
+      '<output-elided>500 characters elided</output-elided>',
+    );
+    expect(delivery).toContain('<stderr-head>first fatal stderr</stderr-head>');
+    expect(delivery).toContain(
+      '<stderr-elided>250 characters elided</stderr-elided>',
+    );
+  });
+
+  it('omits the elision note when the head is not truncated', () => {
+    const delivery = formatBashDelivery(
+      'bash-4',
+      'echo hi',
+      1000,
+      { success: true, stdout: '', stderr: '', exitCode: 0 },
+      'ok',
+      '',
+    );
+
+    expect(delivery).not.toContain('output-head');
+    expect(delivery).not.toContain('elided');
+  });
+
   it('normalizes CRLF when truncating background output previews', () => {
     const outputTail = Array.from(
       { length: 21 },
