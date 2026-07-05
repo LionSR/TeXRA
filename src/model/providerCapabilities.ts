@@ -53,6 +53,32 @@ export function codexBackendModelId(config: {
 }
 
 /**
+ * Known false positive: an OpenAI model the registry-derived heuristic below
+ * would mark eligible (top reasoning-effort tier, live, non-`codex` name),
+ * but that the Codex backend does not actually serve. `gpt-5.4-nano` is
+ * API-only — routing it through `/codex/responses` fails at request time
+ * instead of using the normal API-key path, so it must be excluded outright
+ * rather than left for the backend to reject. Keyed on
+ * {@link codexBackendModelId} (shortName, or date-unpinned fullName) so a
+ * llm-zoo date-pin bump doesn't silently drop the exception.
+ */
+const CODEX_INELIGIBLE_EXCEPTIONS: ReadonlySet<string> = new Set([
+  'gpt-5.4-nano',
+]);
+
+/**
+ * Known false negative: an OpenAI model the registry marks merely
+ * `deprecated` (superseded by a newer release, not pulled) that the Codex
+ * backend still actually serves. The old hand-maintained fullName allowlist
+ * this heuristic replaced still routed `gpt-5.4` through the ChatGPT
+ * subscription after `gpt-5.5` shipped; treating every `deprecated` model as
+ * ineligible would regress that. `deprecated` still disqualifies by default
+ * — only these explicit, known-still-served exceptions bypass it. Keyed on
+ * {@link codexBackendModelId}.
+ */
+const CODEX_DEPRECATED_EXCEPTIONS: ReadonlySet<string> = new Set(['gpt-5.4']);
+
+/**
  * Whether `model` is eligible to route through the ChatGPT-subscription
  * (Codex) backend.
  *
@@ -61,21 +87,42 @@ export function codexBackendModelId(config: {
  * here), so this derives eligibility from registry data every OpenAI
  * `ModelConfig` already carries instead of a hand-maintained fullName
  * allowlist: Codex serves OpenAI's current top-reasoning-effort chat models
- * (`capabilities.reasoningEffort === XHIGH`) that haven't been superseded or
- * pulled (`deprecated`/`retired`), plus — as an explicit naming convention —
- * any model whose id contains "codex", since OpenAI's own dedicated
- * Codex-branded releases (e.g. `gpt-5.3-codex`) keep shipping under that
- * name even after they're marked `deprecated` in favor of a newer one. A new
- * top-effort OpenAI release resolves eligible the moment `llm-zoo` ships it,
- * with no hardcoded edit needed here. Over-matching a model the real backend
- * doesn't actually serve is a benign false positive: the backend is the
- * actual gate and rejects models outside the account's tier at request time.
+ * (`capabilities.reasoningEffort` at `XHIGH` or the higher `MAX` tier) that
+ * haven't been pulled (`retired`) or superseded (`deprecated`), plus — as an
+ * explicit naming convention — any model whose id contains "codex", since
+ * OpenAI's own dedicated Codex-branded releases (e.g. `gpt-5.3-codex`) keep
+ * shipping under that name even after they're marked `deprecated` in favor
+ * of a newer one. A new top-effort OpenAI release resolves eligible the
+ * moment `llm-zoo` ships it, with no hardcoded edit needed here.
+ *
+ * A pure heuristic can't fully replace a curated list, though: it both
+ * over-matches models the backend doesn't actually serve and under-matches
+ * ones still served despite a `deprecated` flag. {@link
+ * CODEX_INELIGIBLE_EXCEPTIONS} and {@link CODEX_DEPRECATED_EXCEPTIONS} layer
+ * a small, explicitly-commented set of known exceptions on top of the
+ * heuristic for those two cases; everything else still resolves
+ * automatically as the registry evolves.
+ *
+ * Requires `model.provider === ModelProvider.OPENAI` — asserted here (not
+ * just by callers) since this function is exported and a future call site
+ * passing a non-OpenAI `ModelConfig` must not resolve eligible just because
+ * its `reasoningEffort` or id happens to match.
  */
 export function isCodexSubscriptionEligible(model: ModelConfig): boolean {
+  if (model.provider !== ModelProvider.OPENAI) return false;
+
   const unpinnedName = codexBackendModelId(model);
+  if (CODEX_INELIGIBLE_EXCEPTIONS.has(unpinnedName)) return false;
   if (/codex/i.test(unpinnedName)) return true;
-  if (model.deprecated || model.retired) return false;
-  return model.capabilities.reasoningEffort === ReasoningEffort.XHIGH;
+  if (model.retired) return false;
+  if (model.deprecated && !CODEX_DEPRECATED_EXCEPTIONS.has(unpinnedName)) {
+    return false;
+  }
+
+  return (
+    model.capabilities.reasoningEffort === ReasoningEffort.XHIGH ||
+    model.capabilities.reasoningEffort === ReasoningEffort.MAX
+  );
 }
 
 const resolveChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({

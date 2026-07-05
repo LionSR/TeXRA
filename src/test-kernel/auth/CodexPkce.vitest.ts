@@ -160,4 +160,99 @@ describe('codex model eligibility', () => {
       ),
     ).toBe(true);
   });
+
+  // #7223: ReasoningEffort has a tier above XHIGH (MAX, clamped to 'xhigh' on
+  // the OpenAI wire by toOpenAIReasoningEffort) — a registry model reporting
+  // MAX must resolve eligible too, not just XHIGH.
+  it('accepts a MAX-reasoning-effort OpenAI model', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.7-2026-09-01',
+          shortName: 'gpt-5.7',
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.MAX,
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  // #7223: a non-OpenAI ModelConfig must never resolve eligible even if its
+  // reasoningEffort/id would otherwise match — the provider guard must live
+  // inside the function itself, not only in callers.
+  it('rejects a non-OpenAI model even at top reasoning-effort tier', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          provider: ModelProvider.ANTHROPIC,
+          fullName: 'claude-codex-lookalike',
+          shortName: 'claude-codex-lookalike',
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  // #7223: gpt-5.4-nano is OpenAI + XHIGH + live per the llm-zoo registry, so
+  // the naive heuristic marks it eligible, but it's an API-only variant the
+  // Codex backend does not actually serve — routing it there would fail at
+  // request time instead of using the normal API-key path.
+  it('rejects the gpt-5.4-nano false positive despite matching the heuristic', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.4-nano-2026-03-17',
+          shortName: 'gpt-5.4-nano',
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  // #7223: gpt-5.4 is deprecated (superseded by gpt-5.5) but the Codex
+  // backend still actually serves it — the old hardcoded allowlist this
+  // heuristic replaced still routed it through the ChatGPT subscription, so
+  // a bare deprecated-excludes-all rule would be a real regression.
+  it('accepts the deprecated-but-still-served gpt-5.4 false negative', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.4-2026-03-05',
+          shortName: 'gpt-5.4',
+          deprecated: true,
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  // A deprecated model *not* on the known-served exception list still gets
+  // excluded by default — the exception table is narrow, not a blanket
+  // "deprecated no longer disqualifies" change.
+  it('still rejects an ordinary deprecated model outside the known exception list', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.2-2025-12-11',
+          shortName: 'gpt-5.2',
+          deprecated: true,
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
 });
