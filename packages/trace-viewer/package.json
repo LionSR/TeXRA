@@ -5,10 +5,11 @@
   "scripts": {
     "dev": "vite --config vite.config.ts",
     "typecheck": "tsc --noEmit",
-    "build": "vite build --config vite.config.ts"
+    "build": "vite build --config vite.config.ts && vite build --config vite.standalone.config.ts"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
-    "vite": "^8.1.3"
+    "vite": "^8.1.3",
+    "vite-plugin-singlefile": "^2.3.3"
   }
 }

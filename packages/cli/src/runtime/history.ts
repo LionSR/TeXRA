@@ -1,4 +1,4 @@
-import { cp, stat } from 'node:fs/promises';
+import { cp, readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {
@@ -213,7 +213,8 @@ export type CliHistoryExportInputResult =
 
 /**
  * Load a stored execution's config + conversation as the format-agnostic
- * {@link ChatExportInput} the html/markdown export formatters consume.
+ * {@link ChatExportInput} the markdown export formatter consumes (the HTML
+ * export path uses `assembleTrace` instead — see `commands/history.ts`).
  * Thin CLI-specific wrapper around the shared {@link loadChatExportInput}
  * loader, which also backs the extension's
  * `ChatExportController.buildExportInput` — so the CLI and extension render
@@ -236,59 +237,54 @@ export async function readCliHistoryExportInput(
   return { status: 'incomplete' };
 }
 
+const TRACE_VIEWER_STANDALONE_DIR_NAME = 'traceViewerStandalone';
+const TRACE_VIEWER_SHARED_DIR_NAME = 'traceViewer';
+
 /**
- * Resolves the `--assets` flag value to the href passed into
- * `formatChatAsHtml`. Blank (`undefined`, empty, or whitespace-only) collapses
- * to `undefined` so the formatter's own documented `./assets` default applies
- * — `--assets ''` must behave identically to omitting the flag, not produce a
- * broken empty href.
+ * Read the trace-viewer's single-file standalone bundle — one self-contained
+ * `index.html` with no external `assets/` (JS/CSS/fonts all inlined) so the
+ * default export opens correctly via `file://` with no server. Returns `null`
+ * (without throwing) when the CLI install doesn't have the bundled template
+ * — e.g. a dev checkout where `packages/trace-viewer` hasn't been built —
+ * so the caller can report a clear error instead of an ENOENT stack trace.
  */
-export function resolveCliHistoryExportAssetsHref(
-  raw: string | undefined,
-): string | undefined {
-  const trimmed = raw?.trim();
-  return trimmed ? trimmed : undefined;
+export async function readCliHistoryStandaloneTemplate(
+  resourcesPath: string,
+): Promise<string | null> {
+  const templatePath = path.join(
+    resourcesPath,
+    TRACE_VIEWER_STANDALONE_DIR_NAME,
+    'index.html',
+  );
+  return readFile(templatePath, 'utf8').catch(() => null);
 }
 
 /**
- * True when `href` names a remote location (has a URL scheme, e.g.
- * `https://cdn/assets`) rather than a filesystem path. There is nothing to
- * stage for a remote href — the caller manages that location themselves.
- * A bare relative/absolute filesystem path (`./assets`, `assets`,
- * `/abs/path`) is never mistaken for one: it has no `scheme://` prefix.
- */
-export function isRemoteCliHistoryExportAssetsHref(
-  href: string | undefined,
-): boolean {
-  return href !== undefined && /^[a-z][a-z\d+.-]*:\/\//i.test(href);
-}
-
-const HTML_EXPORT_ASSET_DIR_NAME = 'htmlExport';
-
-/**
- * Stage the bundled KaTeX / highlight.js / texmath CSS + font assets into
- * `destDir` (e.g. `<cwd>/assets`) so a default `--export html > out.html`
- * redirect — written to the same directory — resolves the exported
- * document's `./assets` href for real, instead of linking to a folder that
- * was never created.
+ * Stage the trace-viewer's multi-file bundle (`index.html` + `assets/`) into
+ * `destDir` for the shared-assets export mode (`--assets-dir`) — a site
+ * hosting many traces points every trace's `?trace=` query param at one
+ * shared bundle instead of duplicating it per trace. Unlike the standalone
+ * bundle, this one keeps external `assets/` references, which is fine here:
+ * shared-assets mode targets pages served over http(s), which never hits the
+ * `file://` module-script CORS restriction the standalone bundle exists to
+ * avoid (see `packages/trace-viewer/vite.standalone.config.ts`).
  *
- * Called for the default href *and* any explicit local `--assets <href>`
- * (including one that happens to spell out the documented default, e.g.
- * `--assets ./assets`) — `fs.cp`'s recursive copy merges into an existing
- * `destDir` rather than nesting under it, so staging is safe to repeat and
- * safe against a `destDir` that already has unrelated content. Only a
- * genuinely remote href (see {@link isRemoteCliHistoryExportAssetsHref})
- * skips staging, since the caller manages that location themselves.
+ * `fs.cp`'s recursive copy merges into an existing `destDir` rather than
+ * nesting under it, so staging is safe to repeat across multiple exports
+ * pointed at the same shared directory.
  *
  * Returns `'missing'` (without throwing) when the CLI install doesn't have
  * the bundled assets — e.g. a dev checkout where `copy:resources` hasn't run
  * — so the caller can warn instead of failing the export outright.
  */
-export async function stageCliHistoryExportAssets(params: {
+export async function stageCliHistoryTraceViewerAssets(params: {
   readonly resourcesPath: string;
   readonly destDir: string;
 }): Promise<'staged' | 'missing'> {
-  const assetsSrc = path.join(params.resourcesPath, HTML_EXPORT_ASSET_DIR_NAME);
+  const assetsSrc = path.join(
+    params.resourcesPath,
+    TRACE_VIEWER_SHARED_DIR_NAME,
+  );
   const sourceExists = await stat(assetsSrc)
     .then((info) => info.isDirectory())
     .catch(() => false);
