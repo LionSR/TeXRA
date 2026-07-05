@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   ModelProvider,
+  ReasoningEffort,
   type ModelConfig,
 } from 'llm-zoo';
 
@@ -20,7 +21,12 @@ const gpt55Config: ModelConfig = {
   inputPrice: 5,
   outputPrice: 30,
   contextWindow: 1_050_000,
-  capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+  // Codex eligibility is now derived from the top reasoning-effort tier
+  // (see providerCapabilities.ts), not from a hardcoded fullName allowlist.
+  capabilities: {
+    ...DEFAULT_MODEL_CAPABILITIES,
+    reasoningEffort: ReasoningEffort.XHIGH,
+  },
   openRouterOnly: false,
 };
 
