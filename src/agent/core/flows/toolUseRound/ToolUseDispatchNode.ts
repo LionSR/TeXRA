@@ -298,7 +298,12 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       const primary = results[primaryIndex];
       // Primary interrupted or never ran: leave the duplicate null too.
       if (!primary) continue;
-      const { edits: _edits, files: _files, ...sharedResult } = primary.result;
+      const {
+        edits: _edits,
+        files: _files,
+        lineChanges: _lineChanges,
+        ...sharedResult
+      } = primary.result;
       results[index] = {
         call,
         result: sharedResult as ToolResult,

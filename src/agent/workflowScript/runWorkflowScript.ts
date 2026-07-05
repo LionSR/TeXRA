@@ -215,6 +215,8 @@ export async function runWorkflowScript(
     // per-index key check keeps replay safe, at the cost of cache hits.
     return Promise.all(
       items.map(async (item, index) => {
+        // The first stage receives (item, item, index): prev is seeded with
+        // the item itself, not undefined.
         let value: unknown = item;
         for (const stage of stageFns) {
           try {
