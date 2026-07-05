@@ -20,7 +20,12 @@ import { deriveRunOutcome } from '@common/constants/streamStatus';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
-import { RUN_OUTCOME, STREAM_PHASE, STREAM_STATUS } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  STREAM_PHASE,
+  STREAM_STATUS,
+  buildRunDescriptor,
+} from '@shared/schemas';
 
 // Local imports - utils
 import { formatDuration } from '@utils/core';
@@ -109,6 +114,15 @@ export function createChildStream(
     streamId: childStreamId,
     agentCategory: options.streamCategory,
     suppressViewSwitch: true,
+  });
+  runTrace.trace.emit({
+    type: 'run.start',
+    descriptor: buildRunDescriptor({
+      streamId: childStreamId,
+      executionId,
+      agent: options.config.agent,
+      category: options.config.agentCategory,
+    }),
   });
   runtimeHost.emit('setTaskState', {
     streamId: childStreamId,

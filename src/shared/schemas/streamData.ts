@@ -20,6 +20,10 @@ import { z } from 'zod';
 
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
+  RUN_DESCRIPTOR_SCHEMA_VERSION,
+  RunDescriptorSchema,
+} from './runDescriptor';
+import {
   TokenUsageStatsBaseSchema,
   UsageRouteSchema,
   emptyUsageStats,
@@ -47,10 +51,15 @@ export const RoundKeySchema = z.coerce.number().int();
  * directly, never their own copy.
  */
 export const StreamTabMetaSchema = z.object({
+  schemaVersion: z
+    .literal(RUN_DESCRIPTOR_SCHEMA_VERSION)
+    .prefault(RUN_DESCRIPTOR_SCHEMA_VERSION),
   /** Legacy field — no longer written, tolerated on read so we can skip it. */
   activeRunId: z.string().nullish(),
   parentStreamId: z.string().optional(),
   executionId: z.string().optional(),
+  runDescriptor: RunDescriptorSchema.optional(),
+  /** Legacy field — read-shimmed from pre-RunDescriptor snapshots only. */
   taskState: z.unknown().optional(),
   /** AI-generated session description, mirrored from ExecutionMeta. */
   description: z.string().optional(),

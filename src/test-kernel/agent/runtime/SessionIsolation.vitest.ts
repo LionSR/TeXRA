@@ -168,7 +168,7 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
 
   it('runFlowWithLifecycle tracks the handle in the run session, not the default', async () => {
     await initTestPlatform();
-    const executionId = 'execution:iso-track' as ExecutionId;
+    const executionId = 'e15001' as ExecutionId;
     const streamId = 'stream:iso-track' as StreamTabId;
     const streamStatus = new StreamStatusMachine();
     const sessionB = new SessionHandle();

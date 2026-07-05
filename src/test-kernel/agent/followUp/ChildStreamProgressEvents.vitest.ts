@@ -21,24 +21,21 @@ import {
 import { createChildStream } from '@tools/childStream';
 import { createRecordingHost } from '../progressTestUtils';
 
-const executionId = 'exec:child-stream' as ExecutionId;
+const executionId = 'c11111' as ExecutionId;
 const parentStreamId = 'stream:parent' as StreamTabId;
-const childStreamId = 'bash#exec:child-stream' as StreamTabId;
-const orderingExecutionId = 'exec:child-stream-ordering' as ExecutionId;
-const orderingChildStreamId = 'bash#exec:child-stream-ordering' as StreamTabId;
-const loopExecutionId = 'exec:child-stream-loop' as ExecutionId;
-const loopChildStreamId = 'codex#exec:child-stream-loop' as StreamTabId;
-const stoppedExecutionId = 'exec:child-stream-stopped' as ExecutionId;
-const stoppedChildStreamId = 'codex#exec:child-stream-stopped' as StreamTabId;
-const cancelledExecutionId = 'exec:child-stream-cancelled' as ExecutionId;
-const cancelledChildStreamId =
-  'codex#exec:child-stream-cancelled' as StreamTabId;
-const failedExecutionId = 'exec:child-stream-failed' as ExecutionId;
-const failedChildStreamId = 'codex#exec:child-stream-failed' as StreamTabId;
-const normalizedErrorExecutionId =
-  'exec:child-stream-normalized-error' as ExecutionId;
-const normalizedErrorChildStreamId =
-  'codex#exec:child-stream-normalized-error' as StreamTabId;
+const childStreamId = 'bash#c11111' as StreamTabId;
+const orderingExecutionId = 'c11112' as ExecutionId;
+const orderingChildStreamId = 'bash#c11112' as StreamTabId;
+const loopExecutionId = 'c11113' as ExecutionId;
+const loopChildStreamId = 'codex#c11113' as StreamTabId;
+const stoppedExecutionId = 'c11114' as ExecutionId;
+const stoppedChildStreamId = 'codex#c11114' as StreamTabId;
+const cancelledExecutionId = 'c11115' as ExecutionId;
+const cancelledChildStreamId = 'codex#c11115' as StreamTabId;
+const failedExecutionId = 'c11116' as ExecutionId;
+const failedChildStreamId = 'codex#c11116' as StreamTabId;
+const normalizedErrorExecutionId = 'c11117' as ExecutionId;
+const normalizedErrorChildStreamId = 'codex#c11117' as StreamTabId;
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',

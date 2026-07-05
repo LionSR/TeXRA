@@ -250,7 +250,7 @@ describe('ProgressBackend', () => {
 
       bus.emit('setTaskState', {
         streamId: 'child',
-        executionId: 'exec-child',
+        executionId: 'c41111',
         taskState: toolUseTaskState('search', 'deepseekproT'),
       });
 
@@ -266,7 +266,7 @@ describe('ProgressBackend', () => {
             label: 'search',
             agent: 'search',
             model: 'deepseekproT',
-            executionId: 'exec-child',
+            executionId: 'c41111',
           },
         }),
       );

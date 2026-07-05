@@ -1,12 +1,8 @@
 /**
  * Bridge a run's `conversationProgress` domain events to its host's
  * `updateConversationProgress` UI event — the single derivation point (F-1b)
- * for both agent categories. Workflow and tool-use flows count turns
- * differently (round index vs. tool-call-bearing overview updates) and keep
- * computing their own numbers via {@link logConversationProgress}; this hub
- * is the only place that turns that single producer emission into the host
- * event, replacing the two call sites that used to call `runtimeHost.emit`
- * directly from `executeAgent.ts`.
+ * for tool-call counts. Round/turn labels now come from typed `stage.start`
+ * metadata with `kind: "round"`.
  */
 import type { ConversationProgress, StreamTabId } from '@shared/schemas';
 import { isObject } from '@utils/core';
@@ -20,11 +16,7 @@ import type { SessionEventHub } from './SessionEventHub';
  *  producer emits `conversationProgress`, but the check keeps a malformed or
  *  missing payload from forwarding `undefined`/partial data to the host. */
 function isConversationProgress(data: unknown): data is ConversationProgress {
-  return (
-    isObject(data) &&
-    Number.isFinite(data.conversationTurns) &&
-    Number.isFinite(data.toolCallCount)
-  );
+  return isObject(data) && Number.isFinite(data.toolCallCount);
 }
 
 /** Returns a detach disposer; callers bundle it into the run's trace teardown. */

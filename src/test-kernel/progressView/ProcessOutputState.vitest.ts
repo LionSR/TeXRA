@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports - progress view frontend
 import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
 import { streamMetaHandlers } from '@progressView/frontend/slices/streamMetaSlice';
+import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
 import {
   createInitialState,
   type ProgressState,
@@ -154,9 +155,9 @@ describe('process output frontend state', () => {
           status: STREAM_PHASE.WAITING,
           lastTimestamp: 9,
           conversationProgress: {
-            conversationTurns: 2,
             toolCallCount: 3,
           },
+          roundStage: { index: 1 },
           activeSubagents: [],
           finishedSubagentCount: 1,
           activeProcesses: [
@@ -182,9 +183,9 @@ describe('process output frontend state', () => {
       status: STREAM_PHASE.WAITING,
       lastTimestamp: 9,
       conversationProgress: {
-        conversationTurns: 2,
         toolCallCount: 3,
       },
+      roundStage: { index: 1 },
       finishedSubagentCount: 1,
       activeProcesses: [
         {
@@ -330,7 +331,6 @@ describe('process output frontend state', () => {
             status: STREAM_PHASE.COMPLETED,
             lastTimestamp: 2,
             conversationProgress: {
-              conversationTurns: 0,
               toolCallCount: 0,
             },
             activeSubagents: [],
@@ -347,6 +347,35 @@ describe('process output frontend state', () => {
       STREAM_PHASE.COMPLETED,
     );
     expect(getState().streamStates.get(streamId)?.substate).toBeUndefined();
+  });
+
+  it('clears round stage when synced content explicitly clears it', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    registerWorkflowStream(state, streamId);
+    state.streamStates.set(
+      streamId,
+      createStreamState(AgentCategory.Workflow, {
+        roundStage: { index: 2 },
+      } satisfies Partial<StreamState>),
+    );
+    const { ctx, getState } = createContext(state);
+
+    dispatch(
+      syncHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+        stream: streamId,
+        action: 'render',
+        todos: [],
+        plan: null,
+        queuedFollowUps: [],
+        roundStage: undefined,
+      } as ProgressViewOutboundMessage,
+      ctx,
+    );
+
+    expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
   });
 
   it('clears a stream parent when update parent stream receives null', () => {

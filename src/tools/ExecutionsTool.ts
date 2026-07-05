@@ -98,7 +98,7 @@ const ExecutionsToolInputSchema = z.strictObject({
       'view: read execution data (returns immediately). ' +
         'wait: wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops). ' +
         'kill: terminate a running execution by ID (use on /executions/{id}). ' +
-        'subscribe: receive future status/progress changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released. ' +
+        'subscribe: receive future status changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released. ' +
         'unsubscribe: stop receiving <execution-activity> follow-ups for /executions/{id}.',
     ),
 
@@ -172,7 +172,7 @@ export class ExecutionsTool extends defineTool({
 
 Paths:
 - /executions - List executions (paginated; use offset/limit for pages)
-- /executions/{id} - Execution summary (agent, model, timestamp, status, progress, children, todos)
+- /executions/{id} - Execution summary (agent, model, timestamp, status, children, todos)
 - /executions/{id}/config - Agent configuration JSON
 - /executions/{id}/conversation - Full message history (subagents)
 - /executions/{id}/todos - Task list (tool-use subagents)
@@ -190,7 +190,7 @@ Use view_range: [start, end] to paginate conversation, output, and file content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
 Use action: "kill" on /executions/{id} to terminate a running execution.
-Use action: "subscribe" on /executions/{id} to receive future status, progress, and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.`,
+Use action: "subscribe" on /executions/{id} to receive future status and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
@@ -607,7 +607,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     return {
       status: 'executed',
       summary: `Subscribed to ${executionId}`,
-      output: `Subscribed to ${executionId}. Status, round, and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`,
+      output: `Subscribed to ${executionId}. Status and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`,
     };
   }
 

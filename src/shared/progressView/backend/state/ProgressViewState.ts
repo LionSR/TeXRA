@@ -22,6 +22,7 @@ import {
   type AgentCategoryFilter,
   type ConversationProgress,
   type ContextStateData,
+  type RoundStage,
   type StreamTabId,
 } from '@shared/schemas';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
@@ -76,6 +77,7 @@ type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
 export interface StreamExecutionState {
   kind: (typeof AgentCategory)[keyof typeof AgentCategory];
   conversationProgress: ConversationProgress;
+  roundStage?: RoundStage;
   activeSubagents: ActiveChildInfo[];
   finishedSubagentCount: number;
   activeProcesses: ActiveChildInfo[];
@@ -100,7 +102,7 @@ function createExecutionState(
 ): StreamExecutionState {
   return {
     kind,
-    conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
+    conversationProgress: { toolCallCount: 0 },
     activeSubagents: [],
     finishedSubagentCount: 0,
     activeProcesses: [],
@@ -280,15 +282,16 @@ export class ProgressViewState {
     const needsReset =
       current.finishedSubagentCount !== 0 ||
       current.finishedProcessCount !== 0 ||
-      current.conversationProgress.conversationTurns !== 0 ||
-      current.conversationProgress.toolCallCount !== 0;
+      current.conversationProgress.toolCallCount !== 0 ||
+      current.roundStage !== undefined;
 
     if (needsReset) {
       this._streamStates.set(stream, {
         ...current,
         finishedSubagentCount: 0,
         finishedProcessCount: 0,
-        conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
+        conversationProgress: { toolCallCount: 0 },
+        roundStage: undefined,
       });
     }
   }

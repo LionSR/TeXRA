@@ -213,7 +213,12 @@ export function attachTranscriptRecorder(
           groupId: event.parentId,
           messageType: MESSAGE_TYPES.DEFAULT,
           text: event.label,
-          data: { status: 'running' },
+          data: {
+            status: 'running',
+            ...(event.kind ? { kind: event.kind } : {}),
+            ...(event.index !== undefined ? { index: event.index } : {}),
+            ...(event.total !== undefined ? { total: event.total } : {}),
+          },
           verbose: isDebugModeEnabled(),
         });
         return;
@@ -386,6 +391,12 @@ export function attachTranscriptRecorder(
         // The terminal outcome is consumed by hosts via `session.onResult`.
         // The transcript already reflects completion through `stage.end`, so it
         // adds no row here (keeps transcript output unchanged).
+        return;
+
+      case 'run.start':
+      case 'run.config':
+        // Run identity/config facts drive host state through the session plane.
+        // They are not transcript rows.
         return;
 
       case 'child.activity':

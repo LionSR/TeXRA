@@ -18,12 +18,6 @@ import {
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { RunCoordinators } from './RunContext';
 
-/** Round counters tracked per execution (both absent until the first update). */
-export interface ExecutionProgress {
-  currentRound?: number;
-  totalRounds?: number;
-}
-
 export interface ExecutionStatusInfo {
   status: string;
   elapsed: string | null;
@@ -44,10 +38,6 @@ export interface ExecutionHandle {
   readonly agentName: string;
   readonly startedAt: number;
   readonly runtimeHost: AgentRuntimeHost;
-
-  getProgress(): ExecutionProgress;
-
-  updateProgress(update: ExecutionProgress): void;
 }
 
 export interface LiveToolUseFlowContext {
@@ -71,7 +61,6 @@ export interface LiveToolUseFlowContext {
  */
 export class AgentExecutionHandle implements ExecutionHandle {
   readonly startedAt = Date.now();
-  private progress: ExecutionProgress = {};
   private _parentStreamId: StreamTabId;
   private _deliveryTargetStreamId: StreamTabId | undefined;
   private toolUseFlowContext?: LiveToolUseFlowContext;
@@ -128,14 +117,6 @@ export class AgentExecutionHandle implements ExecutionHandle {
     this._parentStreamId = this.childStreamId;
   }
 
-  getProgress(): ExecutionProgress {
-    return { ...this.progress };
-  }
-
-  updateProgress(update: ExecutionProgress): void {
-    Object.assign(this.progress, update);
-  }
-
   attachToolUseFlow(context: LiveToolUseFlowContext): void {
     if (this.category !== 'toolUse') {
       throw new Error('Only tool-use execution handles can attach tool flows.');
@@ -164,7 +145,6 @@ export type AgentRunHandle = Pick<
   | 'runtimeHost'
   | 'trace'
   | 'result'
-  | 'getProgress'
 >;
 
 /**
@@ -191,14 +171,6 @@ export class ProcessExecutionHandle implements ExecutionHandle {
 
   terminate(): boolean {
     return this.killFn();
-  }
-
-  getProgress(): ExecutionProgress {
-    return {};
-  }
-
-  updateProgress(): void {
-    // Processes don't have round progress.
   }
 }
 

@@ -170,6 +170,14 @@ function applyToState<K extends ProgressEvent>(
       }));
       return;
     }
+    case 'updateRoundStage': {
+      const p = payload as ProgressEventPayloads['updateRoundStage'];
+      patchStream(p.streamId, (s) => ({
+        ...s,
+        roundStage: p.roundStage,
+      }));
+      return;
+    }
     case 'updateStreamDescription': {
       const p = payload as ProgressEventPayloads['updateStreamDescription'];
       patchStream(p.streamId, (s) => ({

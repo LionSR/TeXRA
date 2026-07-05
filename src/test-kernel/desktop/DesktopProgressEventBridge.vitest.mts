@@ -86,6 +86,7 @@ function makeMockState(overrides: Record<string, any> = {}): any {
     updateStreamHints: vi.fn(),
     snapshots: {
       getTaskState: vi.fn(() => undefined),
+      getRunConfig: vi.fn(() => undefined),
       getExecutionId: vi.fn(() => undefined),
       getParentStreamId: vi.fn(() => undefined),
       getDescription: vi.fn(() => undefined),

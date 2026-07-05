@@ -37,11 +37,20 @@ export const ActiveChildInfoSchema = z.object({
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 
-// Conversation Progress (ephemeral counters updated during execution)
+// Round Stage (ephemeral round label from typed stage.start metadata)
+
+export const RoundStageSchema = z.object({
+  /** Zero-based round/turn index. */
+  index: z.int().nonnegative(),
+  /** Planned total, when known. Workflow runs set this; tool-use turns may not. */
+  total: z.int().positive().optional(),
+});
+
+export type RoundStage = z.infer<typeof RoundStageSchema>;
+
+// Conversation Progress (tool-call counters updated during execution)
 
 export const ConversationProgressSchema = z.object({
-  /** Number of conversation turns (model invocations) completed. */
-  conversationTurns: z.number().prefault(0),
   /** Cumulative number of individual tool calls executed. */
   toolCallCount: z.number().prefault(0),
 });
@@ -49,7 +58,6 @@ export const ConversationProgressSchema = z.object({
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
 export const DEFAULT_CONVERSATION_PROGRESS: ConversationProgress = {
-  conversationTurns: 0,
   toolCallCount: 0,
 };
 
@@ -66,6 +74,7 @@ const BackendOwnedFieldsSchema = z.object({
   conversationProgress: ConversationProgressSchema.prefault(
     DEFAULT_CONVERSATION_PROGRESS,
   ),
+  roundStage: RoundStageSchema.optional(),
   activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
   finishedSubagentCount: z.number().prefault(DEFAULT_FINISHED_CHILD_COUNT),
   activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),

@@ -95,6 +95,9 @@ export class TaskGroupList extends LitElement {
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
 
+  /** Whether the active stream is an interactive tool-use stream. */
+  @property({ type: Boolean }) isToolUse = false;
+
   /** Status for the active stream, used while a run exists before logs arrive. */
   @property({ attribute: false }) streamStatus: string | null = null;
 
@@ -289,7 +292,10 @@ export class TaskGroupList extends LitElement {
     const nextStatuses = new Map<string, string>();
     for (const group of this.groups) {
       const prev = this.previousStatuses.get(group.id);
-      const isRunGroup = /^r\d+$/.test(group.name);
+      const isRunGroup =
+        !this.isToolUse &&
+        (group.kind === 'round' ||
+          (group.kind === undefined && /^r\d+$/.test(group.name)));
       const wasRunning = prev === STREAM_STATUS.RUNNING;
       const isNowComplete =
         group.status === STREAM_STATUS.READY ||
