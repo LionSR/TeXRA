@@ -63,15 +63,14 @@ import {
   formatCliHistoryNotFoundText,
   formatCliHistoryText,
   formatInvalidExportFormatText,
-  isRemoteCliHistoryExportAssetsHref,
   listCliHistoryEntries,
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
   readCliHistoryConfig,
   readCliHistoryDetails,
   readCliHistoryExportInput,
-  resolveCliHistoryExportAssetsHref,
-  stageCliHistoryExportAssets,
+  readCliHistoryStandaloneTemplate,
+  stageCliHistoryTraceViewerAssets,
 } from '@cli/runtime/history';
 
 const config = {
@@ -1006,7 +1005,7 @@ describe('CLI history runtime', () => {
     expect(GoalStore.getForStream(live)?.objective).toBe('keep me');
   });
 
-  describe('history export (--export / --assets)', () => {
+  describe('history export (--export / --assets-dir)', () => {
     it('quotes the value in an invalid --export message, including an empty string', () => {
       expect(formatInvalidExportFormatText('csv')).toBe(
         'Invalid export format: "csv" (use html or md)',
@@ -1015,23 +1014,6 @@ describe('CLI history runtime', () => {
       // with a confusing double space.
       expect(formatInvalidExportFormatText('')).toBe(
         'Invalid export format: "" (use html or md)',
-      );
-    });
-
-    it('resolves a blank --assets value to the documented ./assets default', () => {
-      // `--assets ''` must behave identically to omitting the flag, not
-      // produce a broken empty href passed straight to the formatter.
-      expect(resolveCliHistoryExportAssetsHref(undefined)).toBeUndefined();
-      expect(resolveCliHistoryExportAssetsHref('')).toBeUndefined();
-      expect(resolveCliHistoryExportAssetsHref('   ')).toBeUndefined();
-    });
-
-    it('trims a custom --assets href but otherwise passes it through', () => {
-      expect(resolveCliHistoryExportAssetsHref('./custom-assets')).toBe(
-        './custom-assets',
-      );
-      expect(resolveCliHistoryExportAssetsHref('  https://cdn/assets  ')).toBe(
-        'https://cdn/assets',
       );
     });
 
@@ -1128,38 +1110,38 @@ describe('CLI history runtime', () => {
       ).resolves.toEqual({ status: 'incomplete' });
     });
 
-    it('stages the bundled HTML export assets into the destination directory', async () => {
+    it('stages the bundled trace-viewer shared bundle into the destination directory', async () => {
       await withTempDir('texra-history-export-src-', async (resourcesPath) => {
         await withTempDir('texra-history-export-dest-', async (cwd) => {
-          const htmlExportDir = path.join(resourcesPath, 'htmlExport');
-          await mkdir(htmlExportDir, { recursive: true });
+          const traceViewerDir = path.join(resourcesPath, 'traceViewer');
+          await mkdir(traceViewerDir, { recursive: true });
           await writeFile(
-            path.join(htmlExportDir, 'katex.min.css'),
-            '.katex{}',
+            path.join(traceViewerDir, 'index.html'),
+            '<html></html>',
           );
 
-          const destDir = path.join(cwd, 'assets');
-          const result = await stageCliHistoryExportAssets({
+          const destDir = path.join(cwd, 'shared-assets');
+          const result = await stageCliHistoryTraceViewerAssets({
             resourcesPath,
             destDir,
           });
 
           expect(result).toBe('staged');
           expect(
-            await readFile(path.join(destDir, 'katex.min.css'), 'utf8'),
-          ).toBe('.katex{}');
+            await readFile(path.join(destDir, 'index.html'), 'utf8'),
+          ).toBe('<html></html>');
         });
       });
     });
 
-    it('reports "missing" instead of throwing when bundled assets are absent', async () => {
+    it('reports "missing" instead of throwing when the bundled trace-viewer assets are absent', async () => {
       await withTempDir(
         'texra-history-export-empty-',
         async (resourcesPath) => {
           await withTempDir('texra-history-export-dest-', async (cwd) => {
-            const result = await stageCliHistoryExportAssets({
+            const result = await stageCliHistoryTraceViewerAssets({
               resourcesPath,
-              destDir: path.join(cwd, 'assets'),
+              destDir: path.join(cwd, 'shared-assets'),
             });
 
             expect(result).toBe('missing');
@@ -1169,63 +1151,72 @@ describe('CLI history runtime', () => {
     });
 
     it('merges into a pre-existing destination directory instead of nesting under it', async () => {
-      // A repeat export, or a repo that already checked in an `assets/`
-      // folder, must not turn `./assets/katex.min.css` into
-      // `./assets/htmlExport/katex.min.css`.
+      // A repeat export pointed at the same --assets-dir must not turn
+      // `<dir>/assets/index-xxx.js` into `<dir>/traceViewer/assets/index-xxx.js`.
       await withTempDir('texra-history-export-src-', async (resourcesPath) => {
         await withTempDir('texra-history-export-dest-', async (cwd) => {
-          const htmlExportDir = path.join(resourcesPath, 'htmlExport');
-          await mkdir(path.join(htmlExportDir, 'fonts'), { recursive: true });
+          const traceViewerDir = path.join(resourcesPath, 'traceViewer');
+          await mkdir(path.join(traceViewerDir, 'assets'), {
+            recursive: true,
+          });
           await writeFile(
-            path.join(htmlExportDir, 'katex.min.css'),
-            '.katex{}',
+            path.join(traceViewerDir, 'index.html'),
+            '<html></html>',
           );
           await writeFile(
-            path.join(htmlExportDir, 'fonts', 'a.woff2'),
-            'font-bytes',
+            path.join(traceViewerDir, 'assets', 'index.js'),
+            'js-bytes',
           );
 
-          const destDir = path.join(cwd, 'assets');
+          const destDir = path.join(cwd, 'shared-assets');
           await mkdir(destDir, { recursive: true });
           await writeFile(
-            path.join(destDir, 'unrelated.txt'),
-            'pre-existing file',
+            path.join(destDir, 'trace.json'),
+            'pre-existing trace data',
           );
 
-          await stageCliHistoryExportAssets({ resourcesPath, destDir });
-          // Stage again — the common "repeat export into the same cwd" case.
-          const result = await stageCliHistoryExportAssets({
+          await stageCliHistoryTraceViewerAssets({ resourcesPath, destDir });
+          // Stage again — the common "many exports, one shared dir" case.
+          const result = await stageCliHistoryTraceViewerAssets({
             resourcesPath,
             destDir,
           });
 
           expect(result).toBe('staged');
           expect(
-            await readFile(path.join(destDir, 'katex.min.css'), 'utf8'),
-          ).toBe('.katex{}');
+            await readFile(path.join(destDir, 'index.html'), 'utf8'),
+          ).toBe('<html></html>');
           expect(
-            await readFile(path.join(destDir, 'fonts', 'a.woff2'), 'utf8'),
-          ).toBe('font-bytes');
+            await readFile(path.join(destDir, 'assets', 'index.js'), 'utf8'),
+          ).toBe('js-bytes');
           expect(
-            await readFile(path.join(destDir, 'unrelated.txt'), 'utf8'),
-          ).toBe('pre-existing file');
+            await readFile(path.join(destDir, 'trace.json'), 'utf8'),
+          ).toBe('pre-existing trace data');
         });
       });
     });
 
-    it('identifies remote (URL-scheme) hrefs so staging is skipped for them', () => {
-      expect(isRemoteCliHistoryExportAssetsHref(undefined)).toBe(false);
-      expect(isRemoteCliHistoryExportAssetsHref('./assets')).toBe(false);
-      expect(isRemoteCliHistoryExportAssetsHref('assets')).toBe(false);
-      expect(isRemoteCliHistoryExportAssetsHref('/abs/path/assets')).toBe(
-        false,
-      );
-      expect(isRemoteCliHistoryExportAssetsHref('https://cdn/assets')).toBe(
-        true,
-      );
-      expect(isRemoteCliHistoryExportAssetsHref('http://cdn/assets')).toBe(
-        true,
-      );
+    it('reads the bundled trace-viewer standalone template', async () => {
+      await withTempDir('texra-history-standalone-', async (resourcesPath) => {
+        const standaloneDir = path.join(resourcesPath, 'traceViewerStandalone');
+        await mkdir(standaloneDir, { recursive: true });
+        await writeFile(
+          path.join(standaloneDir, 'index.html'),
+          '<html>standalone</html>',
+        );
+
+        await expect(
+          readCliHistoryStandaloneTemplate(resourcesPath),
+        ).resolves.toBe('<html>standalone</html>');
+      });
+    });
+
+    it('returns null instead of throwing when the standalone template is absent', async () => {
+      await withTempDir('texra-history-standalone-empty-', async (resourcesPath) => {
+        await expect(
+          readCliHistoryStandaloneTemplate(resourcesPath),
+        ).resolves.toBeNull();
+      });
     });
   });
 });

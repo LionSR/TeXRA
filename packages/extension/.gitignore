@@ -4,12 +4,10 @@
 README.md
 CHANGELOG.md
 
-# Copied from node_modules by scripts/copy-html-export-assets.mjs during
-# `pnpm run package:fast` so the HTML chat export ships with KaTeX +
-# highlight.js styling.
-resources/htmlExport/
-
-# Built by packages/trace-viewer's vite config during `pnpm run package:fast`
-# (prepare:trace-viewer-assets) — the static trace-viewer bundle used by the
-# `--export trace` CLI export.
+# Built by packages/trace-viewer's vite configs during `pnpm run package:fast`
+# (prepare:trace-viewer-assets) — the multi-file bundle (shared-assets export
+# mode, served over http/https) and the single-file, fully self-contained
+# bundle (default export mode, opens via file:// with no server) used by the
+# `--export html` CLI export and the Settings view's "Export as HTML" button.
 resources/traceViewer/
+resources/traceViewerStandalone/
