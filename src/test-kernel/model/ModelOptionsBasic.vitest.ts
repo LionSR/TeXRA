@@ -6,6 +6,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import {
   computeModelListVersion,
   DEFAULT_MODELS,
+  isDeprecatedModel,
   isRetiredModel,
   MODEL_LIST_VERSION,
   resolveDefaultModels,
@@ -61,6 +62,10 @@ describe('default model list', () => {
   it('does not include retired models', () => {
     expect(DEFAULT_MODELS.filter(isRetiredModel)).toEqual([]);
   });
+
+  it('does not include deprecated models', () => {
+    expect(DEFAULT_MODELS.filter(isDeprecatedModel)).toEqual([]);
+  });
 });
 
 /**
@@ -81,7 +86,13 @@ describe('resolveDefaultModels', () => {
     expect(resolved).toEqual(['opus48T']);
   });
 
-  it('keeps every preferred pick when none are retired', () => {
+  it('drops a preferred pick the live registry marks deprecated', () => {
+    expect(MODEL_CONFIGS.gpt54?.deprecated).toBe(true);
+    const resolved = resolveDefaultModels(['opus48T', 'gpt54']);
+    expect(resolved).toEqual(['opus48T']);
+  });
+
+  it('keeps every preferred pick when none are retired or deprecated', () => {
     const preferred = ['opus48T', 'gemini31p'];
     expect(resolveDefaultModels(preferred)).toEqual(preferred);
   });
