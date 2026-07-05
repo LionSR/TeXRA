@@ -70,6 +70,14 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
     subtitleEl = shell.subtitleEl ?? null;
     const d = shell.dialog;
 
+    // `createOverlayDialog` already appended `d` to `appRoot` above, before
+    // these listeners are registered. That's safe: `wa-dialog.open` defaults
+    // to false and nothing before this point sets it, so `wa-hide`/
+    // `wa-after-hide` (only dispatched from `requestClose()`, which requires
+    // the dialog to already be showModal'd) cannot fire until `open()` below
+    // sets `d.open = true`, which happens after this listener registration
+    // has already returned.
+    //
     // `wa-hide` fires for every close (close button, Escape, close()); open()
     // sets wantOpen back to true. wa-after-hide runs after the hide animation
     // — by which point a reopen during the animation has set a new src and
