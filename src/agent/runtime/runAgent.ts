@@ -54,9 +54,8 @@ export interface RunAgentOptions {
  * workflow result — invokes `openWorkflowOutput` so the host can surface output.
  *
  * Use this unless you need per-chunk streaming/lifecycle callbacks or subagent
- * lineage; for those, drop to the lower-level engine `executeAgent` (exported
- * as `runAgentStream` from `@texra/core`), where the caller owns executionId
- * generation and `registerExecution`.
+ * lineage; for those, drop to the lower-level engine `executeAgent`, where the
+ * caller owns executionId generation and `registerExecution`.
  */
 export async function runAgent(
   request: ValidatedExecutionRequest,
