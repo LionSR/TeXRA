@@ -139,6 +139,13 @@ export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
   return z.record(z.string(), z.array(valueSchema)).prefault({});
 }
 
+/**
+ * Map keyed by round number to arrays of `T`, e.g. `{ 1: T[], 2: T[], … }`.
+ * Used to batch round-scoped data (output files, missing-output paths,
+ * compile failures) for a subset of rounds without touching the others.
+ */
+export type RoundIndexed<T> = { [round: number]: T[] };
+
 export const RoundOutputSchema = z.strictObject({
   round: z.number(),
   rawOutput: FileLocationSchema.nullable(),

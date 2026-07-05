@@ -224,7 +224,10 @@ export class PersistedFlow<
     mutate?: (flow: FlowRecord) => void,
   ): Promise<void> {
     const key = flowKey(this.runId);
-    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
+    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key));
+    if (!flow) {
+      throw new Error('Invalid or corrupted flow record');
+    }
     this.cachedRecord = null;
     mutate?.(flow);
     flow.shared = this.serializeShared(shared);
