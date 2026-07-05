@@ -101,6 +101,7 @@ import {
   type StreamLifecycleStatus,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { migrateLegacyGlobalBashApprovalOverride } from '@shared/settingsView/handlers/approvalHandlers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
@@ -354,6 +355,14 @@ export async function activate(context: vscode.ExtensionContext) {
     // config to TeXRA workspace storage. Safe to run on every activation —
     // a key already in workspaceSM is left untouched.
     migrateLatexConfigToStorage(),
+    // One-shot per-workspace migration of a legacy global-scope bash-approval
+    // override left over from before #7148 unified the write scope to
+    // workspace (issue #7169). Safe to run on every activation — the
+    // workspace-scoped marker makes it a no-op after the first run.
+    migrateLegacyGlobalBashApprovalOverride({
+      workspaceState: workspaceSM,
+      config: platform().config,
+    }),
     (async () => {
       await copyDefaultAgents(context);
       await registerAgentDirectoryRoots(context);
