@@ -279,8 +279,9 @@ injected). Implements: meta parsing/validation (Zod), import ban,
 `node:vm` sandbox with determinism guards, `agent()` / `parallel()` /
 `pipeline()` / `concat()` / `log()` / `phase()` / `args`, concurrency
 semaphore, call cap, fan-out caps, wall-clock timeout, and journal-based
-resume. 18 Vitest cases in
-`src/test-kernel/agent/WorkflowScriptEngine.vitest.ts` cover parsing,
+resume. The Vitest suite in
+`src/test-kernel/agent/WorkflowScriptEngine.vitest.ts` covers parsing,
 no-barrier pipeline semantics, semaphore bounds, failure-to-null, resume
-replay, and determinism guards. Not yet wired to `executeSubagent` — see
+replay, determinism guards, and sandbox-escape prevention. Not yet wired
+to `executeSubagent` — see
 `src/agent/workflowScript/README.md` for the integration checklist.
