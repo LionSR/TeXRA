@@ -150,6 +150,28 @@ describe('rewriteCodexRequestBody', () => {
     rewriteCodexRequestBody(body);
     expect(body).toEqual(snapshot);
   });
+
+  it.each(['high', 'xhigh'])(
+    'clamps %s reasoning effort down to medium (no background mode to absorb a long synchronous turn)',
+    (effort) => {
+      const out = rewriteCodexRequestBody({
+        input: [{ role: 'user', content: 'hi' }],
+        reasoning: { effort },
+      });
+      expect(out.reasoning).toEqual({ effort: 'medium' });
+    },
+  );
+
+  it.each(['low', 'medium'])(
+    'leaves %s reasoning effort unchanged',
+    (effort) => {
+      const out = rewriteCodexRequestBody({
+        input: [{ role: 'user', content: 'hi' }],
+        reasoning: { effort },
+      });
+      expect(out.reasoning).toEqual({ effort });
+    },
+  );
 });
 
 describe('isGenerationRequest', () => {
