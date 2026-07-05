@@ -644,4 +644,69 @@ describe('ProgressBackend', () => {
       session.dispose();
     }
   });
+
+  it('continues sweeping streamData orphans when one execution cleanup fails', async () => {
+    const failingStream = 'tool@deepseek#f6966f' as StreamTabId;
+    const sweptStream = 'tool@deepseek#a6966a' as StreamTabId;
+    const failingExecution = 'f6966f' as ExecutionId;
+    const sweptExecution = 'a6966a' as ExecutionId;
+    const seed = new StreamSnapshotStore();
+    await seed.load([failingStream, sweptStream]);
+    seed.setTaskState(
+      failingStream,
+      toolUseTaskState('search', 'deepseekproT'),
+      failingExecution,
+    );
+    seed.setTaskState(
+      sweptStream,
+      toolUseTaskState('search', 'deepseekproT'),
+      sweptExecution,
+    );
+    await writeExecutionConfig(failingExecution);
+    await writeExecutionConfig(sweptExecution);
+    await seed.flush();
+
+    const { backend, session } = createIsolatedRecordingBackend();
+    const stores = backend.state.stores as unknown as {
+      deleteExecution(executionId: ExecutionId): Promise<boolean>;
+    };
+    const originalDeleteExecution = stores.deleteExecution.bind(
+      backend.state.stores,
+    );
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const deleteExecutionSpy = vi
+      .spyOn(stores, 'deleteExecution')
+      .mockImplementation(async (executionId) => {
+        if (executionId === failingExecution) {
+          throw new Error('locked execution dir');
+        }
+        return originalDeleteExecution(executionId);
+      });
+
+    try {
+      await expect(backend.state.load()).resolves.toBeUndefined();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        'SessionStores',
+        `Skipping orphaned execution cleanup for ${failingExecution}; startup will continue.`,
+        { data: expect.any(Error) },
+      );
+      expect(await StorageFS.exists(streamDataDir(failingStream))).toBe(false);
+      expect(await StorageFS.exists(`executions/${failingExecution}`)).toBe(
+        true,
+      );
+      expect(await StorageFS.exists(streamDataDir(sweptStream))).toBe(false);
+      expect(await StorageFS.exists(`executions/${sweptExecution}`)).toBe(
+        false,
+      );
+    } finally {
+      deleteExecutionSpy.mockRestore();
+      warnSpy.mockRestore();
+      await getExecutionStore(failingExecution).clear();
+      await getExecutionStore(sweptExecution).clear();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
 });
