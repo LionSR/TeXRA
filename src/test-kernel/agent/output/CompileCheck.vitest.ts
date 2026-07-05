@@ -334,6 +334,44 @@ describe('runCompileCheck', () => {
     await expect(flexibleFS.read(logLocation)).rejects.toThrow();
   });
 
+  it('clears a pre-hash-suffix legacy log left over from before this fix', async () => {
+    // Before the collision-free hash suffix, the log for "main.tex" at round 0
+    // would have been written to "r0_main.tex.log" (no hash). A run resumed
+    // under the fixed code must still clean that legacy name up on success,
+    // not just the new hashed name it now writes to.
+    const executionId = 'compile-legacy-log';
+    const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
+    const legacyLogPath = path.join(
+      runDir(executionId),
+      'compile',
+      'r0_main.tex.log',
+    );
+    await initLatexPlatform({
+      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
+      [legacyLogPath]: 'Compile check failed for main.tex (pre-upgrade)\n',
+    });
+
+    const outputState = createOutputState();
+    ensureRoundData(outputState, 0).outputs = [
+      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
+    ];
+
+    const result = await runCompileCheck(
+      {
+        fileService: new TaskRunFileService(executionId),
+        outputState,
+        logger: logger(),
+        streamId: 'compile-stream',
+      },
+      0,
+    );
+
+    expect(result.compileResult?.status).toBe('ok');
+    await expect(
+      flexibleFS.read(pathToLocation(legacyLogPath)),
+    ).rejects.toThrow();
+  });
+
   it('gives colliding-after-sanitization paths distinct, non-clobbering log slots', async () => {
     const executionId = 'compile-collision';
     // Both sanitize (non [a-zA-Z0-9._-] -> "_") to the same "dir_a_b.tex":
