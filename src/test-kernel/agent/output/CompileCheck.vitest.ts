@@ -1,0 +1,391 @@
+// Standard library imports
+import * as path from 'node:path';
+
+// Third-party imports
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Local imports - agent
+import type { AgentTrace } from '@agent/trace';
+import { runCompileCheck } from '@agent/output/compileCheck';
+import { createOutputState, ensureRoundData } from '@agent/output/outputState';
+
+// Local imports - shared
+import type {
+  ExecutionId,
+  FileLocation,
+  OutputFileInfo,
+} from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+
+// Local imports - file utilities
+import {
+  TaskRunFileService,
+  createRunStorageLocation,
+  flexibleFS,
+  pathToLocation,
+} from '@utils/files';
+
+interface FakeCompileOptions {
+  outputDirectory?: string;
+}
+
+const mocks = vi.hoisted(() => ({
+  compileLatex2Pdf: vi.fn(
+    async (_location: FileLocation, _options?: FakeCompileOptions) => true,
+  ),
+  hasLatexCompiler: vi.fn(async () => true),
+}));
+
+vi.mock('@latex/texTools', () => ({
+  compileLatex2Pdf: mocks.compileLatex2Pdf,
+}));
+
+vi.mock('@latex/latexToolchain', () => ({
+  hasLatexCompiler: mocks.hasLatexCompiler,
+}));
+
+const storagePath = '/storage';
+const workspacePath = '/workspace';
+
+function runDir(executionId: ExecutionId): string {
+  return path.join(storagePath, 'executions', executionId);
+}
+
+function runStorageFile(
+  executionId: ExecutionId,
+  relativePath: string,
+): FileLocation {
+  return createRunStorageLocation(
+    path.join(runDir(executionId), relativePath),
+    relativePath,
+    executionId,
+  );
+}
+
+function outputFile(
+  executionId: ExecutionId,
+  relativePath: string,
+  source: string,
+  round: number,
+): OutputFileInfo {
+  return {
+    source,
+    round,
+    location: runStorageFile(executionId, relativePath),
+    lineage: null,
+    diff: null,
+  };
+}
+
+function logger(): AgentTrace {
+  return {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  } as unknown as AgentTrace;
+}
+
+async function initLatexPlatform(files: Record<string, string>): Promise<void> {
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  initPlatform(
+    createFakePlatform({
+      files,
+      storagePath,
+      workspacePath,
+      workspaceState: {
+        [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: true,
+        [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
+      },
+    }),
+  );
+}
+
+// Writes a fake LaTeX build log next to where `compileLatex2Pdf` was asked to
+// build, so `readLogTail` (which greps for `<basename>.log` in the reported
+// build directory) finds something real rather than falling back to "(no
+// LaTeX log at ...)". Lets tests control the tail's exact line content
+// without needing to reproduce compileCheck's internal safeName/hash scheme.
+async function seedLatexLog(
+  outputDirectory: string,
+  texAbsolutePath: string,
+  content: string,
+): Promise<void> {
+  const basenameNoExt = path.basename(texAbsolutePath).replace(/\.tex$/i, '');
+  const logDest = pathToLocation(
+    path.join(outputDirectory, `${basenameNoExt}.log`),
+  );
+  await flexibleFS.ensureDir(pathToLocation(outputDirectory));
+  await flexibleFS.write(logDest, content);
+}
+
+describe('runCompileCheck', () => {
+  beforeEach(() => {
+    mocks.compileLatex2Pdf.mockReset();
+    mocks.compileLatex2Pdf.mockResolvedValue(true);
+    mocks.hasLatexCompiler.mockReset();
+    mocks.hasLatexCompiler.mockResolvedValue(true);
+  });
+
+  it('counts a per-file exception as a failure, never a silent skip', async () => {
+    const executionId = 'compile-exception';
+    // No file is seeded at the tex path, so flexibleFS.read throws ENOENT
+    // before compileLatex2Pdf is ever invoked.
+    await initLatexPlatform({});
+
+    const outputState = createOutputState();
+    ensureRoundData(outputState, 0).outputs = [
+      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
+    ];
+
+    const result = await runCompileCheck(
+      {
+        fileService: new TaskRunFileService(executionId),
+        outputState,
+        logger: logger(),
+        streamId: 'compile-stream',
+      },
+      0,
+    );
+
+    expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
+    expect(result.compileResult?.status).toBe('failed');
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0].displayName).toBe('main.tex');
+    if (result.compileResult?.status === 'failed') {
+      expect(result.compileResult.logExcerpt).toContain(
+        'Compile check errored for main.tex',
+      );
+    }
+
+    // The synthetic excerpt is persisted like a real failure so it stays
+    // discoverable on disk, not just in-memory.
+    const persisted = await flexibleFS.read(result.failures[0].log);
+    expect(persisted).toContain('Compile check errored for main.tex');
+  });
+
+  it('treats a fragment with no \\documentclass as a graceful skip, not a failure', async () => {
+    const executionId = 'compile-fragment';
+    const texPath = path.join(runDir(executionId), 'r0', 'chunk.tex');
+    await initLatexPlatform({
+      [texPath]: '\\section{Included fragment}\n',
+    });
+
+    const outputState = createOutputState();
+    ensureRoundData(outputState, 0).outputs = [
+      outputFile(executionId, path.join('r0', 'chunk.tex'), 'chunk.tex', 0),
+    ];
+
+    const result = await runCompileCheck(
+      {
+        fileService: new TaskRunFileService(executionId),
+        outputState,
+        logger: logger(),
+        streamId: 'compile-stream',
+      },
+      0,
+    );
+
+    expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
+    expect(result.failures).toHaveLength(0);
+    expect(result.compileResult?.status).toBe('ok');
+  });
+
+  it('truncates a single failing log tail to the last 200 lines', async () => {
+    const executionId = 'compile-tail-truncation';
+    const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
+    await initLatexPlatform({
+      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
+    });
+
+    // Zero-padded so containment checks below can't be fooled by numeric
+    // substrings (e.g. "L0001" would otherwise match inside "L00010").
+    const totalLines = 250;
+    mocks.compileLatex2Pdf.mockImplementation(async (location, options) => {
+      const lines = Array.from(
+        { length: totalLines },
+        (_, i) => `L${String(i + 1).padStart(4, '0')}`,
+      );
+      await seedLatexLog(
+        options?.outputDirectory ?? '',
+        location.absolutePath,
+        lines.join('\n'),
+      );
+      return false;
+    });
+
+    const outputState = createOutputState();
+    ensureRoundData(outputState, 0).outputs = [
+      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
+    ];
+
+    const result = await runCompileCheck(
+      {
+        fileService: new TaskRunFileService(executionId),
+        outputState,
+        logger: logger(),
+        streamId: 'compile-stream',
+      },
+      0,
+    );
+
+    expect(result.compileResult?.status).toBe('failed');
+    const excerpt =
+      result.compileResult?.status === 'failed'
+        ? result.compileResult.logExcerpt
+        : '';
+    // Last 200 of 250 lines survive: L0051 .. L0250.
+    expect(excerpt).toContain('L0051');
+    expect(excerpt).toContain('L0250');
+    expect(excerpt).not.toContain('L0050');
+    expect(excerpt).not.toContain('L0001');
+  });
+
+  it('truncates the combined excerpt to the last 12000 characters', async () => {
+    const executionId = 'compile-char-truncation';
+    const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
+    await initLatexPlatform({
+      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
+    });
+
+    // 150 lines * 101 chars (100 + newline) stays under the 200-line cap but
+    // comfortably exceeds the 12000-character combined-excerpt limit once
+    // wrapped with the "Compile check failed for..." header. Zero-padded
+    // markers avoid numeric-substring false matches in the assertions below.
+    const longLine = 'x'.repeat(100);
+    mocks.compileLatex2Pdf.mockImplementation(async (location, options) => {
+      const lines = Array.from(
+        { length: 150 },
+        (_, i) => `${longLine}-END${String(i + 1).padStart(4, '0')}`,
+      );
+      await seedLatexLog(
+        options?.outputDirectory ?? '',
+        location.absolutePath,
+        lines.join('\n'),
+      );
+      return false;
+    });
+
+    const outputState = createOutputState();
+    ensureRoundData(outputState, 0).outputs = [
+      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
+    ];
+
+    const result = await runCompileCheck(
+      {
+        fileService: new TaskRunFileService(executionId),
+        outputState,
+        logger: logger(),
+        streamId: 'compile-stream',
+      },
+      0,
+    );
+
+    expect(result.compileResult?.status).toBe('failed');
+    const excerpt =
+      result.compileResult?.status === 'failed'
+        ? result.compileResult.logExcerpt
+        : '';
+    expect(excerpt.startsWith('[truncated to last 12000 characters]')).toBe(
+      true,
+    );
+    expect(excerpt).toContain('END0150');
+    expect(excerpt).not.toContain('END0001');
+  });
+
+  it('clears a stale failure log once a later attempt at the same round succeeds', async () => {
+    const executionId = 'compile-stale-log';
+    const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
+    await initLatexPlatform({
+      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
+    });
+
+    mocks.compileLatex2Pdf.mockResolvedValueOnce(false);
+
+    const outputState = createOutputState();
+    ensureRoundData(outputState, 0).outputs = [
+      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
+    ];
+    const ctx = {
+      fileService: new TaskRunFileService(executionId),
+      outputState,
+      logger: logger(),
+      streamId: 'compile-stream',
+    };
+
+    const firstResult = await runCompileCheck(ctx, 0);
+    expect(firstResult.compileResult?.status).toBe('failed');
+    const logLocation = firstResult.failures[0].log;
+    await expect(flexibleFS.read(logLocation)).resolves.toContain(
+      'Compile check failed for main.tex',
+    );
+
+    // Re-run the same round (e.g. after a repaired retry); this time the
+    // compile succeeds.
+    mocks.compileLatex2Pdf.mockResolvedValueOnce(true);
+    const secondResult = await runCompileCheck(ctx, 0);
+    expect(secondResult.compileResult?.status).toBe('ok');
+
+    // The stale failure log from the first attempt must be gone -- otherwise
+    // "no compile/*.log = success" would still find leftover failure evidence.
+    await expect(flexibleFS.read(logLocation)).rejects.toThrow();
+  });
+
+  it('gives colliding-after-sanitization paths distinct, non-clobbering log slots', async () => {
+    const executionId = 'compile-collision';
+    // Both sanitize (non [a-zA-Z0-9._-] -> "_") to the same "dir_a_b.tex":
+    // "dir/a:b.tex" (":" -> "_") and "dir/a_b.tex" ("/" -> "_", "_" already
+    // allowed). Without a disambiguating hash, the second file's log write
+    // would silently replace the first's.
+    const pathA = path.join('r0', 'dir', 'a:b.tex');
+    const pathB = path.join('r0', 'dir', 'a_b.tex');
+    const texPathA = path.join(runDir(executionId), pathA);
+    const texPathB = path.join(runDir(executionId), pathB);
+    await initLatexPlatform({
+      [texPathA]: '\\documentclass{article}\\begin{document}A\\end{document}',
+      [texPathB]: '\\documentclass{article}\\begin{document}B\\end{document}',
+    });
+
+    mocks.compileLatex2Pdf.mockImplementation(async (location, options) => {
+      const abs = location.absolutePath;
+      await seedLatexLog(
+        options?.outputDirectory ?? '',
+        abs,
+        `LOG MARKER FOR ${abs}`,
+      );
+      return false;
+    });
+
+    const outputState = createOutputState();
+    ensureRoundData(outputState, 0).outputs = [
+      outputFile(executionId, pathA, 'a:b.tex', 0),
+      outputFile(executionId, pathB, 'a_b.tex', 0),
+    ];
+
+    const result = await runCompileCheck(
+      {
+        fileService: new TaskRunFileService(executionId),
+        outputState,
+        logger: logger(),
+        streamId: 'compile-stream',
+      },
+      0,
+    );
+
+    expect(result.failures).toHaveLength(2);
+    const [failureA, failureB] = result.failures;
+    // Distinct log slots despite the identical sanitized basename.
+    expect(failureA.logRelativePath).not.toBe(failureB.logRelativePath);
+    expect(failureA.log.absolutePath).not.toBe(failureB.log.absolutePath);
+
+    const persistedA = await flexibleFS.read(failureA.log);
+    const persistedB = await flexibleFS.read(failureB.log);
+    expect(persistedA).toContain(`LOG MARKER FOR ${texPathA}`);
+    expect(persistedA).not.toContain(texPathB);
+    expect(persistedB).toContain(`LOG MARKER FOR ${texPathB}`);
+    expect(persistedB).not.toContain(texPathA);
+  });
+});

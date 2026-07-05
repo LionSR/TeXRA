@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
@@ -7,6 +8,8 @@ import { compileLatex2Pdf } from '@latex/texTools';
 import type {
   CompileFailure,
   CompileResult,
+  ExecutionId,
+  FileLocation,
   OutputFileInfo,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -150,9 +153,25 @@ export async function runCompileCheck(
       }
       if (result.artifact) artifacts.push(result.artifact);
     } catch (err) {
-      ctx.logger.warn(
-        `Compile check: ${displayName} skipped: ${toErrorMessage(err)}`,
-        { data: err },
+      // compileOne handles its own read/compile exceptions internally and
+      // reports them as failures, never as skips — this catch is only a
+      // last-resort backstop for a bug in that handling itself. It must still
+      // never let an errored check masquerade as a successful round, so it
+      // records a failure (with no on-disk log, since we can't trust the
+      // paths that failed to compute) rather than swallowing the error.
+      const message = toErrorMessage(err);
+      ctx.logger.warn(`Compile check: ${displayName} errored: ${message}`, {
+        data: err,
+      });
+      failures.push({
+        round: currentRound,
+        displayName,
+        output: outputFile.location,
+        log: outputFile.location,
+        logRelativePath: '(no log available)',
+      });
+      failureLogExcerpts.push(
+        `Compile check errored for ${displayName}\n\n${message}`,
       );
     }
   }
@@ -179,6 +198,11 @@ interface PerFileOptions {
   timeoutMs: number;
 }
 
+// Short hex digest length appended to safeName below — enough to make
+// collisions between distinct paths astronomically unlikely while keeping
+// log filenames legible.
+const PATH_HASH_LENGTH = 8;
+
 async function compileOne(
   ctx: CompileCheckContext,
   outputFile: OutputFileInfo,
@@ -202,7 +226,16 @@ async function compileOne(
   const pathForSafeName = comparablePath.startsWith(roundPrefix)
     ? comparablePath.slice(roundPrefix.length)
     : comparablePath;
-  const safeName = pathForSafeName.replaceAll(/[^a-zA-Z0-9._-]/g, '_');
+  // Sanitizing to a filesystem-safe name is lossy: two distinct paths that
+  // differ only in characters outside [a-zA-Z0-9._-] (e.g. "a:b.tex" and
+  // "a_b.tex") both collapse to the same string, so a second file's log
+  // write/delete would clobber the first's. Suffix with a short hash of the
+  // untruncated path so every output gets its own collision-free log slot.
+  const pathHash = createHash('sha1')
+    .update(pathForSafeName)
+    .digest('hex')
+    .slice(0, PATH_HASH_LENGTH);
+  const safeName = `${pathForSafeName.replaceAll(/[^a-zA-Z0-9._-]/g, '_')}_${pathHash}`;
   const buildDir = path.join(
     opts.compileRoot,
     'build',
@@ -216,66 +249,143 @@ async function compileOne(
     'compile',
     `r${currentRound}_${safeName}.log`,
   );
+  const executionId = ctx.fileService.metadata.executionId;
 
-  // Clear any stale log from a previous round so "no log = success" holds.
-  await flexibleFS.delete(logDest).catch(() => undefined);
+  let ok: boolean;
+  try {
+    const content = await flexibleFS.read(outputFile.location);
+    if (!/\\documentclass/.test(content)) {
+      ctx.logger.debug(
+        `Compile check: ${displayName} has no \\documentclass, skipping`,
+      );
+      // Only clear a stale log now that we know this file needs no compile
+      // check — deleting it up front (before we know the outcome) would let a
+      // mid-check crash erase evidence of a real prior failure.
+      await flexibleFS.delete(logDest).catch(() => undefined);
+      return { failure: null, failureLogExcerpt: '', artifact: null };
+    }
 
-  const content = await flexibleFS.read(outputFile.location);
-  if (!/\\documentclass/.test(content)) {
-    ctx.logger.debug(
-      `Compile check: ${displayName} has no \\documentclass, skipping`,
+    // The output compiles from `buildDir`, not its original workspace folder.
+    // For extracted outputs, the run-storage basename can be generic while
+    // outputFile.source carries the real workspace path.
+    const extraInputDirs = resolveWorkspaceSourceDir(
+      outputFile,
+      pathForSafeName,
     );
-    return { failure: null, failureLogExcerpt: '', artifact: null };
+
+    // execa's timeout option kills the child process on expiry, so we don't
+    // orphan hanging latexmk/pdflatex runs.
+    ok = await compileLatex2Pdf(outputFile.location, {
+      channel: ctx.streamId,
+      outputDirectory: buildDir,
+      timeout: opts.timeoutMs,
+      extraInputDirs,
+    });
+  } catch (err) {
+    // A per-file exception here (fs read error, compiler crash, etc.) means
+    // we could not determine whether this output compiles — that must never
+    // be reported as success. Record it as a failure with a synthetic
+    // excerpt, persisted to the same discoverable compile/*.log slot a real
+    // compile failure would use.
+    const message = toErrorMessage(err);
+    ctx.logger.warn(`Compile check: ${displayName} errored: ${message}`, {
+      data: err,
+    });
+    return writeCompileFailure({
+      ctx,
+      opts,
+      displayName,
+      currentRound,
+      outputFile,
+      logDest,
+      logRelativePath,
+      executionId,
+      failureLogExcerpt: `Compile check errored for ${displayName}\n\n${message}`,
+    });
   }
-
-  // The output compiles from `buildDir`, not its original workspace folder.
-  // For extracted outputs, the run-storage basename can be generic while
-  // outputFile.source carries the real workspace path.
-  const extraInputDirs = resolveWorkspaceSourceDir(outputFile, pathForSafeName);
-
-  // execa's timeout option kills the child process on expiry, so we don't
-  // orphan hanging latexmk/pdflatex runs.
-  const ok = await compileLatex2Pdf(outputFile.location, {
-    channel: ctx.streamId,
-    outputDirectory: buildDir,
-    timeout: opts.timeoutMs,
-    extraInputDirs,
-  });
 
   if (ok) {
     ctx.logger.debug(`Compile check: ${displayName} built successfully`);
-    const executionId = ctx.fileService.metadata.executionId;
-    const compiledPdfPath = path.join(
+    // Only now that we know the outcome do we clear a stale failure log from
+    // a previous attempt at this round — clearing it up front would leave a
+    // crash mid-check masquerading as success.
+    await flexibleFS.delete(logDest).catch(() => undefined);
+    const artifact = await tryPublishArtifact({
+      ctx,
+      opts,
+      displayName,
+      currentRound,
+      outputFile,
+      compiledBasename,
       buildDir,
-      `${compiledBasename.replace(/\.tex$/i, '')}.pdf`,
-    );
-    const artifact = executionId
-      ? await publishCompiledPdfArtifact({
-          runDirectory: opts.runDirectory,
-          executionId,
-          round: currentRound,
-          displayName,
-          source: outputFile.location,
-          compiledPdfPath,
-        })
-      : null;
-
-    if (artifact) {
-      ctx.logger.debug(`Compile check: ${displayName} PDF persisted`, {
-        data: artifact.latestPdf.relativePath,
-      });
-    }
+      executionId,
+    });
     return { failure: null, failureLogExcerpt: '', artifact };
   }
 
   const tail = await readLogTail(buildDir, compiledBasename);
   const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${tail}`;
-  await flexibleFS.ensureDir(pathToLocation(opts.compileRoot));
-  await flexibleFS.write(logDest, `${failureLogExcerpt}\n`);
   ctx.logger.warn(`Compile check: ${displayName} failed`, {
     data: path.relative(opts.runDirectory, logDest.absolutePath),
   });
-  const executionId = ctx.fileService.metadata.executionId;
+  return writeCompileFailure({
+    ctx,
+    opts,
+    displayName,
+    currentRound,
+    outputFile,
+    logDest,
+    logRelativePath,
+    executionId,
+    failureLogExcerpt,
+  });
+}
+
+interface WriteCompileFailureArgs {
+  ctx: CompileCheckContext;
+  opts: PerFileOptions;
+  displayName: string;
+  currentRound: number;
+  outputFile: OutputFileInfo;
+  logDest: FileLocation;
+  logRelativePath: string;
+  executionId: ExecutionId | undefined;
+  failureLogExcerpt: string;
+}
+
+/**
+ * Persist a failure's log excerpt to its collision-free `compile/*.log` slot
+ * and build the corresponding {@link CompileFailure} record. Never throws:
+ * persistence errors are logged and swallowed so a failure is always counted
+ * even when the log itself couldn't be written to disk.
+ */
+async function writeCompileFailure(args: WriteCompileFailureArgs): Promise<{
+  failure: CompileFailure;
+  failureLogExcerpt: string;
+  artifact: null;
+}> {
+  const {
+    ctx,
+    opts,
+    displayName,
+    currentRound,
+    outputFile,
+    logDest,
+    logRelativePath,
+    executionId,
+    failureLogExcerpt,
+  } = args;
+
+  try {
+    await flexibleFS.ensureDir(pathToLocation(opts.compileRoot));
+    await flexibleFS.write(logDest, `${failureLogExcerpt}\n`);
+  } catch (writeErr) {
+    ctx.logger.warn(
+      `Compile check: failed to persist log for ${displayName}: ${toErrorMessage(writeErr)}`,
+      { data: writeErr },
+    );
+  }
+
   const logLocation = executionId
     ? createRunStorageLocation(
         logDest.absolutePath,
@@ -294,6 +404,65 @@ async function compileOne(
     failureLogExcerpt,
     artifact: null,
   };
+}
+
+interface TryPublishArtifactArgs {
+  ctx: CompileCheckContext;
+  opts: PerFileOptions;
+  displayName: string;
+  currentRound: number;
+  outputFile: OutputFileInfo;
+  compiledBasename: string;
+  buildDir: string;
+  executionId: ExecutionId | undefined;
+}
+
+/**
+ * Publish the compiled PDF as a best-effort side effect of a successful
+ * compile. A failure here (e.g. copying the PDF into run storage) must not
+ * turn a document that genuinely compiled into a reported compile failure.
+ */
+async function tryPublishArtifact(
+  args: TryPublishArtifactArgs,
+): Promise<CompiledPdfArtifact | null> {
+  const {
+    ctx,
+    opts,
+    displayName,
+    currentRound,
+    outputFile,
+    compiledBasename,
+    buildDir,
+    executionId,
+  } = args;
+  if (!executionId) return null;
+
+  const compiledPdfPath = path.join(
+    buildDir,
+    `${compiledBasename.replace(/\.tex$/i, '')}.pdf`,
+  );
+  try {
+    const artifact = await publishCompiledPdfArtifact({
+      runDirectory: opts.runDirectory,
+      executionId,
+      round: currentRound,
+      displayName,
+      source: outputFile.location,
+      compiledPdfPath,
+    });
+    if (artifact) {
+      ctx.logger.debug(`Compile check: ${displayName} PDF persisted`, {
+        data: artifact.latestPdf.relativePath,
+      });
+    }
+    return artifact;
+  } catch (err) {
+    ctx.logger.warn(
+      `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
+      { data: err },
+    );
+    return null;
+  }
 }
 
 function combineFailureLogExcerpts(excerpts: string[]): string {
