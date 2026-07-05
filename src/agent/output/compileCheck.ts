@@ -231,11 +231,12 @@ async function compileOne(
   // "a_b.tex") both collapse to the same string, so a second file's log
   // write/delete would clobber the first's. Suffix with a short hash of the
   // untruncated path so every output gets its own collision-free log slot.
+  const legacySafeName = pathForSafeName.replaceAll(/[^a-zA-Z0-9._-]/g, '_');
   const pathHash = createHash('sha1')
     .update(pathForSafeName)
     .digest('hex')
     .slice(0, PATH_HASH_LENGTH);
-  const safeName = `${pathForSafeName.replaceAll(/[^a-zA-Z0-9._-]/g, '_')}_${pathHash}`;
+  const safeName = `${legacySafeName}_${pathHash}`;
   const buildDir = path.join(
     opts.compileRoot,
     'build',
@@ -249,7 +250,19 @@ async function compileOne(
     'compile',
     `r${currentRound}_${safeName}.log`,
   );
+  // Pre-fix builds wrote to this un-hashed name. A run resumed under this
+  // fix must still clean it up on success, or a leftover legacy log from
+  // before the upgrade would keep reading as a failure forever.
+  const legacyLogDest = pathToLocation(
+    path.join(opts.compileRoot, `r${currentRound}_${legacySafeName}.log`),
+  );
   const executionId = ctx.fileService.metadata.executionId;
+
+  const clearStaleLogs = (): Promise<void[]> =>
+    Promise.all([
+      flexibleFS.delete(logDest).catch(() => undefined),
+      flexibleFS.delete(legacyLogDest).catch(() => undefined),
+    ]);
 
   let ok: boolean;
   try {
@@ -261,7 +274,7 @@ async function compileOne(
       // Only clear a stale log now that we know this file needs no compile
       // check — deleting it up front (before we know the outcome) would let a
       // mid-check crash erase evidence of a real prior failure.
-      await flexibleFS.delete(logDest).catch(() => undefined);
+      await clearStaleLogs();
       return { failure: null, failureLogExcerpt: '', artifact: null };
     }
 
@@ -309,7 +322,7 @@ async function compileOne(
     // Only now that we know the outcome do we clear a stale failure log from
     // a previous attempt at this round — clearing it up front would leave a
     // crash mid-check masquerading as success.
-    await flexibleFS.delete(logDest).catch(() => undefined);
+    await clearStaleLogs();
     const artifact = await tryPublishArtifact({
       ctx,
       opts,
