@@ -37,7 +37,9 @@ describe('checkToolResultTextLimit', () => {
     assert.ok(result.includes('characters elided'));
     // Head/tail content survives; the elided middle does not.
     assert.ok(result.startsWith('Tool result too large'));
-    assert.ok(result.includes(head.slice(0, TOOL_RESULT_TRUNCATION_HEAD_CHARS)));
+    assert.ok(
+      result.includes(head.slice(0, TOOL_RESULT_TRUNCATION_HEAD_CHARS)),
+    );
     assert.ok(result.includes(tail.slice(-TOOL_RESULT_TRUNCATION_TAIL_CHARS)));
     assert.ok(!result.includes('x'.repeat(1000)));
   });
