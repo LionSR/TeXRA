@@ -20,6 +20,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import {
@@ -266,6 +267,15 @@ export class FileList extends LitElement {
     CompileFailure[]
   > = {};
   @property({ attribute: false }) showRoundHeaders = true;
+  /**
+   * Progress-view commands the active host's registry declares
+   * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
+   * same convention). Hides the "Run latexFixer" action on a host where
+   * RUN_COMPILE_FIXER is unsupported, instead of leaving a control visible
+   * that can only produce an unavailable-command toast.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   @state()
   private storageHintDismissed =
@@ -325,7 +335,11 @@ export class FileList extends LitElement {
           )}
         </div>
         ${
-          this.failureByPath.size > 0
+          this.failureByPath.size > 0 &&
+          !isKnownUnsupported(
+            this.unsupportedCommands,
+            PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER,
+          )
             ? html`
                 <div class="compile-actions">
                   <wa-button

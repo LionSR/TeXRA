@@ -84,6 +84,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
         .polishRevision=${currentState.ui.polishRevision}
         .transcribedText=${currentState.ui.transcribedText}
         .recording=${currentState.ui.recording}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
         @focus-complete=${this.handleFocusComplete}
       ></follow-up-input>
     `;

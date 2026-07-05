@@ -22,6 +22,7 @@ import {
   readFileAsBase64,
   type ExtractedClipboardImage,
 } from '@shared/utils/clipboardImages';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
@@ -116,6 +117,15 @@ export class FollowUpInput extends LitElement {
   @property({ attribute: false }) polishRevision = 0;
   @property({ attribute: false }) transcribedText: string | null = null;
   @property({ attribute: false }) recording = false;
+  /**
+   * Progress-view commands the active host's registry declares
+   * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
+   * same convention). Hides the polish button on a host where
+   * POLISH_FOLLOW_UP is unsupported, instead of leaving a control visible
+   * that can only produce an unavailable-command toast.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   @state() private polishing = false;
 
@@ -269,14 +279,21 @@ export class FollowUpInput extends LitElement {
             ></wa-textarea>
 
             <div class="follow-up-actions">
-              ${renderIconActionButton({
-                id: ELEMENT_IDS.POLISH_FOLLOW_UP_BTN,
-                icon: 'sparkle',
-                label: 'Polish follow-up',
-                tooltip: 'Polish follow-up with AI',
-                busy: this.polishing,
-                onClick: this.emitPolish,
-              })}
+              ${
+                isKnownUnsupported(
+                  this.unsupportedCommands,
+                  PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
+                )
+                  ? nothing
+                  : renderIconActionButton({
+                      id: ELEMENT_IDS.POLISH_FOLLOW_UP_BTN,
+                      icon: 'sparkle',
+                      label: 'Polish follow-up',
+                      tooltip: 'Polish follow-up with AI',
+                      busy: this.polishing,
+                      onClick: this.emitPolish,
+                    })
+              }
               ${renderIconActionButton({
                 id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
                 icon: this.recordingController.state.icon,

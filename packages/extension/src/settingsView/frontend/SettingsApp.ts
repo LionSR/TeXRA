@@ -964,7 +964,10 @@ export class SettingsApp extends SettingsAppBase {
           </wa-tab-panel>
 
           ${
-            desktopHost
+            isKnownUnsupported(
+              this.unsupportedCommands.get(),
+              SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+            )
               ? nothing
               : html`
                   <wa-tab-panel name="goal">

@@ -70,6 +70,7 @@ export class WorkflowStreamContent extends BaseStreamContent {
         .filesByRound=${state.files}
         .failuresByRound=${state.compileFailures}
         .showRoundHeaders=${true}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
       ></file-list>
 
       <workflow-tool-use-followup-section
