@@ -1401,7 +1401,7 @@
       }
     ],
     "viewsContainers": {
-      "activitybar": [
+      "secondarySidebar": [
         {
           "id": "texra",
           "title": "TeXRA",
