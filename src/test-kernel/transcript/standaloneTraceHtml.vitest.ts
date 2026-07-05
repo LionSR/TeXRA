@@ -76,6 +76,7 @@ describe('injectStandaloneTrace', () => {
   it('escapes a literal </script> inside trace data instead of truncating the page', () => {
     const t = trace({
       meta: {
+        schemaVersion: 1,
         timestamp: '2026-01-01T00:00:00.000Z',
         description: '</script><img src=x onerror=alert(1)>',
       },
