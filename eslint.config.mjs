@@ -62,6 +62,10 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),
   path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
   path.join(__dirname, 'packages/cli/src/runtime/initPlatform.ts'),
+  // The test suite's composition root: the sole place vitest suites swap the
+  // fake platform, replacing the per-suite `await import('@platform/platform')`
+  // dance every suite used to hand-roll to dodge this same rule.
+  path.join(__dirname, 'src/test-kernel/support/setupPlatform.ts'),
 ]);
 
 const extensionPackageDir = path.join(__dirname, 'packages', 'extension');

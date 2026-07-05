@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent
+import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentTrace } from '@agent/trace';
 import { runCompileCheck } from '@agent/output/compileCheck';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
@@ -86,22 +87,16 @@ function logger(): AgentTrace {
   } as unknown as AgentTrace;
 }
 
-async function initLatexPlatform(files: Record<string, string>): Promise<void> {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(
-    createFakePlatform({
-      files,
-      storagePath,
-      workspacePath,
-      workspaceState: {
-        [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: true,
-        [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
-      },
-    }),
-  );
+function initLatexPlatform(files: Record<string, string>): Promise<void> {
+  return installPlatform({
+    files,
+    storagePath,
+    workspacePath,
+    workspaceState: {
+      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: true,
+      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
+    },
+  });
 }
 
 // Writes a fake LaTeX build log next to where `compileLatex2Pdf` was asked to

@@ -1,6 +1,6 @@
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { TraceEmitter } from '@agent/trace';
@@ -60,14 +60,6 @@ function createMonitorWithEvents() {
 }
 
 describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
-  beforeAll(async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(createFakePlatform());
-  });
-
   it('is undefined before any round and caches the totals after recordUsage', async () => {
     const { dispose, monitor } = createMonitorWithEvents();
     try {

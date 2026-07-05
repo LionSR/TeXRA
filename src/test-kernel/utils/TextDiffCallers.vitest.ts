@@ -5,7 +5,7 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - tests
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent output
 import { computeOutputDiffStats } from '@agent/output/diffComputation';
@@ -33,17 +33,14 @@ import {
 } from '@utils/files';
 import { getRunDir } from '@utils/files/taskRunStorage';
 
-async function installFakePlatform(
+function installFakePlatform(
   files: Record<string, string> = {},
 ): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform({
-      files,
-      storagePath: '/workspace/.texra/storage',
-      workspacePath: '/workspace',
-    }),
-  );
+  return installPlatform({
+    files,
+    storagePath: '/workspace/.texra/storage',
+    workspacePath: '/workspace',
+  });
 }
 
 describe('shared text-diff caller fixtures', () => {

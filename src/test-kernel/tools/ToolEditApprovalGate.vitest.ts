@@ -3,7 +3,7 @@ import * as assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports - tests
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent types
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -36,23 +36,20 @@ async function installPlatform(
   config: Record<string, unknown> = {},
   files: Record<string, string | Uint8Array> = {},
 ) {
-  const { initPlatform } = await import('@platform/platform');
   testApprovalHandler = undefined;
-  initPlatform(
-    createFakePlatform(
-      { workspacePath: '/workspace', config, files },
-      {
-        toolEditApproval: (request) => {
-          const handler = testApprovalHandler;
-          if (!handler) {
-            throw new Error(
-              'No test approval handler configured. Set `testApprovalHandler` first.',
-            );
-          }
-          return handler(request);
-        },
+  await installFakePlatform(
+    { workspacePath: '/workspace', config, files },
+    {
+      toolEditApproval: (request) => {
+        const handler = testApprovalHandler;
+        if (!handler) {
+          throw new Error(
+            'No test approval handler configured. Set `testApprovalHandler` first.',
+          );
+        }
+        return handler(request);
       },
-    ),
+    },
   );
 }
 

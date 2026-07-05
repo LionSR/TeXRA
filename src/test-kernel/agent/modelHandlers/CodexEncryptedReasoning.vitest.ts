@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
 
+import { setupPlatform } from '@test/support/setupPlatform';
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
@@ -75,16 +76,8 @@ function encryptedBlobs(blocks: ReadonlyArray<{ type?: string }>): string[] {
 describe('extractServerToolData reasoning preservation by store mode', () => {
   // The store:false (encrypted-reasoning) path is gated on the subscription
   // being active; turning it off drops the Codex handler to base behavior.
-  beforeEach(async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(
-      createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
-      }),
-    );
+  setupPlatform({
+    config: { 'texra.chatgptCodex.preferSubscription': true },
   });
 
   it('skips reasoning items that carry no encrypted_content (would be rejected empty)', () => {

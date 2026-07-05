@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { beforeAll, describe, it } from 'vitest';
+import { describe, it } from 'vitest';
 
 // Third-party imports
 import {
@@ -17,7 +17,7 @@ import { OpenAIError } from 'openai';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace';
@@ -34,12 +34,9 @@ import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller'
 import { pathToLocation } from '@utils/files';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-// Vitest isolates files, so this suite installs its own platform
-// (pathToLocation and flexibleFS resolve through platform services).
-beforeAll(async () => {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
-});
+// pathToLocation and flexibleFS resolve through platform services, so this
+// suite needs the real node fs rather than the in-memory default.
+setupPlatform({}, { fs: nodeFilesystem });
 
 type LoggerStub = Partial<AgentTrace> & {
   streamId: string;

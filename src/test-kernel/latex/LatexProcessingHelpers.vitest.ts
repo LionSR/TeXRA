@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace';
@@ -58,10 +58,10 @@ async function makeTempDir(): Promise<string> {
   return tempDir;
 }
 
-async function installPlatform(workspaceDir: string): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform({ workspacePath: workspaceDir }, { fs: nodeFilesystem }),
+function installPlatform(workspaceDir: string): Promise<void> {
+  return installFakePlatform(
+    { workspacePath: workspaceDir },
+    { fs: nodeFilesystem },
   );
 }
 

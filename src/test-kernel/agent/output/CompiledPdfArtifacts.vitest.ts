@@ -7,6 +7,10 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - agent output
+
+// Local imports - platform
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 
 // Local imports - file utilities
@@ -27,15 +31,7 @@ function readOutput(
 describe('compiled PDF artifacts', () => {
   const tempDirs: string[] = [];
 
-  beforeEach(async () => {
-    const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
-      await Promise.all([
-        import('@platform/platform'),
-        import('@platform/defaults/nodeFilesystem'),
-        import('@test/support/FakePlatform'),
-      ]);
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
-  });
+  setupPlatform({}, { fs: nodeFilesystem });
 
   async function makeTempDir(): Promise<string> {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'texra-pdf-artifact-'));

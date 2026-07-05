@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
+import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -34,26 +35,20 @@ let testApprovalHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
 
-async function installTestPlatform(): Promise<void> {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(
-    createFakePlatform(
-      {},
-      {
-        toolEditApproval: (request) => {
-          const handler = testApprovalHandler;
-          if (!handler) {
-            throw new Error(
-              'No test approval handler. Set `testApprovalHandler` first.',
-            );
-          }
-          return handler(request);
-        },
+function installTestPlatform(): Promise<void> {
+  return installPlatform(
+    {},
+    {
+      toolEditApproval: (request) => {
+        const handler = testApprovalHandler;
+        if (!handler) {
+          throw new Error(
+            'No test approval handler. Set `testApprovalHandler` first.',
+          );
+        }
+        return handler(request);
       },
-    ),
+    },
   );
 }
 

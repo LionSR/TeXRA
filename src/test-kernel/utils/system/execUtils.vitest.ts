@@ -6,22 +6,19 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 // Third-party imports
-import { afterEach, beforeAll, describe, it } from 'vitest';
+import { afterEach, describe, it } from 'vitest';
 
 // Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - utils
 import { executeCommand } from '@utils/system/execUtils';
 
 const tempDirs: string[] = [];
 
-beforeAll(async () => {
-  // executeCommand resolves its cwd from the workspace; point the fake
-  // platform at a directory that exists on disk so spawning succeeds.
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({ workspacePath: process.cwd() }));
-});
+// executeCommand resolves its cwd from the workspace; point the fake
+// platform at a directory that exists on disk so spawning succeeds.
+setupPlatform({ workspacePath: process.cwd() });
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {

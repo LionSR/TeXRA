@@ -5,6 +5,7 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
+import { installPlatform } from '@test/support/setupPlatform';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { resetCodexCoordinator } from '@auth/codex';
@@ -37,26 +38,20 @@ function config(): ModelConfig {
   };
 }
 
-async function initPlatformWith(opts: {
+function initPlatformWith(opts: {
   config?: Record<string, unknown>;
   globalState?: Record<string, unknown>;
 }): Promise<void> {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(
-    createFakePlatform({
-      config: {
-        'texra.chatgptCodex.preferSubscription': true,
-        // These tests exercise the subscription's transport mechanics with a
-        // workflow handler, so keep the "tool-use only" restriction off.
-        'texra.chatgptCodex.subscriptionToolUseOnly': false,
-        ...opts.config,
-      },
-      globalState: opts.globalState,
-    }),
-  );
+  return installPlatform({
+    config: {
+      'texra.chatgptCodex.preferSubscription': true,
+      // These tests exercise the subscription's transport mechanics with a
+      // workflow handler, so keep the "tool-use only" restriction off.
+      'texra.chatgptCodex.subscriptionToolUseOnly': false,
+      ...opts.config,
+    },
+    globalState: opts.globalState,
+  });
 }
 
 function workflowHandler(): ModelHandlerCodex {

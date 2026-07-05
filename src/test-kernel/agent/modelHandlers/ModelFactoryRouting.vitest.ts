@@ -10,6 +10,7 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
+import { installPlatform } from '@test/support/setupPlatform';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
@@ -31,6 +32,7 @@ import {
   type CodexSession,
 } from '@auth/codex';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import type { FakePlatformOptions } from '@test/support/FakePlatform';
 
 function modelConfig(
   provider: ModelProvider,
@@ -51,19 +53,11 @@ function modelConfig(
   };
 }
 
-// initPlatform is restricted to composition roots, so import it dynamically.
-// The dynamic import also re-resolves @platform/platform after this file's
-// vi.resetModules() calls, keeping it on the instance the factory reads.
-async function initFakePlatform(
-  options?: Parameters<
-    typeof import('@test/support/FakePlatform').createFakePlatform
-  >[0],
-): Promise<void> {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(createFakePlatform(options));
+// installPlatform dynamically imports @platform/platform at call time, so
+// this also re-resolves it after this file's vi.resetModules() calls,
+// keeping it on the instance the factory reads.
+function initFakePlatform(options?: FakePlatformOptions): Promise<void> {
+  return installPlatform(options);
 }
 
 describe('OpenAI model handler routing', () => {
