@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
@@ -105,6 +106,7 @@ export function buildArguments(
 
 export class GrepTool extends defineTool({
   name: 'grep',
+  parallelSafe: true,
   description:
     'Search file contents using regex patterns. output_mode must be "content", "files_with_matches", or "count" (NOT "context"). To show surrounding lines, use -C with output_mode "content".',
   schema: GrepInputSchema,
@@ -138,6 +140,9 @@ export class GrepTool extends defineTool({
       cwd: root,
       channel: CHANNEL,
       truncate: false,
+      // Cancellation for the owning agent run — parallel batches must be
+      // able to terminate large-repo rg subprocesses on interrupt.
+      signal: getCurrentToolCallContext()?.signal,
     });
 
     // ripgrep exit codes: 0 = matches found, 1 = no matches, 2+ = error

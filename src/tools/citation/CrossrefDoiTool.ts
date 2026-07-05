@@ -3,7 +3,9 @@ import { type Work } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { abandonOnAbort } from '@tools/cancellation';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
@@ -19,6 +21,7 @@ export type CrossrefDoiInput = z.infer<typeof CrossrefDoiInputSchema>;
 
 export class CrossrefDoiTool extends defineTool({
   name: 'crossref_doi',
+  parallelSafe: true,
   description: 'Look up detailed metadata for a DOI using Crossref.',
   schema: CrossrefDoiInputSchema,
 }) {
@@ -30,7 +33,13 @@ export class CrossrefDoiTool extends defineTool({
         'crossref',
         CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
       );
-      return crossrefClient.work(trimmedDoi);
+      // The Crossref client has no AbortSignal hook, so a cancelled batch
+      // abandons the in-flight lookup instead of waiting it out.
+      return abandonOnAbort(
+        crossrefClient.work(trimmedDoi),
+        getCurrentToolCallContext()?.signal,
+        'Crossref DOI lookup',
+      );
     }, 'Crossref lookup failed');
 
     if (!response.ok || !response.content?.message) {

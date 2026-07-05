@@ -22,14 +22,15 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
+import { createSemaphore } from '@utils/core/semaphore';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';
 import {
-  DUPLICATE_CALL_ERROR,
-  findDuplicateCallIds,
   normalizeToolCallError,
   parseToolInput,
+  partitionDuplicateCalls,
+  UNSAFE_DUPLICATE_CALL_ERROR,
 } from './toolCallParsing';
 import type { ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
@@ -48,6 +49,9 @@ const DEFERRED_LOG_TOOLS = new Set(['bash', 'codex', 'wolfram']);
 
 /** Tools that support streaming partial output to the UI. */
 const STREAMABLE_TOOLS = new Set(['bash']);
+
+/** Max concurrently executing tool calls within one dispatch batch. */
+const MAX_PARALLEL_TOOL_CALLS = 4;
 
 /** Maximum size of the streaming output buffer sent to the UI (bytes). */
 const STREAM_BUFFER_MAX = 50_000;
@@ -85,13 +89,16 @@ interface ToolExecutionResult {
 }
 
 /**
- * Dispatches tool calls sequentially.
+ * Dispatches tool calls with ordering barriers.
  *
- * Sequential dispatch preserves ordering guarantees when tools have
- * dependencies (e.g., read file then edit file). The inquiry tool used
- * to need a concurrency carve-out because it blocked on a human round-
- * trip; it now returns synchronously, so the default sequential path
- * is sufficient.
+ * Contiguous runs of parallel-safe (read-only) calls execute concurrently
+ * under a small semaphore; any other tool acts as a barrier and runs alone,
+ * preserving ordering guarantees when tools have dependencies (e.g., read
+ * file then edit file). Duplicate parallel calls (identical name+arguments)
+ * to parallel-safe tools execute once, with duplicates receiving a copy of
+ * the primary's result; duplicates of side-effect tools get a synthetic
+ * error instead, since sharing a success would misreport an effect that
+ * never ran.
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
@@ -101,15 +108,26 @@ export class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseRoundServices<C>
 > {
   /**
-   * Call IDs of duplicate parallel calls detected during prep().
-   * These are skipped during exec() and receive a synthetic error result
-   * instructing the model to call them sequentially instead.
+   * Duplicate parallel calls detected during prep(), mapped to the index of
+   * their first occurrence. Duplicates are not executed; after the batch
+   * completes they receive a side-effect-stripped copy of the primary's
+   * result.
    */
-  private _duplicateCallIds = new Set<string>();
+  private _duplicateToPrimary = new Map<string, number>();
+
+  /**
+   * Duplicates of side-effect tools. Fanning the primary's success out
+   * would report an effect that never ran (two identical appends would
+   * "succeed" twice while running once), so these are answered with a
+   * synthetic error instead — the model can re-issue sequentially if it
+   * truly wants the effect twice.
+   */
+  private _unsafeDuplicateCallIds = new Map<string, number>();
 
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
-    this._duplicateCallIds.clear();
+    this._duplicateToPrimary.clear();
+    this._unsafeDuplicateCallIds.clear();
     const toolCalls = shared.toolCalls ?? [];
 
     if (shared.shouldStop || toolCalls.length === 0) {
@@ -121,23 +139,23 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       return [];
     }
 
-    // Deduplicate parallel calls: when multiple calls have the same tool name
-    // and identical arguments, only execute the first one. Later duplicates
-    // receive a synthetic error result prompting sequential invocation.
+    // Deduplicate parallel calls (same tool name + identical arguments):
+    // parallel-safe duplicates share their primary's result, but only
+    // within a contiguous safe segment — a side-effect call in between may
+    // change what a repeated read returns. Side-effect duplicates are
+    // rejected with a synthetic error (see _unsafeDuplicateCallIds).
     if (toolCalls.length > 1) {
-      this._duplicateCallIds = findDuplicateCallIds(toolCalls);
+      const partition = partitionDuplicateCalls(toolCalls, (call) =>
+        this.isParallelSafe(call),
+      );
+      this._duplicateToPrimary = partition.sharedWithPrimary;
+      this._unsafeDuplicateCallIds = partition.rejected;
 
-      if (this._duplicateCallIds.size > 0) {
-        const dupNames = [
-          ...new Set(
-            toolCalls
-              .filter((c) => this._duplicateCallIds.has(c.callId))
-              .map((c) => c.name),
-          ),
-        ];
+      const duplicateCount =
+        this._duplicateToPrimary.size + this._unsafeDuplicateCallIds.size;
+      if (duplicateCount > 0) {
         this.services.logger.debug(
-          `Deduplicated ${this._duplicateCallIds.size} parallel tool call(s) with identical name and arguments`,
-          { data: dupNames },
+          `Deduplicated ${duplicateCount} parallel tool call(s) with identical name and arguments (${this._unsafeDuplicateCallIds.size} side-effect duplicate(s) rejected)`,
         );
       }
     }
@@ -145,20 +163,97 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     return toolCalls;
   }
 
-  /** Execute a single tool call, returning null if interrupted. */
-  async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
-    if (this.services.checkInterruption()) {
-      return null;
-    }
+  /**
+   * Execute the batch: parallel-safe runs concurrently, barriers alone,
+   * duplicates filled from their primary's result afterwards. Results keep
+   * the original call order; skipped/interrupted slots stay null.
+   *
+   * Bypasses Node._exec's per-item retry machinery on purpose: tool calls
+   * are never auto-retried (default maxRetries, exec never throws), and
+   * cancellation runs through the batch abort controller, not `this.signal`.
+   */
+  async _exec(items: unknown[]): Promise<unknown[]> {
+    const calls = Array.isArray(items) ? (items as SdkToolCall[]) : [];
+    if (calls.length === 0) return [];
 
-    // Skip duplicate parallel calls — return a synthetic error result so
-    // the model is informed and can retry sequentially if needed.
-    if (this._duplicateCallIds.has(call.callId)) {
+    const results: (ToolExecutionResult | null)[] = new Array<null>(
+      calls.length,
+    ).fill(null);
+    // Duplicates execute nothing — schedule only the live calls, then copy
+    // the primaries' results (or synthetic errors) onto them afterwards.
+    const live = calls.flatMap((call, index) =>
+      this._duplicateToPrimary.has(call.callId) ||
+      this._unsafeDuplicateCallIds.has(call.callId)
+        ? []
+        : [index],
+    );
+    const batchController = new AbortController();
+    this.services.setAbortController(batchController);
+    try {
+      const semaphore = createSemaphore(MAX_PARALLEL_TOOL_CALLS);
+      let i = 0;
+      while (i < live.length) {
+        if (
+          batchController.signal.aborted ||
+          this.services.checkInterruption()
+        ) {
+          break;
+        }
+        if (!this.isParallelSafe(calls[live[i]])) {
+          // Barrier: mutating/unknown tools run alone, in order.
+          const index = live[i];
+          results[index] = await this.execCall(
+            calls[index],
+            batchController.signal,
+          );
+          i += 1;
+          continue;
+        }
+        // Contiguous run of parallel-safe calls executes concurrently.
+        const run: number[] = [];
+        while (i < live.length && this.isParallelSafe(calls[live[i]])) {
+          run.push(live[i]);
+          i += 1;
+        }
+        await Promise.all(
+          run.map((index) =>
+            semaphore.run(async () => {
+              // Re-check after waiting for a slot: an interrupt while this
+              // call was queued must not start new work.
+              if (batchController.signal.aborted) return;
+              results[index] = await this.execCall(
+                calls[index],
+                batchController.signal,
+              );
+            }),
+          ),
+        );
+      }
+      this.fanOutDuplicateResults(calls, results);
+      this.rejectUnsafeDuplicates(calls, results);
+      return results;
+    } finally {
+      this.services.setAbortController(null);
+    }
+  }
+
+  /** Answer side-effect duplicates with a synthetic error (never executed). */
+  private rejectUnsafeDuplicates(
+    calls: SdkToolCall[],
+    results: (ToolExecutionResult | null)[],
+  ): void {
+    for (const [index, call] of calls.entries()) {
+      const primaryIndex = this._unsafeDuplicateCallIds.get(call.callId);
+      if (primaryIndex === undefined) continue;
+      // If the primary never ran (interrupted batch), the duplicate stays
+      // null too — a "side effects" skip message would be misleading when
+      // no effect happened at all.
+      if (!results[primaryIndex]) continue;
       const duplicateResult: ToolResult = {
         status: 'error',
-        error: DUPLICATE_CALL_ERROR,
+        error: UNSAFE_DUPLICATE_CALL_ERROR,
       };
-      return {
+      results[index] = {
         call,
         result: duplicateResult,
         parsedInput: call.input,
@@ -173,6 +268,25 @@ export class ToolUseDispatchNode<C> extends BatchNode<
         },
       };
     }
+  }
+
+  /** A tool declares itself side-effect-free via ITool.parallelSafe. */
+  private isParallelSafe(call: SdkToolCall): boolean {
+    return this.services.toolRegistry.get(call.name)?.parallelSafe === true;
+  }
+
+  /** Execute a single tool call, returning null if interrupted. */
+  async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
+    return this.execCall(call, null);
+  }
+
+  private async execCall(
+    call: SdkToolCall,
+    batchSignal: AbortSignal | null,
+  ): Promise<ToolExecutionResult | null> {
+    if (this.services.checkInterruption()) {
+      return null;
+    }
 
     const { workspace } = this.services;
     workspace.interactions.recordToolCall();
@@ -182,12 +296,54 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       this.services,
       workspace.interactions,
       workspace.workPlan,
+      batchSignal,
     );
+  }
+
+  /**
+   * Give each duplicate call a copy of its primary's completed result.
+   * Edits and file attachments are stripped: the primary already recorded
+   * them, and a duplicate must not double-track edits or re-register media.
+   */
+  private fanOutDuplicateResults(
+    calls: SdkToolCall[],
+    results: (ToolExecutionResult | null)[],
+  ): void {
+    for (const [index, call] of calls.entries()) {
+      const primaryIndex = this._duplicateToPrimary.get(call.callId);
+      if (primaryIndex === undefined) continue;
+      const primary = results[primaryIndex];
+      // Primary interrupted or never ran: leave the duplicate null too.
+      if (!primary) continue;
+      const {
+        edits: _edits,
+        files: _files,
+        lineChanges: _lineChanges,
+        ...sharedResult
+      } = primary.result;
+      results[index] = {
+        call,
+        result: sharedResult as ToolResult,
+        parsedInput: primary.parsedInput,
+        extracted: {
+          sanitizedResult: primary.extracted.sanitizedResult,
+          // The primary already injected any attachments into the follow-up;
+          // repeating them per duplicate would duplicate binary context.
+          attachments: [],
+        },
+        editedFiles: [],
+        logRef: {
+          logId: undefined,
+          groupId: this.services.logger.activeStageId(),
+        },
+      };
+    }
   }
 
   clone(): this {
     const cloned = super.clone();
-    cloned._duplicateCallIds = new Set();
+    cloned._duplicateToPrimary = new Map();
+    cloned._unsafeDuplicateCallIds = new Map();
     return cloned;
   }
 
@@ -246,6 +402,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseRoundServices<C>,
     tracker: FileInteractionState,
     workPlanState: WorkPlanState,
+    batchSignal: AbortSignal | null,
   ): Promise<ToolExecutionResult | null> {
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
@@ -296,8 +453,23 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       };
     }
 
+    // Each call gets its own controller. Inside a dispatch batch it chains
+    // to the batch-wide signal (one interrupt cancels every in-flight call);
+    // standalone exec() (tests, direct invocation) registers it as before.
     const controller = new AbortController();
-    options.setAbortController(controller);
+    let detachBatchAbort: (() => void) | undefined;
+    if (batchSignal) {
+      if (batchSignal.aborted) {
+        controller.abort();
+      } else {
+        const onBatchAbort = () => controller.abort();
+        batchSignal.addEventListener('abort', onBatchAbort, { once: true });
+        detachBatchAbort = () =>
+          batchSignal.removeEventListener('abort', onBatchAbort);
+      }
+    } else {
+      options.setAbortController(controller);
+    }
 
     let result: ToolResult;
     try {
@@ -313,7 +485,10 @@ export class ToolUseDispatchNode<C> extends BatchNode<
         controller.signal,
       );
     } finally {
-      options.setAbortController(null);
+      detachBatchAbort?.();
+      if (!batchSignal) {
+        options.setAbortController(null);
+      }
     }
 
     if (controller.signal.aborted || options.checkInterruption()) {

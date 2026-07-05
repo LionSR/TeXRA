@@ -8,6 +8,7 @@
  * (just before injection into model context via FollowUpQueue).
  */
 
+import type { ResultMeta } from '@agent/storage';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { normalizeProviderError } from '@common/errors';
@@ -491,4 +492,90 @@ function formatPlanContext(workPlan: WorkPlanSnapshot): string[] {
 function lastNLines(text: string, n: number): string {
   const lines = splitContentLines(text);
   return lines.length <= n ? text : lines.slice(-n).join('\n');
+}
+
+/**
+ * Build the structured result manifest for a finished subagent — the
+ * machine-readable counterpart of {@link formatSubagentDelivery}'s XML.
+ * Persisted to the execution KV store so later stages (orchestrator or a
+ * workflow script) can chain on outputs/diffs/outcome as data instead of
+ * parsing prose.
+ */
+export function buildSubagentResultMeta(
+  agentName: string,
+  result: AgentFlowResult,
+  options: {
+    diffInfos?: Map<string, DiffFileInfo>;
+    diffsUnavailable?: string;
+    wallTimeMs: number;
+  },
+): ResultMeta {
+  const base: ResultMeta = {
+    agentName,
+    category: result.category,
+    outcome: result.outcome,
+    success: result.outcome === 'completed',
+    wallTimeMs: options.wallTimeMs,
+    ...(result.totalCostUsd !== undefined && {
+      totalCostUsd: result.totalCostUsd,
+    }),
+  };
+  if (result.category === 'workflow') {
+    return {
+      ...base,
+      outputs: result.outputs,
+      ...(result.compileFailures.length > 0 && {
+        compileFailures: result.compileFailures,
+      }),
+      ...(options.diffInfos &&
+        options.diffInfos.size > 0 && {
+          diffs: [...options.diffInfos.entries()].map(([path, info]) => ({
+            path,
+            diffRelPath: info.diffRelPath,
+            largeChange: info.largeChange,
+          })),
+        }),
+      // Mirror the XML delivery's diffsUnavailable: a chaining consumer must
+      // distinguish "diff generation failed, read the outputs directly" from
+      // a clean no-diff result.
+      ...(options.diffsUnavailable !== undefined && {
+        diffsUnavailable: options.diffsUnavailable,
+      }),
+    };
+  }
+  return {
+    ...base,
+    ...(result.lastResponse !== undefined && {
+      lastResponse: result.lastResponse,
+    }),
+    ...(result.touchedFiles !== undefined &&
+      result.touchedFiles.length > 0 && {
+        touchedFiles: [...result.touchedFiles],
+      }),
+  };
+}
+
+/**
+ * Build the failure manifest written when a subagent errors. Overwrites any
+ * interim success manifest persisted at onBeforeWaiting — without this, a
+ * later failure would leave /executions/{id}/result claiming success while
+ * the prose report describes the error, breaking the chaining contract.
+ */
+export function buildSubagentFailureResultMeta(
+  agentName: string,
+  result: AgentFlowResult | undefined,
+  wallTimeMs: number,
+): ResultMeta {
+  if (!result) {
+    return { agentName, outcome: 'failed', success: false, wallTimeMs };
+  }
+  const meta = buildSubagentResultMeta(agentName, result, { wallTimeMs });
+  return {
+    ...meta,
+    success: false,
+    // A nominally completed flow that still reached the error path (e.g. a
+    // delivery crash) is a failure from the parent's perspective; genuine
+    // cancelled/failed outcomes pass through unchanged.
+    outcome: result.outcome === 'completed' ? 'failed' : result.outcome,
+  };
 }

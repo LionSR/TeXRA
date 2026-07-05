@@ -7,7 +7,11 @@
  */
 
 // Local imports - agent
-import { getExecutionStore, registerExecution } from '@agent/storage';
+import {
+  getExecutionStore,
+  registerExecution,
+  type ResultMeta,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -46,6 +50,8 @@ import {
   type DiffFileInfo,
 } from '@tools/subagentDiffs';
 import {
+  buildSubagentFailureResultMeta,
+  buildSubagentResultMeta,
   formatSubagentDelivery,
   formatSubagentError,
   formatSubagentProgress,
@@ -89,7 +95,7 @@ async function subagentDeliveryMessage(
     readonly startedAt: number;
     readonly workingDirectory?: string;
   },
-): Promise<string> {
+): Promise<{ msg: string; resultMeta: ResultMeta }> {
   let diffInfos: Map<string, DiffFileInfo> | undefined;
   let diffsUnavailable: string | undefined;
   if (result.category === 'workflow' && result.outputs.length > 0) {
@@ -110,12 +116,20 @@ async function subagentDeliveryMessage(
     }
   }
 
-  return formatSubagentDelivery(agentName, result, {
-    diffInfos,
-    diffsUnavailable,
-    wallTimeMs: Date.now() - options.startedAt,
-    workingDirectory: options.workingDirectory,
-  });
+  const wallTimeMs = Date.now() - options.startedAt;
+  return {
+    msg: formatSubagentDelivery(agentName, result, {
+      diffInfos,
+      diffsUnavailable,
+      wallTimeMs,
+      workingDirectory: options.workingDirectory,
+    }),
+    resultMeta: buildSubagentResultMeta(agentName, result, {
+      diffInfos,
+      diffsUnavailable,
+      wallTimeMs,
+    }),
+  };
 }
 
 async function writeSubagentReport(
@@ -130,6 +144,25 @@ async function writeSubagentReport(
     logger.warn(
       'subagentDelivery',
       `Failed to persist subagent report for ${executionId}: ${toErrorMessage(err)}`,
+    );
+  }
+}
+
+/**
+ * Best-effort persist of the structured result manifest — the chaining
+ * contract read via /executions/{id}/result. Never blocks or fails
+ * delivery.
+ */
+async function writeSubagentResultMeta(
+  executionId: string,
+  resultMeta: ResultMeta,
+): Promise<void> {
+  try {
+    await getExecutionStore(executionId).writeResultMeta(resultMeta);
+  } catch (err) {
+    logger.warn(
+      'subagentDelivery',
+      `Failed to persist subagent result manifest for ${executionId}: ${toErrorMessage(err)}`,
     );
   }
 }
@@ -260,14 +293,23 @@ export async function executeSubagent(
   if (parentContext.stopAfterCycle) {
     const failureResult = async (
       err: unknown,
-      memoryMisses?: AgentFlowResult['memoryMisses'],
+      result?: AgentFlowResult,
     ): Promise<ToolResult> => {
+      const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentError(executionId, agentName, err, {
-        wallTimeMs: Date.now() - startedAt,
+        wallTimeMs,
         workingDirectory,
-        memoryMisses,
+        memoryMisses: result?.memoryMisses,
       });
-      await writeSubagentReport(executionId, msg);
+      await Promise.all([
+        writeSubagentReport(executionId, msg),
+        writeSubagentResultMeta(
+          executionId,
+          // Keep the failed run's data (partial outputs, category, cost)
+          // in the manifest, matching the async error path.
+          buildSubagentFailureResultMeta(agentName, result, wallTimeMs),
+        ),
+      ]);
       return {
         status: 'error',
         summary: `Subagent '${agentName}' failed`,
@@ -295,16 +337,19 @@ export async function executeSubagent(
       if (result.outcome === 'failed') {
         return failureResult(
           subagentError ?? 'Subagent ended with failed outcome.',
-          result.memoryMisses,
+          result,
         );
       }
-      const msg = await subagentDeliveryMessage(
+      const { msg, resultMeta } = await subagentDeliveryMessage(
         executionId,
         agentName,
         result,
         { startedAt, workingDirectory },
       );
-      await writeSubagentReport(executionId, msg);
+      await Promise.all([
+        writeSubagentReport(executionId, msg),
+        writeSubagentResultMeta(executionId, resultMeta),
+      ]);
       return {
         status: 'executed',
         summary:
@@ -314,8 +359,11 @@ export async function executeSubagent(
         output: msg,
       };
     } catch (err) {
-      settleSubagentCost(getAgentFlowErrorResult(err));
-      return failureResult(err);
+      // AgentFlowError carries the failed run's result — keep its category,
+      // partial outputs, and cost in the failure manifest for chaining.
+      const errorResult = getAgentFlowErrorResult(err);
+      settleSubagentCost(errorResult);
+      return failureResult(err, errorResult);
     }
   }
 
@@ -390,6 +438,30 @@ export async function executeSubagent(
     }
   }
 
+  /**
+   * Deliver a terminal result and persist its report (and, when available,
+   * its structured result manifest) concurrently — the best-effort writes
+   * never delay the parent's wakeup, and they run even when delivery is
+   * deduplicated (the report/manifest are the durable copies).
+   */
+  async function persistAndDeliverTerminal(
+    msg: string,
+    resultMeta?: ResultMeta,
+  ): Promise<boolean> {
+    // The manifest lands BEFORE the wake: a parent chaining on this result
+    // reads /executions/{id}/result the moment the follow-up arrives, so
+    // the small JSON write must not race the delivery. The prose report
+    // duplicates the delivery text, so it stays off the critical path.
+    if (resultMeta) {
+      await writeSubagentResultMeta(executionId, resultMeta);
+    }
+    const [delivered] = await Promise.all([
+      deliverTerminalFollowUp({ text: msg, origin: 'subagent_result' }),
+      writeSubagentReport(executionId, msg),
+    ]);
+    return delivered;
+  }
+
   function onProgress(update: SubagentProgressUpdate): void {
     if (deliveryState.isDelivered()) return;
     const msg = formatSubagentProgress(executionId, agentName, update);
@@ -401,16 +473,18 @@ export async function executeSubagent(
     result?: AgentFlowResult,
   ): Promise<void> {
     settleSubagentCost(result);
+    const wallTimeMs = Date.now() - startedAt;
     const msg = formatSubagentError(executionId, agentName, err, {
-      wallTimeMs: Date.now() - startedAt,
+      wallTimeMs,
       workingDirectory,
       memoryMisses: result?.memoryMisses,
     });
-    await writeSubagentReport(executionId, msg);
-    await deliverTerminalFollowUp({
-      text: msg,
-      origin: 'subagent_result',
-    });
+    // Overwrite any interim success manifest from onBeforeWaiting so
+    // /executions/{id}/result never claims success for a failed run.
+    await persistAndDeliverTerminal(
+      msg,
+      buildSubagentFailureResultMeta(agentName, result, wallTimeMs),
+    );
   }
 
   const promise = executeAgent(configPayload, executionId, {
@@ -442,46 +516,38 @@ export async function executeSubagent(
       const resolvedChildStreamId = childStreamId;
       if (!resolvedChildStreamId) return false;
 
-      const msg = formatSubagentDelivery(
-        agentName,
-        {
-          category: 'toolUse' as const,
-          // The turn finished and the subagent is entering WAITING — for the
-          // orchestrator this interim delivery is a completed turn.
-          outcome: 'completed' as const,
-          lastResponse,
-          touchedFiles,
-          executionId,
-          streamId: resolvedChildStreamId,
-          memoryMisses: memoryMisses.length > 0 ? [...memoryMisses] : undefined,
-        },
-        {
-          wallTimeMs: Date.now() - startedAt,
-          workingDirectory,
-        },
-      );
-      // Best-effort persist — must never block delivery or abort the subagent.
-      await writeSubagentReport(executionId, msg);
-      // Claim only the enqueue step: formatting/storage failures before this
-      // still leave onCompleted/onError available as terminal fallbacks.
-      return await deliverTerminalFollowUp({
-        text: msg,
-        origin: 'subagent_result',
+      const interimResult = {
+        category: 'toolUse' as const,
+        // The turn finished and the subagent is entering WAITING — for the
+        // orchestrator this interim delivery is a completed turn.
+        outcome: 'completed' as const,
+        lastResponse,
+        touchedFiles,
+        executionId,
+        streamId: resolvedChildStreamId,
+        memoryMisses: memoryMisses.length > 0 ? [...memoryMisses] : undefined,
+      };
+      const wallTimeMs = Date.now() - startedAt;
+      const msg = formatSubagentDelivery(agentName, interimResult, {
+        wallTimeMs,
+        workingDirectory,
       });
+      // Claim only the enqueue step: formatting failures before this still
+      // leave onCompleted/onError available as terminal fallbacks.
+      return await persistAndDeliverTerminal(
+        msg,
+        buildSubagentResultMeta(agentName, interimResult, { wallTimeMs }),
+      );
     },
     onCompleted: async (result) => {
       settleSubagentCost(result);
-      const msg = await subagentDeliveryMessage(
+      const { msg, resultMeta } = await subagentDeliveryMessage(
         executionId,
         agentName,
         result,
         { startedAt, workingDirectory },
       );
-      await writeSubagentReport(executionId, msg);
-      await deliverTerminalFollowUp({
-        text: msg,
-        origin: 'subagent_result',
-      });
+      await persistAndDeliverTerminal(msg, resultMeta);
     },
     onError: (err, result) => deliverSubagentError(err, result),
   });

@@ -90,11 +90,13 @@ async function runTexcount(
   args: string[],
   channel: string,
   context: string,
+  signal?: AbortSignal,
 ): Promise<{ stdout: string | null; error?: string }> {
   const result = await runToolWithCheck('texcount', args, {
     channel,
     truncate: false,
     showError: true,
+    signal,
   });
 
   if (!result) {
@@ -129,6 +131,7 @@ async function getIndividualCounts(
   paths: string[],
   channel: string,
   includeReferenced: boolean,
+  signal?: AbortSignal,
 ): Promise<{ outputs: string[]; errors: string[] }> {
   const results = await Promise.all(
     paths.map(async (filePath) => {
@@ -149,7 +152,12 @@ async function getIndividualCounts(
       }
       args.push(filePath);
 
-      const { stdout, error } = await runTexcount(args, channel, filePath);
+      const { stdout, error } = await runTexcount(
+        args,
+        channel,
+        filePath,
+        signal,
+      );
       if (stdout) {
         return {
           output: `TeX Count Results for ${filePath}:\n${stdout}`,
@@ -172,6 +180,7 @@ async function getIndividualCounts(
 async function getSummedCount(
   paths: string[],
   channel: string,
+  signal?: AbortSignal,
 ): Promise<{ output: string | null; errors: string[] }> {
   const validPaths: string[] = [];
   const errors: string[] = [];
@@ -216,6 +225,7 @@ async function getSummedCount(
     args,
     channel,
     `sum for ${validPaths.join(', ')}`,
+    signal,
   );
   if (!stdout) {
     if (error) {
@@ -232,7 +242,13 @@ async function getSummedCount(
 
 export async function getTeXCount(
   filePaths: string | string[],
-  { mode = 'separate', channel }: TexcountOptions = {},
+  // `signal` rides alongside the schema-derived options: it's a runtime
+  // capability, not data, so it stays out of the Zod schema.
+  {
+    mode = 'separate',
+    channel,
+    signal,
+  }: TexcountOptions & { signal?: AbortSignal } = {},
 ): Promise<TexcountResult> {
   const resolvedChannel = channel ?? CHANNEL;
 
@@ -252,6 +268,7 @@ export async function getTeXCount(
       const { output, errors } = await getSummedCount(
         trimmedPaths,
         resolvedChannel,
+        signal,
       );
       if (output) {
         logger.info(resolvedChannel, `Combined TeX Count Results:\n${output}`);
@@ -264,6 +281,7 @@ export async function getTeXCount(
       trimmedPaths,
       resolvedChannel,
       includeReferenced,
+      signal,
     );
     if (outputs.length === 0) {
       if (errors.length === 0) {

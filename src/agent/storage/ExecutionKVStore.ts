@@ -102,8 +102,25 @@ export interface ChildRecord extends ChildRecordData {
   id: ExecutionId;
 }
 
-/** Lightweight metadata captured after an execution finishes. */
-const ResultMetaSchema = z.object({
+/** Line-diff reference for one output file, relative to the run directory. */
+const ResultDiffSummarySchema = z.object({
+  /** Absolute path of the output file the diff belongs to. */
+  path: z.string(),
+  /** Diff file path relative to the execution run directory. */
+  diffRelPath: z.string(),
+  /** True when the change ratio exceeded the large-change threshold. */
+  largeChange: z.boolean(),
+});
+
+/**
+ * Structured result of a finished execution — the machine-readable
+ * counterpart of the prose report. This is the chaining contract: a later
+ * stage (orchestrator or workflow script) reads outputs/diffs/outcome as
+ * data instead of parsing the XML delivery. Written by subagent completion,
+ * background bash, and CLI workflow runs; all fields optional so each
+ * writer contributes what it has.
+ */
+export const ResultMetaSchema = z.object({
   exitCode: z.int().optional(),
   wallTimeMs: z.number().nonnegative().optional(),
   success: z.boolean().optional(),
@@ -113,6 +130,26 @@ const ResultMetaSchema = z.object({
   copiedOutputs: z.array(z.string()).optional(),
   outputs: z.array(OutputFileSummarySchema).optional(),
   compileFailures: z.array(CompileFailureSummarySchema).optional(),
+  /** Agent that produced this result (subagent completions). */
+  agentName: z.string().optional(),
+  // New agent categories must be added here, or their manifests fail
+  // validation on read and surface as null.
+  category: z.enum(['workflow', 'toolUse']).optional(),
+  outcome: RunOutcomeSchema.optional(),
+  /** Final assistant text (tool-use agents). */
+  lastResponse: z.string().optional(),
+  /** Workspace-relative paths touched by a tool-use run. */
+  touchedFiles: z.array(z.string()).optional(),
+  /** Total model cost (USD) including the run's own subagents. */
+  totalCostUsd: z.number().nonnegative().optional(),
+  /** Line-diff files written for workflow outputs. */
+  diffs: z.array(ResultDiffSummarySchema).optional(),
+  /**
+   * Present when diff generation failed for a workflow result: carries the
+   * error so a chaining consumer distinguishes "diffs failed, read the
+   * output files directly" from a genuine no-diff/clean result.
+   */
+  diffsUnavailable: z.string().optional(),
 });
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
 
