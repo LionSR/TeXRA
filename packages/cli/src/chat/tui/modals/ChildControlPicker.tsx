@@ -23,6 +23,9 @@ import {
 } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import {
+  jumpTaskDetailScrollState,
+  moveTaskDetailScrollState,
+  pageTaskDetailScrollState,
   syncTaskDetailScrollState,
   taskDetailFollowTailScrollOffsetForColumns,
   taskDetailInitialScrollOffset,
@@ -30,7 +33,6 @@ import {
   taskDetailScrollContextKey,
   taskDetailVisibleOutputRowsFromOffsetForColumns,
   taskDetailVisibleScrollOffset,
-  moveTaskDetailScrollState,
   type TaskDetailScrollContext,
   type TaskDetailScrollState,
 } from '../state/taskDetailScroll';
@@ -64,6 +66,12 @@ const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
 const NARROW_TASK_DETAIL_HINT_MAX_COLUMNS = 56;
 const PICKER_HORIZONTAL_CHROME_COLUMNS = 4;
 const MIN_COLUMNS_FOR_KILL_HINT = 44;
+// PgUp/PgDn and g/G are the least essential task-detail hints — they
+// duplicate `TranscriptViewer`'s paging bindings but the arrow-key scroll
+// hint above already covers the same affordance more compactly. Only surface
+// them once there's room for the full hint row (scroll + page + top/bottom +
+// focus stream + kill + back) without crowding out the higher-priority ones.
+const MIN_COLUMNS_FOR_PAGE_JUMP_HINTS = 84;
 
 export function pickerTitle(mode: ChildControlMode): string {
   return CHILD_CONTROL_MODE_COPY[mode].title;
@@ -203,6 +211,14 @@ export function taskDetailKeyHintsForColumns({
     availableColumns <= NARROW_TASK_DETAIL_HINT_MAX_COLUMNS;
   const hints: KeyHint[] = [];
   if (showScrollHint) hints.push({ key: '↑/↓', action: 'scroll' });
+  if (
+    showScrollHint &&
+    (availableColumns === undefined ||
+      availableColumns >= MIN_COLUMNS_FOR_PAGE_JUMP_HINTS)
+  ) {
+    hints.push({ key: 'PgUp/PgDn', action: 'page' });
+    hints.push({ key: 'g/G', action: 'top/bottom' });
+  }
   if (canFocusStream) {
     hints.push({ key: 'f', action: narrow ? 'focus' : 'focus stream' });
   }
@@ -593,6 +609,52 @@ function TaskDetailView({
           current,
           maxOffset,
           'down',
+          followOffset,
+          scrollContext,
+        ),
+      );
+    }
+    if (key.pageUp) {
+      setScrollState((current) =>
+        pageTaskDetailScrollState(
+          current,
+          maxOffset,
+          'up',
+          visibleLineCount,
+          followOffset,
+          scrollContext,
+        ),
+      );
+    }
+    if (key.pageDown) {
+      setScrollState((current) =>
+        pageTaskDetailScrollState(
+          current,
+          maxOffset,
+          'down',
+          visibleLineCount,
+          followOffset,
+          scrollContext,
+        ),
+      );
+    }
+    if (input === 'g') {
+      setScrollState((current) =>
+        jumpTaskDetailScrollState(
+          current,
+          maxOffset,
+          'top',
+          followOffset,
+          scrollContext,
+        ),
+      );
+    }
+    if (input === 'G') {
+      setScrollState((current) =>
+        jumpTaskDetailScrollState(
+          current,
+          maxOffset,
+          'bottom',
           followOffset,
           scrollContext,
         ),
