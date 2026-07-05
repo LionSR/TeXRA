@@ -74,7 +74,7 @@ export class RecordingManager {
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     try {
-      const result = await startRecording(this.context);
+      const result = await startRecording();
       if (result.success) {
         const payload = this.buildRecordingMessage('started');
         if (payload) webviewView.webview.postMessage(payload);
@@ -107,7 +107,7 @@ export class RecordingManager {
           cancellable: false,
         },
         async () => {
-          const transcriptionPromise = stopRecordingAndTranscribe(this.context);
+          const transcriptionPromise = stopRecordingAndTranscribe();
           acknowledgeStop();
           const result = await transcriptionPromise;
           if (result.success) {

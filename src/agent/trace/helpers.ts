@@ -34,11 +34,7 @@ export function logSdkError(
   context?: ErrorContext,
   stageId?: string,
 ): void {
-  trace.error(message, {
-    messageType: MESSAGE_TYPES.ERROR,
-    data: buildErrorLogData(err, context),
-    stageId,
-  });
+  logErrorData(trace, message, buildErrorLogData(err, context), stageId);
 }
 
 /** Emit an error log with a pre-serialized data payload. */

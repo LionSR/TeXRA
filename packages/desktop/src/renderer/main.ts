@@ -96,6 +96,7 @@ import { getRendererPlatform } from './rendererPlatform';
 import { createPdfOverlay } from './pdfOverlay';
 import { createDiffOverlay } from './diffOverlay';
 import { createLogsDrawer } from './logsDrawer';
+import { createDialogCloseButton } from './dialogCloseButton';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -540,16 +541,13 @@ function ensureSettingsDialog(): WaDialog {
   // Settings-app fills the dialog body. We append it directly so subsequent
   // re-opens reuse the same instance (preserving tab selection and state).
   dialog.append(settingsView);
-  const close = document.createElement('wa-button');
-  close.classList.add('desktop-settings-close');
-  close.setAttribute('appearance', 'plain');
-  close.setAttribute('size', 'small');
-  close.setAttribute('aria-label', 'Close settings');
-  close.setAttribute('title', 'Close settings');
-  render(waIcon('xmark'), close);
-  close.addEventListener('click', () => {
-    dialog.open = false;
-  });
+  const close = createDialogCloseButton(
+    'desktop-settings-close',
+    'Close settings',
+    () => {
+      dialog.open = false;
+    },
+  );
   dialog.append(close);
   appRoot.append(dialog);
   settingsDialog = dialog;
