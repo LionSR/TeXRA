@@ -22,7 +22,6 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
-import { toErrorMessage } from '@common/errors';
 import {
   deriveRunOutcome,
   legacyEndGroupStatusForOutcome,
@@ -30,6 +29,7 @@ import {
 } from '@common/constants/streamStatus';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { STREAM_STATUS } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { isCleanInterruption, logTurnSummary } from './agentCliShared';
 import type { ChildStream } from './childStream';

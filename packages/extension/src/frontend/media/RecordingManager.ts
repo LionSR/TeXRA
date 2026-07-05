@@ -1,9 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
-import { toErrorMessage } from '@common/errors';
-
 // Local imports - media utilities
 import {
   startRecording,
@@ -11,6 +8,7 @@ import {
 } from '@frontend/media/audio';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'RecordingManager';
 logger.initialize(CHANNEL);
@@ -74,7 +72,7 @@ export class RecordingManager {
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     try {
-      const result = await startRecording(this.context);
+      const result = await startRecording();
       if (result.success) {
         const payload = this.buildRecordingMessage('started');
         if (payload) webviewView.webview.postMessage(payload);
@@ -107,7 +105,7 @@ export class RecordingManager {
           cancellable: false,
         },
         async () => {
-          const transcriptionPromise = stopRecordingAndTranscribe(this.context);
+          const transcriptionPromise = stopRecordingAndTranscribe();
           acknowledgeStop();
           const result = await transcriptionPromise;
           if (result.success) {

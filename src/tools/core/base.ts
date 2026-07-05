@@ -3,13 +3,13 @@ import { z, ZodError, type ZodType } from 'zod';
 
 // Local imports - core tool types (single source of truth)
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { toErrorMessage } from '@common/errors';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   type ToolResult,
 } from '@shared/schemas/toolResult';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Abstract base class for tool implementations.

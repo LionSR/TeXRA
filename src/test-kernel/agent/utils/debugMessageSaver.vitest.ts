@@ -8,10 +8,10 @@ import { describe, it, beforeAll, beforeEach, afterEach } from 'vitest';
 // Local imports - agent
 // Internal imports
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS, StorageFS } from '@utils/files';
-import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 beforeAll(async () => {
   // getConfig reads through the platform config provider; enable the
@@ -106,8 +106,8 @@ describe('maybeSaveDebugObject', () => {
       },
     });
 
-    const expectedDir = path.join(TASK_RUNS_DIR, executionId);
-    assert.deepEqual(ensured, [TASK_RUNS_DIR, expectedDir]);
+    const expectedDir = path.join(RUNS_STORAGE_DIR, executionId);
+    assert.deepEqual(ensured, [RUNS_STORAGE_DIR, expectedDir]);
 
     assert.equal(storageWrites.length, 1);
     const expectedRelativePath = path.join(expectedDir, 'response.json');

@@ -1,4 +1,4 @@
-import { toErrorMessage } from './errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const MAX_ERROR_LENGTH = 500;
 

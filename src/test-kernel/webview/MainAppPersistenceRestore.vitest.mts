@@ -20,7 +20,7 @@ import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
  * Characterization tests for MainApp's persistence/restore machinery.
  *
  * These pin down the CURRENT behavior of the two independently-triggered
- * restore paths (issue #7075):
+ * restore paths:
  *   1. mount-time webview-storage restore (`restorePersistedState`), and
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`),
  * including the legacy single-`instruction` migration precedence, the forced
@@ -64,9 +64,20 @@ const LEGACY_SEED = {
   attachTeXCount: true,
 };
 
+function seedWebviewState(state: Record<string, unknown> = LEGACY_SEED): void {
+  if (!webviewState) {
+    webviewState = { mainViewState: structuredClone(state) };
+    return;
+  }
+  for (const key of Object.keys(webviewState)) {
+    delete webviewState[key];
+  }
+  webviewState.mainViewState = structuredClone(state);
+}
+
 // Install the host-bridge stub at module scope, BEFORE the DOM harness imports
 // the MainApp module — `hostBridge` resolves this global at module load.
-webviewState = { mainViewState: structuredClone(LEGACY_SEED) };
+seedWebviewState();
 (globalThis as Record<string, unknown>)[HOST_BRIDGE_API_KEY] = {
   postMessage: (message: unknown) => {
     posted.push(message as PostedMessage);
@@ -144,12 +155,11 @@ describe('MainApp persistence and restore characterization', () => {
   useLitComponentTestDom(() => import('@webview/frontend/MainApp'));
 
   beforeEach(() => {
+    seedWebviewState();
     posted.length = 0;
     storageWrites.length = 0;
   });
 
-  // NOTE: this test must run first — it characterizes the mount-time restore
-  // against the pristine LEGACY_SEED, before other tests overwrite storage.
   it('restores persisted state on mount, migrating the legacy instruction and forcing output files inactive', async () => {
     const element = await mountMainApp();
     const { fileState, session } = contextsOf(element);

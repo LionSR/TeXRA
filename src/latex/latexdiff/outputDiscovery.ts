@@ -16,7 +16,7 @@ import {
   parseWorkflowOutputRoundDir,
 } from '@agent/output/workflowOutputLayout';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import { isFileNotFoundError, toErrorMessage } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type {
   ExecutionId,
@@ -29,6 +29,7 @@ import {
   findRunDir,
   pathToLocation,
 } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 

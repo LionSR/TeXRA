@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { toErrorMessage } from '@common/errors';
 // Local imports - frontend
 import { getFileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -16,6 +15,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'openFileCommands';
 logger.initialize(CHANNEL);

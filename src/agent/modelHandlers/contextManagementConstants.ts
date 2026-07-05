@@ -22,6 +22,14 @@ export const CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT = 5;
 /** Max character length for tool result text (200KB ~ 50-66k tokens). */
 export const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 
+/**
+ * Head/tail kept from an oversized tool result instead of discarding it
+ * wholesale. Head is small (just enough to name the invoked engine/file);
+ * tail is large because LaTeX/build errors cluster at the end of long logs.
+ */
+export const TOOL_RESULT_TRUNCATION_HEAD_CHARS = 4_000;
+export const TOOL_RESULT_TRUNCATION_TAIL_CHARS = 50_000;
+
 /** Max PDF pages per Anthropic API request: 600 for 1M-context models, 100 for 200K-context models. */
 const ANTHROPIC_MAX_PDF_PAGES_1M = 600;
 const ANTHROPIC_MAX_PDF_PAGES_200K = 100;

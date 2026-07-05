@@ -18,12 +18,12 @@ const EMPTY_SESSION_META: SessionMeta = {
 
 export const SESSION_META = signal<SessionMeta>(EMPTY_SESSION_META);
 
+export function patchSessionMeta(patch: Partial<SessionMeta>): void {
+  SESSION_META.set({ ...SESSION_META.get(), ...patch });
+}
+
 export function setCliSessionModelOverride(model: string): void {
-  SESSION_META.set({
-    ...SESSION_META.get(),
-    model,
-    modelSource: 'explicit-override',
-  });
+  patchSessionMeta({ model, modelSource: 'explicit-override' });
 }
 
 /** Preserve the resolved CLI version across resets; everything else clears. */

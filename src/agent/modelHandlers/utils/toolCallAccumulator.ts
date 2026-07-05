@@ -5,7 +5,7 @@
  * deltas whose `id`, `name`, and `arguments` arrive spread across chunks. This
  * is the SDK-agnostic shape both feed into the accumulator.
  */
-export interface ToolCallDelta {
+interface ToolCallDelta {
   index: number;
   id?: string | null;
   name?: string | null;
@@ -13,7 +13,7 @@ export interface ToolCallDelta {
 }
 
 /** A tool call assembled from streaming fragments, ready for materialization. */
-export interface AssembledToolCall {
+interface AssembledToolCall {
   index: number;
   id: string;
   name: string;
@@ -27,7 +27,7 @@ interface PartialToolCall {
 }
 
 /** Options controlling how accumulated calls are materialized. */
-export interface BuildToolCallsOptions {
+interface BuildToolCallsOptions {
   /** Skip entries with no id, name, or arguments. Defaults to `true`. */
   dropEmpty?: boolean;
   /** Substitute a stable `tool_call_${index}` id when none streamed. Defaults to `true`. */

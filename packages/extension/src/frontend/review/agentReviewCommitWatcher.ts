@@ -15,10 +15,10 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { toErrorMessage } from '@common/errors';
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 import { AgentReviewService } from './AgentReviewService';

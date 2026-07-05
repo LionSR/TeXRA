@@ -11,10 +11,10 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 import { invalidateListingCache } from './executionListing';
 
