@@ -8,9 +8,15 @@
  * what lets a session render/resume identically across hosts and keeps the
  * future cross-host shared-root flip a configuration change, not a format one.
  *
- * The per-category file keys live here too (not just in the extension's
- * `StreamTabStore`) so the shared `StreamSnapshotStore` and every host write
- * the same filenames.
+ * The per-category file keys live here too so the shared `StreamSnapshotStore`
+ * and every host write the same filenames.
+ *
+ * `LEGACY_INSTRUCTIONS`/`LEGACY_RUN_INSTRUCTIONS` are read-only archival keys:
+ * tabs created before the one-run-per-tab refactor (#3061, 2026-04-19) may
+ * still have one of these on disk, and there is no retention policy or GC for
+ * `streamData/` (see `docs/proposals/session-scoped-runtime-architecture.md`),
+ * so they stay supported until a dated retirement checkpoint retires them
+ * alongside the other #3061-era shims tracked in `#6981`.
  */
 
 import * as path from 'node:path';
