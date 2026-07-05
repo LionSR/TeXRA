@@ -67,6 +67,7 @@ import {
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
 import {
+  BASH_APPROVAL_CONFIG_TARGET,
   buildApprovalSettingsMessage,
   setBashApprovalEnabled,
   setWorkspaceAgentSetting,
@@ -914,7 +915,7 @@ export function createDesktopSettingsIpc(
     await setBashApprovalEnabled(
       { workspaceState, globalState, config: getConfigProvider() },
       enabled,
-      'workspace',
+      BASH_APPROVAL_CONFIG_TARGET,
     );
     postApprovalSettings();
   }
