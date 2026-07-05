@@ -319,7 +319,7 @@ export class ProgressFollowUpController {
         executionId,
       );
       const logPath = executionId
-        ? `/executions/${executionId}/files/${failure.logRelativePath}`
+        ? runStorageFilePath(executionId, failure.logRelativePath)
         : failure.log.absolutePath;
       return `- r${failure.round} ${failure.displayName}: output ${outputPath}; compile log ${logPath}`;
     });
@@ -475,7 +475,7 @@ export class ProgressFollowUpController {
     executionId: string | undefined,
   ): string {
     if (executionId && output.kind === 'runStorage') {
-      return `/executions/${executionId}/files/${output.relativePath}`;
+      return runStorageFilePath(executionId, output.relativePath);
     }
     if (output.kind === 'external') {
       return output.absolutePath;
@@ -490,11 +490,22 @@ export class ProgressFollowUpController {
     const location = output.location;
     switch (location.kind) {
       case 'runStorage':
-        return `/executions/${executionId ?? location.executionId}/files/${location.relativePath}`;
+        return runStorageFilePath(
+          executionId ?? location.executionId,
+          location.relativePath,
+        );
       case 'workspace':
         return location.relativePath;
       case 'external':
         return location.absolutePath;
     }
   }
+}
+
+/**
+ * Reference to a run-storage file the way the follow-up prompt addresses it:
+ * `/executions/<executionId>/files/<relativePath>`.
+ */
+function runStorageFilePath(executionId: string, relativePath: string): string {
+  return `/executions/${executionId}/files/${relativePath}`;
 }

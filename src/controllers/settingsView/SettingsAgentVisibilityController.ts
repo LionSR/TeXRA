@@ -2,6 +2,9 @@
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import { agentKeyOf } from '@shared/schemas/agent';
 
+// Local imports - controllers
+import { enabledKeysIncludeAgent } from './SettingsAgentCatalogController';
+
 export interface SettingsAgentVisibilityEntry {
   source: AgentSource;
   name: string;
@@ -35,10 +38,9 @@ export class SettingsAgentVisibilityController {
 
     let updated: string[];
     if (input.enabled) {
-      updated =
-        current.includes(key) || current.includes(input.name)
-          ? current
-          : [...current, key];
+      updated = enabledKeysIncludeAgent(current, input)
+        ? current
+        : [...current, key];
     } else if (raw === undefined) {
       updated = this.deps.state
         .getAgents(input.category)
