@@ -60,6 +60,25 @@ describe('buildSubagentResultMeta', () => {
     expect(meta.compileFailures).toBeUndefined();
   });
 
+  it('records diffsUnavailable in the manifest when diff generation failed', () => {
+    const result: AgentFlowResult = {
+      category: 'workflow',
+      outcome: 'completed',
+      outputs: [OUTPUT],
+      compileFailures: [],
+      executionId: 'abcdefabcdef' as ExecutionId,
+      streamId: 'stream:wf' as StreamTabId,
+    };
+    const meta = buildSubagentResultMeta('merge', result, {
+      wallTimeMs: 500,
+      diffsUnavailable: 'latexdiff crashed',
+    });
+
+    expect(ResultMetaSchema.parse(meta)).toEqual(meta);
+    expect(meta.diffs).toBeUndefined();
+    expect(meta.diffsUnavailable).toBe('latexdiff crashed');
+  });
+
   it('builds a schema-valid manifest for tool-use results', () => {
     const result: AgentFlowResult = {
       category: 'toolUse',

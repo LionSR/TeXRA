@@ -112,6 +112,19 @@ const DETERMINISM_PRELUDE = `
     writable: false,
     configurable: false,
   });
+
+  // Lock the Promise prototype's combinators so a script cannot reassign
+  // then/catch/finally before its first await. The kickoff dispatches the
+  // body promise through .then to deliver the result, and the realm's own
+  // Promise.all (in parallel/pipeline) relies on native then — a script
+  // override could otherwise forge an early success or corrupt fan-out.
+  for (const method of ['then', 'catch', 'finally']) {
+    Object.defineProperty(Promise.prototype, method, {
+      value: Promise.prototype[method],
+      writable: false,
+      configurable: false,
+    });
+  }
 })();
 `;
 
@@ -395,6 +408,9 @@ export async function runScriptInSandbox(
     `(() => {\n` +
       `  const body = __wfBody, deliver = __wfDeliver;\n` +
       `  delete globalThis.__wfBody;\n` +
+      // Promise.prototype.then is locked by DETERMINISM_PRELUDE, so this
+      // dispatch always uses the native then — a script cannot override it
+      // to invoke the fulfillment callback early and forge a result.
       `  delete globalThis.__wfDeliver;\n` +
       `  body().then((value) => deliver(value, false), (error) => deliver(error, true));\n` +
       `})();`,

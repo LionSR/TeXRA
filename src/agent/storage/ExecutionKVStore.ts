@@ -144,6 +144,12 @@ export const ResultMetaSchema = z.object({
   totalCostUsd: z.number().nonnegative().optional(),
   /** Line-diff files written for workflow outputs. */
   diffs: z.array(ResultDiffSummarySchema).optional(),
+  /**
+   * Present when diff generation failed for a workflow result: carries the
+   * error so a chaining consumer distinguishes "diffs failed, read the
+   * output files directly" from a genuine no-diff/clean result.
+   */
+  diffsUnavailable: z.string().optional(),
 });
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
 

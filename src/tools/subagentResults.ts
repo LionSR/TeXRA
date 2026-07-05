@@ -482,6 +482,7 @@ export function buildSubagentResultMeta(
   result: AgentFlowResult,
   options: {
     diffInfos?: Map<string, DiffFileInfo>;
+    diffsUnavailable?: string;
     wallTimeMs: number;
   },
 ): ResultMeta {
@@ -510,6 +511,12 @@ export function buildSubagentResultMeta(
             largeChange: info.largeChange,
           })),
         }),
+      // Mirror the XML delivery's diffsUnavailable: a chaining consumer must
+      // distinguish "diff generation failed, read the outputs directly" from
+      // a clean no-diff result.
+      ...(options.diffsUnavailable !== undefined && {
+        diffsUnavailable: options.diffsUnavailable,
+      }),
     };
   }
   return {

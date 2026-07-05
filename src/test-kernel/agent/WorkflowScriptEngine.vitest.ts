@@ -436,6 +436,24 @@ return results[0]`,
     ).rejects.toThrow(/not JSON-serializable/i);
   });
 
+  it('cannot forge a result by overriding Promise.prototype.then', async () => {
+    // then/catch/finally are locked non-writable before the body runs, so a
+    // script that tries to reassign then (to invoke the kickoff's delivery
+    // callback with a forged value) gets a real result — the reassignment
+    // throws under strict mode, or is simply ignored — not a forged success.
+    const run = await runWorkflowScript({
+      script: `${META}
+try {
+  Promise.prototype.then = function () { return this }
+} catch (error) {
+  // strict-mode assignment to a non-writable property throws; swallow it
+}
+return 'real-result'`,
+      runAgent: echoRunner,
+    });
+    expect(run.result).toBe('real-result');
+  });
+
   it('does not expose the result delivery channel to scripts', async () => {
     // The kickoff captures and deletes __wfDeliver/__wfBody before the body
     // runs, so a script cannot forge an early result through them.

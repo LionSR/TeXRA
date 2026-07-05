@@ -126,6 +126,7 @@ async function subagentDeliveryMessage(
     }),
     resultMeta: buildSubagentResultMeta(agentName, result, {
       diffInfos,
+      diffsUnavailable,
       wallTimeMs,
     }),
   };
