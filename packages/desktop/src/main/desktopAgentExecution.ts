@@ -653,6 +653,33 @@ export class DesktopProgressBridge {
     return { activeExecutionIds, allExecutionIds };
   }
 
+  /**
+   * Consults detectWaitingStreams() (the KV-store-backed, ground-truth
+   * persisted flow record check) and then re-fetches active execution ids
+   * to drop any stream that became active while that await was in flight --
+   * a narrow but real race (another window, or a headless run, could resume
+   * the stream mid-lookup). Shared by both the primary try path and the
+   * degraded catch-fallback path in repairOrphanedStreamsAfterRestart so the
+   * two can no longer silently diverge on this check the way they once did.
+   */
+  private async detectRaceGuardedWaitingStreams(
+    executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
+  ): Promise<{
+    waitingStreams: Set<StreamTabId>;
+    activeExecutionIds: Set<string>;
+    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
+  }> {
+    const waitingStreams = await detectWaitingStreams(executionIdMap);
+    const { activeExecutionIds, allExecutionIds } =
+      this.refreshActiveExecutionIds();
+    for (const [streamId, executionId] of allExecutionIds) {
+      if (activeExecutionIds.has(executionId)) {
+        waitingStreams.delete(streamId);
+      }
+    }
+    return { waitingStreams, activeExecutionIds, allExecutionIds };
+  }
+
   private resetRestartRepairStreamStatuses(
     repairStreams: ReadonlySet<StreamTabId>,
     waitingStreams: ReadonlySet<StreamTabId>,
@@ -761,16 +788,11 @@ export class DesktopProgressBridge {
           ([, executionId]) => !activeExecutionIds.has(executionId),
         ),
       );
-      const waitingStreams = await detectWaitingStreams(executionIdMap);
       const {
+        waitingStreams,
         activeExecutionIds: repairActiveExecutionIds,
         allExecutionIds: repairAllExecutionIds,
-      } = this.refreshActiveExecutionIds();
-      for (const [streamId, executionId] of repairAllExecutionIds) {
-        if (repairActiveExecutionIds.has(executionId)) {
-          waitingStreams.delete(streamId);
-        }
-      }
+      } = await this.detectRaceGuardedWaitingStreams(executionIdMap);
       const repairExecutionIdMap = new Map(
         [...repairAllExecutionIds].filter(
           ([, executionId]) => !repairActiveExecutionIds.has(executionId),
@@ -808,7 +830,53 @@ export class DesktopProgressBridge {
         }
       }
       this.progressEvents.hydrateRestoredStreams();
-      this.refreshActiveExecutionIds();
+      const { activeExecutionIds, allExecutionIds } =
+        this.refreshActiveExecutionIds();
+      // The in-memory scan above only catches streams whose CURRENT status
+      // already happens to be WAITING. It misses a stream that was RUNNING
+      // at crash time but has a valid persisted flow record -- ground truth
+      // that only detectWaitingStreams() (KV-store backed) can see. Without
+      // this, resetRestartRepairStreamStatuses would wrongly demote such a
+      // stream to FAILED instead of restoring it to WAITING.
+      try {
+        const executionIdMap = new Map(
+          [...allExecutionIds].filter(
+            ([, executionId]) => !activeExecutionIds.has(executionId),
+          ),
+        );
+        const {
+          waitingStreams: persistedWaitingStreams,
+          activeExecutionIds: postDetectActiveExecutionIds,
+          allExecutionIds: postDetectAllExecutionIds,
+        } = await this.detectRaceGuardedWaitingStreams(executionIdMap);
+        for (const streamId of persistedWaitingStreams) {
+          waitingStreams.add(streamId);
+        }
+        // The helper only race-guards its own (persisted-record) result.
+        // waitingStreams also carries the pre-existing in-memory-scan
+        // entries from above, which predate the KV read and so never got
+        // checked against activity that happened during it -- recheck them
+        // here too, or an actively-resumed stream could still be handed to
+        // closeRunningTaskGroupsForStreams() below.
+        for (const [streamId, executionId] of postDetectAllExecutionIds) {
+          if (postDetectActiveExecutionIds.has(executionId)) {
+            waitingStreams.delete(streamId);
+          }
+        }
+      } catch (detectError) {
+        // Keep going with whatever the in-memory scan already found -- a
+        // failure here must not block the rest of this already-degraded
+        // fallback path.
+        this.logger.warn(
+          'Failed to consult persisted flow records during desktop restart-repair fallback',
+          {
+            data:
+              detectError instanceof Error
+                ? detectError
+                : { error: detectError },
+          },
+        );
+      }
       const affectedStreams = this.resetRestartRepairStreamStatuses(
         new Set(this.progressEvents.restoredStreams.keys()),
         waitingStreams,
