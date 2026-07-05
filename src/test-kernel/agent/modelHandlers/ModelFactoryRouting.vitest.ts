@@ -7,6 +7,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
   MODEL_CONFIGS,
   ModelProvider,
+  ReasoningEffort,
   type ModelConfig,
 } from 'llm-zoo';
 
@@ -183,10 +184,14 @@ describe('OpenAI model handler routing', () => {
   });
 
   const codexEligibleConfig: ModelConfig = {
-    ...modelConfig(ModelProvider.OPENAI),
+    ...modelConfig(ModelProvider.OPENAI, {
+      reasoningEffort: ReasoningEffort.XHIGH,
+    }),
     name: 'gpt55-test',
     // Date-pinned fullName (as llm-zoo really ships) with the unpinned shortName
-    // the Codex backend + eligibility key on. Guards the short-name matching.
+    // the Codex backend keys on. Codex eligibility itself is derived from the
+    // top reasoning-effort tier (see providerCapabilities.ts), independent of
+    // this shortName/date-pin pair.
     fullName: 'gpt-5.5-2026-04-23',
     shortName: 'gpt-5.5',
     requiresResponsesAPI: true,
