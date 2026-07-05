@@ -140,10 +140,10 @@ export class WorkflowToolUseFollowupSection extends LitElement {
     return html`
       <wa-details
         class="panel-collapsible"
-        summary="Tool-use follow-up"
+        summary="Follow-up chat"
         @wa-show=${this.handleShow}
         role="region"
-        aria-label="Workflow tool-use follow-up"
+        aria-label="Follow-up chat"
       >
         <div class="followup__body">
           <div class="followup__description">

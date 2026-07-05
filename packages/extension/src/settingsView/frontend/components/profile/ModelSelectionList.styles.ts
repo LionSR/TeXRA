@@ -82,6 +82,11 @@ export const modelSelectionListStyles: CSSResult = css`
   .provider-group-toggle::part(base) {
     display: flex;
     align-items: center;
+    /* wa-button's own .button part defaults to justify-content: center
+     * (a centered label suits a typical button) -- override it here since
+     * this button's content is a left-aligned row (chevron, name, count),
+     * matching the API Configuration provider rows above it. */
+    justify-content: flex-start;
     width: 100%;
     padding: var(--wa-space-xs);
     background: none;
