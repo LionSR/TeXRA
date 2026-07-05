@@ -3,10 +3,10 @@ import { z } from 'zod';
 
 // Internal imports
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from '../core/define';

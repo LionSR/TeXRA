@@ -49,7 +49,7 @@ const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /** Options shared by upload helpers that must bypass uploads on OpenRouter. */
-export interface FileUploadOptions {
+interface FileUploadOptions {
   /** Whether requests are routed through OpenRouter (uploads unavailable). */
   openRouterRouting: boolean;
   logger: AgentTrace;

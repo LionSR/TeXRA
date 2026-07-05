@@ -5,13 +5,14 @@ import { z } from 'zod';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
-import { toErrorMessage } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@shared/schemas/toolResult';
+import { isObject } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export const DUPLICATE_CALL_ERROR =
   'Duplicate parallel call skipped — same tool name and arguments as an earlier call in this batch. ' +
@@ -61,6 +62,21 @@ export function parseToolInput(
     return raw;
   }
   return parsed.value;
+}
+
+/**
+ * Same as {@link parseToolInput}, but always returns a plain object — for
+ * handlers (e.g. streamed argument buffers) whose tool-call arguments must
+ * be a Record rather than a possibly-raw string.
+ */
+export function parseToolInputAsObject(
+  raw: string,
+  callId: string,
+  logger: AgentTrace,
+): Record<string, unknown> {
+  if (!raw) return {};
+  const parsed = parseToolInput(raw, callId, logger);
+  return isObject(parsed) ? parsed : {};
 }
 
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */

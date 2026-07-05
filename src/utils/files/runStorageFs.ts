@@ -3,25 +3,21 @@ import * as path from 'node:path';
 import { promises as fs } from 'node:fs';
 
 import {
-  LEGACY_RUNS_STORAGE_DIR,
   resolveExistingRunStoragePath,
   resolveRunOriginalSnapshotPath,
   resolveRunStoragePath,
   resolveRunStorageRelativePath,
   RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
-import { isFileNotFoundError, toErrorMessage } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { type ExecutionId, type RunStorageFileLocation } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { createRunStorageLocation } from './fileLocation';
 import { StorageFS } from './storageFS';
 
 export const CHANNEL = 'taskRunStorage';
-
-export const TASK_RUNS_DIR = RUNS_STORAGE_DIR;
-
-export const LEGACY_RUNS_DIR = LEGACY_RUNS_STORAGE_DIR;
 
 export function getRunDir(id: ExecutionId): string {
   return StorageFS.fullPath(resolveRunStoragePath(id));
@@ -51,7 +47,7 @@ export async function findRunDir(id: ExecutionId): Promise<string | undefined> {
 }
 
 export async function ensureRunDir(id: ExecutionId): Promise<void> {
-  await StorageFS.ensureDir(TASK_RUNS_DIR);
+  await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   await StorageFS.ensureDir(resolveRunStoragePath(id));
 }
 

@@ -65,7 +65,7 @@ export type {
 export { NO_BYPASS, thinkingIndicatorVisible } from './types';
 export type { ActiveSlashForm } from './foregroundOverlaySlice';
 
-export { setCliSessionModelOverride } from './sessionSlice';
+export { patchSessionMeta, setCliSessionModelOverride } from './sessionSlice';
 export { patchStream, setStreamStatusInCliState } from './streamsSlice';
 export { registerChildStreams, setParentStream } from './parentStreamSlice';
 export { bumpCodexPreferenceVersion } from './codexPreferenceSlice';

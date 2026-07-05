@@ -73,10 +73,6 @@ settings:
   # Output Handling
   documentTag: documents # The main XML tag wrapping the agent's final output (defaults to `documents`).
   endTag: '</documents>' # The closing tag that signals the agent has finished its main output.
-  prefills:
-    - "<documents>\n" # List of strings the AI should start its response(s) with.
-      # Item [0] is for Round 0, Item [1] is for Round 1 (reflection).
-      # Crucial for models needing specific start formats (e.g., XML tags).
 
   # File Handling (Optional - Advanced)
   # requiredFiles:

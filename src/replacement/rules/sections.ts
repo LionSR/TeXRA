@@ -9,12 +9,11 @@ export const SECTION_REPLACEMENTS: ReplacementCategory = {
   name: 'sections',
   description: 'Fixes for section spacing in LaTeX documents',
   isRegex: false,
-  patterns: (() => {
-    // Examples:
-    // \end{align}\n\section -> \end{align}\n\n\n\section
-    // \end{equation}\n\paragraph -> \end{equation}\n\n\n\paragraph
-    const environments = ['align', 'equation'];
-
-    return generateSectionSpacingFixes(environments, SECTION_TYPES.slice(0, 3));
-  })(),
+  // Examples:
+  // \end{align}\n\section -> \end{align}\n\n\n\section
+  // \end{equation}\n\paragraph -> \end{equation}\n\n\n\paragraph
+  patterns: generateSectionSpacingFixes(
+    ['align', 'equation'],
+    SECTION_TYPES.slice(0, 3),
+  ),
 };
