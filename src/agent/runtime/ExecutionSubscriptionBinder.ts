@@ -17,6 +17,7 @@ import {
   type ExecutionProgress,
   type ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -177,9 +178,11 @@ class ExecutionSubscription implements Disposable {
     )
       .then((result) => {
         if (result.status === 'sent' || result.status === 'queued') {
-          this.runtimeHost.emit('updateQueuedFollowUps', {
-            streamId: this.streamId,
-          });
+          emitRuntimeEvent(
+            'updateQueuedFollowUps',
+            { streamId: this.streamId },
+            this.session,
+          );
         }
       })
       .catch((err: unknown) => {

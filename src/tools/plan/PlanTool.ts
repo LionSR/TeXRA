@@ -25,7 +25,6 @@ import {
   getCurrentToolContexts,
   type CurrentToolContexts,
 } from '@agent/followUp/ToolFileInteractionContext';
-import { toErrorMessage } from '@common/errors';
 import { createChannelTrace } from '@logger';
 import type { Plan } from '@shared/schemas';
 import {
@@ -43,6 +42,7 @@ import {
 } from '@tools/goal';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createChannelTrace('PlanTool');
 

@@ -24,8 +24,8 @@ import {
   toStorableSupabaseSession,
   type SupabaseSession,
 } from '@auth/SupabaseSession';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SupabaseUriHandler } from './UriHandler';
 
 const AUTH_URI_HANDLER_NOT_INITIALIZED =

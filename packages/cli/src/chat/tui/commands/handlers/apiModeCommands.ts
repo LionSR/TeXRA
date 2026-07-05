@@ -12,10 +12,10 @@ import {
   selectCliRunnableModel,
 } from '@cli/runtime/modelAccess';
 
-import { cliState } from '@cli/chat/tui/state/cliState';
+import { cliState, patchSessionMeta } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
@@ -42,19 +42,13 @@ async function reconcileRootModelAfterApiModeChange(
   await setCliHelperModel(selection.model);
   if (selection.model === currentModel) return undefined;
 
-  cliState.sessionMeta.set({
-    ...cliState.sessionMeta.get(),
-    model: selection.model,
-  });
+  patchSessionMeta({ model: selection.model });
   return selection.notice;
 }
 
 /** Set the chat session's api-mode without touching the persisted global. */
 export function setCliSessionApiMode(apiMode: CliApiMode): void {
-  cliState.sessionMeta.set({
-    ...cliState.sessionMeta.get(),
-    apiMode,
-  });
+  patchSessionMeta({ apiMode });
 }
 
 export async function applyCliApiModeSelection(

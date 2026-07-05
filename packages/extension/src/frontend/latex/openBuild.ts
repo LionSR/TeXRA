@@ -3,7 +3,6 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 
-import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -16,6 +15,7 @@ import {
 
 // Local imports - utilities
 import { AbsoluteFS, pathToLocation } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'OpenBuildUtils';
 

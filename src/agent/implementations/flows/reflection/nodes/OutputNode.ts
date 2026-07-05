@@ -28,7 +28,6 @@ import {
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { tryOperation } from '@agent/output/outputOperations';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import { toErrorMessage } from '@common/errors';
 import {
   MESSAGE_TYPES,
   type AgentFileLocation,
@@ -38,6 +37,7 @@ import {
   type RoundOutput,
 } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';

@@ -1,4 +1,4 @@
-import { bus } from '@eventBus/ProgressEventBus';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 
 /**
  * How to identify the workflow tab(s) whose missing-outputs marker should be
@@ -23,8 +23,12 @@ export function emitClearMissingOutputs(
   options: ClearMissingOutputsOptions,
 ): void {
   if (options.streamIdOverride !== undefined) {
-    bus.emit('clearMissingOutputs', { streamId: options.streamIdOverride });
+    emitRuntimeEvent('clearMissingOutputs', {
+      streamId: options.streamIdOverride,
+    });
     return;
   }
-  bus.emit('clearMissingOutputs', { streamConfig: options.streamConfig });
+  emitRuntimeEvent('clearMissingOutputs', {
+    streamConfig: options.streamConfig,
+  });
 }

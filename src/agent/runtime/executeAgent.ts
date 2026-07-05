@@ -7,6 +7,7 @@ import {
   runToolUseFlow,
   type RunToolUseFlowResult,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import {
@@ -180,7 +181,7 @@ async function runToolUseAgent(
           options.onProgress?.(update);
         },
         onFollowUpConsumed: () => {
-          ctx.runtimeHost.emit('updateQueuedFollowUps', {
+          emitRuntimeEvent('updateQueuedFollowUps', {
             streamId: ctx.streamId,
           });
           options.onFollowUpConsumed?.();
@@ -492,7 +493,7 @@ export async function resumeToolUseFromSnapshot(
             // /memories protocol) that the fresh run had included.
             isSubagent,
             onFollowUpConsumed: () =>
-              ctx.runtimeHost.emit('updateQueuedFollowUps', {
+              emitRuntimeEvent('updateQueuedFollowUps', {
                 streamId: ctx.streamId,
               }),
           },

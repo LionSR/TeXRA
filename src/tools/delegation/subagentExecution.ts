@@ -28,7 +28,6 @@ import {
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 
 // Local imports - logger
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // Local imports - tools
@@ -55,6 +54,7 @@ import {
   SUBAGENT_DELIVERY_DECISION,
   subagentDeliveryRegistry,
 } from '@tools/subagentDeliveryState';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';

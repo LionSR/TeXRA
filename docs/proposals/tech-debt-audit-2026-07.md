@@ -284,19 +284,19 @@ with a stable id so synthetics/dedup disappear entirely.
 ### B3. `@texra/core` "SDK boundary": declared done, but nothing enforces it
 
 `agent-sdk-readiness.md` marks Steps 1–7 landed and the checkpoint concludes
-"SDK-ready in shape." The artifact, though, is a single 134-line re-export
-barrel — `"private": true`, `main`/`exports` pointing at raw `./src/index.ts`,
-no emit build, excluded from root tsconfig — and its own header concedes deep
-`@agent/*` imports "are not being migrated in bulk." An unenforced boundary
-drifts by default.
+"SDK-ready in shape." As of the audit, the artifact was a single 134-line
+re-export barrel — `"private": true`, `main`/`exports` pointing at raw
+`./src/index.ts`, no emit build, excluded from root tsconfig — and its own
+header conceded deep `@agent/*` imports "are not being migrated in bulk." An
+unenforced boundary drifts by default.
 
 **Better solution:** pick one honestly. Either (a) enforce: an ESLint
 `no-restricted-imports` rule banning deep `@agent/*`/`@platform` imports from
 `packages/{cli,desktop,extension}` (allowlist the current offenders, ratchet
-down) plus a real build so the package is publishable; or (b) demote the
-framing from "curated public SDK" to "internal convenience barrel" in docs and
-CLAUDE.md. The costly state is the current middle: SDK claims without SDK
-guarantees.
+down) plus a real build so the package is publishable; or (b) demote. #7099
+selects path (b): remove the unused package/dependencies and describe the SDK
+package as a future enforced surface rather than a current artifact. The costly
+state was the middle: SDK claims without SDK guarantees.
 
 ### B4. Config catalog: extend the documented plan to code-generate the manifest and delete the snapshot machinery
 
@@ -425,14 +425,13 @@ Two independent delivery systems, meeting only at two bridges:
 
 ### Execution cluster as it actually runs
 
-- **Ownership map:** `SessionHandle` (289 lines) composes per-session
-  `InterruptRegistry`, `ExecutionRegistry`, `RunCoordinatorBridge`,
-  `ExecutionSubscriptionBinder` in forced dependency order
-  (`SessionHandle.ts:86-118`); `defaultSession()` aliases the process
-  singletons so unmigrated call sites stay byte-identical. Deliberately NOT
-  session-owned: `StreamStatusService` (shared instance injected into every
-  session), static `ToolUseFollowUpQueue`, `subagentDeliveryRegistry`
-  (explicit rationale comment), `toolInjectionRegistry`.
+- **Ownership map:** `SessionHandle` composes per-session `InterruptRegistry`,
+  `ExecutionRegistry`, `RunCoordinatorBridge`, `ExecutionSubscriptionBinder`,
+  event hub, transcript store, and follow-up queue in forced dependency order;
+  `defaultSession()` aliases the process singletons/default store/default queue
+  so unmigrated call sites stay byte-identical. Deliberately NOT session-owned:
+  `subagentDeliveryRegistry` (explicit rationale comment),
+  `toolInjectionRegistry`.
 - **Lifecycle single-writer (landed):** `runFlowWithLifecycle` is the sole
   owner of RUNNING and of the terminal transition; `RunOutcome` is projected
   through the declarative `RUN_OUTCOME_PROJECTION` table to
