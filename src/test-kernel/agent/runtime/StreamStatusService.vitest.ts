@@ -236,7 +236,7 @@ describe('StreamStatusMachine', () => {
     expect(explicit.events).toEqual([]);
   });
 
-  it('clears transient running substates without changing phase', () => {
+  it('clears a transient running substate through the table-checked resume transition', () => {
     const { machine, explicit, streamId } = setupMachine(
       'stream-status-clear-running-substate',
     );
@@ -244,7 +244,7 @@ describe('StreamStatusMachine', () => {
     seedStreamStatusForTest(machine, streamId, STREAM_STATUS.RESUMING);
 
     expect(
-      machine.clearRunningSubstate(streamId, 'resume', {
+      machine.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
         runtimeHost: explicit.host,
       }),
     ).toBe(true);
@@ -262,6 +262,24 @@ describe('StreamStatusMachine', () => {
         },
       },
     ]);
+  });
+
+  it('skips the write and publish for a no-op RUNNING resume with no substate to clear', () => {
+    const { machine, explicit, streamId } = setupMachine(
+      'stream-status-noop-running-resume',
+    );
+
+    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.RUNNING);
+
+    expect(
+      machine.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
+        runtimeHost: explicit.host,
+      }),
+    ).toBe(true);
+
+    expect(machine.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+    expect(machine.getSubstate(streamId)).toBeUndefined();
+    expect(explicit.events).toEqual([]);
   });
 
   it('rolls back reservation state identically with and without observers', () => {

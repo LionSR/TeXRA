@@ -9,7 +9,6 @@ import {
   formatToolResultAsText,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
-import { toolError, ToolResultSchema } from '@shared/schemas/toolResult';
 
 describe('checkToolResultTextLimit', () => {
   it('returns null for text within limit', () => {
@@ -202,19 +201,6 @@ describe('extractToolAttachments', () => {
           },
         ],
       } as never),
-    );
-  });
-});
-
-describe('toolError', () => {
-  it('normalizes blank messages to a schema-valid fallback', () => {
-    const result = toolError('   ');
-
-    assert.equal(result.status, 'error');
-    assert.equal(result.error, 'Tool execution failed.');
-    assert.equal(
-      ToolResultSchema.parse(result).error,
-      'Tool execution failed.',
     );
   });
 });

@@ -7,7 +7,10 @@ import type { ToolResult } from '@shared/schemas/toolResult';
 
 /**
  * Contract for tool implementations.
- * BaseTool provides the canonical implementation with Zod validation.
+ * BaseTool provides the canonical implementation with Zod validation. Expected
+ * tool failures are returned as literal `{ status: 'error', error: ... }`
+ * ToolResult values; unexpected/programmer failures should throw and let
+ * BaseTool convert them at the boundary.
  */
 export interface ITool {
   readonly definition: ToolDefinition;
