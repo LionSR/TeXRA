@@ -26,3 +26,8 @@ export {
 } from './runTrace';
 export { streamDataDir } from './streamDataPaths';
 export { StreamSnapshotStore } from './StreamSnapshotStore';
+export {
+  assembleTrace,
+  type AssembleTraceResult,
+  type TraceDocument,
+} from './traceAssembler';
