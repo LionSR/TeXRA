@@ -12,7 +12,10 @@ import { instruction$, isPolishing$, isRecording$ } from '../mainViewState';
 import { setInstruction, showInformation } from '../mainViewActions';
 import { saveState } from '../persistence';
 
-export const chatHandlers: MainViewHandlerRegistry = {
+// `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
+// owns only chat commands; see bannerSlice.ts for why (registry is now
+// exhaustive, messageDispatcher.ts is the real coverage checkpoint).
+export const chatHandlers = {
   [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (message) => {
     isPolishing$.set(false);
     if (message.text.trim()) {
@@ -51,4 +54,4 @@ export const chatHandlers: MainViewHandlerRegistry = {
   [MAIN_VIEW_COMMANDS.RECORDING_ERROR]: () => {
     isRecording$.set(false);
   },
-};
+} satisfies Partial<MainViewHandlerRegistry>;

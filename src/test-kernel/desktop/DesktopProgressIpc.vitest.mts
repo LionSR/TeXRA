@@ -4,9 +4,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - webview command constants
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
+import { unsupported } from '@shared/utils/dispatcher';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+
+/** Default reason for the handlers this test doesn't stub explicitly. */
+const NOT_UNDER_TEST = 'not covered by this test';
+
+/**
+ * Pads a partial handler stub with `unsupported(NOT_UNDER_TEST)` for every
+ * other command so it satisfies the exhaustive registry type. This suite
+ * only exercises the desktop IPC's dispatch mechanics (recognized/pass-
+ * through/unhandled), not real per-command coverage.
+ */
+function fillRegistry(
+  partial: Partial<ProgressViewInboundHandlerRegistry> = {},
+): ProgressViewInboundHandlerRegistry {
+  const full: Record<string, unknown> = {};
+  for (const command of new Set(Object.values(PROGRESS_VIEW_COMMANDS))) {
+    full[command] =
+      (partial as Record<string, unknown>)[command] ??
+      unsupported(NOT_UNDER_TEST);
+  }
+  return full as ProgressViewInboundHandlerRegistry;
+}
 
 interface DesktopProgressIpcModule {
   createDesktopProgressIpc(options: {
@@ -14,7 +36,10 @@ interface DesktopProgressIpcModule {
       syncFullView(): void;
       progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
     };
-    onUnsupportedCommand?: (message: { command: string }) => void;
+    onUnsupportedCommand?: (
+      message: { command: string },
+      reason?: string,
+    ) => void;
     onAsyncError?: (error: unknown) => void;
   }): {
     handleMessage(
@@ -31,11 +56,11 @@ async function loadDesktopProgressIpc(): Promise<DesktopProgressIpcModule> {
 }
 
 function createProgress(
-  progressViewInboundHandlers: ProgressViewInboundHandlerRegistry = {},
+  progressViewInboundHandlers: Partial<ProgressViewInboundHandlerRegistry> = {},
 ) {
   return {
     syncFullView: vi.fn(),
-    progressViewInboundHandlers,
+    progressViewInboundHandlers: fillRegistry(progressViewInboundHandlers),
   };
 }
 
@@ -87,10 +112,10 @@ describe('desktop Progress IPC', () => {
         stream: 'run-1',
       }),
     ).toBe(true);
-    expect(onUnsupportedCommand).toHaveBeenCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.STOP_STREAM,
-      stream: 'run-1',
-    });
+    expect(onUnsupportedCommand).toHaveBeenCalledWith(
+      { command: PROGRESS_VIEW_COMMANDS.STOP_STREAM, stream: 'run-1' },
+      NOT_UNDER_TEST,
+    );
   });
 
   it('leaves shell-level pass-through commands for sibling desktop handlers', async () => {

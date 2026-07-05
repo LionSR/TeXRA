@@ -1,3 +1,5 @@
+import { UnsupportedCommandError } from '@shared/utils/dispatcher';
+
 export type DesktopCommandMessage = { command: string } & Record<
   string,
   unknown
@@ -22,10 +24,27 @@ export function isDesktopCommandMessage(
   );
 }
 
+/**
+ * Wraps a dispatcher's `onError` callback so an {@link UnsupportedCommandError}
+ * (a registry entry declared `unsupported(...)`) is routed to `onUnsupported`
+ * — the host's visible-feedback surface (e.g. a native info dialog) — instead
+ * of the generic error reporter. Every desktop dispatcher call site shares
+ * this so "command deliberately unsupported here" always produces visible
+ * feedback rather than a console-only log.
+ */
 export function createDesktopErrorReporter(
   onError?: (error: unknown) => void,
+  onUnsupported?: (error: UnsupportedCommandError) => void,
 ): (error: unknown) => void {
-  return onError ?? defaultReportError;
+  const reportError = onError ?? defaultReportError;
+  if (!onUnsupported) return reportError;
+  return (error: unknown) => {
+    if (error instanceof UnsupportedCommandError) {
+      onUnsupported(error);
+      return;
+    }
+    reportError(error);
+  };
 }
 
 function defaultReportError(error: unknown): void {

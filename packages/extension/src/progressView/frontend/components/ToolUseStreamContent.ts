@@ -47,6 +47,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
         .yoloActive=${Boolean(currentState.toolEditBypass)}
         .superYoloActive=${Boolean(currentState.superYoloBypass)}
         .goalActive=${Boolean(currentState.goalActive)}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
       ></stream-header>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
@@ -84,6 +85,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
         .polishRevision=${currentState.ui.polishRevision}
         .transcribedText=${currentState.ui.transcribedText}
         .recording=${currentState.ui.recording}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
         @focus-complete=${this.handleFocusComplete}
       ></follow-up-input>
     `;

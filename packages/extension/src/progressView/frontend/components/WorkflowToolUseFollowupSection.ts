@@ -16,6 +16,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   STREAM_PHASE,
   STREAM_STATUS,
@@ -23,11 +24,12 @@ import {
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { selectStyles } from '@shared/styles/selectStyles';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   renderAgentOptions,
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 import { ProgressEvents } from '../events';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
@@ -104,6 +106,16 @@ export class WorkflowToolUseFollowupSection extends LitElement {
   @property({ type: Boolean }) hasOutputFiles = false;
   @property({ attribute: false }) options: FollowupOptionsState | null = null;
   @property({ attribute: false }) streamModel: string | null = null;
+  /**
+   * Progress-view commands the active host's registry declares
+   * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
+   * same convention). Hides this whole section on a host where
+   * GET_FOLLOWUP_OPTIONS is unsupported, instead of leaving a follow-up
+   * panel visible whose first interaction (expanding it) can only produce
+   * an unavailable-command toast.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   @state() private selectedAgent = '';
   @state() private selectedModel = '';
@@ -212,6 +224,10 @@ export class WorkflowToolUseFollowupSection extends LitElement {
   private shouldRender(): boolean {
     return (
       this.hasOutputFiles &&
+      !isKnownUnsupported(
+        this.unsupportedCommands,
+        PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS,
+      ) &&
       (this.status == null ||
         this.status === STREAM_STATUS.READY ||
         this.status === STREAM_PHASE.FAILED ||
