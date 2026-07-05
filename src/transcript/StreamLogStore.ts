@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { KVStore } from '@common/storage/KVStore';
 import * as log from '@logger/logUtils';
 import {
+  END_GROUP_STATUS,
   PersistedStreamLogEntrySchema,
   STREAM_LOG_ENTRY_TYPES,
+  type EndGroupStatus,
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
@@ -357,6 +359,7 @@ export class StreamLogStore {
   async endRunningGroups(
     now: number = Date.now(),
     streamIds: readonly StreamTabId[] = [],
+    status: EndGroupStatus = END_GROUP_STATUS.ERROR,
   ): Promise<StreamTabId[]> {
     const streamsToLoad = new Set(streamIds);
     for (const [streamId, summary] of this.summaries) {
@@ -371,7 +374,7 @@ export class StreamLogStore {
       });
     }
 
-    const affected = this.endRunningGroupsInLoadedLogs(now);
+    const affected = this.endRunningGroupsInLoadedLogs(now, undefined, status);
     if (affected.length > 0) {
       void this.save();
     }
@@ -382,13 +385,18 @@ export class StreamLogStore {
   async endRunningGroupsForStreams(
     streamIds: readonly StreamTabId[],
     now: number = Date.now(),
+    status: EndGroupStatus = END_GROUP_STATUS.ERROR,
   ): Promise<StreamTabId[]> {
     if (streamIds.length === 0) return [];
     await pMap(streamIds, (id) => this.ensureLoaded(id), {
       concurrency: STREAM_LOG_LOAD_CONCURRENCY,
     });
 
-    const affected = this.endRunningGroupsInLoadedLogs(now, new Set(streamIds));
+    const affected = this.endRunningGroupsInLoadedLogs(
+      now,
+      new Set(streamIds),
+      status,
+    );
     if (affected.length > 0) {
       void this.save();
     }
@@ -399,6 +407,7 @@ export class StreamLogStore {
   private endRunningGroupsInLoadedLogs(
     now: number,
     streamIds?: ReadonlySet<StreamTabId>,
+    status: EndGroupStatus = END_GROUP_STATUS.ERROR,
   ): StreamTabId[] {
     const affected: StreamTabId[] = [];
     for (const [streamId, logInstance] of this.logs.entries()) {
@@ -410,7 +419,7 @@ export class StreamLogStore {
 
         updatedAny ||= !!logInstance.update(entry.id, {
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          data: { ...existingData, status: 'error', endTime: now },
+          data: { ...existingData, status, endTime: now },
         });
       }
 
