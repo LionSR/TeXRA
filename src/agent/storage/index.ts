@@ -5,8 +5,10 @@
  */
 
 export {
+  EXECUTION_META_SCHEMA_VERSION,
   type ExecutionKVStore,
   type ExecutionMeta,
+  type ExecutionMetaInput,
   type TodoEntry,
   type ChildRecord,
   type ResultMeta,

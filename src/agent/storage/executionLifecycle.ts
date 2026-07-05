@@ -15,7 +15,11 @@ import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
+import {
+  type ExecutionMeta,
+  type ExecutionMetaInput,
+  getExecutionStore,
+} from './ExecutionKVStore';
 import { invalidateListingCache } from './executionListing';
 
 /**
@@ -105,7 +109,7 @@ export async function registerExecution(
   const timestamp = new Date().toISOString();
   const store = getExecutionStore(executionId);
 
-  const meta: ExecutionMeta = { timestamp, parentExecutionId };
+  const meta: ExecutionMetaInput = { timestamp, parentExecutionId };
   if (category) meta.category = category;
   if (delegationDepth !== undefined) meta.delegationDepth = delegationDepth;
   const persistedConfig = normalizeWriterCategory(

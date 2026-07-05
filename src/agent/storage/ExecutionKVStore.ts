@@ -15,6 +15,7 @@ import {
   AgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
+import * as logger from '@logger/logUtils';
 import {
   ExecutionIdSchema,
   RunOutcomeSchema,
@@ -28,6 +29,7 @@ import {
   OutputFileSummarySchema,
 } from '@shared/schemas/output';
 import { byString, filterNotNull } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
@@ -44,12 +46,16 @@ const KEYS = {
   child: (id: string) => `child-${id}`,
 } as const;
 
+const CHANNEL = 'ExecutionKVStore';
+export const EXECUTION_META_SCHEMA_VERSION = 1;
+
 // ============================================================================
 // Domain types — Zod schemas as source of truth
 // ============================================================================
 
 /** Execution metadata stored alongside config at launch time. */
 const ExecutionMetaBaseSchema = z.object({
+  schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
   timestamp: z.string(),
   parentExecutionId: ExecutionIdSchema.optional(),
   /** Persisted when execution reaches a terminal state (success or error). */
@@ -79,6 +85,7 @@ const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
   },
 );
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
+export type ExecutionMetaInput = z.input<typeof ExecutionMetaSchema>;
 
 /** Shape of a persisted todo item from tool-use flow state. */
 const TodoEntrySchema = z.object({
@@ -187,7 +194,7 @@ export interface ExecutionKVStore {
   readResultMeta(): Promise<ResultMeta | null>;
 
   // -- Typed writers --------------------------------------------------------
-  writeMeta(meta: ExecutionMeta): Promise<void>;
+  writeMeta(meta: ExecutionMetaInput): Promise<void>;
   writeConfig(config: AgentConfig): Promise<void>;
   writeReport(report: string): Promise<void>;
   writeTodos(todos: TodoEntry[]): Promise<void>;
@@ -229,14 +236,28 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   private async readValidated<T>(
     key: string,
     schema: z.ZodType<T>,
+    options: { warnOnFailure?: boolean } = {},
   ): Promise<T | null> {
     const raw = await this.read(key);
-    if (!raw) return null;
-    return schema.nullable().catch(null).parse(raw);
+    if (raw == null) return null;
+    const result = schema.nullable().safeParse(raw);
+    if (result.success) return result.data;
+    if (options.warnOnFailure) {
+      logger.warn(
+        CHANNEL,
+        `Failed to parse execution ${this.executionId} ${key}.json: ${toErrorMessage(
+          result.error,
+        )}`,
+        { data: result.error },
+      );
+    }
+    return null;
   }
 
   async readMeta(): Promise<ExecutionMeta | null> {
-    return this.readValidated(KEYS.META, ExecutionMetaSchema);
+    return this.readValidated(KEYS.META, ExecutionMetaSchema, {
+      warnOnFailure: true,
+    });
   }
 
   async readConfig(): Promise<AgentConfig | null> {
@@ -284,8 +305,8 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   // -- Typed writers --------------------------------------------------------
 
-  async writeMeta(meta: ExecutionMeta): Promise<void> {
-    await this.write(KEYS.META, meta);
+  async writeMeta(meta: ExecutionMetaInput): Promise<void> {
+    await this.write(KEYS.META, ExecutionMetaSchema.parse(meta));
   }
 
   async writeConfig(config: AgentConfig): Promise<void> {

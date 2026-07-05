@@ -112,6 +112,51 @@ describe('retrieveSessionResumeData', () => {
     );
   });
 
+  it('normalizes legacy nested conversation shared state for tool-use resume', async () => {
+    const executionId = 'abc128' as ExecutionId;
+    const streamId = 'chat@gpt54#abc128' as StreamTabId;
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        state: {
+          conversation: [
+            {
+              role: 'user',
+              content: 'Continue the legacy conversation.',
+            },
+          ],
+          shouldSkipCycle: false,
+          stateSlices: {
+            runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+            workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+            userChannels: {
+              input: Object.freeze({ MODEL: 'gpt54' }),
+              transient: {},
+            },
+          },
+        },
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+
+    const resume = await retrieveSessionResumeData(
+      streamId,
+      executionId,
+      agentConfigToTaskState(CONFIG),
+    );
+
+    expect(resume?.type).toBe('toolUse');
+    if (resume?.type !== 'toolUse') return;
+    expect(resume.snapshot.messages).toEqual([
+      {
+        role: 'user',
+        content: 'Continue the legacy conversation.',
+      },
+    ]);
+  });
+
   it('infers the legacy Google GenAI handler for old workflow transcripts', async () => {
     const executionId = 'abc125' as ExecutionId;
     const streamId = 'workflow@gemini35f#abc125' as StreamTabId;
