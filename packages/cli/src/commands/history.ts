@@ -17,6 +17,7 @@ import {
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
+  isRemoteCliHistoryExportAssetsHref,
   readCliHistoryExportInput,
   resolveCliHistoryExportAssetsHref,
   stageCliHistoryExportAssets,
@@ -100,13 +101,15 @@ async function runHistoryShow(
  * reuses the Lit-SSR chat export renderer (same HTML output as the
  * extension's chat export — not the separate Progress View trace export).
  *
- * For the default (unset) `--assets` href, also stages the bundled
- * KaTeX/highlight.js/texmath assets into `<cwd>/assets` as a side effect —
- * the common `texra history show <id> --export html > out.html` redirect
- * writes `out.html` into the same directory, so the exported document's
- * `./assets` href resolves for real instead of pointing at a folder that was
- * never created. An explicit `--assets <href>` is left untouched: the caller
- * is pointing at a location (local folder or CDN URL) they manage themselves.
+ * For any local (non-URL) `--assets` href — the unset default `./assets` or
+ * an explicit local path, including one that spells out the default — also
+ * stages the bundled KaTeX/highlight.js/texmath assets into that path
+ * (resolved against `--cwd`) as a side effect. The common
+ * `texra history show <id> --export html > out.html` redirect writes
+ * `out.html` into the same directory, so the exported document's asset href
+ * resolves for real instead of pointing at a folder that was never created.
+ * A genuinely remote href (e.g. a CDN URL) is left untouched: the caller
+ * manages that location themselves.
  */
 async function runHistoryExport(
   context: CliContext,
@@ -122,10 +125,10 @@ async function runHistoryExport(
   }
 
   const assetsHref = resolveCliHistoryExportAssetsHref(options.assetsHref);
-  if (format === 'html' && assetsHref === undefined) {
+  if (format === 'html' && !isRemoteCliHistoryExportAssetsHref(assetsHref)) {
     const staged = await stageCliHistoryExportAssets({
       resourcesPath: context.resourcesPath,
-      destDir: path.join(context.cwd, 'assets'),
+      destDir: path.resolve(context.cwd, assetsHref ?? './assets'),
     });
     if (staged === 'missing') {
       writeTextStderr(
