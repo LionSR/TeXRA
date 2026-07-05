@@ -53,6 +53,16 @@ const STREAMABLE_TOOLS = new Set(['bash']);
 const STREAM_BUFFER_MAX = 50_000;
 
 /**
+ * Error message for a tool_result synthesized in place of a tool_use whose
+ * call never executed (interrupted before dispatch, or aborted mid-flight).
+ * Every persisted tool_use must have a paired tool_result — providers with
+ * strict tool-call pairing requirements (e.g. Anthropic, and OpenAI's
+ * response-chaining mode) reject follow-up requests otherwise.
+ */
+const CANCELLED_CALL_ERROR =
+  'Tool call cancelled — the run was interrupted before this tool executed.';
+
+/**
  * Result of executing a single tool call, capturing everything needed
  * for logging and message creation.
  */
@@ -353,6 +363,33 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     };
   }
 
+  /**
+   * Build a synthetic "cancelled" result for a tool_use that never executed
+   * (interrupted before dispatch, or aborted mid-flight and returned `null`
+   * from `exec()`). Mirrors the duplicate-call synthetic result shape so it
+   * flows through the same follow-up-message construction unchanged.
+   */
+  private buildCancelledResult(call: SdkToolCall): ToolExecutionResult {
+    const cancelledResult: ToolResult = {
+      status: 'error',
+      error: CANCELLED_CALL_ERROR,
+    };
+    return {
+      call,
+      result: cancelledResult,
+      parsedInput: call.input,
+      extracted: {
+        sanitizedResult: cancelledResult,
+        attachments: [],
+      },
+      editedFiles: [],
+      logRef: {
+        logId: undefined,
+        groupId: this.services.logger.activeStageId(),
+      },
+    };
+  }
+
   private async logAndProcessMediaFiles(
     execResult: ToolExecutionResult,
   ): Promise<void> {
@@ -421,30 +458,47 @@ export class ToolUseDispatchNode<C> extends BatchNode<
   /** Process tool execution results and create follow-up messages. */
   async post(
     shared: ToolUseRoundShared,
-    _toolCalls: SdkToolCall[],
+    toolCalls: SdkToolCall[],
     execResults: (ToolExecutionResult | null)[],
   ): Promise<string | undefined> {
     const { workspace } = this.services;
 
-    const completedResults = execResults.filter(
-      (r): r is ToolExecutionResult => r !== null,
-    );
-
-    if (completedResults.length < execResults.length) {
-      shared.shouldStop = true;
-    }
-    if (!completedResults.length) {
+    if (!toolCalls.length) {
       return FlowTransition.COMPLETE;
+    }
+
+    // Every tool_use the model requested must end up paired with a tool_result
+    // before persistence. A call that never executed — interrupted before
+    // dispatch, aborted mid-flight, or a duplicate whose primary never ran —
+    // shows up here as `null`; synthesize a "cancelled" result for it instead
+    // of silently dropping it, so the persisted turn always satisfies
+    // provider tool-call pairing invariants on resume.
+    let interrupted = false;
+    const allResults = toolCalls.map((call, index) => {
+      const execResult = execResults[index];
+      if (execResult) return execResult;
+      interrupted = true;
+      return this.buildCancelledResult(call);
+    });
+
+    if (interrupted) {
+      shared.shouldStop = true;
     }
 
     const assistantText = shared.text ?? '';
 
-    for (const execResult of completedResults) {
-      await this.logAndProcessMediaFiles(execResult);
+    // Only log results that actually ran (or were synthesized earlier for
+    // duplicate skips) — a mid-flight abort already finalizes its own card
+    // with a 'failed' status inside executeToolCall(), and a never-started
+    // call has no card to update.
+    for (const execResult of execResults) {
+      if (execResult) {
+        await this.logAndProcessMediaFiles(execResult);
+      }
     }
 
-    const extracted = completedResults.map((er) => er.extracted);
-    const calls = completedResults.map((er) => er.call);
+    const extracted = allResults.map((er) => er.extracted);
+    const calls = allResults.map((er) => er.call);
 
     // For handlers that carry provider-side reasoning across multiple parallel
     // calls, batch all tool calls into a single message to preserve thought
@@ -466,7 +520,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
         );
       shared.messages.push(...followUpMsgs);
     } else {
-      for (const [index, execResult] of completedResults.entries()) {
+      for (const [index, execResult] of allResults.entries()) {
         const { sanitizedResult, attachments } = extracted[index];
         const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
           this.services.client,
