@@ -8,7 +8,6 @@ import TurndownService from 'turndown';
 import { z } from 'zod';
 
 // Local imports - core
-import { ensureError, toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import {
   isTimeoutError,
@@ -16,6 +15,7 @@ import {
   unwrapAbortError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 const WEB_FETCH_RETRIES = 2;
@@ -37,7 +37,7 @@ async function readBodyWithLimit(
   }
   const ct = response.headers.get('content-type') ?? '';
   const charsetMatch = /charset=([^\s;]+)/i.exec(ct);
-  const charset = charsetMatch?.[1]?.replace(/^["']|["']$/gu, '');
+  const charset = charsetMatch?.[1]?.replaceAll(/^["']|["']$/gu, '');
   let decoder: TextDecoder;
   try {
     decoder = new TextDecoder(charset || 'utf-8');

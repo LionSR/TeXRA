@@ -52,7 +52,6 @@ import {
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { isLiveElapsedStatus } from '@common/constants/streamStatus';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -61,6 +60,7 @@ import {
 } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   buildInitialChatAgentConfig,

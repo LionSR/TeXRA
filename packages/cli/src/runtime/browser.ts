@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 
-import { extractErrorMessage } from '@common/errors';
+import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 export interface BrowserLaunchCommand {
   readonly command: string;

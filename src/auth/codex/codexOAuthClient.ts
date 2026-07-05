@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 
-import { toErrorMessage } from '@common/errors';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CODEX_CLIENT_ID,
   CODEX_DEVICE_TOKEN_URL,

@@ -13,7 +13,6 @@
 
 // Local imports
 import { platform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY } from '@shared/constants/cliRuntime';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
@@ -36,6 +35,7 @@ import {
   summarizeLeanServers,
 } from '@tools/lean/leanServerRegistry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { isGitRepository } from '@utils/system/isGitRepository';
 import { checkToolInstalled } from '@utils/system/toolUtils';

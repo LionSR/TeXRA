@@ -6,8 +6,8 @@ import { formatCliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { GoalStore } from '@tools/goal';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatCliSessionStatus } from '../sessionStatus';
 import { requestCliCompaction } from '../state/compactionRequest';

@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 
 // Local imports - result types
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getCleanAgentName } from '@shared/schemas/agent';
 import type { FileOpResult } from '@shared/schemas/opResults';
@@ -11,6 +10,7 @@ import type { FileOpResult } from '@shared/schemas/opResults';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
