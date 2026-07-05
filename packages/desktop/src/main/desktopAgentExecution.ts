@@ -879,6 +879,27 @@ export class DesktopProgressBridge {
                 : { error: detectError },
           },
         );
+        // detectRaceGuardedWaitingStreams() throwing only means the
+        // KV-store-backed lookup itself failed -- it does not mean no time
+        // passed. A stream could still have become active elsewhere while
+        // that (failed) await was in flight, so re-fetch active execution
+        // ids here too and recheck waitingStreams against them, or an
+        // actively-resumed stream could be handed to
+        // closeRunningTaskGroupsForStreams() below just because detection
+        // happened to fail. This mirrors the recheck the success branch
+        // above performs with its own (persisted-record) result, and also
+        // re-runs forgetActiveRestoredStreams() so a now-active stream is
+        // dropped from repairStreams entirely rather than being marked
+        // FAILED.
+        const {
+          activeExecutionIds: postDetectErrorActiveExecutionIds,
+          allExecutionIds: postDetectErrorAllExecutionIds,
+        } = this.refreshActiveExecutionIds();
+        for (const [streamId, executionId] of postDetectErrorAllExecutionIds) {
+          if (postDetectErrorActiveExecutionIds.has(executionId)) {
+            waitingStreams.delete(streamId);
+          }
+        }
       }
       const affectedStreams = this.resetRestartRepairStreamStatuses(
         new Set(this.progressEvents.restoredStreams.keys()),
