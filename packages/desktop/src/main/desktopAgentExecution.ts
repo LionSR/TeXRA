@@ -40,7 +40,6 @@ import {
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { toErrorMessage } from '@common/errors';
 import {
   getFileListConfig,
   loadFileListSettings,
@@ -84,6 +83,7 @@ import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCap
 import { GoalStore } from '@tools/goal';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';

@@ -4,8 +4,8 @@ import ky from 'ky';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { delay } from '@utils/core/async';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
