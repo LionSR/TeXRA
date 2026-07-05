@@ -190,7 +190,7 @@ export async function injectContinuationForAnsweredThread(
   if (!manifest) return 'archived';
 
   const lastTurn = manifest.turns.at(-1);
-  if (!lastTurn || !lastTurn.answer) return 'archived';
+  if (!lastTurn || lastTurn.kind !== 'answered') return 'archived';
   if (manifest.parentStreamId == null) {
     await emitInquiryThreadUpdate(
       threadId,
