@@ -153,6 +153,115 @@ describe('OpenAI-compatible provider request params', () => {
     assert.equal(createCalls[0].thinking, undefined);
   });
 
+  it('pins Kimi K2.5 non-reasoning chat requests to temperature 0.6 and disables thinking (#7081)', async () => {
+    const handler = new ModelHandlerKimi(
+      buildConfig(ModelProvider.MOONSHOT, {
+        name: 'kimi25',
+        fullName: 'kimi-k2.5',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: false,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    (handler as any).getStreamingConfig = () => false;
+    (handler as any).estimateTokenCount = async () => 100;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'hi' }],
+      temperature: 0,
+    });
+
+    assert.equal(createCalls[0].temperature, 0.6);
+    assert.deepEqual(createCalls[0].thinking, { type: 'disabled' });
+  });
+
+  it('pins Kimi K2.5 thinking chat requests to temperature 1 and leaves the API default (#7081)', async () => {
+    const handler = new ModelHandlerKimi(
+      buildConfig(ModelProvider.MOONSHOT, {
+        name: 'kimi25T',
+        fullName: 'kimi-k2.5',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    (handler as any).getStreamingConfig = () => false;
+    (handler as any).estimateTokenCount = async () => 100;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think' }],
+      temperature: 0,
+    });
+
+    assert.equal(createCalls[0].temperature, 1);
+    assert.equal(createCalls[0].thinking, undefined);
+  });
+
+  it('disables thinking for the Kimi K2.6 non-reasoning entry sharing a fullName with its thinking sibling (#7081)', async () => {
+    // kimi26 and kimi26T both resolve to fullName 'kimi-k2.6' in the live
+    // registry — the same shared-fullName ambiguity as K2.5 — but before
+    // this fix only 'kimi-k2.5' was hardcoded here, so this non-reasoning
+    // entry silently kept thinking on at the Moonshot API default.
+    const handler = new ModelHandlerKimi(
+      buildConfig(ModelProvider.MOONSHOT, {
+        name: 'kimi26',
+        fullName: 'kimi-k2.6',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: false,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    (handler as any).getStreamingConfig = () => false;
+    (handler as any).estimateTokenCount = async () => 100;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'hi' }],
+      temperature: 0,
+    });
+
+    assert.deepEqual(createCalls[0].thinking, { type: 'disabled' });
+    // K2.6 has no fixed-temperature requirement, so the caller's temperature
+    // passes through unchanged.
+    assert.equal(createCalls[0].temperature, 0);
+  });
+
+  it('leaves Kimi K2.6 thinking requests on the API default (#7081)', async () => {
+    const handler = new ModelHandlerKimi(
+      buildConfig(ModelProvider.MOONSHOT, {
+        name: 'kimi26T',
+        fullName: 'kimi-k2.6',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    (handler as any).getStreamingConfig = () => false;
+    (handler as any).estimateTokenCount = async () => 100;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think' }],
+      temperature: 0,
+    });
+
+    assert.equal(createCalls[0].thinking, undefined);
+  });
+
   it('maps GLM low reasoning effort to the provider minimum', async () => {
     const handler = new ModelHandlerGLM(
       buildConfig(ModelProvider.GLM, {
