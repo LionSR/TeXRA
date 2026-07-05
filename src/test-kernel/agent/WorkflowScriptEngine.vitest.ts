@@ -475,6 +475,16 @@ return Math.random()`,
       runAgent: echoRunner,
     });
     expect(explicit.result).toBe(0);
+    // Date.prototype.constructor is locked too, so a script cannot reassign
+    // it to smuggle the unguarded constructor back onto instances.
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+Date.prototype.constructor = function () { return { now: () => 1 } }
+return 'reassigned'`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/read only property|Cannot assign/i);
   });
 
   it('does not let parallel() swallow the agent-call cap', async () => {

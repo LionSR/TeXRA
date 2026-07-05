@@ -89,9 +89,14 @@ const DETERMINISM_PRELUDE = `
     writable: false,
     configurable: false,
   });
-  // Instances must not hand back the unguarded constructor.
+  // Instances must not hand back the unguarded constructor. Locked like
+  // every other guard here so a script cannot reassign it back to RealDate
+  // (defense in depth: globalThis.Date is already non-writable and code
+  // generation is disabled).
   Object.defineProperty(RealDate.prototype, 'constructor', {
     value: GuardedDate,
+    writable: false,
+    configurable: false,
   });
   Object.defineProperty(globalThis, 'Date', {
     value: GuardedDate,
