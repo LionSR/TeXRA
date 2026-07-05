@@ -6,7 +6,7 @@ import {
   type CodexSession,
   type CodexSubscriptionPreferenceUpdate,
 } from '@auth/codex';
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { tryOpenBrowser } from './browser';
 import { isLikelyRemoteSession } from './remoteSession';

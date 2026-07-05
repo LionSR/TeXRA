@@ -31,6 +31,7 @@ import {
 } from '@shared/styles';
 
 // Local imports - progress view helpers
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import {
   createEmptyPermissionGroups,
   findPanelForPermission,
@@ -55,7 +56,6 @@ import './ProposalRequestPanel';
 import './PlanApprovalRequestPanel';
 import './ExternalInquiryPanel';
 import './UserQuestionPanel';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 /** Section configuration for rendering permission groups */
 interface SectionConfig {

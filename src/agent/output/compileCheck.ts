@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
-import { toErrorMessage } from '@common/errors';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type {
@@ -19,6 +18,7 @@ import {
   WorkspaceFS,
   type TaskRunFileService,
 } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';

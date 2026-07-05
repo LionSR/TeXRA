@@ -11,7 +11,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { toErrorMessage } from '@common/errors';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -37,6 +36,7 @@ import {
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const FILE_COMMAND_VSCODE_IDS: Record<LeanFileCommand, string> = {
   restart: 'lean4.restartFile',

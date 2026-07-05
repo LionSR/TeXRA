@@ -20,12 +20,12 @@ import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { K_SLICE } from '@agent/core/constants';
-import { toErrorMessage } from '@common/errors';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getSystemPromptWithRules } from '@utils/prompt';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 
 import { FlowTransition } from './FlowTransitions';

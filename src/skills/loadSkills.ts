@@ -3,12 +3,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Local imports - common
-import {
-  isFileNotFoundError,
-  isNotADirectoryError,
-  toErrorMessage,
-} from '@common/errors';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { byName } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
 import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';

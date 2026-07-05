@@ -2,7 +2,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { setWebSocketEnabledOverride } from '@utils/config/providerConfig';
 

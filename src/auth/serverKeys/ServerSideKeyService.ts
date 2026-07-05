@@ -15,7 +15,7 @@
  */
 
 import { EventEmitter } from 'node:events';
-import { toErrorMessage } from '@common/errors';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   SERVER_SIDE_CACHE_TTL_MS,
   ULTRA_TIER,
