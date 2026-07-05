@@ -1,9 +1,6 @@
 import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import {
-  codexBackendModelId,
-  isCodexSubscriptionEligible,
-} from './providerCapabilities';
+import { isCodexSubscriptionEligible } from './providerCapabilities';
 
 /**
  * Curated setup-probe model per provider — a well-known model used to verify
@@ -61,7 +58,7 @@ function isUsableSetupModel(
   // Codex-eligible model ids — keep the openai pick constrained so a
   // fallback swap can't silently break ChatGPT-subscription setup.
   if (setupProvider === 'openai') {
-    return isCodexSubscriptionEligible(codexBackendModelId(config));
+    return isCodexSubscriptionEligible(config);
   }
   return true;
 }
