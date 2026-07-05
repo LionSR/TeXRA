@@ -38,7 +38,7 @@ import { tagOpenRouterSdkError } from './openRouterSdkError';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAITools } from '../toolConversion';
 import {
-  assertBatchedToolCalls,
+  checkBatchedToolCalls,
   insertMediaIntoChatUserMessage,
   prependTextToChatUserMessage,
 } from '../openai/openAIMessageUtils';
@@ -697,7 +697,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatMessages[]> {
-    if (!assertBatchedToolCalls(calls.length, results.length)) return [];
+    if (!checkBatchedToolCalls(calls.length, results.length)) return [];
 
     const callMsg: ChatMessages = {
       role: 'assistant',
@@ -827,7 +827,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
     try {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
-      insertMediaIntoChatUserMessage(messages, formattedMedia);
+      insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
     } catch (err) {
       logSdkError(this.logger, 'Error adding media to user message', err, {
         operation: 'add media to user message',

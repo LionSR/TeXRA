@@ -4,7 +4,7 @@ import { describe, it } from 'vitest';
 
 // Local imports - agent
 import {
-  assertBatchedToolCalls,
+  checkBatchedToolCalls,
   insertMediaIntoChatUserMessage,
   normalizeOpenAIMessageContent,
   prependTextToChatUserMessage,
@@ -200,25 +200,25 @@ describe('normalizeOpenAIMessageContent', () => {
   });
 });
 
-describe('assertBatchedToolCalls', () => {
+describe('checkBatchedToolCalls', () => {
   it('throws on a call/result count mismatch', () => {
     assert.throws(
-      () => assertBatchedToolCalls(2, 1),
+      () => checkBatchedToolCalls(2, 1),
       /Batched tool calls mismatch: 2 calls vs 1 results/,
     );
   });
 
   it('returns false when there is nothing to send', () => {
-    assert.equal(assertBatchedToolCalls(0, 0), false);
+    assert.equal(checkBatchedToolCalls(0, 0), false);
   });
 
   it('returns true when counts match and are non-empty', () => {
-    assert.equal(assertBatchedToolCalls(3, 3), true);
+    assert.equal(checkBatchedToolCalls(3, 3), true);
   });
 
   it('reports the mismatch before the empty check', () => {
     // A zero call count with a non-zero result count is still a mismatch.
-    assert.throws(() => assertBatchedToolCalls(0, 2), /0 calls vs 2 results/);
+    assert.throws(() => checkBatchedToolCalls(0, 2), /0 calls vs 2 results/);
   });
 });
 
@@ -287,28 +287,38 @@ describe('insertMediaIntoChatUserMessage', () => {
   const media = [{ type: 'image_url', image_url: { url: 'data:media' } }];
 
   it('promotes a string body to an array with media ahead of the text', () => {
-    const messages = [{ role: 'user', content: 'describe this' }];
-    insertMediaIntoChatUserMessage(messages, media);
-    assert.deepEqual(messages[0].content, [
+    const message = { role: 'user', content: 'describe this' };
+    insertMediaIntoChatUserMessage(message, media);
+    assert.deepEqual(message.content, [
       ...media,
       { type: 'text', text: 'describe this' },
     ]);
   });
 
   it('unshifts media in front of existing array parts', () => {
-    const messages = [
-      { role: 'user', content: [{ type: 'text', text: 'body' }] },
-    ];
-    insertMediaIntoChatUserMessage(messages, media);
-    const parts = messages[0].content as Array<{ type: string }>;
+    const message = { role: 'user', content: [{ type: 'text', text: 'body' }] };
+    insertMediaIntoChatUserMessage(message, media);
+    const parts = message.content as Array<{ type: string }>;
     assert.equal(parts.length, 2);
     assert.equal(parts[0].type, 'image_url');
     assert.equal(parts[1].type, 'text');
   });
 
-  it('is a no-op when no user message exists', () => {
-    const messages = [{ role: 'assistant', content: 'only' }];
-    insertMediaIntoChatUserMessage(messages, media);
-    assert.equal(messages[0].content, 'only');
+  it('targets the captured message, not a later user turn', () => {
+    // Regression guard: media must land on the message the caller located and
+    // validated before the async formatting await, even if the conversation
+    // gained another user turn meanwhile.
+    const captured = { role: 'user', content: 'original' };
+    const conversation = [captured, { role: 'user', content: 'newer turn' }];
+    insertMediaIntoChatUserMessage(captured, media);
+    assert.ok(
+      Array.isArray(captured.content),
+      'media should land on the captured message',
+    );
+    assert.equal(
+      conversation[1].content,
+      'newer turn',
+      'a later user turn must be untouched',
+    );
   });
 });

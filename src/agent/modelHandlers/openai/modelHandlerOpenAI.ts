@@ -41,7 +41,7 @@ import { tagOpenAISdkError } from './openAISdkError';
 import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import {
-  assertBatchedToolCalls,
+  checkBatchedToolCalls,
   insertMediaIntoChatUserMessage,
   normalizeOpenAIMessageContent,
   prependTextToChatUserMessage,
@@ -1317,7 +1317,7 @@ export class ModelHandlerOpenAI<
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    if (!assertBatchedToolCalls(calls.length, results.length)) {
+    if (!checkBatchedToolCalls(calls.length, results.length)) {
       return [];
     }
 
@@ -1365,7 +1365,7 @@ export class ModelHandlerOpenAI<
 
     try {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
-      insertMediaIntoChatUserMessage(messages, formattedMedia);
+      insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
     } catch (err) {
       logSdkError(
         this.logger,
