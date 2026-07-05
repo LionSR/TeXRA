@@ -3,9 +3,9 @@
  * dropped path, follow-up turn semantics, legacy manifest migration,
  * and listing filters.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   ExternalInquiryPermissionSchema,
   type StreamTabId,
@@ -28,10 +28,10 @@ const STREAM_A = 'stream:a' as StreamTabId;
 const STREAM_B = 'stream:b' as StreamTabId;
 
 describe('InquiryStorage', () => {
-  beforeEach(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform());
-  });
+  // Each test seeds threads against a fresh platform: state must not leak
+  // between tests in this file, so this installs (and resets) per test
+  // rather than once for the whole file.
+  setupPlatform();
 
   it('opens, answers, and resolves a thread end-to-end', async () => {
     const opened = await recordOpenQuestion({

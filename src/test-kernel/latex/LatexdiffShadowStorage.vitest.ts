@@ -8,7 +8,7 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   createExternalLocation,
   createWorkspaceLocation,
@@ -37,24 +37,21 @@ describe('LaTeXdiffService shadow output', () => {
     return tempDir;
   }
 
-  async function installNodeBackedPlatform(
+  function installNodeBackedPlatform(
     workspaceDir: string,
     storageRoot: string,
   ): Promise<void> {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {
-          workspacePath: workspaceDir,
-        },
-        {
-          fs: nodeFilesystem,
-          workspace: createNodeWorkspace(() => workspaceDir),
-          storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-          globalState: new MemoryStateStore(),
-          workspaceState: new MemoryStateStore(),
-        },
-      ),
+    return installPlatform(
+      {
+        workspacePath: workspaceDir,
+      },
+      {
+        fs: nodeFilesystem,
+        workspace: createNodeWorkspace(() => workspaceDir),
+        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+        globalState: new MemoryStateStore(),
+        workspaceState: new MemoryStateStore(),
+      },
     );
   }
 

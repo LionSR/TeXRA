@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import {
   ServerSideKeyService,
   setServerSideKeyService,
@@ -84,38 +84,32 @@ function codexSession(): CodexSession {
   };
 }
 
-async function initSubscriptionPlatform(
+function initSubscriptionPlatform(
   secrets: Record<string, string> = {},
 ): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform({
-      config: {
-        'texra.chatgptCodex.preferSubscription': true,
-        'texra.chatgptCodex.subscriptionToolUseOnly': true,
-      },
-      globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-      secrets,
-    }),
-  );
+  return installPlatform({
+    config: {
+      'texra.chatgptCodex.preferSubscription': true,
+      'texra.chatgptCodex.subscriptionToolUseOnly': true,
+    },
+    globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+    secrets,
+  });
 }
 
 describe('computeModelOptionsData relay quota state', () => {
-  beforeEach(async () => {
+  setupPlatform({
+    globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+    secrets: {
+      [apiKeySecretName('openai')]: 'sk-openai',
+      [apiKeySecretName('deepseek')]: 'sk-deepseek',
+    },
+  });
+
+  beforeEach(() => {
     invalidateApiKeyCache();
     invalidateModelOptionsCache();
     resetCodexCoordinator();
-
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform({
-        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-        secrets: {
-          [apiKeySecretName('openai')]: 'sk-openai',
-          [apiKeySecretName('deepseek')]: 'sk-deepseek',
-        },
-      }),
-    );
   });
 
   it('shows relay quota exhaustion while included access remains selected', async () => {
@@ -223,18 +217,15 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('shows subscription access before relay state when ChatGPT subscription is preferred and signed in', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform({
-        config: {
-          'texra.chatgptCodex.preferSubscription': true,
-        },
-        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-        secrets: {
-          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
-        },
-      }),
-    );
+    await installPlatform({
+      config: {
+        'texra.chatgptCodex.preferSubscription': true,
+      },
+      globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+      secrets: {
+        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
+      },
+    });
     const access = createModelOptionsAccess({
       useIncludedAccess: true,
       canUseServerSideKeys: true,

@@ -5,6 +5,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
+import { installPlatform } from '@test/support/setupPlatform';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 import {
@@ -14,7 +15,7 @@ import {
 } from '@tools/setup/platform';
 
 import { createFakeSetupPlatform } from './fixtures';
-import type { Platform } from '@platform/platform';
+import type { ConfigProvider } from '@platform/interfaces/config';
 
 /**
  * `requestBashApproval` reads `texra.toolUse.requireBashApproval` via
@@ -24,30 +25,20 @@ import type { Platform } from '@platform/platform';
  * callback that never arrives. Stub the platform's config so the
  * approval flag resolves to `false`.
  *
- * `initPlatform` mutates module-scope state and the platform stays
- * registered for the rest of this file's worker process (vitest isolates
- * suites per file); we don't reset it in an `afterAll` hook because there
- * is no public reset API. That's fine here: the stub returns
- * `defaultValue` verbatim for every key except `BASH_APPROVAL_CONFIG_KEY`,
- * so behaviour stays identical to "no platform registered" unless a test
- * also checks the approval flag.
- *
- * Dynamic import: the no-platform-init-outside-composition-root lint rule
- * reserves static initPlatform imports for composition roots.
+ * The stub returns `defaultValue` verbatim for every key except
+ * `BASH_APPROVAL_CONFIG_KEY`, so behaviour stays identical to "no platform
+ * registered" unless a test also checks the approval flag.
  */
 async function installApprovalSkippingPlatform(): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  const stub: Partial<Platform> = {
-    config: {
-      get: <T>(key: string, defaultValue?: T): T =>
-        key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
-      update: async () => {},
-      inspect: () => undefined,
-      isExplicitlySet: () => false,
-      watch: () => ({ dispose: () => {} }),
-    },
+  const stubConfig: ConfigProvider = {
+    get: <T>(key: string, defaultValue?: T): T =>
+      key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
+    update: async () => {},
+    inspect: () => undefined,
+    isExplicitlySet: () => false,
+    watch: () => ({ dispose: () => {} }),
   };
-  initPlatform(stub as Platform);
+  await installPlatform({}, { config: stubConfig });
 }
 
 interface RunRecord {

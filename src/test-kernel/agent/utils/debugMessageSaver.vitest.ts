@@ -1,27 +1,22 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
-import { describe, it, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Standard library imports
 
 // Local imports - agent
 // Internal imports
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 
-beforeAll(async () => {
-  // getConfig reads through the platform config provider; enable the
-  // debug-object saving flag there instead of patching the ESM export.
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform({
-      config: { 'texra.debug.saveDebugObjects': true },
-    }),
-  );
+// getConfig reads through the platform config provider; enable the
+// debug-object saving flag there instead of patching the ESM export.
+setupPlatform({
+  config: { 'texra.debug.saveDebugObjects': true },
 });
 
 describe('maybeSaveDebugObject', () => {

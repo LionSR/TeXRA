@@ -4,6 +4,8 @@ import * as path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -70,14 +72,9 @@ async function withTempWorkspace(
 }
 
 describe('ExecutionsTool', () => {
-  beforeEach(async () => {
-    const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
-      await Promise.all([
-        import('@platform/platform'),
-        import('@platform/defaults/nodeFilesystem'),
-        import('@test/support/FakePlatform'),
-      ]);
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+  setupPlatform({}, { fs: nodeFilesystem });
+
+  beforeEach(() => {
     vi.clearAllMocks();
     mocks.listExecutions.mockResolvedValue([]);
     mocks.readMeta.mockResolvedValue(null);

@@ -1,21 +1,12 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { beforeAll, describe, it } from 'vitest';
-
-// Node.js built-in imports
+import { describe, it } from 'vitest';
 
 // Internal imports
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { flexibleFS } from '@utils/files/flexibleFS';
 import { pathToLocation } from '@utils/files/taskRunStorage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-
-beforeAll(async () => {
-  // pathToLocation resolves paths against the platform workspace.
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform());
-});
 
 describe('flexibleFS.write', () => {
   it('retries the write after clearing symlink loops', async () => {

@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeAll, describe, it, vi } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 
 // Third-party imports
 import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
@@ -14,7 +14,7 @@ import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk'
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
 import {
@@ -56,12 +56,9 @@ import type {
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
-// Vitest isolates files, so this suite installs its own platform. Real node
-// fs is required because the prefill tests write and read files in os.tmpdir().
-beforeAll(async () => {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
-});
+// Real node fs is required because the prefill tests write and read files in
+// os.tmpdir().
+setupPlatform({}, { fs: nodeFilesystem });
 
 afterEach(() => {
   vi.restoreAllMocks();

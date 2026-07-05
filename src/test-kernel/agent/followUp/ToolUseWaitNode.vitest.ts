@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -260,8 +260,7 @@ describe('ToolUseWaitNode', () => {
 
   it('pauses the goal after a failed parent cycle', async () => {
     const streamId = 'wait-node-error-goal' as StreamTabId;
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}));
+    await installPlatform();
 
     await GoalStore.start(streamId, 'finish the refactor');
 
@@ -334,8 +333,7 @@ describe('ToolUseWaitNode', () => {
 
   it('injects an active goal continuation before the blocking wait', async () => {
     const streamId = 'wait-node-active-goal' as StreamTabId;
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}));
+    await installPlatform();
 
     await GoalStore.start(streamId, 'Finish the autonomous proof audit.');
 
@@ -419,8 +417,7 @@ describe('ToolUseWaitNode', () => {
 
   it('keeps injecting active goal continuations across a long run', async () => {
     const streamId = 'wait-node-long-goal' as StreamTabId;
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}));
+    await installPlatform();
 
     await GoalStore.start(
       streamId,
@@ -502,8 +499,7 @@ describe('ToolUseWaitNode', () => {
 
   it('lets queued user follow-up win over an active goal continuation', async () => {
     const streamId = 'wait-node-goal-user-queued' as StreamTabId;
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}));
+    await installPlatform();
 
     await GoalStore.start(streamId, 'Keep going autonomously.');
 
@@ -549,8 +545,7 @@ describe('ToolUseWaitNode', () => {
 
   it('does not let a subagent drive the parent goal continuation loop', async () => {
     const streamId = 'wait-node-goal-subagent' as StreamTabId;
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}));
+    await installPlatform();
 
     await GoalStore.start(streamId, 'Parent-owned objective.');
 

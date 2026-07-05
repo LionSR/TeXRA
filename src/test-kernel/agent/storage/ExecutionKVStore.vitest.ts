@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import {
   EXECUTION_STATUS,
@@ -9,9 +9,9 @@ import {
   type RunOutcome,
 } from '@shared/schemas';
 
-beforeEach(async () => {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({ workspacePath: '/workspace' }));
+setupPlatform({ workspacePath: '/workspace' });
+
+beforeEach(() => {
   clearStoreCache();
 });
 

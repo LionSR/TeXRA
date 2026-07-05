@@ -16,6 +16,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   wakeQueuedFollowUpStream: wakeQueuedFollowUpStreamMock,
 }));
 
+import { setupPlatform } from '@test/support/setupPlatform';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
   type ExternalInquiryPermission,
@@ -24,8 +25,6 @@ import {
 } from '@shared/schemas';
 import { ExternalInquiryTool } from '@tools/inquiry/ExternalInquiryTool';
 import { injectContinuationForAnsweredThread } from '@tools/inquiry/inquiryContinuation';
-
-import { createFakePlatform } from '../support/FakePlatform';
 
 const THREAD = 'ei_aabbccdd0011' as ExternalInquiryThreadId;
 const OPEN_THREAD = 'ei_aabbccdd0022' as ExternalInquiryThreadId;
@@ -139,9 +138,12 @@ function createProgressProviderShell(): {
 }
 
 describe('external inquiry read boundary', () => {
-  beforeEach(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform());
+  // Tests seed threads against a fresh platform: state must not leak between
+  // tests in this file, so this installs (and resets) per test rather than
+  // once for the whole file.
+  setupPlatform();
+
+  beforeEach(() => {
     sendFollowUpMock.mockClear();
     wakeQueuedFollowUpStreamMock.mockClear();
   });

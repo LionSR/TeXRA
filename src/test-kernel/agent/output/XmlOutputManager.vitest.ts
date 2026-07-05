@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -22,12 +23,8 @@ vi.mock('@latex/texFormatter', () => ({
   runLatexFormatter: formatterMocks.runLatexFormatter,
 }));
 
-async function initFakePlatform(files: Record<string, string> = {}) {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(createFakePlatform({ files, workspacePath: '/workspace' }));
+function initFakePlatform(files: Record<string, string> = {}) {
+  return installPlatform({ files, workspacePath: '/workspace' });
 }
 
 function createWorkflowAgentSetting(
