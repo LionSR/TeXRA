@@ -3,7 +3,12 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - agent
-import { normalizeOpenAIMessageContent } from '@agent/modelHandlers/openai/openAIMessageUtils';
+import {
+  assertBatchedToolCalls,
+  insertMediaIntoChatUserMessage,
+  normalizeOpenAIMessageContent,
+  prependTextToChatUserMessage,
+} from '@agent/modelHandlers/openai/openAIMessageUtils';
 
 describe('normalizeOpenAIMessageContent', () => {
   it('merges consecutive roles when requested', () => {
@@ -192,5 +197,118 @@ describe('normalizeOpenAIMessageContent', () => {
     assert.equal(normalized.length, 3);
     assert.equal(normalized[1].tool_call_id, 'call_1');
     assert.equal(normalized[2].tool_call_id, 'call_2');
+  });
+});
+
+describe('assertBatchedToolCalls', () => {
+  it('throws on a call/result count mismatch', () => {
+    assert.throws(
+      () => assertBatchedToolCalls(2, 1),
+      /Batched tool calls mismatch: 2 calls vs 1 results/,
+    );
+  });
+
+  it('returns false when there is nothing to send', () => {
+    assert.equal(assertBatchedToolCalls(0, 0), false);
+  });
+
+  it('returns true when counts match and are non-empty', () => {
+    assert.equal(assertBatchedToolCalls(3, 3), true);
+  });
+
+  it('reports the mismatch before the empty check', () => {
+    // A zero call count with a non-zero result count is still a mismatch.
+    assert.throws(() => assertBatchedToolCalls(0, 2), /0 calls vs 2 results/);
+  });
+});
+
+describe('prependTextToChatUserMessage', () => {
+  it('prepends to a string user content in place', () => {
+    const messages = [
+      { role: 'assistant', content: 'hi' },
+      { role: 'user', content: 'question' },
+    ];
+    prependTextToChatUserMessage(messages, 'PREFIX: ');
+    assert.equal(messages[1].content, 'PREFIX: question');
+  });
+
+  it('merges into the first text part of an array content', () => {
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: 'data:...' } },
+          { type: 'text', text: 'body' },
+        ],
+      },
+    ];
+    prependTextToChatUserMessage(messages, 'PRE ');
+    const parts = messages[0].content as Array<{ type: string; text?: string }>;
+    assert.equal(parts[1].text, 'PRE body');
+    assert.equal(parts.length, 2, 'no new part added when a text part exists');
+  });
+
+  it('unshifts a text part when the array has none', () => {
+    const messages = [
+      {
+        role: 'user',
+        content: [{ type: 'image_url', image_url: { url: 'data:...' } }],
+      },
+    ];
+    prependTextToChatUserMessage(messages, 'PRE');
+    const parts = messages[0].content as Array<{ type: string; text?: string }>;
+    assert.equal(parts.length, 2);
+    assert.deepEqual(parts[0], { type: 'text', text: 'PRE' });
+  });
+
+  it('targets the last user message and ignores later assistant turns', () => {
+    const messages = [
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: 'reply' },
+      { role: 'user', content: 'second' },
+    ];
+    prependTextToChatUserMessage(messages, 'X');
+    assert.equal(messages[0].content, 'first');
+    assert.equal(messages[2].content, 'Xsecond');
+  });
+
+  it('is a no-op for blank text or when no user message exists', () => {
+    const blank = [{ role: 'user', content: 'unchanged' }];
+    prependTextToChatUserMessage(blank, '   ');
+    assert.equal(blank[0].content, 'unchanged');
+
+    const noUser = [{ role: 'assistant', content: 'only' }];
+    prependTextToChatUserMessage(noUser, 'X');
+    assert.equal(noUser[0].content, 'only');
+  });
+});
+
+describe('insertMediaIntoChatUserMessage', () => {
+  const media = [{ type: 'image_url', image_url: { url: 'data:media' } }];
+
+  it('promotes a string body to an array with media ahead of the text', () => {
+    const messages = [{ role: 'user', content: 'describe this' }];
+    insertMediaIntoChatUserMessage(messages, media);
+    assert.deepEqual(messages[0].content, [
+      ...media,
+      { type: 'text', text: 'describe this' },
+    ]);
+  });
+
+  it('unshifts media in front of existing array parts', () => {
+    const messages = [
+      { role: 'user', content: [{ type: 'text', text: 'body' }] },
+    ];
+    insertMediaIntoChatUserMessage(messages, media);
+    const parts = messages[0].content as Array<{ type: string }>;
+    assert.equal(parts.length, 2);
+    assert.equal(parts[0].type, 'image_url');
+    assert.equal(parts[1].type, 'text');
+  });
+
+  it('is a no-op when no user message exists', () => {
+    const messages = [{ role: 'assistant', content: 'only' }];
+    insertMediaIntoChatUserMessage(messages, media);
+    assert.equal(messages[0].content, 'only');
   });
 });
