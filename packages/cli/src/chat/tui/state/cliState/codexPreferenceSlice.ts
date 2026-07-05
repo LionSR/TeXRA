@@ -5,7 +5,9 @@
 
 import { signal } from '@lit-labs/signals';
 
-export const CODEX_PREFERENCE_VERSION = signal<number>(0);
+const CODEX_PREFERENCE_VERSION = signal<number>(0);
+
+export const codexPreferenceVersion = CODEX_PREFERENCE_VERSION;
 
 /** Signal the status bar to re-read the ChatGPT-subscription preference now. */
 export function bumpCodexPreferenceVersion(): void {

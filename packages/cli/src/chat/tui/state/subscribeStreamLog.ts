@@ -1,6 +1,7 @@
 // Mirror StreamLogStore user/model/tool entries into
-// `cliState.streams[].entries`. Approval/permission entries land in side
-// panels and modals; tool rows render inline alongside assistant prose.
+// `streams[].entries` (state/cliState/streamsSlice.ts). Approval/permission
+// entries land in side panels and modals; tool rows render inline alongside
+// assistant prose.
 
 import { isDeepStrictEqual } from 'node:util';
 
@@ -24,8 +25,10 @@ import {
   isRenderableTranscriptEntry,
   trimAssistantTranscriptLead,
 } from '../panes/transcriptEntries';
-import { cliState, patchStream, type ConversationEntry } from './cliState';
+import { activeStreamId } from './cliState/focusSlice';
+import { patchStream } from './cliState/streamsSlice';
 import { isFinalTranscriptStatus } from './transcript';
+import type { ConversationEntry } from './cliState/types';
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.ERROR,
@@ -433,7 +436,7 @@ export function syncStreamLog(streamId: StreamTabId): void {
 
   // Surface stream as active if we don't already have one — handles bare
   // `texra chat` where setActiveStream is the first signal the runtime emits.
-  if (!cliState.activeStreamId.get()) {
-    cliState.activeStreamId.set(streamId);
+  if (!activeStreamId.get()) {
+    activeStreamId.set(streamId);
   }
 }

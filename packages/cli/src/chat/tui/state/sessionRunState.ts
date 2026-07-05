@@ -7,7 +7,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
-import { cliState } from './cliState';
+import { rootRunStartAvailable } from './cliState/focusSlice';
 
 export interface ClearableTuiSessionState {
   streamId: StreamTabId | undefined;
@@ -101,7 +101,7 @@ export function chatTuiCanStartRootRun(
 export function publishChatTuiRootRunStartAvailability(
   session: PendingTuiRunSessionState,
 ): void {
-  cliState.rootRunStartAvailable.set(chatTuiCanStartRootRun(session));
+  rootRunStartAvailable.set(chatTuiCanStartRootRun(session));
 }
 
 export function chatTuiCanSelectModel(input: {

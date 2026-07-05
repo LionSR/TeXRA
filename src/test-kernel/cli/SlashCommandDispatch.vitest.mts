@@ -11,11 +11,13 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
+import { activeForm } from '@cli/chat/tui/state/cliState/foregroundOverlaySlice';
+import { activeStreamId } from '@cli/chat/tui/state/cliState/focusSlice';
+import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
 import {
-  cliState,
   patchStream,
-  resetCliState,
-} from '@cli/chat/tui/state/cliState';
+  streams,
+} from '@cli/chat/tui/state/cliState/streamsSlice';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -90,7 +92,7 @@ function createContext(
 function lastEntryText(
   streamId: StreamTabId = CLI_LOCAL_STREAM_ID,
 ): string | undefined {
-  return cliState.streams.get().get(streamId)?.entries.at(-1)?.text;
+  return streams.get().get(streamId)?.entries.at(-1)?.text;
 }
 
 describe('handleTuiSlashCommand', () => {
@@ -103,7 +105,7 @@ describe('handleTuiSlashCommand', () => {
     );
 
     expect(handled).toBe(true);
-    expect(cliState.activeForm.get()?.commandName).toBe('model');
+    expect(activeForm.get()?.commandName).toBe('model');
   });
 
   it('opens the login form for bare /login', async () => {
@@ -115,7 +117,7 @@ describe('handleTuiSlashCommand', () => {
     );
 
     expect(handled).toBe(true);
-    expect(cliState.activeForm.get()?.commandName).toBe('login');
+    expect(activeForm.get()?.commandName).toBe('login');
   });
 
   it('uses ChatGPT device-code login from a likely remote shell', async () => {
@@ -234,7 +236,7 @@ describe('handleTuiSlashCommand', () => {
     expect(session.stopRequested).toBe(true);
     expect(interruptActive).toHaveBeenCalledOnce();
     expect(requestInputExit).toHaveBeenCalledOnce();
-    expect(cliState.activeStreamId.get()).toBeUndefined();
+    expect(activeStreamId.get()).toBeUndefined();
   });
 
   it('uses the provided process cwd when formatting /status resume hints', async () => {
@@ -243,7 +245,7 @@ describe('handleTuiSlashCommand', () => {
     const streamId = 'stream-1' as StreamTabId;
     session.streamId = streamId;
     session.executionId = 'exec-1' as ExecutionId;
-    cliState.activeStreamId.set(streamId);
+    activeStreamId.set(streamId);
     patchStream(streamId, (slice) => ({
       ...slice,
       status: STREAM_STATUS.WAITING,

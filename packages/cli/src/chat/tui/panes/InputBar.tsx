@@ -23,7 +23,10 @@ import {
   type SlashCommand,
   type SlashPickIntent,
 } from '../commands/slashRegistry';
-import { cliState } from '../state/cliState';
+import {
+  reverseSearchOpen as reverseSearchOpenSignal,
+  slashPaletteOpen,
+} from '../state/cliState/foregroundOverlaySlice';
 import { useSignal } from '../state/useSignal';
 import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';
@@ -88,7 +91,7 @@ export function submitSlashCommandWhenReady({
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, onSubmit, prompt } = props;
   const [value, setValueState] = useState('');
-  const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
+  const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const [attachNotice, setAttachNotice] = useState<string | null>(null);
   const draftValueRef = useRef(value);
   // ↑/↓ history browsing (shell-style). `index` walks the persisted entries,
@@ -194,7 +197,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   useInput(
     (input, key) => {
       if (isCtrlInput(input, key, 'r') && historyRef.current) {
-        cliState.reverseSearchOpen.set(true);
+        reverseSearchOpenSignal.set(true);
       }
     },
     { isActive: !disabled },
@@ -301,19 +304,19 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     // Auto-close the reverse-search overlay when the input is disabled —
     // an approval modal taking focus shouldn't trap the user in the
     // search prompt.
-    if (disabled && reverseSearchOpen) cliState.reverseSearchOpen.set(false);
+    if (disabled && reverseSearchOpen) reverseSearchOpenSignal.set(false);
   }, [disabled, reverseSearchOpen]);
 
   // Surface palette visibility so the App-level Tab handler (focus cycle)
   // can stand down while the palette owns Tab for "accept selection".
   useEffect(() => {
-    cliState.slashPaletteOpen.set(showPalette);
-    return () => cliState.slashPaletteOpen.set(false);
+    slashPaletteOpen.set(showPalette);
+    return () => slashPaletteOpen.set(false);
   }, [showPalette]);
 
-  // reverseSearchOpen lives in cliState directly (read via useSignal above),
-  // so only the unmount reset needs an effect here.
-  useEffect(() => () => cliState.reverseSearchOpen.set(false), []);
+  // reverseSearchOpen lives in foregroundOverlaySlice directly (read via
+  // useSignal above), so only the unmount reset needs an effect here.
+  useEffect(() => () => reverseSearchOpenSignal.set(false), []);
 
   if (disabled && props.collapseWhenDisabled) return <></>;
 
@@ -336,9 +339,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           history={historyRef.current}
           onCommit={(line) => {
             replaceDraft(line);
-            cliState.reverseSearchOpen.set(false);
+            reverseSearchOpenSignal.set(false);
           }}
-          onCancel={() => cliState.reverseSearchOpen.set(false)}
+          onCancel={() => reverseSearchOpenSignal.set(false)}
         />
       ) : null}
       {attachNotice ? <Text dimColor>{attachNotice}</Text> : null}
