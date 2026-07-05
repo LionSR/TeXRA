@@ -129,38 +129,11 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  if (options.modelSource === 'live') {
-    const { getModel, model } = options;
-    return Object.freeze({
-      kind: 'launch',
-      runtimeHost: options.runtimeHost,
-      streamId: options.streamId,
-      executionId: options.executionId,
-      coordinators: options.coordinators,
-      get model() {
-        return getModel() ?? model;
-      },
-      agentName: options.agentName,
-      workingDirectory: options.workingDirectory,
-      delegationDepth: options.delegationDepth,
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
-      stopAfterCycle: options.stopAfterCycle,
-      session: options.session,
-      toolEditApprovalHandler: options.toolEditApprovalHandler,
-    });
-  }
-
-  const { model } = options;
-  return Object.freeze({
-    kind: 'bare',
+  const common = {
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
     coordinators: options.coordinators,
-    get model() {
-      return model;
-    },
     agentName: options.agentName,
     workingDirectory: options.workingDirectory,
     delegationDepth: options.delegationDepth,
@@ -169,6 +142,26 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     stopAfterCycle: options.stopAfterCycle,
     session: options.session,
     toolEditApprovalHandler: options.toolEditApprovalHandler,
+  };
+
+  if (options.modelSource === 'live') {
+    const { getModel, model } = options;
+    return Object.freeze({
+      kind: 'launch',
+      ...common,
+      get model() {
+        return getModel() ?? model;
+      },
+    });
+  }
+
+  const { model } = options;
+  return Object.freeze({
+    kind: 'bare',
+    ...common,
+    get model() {
+      return model;
+    },
   });
 }
 
