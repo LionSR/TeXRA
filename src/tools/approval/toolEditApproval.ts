@@ -17,7 +17,7 @@ import {
   makePatchText,
   type TextDiff,
 } from '@utils/text/diff';
-import { tallyDiffLineChanges } from '@utils/text/diffLineTally';
+import { countLines } from '@utils/text/stringUtils';
 
 import { bashApprovalController } from './bashApproval';
 import { createStreamApprovalController } from './streamApprovalQueue';
@@ -145,7 +145,20 @@ export function computeLineChangeSummary(
     return { added: 0, removed: 0 };
   }
 
-  return tallyDiffLineChanges(createSemanticDiffs(original, proposed));
+  const diffs = createSemanticDiffs(original, proposed);
+
+  let added = 0;
+  let removed = 0;
+
+  for (const [type, text] of diffs) {
+    if (type === DIFF_INSERT) {
+      added += countLines(text);
+    } else if (type === DIFF_DELETE) {
+      removed += countLines(text);
+    }
+  }
+
+  return { added, removed };
 }
 
 /**
