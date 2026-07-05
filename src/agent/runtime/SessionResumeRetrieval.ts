@@ -11,12 +11,15 @@
 
 import { z } from 'zod';
 
-import { getExecutionStore } from '@agent/storage';
+import {
+  deriveResumability,
+  RESUMABILITY_CAUSE,
+  type ResumabilityDecision,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import {
   migrateSharedState,
@@ -69,6 +72,20 @@ type NormalizedToolUseState = z.infer<
   typeof CurrentToolUseFlowRecordStateSchema
 >;
 
+function throwIfResumeStorageUnreadable(
+  resumability: ResumabilityDecision,
+): void {
+  if (resumability.resumable) return;
+  if (
+    resumability.cause !== RESUMABILITY_CAUSE.UNREADABLE_FLOW &&
+    resumability.cause !== RESUMABILITY_CAUSE.UNREADABLE_META &&
+    resumability.cause !== RESUMABILITY_CAUSE.INVALID_META
+  ) {
+    return;
+  }
+  throw new Error(`Unable to read resume storage: ${resumability.cause}`);
+}
+
 /**
  * Minimal schema for validating workflow flow record exists and has resumable state.
  * Full validation happens when the flow actually resumes.
@@ -114,24 +131,6 @@ export async function retrieveSessionResumeData(
   return null;
 }
 
-/** Read a flow record from the execution store. Returns null if absent or invalid. */
-async function readFlowRecord(
-  executionId: ExecutionId,
-  agentType: 'tool-use' | 'workflow',
-): Promise<FlowRecord | null> {
-  const kv = getExecutionStore(executionId);
-  const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
-
-  if (!flowRecord?.shared) {
-    logger.warn('No flow record found for execution', {
-      data: { agentType, executionId },
-    });
-    return null;
-  }
-
-  return flowRecord;
-}
-
 /**
  * Retrieve resume data for a tool-use session.
  */
@@ -141,10 +140,19 @@ async function retrieveToolUseResumeData(
   agentConfig: AgentConfig,
 ): Promise<ToolUseResumeData | null> {
   try {
-    const flowRecord = await readFlowRecord(executionId, 'tool-use');
-    if (!flowRecord) {
+    const resumability = await deriveResumability(executionId);
+    if (!resumability.resumable) {
+      throwIfResumeStorageUnreadable(resumability);
+      logger.warn('Execution is not resumable', {
+        data: {
+          agentType: 'tool-use',
+          executionId,
+          cause: resumability.cause,
+        },
+      });
       return null;
     }
+    const { flowRecord } = resumability;
 
     const migrationResult = migrateSharedState(flowRecord.shared);
     if (migrationResult === null) {
@@ -223,10 +231,19 @@ async function retrieveWorkflowResumeData(
   agentConfig: AgentConfig,
 ): Promise<WorkflowResumeData | null> {
   try {
-    const flowRecord = await readFlowRecord(executionId, 'workflow');
-    if (!flowRecord) {
+    const resumability = await deriveResumability(executionId);
+    if (!resumability.resumable) {
+      throwIfResumeStorageUnreadable(resumability);
+      logger.warn('Execution is not resumable', {
+        data: {
+          agentType: 'workflow',
+          executionId,
+          cause: resumability.cause,
+        },
+      });
       return null;
     }
+    const { flowRecord } = resumability;
 
     // Minimal validation - just verify essential fields exist.
     // Full state validation happens when the flow actually resumes.

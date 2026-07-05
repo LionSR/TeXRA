@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import {
   deleteAllExecutions,
   deleteExecution,
+  deriveResumability,
   getExecutionStore,
   listExecutions,
   type ExecutionListingEntry,
@@ -14,11 +15,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import {
-  EXECUTION_STATUS,
-  ExecutionIdSchema,
-  type ExecutionId,
-} from '@shared/schemas';
+import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 
 import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
@@ -143,6 +140,7 @@ export async function readCliHistoryDetails(
     conversation,
     persistedWorkspaceFilePaths,
     generatedFiles,
+    resumability,
   ] = await Promise.all([
     store.readMeta(),
     store.readConfig(),
@@ -151,10 +149,12 @@ export async function readCliHistoryDetails(
     store.readConversation(),
     store.readWorkspaceFiles(),
     listGeneratedFiles(id),
+    deriveResumability(id),
   ]);
-  const resumeData = config
-    ? await readCliToolUseResumeDataForListing(id, config)
-    : undefined;
+  const resumeData =
+    resumability.resumable && config
+      ? await readCliToolUseResumeDataForListing(id, config)
+      : null;
   const conversationPreview = createConversationPreview(conversation);
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
@@ -179,7 +179,7 @@ export async function readCliHistoryDetails(
     id,
     status: resolveCliHistoryStatus({
       terminalStatus: meta?.terminalStatus,
-      hasFlowRecord: !!resumeData,
+      resumable: resumeData !== null,
     }),
     meta,
     config,
@@ -190,7 +190,7 @@ export async function readCliHistoryDetails(
       ? { conversation: fullConversation }
       : {}),
     files,
-    hasFlowRecord: !!resumeData,
+    hasFlowRecord: resumeData !== null,
     currentModel: resumeData?.snapshot.agentConfig.model,
   };
 }
@@ -396,23 +396,14 @@ export function cliHistoryNdjsonRecords(
 
 export function resolveCliHistoryStatus(input: {
   readonly terminalStatus?: string;
-  readonly hasFlowRecord?: boolean;
+  readonly resumable: boolean;
 }): string {
   // An absent terminal status means the run never reached its terminal write
   // (crash, kill, old build) — never report that as 'completed'.
-  if (input.hasFlowRecord && terminalStatusAllowsResume(input.terminalStatus)) {
+  if (input.resumable) {
     return CLI_HISTORY_RESUMABLE_STATUS;
   }
   return input.terminalStatus ?? 'unknown';
-}
-
-function terminalStatusAllowsResume(
-  terminalStatus: string | undefined,
-): boolean {
-  return (
-    terminalStatus === undefined ||
-    terminalStatus === EXECUTION_STATUS.INTERRUPTED
-  );
 }
 
 export function formatCliHistoryDetailsText(
@@ -475,10 +466,9 @@ async function toCliHistoryEntry(
   entry: ExecutionListingEntry,
 ): Promise<CliHistoryEntry> {
   const inputBasename = firstInputBasename(entry.agentConfig);
-  // Cancelled sessions persist 'interrupted' and may keep a resumable flow
-  // record — check it for those too, not only for missing terminal statuses.
+  const resumability = await deriveResumability(entry.id);
   const resumeData =
-    terminalStatusAllowsResume(entry.terminalStatus) && entry.agentConfig
+    resumability.resumable && entry.agentConfig
       ? await readCliToolUseResumeDataForListing(entry.id, entry.agentConfig)
       : null;
   return {
@@ -488,7 +478,7 @@ async function toCliHistoryEntry(
     model: resumeData?.snapshot.agentConfig.model ?? entry.model,
     status: resolveCliHistoryStatus({
       terminalStatus: entry.terminalStatus,
-      hasFlowRecord: !!resumeData,
+      resumable: resumeData !== null,
     }),
     inputBasename,
     category: entry.category,

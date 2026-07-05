@@ -1,0 +1,187 @@
+import { z } from 'zod';
+
+import { flowKey } from '@agent/node/persistedFlow';
+import type { FlowRecord } from '@agent/node/persistedFlow';
+import * as logger from '@logger/logUtils';
+import {
+  EXECUTION_STATUS,
+  RUN_OUTCOME,
+  type ExecutionId,
+  type RunOutcome,
+} from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+import {
+  ExecutionMetaSchema,
+  getExecutionStore,
+  type ExecutionMeta,
+} from './ExecutionKVStore';
+
+const CHANNEL = 'Resumability';
+
+const ResumableFlowRecordSchema = z.looseObject({
+  flowName: z.string(),
+  params: z.record(z.string(), z.unknown()),
+  shared: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  nodes: z.array(z.looseObject({ action: z.string().optional() })),
+});
+
+export const RESUMABILITY_CAUSE = {
+  INTERRUPTED_WITH_FLOW: 'interrupted-with-flow',
+  MISSING_TERMINAL_WITH_FLOW: 'missing-terminal-with-flow',
+  TERMINAL_COMPLETED: 'terminal-completed',
+  TERMINAL_FAILED: 'terminal-failed',
+  TERMINAL_STATUS: 'terminal-status',
+  MISSING_FLOW: 'missing-flow',
+  INVALID_FLOW: 'invalid-flow',
+  INVALID_META: 'invalid-meta',
+  UNREADABLE_FLOW: 'unreadable-flow',
+  UNREADABLE_META: 'unreadable-meta',
+} as const;
+
+export type ResumabilityCause =
+  (typeof RESUMABILITY_CAUSE)[keyof typeof RESUMABILITY_CAUSE];
+type ResumableCause =
+  | typeof RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW
+  | typeof RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW;
+type NonResumableCause = Exclude<ResumabilityCause, ResumableCause>;
+
+export type ResumabilityDecision =
+  | {
+      readonly resumable: true;
+      readonly cause: ResumableCause;
+      readonly flowRecord: FlowRecord;
+      readonly terminalStatus?: string;
+      readonly outcome?: RunOutcome;
+    }
+  | {
+      readonly resumable: false;
+      readonly cause: NonResumableCause;
+      readonly terminalStatus?: string;
+      readonly outcome?: RunOutcome;
+    };
+
+function terminalBlockCause(
+  meta: ExecutionMeta | null,
+): NonResumableCause | undefined {
+  if (!meta) return undefined;
+  if (meta.outcome === RUN_OUTCOME.COMPLETED) {
+    return RESUMABILITY_CAUSE.TERMINAL_COMPLETED;
+  }
+  if (meta.outcome === RUN_OUTCOME.FAILED) {
+    return RESUMABILITY_CAUSE.TERMINAL_FAILED;
+  }
+  if (
+    meta.outcome === RUN_OUTCOME.CANCELLED ||
+    meta.terminalStatus === undefined ||
+    meta.terminalStatus === EXECUTION_STATUS.INTERRUPTED
+  ) {
+    return undefined;
+  }
+  return RESUMABILITY_CAUSE.TERMINAL_STATUS;
+}
+
+/**
+ * Single storage-owned resumability decision.
+ *
+ * Terminal metadata is authoritative for completed/failed runs so stale flow
+ * files cannot resurrect old executions. Cancelled or crash-interrupted runs
+ * require a valid flow record before they are resumable.
+ */
+export async function deriveResumability(
+  executionId: ExecutionId,
+): Promise<ResumabilityDecision> {
+  const store = getExecutionStore(executionId);
+  let meta: ExecutionMeta | null;
+  try {
+    const rawMeta = await store.read('meta');
+    if (rawMeta == null) {
+      meta = null;
+    } else {
+      const metaResult = ExecutionMetaSchema.safeParse(rawMeta);
+      if (!metaResult.success) {
+        logger.debug(
+          CHANNEL,
+          `Invalid execution metadata for ${executionId}: ${toErrorMessage(
+            metaResult.error,
+          )}`,
+          { data: metaResult.error },
+        );
+        return {
+          resumable: false,
+          cause: RESUMABILITY_CAUSE.INVALID_META,
+        };
+      }
+      meta = metaResult.data;
+    }
+  } catch (error) {
+    logger.debug(
+      CHANNEL,
+      `Failed to read execution metadata for ${executionId}: ${toErrorMessage(
+        error,
+      )}`,
+    );
+    return {
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.UNREADABLE_META,
+    };
+  }
+
+  const terminalCause = terminalBlockCause(meta);
+  if (terminalCause !== undefined) {
+    return {
+      resumable: false,
+      cause: terminalCause,
+      terminalStatus: meta?.terminalStatus,
+      outcome: meta?.outcome,
+    };
+  }
+
+  let rawFlowRecord: unknown;
+  try {
+    rawFlowRecord = await store.read(flowKey(executionId));
+  } catch (error) {
+    logger.debug(
+      CHANNEL,
+      `Failed to read flow record for ${executionId}: ${toErrorMessage(error)}`,
+    );
+    return {
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.UNREADABLE_FLOW,
+      terminalStatus: meta?.terminalStatus,
+      outcome: meta?.outcome,
+    };
+  }
+
+  if (rawFlowRecord == null) {
+    return {
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+      terminalStatus: meta?.terminalStatus,
+      outcome: meta?.outcome,
+    };
+  }
+
+  const flowResult = ResumableFlowRecordSchema.safeParse(rawFlowRecord);
+  if (!flowResult.success) {
+    return {
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
+      terminalStatus: meta?.terminalStatus,
+      outcome: meta?.outcome,
+    };
+  }
+
+  return {
+    resumable: true,
+    cause:
+      meta?.outcome === RUN_OUTCOME.CANCELLED ||
+      meta?.terminalStatus === EXECUTION_STATUS.INTERRUPTED
+        ? RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW
+        : RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+    flowRecord: flowResult.data as FlowRecord,
+    terminalStatus: meta?.terminalStatus,
+    outcome: meta?.outcome,
+  };
+}
