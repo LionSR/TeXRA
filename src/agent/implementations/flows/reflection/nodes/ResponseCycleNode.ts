@@ -74,17 +74,17 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const { shared } = prepRes;
     const context = shared.context!; // Validated in prep()
 
-    const [prefillEndsTurn, initializedMessages] =
+    const [outputAlreadyComplete, initializedMessages] =
       await this.services.modelHandler.initializeOutputAndPrefill(
         this.services.config,
         this.services.setting,
         context.messages,
         prepRes.workspace,
         prepRes.outputLocation,
-        context.prefill,
+        '',
       );
 
-    if (prefillEndsTurn) {
+    if (outputAlreadyComplete) {
       return { outcome: 'completed', endTurn: true };
     }
 

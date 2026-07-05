@@ -26,9 +26,6 @@
       ],
       "project": ["src/**/*.{ts,tsx}"],
       "ignore": ["src/renderer/vite-env.d.ts"]
-    },
-    "packages/core": {
-      "project": ["src/**/*.ts"]
     }
   }
 }

@@ -129,7 +129,7 @@ export function describeAttachments(
 /**
  * Attachment summary message variants for different handler scenarios.
  */
-export type AttachmentSummaryVariant =
+type AttachmentSummaryVariant =
   /** Handler doesn't upload files - tell model to use read_file */
   | 'metadata-only'
   /** Files were uploaded/included inline - no read instruction needed */

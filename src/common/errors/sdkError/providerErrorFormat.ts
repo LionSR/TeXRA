@@ -7,7 +7,7 @@ import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
-import { isDiskFullError } from '../errorPredicates';
+import { findInCauseChain, isDiskFullError } from '../errorPredicates';
 import {
   detectPartialText,
   detectSdkErrorMetadata,
@@ -258,15 +258,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
 }
 
 function detectCachedProviderError(err: unknown): ProviderError | undefined {
-  for (
-    let current: unknown = err;
-    current != null && typeof current === 'object';
-    current = (current as { cause?: unknown }).cause
-  ) {
-    const cached = providerErrorMetadata.detect(current);
-    if (cached) return cached;
-  }
-  return undefined;
+  return findInCauseChain(err, providerErrorMetadata.detect);
 }
 
 /**
