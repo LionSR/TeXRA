@@ -18,7 +18,6 @@ import {
 
 const RoundContextSchema = z.object({
   messages: z.array(ProviderMessageSchema),
-  prefill: z.string(),
   stateRoundSnapshot: ConversationRoundStateSnapshotSchema,
 });
 
