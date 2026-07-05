@@ -7,12 +7,12 @@ import { customElement } from 'lit/decorators.js';
 // Local imports - progress view
 import { ProgressEvents } from '../events';
 import { BaseStreamContent } from './BaseStreamContent';
+import { renderStreamHeader } from './streamHeaderView';
 import type { ToolUseStreamState } from '../store';
 
 // Local imports - components
 
 // Side-effect imports - sibling components
-import './StreamHeader';
 import './RequestPanels';
 import './TodoList';
 import './PlanView';
@@ -38,17 +38,11 @@ export class ToolUseStreamContent extends BaseStreamContent {
     }
 
     return html`
-      <stream-header
-        .stream=${streamInfo}
-        .status=${currentState.status}
-        .substate=${currentState.substate}
-        .progress=${currentState.conversationProgress}
-        .roundStage=${currentState.roundStage}
-        .yoloActive=${Boolean(currentState.toolEditBypass)}
-        .superYoloActive=${Boolean(currentState.superYoloBypass)}
-        .goalActive=${Boolean(currentState.goalActive)}
-        .unsupportedCommands=${this.streamContext.unsupportedCommands}
-      ></stream-header>
+      ${renderStreamHeader(
+        streamInfo,
+        currentState,
+        this.streamContext.unsupportedCommands,
+      )}
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
