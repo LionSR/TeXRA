@@ -16,11 +16,13 @@ import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
 import {
   AgentCategory,
+  END_GROUP_STATUS,
   LOG_LEVELS,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
+  type EndGroupStatus,
   type RestoredStreamSnapshot,
   type RunOutcome,
   type StreamTabId,
@@ -904,6 +906,55 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('closes fallback waiting groups from durable snapshots outside restored streams', async () => {
+    let finishDetection!: (value: Set<StreamTabId>) => void;
+    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
+      finishDetection = resolve;
+    });
+    const detectWaitingStreams = vi.fn(async () => detectionGate);
+    const bridge = await createBridge([], {
+      configureProgressSnapshotStore: (store) => {
+        store.setTaskState(
+          'snapshot-waiting-stream',
+          TaskStateSchema.parse(workflowTaskState()),
+          'abc123',
+        );
+      },
+      detectWaitingStreams,
+      streamLogsLoadError: new Error('stream log store unavailable'),
+    });
+    const restartRepair = (
+      bridge as unknown as { restartRepair: Promise<void> }
+    ).restartRepair;
+    const streamLogs = bridge.streamLogs as typeof bridge.streamLogs & {
+      endRunningGroupsForStreams: (
+        streamIds: readonly StreamTabId[],
+        now?: number,
+        status?: EndGroupStatus,
+      ) => Promise<StreamTabId[]>;
+    };
+    const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
+
+    try {
+      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
+      finishDetection(new Set<StreamTabId>(['snapshot-waiting-stream']));
+      await restartRepair;
+
+      expect(bridgeStatus(bridge).get('snapshot-waiting-stream')).toBe(
+        STREAM_STATUS.WAITING,
+      );
+      expect(closeSpy).toHaveBeenCalledWith(
+        ['snapshot-waiting-stream'],
+        expect.any(Number),
+        END_GROUP_STATUS.STOPPED,
+      );
+    } finally {
+      finishDetection(new Set());
+      bridgeStatus(bridge).clearStream('snapshot-waiting-stream');
+      bridge.dispose();
+    }
+  });
+
   it('rechecks active executions after a failed persisted-record lookup in the fallback path', async () => {
     // Regression test for the "catch-within-catch" gap (issue #7160): the
     // fallback path's own recheck (see the regression test above) only ran
@@ -955,6 +1006,7 @@ describe('DesktopProgressBridge', () => {
       endRunningGroupsForStreams: (
         streamIds: readonly StreamTabId[],
         now?: number,
+        status?: EndGroupStatus,
       ) => Promise<StreamTabId[]>;
     };
     const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
@@ -1152,6 +1204,7 @@ describe('DesktopProgressBridge', () => {
       endRunningGroupsForStreams: (
         streamIds: readonly StreamTabId[],
         now?: number,
+        status?: EndGroupStatus,
       ) => Promise<StreamTabId[]>;
     };
     const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
@@ -1164,6 +1217,7 @@ describe('DesktopProgressBridge', () => {
         expect(closeSpy).toHaveBeenCalledWith(
           ['waiting-stream'],
           expect.any(Number),
+          END_GROUP_STATUS.STOPPED,
         );
       });
     } finally {
@@ -1192,6 +1246,7 @@ describe('DesktopProgressBridge', () => {
       endRunningGroupsForStreams: (
         streamIds: readonly StreamTabId[],
         now?: number,
+        status?: EndGroupStatus,
       ) => Promise<StreamTabId[]>;
     };
     const closeSpy = vi
@@ -1211,6 +1266,7 @@ describe('DesktopProgressBridge', () => {
         expect(closeSpy).toHaveBeenLastCalledWith(
           ['waiting-stream'],
           expect.any(Number),
+          END_GROUP_STATUS.STOPPED,
         );
       });
     } finally {
