@@ -2,11 +2,11 @@ import * as vscode from 'vscode';
 
 import { createKey, getAgent, type AgentSource } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { extractErrorMessage } from '@common/errors';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { delay } from '@utils/core';
+import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'RemoteAgentUtils';
 logger.initialize(CHANNEL);

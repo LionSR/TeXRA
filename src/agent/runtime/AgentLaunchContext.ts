@@ -41,7 +41,7 @@ import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/m
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
-import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
+import { AgentError, getSdkErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import {
@@ -52,6 +52,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas/agent';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';

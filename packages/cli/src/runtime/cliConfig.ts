@@ -5,9 +5,9 @@ import { z } from 'zod';
 
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { isFileNotFoundError } from '@common/errors';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { configKeyVariants } from '@shared/config/configKeys';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isObject } from '@utils/core/typeGuards';
 
 import {

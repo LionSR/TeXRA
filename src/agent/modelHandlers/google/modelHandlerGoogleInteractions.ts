@@ -17,6 +17,7 @@ import { logProgressStatus, logSdkError } from '@agent/trace';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { parseToolArgumentsAsObject } from '@agent/modelHandlers/utils/parseArguments';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
@@ -27,7 +28,6 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 
@@ -39,7 +39,7 @@ import type {
 } from '@shared/schemas/toolResult';
 
 // Local imports - utils
-import { filterNotNull, isNonEmptyString, isObject } from '@utils/core';
+import { filterNotNull, isNonEmptyString } from '@utils/core';
 import { getShortDisplayPath } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
@@ -1882,7 +1882,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
           case 'step.stop': {
             const slot = pending.get(event.index);
             if (slot && slot.type === 'function_call' && slot.argsBuffer) {
-              slot.args = this.parseArguments(slot.argsBuffer);
+              slot.args = parseToolArgumentsAsObject(
+                slot.argsBuffer,
+                this.logger,
+              );
             }
             break;
           }
@@ -2027,7 +2030,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
           type: 'function_call',
           id: slot.callId ?? nanoid(),
           name: slot.callName ?? '',
-          arguments: slot.args ?? this.parseArguments(slot.argsBuffer),
+          arguments:
+            slot.args ??
+            parseToolArgumentsAsObject(slot.argsBuffer, this.logger),
         } satisfies FunctionCallStep);
       } else if (slot.text) {
         steps.push({
@@ -2037,18 +2042,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       }
     }
     return steps;
-  }
-
-  private parseArguments(buffer: string): Record<string, unknown> {
-    if (!buffer) return {};
-    const parsed = safeParseJson(buffer);
-    if (parsed.isErr()) {
-      this.logger.warn('Failed to parse streamed tool arguments.', {
-        data: parsed.error,
-      });
-      return {};
-    }
-    return isObject(parsed.value) ? parsed.value : {};
   }
 
   // ===========================================================================

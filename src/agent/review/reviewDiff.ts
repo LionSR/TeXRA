@@ -16,8 +16,8 @@ import simpleGit, { type SimpleGit } from 'simple-git';
 
 // Local imports
 import { platform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { makeMachineGitEnv } from '@utils/system/platformPaths';
 import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 
