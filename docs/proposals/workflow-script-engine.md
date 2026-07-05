@@ -140,6 +140,15 @@ Small data travels inline in the script; large artifacts (documents) travel
 by file reference. A 40-page LaTeX rewrite never round-trips through the
 script as a string.
 
+_Landed (2026-07-05)_: every subagent completion now persists a structured
+result manifest (`ResultMeta`: agent, category, outcome, outputs, line-diff
+references, `lastResponse`, touched files, cost) to the execution KV store,
+readable as JSON via `/executions/{id}/result`. This is the chaining
+contract — the orchestrator (today) and the engine's `runAgent` wiring
+(next) consume outputs/diffs/outcome as data instead of parsing the XML
+delivery. Workflow agents thereby become chainable without any change to
+their YAML: stage N's manifest `outputs` feed stage N+1's `inputFiles`.
+
 ### 2. `outputSchema`: the structured-output prerequisite
 
 There is currently **no** schema-constrained final answer anywhere in the

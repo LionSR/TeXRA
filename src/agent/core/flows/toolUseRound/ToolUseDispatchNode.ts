@@ -233,15 +233,16 @@ export class ToolUseDispatchNode<C> extends BatchNode<
   ): void {
     for (const [index, call] of calls.entries()) {
       if (!this._unsafeDuplicateCallIds.has(call.callId)) continue;
+      const duplicateResult: ToolResult = {
+        status: 'error',
+        error: UNSAFE_DUPLICATE_CALL_ERROR,
+      };
       results[index] = {
         call,
-        result: toolError(UNSAFE_DUPLICATE_CALL_ERROR),
+        result: duplicateResult,
         parsedInput: call.input,
         extracted: {
-          sanitizedResult: {
-            status: 'error',
-            error: UNSAFE_DUPLICATE_CALL_ERROR,
-          },
+          sanitizedResult: duplicateResult,
           attachments: [],
         },
         editedFiles: [],
