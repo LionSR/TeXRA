@@ -105,6 +105,10 @@ export const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
  *  - guarantee a non-empty top-level `instructions`, hoisting system/developer
  *    items out of `input` into `instructions` (matching Zed/Codex), deduping
  *    text already present, with {@link CODEX_DEFAULT_INSTRUCTIONS} as fallback.
+ *  - clamp `reasoning.effort` above `medium` down to `medium`: with no
+ *    background mode (see above), a `high`/`xhigh` reasoning turn runs fully
+ *    synchronously over this connection and risks the client timing out
+ *    before the backend responds.
  */
 export function rewriteCodexRequestBody(
   body: Record<string, unknown>,
@@ -116,6 +120,16 @@ export function rewriteCodexRequestBody(
   delete rewritten.max_output_tokens;
   delete rewritten.background;
   rewritten.store = false;
+
+  const reasoning = rewritten.reasoning;
+  if (
+    reasoning &&
+    typeof reasoning === 'object' &&
+    'effort' in reasoning &&
+    (reasoning.effort === 'high' || reasoning.effort === 'xhigh')
+  ) {
+    rewritten.reasoning = { ...reasoning, effort: 'medium' };
+  }
 
   const instructions: string[] = [];
   if (
