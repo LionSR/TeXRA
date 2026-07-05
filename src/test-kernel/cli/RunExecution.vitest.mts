@@ -134,6 +134,7 @@ describe('executeCliRequest', () => {
   beforeEach(stubRunExecutionDeps);
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.all(
       tempDirs
         .splice(0)
@@ -292,6 +293,53 @@ describe('executeCliRequest', () => {
       'stream-1' as StreamTabId,
     );
     expect(snapshot.todos).toEqual([todo]);
+  });
+
+  it('loads the stream log store before the run and flushes it after, in order', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { getDefaultStreamLogStore } = await import('@transcript');
+    const request = baseRequest();
+    const store = getDefaultStreamLogStore();
+    const callOrder: string[] = [];
+    vi.spyOn(store, 'load').mockImplementation(async () => {
+      callOrder.push('load');
+    });
+    vi.spyOn(store, 'flush').mockImplementation(async () => {
+      callOrder.push('flush');
+    });
+    mocks.runAgent.mockImplementationOnce(async () => {
+      callOrder.push('runAgent');
+      return {
+        category: 'toolUse',
+        executionId: 'exec-1',
+        status: 'completed',
+        streamId: 'stream-1',
+      };
+    });
+
+    await executeCliRequest(request, cliContext());
+
+    // The bug this test guards: StreamLogStore.save()/flush() silently no-op
+    // until .load() has run once, so headless runs lost their whole
+    // streamLogs timeline. `load` must precede the run, `flush` must follow it.
+    expect(callOrder).toEqual(['load', 'runAgent', 'flush']);
+  });
+
+  it('flushes the stream log store even when the run throws', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { getDefaultStreamLogStore } = await import('@transcript');
+    const request = baseRequest();
+    const store = getDefaultStreamLogStore();
+    const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
+    const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
+    mocks.runAgent.mockRejectedValueOnce(new Error('boom'));
+
+    await expect(
+      executeCliRequest(request, cliContext()),
+    ).rejects.toThrow('boom');
+
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+    expect(flushSpy).toHaveBeenCalledTimes(1);
   });
 
   it('closes the runtime host when sidecar flush fails', async () => {
