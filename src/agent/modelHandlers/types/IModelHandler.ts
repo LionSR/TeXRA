@@ -1,192 +1,49 @@
 // Local imports - agent components
-import type { AgentTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  AgentCategory,
-  type AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
-import type {
-  ConversationRoundStateSnapshot,
-  AgentRunStateSnapshot,
-} from '@agent/core/state/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import type { ToolDefinition } from '@model';
-import type { FileLocation } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-import type { ModelConfig, ModelCapabilities } from 'llm-zoo';
+import type { ModelHandler } from '../ModelHandler';
 import type { ProviderMessage } from './ProviderMessage';
-import type { ProviderStopReason } from './StopReasonTypes';
-import type {
-  ChatCompletionMessageFunctionToolCall,
-  ChatCompletionMessageToolCall,
-} from 'openai/resources/chat/completions';
-import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
-import type { FunctionCall } from '@google/genai';
-import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
-import type { ChatToolCall as ORChatToolCall } from '@openrouter/sdk/models';
-import type { ServerToolExtractionResult } from './ServerToolTypes';
+import type { SdkToolCall } from './ModelHandlerContracts';
+
+// Re-exported for existing consumers of this module. These plain data
+// contracts live in `./ModelHandlerContracts` (not here) because
+// `ModelHandler.ts` needs them too, and importing them from this file would
+// recreate the ModelHandler.ts <-> IModelHandler.ts cycle this module exists
+// to avoid — see the note on `IModelHandler` below.
+export type {
+  TokenCountOptions,
+  TokenValidationResult,
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  StopConditionsResult,
+  OpenAIToolCall,
+  DeepSeekToolCall,
+  OpenAIResponseToolCall,
+  GoogleToolCall,
+  AnthropicToolCall,
+  OpenRouterToolCall,
+  SdkToolCall,
+} from './ModelHandlerContracts';
 
 /**
- * Options for token counting - all fields optional, handlers use what they need.
- * @template C Provider-specific client type
- */
-export interface TokenCountOptions<C = unknown> {
-  /** Pre-authenticated client (avoids re-auth) */
-  client?: C;
-  /** System prompt to include in count */
-  systemPrompt?: string;
-  /** Tool definitions to include in count */
-  tools?: unknown[];
-  /** For cancellation */
-  signal?: AbortSignal;
-}
-
-/**
- * Result from validating token limits against context window.
- */
-export interface TokenValidationResult {
-  /** Adjusted max tokens to fit within context window */
-  adjustedMaxTokens: number;
-  /** Input token count used for validation */
-  inputTokens?: number;
-  /** Percentage of context window utilized */
-  utilizationPercent?: number;
-}
-
-/**
- * Options for creating a model response.
- * @template M - Provider-specific message type
- */
-export interface CreateResponseOptions<
-  M extends ProviderMessage = ProviderMessage,
-  C = unknown,
-> {
-  /** Provider client instance */
-  client: C;
-  /** Conversation messages */
-  messages: M[];
-  /** Sampling temperature (0-1) */
-  temperature: number;
-  /** Optional system prompt */
-  systemPrompt?: string;
-  /** Optional stop sequence */
-  endTag?: string;
-  /** Optional abort signal for cancellation */
-  signal?: AbortSignal;
-  /** Optional tool definitions for function calling */
-  tools?: ToolDefinition[];
-}
-
-/**
- * Result from createResponse, optionally including updated messages
- * after compaction or other transformations.
+ * Common port implemented by all model handlers.
  *
- * @template Resp - Provider-specific response type
- * @template M - Provider-specific message type
- */
-export interface CreateResponseResult<
-  Resp,
-  M extends ProviderMessage = ProviderMessage,
-> {
-  /** The provider response */
-  response: Resp;
-  /**
-   * If messages were transformed (e.g., compaction), the new array.
-   * Undefined means messages were not modified - caller keeps original.
-   */
-  updatedMessages?: M[];
-}
-
-/**
- * Result from extracting response data from a provider response.
- */
-export interface ExtractResponseResult {
-  /** Extracted response text */
-  text: string;
-  /** Usage/token statistics from the provider */
-  usage: ProviderUsage;
-  /** Reason why the model stopped generating */
-  stopReason: ProviderStopReason;
-}
-
-/**
- * Result from checking stop conditions.
- */
-export interface StopConditionsResult {
-  /** Whether the turn should end */
-  endTurn: boolean;
-  /** Whether generation should stop */
-  shouldStop: boolean;
-}
-
-export type OpenAIToolCall = {
-  provider: 'openai';
-  callId: string;
-  name: string;
-  input: ChatCompletionMessageFunctionToolCall['function']['arguments'];
-  raw: ChatCompletionMessageToolCall;
-};
-
-export type DeepSeekToolCall = {
-  provider: 'deepseek';
-  callId: string;
-  name: string;
-  input: unknown;
-  raw: ChatCompletionMessageToolCall;
-};
-
-export type OpenAIResponseToolCall = {
-  provider: 'openai-response';
-  callId: string;
-  name: string;
-  input: unknown;
-  raw: ResponseFunctionToolCallItem;
-};
-
-export type GoogleToolCall = {
-  provider: 'google';
-  callId: string;
-  name: string;
-  input: FunctionCall['args'];
-  raw: FunctionCall;
-  thoughtSignature?: string;
-};
-
-export type AnthropicToolCall = {
-  provider: 'anthropic';
-  callId: string;
-  name: string;
-  input: ToolUseBlock['input'];
-  raw: ToolUseBlock;
-};
-
-export type OpenRouterToolCall = {
-  provider: 'openrouter';
-  callId: string;
-  name: string;
-  input: unknown;
-  raw: ORChatToolCall;
-};
-
-export type SdkToolCall =
-  | OpenAIToolCall
-  | DeepSeekToolCall
-  | OpenAIResponseToolCall
-  | GoogleToolCall
-  | AnthropicToolCall
-  | OpenRouterToolCall;
-
-// Note: SdkToolCall is a discriminated union on 'provider'.
-// Use `call.provider === 'openai'` directly for type narrowing instead of
-// separate type guard functions.
-
-/**
- * Common interface implemented by all model handlers.
+ * Derived from {@link ModelHandler} via `Pick` so the port surface can never
+ * drift from the base class: adding, renaming, or retyping a member there is
+ * automatically reflected here, and a base-class signature change breaks
+ * exactly one place (the class) instead of two. Only members consumers
+ * actually call through this port are picked — internal-only members (e.g.
+ * `computePrice`, `supportsReasoningLevelOverride`) are reached through the
+ * concrete class instead and are intentionally omitted.
+ *
+ * `createBatchedToolUseFollowUpMessages` is the one thing this port expresses
+ * that the class doesn't: it's an interface-only optional extension that
+ * `ToolUseDispatchNode` feature-detects for providers requiring batched
+ * parallel tool-result messages (e.g. Google, DeepSeek, Kimi, MiniMax).
  *
  * @template M - Message type specific to the provider (e.g., MessageParam for Anthropic,
  *               ChatCompletionMessageParam for OpenAI). Must extend ProviderMessage.
@@ -196,195 +53,56 @@ export type SdkToolCall =
  * @template C - Provider-specific client type
  * @template Resp - Provider-specific response object type
  */
-export interface IModelHandler<
+export type IModelHandler<
   M extends ProviderMessage = ProviderMessage,
   U = unknown,
   T extends SdkToolCall = SdkToolCall,
   C = unknown,
   Resp = unknown,
-> {
-  config: ModelConfig;
-  capabilities: ModelCapabilities;
-  readonly isOpenai: boolean;
-  readonly isAnthropic: boolean;
-
-  getStreamingConfig(): boolean;
-  setOutputStreaming(enabled: boolean): void;
-  isBackgroundModeActive(): boolean;
-
-  /** Whether this handler supports manual context compaction. */
-  readonly supportsManualCompaction: boolean;
-
-  /**
-   * True when the provider client or handler already owns automatic transient
-   * retries. Flow-level model invocation should not add another automatic retry
-   * layer on top of it; manual retry remains available after the provider layer
-   * gives up. Provider handlers may still mark post-request failures, such as
-   * stream-consumption or background-polling errors, as requiring flow-level
-   * auto-retry because those failures are outside the SDK retry boundary.
-   */
-  readonly usesProviderManagedAutoRetry?: boolean;
-
-  /**
-   * Error-specific refinement for provider-managed retry ownership. Handlers
-   * whose SDK retries only a subset of transient failures can return false for
-   * errors that should still use TeXRA's flow-level automatic retry.
-   */
-  isAutoRetryManagedByProvider?(error: Error): boolean;
-
-  /**
-   * Request context compaction on the next API call.
-   * For handlers that support it, this forces compaction regardless of the
-   * automatic threshold. No-op for handlers that don't support compaction.
-   */
-  requestCompaction(): void;
-
-  /** Returns the effective context window, accounting for beta overrides. */
-  getEffectiveContextWindow(): number;
-
-  readonly isGoogle: boolean;
-
-  /**
-   * Whether parallel tool calls in a single turn must be batched into one
-   * follow-up message to preserve provider-side reasoning / thought signatures
-   * (e.g. Google, DeepSeek, Kimi, MiniMax).
-   */
-  readonly requiresBatchedParallelToolResults: boolean;
-
-  /**
-   * Whether a user-set reasoning-level override applies to this handler.
-   * Defaults to the model's configurable-effort capability; handlers whose
-   * provider honors a reasoning level without a granular effort flag override it.
-   */
-  readonly supportsReasoningLevelOverride: boolean;
-
-  setLogger(logger: AgentTrace): void;
-  setAgentCategory(agentCategory?: AgentCategory | null): void;
-  getClient(): Promise<C>;
-
-  /**
-   * Generate a response from the model.
-   * @param options Options for creating the response
-   * @returns Result containing the response and optionally updated messages
-   */
-  createResponse(
-    options: CreateResponseOptions<M, C>,
-  ): Promise<CreateResponseResult<Resp, M>>;
-
-  initializeMessages(
-    userPrefix: string,
-    userRequest: string,
-    mediaFiles?: FileLocation[],
-    systemPrompt?: string,
-  ): Promise<M[]>;
-
-  createRoundMessages(
-    messages: M[],
-    userMessage: string,
-    mediaFiles?: FileLocation[],
-  ): Promise<M[]>;
-
-  extractResponse(responseObject: Resp, endTag: string): ExtractResponseResult;
-
-  addContinueMessageWithPrefill(
-    messages: M[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
-  ): void;
-
-  addContinueMessageWithoutPrefill(
-    messages: M[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
-  ): void;
-
-  initializeOutputAndPrefill(
-    agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
-    messages: M[],
-    workspaceState: AgentWorkspaceState,
-    outputLocation: FileLocation,
-    prefill: string,
-  ): Promise<[boolean, M[]]>;
-
-  computePrice(responseUsage: U): number;
-
-  /**
-   * Normalizes provider-specific usage data into a unified format.
-   * This is the single source of truth for usage statistics.
-   * Cost is computed once here and should never be recomputed elsewhere.
-   */
-  normalizeUsage(rawUsage: U, responseTimeMs: number): NormalizedUsage;
-
-  updateMessageContentWithPrefill(
-    messages: M[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void;
-
-  updateMessageContentWithoutPrefill(
-    messages: M[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void;
-
-  shouldContinue(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-    agentSetting: AgentSetting,
-  ): boolean;
-
-  /**
-   * Evaluate whether to end the turn and/or stop generation.
-   * @returns Object with endTurn and shouldStop flags
-   */
-  checkStopConditions(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-    stateRound: ConversationRoundStateSnapshot,
-    stateGlobal: AgentRunStateSnapshot,
-    agentSetting: AgentSetting,
-  ): StopConditionsResult;
-
-  processThinkingBlock(
-    responseObject: Resp,
-    workspaceState?: AgentWorkspaceState,
-  ): string | null;
-
-  extractToolUse(responseObject: Resp): T[];
-
-  /**
-   * Extract all server tool data from a provider response in a single pass.
-   * Returns both normalized results for display and raw content blocks for context.
-   * This is the single source of truth for server tool extraction.
-   *
-   * @param responseObject - The raw API response
-   * @returns Combined extraction result with webSearchResults and contentBlocks
-   */
-  extractServerToolData(responseObject: Resp): ServerToolExtractionResult;
-
-  /**
-   * Create provider-specific messages capturing the tool call and result.
-   *
-   * @param client - Provider client (for file uploads if supported)
-   * @param call - Parsed tool call object or input payload
-   * @param result - Tool result payload (binary data stripped, properly typed)
-   * @param attachments - Extracted file attachments (for upload/inline if supported)
-   * @param workspaceState - Optional workspace state
-   * @param text - Optional text to include before tool call
-   * @returns Array of provider-specific messages
-   */
-  createToolUseFollowUpMessages(
-    client: C | undefined,
-    call: T,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<M[]>;
-
+> = Pick<
+  ModelHandler<M, U, T, C, Resp>,
+  | 'config'
+  | 'capabilities'
+  | 'isOpenai'
+  | 'isAnthropic'
+  | 'isGoogle'
+  | 'getStreamingConfig'
+  | 'setOutputStreaming'
+  | 'isBackgroundModeActive'
+  | 'supportsManualCompaction'
+  | 'usesProviderManagedAutoRetry'
+  | 'isAutoRetryManagedByProvider'
+  | 'requestCompaction'
+  | 'getEffectiveContextWindow'
+  | 'requiresBatchedParallelToolResults'
+  | 'setLogger'
+  | 'setAgentCategory'
+  | 'getClient'
+  | 'createResponse'
+  | 'initializeMessages'
+  | 'createRoundMessages'
+  | 'extractResponse'
+  | 'addContinueMessageWithPrefill'
+  | 'addContinueMessageWithoutPrefill'
+  | 'initializeOutputAndPrefill'
+  | 'normalizeUsage'
+  | 'updateMessageContentWithPrefill'
+  | 'updateMessageContentWithoutPrefill'
+  | 'shouldContinue'
+  | 'checkStopConditions'
+  | 'processThinkingBlock'
+  | 'extractToolUse'
+  | 'extractServerToolData'
+  | 'createToolUseFollowUpMessages'
+  | 'createUserFollowUpMessages'
+  | 'createAssistantMessageFromResponse'
+  | 'isEndTurnStop'
+  | 'extractAssistantContent'
+  | 'extractAssistantText'
+  | 'prependTextToUserMessage'
+  | 'addMediaToUserMessage'
+  | 'dispose'
+> & {
   /**
    * Create provider-specific messages for MULTIPLE parallel tool calls.
    *
@@ -408,70 +126,4 @@ export interface IModelHandler<
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
-
-  /**
-   * Create provider-specific messages for a simple text follow-up.
-   * Appends the user's message to the existing conversation array.
-   */
-  createUserFollowUpMessages(messages: M[], userMessage: string): Promise<M[]>;
-
-  /**
-   * Build an assistant message from a provider response.
-   */
-  createAssistantMessageFromResponse(responseObject: Resp, text: string): M;
-
-  /**
-   * Determine if the stop reason represents an end-turn marker.
-   */
-  isEndTurnStop(reason: ProviderStopReason): boolean;
-
-  /**
-   * Extract assistant content blocks from a response, excluding tool_use blocks.
-   * Used to preserve original order when building follow-up messages.
-   *
-   * @param responseObject - The raw API response
-   * @returns Array of content blocks suitable for message building, or empty array if not supported
-   */
-  extractAssistantContent(responseObject: Resp): unknown[];
-
-  /**
-   * Extract text from an assistant message in the conversation.
-   * Returns undefined if the message is not an assistant message or has no text.
-   *
-   * Each provider implements this with proper typing for their message format
-   * (e.g., role='assistant' for OpenAI/Anthropic, role='model' for Google).
-   */
-  extractAssistantText(message: M): string | undefined;
-
-  // =========================================================================
-  // Message modification methods (for post-build enrichment)
-  // =========================================================================
-
-  /**
-   * Prepend text to the last user message in the conversation.
-   * Used by TeXCountNode to add stats before the user's content.
-   *
-   * @param messages - Existing messages array (mutated in place)
-   * @param text - Text to prepend
-   */
-  prependTextToUserMessage(messages: M[], text: string): void;
-
-  /**
-   * Add media files to the last user message in the conversation.
-   * Used by MediaExtractionNode to add figures/PDFs after message building.
-   *
-   * @param messages - Existing messages array (mutated in place)
-   * @param mediaFiles - Media files to add
-   */
-  addMediaToUserMessage(
-    messages: M[],
-    mediaFiles: FileLocation[],
-  ): Promise<void>;
-
-  /**
-   * Release any resources held by the handler (e.g., WebSocket connections,
-   * keepalive intervals). Called when the handler is no longer needed.
-   * No-op by default.
-   */
-  dispose(): void;
-}
+};
