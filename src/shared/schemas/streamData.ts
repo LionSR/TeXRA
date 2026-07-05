@@ -47,8 +47,7 @@ export const RoundKeySchema = z.coerce.number().int();
  * schema stays `@agent`-free and can live in `@shared/schemas`; consumers that
  * need the typed value parse it with `TaskStateSchema` (which depends on
  * `@agent`). This is THE definition — the core `StreamSnapshotStore` /
- * `streamSnapshotRead` and the legacy `StreamTabStore` reader all import it
- * directly, never their own copy.
+ * `streamSnapshotRead` import it directly, never their own copy.
  */
 export const StreamTabMetaSchema = z.object({
   schemaVersion: z
@@ -69,6 +68,14 @@ export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 
 // ============================================================================
 // Legacy instructions: { runId: { text, timestamp?, ... } }
+//
+// Archival-only: tabs created before the one-run-per-tab refactor (#3061,
+// 2026-04-19) may still have this on disk (as `legacyInstructions.json`, or
+// the older `runInstructions.json` written before that refactor renamed the
+// key). Current code never writes it; `StreamSnapshotStore.readLegacyInstruction`
+// reads it once at load() so those tabs can backfill their original user
+// message into the stream log. Retire alongside the other #3061-era shims
+// tracked in `docs/proposals/architecture-checkpoints-2026.md` / `#6981`.
 // ============================================================================
 
 export const LegacyInstructionEntrySchema = z.looseObject({
