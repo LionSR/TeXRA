@@ -27,6 +27,13 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 const ACTIVE_STREAM_ID = 'polish';
 const BASE_TIME = Date.parse('2026-05-28T16:00:00Z');
 
+// The design gallery has no host registry broadcasting capabilities, so
+// `unsupportedCommands` would otherwise stay `null`, which `isKnownUnsupported`
+// treats as "unsupported" and hides every gated toolbar/file-list control
+// (Restore, Diff, Pack, Clean, Run latexFixer, etc.). An empty set says every
+// command is supported, so this static mock renders the full designed layout.
+const NO_UNSUPPORTED_COMMANDS: ReadonlySet<string> = new Set();
+
 /** Realistic OutputFileInfo fixture for the production <file-list>. */
 function mockFile(
   relative: string,
@@ -296,6 +303,7 @@ export class ProgressBoardLayoutMock extends LitElement {
             .progress=${{ toolCallCount: 4 }}
             .roundStage=${{ index: 1, total: 2 }}
             .yoloActive=${true}
+            .unsupportedCommands=${NO_UNSUPPORTED_COMMANDS}
           ></stream-header>
           <div class="log-body">
             <task-group-list
@@ -311,6 +319,7 @@ export class ProgressBoardLayoutMock extends LitElement {
               .filesByRound=${SAMPLE_FILES}
               .failuresByRound=${{}}
               .showRoundHeaders=${false}
+              .unsupportedCommands=${NO_UNSUPPORTED_COMMANDS}
             ></file-list>
           </div>
         </div>
