@@ -17,7 +17,13 @@ import {
   latexSettingsStatus,
 } from '../settingsState';
 
-export const latexHandlers: SettingsViewOutboundHandlerRegistry = {
+// `SettingsViewOutboundHandlerRegistry` is now exhaustive (every SettingsView
+// outbound command needs a real handler or `unsupported(...)` — see
+// `@shared/utils/dispatcher`). This slice only owns LaTeX-settings commands,
+// so it's typed as a `satisfies Partial<...>` subset rather than the full
+// registry; `messageDispatcher.ts` spreads all slices together and is the
+// actual exhaustiveness checkpoint TypeScript enforces.
+export const latexHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS]: (data) => {
     latexSettingsStatus.set(data.settings);
     latexSettingsLoaded.set(true);
@@ -31,4 +37,4 @@ export const latexHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED]: (data) => {
     inlineCriticismEnabled.set(data.enabled);
   },
-};
+} satisfies Partial<SettingsViewOutboundHandlerRegistry>;

@@ -13,7 +13,13 @@ import {
   memoryToggleDisabled,
 } from '../settingsState';
 
-export const memoryHandlers: SettingsViewOutboundHandlerRegistry = {
+// `SettingsViewOutboundHandlerRegistry` is now exhaustive (every SettingsView
+// outbound command needs a real handler or `unsupported(...)` — see
+// `@shared/utils/dispatcher`). This slice only owns memory commands, so it's
+// typed as a `satisfies Partial<...>` subset rather than the full registry;
+// `messageDispatcher.ts` spreads all slices together and is the actual
+// exhaustiveness checkpoint TypeScript enforces.
+export const memoryHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY]: (data) => {
     memoryItems.set(data.items ?? []);
   },
@@ -41,4 +47,4 @@ export const memoryHandlers: SettingsViewOutboundHandlerRegistry = {
       }),
     );
   },
-};
+} satisfies Partial<SettingsViewOutboundHandlerRegistry>;

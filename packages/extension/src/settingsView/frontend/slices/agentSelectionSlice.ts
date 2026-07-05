@@ -10,7 +10,13 @@ import {
   workflowAgents,
 } from '../settingsState';
 
-export const agentSelectionHandlers: SettingsViewOutboundHandlerRegistry = {
+// `SettingsViewOutboundHandlerRegistry` is now exhaustive (every SettingsView
+// outbound command needs a real handler or `unsupported(...)` — see
+// `@shared/utils/dispatcher`). This slice only owns agent-selection
+// commands, so it's typed as a `satisfies Partial<...>` subset rather than
+// the full registry; `messageDispatcher.ts` spreads all slices together and
+// is the actual exhaustiveness checkpoint TypeScript enforces.
+export const agentSelectionHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION]: (data) => {
     workflowAgents.set(data.workflow);
     toolUseAgents.set(data.toolUse);
@@ -20,4 +26,4 @@ export const agentSelectionHandlers: SettingsViewOutboundHandlerRegistry = {
     customAgentDir.set(data.path);
     customAgentDirIsDefault.set(data.isDefault);
   },
-};
+} satisfies Partial<SettingsViewOutboundHandlerRegistry>;

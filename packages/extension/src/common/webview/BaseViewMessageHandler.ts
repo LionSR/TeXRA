@@ -4,7 +4,11 @@ import { ZodError } from 'zod';
 
 // Local imports - common
 import * as logger from '@logger/logUtils';
-import type { DispatcherFn, HandlerRegistry } from '@shared/utils/dispatcher';
+import {
+  UnsupportedCommandError,
+  type DispatcherFn,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 
 // Local file imports
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
@@ -149,11 +153,18 @@ export abstract class BaseViewMessageHandler<
     await this.withActiveView(webviewView, () => {
       this.onDispatch?.(webviewView);
 
+      let unsupported = false;
       const handled = dispatcher(message, handlers, (error) => {
         if (error instanceof ZodError) {
           this.logger.debug(this.channel, 'Message validation failed', {
             data: error,
           });
+        } else if (error instanceof UnsupportedCommandError) {
+          // Declared `unsupported(...)` in this host's registry: visible
+          // feedback (toast), not a silent drop or an error-level log.
+          unsupported = true;
+          this.logger.debug(this.channel, error.message);
+          void vscode.window.showInformationMessage(error.reason);
         } else {
           this.logger.error(this.channel, 'Error handling message', {
             data: error,
@@ -161,7 +172,7 @@ export abstract class BaseViewMessageHandler<
         }
       });
 
-      if (!handled && isCommandMessage(message)) {
+      if (!handled && !unsupported && isCommandMessage(message)) {
         this.logger.warn(this.channel, `Unhandled command: ${message.command}`);
       }
     });

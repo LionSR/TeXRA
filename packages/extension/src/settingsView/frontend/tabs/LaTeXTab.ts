@@ -534,7 +534,7 @@ export class LaTeXTab extends LitElement {
                 )}
               `
         }
-        ${this.renderInlineCriticismSetting()}
+        ${this.desktopHost ? nothing : this.renderInlineCriticismSetting()}
         ${this.renderCompileDiffSettings()}
       </div>
     `;

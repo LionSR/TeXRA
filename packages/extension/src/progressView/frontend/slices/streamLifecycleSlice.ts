@@ -16,6 +16,7 @@ import {
 } from '@shared/schemas';
 
 import { firstStreamId, type ProgressState, type StreamState } from '../store';
+import { unsupportedProgressCommands$ } from '../progressState';
 import { clearResolvedProposalIds } from './permissionSlice';
 import { pendingDescriptions, takePendingDescription } from './streamMetaSlice';
 import { mergeBackendOwnedState } from './streamStateMerge';
@@ -97,6 +98,9 @@ function updateStreamInfo(
 
 export const streamLifecycleHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data, ctx) => {
+    if (data.unsupportedCommands) {
+      unsupportedProgressCommands$.set(new Set(data.unsupportedCommands));
+    }
     const previousState = ctx.getState();
     const updated = updateStreamInfo(
       previousState,

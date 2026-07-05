@@ -517,6 +517,19 @@ export const UpdateGoalListMessageSchema = z.object({
 });
 export type UpdateGoalListMessage = z.infer<typeof UpdateGoalListMessageSchema>;
 
+/**
+ * Outbound: sent once at webview-ready with the commands this host's inbound
+ * registry declares `unsupported(...)` — the derived capability view (see
+ * `unsupportedCommands` in `@shared/utils/dispatcher`).
+ */
+export const SetUnsupportedCommandsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS),
+  commands: z.array(z.string()),
+});
+export type SetUnsupportedCommandsMessage = z.infer<
+  typeof SetUnsupportedCommandsMessageSchema
+>;
+
 // ============================================================
 // Outbound messages (extension host → settings webview)
 // ============================================================
@@ -547,6 +560,7 @@ export const SettingsViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateInlineCriticismEnabledMessageSchema,
     UpdateGoalListMessageSchema,
     UpdateProfileMessageSchema,
+    SetUnsupportedCommandsMessageSchema,
   ],
 );
 
