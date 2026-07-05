@@ -19,16 +19,6 @@ logger.initialize(CHANNEL);
 
 const PDF_FILTERS = { 'PDF files': ['pdf'] };
 
-export function registerImageCommands(_context: vscode.ExtensionContext) {
-  // `texra.countPdfPages`, `texra.encodeImageToBase64`, and
-  // `texra.convertPdfToImages` are now registered through
-  // `extensionCommandSurface` (see #3775 / #3781 batch 3). This stub
-  // remains so `commands.ts` can keep its existing call site; the
-  // exported handlers (`handleCountPdfPages`,
-  // `handleEncodeImageToBase64`, `handleConvertPdfToImages`) defined
-  // below are referenced by the registry's actions.
-}
-
 export async function handleCountPdfPages(): Promise<void> {
   try {
     const selection = await dialogUtils.selectFileFromWorkspace({
