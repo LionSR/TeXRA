@@ -87,6 +87,11 @@ describe('bash-approval config target', () => {
     // both call sites to reference BASH_APPROVAL_CONFIG_TARGET so they can
     // never drift apart again.
     const repoRoot = process.cwd();
+    // NOTE: this list is hardcoded to the current hosts that wire the
+    // bash-approval toggle. If a new host entry point starts calling
+    // setBashApprovalEnabled, add its path here too, or this regression
+    // guard will not see it and the scope-mismatch bug could reappear
+    // unnoticed on the new host.
     const sites = [
       'packages/extension/src/settingsView/SettingsViewMessageHandler.ts',
       'packages/desktop/src/main/desktopSettingsIpc.ts',

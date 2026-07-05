@@ -139,6 +139,10 @@ class MemoryStateStore implements StateStore {
 
 class MemoryConfigStore {
   readonly values = new Map<string, unknown>();
+  // Only recorded when a call site passes an explicit target -- do not
+  // default this, or a call site that forgets to pass `target` would still
+  // read back as 'workspace' and mask the exact scope-mismatch regression
+  // this store exists to catch (see issue #7085).
   readonly updateTargets = new Map<string, 'global' | 'workspace'>();
 
   get<T>(key: string, defaultValue?: T): T {
@@ -148,9 +152,13 @@ class MemoryConfigStore {
   async update<T>(
     key: string,
     value: T,
-    target: 'global' | 'workspace' = 'workspace',
+    target?: 'global' | 'workspace',
   ): Promise<void> {
-    this.updateTargets.set(key, target);
+    if (target === undefined) {
+      this.updateTargets.delete(key);
+    } else {
+      this.updateTargets.set(key, target);
+    }
     if (value === undefined) {
       this.values.delete(key);
     } else {
