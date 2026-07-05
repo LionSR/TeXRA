@@ -74,6 +74,32 @@ export async function selectFile(
   return paths?.[0] ?? null;
 }
 
+export interface FolderDialogOptions {
+  /** Label for the open button */
+  openLabel: string;
+  /** Optional dialog title */
+  title?: string;
+}
+
+/**
+ * Generic helper to show a folder-picker dialog and return the selected
+ * absolute path. Unlike {@link selectFile}/{@link selectFiles}, this never
+ * touches `WorkspaceFS`, so it's safe to call before a workspace (or
+ * `platform()`) is available.
+ */
+export async function selectFolder(
+  options: FolderDialogOptions,
+): Promise<string | null> {
+  const folders = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: options.openLabel,
+    ...(options.title ? { title: options.title } : {}),
+  });
+  return folders?.[0]?.fsPath ?? null;
+}
+
 export interface FileSelectionResult {
   relativePath: string;
   absolutePath: string;
