@@ -172,6 +172,7 @@ type TestDesktopStreamSnapshotStore = {
   upsert(snapshot: RestoredStreamSnapshot): Promise<void>;
   remove(streamId: StreamTabId): Promise<void>;
   replaceAll(snapshots: RestoredStreamSnapshot[]): Promise<void>;
+  flush(): Promise<void>;
   getAll(): RestoredStreamSnapshot[];
 };
 
@@ -494,6 +495,7 @@ function createStreamSnapshotStore(
       live.clear();
       for (const snapshot of snapshots) live.set(snapshot.streamId, snapshot);
     }),
+    flush: vi.fn(async () => {}),
     getAll: () => [...live.values()],
   };
 }

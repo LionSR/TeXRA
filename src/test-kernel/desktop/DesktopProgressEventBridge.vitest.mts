@@ -56,6 +56,7 @@ function createSnapshotStore(
     upsert: vi.fn(async () => {}),
     remove: vi.fn(async () => {}),
     replaceAll: vi.fn(async () => {}),
+    flush: vi.fn(async () => {}),
     getAll: vi.fn(() => []),
     ...overrides,
   };
