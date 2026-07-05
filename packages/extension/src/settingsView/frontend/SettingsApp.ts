@@ -30,6 +30,7 @@ import {
   type SettingsTabName,
   type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import {
   registerTeXRAWebAwesomeIcons,
@@ -258,8 +259,13 @@ export class SettingsApp extends SettingsAppBase {
   // Derived capability view: commands the active host's inbound registry
   // declares `unsupported(...)`, sent once at webview-ready (see
   // `unsupportedCommands` in `@shared/utils/dispatcher`). Replaces
-  // `isDesktopHost` checks for command-availability gating.
-  private readonly unsupportedCommands = signal<ReadonlySet<string>>(new Set());
+  // `isDesktopHost` checks for command-availability gating. `null` before
+  // that broadcast arrives — checked via `isKnownUnsupported`, which treats
+  // "not yet known" as unsupported so a control never flashes visible then
+  // hidden once the real capability set lands.
+  private readonly unsupportedCommands = signal<ReadonlySet<string> | null>(
+    null,
+  );
 
   // Outbound message handlers (extension host → settings webview). Each entry
   // receives the already-parsed, typed message and updates the matching
@@ -803,9 +809,10 @@ export class SettingsApp extends SettingsAppBase {
   );
 
   private renderHeader(): TemplateResult {
-    const settingsButton = this.unsupportedCommands
-      .get()
-      .has(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS)
+    const settingsButton = isKnownUnsupported(
+      this.unsupportedCommands.get(),
+      SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+    )
       ? nothing
       : html`
           <wa-button
@@ -928,9 +935,10 @@ export class SettingsApp extends SettingsAppBase {
           ${SETTINGS_TABS.filter(
             (tab) =>
               tab.panel !== 'goal' ||
-              !this.unsupportedCommands
-                .get()
-                .has(SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST),
+              !isKnownUnsupported(
+                this.unsupportedCommands.get(),
+                SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+              ),
           ).map(
             (tab) =>
               html`<wa-tab panel=${tab.panel}
@@ -1066,9 +1074,10 @@ export class SettingsApp extends SettingsAppBase {
               .items=${this.toolDashboardItems.get()}
               .loaded=${this.toolDashboardLoaded.get()}
               .bashApprovalEnabled=${this.bashApprovalEnabled.get()}
-              .showDesktopCrashReporting=${!this.unsupportedCommands
-                .get()
-                .has(SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING)}
+              .showDesktopCrashReporting=${!isKnownUnsupported(
+                this.unsupportedCommands.get(),
+                SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,
+              )}
               .desktopCrashReportingEnabled=${this.desktopCrashReportingEnabled.get()}
               .desktopCrashReportingConfigured=${this.desktopCrashReportingConfigured.get()}
               @tool-open-url=${this.handleToolOpenUrl}

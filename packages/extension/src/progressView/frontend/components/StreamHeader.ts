@@ -27,6 +27,7 @@ import {
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA icon component
@@ -330,10 +331,13 @@ export class StreamHeader extends LitElement {
    * from `unsupportedProgressCommands$`, itself derived from the host's
    * registry — see `@shared/utils/dispatcher`). A button whose command is in
    * this set is hidden, the same as an execution-dependent button with no
-   * executionId, rather than rendered disabled-but-visible.
+   * executionId, rather than rendered disabled-but-visible. `null` before
+   * the host's one-shot capability broadcast arrives — see
+   * `isKnownUnsupported`, which treats that the same as "unsupported" so a
+   * button never flashes visible then hidden.
    */
-  @property({ attribute: false }) unsupportedCommands: ReadonlySet<string> =
-    new Set();
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
@@ -465,7 +469,7 @@ export class StreamHeader extends LitElement {
     // active host's registry has declared unsupported.
     const hidden =
       (EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId) ||
-      this.unsupportedCommands.has(command);
+      isKnownUnsupported(this.unsupportedCommands, command);
     const disabled = hidden || !enabledButtons?.has(buttonId);
     return { disabled, hidden };
   }

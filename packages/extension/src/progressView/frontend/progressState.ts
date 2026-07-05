@@ -83,10 +83,13 @@ export const permissions$ = signal<PermissionState[]>([]);
  * Progress-view commands the active host's inbound registry declares
  * `unsupported(...)`, sent once with UPDATE_STREAMS (see `unsupportedCommands`
  * in `@shared/utils/dispatcher`). Feeds StreamHeader's capability gating so
- * it never renders a control the active host can't act on.
+ * it never renders a control the active host can't act on. `null` before
+ * that first UPDATE_STREAMS arrives — treated as "unsupported" by
+ * `isKnownUnsupported` so a control never flashes visible then hidden once
+ * the real capability set lands.
  */
-export const unsupportedProgressCommands$ = signal<ReadonlySet<string>>(
-  new Set(),
+export const unsupportedProgressCommands$ = signal<ReadonlySet<string> | null>(
+  null,
 );
 
 // ---------------------------------------------------------------------------

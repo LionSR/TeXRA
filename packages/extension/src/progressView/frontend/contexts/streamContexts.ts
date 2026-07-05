@@ -39,9 +39,11 @@ export interface StreamContextValue {
    * Progress-view commands the active host's inbound registry declares
    * `unsupported(...)` (see `unsupportedCommands` in `@shared/utils/dispatcher`).
    * StreamHeader derives its button visibility from this instead of an
-   * `isDesktopHost` check.
+   * `isDesktopHost` check. `null` before the host's one-shot capability
+   * broadcast arrives; pair with `isKnownUnsupported` (also in
+   * `@shared/utils/dispatcher`) rather than reading it directly.
    */
-  unsupportedCommands: ReadonlySet<string>;
+  unsupportedCommands: ReadonlySet<string> | null;
 }
 
 /** Default empty stream context value. */
@@ -51,7 +53,7 @@ export const EMPTY_STREAM_CONTEXT: StreamContextValue = {
   isToolUse: false,
   hasStreams: false,
   followupOptions: null,
-  unsupportedCommands: new Set(),
+  unsupportedCommands: null,
 };
 
 export const streamStateContext = createContext<StreamContextValue>(

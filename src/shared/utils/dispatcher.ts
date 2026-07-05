@@ -103,6 +103,21 @@ export function unsupportedCommands(
 }
 
 /**
+ * Frontend-side capability check for a command gated by a set the host sent
+ * via `unsupportedCommands()` above. `commands` is `null` before the host's
+ * one-shot capability broadcast has arrived — treated as "unsupported" (the
+ * control stays hidden) rather than "supported" (which would flash a control
+ * the active host can't act on before disappearing once the real data
+ * lands). Once the broadcast arrives, this reflects the registry exactly.
+ */
+export function isKnownUnsupported(
+  commands: ReadonlySet<string> | null,
+  command: string,
+): boolean {
+  return commands === null || commands.has(command);
+}
+
+/**
  * Creates a type-safe message dispatcher for a given schema.
  *
  * @param schema - Zod schema for the message union (must output { command: string, ... })
