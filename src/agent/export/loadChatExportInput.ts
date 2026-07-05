@@ -13,10 +13,10 @@
  * `src/controllers/settingsView/ChatExportController.ts`).
  *
  * `store.readConfig()` already validates against `AgentConfigSchema`
- * internally and falls back to `null` on a schema mismatch (see
- * `ExecutionKVStore.readValidated`), so `config` here is never a raw,
- * unvalidated value — no redundant re-parse (and no risk of it throwing on a
- * corrupt record) is needed.
+ * internally and falls back to `null` on a schema mismatch (see the private
+ * `readValidated` helper on `StorageFSKVStore` in `ExecutionKVStore.ts`), so
+ * `config` here is never a raw, unvalidated value — no redundant re-parse
+ * (and no risk of it throwing on a corrupt record) is needed.
  */
 
 import { getExecutionStore, type ExecutionMeta } from '@agent/storage';
@@ -42,13 +42,16 @@ export interface ChatExportLoadResult {
 
 /**
  * A stored conversation is only "present" when it has at least one message.
- * A stored-but-empty array must be treated the same as absent so that
- * every existence check downstream (this module's `exportInput`, and each
- * host's own not-found/incomplete classification) agrees with
- * `readCliHistoryDetails`, which builds no preview from an empty array
- * either. Without this, a plain truthiness check (`!conversation`) would
- * treat `[]` as "present" — `![]` is `false` in JS — and misreport an
- * execution `history show` already treats as not found.
+ * `ExecutionKVStore.readConversation()` already normalizes an empty stored
+ * array to `null` at the store layer, so this check is defensive rather than
+ * the primary fix — but it keeps the "non-empty array only" contract
+ * explicit for this module's callers (and for tests, which mock the store
+ * directly and can return `[]` without going through that normalization).
+ * Without it, a plain truthiness check (`!conversation`) would treat `[]` as
+ * "present" — `![]` is `false` in JS — and every existence check downstream
+ * (this module's `exportInput`, and each host's own not-found/incomplete
+ * classification) would disagree with `readCliHistoryDetails`, which builds
+ * no preview from an empty array either.
  */
 function hasConversationMessages(
   conversation: readonly unknown[] | null,
