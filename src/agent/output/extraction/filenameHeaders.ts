@@ -349,10 +349,10 @@ export function extractFilenameHeaderDocuments(
         pendingPrefacedMarkdownFence = fence;
       }
       ignoreProseUntilNextHeader = false;
-      // This fence failed the sole-output-chunk gate above (not LaTeX-ish),
-      // so it is prose/example content, not a continuation of the coalesced
-      // output — any pending "next chunk" label it followed no longer
-      // applies to whatever comes after it.
+      // This fence failed the sole-output-chunk gate above (whatever the
+      // reason), so it is prose/example content, not a continuation of the
+      // coalesced output — any pending "next chunk" label it followed no
+      // longer applies to whatever comes after it.
       sawSoleOutputChunkLabel = false;
       continue;
     }
