@@ -1,5 +1,7 @@
+// Third-party imports
 import { describe, expect, it } from 'vitest';
 
+// Local imports
 import { ToolError } from '@shared/schemas/toolResult';
 import { abandonOnAbort } from '@tools/cancellation';
 

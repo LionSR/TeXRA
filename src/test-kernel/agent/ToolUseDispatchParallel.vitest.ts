@@ -1,5 +1,7 @@
-// Third-party imports
+// Standard library imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
