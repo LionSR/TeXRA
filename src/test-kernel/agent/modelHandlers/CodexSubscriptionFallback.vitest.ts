@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   ModelProvider,
+  ReasoningEffort,
   type ModelConfig,
 } from 'llm-zoo';
 
@@ -39,7 +40,12 @@ const config: ModelConfig = {
   inputPrice: 2,
   outputPrice: 8,
   contextWindow: 128_000,
-  capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+  // Codex eligibility is derived from the top reasoning-effort tier (see
+  // providerCapabilities.ts), not from a hardcoded fullName allowlist.
+  capabilities: {
+    ...DEFAULT_MODEL_CAPABILITIES,
+    reasoningEffort: ReasoningEffort.XHIGH,
+  },
   openRouterOnly: false,
 };
 
