@@ -67,6 +67,7 @@ import {
   preflightCliHistoryDeleteAll,
   readCliHistoryConfig,
   readCliHistoryDetails,
+  isRemoteCliHistoryExportAssetsHref,
   readCliHistoryExportInput,
   resolveCliHistoryExportAssetsHref,
   stageCliHistoryExportAssets,
@@ -1109,6 +1110,66 @@ describe('CLI history runtime', () => {
             expect(result).toBe('missing');
           });
         },
+      );
+    });
+
+    it('merges into a pre-existing destination directory instead of nesting under it', async () => {
+      // A repeat export, or a repo that already checked in an `assets/`
+      // folder, must not turn `./assets/katex.min.css` into
+      // `./assets/htmlExport/katex.min.css`.
+      await withTempDir('texra-history-export-src-', async (resourcesPath) => {
+        await withTempDir('texra-history-export-dest-', async (cwd) => {
+          const htmlExportDir = path.join(resourcesPath, 'htmlExport');
+          await mkdir(path.join(htmlExportDir, 'fonts'), { recursive: true });
+          await writeFile(
+            path.join(htmlExportDir, 'katex.min.css'),
+            '.katex{}',
+          );
+          await writeFile(
+            path.join(htmlExportDir, 'fonts', 'a.woff2'),
+            'font-bytes',
+          );
+
+          const destDir = path.join(cwd, 'assets');
+          await mkdir(destDir, { recursive: true });
+          await writeFile(
+            path.join(destDir, 'unrelated.txt'),
+            'pre-existing file',
+          );
+
+          await stageCliHistoryExportAssets({ resourcesPath, destDir });
+          // Stage again — the common "repeat export into the same cwd" case.
+          const result = await stageCliHistoryExportAssets({
+            resourcesPath,
+            destDir,
+          });
+
+          expect(result).toBe('staged');
+          expect(
+            await readFile(path.join(destDir, 'katex.min.css'), 'utf8'),
+          ).toBe('.katex{}');
+          expect(
+            await readFile(path.join(destDir, 'fonts', 'a.woff2'), 'utf8'),
+          ).toBe('font-bytes');
+          expect(
+            await readFile(path.join(destDir, 'unrelated.txt'), 'utf8'),
+          ).toBe('pre-existing file');
+        });
+      });
+    });
+
+    it('identifies remote (URL-scheme) hrefs so staging is skipped for them', () => {
+      expect(isRemoteCliHistoryExportAssetsHref(undefined)).toBe(false);
+      expect(isRemoteCliHistoryExportAssetsHref('./assets')).toBe(false);
+      expect(isRemoteCliHistoryExportAssetsHref('assets')).toBe(false);
+      expect(isRemoteCliHistoryExportAssetsHref('/abs/path/assets')).toBe(
+        false,
+      );
+      expect(isRemoteCliHistoryExportAssetsHref('https://cdn/assets')).toBe(
+        true,
+      );
+      expect(isRemoteCliHistoryExportAssetsHref('http://cdn/assets')).toBe(
+        true,
       );
     });
   });
