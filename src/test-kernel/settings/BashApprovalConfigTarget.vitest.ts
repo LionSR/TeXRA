@@ -1,0 +1,130 @@
+// Standard library imports
+import { strict as assert } from 'node:assert';
+import { readFile } from 'node:fs/promises';
+import * as path from 'node:path';
+
+// Third-party imports
+import { describe, expect, it } from 'vitest';
+
+import {
+  BASH_APPROVAL_CONFIG_TARGET,
+  setBashApprovalEnabled,
+} from '@shared/settingsView/handlers/approvalHandlers';
+import type {
+  ConfigInspection,
+  ConfigTarget,
+} from '@platform/interfaces/config';
+import type { StateStore } from '@platform/interfaces/state';
+
+class MemoryStateStore implements StateStore {
+  private readonly values = new Map<string, unknown>();
+
+  get<T>(key: string, defaultValue?: T): T {
+    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
+  }
+
+  async update(key: string, value: unknown): Promise<void> {
+    this.values.set(key, value);
+  }
+}
+
+class RecordingConfigProvider {
+  readonly updateCalls: Array<{
+    key: string;
+    value: unknown;
+    target: ConfigTarget | undefined;
+  }> = [];
+
+  get<T>(_key: string, defaultValue?: T): T {
+    return defaultValue as T;
+  }
+
+  async update<T>(key: string, value: T, target?: ConfigTarget): Promise<void> {
+    this.updateCalls.push({ key, value, target });
+  }
+
+  inspect<T = unknown>(_key: string): ConfigInspection<T> | undefined {
+    return undefined;
+  }
+
+  isExplicitlySet(): boolean {
+    return false;
+  }
+
+  watch(): { dispose(): void } {
+    return { dispose: () => undefined };
+  }
+}
+
+describe('bash-approval config target', () => {
+  it('is scoped per-workspace, not global', () => {
+    // Bash approval gating is a security-adjacent bypass: disabling it in one
+    // workspace must never disable it everywhere (issue #7085).
+    expect(BASH_APPROVAL_CONFIG_TARGET).toBe('workspace');
+  });
+
+  it('setBashApprovalEnabled forwards the given target to config.update', async () => {
+    const config = new RecordingConfigProvider();
+    const ports = {
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      config,
+    };
+
+    await setBashApprovalEnabled(ports, false, BASH_APPROVAL_CONFIG_TARGET);
+
+    expect(config.updateCalls).toHaveLength(1);
+    expect(config.updateCalls[0]).toMatchObject({
+      value: false,
+      target: 'workspace',
+    });
+  });
+
+  it('both the extension and desktop hosts pass the shared constant, not a literal', async () => {
+    // Regression guard for issue #7085: the extension previously hardcoded
+    // 'global' and desktop hardcoded 'workspace' at their respective call
+    // sites, silently giving the same toggle different scopes per host. Pin
+    // both call sites to reference BASH_APPROVAL_CONFIG_TARGET so they can
+    // never drift apart again.
+    const repoRoot = process.cwd();
+    const sites = [
+      'packages/extension/src/settingsView/SettingsViewMessageHandler.ts',
+      'packages/desktop/src/main/desktopSettingsIpc.ts',
+    ];
+
+    for (const relativePath of sites) {
+      const source = await readFile(path.join(repoRoot, relativePath), 'utf8');
+
+      assert.match(
+        source,
+        /BASH_APPROVAL_CONFIG_TARGET/,
+        `${relativePath} must import/use BASH_APPROVAL_CONFIG_TARGET`,
+      );
+
+      // Find the actual invocation (identifier immediately followed by `(`),
+      // as opposed to the import statement or the command-dispatch-table key
+      // (both of which name the identifier without calling it); slice a small
+      // bounded window after it and make sure the call passes the shared
+      // constant, not a raw 'global'/'workspace' string literal, as its
+      // target argument.
+      const callSites = [...source.matchAll(/setBashApprovalEnabled\w*\(/g)];
+      assert.ok(
+        callSites.length > 0,
+        `${relativePath} must call setBashApprovalEnabled`,
+      );
+      const callSiteIndex = callSites.at(-1)!.index;
+      const callSiteWindow = source.slice(callSiteIndex, callSiteIndex + 200);
+
+      assert.match(
+        callSiteWindow,
+        /BASH_APPROVAL_CONFIG_TARGET/,
+        `${relativePath} must pass BASH_APPROVAL_CONFIG_TARGET as the call's target argument`,
+      );
+      assert.doesNotMatch(
+        callSiteWindow,
+        /['"](?:global|workspace)['"]/,
+        `${relativePath} must not hardcode the bash-approval config target`,
+      );
+    }
+  });
+});

@@ -139,6 +139,7 @@ class MemoryStateStore implements StateStore {
 
 class MemoryConfigStore {
   readonly values = new Map<string, unknown>();
+  readonly updateTargets = new Map<string, 'global' | 'workspace'>();
 
   get<T>(key: string, defaultValue?: T): T {
     return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
@@ -147,8 +148,9 @@ class MemoryConfigStore {
   async update<T>(
     key: string,
     value: T,
-    _target?: 'global' | 'workspace',
+    target: 'global' | 'workspace' = 'workspace',
   ): Promise<void> {
+    this.updateTargets.set(key, target);
     if (value === undefined) {
       this.values.delete(key);
     } else {
@@ -1040,6 +1042,48 @@ describe('desktop settings IPC', () => {
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       items: [expect.objectContaining({ id: 'file-ops' })],
+    });
+  });
+
+  it('writes the bash-approval toggle to the workspace config scope, not global', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const config = new MemoryConfigStore();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      config,
+      loadAgents: async () => undefined,
+      getCustomAgentDirectory: async () => '',
+      detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
+      onError: () => undefined,
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED,
+        enabled: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(config.values.get('texra.toolUse.requireBashApproval')).toBe(false);
+    // Security-adjacent scope pin: a per-workspace approval bypass must never
+    // be written to the global config target (see issue #7085).
+    expect(config.updateTargets.get('texra.toolUse.requireBashApproval')).toBe(
+      'workspace',
+    );
+    expect(
+      posted.find(
+        (message) =>
+          commandOf(message) ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      bashApprovalEnabled: false,
     });
   });
 
