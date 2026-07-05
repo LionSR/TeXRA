@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   deleteAllExecutions: vi.fn(),
   readCliToolUseResumeData: vi.fn(),
   readCliToolUseResumeDataForListing: vi.fn(),
+  assembleTrace: vi.fn(),
 }));
 
 vi.mock('@agent/storage', async () => {
@@ -56,8 +57,27 @@ vi.mock('@cli/runtime/toolUseResumeData', () => ({
   readCliToolUseResumeDataForListing: mocks.readCliToolUseResumeDataForListing,
 }));
 
+vi.mock('@transcript', async () => {
+  const actual =
+    await vi.importActual<typeof import('@transcript')>('@transcript');
+  return {
+    ...actual,
+    assembleTrace: mocks.assembleTrace,
+  };
+});
+
+// `runHistoryExport` calls this unconditionally; the real implementation
+// bootstraps platform agent directories keyed by `resourcesPath`, which is
+// unrelated to (and heavier than) what these tests exercise.
+vi.mock('@cli/runtime/initPlatform', () => ({
+  initLocalCliPlatform: vi.fn(),
+}));
+
 // Imported after vi.mock so the mocked dependencies are in place.
-import { parseHistoryListLimit } from '@cli/commands/history';
+import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
+import type { CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { TraceDocument } from '@transcript';
 import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
@@ -1230,6 +1250,124 @@ describe('CLI history runtime', () => {
           ).resolves.toBeNull();
         },
       );
+    });
+
+    describe('runHistoryExport --assets-dir', () => {
+      // Capture every byte written so we can assert on exit code + wording
+      // without the real bytes leaking to the test runner's own stdout/stderr.
+      let stdout = '';
+      let stderr = '';
+      let stdoutSpy: ReturnType<typeof vi.spyOn>;
+      let stderrSpy: ReturnType<typeof vi.spyOn>;
+
+      const trace = {
+        executionId: 'a1',
+        streamId: 'a1',
+        config,
+        meta: null,
+        entries: [],
+        snapshot: { todos: [], plan: null, usage: null },
+        terminalStatus: null,
+      } as unknown as TraceDocument;
+
+      function makeContext(resourcesPath: string): CliContext {
+        return {
+          cwd: '/workspace',
+          mode: 'headless',
+          outputFormat: 'text',
+          approvalPolicy: 'never',
+          colorEnabled: false,
+          version: '0.0.0',
+          resourcesPath,
+        };
+      }
+
+      beforeEach(() => {
+        stdout = '';
+        stderr = '';
+        mocks.assembleTrace.mockResolvedValue({ status: 'ok', trace });
+        stdoutSpy = vi
+          .spyOn(process.stdout, 'write')
+          .mockImplementation((chunk: unknown) => {
+            stdout += String(chunk);
+            return true;
+          }) as unknown as ReturnType<typeof vi.spyOn>;
+        stderrSpy = vi
+          .spyOn(process.stderr, 'write')
+          .mockImplementation((chunk: unknown) => {
+            stderr += String(chunk);
+            return true;
+          }) as unknown as ReturnType<typeof vi.spyOn>;
+      });
+
+      afterEach(() => {
+        stdoutSpy.mockRestore();
+        stderrSpy.mockRestore();
+      });
+
+      it('returns a non-zero exit code (but still writes the trace JSON) when the bundled assets are missing', async () => {
+        await withTempDir(
+          'texra-history-export-missing-src-',
+          async (resourcesPath) => {
+            await withTempDir(
+              'texra-history-export-missing-dest-',
+              async (cwd) => {
+                const destDir = path.join(cwd, 'shared-assets');
+                const exitCode = await runHistoryExport(
+                  makeContext(resourcesPath),
+                  'a1' as ExecutionId,
+                  'html',
+                  { assetsDir: destDir },
+                );
+
+                expect(exitCode).toBe(CliExitCode.Usage);
+                expect(stdout).toBe(JSON.stringify(trace));
+                expect(stderr).toContain('were not found in this CLI install');
+              },
+            );
+          },
+        );
+      });
+
+      it('returns success and writes a concrete (non-placeholder) instruction when assets stage correctly', async () => {
+        await withTempDir(
+          'texra-history-export-staged-src-',
+          async (resourcesPath) => {
+            const traceViewerDir = path.join(resourcesPath, 'traceViewer');
+            await mkdir(traceViewerDir, { recursive: true });
+            await writeFile(
+              path.join(traceViewerDir, 'index.html'),
+              '<html></html>',
+            );
+
+            await withTempDir(
+              'texra-history-export-staged-dest-',
+              async (cwd) => {
+                const destDir = path.join(cwd, 'shared-assets');
+                const exitCode = await runHistoryExport(
+                  makeContext(resourcesPath),
+                  'a1' as ExecutionId,
+                  'html',
+                  { assetsDir: destDir },
+                );
+
+                expect(exitCode).toBe(CliExitCode.Success);
+                expect(stdout).toBe(JSON.stringify(trace));
+                // Must not contain the old literal placeholder tokens, which
+                // read like an unresolved template rather than instructions.
+                expect(stderr).not.toContain('<redirected-path>');
+                expect(stderr).not.toContain(
+                  '<relative-path-to-the-redirected-file>',
+                );
+                expect(stderr).toContain(
+                  `Wrote trace JSON for a1 to stdout. Save the output to a ` +
+                    `file, then open ${destDir}/index.html?trace=<your-filename>.`,
+                );
+              },
+            );
+          },
+        );
+      });
     });
   });
 });
