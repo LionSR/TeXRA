@@ -115,6 +115,17 @@ describe('DesktopStreamSnapshot', () => {
     return raw.restoredStreams.streams;
   }
 
+  function deferred(): {
+    promise: Promise<void>;
+    resolve(): void;
+  } {
+    let resolve!: () => void;
+    const promise = new Promise<void>((settle) => {
+      resolve = settle;
+    });
+    return { promise, resolve };
+  }
+
   it('starts empty when the file does not exist', async () => {
     const store = await openDesktopStreamSnapshotStore(await tempFilePath());
 
@@ -261,6 +272,55 @@ describe('DesktopStreamSnapshot', () => {
     expect(await readPersistedSnapshots(filePath)).toEqual([
       expect.objectContaining({ description: 'pending' }),
     ]);
+  });
+
+  it('flush drains upserts scheduled while a write is in flight', async () => {
+    vi.useFakeTimers();
+    const filePath = await tempFilePath();
+    const store = await openDesktopStreamSnapshotStore(filePath);
+    const firstWriteStarted = deferred();
+    const releaseFirstWrite = deferred();
+    writeFileAtomicMock.mockImplementationOnce(async (target, data) => {
+      firstWriteStarted.resolve();
+      await releaseFirstWrite.promise;
+      await writeFile(target, data);
+    });
+
+    const first = store.upsert(makeSnapshot({ description: 'first' }));
+    const flush = store.flush();
+    await firstWriteStarted.promise;
+    const second = store.upsert(
+      makeSnapshot({
+        streamId: 'toolUseAgent@2',
+        agentCategory: 'toolUse',
+        description: 'second',
+      }),
+    );
+    let secondSettled = false;
+    void second.then(() => {
+      secondSettled = true;
+    });
+
+    releaseFirstWrite.resolve();
+    await flush;
+    await Promise.resolve();
+
+    expect(secondSettled).toBe(true);
+    await Promise.all([first, second]);
+    expect(writeFileAtomicMock).toHaveBeenCalledTimes(2);
+    expect(await readPersistedSnapshots(filePath)).toEqual([
+      expect.objectContaining({
+        streamId: 'workflowAgent@1',
+        description: 'first',
+      }),
+      expect.objectContaining({
+        streamId: 'toolUseAgent@2',
+        description: 'second',
+      }),
+    ]);
+
+    await vi.advanceTimersByTimeAsync(debounceMs);
+    expect(writeFileAtomicMock).toHaveBeenCalledTimes(2);
   });
 
   it('remove drops a snapshot and persists the removal', async () => {
