@@ -14,6 +14,7 @@ import {
 
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 
 // Type imports
@@ -473,5 +474,86 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     const capturedParams = getParams();
     assert.equal(capturedParams.tools[0].function.name, 'delegate_workflow');
     assert.equal(capturedParams.tools[0].function.strict, undefined);
+  });
+});
+
+describe('ModelHandlerOpenAI DeepSeek official max_tokens ceiling (#7081)', () => {
+  // Tool-use mode reduces max_tokens to 70% of the registry budget
+  // (getEffectiveMaxOutputTokens); running these in tool-use mode makes
+  // "override applied" vs. "override skipped" produce different numbers
+  // instead of a coincidental match.
+  it('bypasses the tool-use reduction for a low-budget non-reasoning DeepSeek entry, regardless of fullName', async () => {
+    // Registry-derived: gated on provider + capability + the config's own
+    // maxOutputTokens, not on the literal fullName 'deepseek-chat' — so a
+    // differently named low-budget entry is still capped correctly.
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        fullName: 'deepseek-legacy-chat',
+        maxOutputTokens: 8192,
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: false,
+        },
+      }),
+    );
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    stubHandlerForTest(handler);
+    const { client, getParams } = createCapturingClient();
+
+    await handler.createResponse({
+      client,
+      messages: [{ role: 'user', content: 'hi' }],
+      temperature: 0,
+    });
+
+    assert.equal(getParams().max_tokens, 8192);
+  });
+
+  it('keeps the tool-use reduction for a current large-output non-reasoning DeepSeek entry', async () => {
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        fullName: 'deepseek-v4-flash',
+        maxOutputTokens: 393216,
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: false,
+        },
+      }),
+    );
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    stubHandlerForTest(handler);
+    const { client, getParams } = createCapturingClient();
+
+    await handler.createResponse({
+      client,
+      messages: [{ role: 'user', content: 'hi' }],
+      temperature: 0,
+    });
+
+    assert.equal(getParams().max_tokens, Math.floor(393216 * 0.7));
+  });
+
+  it('keeps the tool-use reduction for a reasoning DeepSeek entry even at a low registry budget', async () => {
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        fullName: 'deepseek-legacy-reasoner',
+        maxOutputTokens: 8192,
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+        },
+      }),
+    );
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    stubHandlerForTest(handler);
+    const { client, getParams } = createCapturingClient();
+
+    await handler.createResponse({
+      client,
+      messages: [{ role: 'user', content: 'think' }],
+      temperature: 0,
+    });
+
+    assert.equal(getParams().max_tokens, Math.floor(8192 * 0.7));
   });
 });
