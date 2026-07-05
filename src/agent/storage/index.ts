@@ -9,7 +9,6 @@ export {
   type ExecutionKVStore,
   type ExecutionMeta,
   type ExecutionMetaInput,
-  ExecutionMetaSchema,
   type TodoEntry,
   type ChildRecord,
   type ResultMeta,
