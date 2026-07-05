@@ -30,6 +30,17 @@ function isTaskGroupStatus(
   );
 }
 
+function isStageKind(
+  value: unknown,
+): value is 'run' | 'round' | 'phase' | 'session' {
+  return (
+    value === 'run' ||
+    value === 'round' ||
+    value === 'phase' ||
+    value === 'session'
+  );
+}
+
 function asContextStateData(data: unknown): ContextStateData | undefined {
   return ContextStateDataSchema.optional().catch(undefined).parse(data);
 }
@@ -77,6 +88,9 @@ function updateTaskGroups(
       startTime: entry.timestamp,
       status,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
+      ...(isStageKind(payload.kind) ? { kind: payload.kind } : {}),
+      ...(typeof payload.index === 'number' ? { index: payload.index } : {}),
+      ...(typeof payload.total === 'number' ? { total: payload.total } : {}),
     };
 
     if (groupIndex === -1) {
@@ -106,6 +120,9 @@ function updateTaskGroups(
       startTime: entry.timestamp,
       status,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
+      ...(isStageKind(payload.kind) ? { kind: payload.kind } : {}),
+      ...(typeof payload.index === 'number' ? { index: payload.index } : {}),
+      ...(typeof payload.total === 'number' ? { total: payload.total } : {}),
       ...(endTime !== undefined ? { endTime } : {}),
     });
   } else {

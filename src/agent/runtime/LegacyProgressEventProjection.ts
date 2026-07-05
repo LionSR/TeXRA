@@ -1,5 +1,6 @@
 import type { AgentEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { StreamTabId } from '@shared/schemas';
 
 import type { SessionEventHub, SessionFact } from './SessionEventHub';
 
@@ -28,8 +29,23 @@ function emitLegacySessionFact(
 
 function emitLegacyRunEvent(
   runtimeHost: AgentRuntimeHost,
+  streamId: StreamTabId,
   event: AgentEvent,
 ): void {
+  if (event.type === 'stage.start') {
+    if (event.kind !== 'round') return;
+    runtimeHost.emit('updateRoundStage', {
+      streamId,
+      roundStage: {
+        index: event.index ?? 0,
+        ...(event.total !== undefined && event.total > 0
+          ? { total: event.total }
+          : {}),
+      },
+    });
+    return;
+  }
+
   if (event.type === 'child.activity') {
     if (event.kind === 'subagents') {
       runtimeHost.emit('updateActiveSubagents', {
@@ -84,11 +100,15 @@ export function attachLegacyProgressEventProjection(
   const detachRunFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
-      emitLegacyRunEvent(runtimeHost, sessionEvent.event);
+      emitLegacyRunEvent(
+        runtimeHost,
+        sessionEvent.streamId,
+        sessionEvent.event,
+      );
     },
     {
       scope: 'run',
-      types: ['child.activity', 'process.output'],
+      types: ['stage.start', 'child.activity', 'process.output'],
     },
   );
 

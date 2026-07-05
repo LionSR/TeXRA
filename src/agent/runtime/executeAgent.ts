@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { logConversationProgress, type AgentTrace } from '@agent/trace';
+import { logConversationProgress } from '@agent/trace';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
   getToolUseFlowErrorResult,
@@ -26,7 +26,6 @@ import {
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
@@ -47,15 +46,15 @@ import {
   type AgentLaunchContext,
 } from './AgentLaunchContext';
 import { runFlowWithLifecycle } from './AgentRunLifecycle';
-import { currentSession, type SessionHandle } from './SessionHandle';
-import { createInterruptCallbacks } from './InterruptManager';
-import { generateSessionDescription } from './sessionDescription';
-import { getProgressViewBridge } from './ProgressViewBridge';
 import {
   AgentFlowError,
   buildOptionalFlowResultFields,
   type AgentFlowResult,
 } from './AgentFlowResult';
+import { createInterruptCallbacks } from './InterruptManager';
+import { generateSessionDescription } from './sessionDescription';
+import { getProgressViewBridge } from './ProgressViewBridge';
+import type { SessionHandle } from './SessionHandle';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -100,37 +99,6 @@ function buildToolUseFlowResult(
   };
 }
 
-/** Create an onRoundCompleted callback that feeds progress into the execution registry and orchestrator. */
-function createRoundProgressCallback(
-  executionId: ExecutionId,
-  trace: AgentTrace,
-  onProgress?: (update: SubagentProgressUpdate) => void,
-): (
-  roundIndex: number,
-  totalRounds: number,
-  outputPaths?: readonly string[],
-) => void {
-  return (roundIndex, totalRounds, outputPaths) => {
-    currentSession().executions.updateProgress(executionId, {
-      currentRound: roundIndex,
-      totalRounds,
-    });
-    onProgress?.({
-      kind: 'round',
-      currentRound: roundIndex,
-      totalRounds,
-      outputPaths: outputPaths ?? [],
-    });
-    // Single producer emission (F-1b): the conversationProgressHub attached in
-    // AgentLaunchContext derives the host `updateConversationProgress` event
-    // from this instead of emitting to the runtimeHost directly.
-    logConversationProgress(trace, {
-      conversationTurns: roundIndex + 1,
-      toolCallCount: 0,
-    });
-  };
-}
-
 /** Create the awaited round-finalized callback used by agent flows. */
 function createUsageRecordingCallback(
   ctx: AgentLaunchContext,
@@ -158,7 +126,6 @@ async function runToolUseAgent(
   >,
 ): Promise<AgentFlowResult> {
   const { streamId } = ctx;
-  let toolUseTurns = 0;
   const onRoundFinalized = createUsageRecordingCallback(ctx);
   try {
     const result = await runToolUseFlow(
@@ -171,10 +138,7 @@ async function runToolUseAgent(
         onBeforeWaiting: options.onBeforeWaiting,
         onProgress: (update) => {
           if (update.kind === 'overview') {
-            toolUseTurns++;
-            // Single producer emission (F-1b): see createRoundProgressCallback.
             logConversationProgress(ctx.logger, {
-              conversationTurns: toolUseTurns,
               toolCallCount: update.toolCallCount,
             });
           }
@@ -227,27 +191,20 @@ async function runToolUseAgent(
 /**
  * Run the reflection (workflow) flow for a single agent execution.
  *
- * Owns all workflow-specific wiring: per-round progress callbacks and usage
- * recording. The caller (`executeAgent`) owns lifecycle and stream-status.
+ * Owns workflow-specific usage recording. The caller (`executeAgent`) owns
+ * lifecycle and stream-status.
  */
 async function runReflectionAgent(
   ctx: AgentLaunchContext,
   setting: AgentWorkflowSetting,
-  options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Promise<AgentFlowResult> {
   const { streamId } = ctx;
-  const onRoundCompleted = createRoundProgressCallback(
-    ctx.executionId,
-    ctx.logger,
-    options.onProgress,
-  );
   const onRoundFinalized = createUsageRecordingCallback(ctx);
   const result = await runReflectionFlow({
     ...ctx,
     ...createInterruptCallbacks(),
     onRoundFinalized,
     setting,
-    onRoundCompleted,
   });
   return buildWorkflowFlowResult(
     result,
@@ -309,7 +266,7 @@ export interface ExecuteAgentOptions {
   onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   /** Fires when a tool-use session consumes queued follow-up instructions. */
   onFollowUpConsumed?: () => void;
-  /** Fires on meaningful progress: todo changes, round completions, tool call milestones. */
+  /** Fires on meaningful progress: todo changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
@@ -336,6 +293,12 @@ export interface ExecuteAgentOptions {
   onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
+/**
+ * Low-level execution runner for an already-registered execution. Fresh
+ * launches should use `runAgent()` or call `registerExecution()` first so the
+ * canonical `executions/{id}/config.json` exists before `run.start` exposes
+ * its descriptor. Resume paths reuse the existing execution record.
+ */
 export async function executeAgent(
   configPayload: AgentConfigPayload,
   executionId: ExecutionId | undefined,
@@ -395,12 +358,6 @@ export async function executeAgent(
             fallbackNotification: buildFallbackNotification(config),
           });
         }
-        ctx.runtimeHost.emit('setTaskState', {
-          streamId,
-          executionId,
-          taskState: agentConfigToTaskState(config),
-        });
-
         logger.info('Executing agent', {
           data: { agent: config.agent, model: config.model },
         });
@@ -408,7 +365,7 @@ export async function executeAgent(
         if (setting.agentCategory === AgentCategory.ToolUse) {
           return runToolUseAgent(ctx, handle, setting, options);
         }
-        return runReflectionAgent(ctx, setting, options);
+        return runReflectionAgent(ctx, setting);
       },
       {
         isSubagent,

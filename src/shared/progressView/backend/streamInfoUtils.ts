@@ -43,9 +43,8 @@ export function buildStreamInfo(
   id: string,
   filter: AgentCategoryFilter,
 ): StreamTabInfo | null {
-  const taskState = state.snapshots.getTaskState(id);
   const hints = state.getStreamHints(id);
-  const config = taskState?.agentConfig;
+  const config = state.snapshots.getRunConfig(id);
 
   // Determine category and check filter
   const rawCategory = config?.agentCategory ?? hints.agentCategory;

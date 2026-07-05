@@ -344,9 +344,9 @@ function progressMessages() {
           status: 'running',
           lastTimestamp: timestamp + 90_000,
           conversationProgress: {
-            conversationTurns: 2,
             toolCallCount: 5,
           },
+          roundStage: { index: 1 },
           activeSubagents: [
             {
               executionId: 'exec-polish',

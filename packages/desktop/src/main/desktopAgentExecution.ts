@@ -12,14 +12,13 @@ import { getProgressStreamControls } from '@controllers/progressView/progressStr
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
 import { StreamSnapshotStore } from '@transcript';
-import { streamDataDir } from '@transcript/streamDataPaths';
-import { readMeta } from '@transcript/streamSnapshotRead';
 import type { AgentTrace } from '@agent/trace';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { TaskState } from '@agent/core/state/TaskState';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
@@ -47,7 +46,6 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import { KVStore } from '@common/storage/KVStore';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import { createChannelTrace } from '@logger';
@@ -152,15 +150,8 @@ export interface DesktopAgentExecution {
 }
 
 type ResumeState = {
-  taskState: TaskState;
+  runState: AgentConfig;
   executionId?: ExecutionId;
-};
-
-type PersistedResumeMeta = {
-  taskState?: TaskState;
-  executionId?: ExecutionId;
-  description?: string;
-  parentStreamId?: StreamTabId;
 };
 
 interface DesktopRunExecutionOptions {
@@ -1110,7 +1101,7 @@ export class DesktopProgressBridge {
           return undefined;
         }
         return {
-          taskState: resumeState.taskState,
+          runState: resumeState.runState,
           executionId: resumeState.executionId,
         };
       },
@@ -1214,66 +1205,31 @@ export class DesktopProgressBridge {
   private async resolveResumeState(
     streamId: StreamTabId,
   ): Promise<ResumeState | undefined> {
-    const taskState = this.state.snapshots.getTaskState(streamId);
-    const executionId = this.getStreamExecutionId(streamId);
-    if (taskState && executionId) return { taskState, executionId };
+    let runState = this.state.snapshots.getRunConfig(streamId);
+    let executionId = this.getStreamExecutionId(streamId);
+    if (runState && executionId) return { runState, executionId };
 
-    const persisted = await this.readPersistedResumeMeta(streamId);
-
-    const restoredTaskState = taskState ?? persisted?.taskState;
-    if (!restoredTaskState) return undefined;
-
-    const restoredExecutionId = executionId ?? persisted?.executionId;
-    this.state.streamLogs.ensureStream(streamId);
-    this.state.updateStreamHints(streamId, {
-      agentCategory: restoredTaskState.agentConfig.agentCategory,
-    });
-    this.state.snapshots.setTaskState(
-      streamId,
-      restoredTaskState,
-      restoredExecutionId,
-    );
-    if (persisted?.description !== undefined) {
-      this.state.snapshots.setDescription(streamId, persisted.description);
-    }
-    if (persisted?.parentStreamId !== undefined) {
-      this.state.snapshots.setParentStream(streamId, persisted.parentStreamId);
-    }
-
-    return {
-      taskState: restoredTaskState,
-      ...(restoredExecutionId && { executionId: restoredExecutionId }),
-    };
-  }
-
-  private async readPersistedResumeMeta(
-    streamId: StreamTabId,
-  ): Promise<PersistedResumeMeta | undefined> {
     try {
-      // Resume only needs meta.json. Read it directly so this bridge does not
-      // create a second StreamSnapshotStore loader/writer for streamData/.
-      const meta = await readMeta(new KVStore(streamDataDir(streamId)));
-      if (!meta) return undefined;
-
-      const taskState = TaskStateSchema.safeParse(meta.taskState);
-      return {
-        ...(taskState.success && { taskState: taskState.data }),
-        ...(meta.executionId && {
-          executionId: meta.executionId as ExecutionId,
-        }),
-        ...(meta.description !== undefined && {
-          description: meta.description,
-        }),
-        ...(meta.parentStreamId !== undefined && {
-          parentStreamId: meta.parentStreamId,
-        }),
-      };
+      await this.state.snapshots.preload([streamId]);
     } catch (error) {
       this.logger.warn(`Failed to read persisted resume data for ${streamId}`, {
         data: error instanceof Error ? error : { error },
       });
       return undefined;
     }
+    runState = this.state.snapshots.getRunConfig(streamId);
+    executionId = executionId ?? this.getStreamExecutionId(streamId);
+    if (!runState) return undefined;
+
+    this.state.streamLogs.ensureStream(streamId);
+    this.state.updateStreamHints(streamId, {
+      agentCategory: runState.agentCategory,
+    });
+
+    return {
+      runState,
+      ...(executionId && { executionId }),
+    };
   }
 
   private async sendFollowUp(

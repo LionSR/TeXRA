@@ -49,7 +49,7 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
 } {
   const explicit = createRecordingHost();
   const n = counter++;
-  const executionId = `exec:result-${n}` as ExecutionId;
+  const executionId = `a${n.toString(16).padStart(5, '0')}` as ExecutionId;
   const streamId = `stream:result-${n}` as StreamTabId;
   const streamStatus = new StreamStatusMachine();
   const config = AgentConfigSchema.parse({

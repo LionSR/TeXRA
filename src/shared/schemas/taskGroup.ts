@@ -10,6 +10,9 @@ export const TaskGroupSchema = z.strictObject({
   endTime: z.number().optional(),
   status: TaskGroupStatusSchema,
   parentGroupId: z.string().optional(),
+  kind: z.enum(['run', 'round', 'phase', 'session']).optional(),
+  index: z.int().nonnegative().optional(),
+  total: z.int().positive().optional(),
 });
 
 export type TaskGroup = z.infer<typeof TaskGroupSchema>;

@@ -43,6 +43,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
         .status=${currentState.status}
         .substate=${currentState.substate}
         .progress=${currentState.conversationProgress}
+        .roundStage=${currentState.roundStage}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
         .superYoloActive=${Boolean(currentState.superYoloBypass)}
         .goalActive=${Boolean(currentState.goalActive)}

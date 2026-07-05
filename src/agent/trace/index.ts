@@ -10,7 +10,13 @@
  *
  * See `docs/proposals/agent-trace-sdk-surface.md` for the design.
  */
-export type { AgentEvent, LogEvent, ResultEvent, StatusEvent } from './events';
+export type {
+  AgentEvent,
+  LogEvent,
+  ResultEvent,
+  StageStartEvent,
+  StatusEvent,
+} from './events';
 
 export type {
   AgentTrace,

@@ -32,7 +32,6 @@ describe('attachConversationProgressHub (F-1b)', () => {
 
     try {
       logConversationProgress(trace, {
-        conversationTurns: 2,
         toolCallCount: 5,
       });
 
@@ -41,7 +40,7 @@ describe('attachConversationProgressHub (F-1b)', () => {
         event: 'updateConversationProgress',
         payload: {
           streamId,
-          progress: { conversationTurns: 2, toolCallCount: 5 },
+          progress: { toolCallCount: 5 },
         },
       });
     } finally {
@@ -57,7 +56,7 @@ describe('attachConversationProgressHub (F-1b)', () => {
     expect(events).toHaveLength(0);
 
     detachAll();
-    logConversationProgress(trace, { conversationTurns: 1, toolCallCount: 0 });
+    logConversationProgress(trace, { toolCallCount: 0 });
     expect(events).toHaveLength(0);
   });
 
@@ -69,7 +68,7 @@ describe('attachConversationProgressHub (F-1b)', () => {
       trace.domain({ key: 'conversationProgress', data: undefined });
       trace.domain({
         key: 'conversationProgress',
-        data: { conversationTurns: 1 },
+        data: { toolCallCount: '1' },
       });
       trace.domain({ key: 'conversationProgress', data: 'not an object' });
 

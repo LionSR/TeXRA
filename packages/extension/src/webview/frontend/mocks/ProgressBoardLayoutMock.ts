@@ -159,7 +159,8 @@ const SAMPLE_STREAM_STATES: Map<string, StreamState> = new Map([
     createWorkflowStreamState({
       status: STREAM_STATUS.RUNNING,
       lastTimestamp: BASE_TIME + 41_000,
-      conversationProgress: { conversationTurns: 2, toolCallCount: 4 },
+      conversationProgress: { toolCallCount: 4 },
+      roundStage: { index: 1, total: 2 },
       taskGroups: SAMPLE_TASK_GROUPS,
       files: SAMPLE_FILES,
     }),
@@ -292,10 +293,8 @@ export class ProgressBoardLayoutMock extends LitElement {
           <stream-header
             .stream=${activeStream}
             .status=${STREAM_STATUS.RUNNING}
-            .progress=${{
-              conversationTurns: 2,
-              toolCallCount: 4,
-            }}
+            .progress=${{ toolCallCount: 4 }}
+            .roundStage=${{ index: 1, total: 2 }}
             .yoloActive=${true}
           ></stream-header>
           <div class="log-body">

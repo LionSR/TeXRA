@@ -43,6 +43,7 @@ export class ProcessStreamContent extends LitElement {
         .status=${streamState.status}
         .substate=${streamState.substate}
         .progress=${streamState.conversationProgress}
+        .roundStage=${streamState.roundStage}
         .yoloActive=${Boolean(toolUse?.toolEditBypass)}
         .superYoloActive=${Boolean(toolUse?.superYoloBypass)}
         .goalActive=${Boolean(toolUse?.goalActive)}

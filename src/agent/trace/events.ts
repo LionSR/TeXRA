@@ -9,6 +9,7 @@
  * escape hatch with a host-chosen `key`.
  */
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentErrorKind } from '@common/errors';
 import type { StreamTransitionCause } from '@common/constants/streamStatus';
 import type {
@@ -21,6 +22,7 @@ import type {
   StreamSubstate,
   StreamTabId,
 } from '@shared/schemas';
+import type { RunDescriptor } from '@shared/schemas/runDescriptor';
 
 /** Status assigned to a tool call when it completes. */
 export type ToolStatus = 'completed' | 'failed' | 'in_progress';
@@ -77,6 +79,23 @@ export interface StageStartEvent extends StageStamp {
   readonly id: string;
   readonly label: string;
   readonly parentId?: string;
+  readonly kind?: 'run' | 'round' | 'phase' | 'session';
+  readonly index?: number;
+  readonly total?: number;
+}
+
+/** Immutable run identity emitted once when a stream enters RUNNING. */
+export interface RunStartEvent extends StageStamp {
+  readonly type: 'run.start';
+  readonly descriptor: RunDescriptor;
+}
+
+/** Mutable persisted run config changed after run.start, e.g. model switch. */
+export interface RunConfigEvent extends StageStamp {
+  readonly type: 'run.config';
+  readonly streamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly config: AgentConfig;
 }
 
 /** Stage closed with a terminal status. */
@@ -244,6 +263,8 @@ export interface ResultEvent extends StageStamp {
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =
   | LogEvent
+  | RunStartEvent
+  | RunConfigEvent
   | StageStartEvent
   | StageEndEvent
   | ToolStartEvent
