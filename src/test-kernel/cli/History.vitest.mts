@@ -1,5 +1,5 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -62,11 +62,16 @@ import {
   formatCliHistoryDetailsText,
   formatCliHistoryNotFoundText,
   formatCliHistoryText,
+  formatInvalidExportFormatText,
+  isRemoteCliHistoryExportAssetsHref,
   listCliHistoryEntries,
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
   readCliHistoryConfig,
   readCliHistoryDetails,
+  readCliHistoryExportInput,
+  resolveCliHistoryExportAssetsHref,
+  stageCliHistoryExportAssets,
 } from '@cli/runtime/history';
 
 const config = {
@@ -999,5 +1004,202 @@ describe('CLI history runtime', () => {
     expect(GoalStore.getForStream(deletedA)).toBeNull();
     expect(GoalStore.getForStream(deletedB)).toBeNull();
     expect(GoalStore.getForStream(live)?.objective).toBe('keep me');
+  });
+
+  describe('history export (--export / --assets)', () => {
+    it('quotes the value in an invalid --export message, including an empty string', () => {
+      expect(formatInvalidExportFormatText('csv')).toBe(
+        'Invalid export format: "csv" (use html or md)',
+      );
+      // Must not collapse into "Invalid export format:  (use html or md)"
+      // with a confusing double space.
+      expect(formatInvalidExportFormatText('')).toBe(
+        'Invalid export format: "" (use html or md)',
+      );
+    });
+
+    it('resolves a blank --assets value to the documented ./assets default', () => {
+      // `--assets ''` must behave identically to omitting the flag, not
+      // produce a broken empty href passed straight to the formatter.
+      expect(resolveCliHistoryExportAssetsHref(undefined)).toBeUndefined();
+      expect(resolveCliHistoryExportAssetsHref('')).toBeUndefined();
+      expect(resolveCliHistoryExportAssetsHref('   ')).toBeUndefined();
+    });
+
+    it('trims a custom --assets href but otherwise passes it through', () => {
+      expect(resolveCliHistoryExportAssetsHref('./custom-assets')).toBe(
+        './custom-assets',
+      );
+      expect(resolveCliHistoryExportAssetsHref('  https://cdn/assets  ')).toBe(
+        'https://cdn/assets',
+      );
+    });
+
+    it('builds export input from the stored config, conversation, and meta', async () => {
+      mocks.readConversation.mockResolvedValue([
+        { role: 'user', content: 'Polish the lemma.' },
+        { role: 'assistant', content: 'Done.' },
+      ]);
+      mocks.readMeta.mockResolvedValue({
+        timestamp: '2026-05-18T08:00:00.000Z',
+        description: 'Polish pass',
+      });
+
+      const result = await readCliHistoryExportInput('a1' as ExecutionId);
+
+      expect(result).toEqual({
+        status: 'ok',
+        exportInput: {
+          timestamp: '2026-05-18T08:00:00.000Z',
+          description: 'Polish pass',
+          config: {
+            agent: 'correct',
+            model: 'deepseekT',
+            instruction: 'Polish the introduction.',
+            inputFiles: ['chapters/intro.tex'],
+            mediaFiles: [],
+            contextFiles: [],
+            outputFiles: ['chapters/intro.tex'],
+          },
+          messages: [
+            { role: 'user', content: 'Polish the lemma.' },
+            { role: 'assistant', content: 'Done.' },
+          ],
+        },
+      });
+    });
+
+    it('reports "not_found" only when there is no trace of the execution at all', async () => {
+      mocks.readConfig.mockResolvedValue(null);
+      mocks.readConversation.mockResolvedValue(null);
+      mocks.readMeta.mockResolvedValue(null);
+
+      await expect(
+        readCliHistoryExportInput('missing' as ExecutionId),
+      ).resolves.toEqual({ status: 'not_found' });
+    });
+
+    it('reports "incomplete" (not "not_found") when config exists but conversation does not', async () => {
+      // history show would still display this execution (it has a config) —
+      // export just has nothing to render, which is a different failure than
+      // the id not resolving to anything at all.
+      mocks.readConversation.mockResolvedValue(null);
+      mocks.readMeta.mockResolvedValue(null);
+
+      await expect(
+        readCliHistoryExportInput('a1' as ExecutionId),
+      ).resolves.toEqual({ status: 'incomplete' });
+    });
+
+    it('reports "incomplete" (not "not_found") when conversation exists but config does not', async () => {
+      mocks.readConfig.mockResolvedValue(null);
+      mocks.readConversation.mockResolvedValue([
+        { role: 'user', content: 'hi' },
+      ]);
+
+      await expect(
+        readCliHistoryExportInput('a1' as ExecutionId),
+      ).resolves.toEqual({ status: 'incomplete' });
+    });
+
+    it('stages the bundled HTML export assets into the destination directory', async () => {
+      await withTempDir('texra-history-export-src-', async (resourcesPath) => {
+        await withTempDir('texra-history-export-dest-', async (cwd) => {
+          const htmlExportDir = path.join(resourcesPath, 'htmlExport');
+          await mkdir(htmlExportDir, { recursive: true });
+          await writeFile(
+            path.join(htmlExportDir, 'katex.min.css'),
+            '.katex{}',
+          );
+
+          const destDir = path.join(cwd, 'assets');
+          const result = await stageCliHistoryExportAssets({
+            resourcesPath,
+            destDir,
+          });
+
+          expect(result).toBe('staged');
+          expect(
+            await readFile(path.join(destDir, 'katex.min.css'), 'utf8'),
+          ).toBe('.katex{}');
+        });
+      });
+    });
+
+    it('reports "missing" instead of throwing when bundled assets are absent', async () => {
+      await withTempDir(
+        'texra-history-export-empty-',
+        async (resourcesPath) => {
+          await withTempDir('texra-history-export-dest-', async (cwd) => {
+            const result = await stageCliHistoryExportAssets({
+              resourcesPath,
+              destDir: path.join(cwd, 'assets'),
+            });
+
+            expect(result).toBe('missing');
+          });
+        },
+      );
+    });
+
+    it('merges into a pre-existing destination directory instead of nesting under it', async () => {
+      // A repeat export, or a repo that already checked in an `assets/`
+      // folder, must not turn `./assets/katex.min.css` into
+      // `./assets/htmlExport/katex.min.css`.
+      await withTempDir('texra-history-export-src-', async (resourcesPath) => {
+        await withTempDir('texra-history-export-dest-', async (cwd) => {
+          const htmlExportDir = path.join(resourcesPath, 'htmlExport');
+          await mkdir(path.join(htmlExportDir, 'fonts'), { recursive: true });
+          await writeFile(
+            path.join(htmlExportDir, 'katex.min.css'),
+            '.katex{}',
+          );
+          await writeFile(
+            path.join(htmlExportDir, 'fonts', 'a.woff2'),
+            'font-bytes',
+          );
+
+          const destDir = path.join(cwd, 'assets');
+          await mkdir(destDir, { recursive: true });
+          await writeFile(
+            path.join(destDir, 'unrelated.txt'),
+            'pre-existing file',
+          );
+
+          await stageCliHistoryExportAssets({ resourcesPath, destDir });
+          // Stage again — the common "repeat export into the same cwd" case.
+          const result = await stageCliHistoryExportAssets({
+            resourcesPath,
+            destDir,
+          });
+
+          expect(result).toBe('staged');
+          expect(
+            await readFile(path.join(destDir, 'katex.min.css'), 'utf8'),
+          ).toBe('.katex{}');
+          expect(
+            await readFile(path.join(destDir, 'fonts', 'a.woff2'), 'utf8'),
+          ).toBe('font-bytes');
+          expect(
+            await readFile(path.join(destDir, 'unrelated.txt'), 'utf8'),
+          ).toBe('pre-existing file');
+        });
+      });
+    });
+
+    it('identifies remote (URL-scheme) hrefs so staging is skipped for them', () => {
+      expect(isRemoteCliHistoryExportAssetsHref(undefined)).toBe(false);
+      expect(isRemoteCliHistoryExportAssetsHref('./assets')).toBe(false);
+      expect(isRemoteCliHistoryExportAssetsHref('assets')).toBe(false);
+      expect(isRemoteCliHistoryExportAssetsHref('/abs/path/assets')).toBe(
+        false,
+      );
+      expect(isRemoteCliHistoryExportAssetsHref('https://cdn/assets')).toBe(
+        true,
+      );
+      expect(isRemoteCliHistoryExportAssetsHref('http://cdn/assets')).toBe(
+        true,
+      );
+    });
   });
 });

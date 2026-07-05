@@ -40,7 +40,12 @@ import { tagOpenAISdkError } from './openAISdkError';
 // Local file imports
 import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
-import { normalizeOpenAIMessageContent } from './openAIMessageUtils';
+import {
+  checkBatchedToolCalls,
+  insertMediaIntoChatUserMessage,
+  normalizeOpenAIMessageContent,
+  prependTextToChatUserMessage,
+} from './openAIMessageUtils';
 import {
   extractOpenAIPartialTail,
   extractReasoningDelta as extractReasoningDeltaFromChunk,
@@ -1312,13 +1317,7 @@ export class ModelHandlerOpenAI<
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    if (calls.length !== results.length) {
-      throw new Error(
-        `Batched tool calls mismatch: ${calls.length} calls vs ${results.length} results`,
-      );
-    }
-
-    if (calls.length === 0) {
+    if (!checkBatchedToolCalls(calls.length, results.length)) {
       return [];
     }
 
@@ -1349,21 +1348,7 @@ export class ModelHandlerOpenAI<
     messages: ChatCompletionMessageParam[],
     text: string,
   ): void {
-    if (!text.trim()) return;
-
-    const lastUserMsg = messages.findLast((m) => m.role === 'user');
-    if (!lastUserMsg || !('content' in lastUserMsg)) return;
-
-    if (typeof lastUserMsg.content === 'string') {
-      lastUserMsg.content = text + lastUserMsg.content;
-    } else if (Array.isArray(lastUserMsg.content)) {
-      const firstTextPart = lastUserMsg.content.find((p) => p.type === 'text');
-      if (firstTextPart && 'text' in firstTextPart) {
-        firstTextPart.text = text + firstTextPart.text;
-      } else {
-        lastUserMsg.content.unshift({ type: 'text', text });
-      }
-    }
+    prependTextToChatUserMessage(messages, text);
   }
 
   /**
@@ -1380,17 +1365,7 @@ export class ModelHandlerOpenAI<
 
     try {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
-      if (typeof lastUserMsg.content === 'string') {
-        lastUserMsg.content = [
-          ...formattedMedia,
-          {
-            type: 'text',
-            text: lastUserMsg.content,
-          } as ChatCompletionContentPart,
-        ];
-      } else if (Array.isArray(lastUserMsg.content)) {
-        lastUserMsg.content.unshift(...formattedMedia);
-      }
+      insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
     } catch (err) {
       logSdkError(
         this.logger,
