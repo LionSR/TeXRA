@@ -37,6 +37,7 @@ export * from './todo';
 export * from './todoDisplay';
 export * from './plan';
 export * from './workPlan';
+export * from './runDescriptor';
 export * from './streamData';
 export * from './subagentProgress';
 export * from './inquiry';

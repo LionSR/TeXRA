@@ -65,6 +65,7 @@ export interface RoundCallbacks<S extends RoundAwareState> {
   createRoundStage?: (
     roundIndex: number,
     parentStage: StageHandle | null,
+    shared: S,
   ) => StageHandle;
 
   /** Check if execution should be interrupted. */
@@ -72,9 +73,6 @@ export interface RoundCallbacks<S extends RoundAwareState> {
 
   /** Reset workspace state for a new round. */
   resetForNextRound?: (shared: S) => void;
-
-  /** Called when a round completes (after all nodes finish, before transition). */
-  onRoundCompleted?: (roundIndex: number, shared: S) => void | Promise<void>;
 }
 
 // ============================================================================
@@ -140,7 +138,7 @@ export class RoundPersistedFlow<
 
     try {
       // Create initial round stage (r0)
-      this.createStage(currentShared.currentRound);
+      this.createStage(currentShared.currentRound, currentShared);
 
       // Execute all nodes for the current round
       currentShared = await this.executeRoundSteps(currentShared);
@@ -153,12 +151,6 @@ export class RoundPersistedFlow<
 
       // Determine final outcome
       outcome = this.resolveOutcome(currentShared);
-      if (outcome === RUN_OUTCOME.COMPLETED) {
-        await this.callbacks.onRoundCompleted?.(
-          currentShared.currentRound,
-          currentShared,
-        );
-      }
     } finally {
       this.currentRoundStage?.end();
       this.currentRoundStage = null;
@@ -215,9 +207,6 @@ export class RoundPersistedFlow<
    * reset node history so the flow starts from the beginning again.
    */
   private async transitionToNextRound(shared: S): Promise<void> {
-    // Notify round completion before ending the stage
-    await this.callbacks.onRoundCompleted?.(shared.currentRound, shared);
-
     // End previous round stage
     this.currentRoundStage?.end();
     this.currentRoundStage = null;
@@ -232,17 +221,18 @@ export class RoundPersistedFlow<
     await this.resetNodeHistory(shared);
 
     // Create new stage
-    this.createStage(shared.currentRound);
+    this.createStage(shared.currentRound, shared);
   }
 
   /**
    * Create a round stage.
    */
-  private createStage(roundIndex: number): void {
+  private createStage(roundIndex: number, shared: S): void {
     if (this.callbacks.createRoundStage) {
       this.currentRoundStage = this.callbacks.createRoundStage(
         roundIndex,
         this.parentStage,
+        shared,
       );
     }
   }

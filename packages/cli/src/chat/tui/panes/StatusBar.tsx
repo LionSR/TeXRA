@@ -14,7 +14,7 @@ import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { isLiveElapsedStatus } from '@common/constants/streamStatus';
 import {
   STREAM_STATUS,
-  type ConversationProgress,
+  type RoundStage,
   type StreamLifecycleStatus,
   type StreamSubstate,
   type StreamTabId,
@@ -86,7 +86,7 @@ export interface StatusBarDisplayInput {
   readonly queuedFollowUpMessages: readonly string[];
   readonly queuedFollowUpPreview?: boolean;
   readonly usage: TokenUsageStats | undefined;
-  readonly conversation: ConversationProgress | undefined;
+  readonly roundStage: RoundStage | undefined;
   readonly activeSubagents: number;
   readonly activeProcesses: number;
   readonly approvalDepth: number;
@@ -167,12 +167,11 @@ function formatUsage(
 }
 
 function roundSegment(
-  conversation: ConversationProgress | undefined,
+  roundStage: RoundStage | undefined,
 ): StatusBarSegment | undefined {
-  const turns = conversation?.conversationTurns ?? 0;
-  return turns > 0
+  return roundStage !== undefined
     ? {
-        text: `r${turns}`,
+        text: `r${roundStage.index + 1}`,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.round,
       }
@@ -724,7 +723,7 @@ export function buildStatusBarDisplay(
   const policy = approvalPolicySegment(input.approvalPolicy);
   if (policy) left.push(policy);
 
-  const round = roundSegment(input.conversation);
+  const round = roundSegment(input.roundStage);
   if (round) left.push(round);
 
   const usage = formatUsage(input.usage, input.model);
@@ -893,7 +892,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     queuedFollowUpMessages: statusSlice?.queuedFollowUpMessages ?? [],
     queuedFollowUpPreview: props.queuedFollowUpPreview,
     usage: statusSlice?.usage,
-    conversation: statusSlice?.conversation,
+    roundStage: statusSlice?.roundStage,
     activeSubagents: statusSlice?.activeSubagents.length ?? 0,
     activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals.depth,

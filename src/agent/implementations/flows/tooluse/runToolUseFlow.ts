@@ -18,6 +18,7 @@ import {
   type FlowRecord,
 } from '@agent/node/persistedFlow';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -249,6 +250,9 @@ export async function runToolUseFlow<C = unknown>(
     nextHandler.setAgentCategory(setting.agentCategory);
     nextHandler.setLogger(logger);
 
+    const nextAgentConfig = { ...services.config, model };
+    await kv.writeConfig(nextAgentConfig);
+
     services.modelHandler = nextHandler;
     services.config.model = model;
     services.userVarChannels.transient.MODEL = model;
@@ -258,6 +262,17 @@ export async function runToolUseFlow<C = unknown>(
       previousHandler.dispose();
       switchedHandlers.delete(previousHandler);
     }
+    logger.emit({
+      type: 'run.config',
+      streamId,
+      executionId,
+      config: services.config,
+    });
+    runtimeHost.emit('setTaskState', {
+      streamId,
+      executionId,
+      taskState: agentConfigToTaskState(services.config),
+    });
     input.onModelChanged?.(nextHandler, model);
   };
 

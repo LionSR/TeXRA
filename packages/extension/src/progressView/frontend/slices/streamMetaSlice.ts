@@ -178,6 +178,14 @@ export const streamMetaHandlers: HandlerRegistry = {
     );
   },
 
+  [PROGRESS_VIEW_COMMANDS.UPDATE_ROUND_STAGE]: (data, ctx) => {
+    ctx.setStreamState(data.stream, (prev) =>
+      create(prev, (draft) => {
+        draft.roundStage = data.roundStage;
+      }),
+    );
+  },
+
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES]: (data, ctx) => {
     ctx.setStreamState(data.stream, (prev) =>
       create(prev, (draft) => {

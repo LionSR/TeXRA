@@ -255,7 +255,7 @@ async function beginRunStage(
   instruction: string | undefined,
 ): Promise<StageHandle> {
   if (instruction) logUserMessage(agentLogger, instruction);
-  return agentLogger.openStage(label);
+  return agentLogger.openStage(label, { kind: 'run' });
 }
 
 async function assembleAgentLaunchContext(

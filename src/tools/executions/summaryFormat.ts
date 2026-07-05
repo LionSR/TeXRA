@@ -17,7 +17,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { formatResultCount, formatTimestamp } from '@utils/text/stringUtils';
 import {
-  formatProgressLine,
   formatStatusInfo,
   formatTodoSection,
   getAvailablePaths,
@@ -95,9 +94,6 @@ export function buildRunningSummaryLines(
     `Started: ${new Date(handle.startedAt).toISOString()}`,
     `Status: ${formatStatusInfo(info)}`,
   ];
-
-  const progressLine = formatProgressLine(handle);
-  if (progressLine) lines.push(progressLine);
 
   if (meta?.parentExecutionId) {
     lines.push(`Parent: ${meta.parentExecutionId}`);

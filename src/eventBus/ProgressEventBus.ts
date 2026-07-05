@@ -16,6 +16,7 @@ import type {
   PlanApprovalPermission,
   RetryPermission,
   RoundIndexed,
+  RoundStage,
   StorageKey,
   StreamPhase,
   StreamSubstate,
@@ -165,6 +166,10 @@ export interface ProgressEventPayloads {
   updateConversationProgress: {
     streamId: StreamTabId;
     progress: ConversationProgress;
+  };
+  updateRoundStage: {
+    streamId: StreamTabId;
+    roundStage: RoundStage;
   };
   updateQueuedFollowUps: { streamId: StreamTabId };
   /**

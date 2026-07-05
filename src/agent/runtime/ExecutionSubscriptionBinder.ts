@@ -2,10 +2,10 @@
  * Bind execution-status subscriptions to agent stream lifecycles.
  *
  * Each (streamId, executionId) pair holds one disposer registered with the
- * execution registry's persistent listener API. Status transitions, progress
- * updates, kills, and the final "untrack" event all fire as follow-ups into
- * the subscriber stream's queue, wrapped in `<execution-activity>` so the
- * agent can distinguish them from user input.
+ * execution registry's persistent listener API. Status transitions, kills,
+ * and the final "untrack" event all fire as follow-ups into the subscriber
+ * stream's queue, wrapped in `<execution-activity>` so the agent can
+ * distinguish them from user input.
  *
  * Subscriptions self-dispose when the execution finishes (handle removed
  * from the registry) and when the subscriber stream's queue is released.
@@ -14,7 +14,6 @@
 import {
   executionRegistry,
   type ExecutionHandle,
-  type ExecutionProgress,
   type ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
@@ -52,21 +51,9 @@ interface ExecutionSubscriptionBinderOptions {
   session?: SessionHandle;
 }
 
-function progressLine(progress: ExecutionProgress | undefined): string | null {
-  if (
-    !progress ||
-    progress.currentRound === undefined ||
-    progress.totalRounds === undefined
-  ) {
-    return null;
-  }
-  return `Progress: round ${progress.currentRound + 1}/${progress.totalRounds}`;
-}
-
 interface SnapshotState {
   status: string;
   elapsed: string | null;
-  round: string | null;
 }
 
 function snapshot(
@@ -77,7 +64,6 @@ function snapshot(
   return {
     status: info.status,
     elapsed: info.elapsed,
-    round: progressLine(handle.getProgress()),
   };
 }
 
@@ -142,8 +128,7 @@ class ExecutionSubscription implements Disposable {
 
     const current = snapshot(this.registry, handle);
     const statusChanged = !this.last || this.last.status !== current.status;
-    const roundChanged = this.last?.round !== current.round;
-    if (!statusChanged && !roundChanged) {
+    if (!statusChanged) {
       this.last = current;
       return;
     }
@@ -153,11 +138,9 @@ class ExecutionSubscription implements Disposable {
         ? `${this.last.status} → ${current.status}`
         : current.status;
     const elapsed = current.elapsed ? ` (${current.elapsed} elapsed)` : '';
-    const lines = [
+    this.send(
       `${this.executionId} (${this.agentName}, ${this.category}) ${transition}${elapsed}`,
-    ];
-    if (current.round) lines.push(current.round);
-    this.send(lines.join('\n'));
+    );
     this.last = current;
   }
 
@@ -212,10 +195,10 @@ export class ExecutionSubscriptionBinder {
   }
 
   /**
-   * Subscribe `streamId` to status, progress, and termination events for
-   * `executionId`. Subsequent calls for the same pair are no-ops. Throws if
-   * the execution is not currently tracked — terminal executions cannot be
-   * subscribed (use `executions view` to read the final report).
+   * Subscribe `streamId` to status and termination events for `executionId`.
+   * Subsequent calls for the same pair are no-ops. Throws if the execution is
+   * not currently tracked — terminal executions cannot be subscribed (use
+   * `executions view` to read the final report).
    */
   bind(
     streamId: StreamTabId,

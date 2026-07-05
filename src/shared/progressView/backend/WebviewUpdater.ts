@@ -10,6 +10,7 @@ import type {
   ProgressViewPlacement,
   ProgressViewOutboundMessage,
   RoundIndexed,
+  RoundStage,
   StreamMetadata,
   StreamPhase,
   StreamSubstate,
@@ -291,6 +292,14 @@ export class WebviewUpdater {
     });
   }
 
+  updateRoundStage(stream: StreamTabId, roundStage: RoundStage): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_ROUND_STAGE,
+      stream,
+      roundStage,
+    });
+  }
+
   updateStreamBadges(stream: StreamTabId, badges: StreamBadgeSnapshot): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
@@ -471,6 +480,7 @@ export class WebviewUpdater {
       substate: substates?.get(streamInfo.name),
       lastTimestamp: state.streamLogs.getLastTimestamp(streamInfo.name),
       conversationProgress: current?.conversationProgress,
+      roundStage: current?.roundStage,
       activeSubagents: current?.activeSubagents,
       finishedSubagentCount: current?.finishedSubagentCount,
       activeProcesses: current?.activeProcesses,

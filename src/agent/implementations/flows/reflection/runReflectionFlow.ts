@@ -69,11 +69,6 @@ export interface RunReflectionFlowInput<
   getOutputFileLocation?: (
     round: number,
   ) => AgentFileLocation | Promise<AgentFileLocation>;
-  onRoundCompleted?: (
-    roundIndex: number,
-    totalRounds: number,
-    outputPaths: readonly string[],
-  ) => void;
   workflowOutputPolicy?: WorkflowOutputPolicy;
 }
 
@@ -259,23 +254,17 @@ export async function runReflectionFlow<C = unknown>(
     >(prepContextNode, kv, {
       parentStage,
       callbacks: {
-        createRoundStage: (roundIndex, parent) =>
+        createRoundStage: (roundIndex, parent, shared) =>
           logger.openStage(`r${roundIndex}`, {
             parent: parent ?? undefined,
+            kind: 'round',
+            index: roundIndex,
+            total: shared.totalRounds,
           }),
         resetForNextRound: (s) => {
           s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
         },
         checkInterruption,
-        onRoundCompleted: (roundIndex, s) => {
-          const outputs = outputState.rounds.get(roundIndex)?.outputs ?? [];
-          const outputPaths = outputs.map((o) =>
-            'relativePath' in o.location
-              ? o.location.relativePath
-              : o.location.absolutePath,
-          );
-          input.onRoundCompleted?.(roundIndex, s.totalRounds, outputPaths);
-        },
       },
     });
 

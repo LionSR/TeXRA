@@ -13,10 +13,14 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
   switch (config.agentCategory) {
     case AgentCategory.ToolUse:
       return {
+        // TaskState stores the already-normalized AgentConfig object by
+        // identity; the switch discriminant is the runtime/type invariant.
         agentConfig: config as ToolUseTaskState['agentConfig'],
       };
     case AgentCategory.Workflow:
       return {
+        // TaskState stores the already-normalized AgentConfig object by
+        // identity; the switch discriminant is the runtime/type invariant.
         agentConfig: config as WorkflowTaskState['agentConfig'],
         activeFiles: {
           input: (config.inputFiles?.length ?? 0) > 0,

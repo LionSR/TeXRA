@@ -113,4 +113,61 @@ describe('LegacyProgressEventProjection', () => {
       detach();
     }
   });
+
+  it('projects typed round stages onto the host round-stage payload', () => {
+    const hub = new SessionEventHub();
+    const host = createRecordingHost();
+    const streamId = 'stream:round' as StreamTabId;
+
+    const detach = attachLegacyProgressEventProjection(hub, host.host);
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'stage.start',
+          id: 'r1',
+          label: 'r1',
+          kind: 'round',
+          index: 1,
+          total: 3,
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'stage.start',
+          id: 'r2',
+          label: 'r2',
+          kind: 'round',
+          index: 2,
+          total: 0,
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'stage.start',
+          id: 'init',
+          label: 'Init',
+          kind: 'phase',
+        },
+      });
+
+      expect(host.events).toEqual([
+        {
+          event: 'updateRoundStage',
+          payload: { streamId, roundStage: { index: 1, total: 3 } },
+        },
+        {
+          event: 'updateRoundStage',
+          payload: { streamId, roundStage: { index: 2 } },
+        },
+      ]);
+    } finally {
+      detach();
+    }
+  });
 });

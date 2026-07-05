@@ -12,7 +12,10 @@
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import { StateSlicesSchema } from '@agent/implementations/flows/tooluse/nodes/types';
@@ -21,11 +24,8 @@ import {
   ToolUseSessionSnapshotSchema,
 } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { currentModelFromUserChannels } from '@agent/implementations/flows/tooluse/modelSwitchState';
-import {
-  isToolUseTaskState,
-  isWorkflowTaskState,
-  type TaskState,
-} from '@agent/core/state/TaskState';
+import type { TaskState } from '@agent/core/state/TaskState';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { createChannelTrace } from '@logger';
 import {
   ExecutionIdSchema,
@@ -111,7 +111,7 @@ const WorkflowFlowRecordStateSchema = z.object({
  *
  * @param streamId - Stream tab ID (used for logging and tool-use snapshot)
  * @param executionId - The execution ID for the stream
- * @param taskState - The persisted task state
+ * @param state - Current run config, or legacy TaskState compatibility input
  * @returns The resume data, or `null` when there is no resumable session
  *   (missing/invalid flow record). Throws when retrieval fails unexpectedly
  *   (e.g. a transient KV/IO error) so the caller can distinguish "nothing to
@@ -120,17 +120,19 @@ const WorkflowFlowRecordStateSchema = z.object({
 export async function retrieveSessionResumeData(
   streamId: StreamTabId,
   executionId: ExecutionId,
-  taskState: TaskState,
+  state: AgentConfig | TaskState,
 ): Promise<SessionResumeData | null> {
-  if (isToolUseTaskState(taskState)) {
-    return retrieveToolUseResumeData(streamId, executionId, taskState);
+  const agentConfig = 'agentConfig' in state ? state.agentConfig : state;
+
+  if (agentConfig.agentCategory === AgentCategory.ToolUse) {
+    return retrieveToolUseResumeData(streamId, executionId, agentConfig);
   }
 
-  if (isWorkflowTaskState(taskState)) {
-    return retrieveWorkflowResumeData(streamId, executionId, taskState);
+  if (agentConfig.agentCategory === AgentCategory.Workflow) {
+    return retrieveWorkflowResumeData(streamId, executionId, agentConfig);
   }
 
-  logger.warn(`Unknown task state type for stream: ${streamId}`);
+  logger.warn(`Unknown agent config type for stream: ${streamId}`);
   return null;
 }
 
@@ -158,7 +160,7 @@ async function readFlowRecord(
 async function retrieveToolUseResumeData(
   streamId: StreamTabId,
   executionId: ExecutionId,
-  taskState: TaskState,
+  agentConfig: AgentConfig,
 ): Promise<ToolUseResumeData | null> {
   try {
     const flowRecord = await readFlowRecord(executionId, 'tool-use');
@@ -178,15 +180,15 @@ async function retrieveToolUseResumeData(
     }
 
     const { messages, stateSlices } = parseResult.data;
-    const agentConfig = {
-      ...taskState.agentConfig,
+    const currentConfig = {
+      ...agentConfig,
       model:
         currentModelFromUserChannels(stateSlices.userChannels) ??
-        taskState.agentConfig.model,
+        agentConfig.model,
     };
     const modelHandlerCompatibilityKey =
       parseResult.data.modelHandlerCompatibilityKey ??
-      inferPersistedModelHandlerCompatibilityKey(agentConfig.model, messages);
+      inferPersistedModelHandlerCompatibilityKey(currentConfig.model, messages);
 
     // Construct and validate the complete snapshot.
     // Validation provides defense-in-depth: even if flow record is valid,
@@ -195,7 +197,7 @@ async function retrieveToolUseResumeData(
       version: TOOL_USE_SNAPSHOT_VERSION,
       executionId,
       streamId,
-      agentConfig,
+      agentConfig: currentConfig,
       modelHandlerCompatibilityKey,
       messages,
       run: stateSlices.runStateSnapshot,
@@ -233,7 +235,7 @@ async function retrieveToolUseResumeData(
 async function retrieveWorkflowResumeData(
   streamId: StreamTabId,
   executionId: ExecutionId,
-  taskState: TaskState,
+  agentConfig: AgentConfig,
 ): Promise<WorkflowResumeData | null> {
   try {
     const flowRecord = await readFlowRecord(executionId, 'workflow');
@@ -261,12 +263,12 @@ async function retrieveWorkflowResumeData(
     const modelHandlerCompatibilityKey =
       parseResult.data.modelHandlerCompatibilityKey ??
       inferPersistedModelHandlerCompatibilityKey(
-        taskState.agentConfig.model,
+        agentConfig.model,
         parseResult.data.conversation,
       );
     return {
       type: 'workflow',
-      agentConfig: taskState.agentConfig,
+      agentConfig,
       executionId,
       modelHandlerCompatibilityKey,
     };

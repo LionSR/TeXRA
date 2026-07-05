@@ -29,6 +29,7 @@ import {
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
+  RoundStageSchema,
   StreamMetadataSchema,
 } from '../streamState';
 import { PlanSchema } from '../plan';
@@ -67,6 +68,11 @@ export const UpdateConversationProgressMessageSchema =
     command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
     progress: ConversationProgressSchema,
   });
+
+export const UpdateRoundStageMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_ROUND_STAGE),
+  roundStage: RoundStageSchema,
+});
 
 export const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
@@ -289,6 +295,7 @@ export const SyncStreamContentMessageSchema = z.object({
   agentCategory: z.string().optional(),
   // Tab-switch state (R2: replaces separate syncActiveStreamState messages)
   conversationProgress: ConversationProgressSchema.optional(),
+  roundStage: RoundStageSchema.optional(),
   badges: z
     .object({
       activeSubagents: z.array(ActiveChildInfoSchema),
@@ -343,6 +350,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateStreamMetadataMessageSchema,
     SetActiveStreamMessageSchema,
     UpdateConversationProgressMessageSchema,
+    UpdateRoundStageMessageSchema,
     UpdateStreamBadgesMessageSchema,
     UpdateProcessOutputMessageSchema,
     UpdateParentStreamMessageSchema,

@@ -1,13 +1,10 @@
 // Local imports - agent registry
 import { resolveAgentKey } from '@agent/index';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 // Local imports - task state
-import {
-  isToolUseTaskState,
-  isWorkflowTaskState,
-  type TaskState,
-} from '@agent/core/state/TaskState';
+import type { TaskState } from '@agent/core/state/TaskState';
 
 // Local imports - shared schemas
 import {
@@ -17,11 +14,11 @@ import {
 
 /** Convert a TaskState payload into a full main view state snapshot. */
 export function buildMainViewState(
-  taskState: TaskState,
+  state: TaskState | AgentConfig,
 ): MainViewPersistedState {
-  const { agentConfig } = taskState;
-  const isToolUse = isToolUseTaskState(taskState);
-  const isWorkflow = isWorkflowTaskState(taskState);
+  const agentConfig = 'agentConfig' in state ? state.agentConfig : state;
+  const isToolUse = agentConfig.agentCategory === AgentCategory.ToolUse;
+  const isWorkflow = agentConfig.agentCategory === AgentCategory.Workflow;
   const toolConfig = agentConfig.toolConfig ?? {};
 
   const agentCategory = isToolUse
@@ -46,7 +43,9 @@ export function buildMainViewState(
     contextFiles: agentConfig.contextFiles,
     mediaFiles: agentConfig.mediaFiles,
     outputFiles: agentConfig.outputFiles,
-    outputFilesActive: isWorkflow ? taskState.activeFiles?.output : undefined,
+    outputFilesActive: isWorkflow
+      ? agentConfig.outputFiles.length > 0
+      : undefined,
     autoExtractFigure: toolConfig.autoExtractFigure,
     autoExtractTikzFigure: toolConfig.autoExtractTikzFigure,
     autoCompileInputPdf: toolConfig.autoCompileInputPdf,

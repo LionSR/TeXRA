@@ -22,9 +22,10 @@ fresh `SessionHandle` for its BrowserWindow
 cross-window active-execution aggregation is explicit
 (`src/agent/runtime/SessionHandle.ts:254`).
 
-Stages 3a, 3b, and 3c should proceed in parallel after #6978 lands. Stage 4 and
-F2 stay coupled behind Checkpoint B (#6979). Foundation Checkpoint C (#6980) is
-absorbed by this pass and should close when #6978 lands.
+Stages 3a and 3b now have implementation PRs after #6978; Stage 3c remains the
+next Stage 3 item. Stage 4 and F2 stay coupled behind Checkpoint B (#6979).
+Foundation Checkpoint C (#6980) is absorbed by this pass and should close when
+#6978 lands.
 
 ### Re-verified Evidence
 
@@ -52,18 +53,15 @@ absorbed by this pass and should close when #6978 lands.
   `src/agent/runtime/executionRegistry.ts:203` and `:678`; process output still
   emits `updateProcessOutput` at `src/agent/runtime/ProcessOutputPoller.ts:88`
   and `:216`.
-- **Stage 3b citation drift:** `handleSetTaskState` still carries run-start
-  side effects, but the old O(N) metadata rebuild has already been narrowed to
-  a single-stream metadata patch (`src/shared/progressView/backend/events/ProgressEventHandler.ts:373`).
-  The remaining work is moving hint clear, stream-state ensure, finished-child
-  reset, interrupt prune, and the single-stream patch onto the `-> running`
-  transition.
-- **Round encoding still has three surfaces:** reflection stages still use
-  `r<N>` labels (`src/agent/implementations/flows/reflection/runReflectionFlow.ts:262`),
-  `ExecutionProgress` is produced in `src/agent/runtime/executeAgent.ts:103`,
-  and the round/turn half of `conversationProgress` is emitted from
-  `src/agent/runtime/executeAgent.ts:126` / `:171` and projected by
-  `src/agent/runtime/conversationProgressHub.ts:31`.
+- **Stage 3b citation drift resolved by #6965:** `handleSetTaskState` no longer
+  owns run-start side effects; hint clear, stream-state ensure,
+  finished-child reset, interrupt pruning, and the per-stream metadata patch
+  moved to the `-> running` transition.
+- **Round encoding collapsed by #6965:** `r<N>` remains only the internal stage
+  id. Live round status is the typed `stage.start` payload
+  (`kind:'round'`, `index`, `total`), while `ExecutionProgress` counters, the
+  workflow round subagent-progress producer, and the round/turn half of
+  `conversationProgress` were removed.
 - **Stage 3c citation drift:** `detectWaitingStreams` moved to
   `src/agent/storage/detectWaitingStreams.ts:59`; desktop restart repair lives
   at `packages/desktop/src/main/desktopAgentExecution.ts:753` with the catch
@@ -120,8 +118,9 @@ checkpoint where noted.
   from the original targeted meter. No new barrels in Stage 3; delete touched
   empty or compatibility barrels only.
 - `ensureRoundData` refs: baseline 14; current 14 non-test refs.
-  Non-increasing. Stage 3b remains responsible for collapsing this toward the
-  round owner.
+  Non-increasing. Stage 3b (#6965) moved runtime/UI round progress to typed
+  round stages, but output-file round ownership remains in the output pipeline;
+  this meter therefore stays at 14 without adding a wrapper layer.
 - `syncStream*` refs: baseline ~100; current 50 non-test refs for
   `syncStreamLog`, `syncFullView`, `syncStreamContent`, and `syncStream`.
   Decreased. Stage 3a/3c should keep this non-increasing while transferring
@@ -137,9 +136,10 @@ barrels, and a stated count delta for any touched meter.
    child/process arms, and session-owned transcripts/follow-ups. The corrected
    child-stream and follow-up citations above were the implementation evidence;
    do not re-litigate #6993's ordering fix.
-2. Stage 3b (#6965): `RunDescriptor`, config persistence, and typed round
-   stages. Treat the metadata-patch O(N) claim as stale; the side effect is now a
-   per-stream patch.
+2. Stage 3b (#6965): completed by the Stage 3b PR. It lands `RunDescriptor`,
+   config persistence, typed round stages, and the transition-owned run-start
+   side effects. Treat the metadata-patch O(N) claim as stale; the side effect
+   is now a per-stream patch.
 3. Stage 3c (#6966): persistence facade, atomic delete, orphan sweep,
    `deriveResumability`, and shared restart repair. Split by task bullets if the
    PR gets too large.

@@ -6,6 +6,7 @@ import { platform } from '@platform/platform';
 import { writeTerminalStatus } from '@agent/storage';
 import { logSdkError, type ResultEvent } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -21,6 +22,7 @@ import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
+  buildRunDescriptor,
   toRetryErrorInfo,
   type RunOutcome,
   type StreamTabId,
@@ -136,6 +138,26 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
   });
 }
 
+function emitRunStart(ctx: AgentLaunchContext): void {
+  // Launch construction receives already-normalized AgentConfig; descriptor
+  // parse failures here indicate an internal run-contract violation.
+  const descriptor = buildRunDescriptor({
+    streamId: ctx.streamId,
+    executionId: ctx.executionId,
+    agent: ctx.config.agent,
+    category: ctx.setting.agentCategory,
+  });
+  ctx.logger.emit({ type: 'run.start', descriptor });
+
+  // Legacy compatibility for hosts still ingressing run identity through the
+  // ProgressEventBus. The snapshot store no longer persists `taskState`.
+  ctx.runtimeHost.emit('setTaskState', {
+    streamId: ctx.streamId,
+    executionId: ctx.executionId,
+    taskState: agentConfigToTaskState(ctx.config),
+  });
+}
+
 /**
  * Wraps a flow runner with full agent run lifecycle management: execution
  * registry tracking, stream-status transitions, error classification, user
@@ -189,6 +211,10 @@ export async function runFlowWithLifecycle(
   // arm and publish a second, contradictory `failed` result for a finished run.
   let resultEmitted = false;
   try {
+    // Publish run identity/config before the RUNNING transition so progress
+    // backends can create the initial StreamExecutionState with the real
+    // category when the transition-owned run-start side effects fire.
+    emitRunStart(ctx);
     // The lifecycle owns every stream-status transition: RUNNING here,
     // terminal states in the success/error arms below. Runners must not
     // set stream status themselves.
