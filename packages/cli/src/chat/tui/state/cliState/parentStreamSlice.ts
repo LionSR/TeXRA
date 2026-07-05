@@ -7,9 +7,10 @@ import { signal } from '@lit-labs/signals';
 
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
-export const PARENT_STREAM = signal<ReadonlyMap<StreamTabId, StreamTabId>>(
-  new Map(),
-);
+const PARENT_STREAM = signal<ReadonlyMap<StreamTabId, StreamTabId>>(new Map());
+
+/** child -> parent stream-id map. */
+export const parentStream = PARENT_STREAM;
 
 interface ParentStreamEdgeUpdate {
   readonly childStreamId?: StreamTabId;

@@ -16,7 +16,7 @@ import {
 } from '@shared/schemas';
 
 import { childExecutionLabel } from './childExecutions';
-import type { StreamSlice } from './cliState';
+import type { StreamSlice } from './cliState/types';
 
 export interface ResumeTarget {
   readonly executionId: string;

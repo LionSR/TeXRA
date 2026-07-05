@@ -23,15 +23,19 @@ export interface ActiveSlashForm {
     availableRows: number,
   ) => React.ReactNode;
 }
-export const ACTIVE_FORM: Signal.State<ActiveSlashForm | undefined> = signal<
+const ACTIVE_FORM: Signal.State<ActiveSlashForm | undefined> = signal<
   ActiveSlashForm | undefined
 >(undefined);
+/** Active inline slash form, or `undefined` when the chat input owns the screen. */
+export const activeForm = ACTIVE_FORM;
 
 /** True while the slash-command palette is mounted in the InputBar. App-level
  *  Tab handlers gate on this so palette-Tab (accept selection) doesn't double
  *  with stream-focus Tab. */
-export const SLASH_PALETTE_OPEN = signal<boolean>(false);
-export const REVERSE_SEARCH_OPEN = signal<boolean>(false);
+const SLASH_PALETTE_OPEN = signal<boolean>(false);
+export const slashPaletteOpen = SLASH_PALETTE_OPEN;
+const REVERSE_SEARCH_OPEN = signal<boolean>(false);
+export const reverseSearchOpen = REVERSE_SEARCH_OPEN;
 
 /** The stream whose full-output transcript the viewer is showing, or
  *  `undefined` when the viewer is closed. ctrl+t opens it on the active
@@ -40,14 +44,16 @@ export const REVERSE_SEARCH_OPEN = signal<boolean>(false);
  *  scrollback. The viewer shows that one stream's tool output untruncated and
  *  scrollable; the finalized scrollback and live region only ever show a
  *  head+tail slice. */
-export const TRANSCRIPT_VIEWER_STREAM_ID = signal<StreamTabId | undefined>(
-  undefined,
-);
+const TRANSCRIPT_VIEWER_STREAM_ID = signal<StreamTabId | undefined>(undefined);
+export const transcriptViewerStreamId = TRANSCRIPT_VIEWER_STREAM_ID;
 
 /** Which child-control picker (subagents/tasks) App is showing in the
  *  foreground, or `undefined` when neither is open. */
-export const CHILD_CONTROL_MODE: Signal.State<ChildControlMode | undefined> =
-  signal<ChildControlMode | undefined>(undefined);
+const CHILD_CONTROL_MODE: Signal.State<ChildControlMode | undefined> = signal<
+  ChildControlMode | undefined
+>(undefined);
+export const childControlMode = CHILD_CONTROL_MODE;
 /** Status-bar verb for Escape while the child-control picker owns input;
  *  the picker reports this as it navigates between its list and detail view. */
-export const CHILD_CONTROL_ESCAPE_ACTION = signal<string>('close');
+const CHILD_CONTROL_ESCAPE_ACTION = signal<string>('close');
+export const childControlEscapeAction = CHILD_CONTROL_ESCAPE_ACTION;

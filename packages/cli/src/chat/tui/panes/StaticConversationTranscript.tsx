@@ -13,12 +13,9 @@ import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
 import { safeHomedir } from '@utils/system/platformPaths';
 
-import {
-  cliState,
-  type ConversationEntry,
-  type SessionMeta,
-  type StreamSlice,
-} from '../state/cliState';
+import { parentStream as parentStreamSignal } from '../state/cliState/parentStreamSlice';
+import { sessionMeta as sessionMetaSignal } from '../state/cliState/sessionSlice';
+import { streams as streamsSignal } from '../state/cliState/streamsSlice';
 import { streamViewForId } from '../state/streamViews';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
@@ -36,6 +33,11 @@ import {
   USER_ENTRY_MARGIN_BOTTOM_ROWS,
   USER_ENTRY_MARGIN_TOP_ROWS,
 } from './TranscriptEntry';
+import type {
+  ConversationEntry,
+  SessionMeta,
+  StreamSlice,
+} from '../state/cliState/types';
 
 export type StaticTranscriptItem =
   | {
@@ -334,9 +336,9 @@ export function StaticConversationTranscript({
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): React.JSX.Element {
-  const streams = useSignal(cliState.streams);
-  const sessionMeta = useSignal(cliState.sessionMeta);
-  const parentStream = useSignal(cliState.parentStream);
+  const streams = useSignal(streamsSignal);
+  const sessionMeta = useSignal(sessionMetaSignal);
+  const parentStream = useSignal(parentStreamSignal);
   const [state, setState] = useState<StaticTranscriptState>(() => ({
     ownerKey,
     items: appendStaticTranscriptItems({

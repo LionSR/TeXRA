@@ -11,7 +11,8 @@ import {
   type TodoStatus,
 } from '@shared/schemas';
 
-import { cliState } from '../state/cliState';
+import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
+import { streams as streamsSignal } from '../state/cliState/streamsSlice';
 import { useSignal } from '../state/useSignal';
 import { TODO_ACTIVE, TODO_DONE, TODO_PENDING } from '../ui/glyphs';
 
@@ -172,8 +173,8 @@ export interface TodosPlanPanelProps {
 export function TodosPlanPanel(
   props: TodosPlanPanelProps = {},
 ): React.JSX.Element | null {
-  const activeStreamId = useSignal(cliState.activeStreamId);
-  const streams = useSignal(cliState.streams);
+  const activeStreamId = useSignal(activeStreamIdSignal);
+  const streams = useSignal(streamsSignal);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   if (!slice) return null;
   const { todos, plan } = slice;

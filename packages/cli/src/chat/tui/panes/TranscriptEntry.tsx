@@ -22,7 +22,7 @@ import { toolUseDisplayLines } from './toolRenderers';
 import type {
   CompletedProcessTranscript,
   ConversationEntry,
-} from '../state/cliState';
+} from '../state/cliState/types';
 
 export const USER_ENTRY_MARGIN_TOP_ROWS = 1;
 export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
