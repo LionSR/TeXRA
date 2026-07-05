@@ -255,4 +255,22 @@ describe('codex model eligibility', () => {
       ),
     ).toBe(false);
   });
+
+  // #7223 follow-up: the `retired` guard must apply uniformly regardless of
+  // which branch would otherwise resolve eligibility. A `-codex`-named model
+  // (e.g. gpt-5.2-codex, pulled after gpt-5.3-codex ships) must be rejected
+  // once retired — the naming convention must not let a pulled model bypass
+  // the same "no longer served" check a same-retired non-codex-named model
+  // correctly fails.
+  it('rejects a retired codex-named model despite matching the naming convention', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.2-codex-2025-12-11',
+          shortName: 'gpt-5.2-codex',
+          retired: true,
+        }),
+      ),
+    ).toBe(false);
+  });
 });

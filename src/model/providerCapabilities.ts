@@ -107,14 +107,24 @@ const CODEX_DEPRECATED_EXCEPTIONS: ReadonlySet<string> = new Set(['gpt-5.4']);
  * just by callers) since this function is exported and a future call site
  * passing a non-OpenAI `ModelConfig` must not resolve eligible just because
  * its `reasoningEffort` or id happens to match.
+ *
+ * `retired` (pulled from availability entirely) is checked *before* the
+ * `/codex/i` naming test and has no exception carve-out, so a `-codex`-named
+ * model that gets retired (e.g. a successor ships and the old one is pulled)
+ * is rejected the same as any other retired model — naming alone must never
+ * override a hard "no longer served" signal. `deprecated` (merely
+ * superseded) is checked *after* the naming test on purpose: Codex-branded
+ * releases are documented above as continuing to serve under their name even
+ * once deprecated, so the naming match intentionally bypasses the
+ * deprecated-exclusion for those still-live models.
  */
 export function isCodexSubscriptionEligible(model: ModelConfig): boolean {
   if (model.provider !== ModelProvider.OPENAI) return false;
 
   const unpinnedName = codexBackendModelId(model);
   if (CODEX_INELIGIBLE_EXCEPTIONS.has(unpinnedName)) return false;
-  if (/codex/i.test(unpinnedName)) return true;
   if (model.retired) return false;
+  if (/codex/i.test(unpinnedName)) return true;
   if (model.deprecated && !CODEX_DEPRECATED_EXCEPTIONS.has(unpinnedName)) {
     return false;
   }
