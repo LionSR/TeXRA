@@ -12,7 +12,7 @@ import {
   WorkspaceStorageProvider,
 } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
