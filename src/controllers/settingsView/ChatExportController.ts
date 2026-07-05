@@ -13,8 +13,7 @@
  */
 
 // Local imports - agent
-import { getExecutionStore } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 
 // Local imports - host-neutral chat-export formatters
 import {
@@ -85,39 +84,23 @@ export class ChatExportController {
    *
    * Returns a discriminated status so the caller can show the right error
    * message for each missing piece without coupling to storage details.
+   * Thin wrapper around the shared {@link loadChatExportInput} loader, which
+   * also backs the CLI's `readCliHistoryExportInput` — so both hosts read,
+   * validate, and assemble export input identically (including treating a
+   * stored-but-empty conversation array as absent, not present).
    */
   async buildExportInput(historyId: string): Promise<ExportInputResult> {
-    const store = getExecutionStore(historyId as ExecutionId);
-    const [rawConfig, conversation, meta] = await Promise.all([
-      store.readConfig(),
-      store.readConversation(),
-      store.readMeta(),
-    ]);
+    const { config, exportInput } = await loadChatExportInput(
+      historyId as ExecutionId,
+    );
 
-    if (!rawConfig) {
+    if (!config) {
       return { status: 'config_missing' };
     }
 
-    if (!conversation) {
+    if (!exportInput) {
       return { status: 'conversation_missing' };
     }
-
-    const config = AgentConfigSchema.parse(rawConfig);
-
-    const exportInput: ChatExportInput = {
-      timestamp: meta?.timestamp ?? new Date().toISOString(),
-      description: meta?.description,
-      config: {
-        agent: config.agent,
-        model: config.model,
-        instruction: config.instruction,
-        inputFiles: config.inputFiles,
-        mediaFiles: config.mediaFiles,
-        contextFiles: config.contextFiles,
-        outputFiles: config.outputFiles,
-      },
-      messages: conversation,
-    };
 
     return { status: 'ok', exportInput };
   }
