@@ -12,6 +12,9 @@
  * is pinned by `src/test-kernel/webview/MainAppPersistenceRestore.vitest.mts`.
  */
 
+// Third-party imports
+import { type ZodError } from 'zod';
+
 // Local imports - shared state and schemas
 import { PersistedState } from '@shared/state';
 import {
@@ -41,7 +44,6 @@ import {
   workflowInstruction$,
 } from './mainViewState';
 import { webviewStorage } from './webviewStorage';
-import type { ZodError } from 'zod';
 
 const stateManager = new PersistedState(
   webviewStorage,
