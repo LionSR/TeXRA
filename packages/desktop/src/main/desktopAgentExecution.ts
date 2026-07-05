@@ -28,6 +28,7 @@ import {
 } from '@agent/runtime/resolveAndResumeStream';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
@@ -296,7 +297,6 @@ export class DesktopProgressBridge {
     });
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
-    const backendSubscription = this.backend.setupEventListeners(bus);
     // Compose the extracted progress-event bridge for ghost-stream hydration,
     // stream-snapshot persistence, restored-display sending, and progress-event
     // → rail-update translation.  See #6329.
@@ -318,6 +318,9 @@ export class DesktopProgressBridge {
       onShowError: (message) => {
         void this.options.showErrorMessage?.(message);
       },
+    });
+    const backendSubscription = this.backend.setupEventListeners(bus, {
+      emit: (event, payload) => this.handleSessionProgressEvent(event, payload),
     });
     this.restartRepair = this.repairOrphanedStreamsAfterRestart();
     // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
@@ -924,6 +927,14 @@ export class DesktopProgressBridge {
     this.progressEvents.onProgressEvent(event, payload);
   }
 
+  private handleSessionProgressEvent<K extends keyof ProgressEventPayloads>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void {
+    this.backend.handleProgressEvent(event, payload);
+    this.progressEvents.onProgressEvent(event, payload);
+  }
+
   private streamStatusSnapshot(): Map<StreamTabId, StreamPhase> {
     return this.session.status.getAll();
   }
@@ -980,7 +991,7 @@ export class DesktopProgressBridge {
 
     this.releaseApprovalsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
-    await GoalStore.forget(streamId);
+    await GoalStore.forget(streamId, this.session);
     await this.state.clearStream(streamId);
     this.send({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
@@ -1013,7 +1024,7 @@ export class DesktopProgressBridge {
     // after the visible per-stream sweep. This is session-scoped and does not
     // touch sibling windows.
     this.session.coordinators.cleanupAllRequests();
-    await GoalStore.forgetMany([...streamIds]);
+    await GoalStore.forgetMany([...streamIds], this.session);
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
     // ghosts come back zombie-style after relaunch.
@@ -1262,13 +1273,18 @@ export class DesktopProgressBridge {
       this.session,
     );
     if (result.status === 'sent' || result.status === 'queued') {
-      this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
-      const wake = await wakeQueuedFollowUpStream(streamId, result, {
-        tryResumeStream: (id) => this.tryResumeStream(id),
-        isResumeInFlight: (id) => this.isResumeInFlight(id),
-      });
+      emitRuntimeEvent('updateQueuedFollowUps', { streamId }, this.session);
+      const wake = await wakeQueuedFollowUpStream(
+        streamId,
+        result,
+        {
+          tryResumeStream: (id) => this.tryResumeStream(id),
+          isResumeInFlight: (id) => this.isResumeInFlight(id),
+        },
+        this.session,
+      );
       if (wake.kind === 'dropped') {
-        this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
+        emitRuntimeEvent('updateQueuedFollowUps', { streamId }, this.session);
         await this.options.showInfoMessage?.(
           'Message dropped because no session was available to receive it. Start a new agent task to continue.',
         );

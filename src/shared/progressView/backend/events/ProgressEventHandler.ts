@@ -1,6 +1,5 @@
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
   ProgressEventBusLike,
@@ -243,7 +242,7 @@ export class ProgressEventHandler {
         // Follow-up events
         updateQueuedFollowUps: (ctx, { streamId }) => {
           this.sendIfActive(streamId, () => {
-            const messages = ToolUseFollowUpQueue.getAll(streamId);
+            const messages = ctx.state.followUps.getAll(streamId);
             ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
           });
         },
@@ -521,7 +520,7 @@ export class ProgressEventHandler {
 
     const extras = this.buildStreamSyncExtras(stream);
     const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
-    const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
+    const queuedFollowUps = this.state.followUps.getAll(stream);
     const agentCategory = this.getStreamCategory(stream);
 
     // Optionally include active-stream state (replaces syncActiveStreamState).

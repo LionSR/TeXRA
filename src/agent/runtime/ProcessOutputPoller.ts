@@ -4,9 +4,9 @@ import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
-import type { StreamTabId } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { delay } from '@utils/core/async';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ProcessExecutionHandle } from './ExecutionHandle';
@@ -15,6 +15,15 @@ interface ProcessOutputSource {
   handle: ProcessExecutionHandle;
   runtimeHost: AgentRuntimeHost;
 }
+
+export interface ProcessOutputPayload {
+  readonly parentStreamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+type ProcessOutputEmitter = (payload: ProcessOutputPayload) => void;
 
 /** Interval at which temp files are read and pushed to the progress UI. */
 const OUTPUT_POLL_INTERVAL_MS = 500;
@@ -42,6 +51,15 @@ export class ProcessOutputPoller {
   private readonly processOutputs = new Map<string, ProcessOutputSource>();
   private readonly readingInProgress = new Map<string, Promise<void>>();
   private loopController: AbortController | null = null;
+  private emitOutput: ProcessOutputEmitter | undefined;
+
+  constructor(emitOutput?: ProcessOutputEmitter) {
+    this.emitOutput = emitOutput;
+  }
+
+  setOutputEmitter(emitOutput: ProcessOutputEmitter): void {
+    this.emitOutput = emitOutput;
+  }
 
   register(
     handle: ProcessExecutionHandle,
@@ -85,7 +103,7 @@ export class ProcessOutputPoller {
       state.stdout.decoder = new StringDecoder('utf8');
       state.stderr.decoder = new StringDecoder('utf8');
       if (outTail || errTail) {
-        runtimeHost.emit('updateProcessOutput', {
+        this.emitProcessOutput(runtimeHost, {
           parentStreamId: handle.parentStreamId,
           executionId: handle.executionId,
           stdout: outTail,
@@ -213,7 +231,7 @@ export class ProcessOutputPoller {
         ]);
         if (!outText && !errText) return;
 
-        runtimeHost.emit('updateProcessOutput', {
+        this.emitProcessOutput(runtimeHost, {
           parentStreamId,
           executionId,
           stdout: outText,
@@ -239,6 +257,17 @@ export class ProcessOutputPoller {
         this.readingInProgress.delete(executionId);
       }
     }
+  }
+
+  private emitProcessOutput(
+    runtimeHost: AgentRuntimeHost,
+    payload: ProcessOutputPayload,
+  ): void {
+    if (this.emitOutput) {
+      this.emitOutput(payload);
+      return;
+    }
+    runtimeHost.emit('updateProcessOutput', payload);
   }
 }
 

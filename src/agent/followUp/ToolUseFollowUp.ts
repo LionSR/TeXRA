@@ -16,11 +16,9 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
-import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 
 /**
@@ -66,6 +64,7 @@ export async function wakeQueuedFollowUpStream(
   streamId: StreamTabId,
   result: SendFollowUpResult,
   resumePort?: FollowUpResumePort,
+  session?: SessionHandle,
 ): Promise<FollowUpWakeResult> {
   if (
     result.status !== 'queued' ||
@@ -95,13 +94,14 @@ export async function wakeQueuedFollowUpStream(
   if (port.isResumeInFlight?.(streamId) === true) {
     return { kind: 'resume_in_flight' };
   }
-  if (StreamStatusService.isActiveOrResuming(streamId)) {
+  const ownerSession = session ?? currentSession();
+  if (ownerSession.status.isActiveOrResuming(streamId)) {
     return { kind: 'active_or_resuming' };
   }
   if (result.reason !== 'children_running') {
     return { kind: 'queued_resume_failed' };
   }
-  ToolUseFollowUpQueue.release(streamId);
+  ownerSession.followUps.release(streamId);
   return { kind: 'dropped' };
 }
 
@@ -112,8 +112,12 @@ export async function wakeQueuedFollowUpStream(
 export async function wakeOrReleaseQueuedStream(
   streamId: StreamTabId,
   result: SendFollowUpResult,
+  session?: SessionHandle,
 ): Promise<boolean> {
-  return (await wakeQueuedFollowUpStream(streamId, result)).kind !== 'dropped';
+  return (
+    (await wakeQueuedFollowUpStream(streamId, result, undefined, session))
+      .kind !== 'dropped'
+  );
 }
 
 const logger = createChannelTrace('ToolUseFollowUp');
@@ -187,9 +191,8 @@ export async function sendFollowUp(
   displayText?: string,
   session?: SessionHandle,
 ): Promise<SendFollowUpResult> {
-  const target = (
-    session ?? currentSession()
-  ).executions.getToolUseFollowUpTarget(streamId);
+  const ownerSession = session ?? currentSession();
+  const target = ownerSession.executions.getToolUseFollowUpTarget(streamId);
   const item =
     typeof followUp === 'string'
       ? { text: followUp, mediaFiles, displayText }
@@ -204,7 +207,7 @@ export async function sendFollowUp(
   if (target.kind === 'queue') {
     // children_running reopens a queue sealed by session disposal; callers
     // must auto-resume the parent or release again to avoid stale delivery.
-    ToolUseFollowUpQueue.enqueue(streamId, item, {
+    ownerSession.followUps.enqueue(streamId, item, {
       createIfMissing: true,
       force: target.reason === 'children_running',
     });

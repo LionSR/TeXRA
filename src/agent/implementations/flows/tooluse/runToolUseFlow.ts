@@ -150,7 +150,10 @@ export async function runToolUseFlow<C = unknown>(
   // closure below fires from the host thread outside the ALS, so it must use
   // this captured handle, not a fresh currentSession() lookup.
   const runSession = currentSession();
-  const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
+  const sessionLifecycle = new ToolUseSessionLifecycle(
+    streamId,
+    runSession.followUps,
+  );
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const delegationDepth = input.delegation?.delegationDepth ?? 0;
   const delegationGate = evaluateCurrentDelegationGate(delegationDepth);

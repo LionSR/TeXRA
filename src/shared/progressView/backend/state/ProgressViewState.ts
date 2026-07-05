@@ -1,12 +1,9 @@
 import { z } from 'zod';
 
-import {
-  setDefaultStreamLogStore,
-  StreamLogStore,
-  StreamSnapshotStore,
-} from '@transcript';
+import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   defaultSession,
@@ -135,6 +132,7 @@ export class ProgressViewState {
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
   readonly streamStatus: StreamStatusMachine;
+  readonly followUps: ToolUseFollowUpQueue;
 
   private readonly logger: AgentTrace;
   private readonly session: SessionHandle;
@@ -152,8 +150,8 @@ export class ProgressViewState {
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
       ProgressViewPrefsSchema,
     );
-    this.streamLogs = new StreamLogStore();
-    setDefaultStreamLogStore(this.streamLogs);
+    this.streamLogs = session.transcripts;
+    this.followUps = session.followUps;
     this.snapshots = snapshots;
   }
 

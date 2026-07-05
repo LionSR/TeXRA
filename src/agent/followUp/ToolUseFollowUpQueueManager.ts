@@ -1,10 +1,3 @@
-/**
- * Static manager for follow-up queues indexed by stream ID.
- *
- * Provides queue acquisition, release, and coordination for routing
- * follow-ups to active/resuming sessions.
- */
-
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import {
@@ -16,15 +9,19 @@ import {
 const logger = createChannelTrace('ToolUseFollowUpQueue');
 
 /**
- * Static manager for follow-up queues indexed by stream ID.
+ * Follow-up queue owner indexed by stream ID.
+ *
+ * Fresh instances are session-owned. Static methods proxy to the process
+ * default instance so unmigrated default-session callers stay byte-identical.
  */
 export class ToolUseFollowUpQueue {
-  private static readonly queues = new Map<StreamTabId, FollowUpQueue>();
+  private static readonly defaultQueue = new ToolUseFollowUpQueue();
+  private readonly queues = new Map<StreamTabId, FollowUpQueue>();
   /** Streams whose queues were explicitly released (orchestrator disposed). */
-  private static readonly released = new Set<StreamTabId>();
+  private readonly released = new Set<StreamTabId>();
   static readonly RELEASED_CAP = 500;
   /** Observers notified whenever a stream's queue is released. */
-  private static readonly releaseObservers = new Set<
+  private readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
   >();
 
@@ -34,14 +31,14 @@ export class ToolUseFollowUpQueue {
    * polling) to tear down stream-scoped subscriptions when the owning stream
    * goes away.
    */
-  static onRelease(observer: (streamId: StreamTabId) => void): () => void {
+  onRelease(observer: (streamId: StreamTabId) => void): () => void {
     this.releaseObservers.add(observer);
     return () => {
       this.releaseObservers.delete(observer);
     };
   }
 
-  static acquire(streamId: StreamTabId): FollowUpQueue {
+  acquire(streamId: StreamTabId): FollowUpQueue {
     this.released.delete(streamId);
     const existing = this.queues.get(streamId);
     if (existing) return existing;
@@ -50,7 +47,7 @@ export class ToolUseFollowUpQueue {
     return queue;
   }
 
-  static release(streamId: StreamTabId): void {
+  release(streamId: StreamTabId): void {
     const queue = this.queues.get(streamId);
     if (queue) {
       queue.dispose();
@@ -81,7 +78,7 @@ export class ToolUseFollowUpQueue {
    * responsible for ensuring a consumer will drain it, or releasing again on
    * failure).
    */
-  static enqueue(
+  enqueue(
     streamId: StreamTabId,
     followUp: FollowUpQueueInput,
     options?: { createIfMissing?: boolean; force?: boolean },
@@ -105,27 +102,63 @@ export class ToolUseFollowUpQueue {
     return true;
   }
 
-  static drain(streamId: StreamTabId): string[] {
+  drain(streamId: StreamTabId): string[] {
     return this.queues.get(streamId)?.drain() ?? [];
   }
 
   /** Drain queued follow-ups with their media file paths (resume replay). */
-  static drainItems(streamId: StreamTabId): DrainedFollowUpItem[] {
+  drainItems(streamId: StreamTabId): DrainedFollowUpItem[] {
     return this.queues.get(streamId)?.drainItems() ?? [];
   }
 
   /** Get all queued follow-up messages for a stream without consuming them. */
-  static getAll(streamId: StreamTabId): string[] {
+  getAll(streamId: StreamTabId): string[] {
     return this.queues.get(streamId)?.getAll() ?? [];
   }
 
-  private static rememberReleased(streamId: StreamTabId): void {
+  private rememberReleased(streamId: StreamTabId): void {
     this.released.delete(streamId);
     this.released.add(streamId);
-    while (this.released.size > this.RELEASED_CAP) {
+    while (this.released.size > ToolUseFollowUpQueue.RELEASED_CAP) {
       const oldest = this.released.values().next().value;
       if (oldest === undefined) return;
       this.released.delete(oldest);
     }
+  }
+
+  static onRelease(observer: (streamId: StreamTabId) => void): () => void {
+    return this.defaultQueue.onRelease(observer);
+  }
+
+  static acquire(streamId: StreamTabId): FollowUpQueue {
+    return this.defaultQueue.acquire(streamId);
+  }
+
+  static release(streamId: StreamTabId): void {
+    this.defaultQueue.release(streamId);
+  }
+
+  static enqueue(
+    streamId: StreamTabId,
+    followUp: FollowUpQueueInput,
+    options?: { createIfMissing?: boolean; force?: boolean },
+  ): boolean {
+    return this.defaultQueue.enqueue(streamId, followUp, options);
+  }
+
+  static drain(streamId: StreamTabId): string[] {
+    return this.defaultQueue.drain(streamId);
+  }
+
+  static drainItems(streamId: StreamTabId): DrainedFollowUpItem[] {
+    return this.defaultQueue.drainItems(streamId);
+  }
+
+  static getAll(streamId: StreamTabId): string[] {
+    return this.defaultQueue.getAll(streamId);
+  }
+
+  static defaultInstance(): ToolUseFollowUpQueue {
+    return this.defaultQueue;
   }
 }
