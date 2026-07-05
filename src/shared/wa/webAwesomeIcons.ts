@@ -364,15 +364,21 @@ function resolveIcon(name: string): FontAwesomeIconDefinition | undefined {
   return icons[canonical as keyof typeof icons];
 }
 
+function texraIconResolver(name: string): string {
+  const icon = resolveIcon(name);
+  return icon ? dataUri(iconSvg(icon)) : '';
+}
+
 export function registerTeXRAWebAwesomeIcons(): void {
   if (isRegistered) return;
 
-  registerIconLibrary(TEXRA_ICON_LIBRARY, {
-    resolver(name) {
-      const icon = resolveIcon(name);
-      return icon ? dataUri(iconSvg(icon)) : '';
-    },
-  });
+  registerIconLibrary(TEXRA_ICON_LIBRARY, { resolver: texraIconResolver });
+  // WA's own internal components resolve icons through the 'default' library,
+  // which WA hardcodes to a live CDN (ka-f.fontawesome.com) — confirmed via
+  // DevTools network capture. Reusing the same offline resolver here means no
+  // host (extension, desktop, webview, trace-viewer) depends on that CDN for
+  // any icon, anywhere.
+  registerIconLibrary('default', { resolver: texraIconResolver });
   isRegistered = true;
 }
 

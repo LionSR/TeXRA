@@ -186,6 +186,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   }
 
   private scheduleDraftSave(): void {
+    // Read-only trace-viewer export: no live backend for a draft to reach.
+    if (this.archived) return;
     const ids = this.getPermissionIds();
     const draft = this.currentDraft();
     this.writeDraft(ids, draft, { persist: false });
@@ -547,6 +549,10 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   }
 
   private handleSubmit(): void {
+    // Bypasses the base class's emitAction chokepoint (dispatches
+    // permission-action directly), so the archived/read-only trace-viewer
+    // guard has to be repeated here.
+    if (this.archived) return;
     if (!this.hasAnswer) return;
     const answer = this.answerText.trim();
     const sessionLinks = this.normalizedSessionLinks;

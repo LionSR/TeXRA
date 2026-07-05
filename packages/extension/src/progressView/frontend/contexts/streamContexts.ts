@@ -131,3 +131,25 @@ export const EMPTY_STREAM_BY_ID: StreamByIdMap = new Map();
 export const streamByIdContext = createContext<StreamByIdMap>(
   'progress-stream-by-id',
 );
+
+/**
+ * Whether request panels render in a read-only, archived mode — true for a
+ * static trace-viewer export (`packages/trace-viewer/`) replaying a finished
+ * run with no live backend to send actions to. Defaults to `false` for every
+ * live host (VS Code extension, desktop, webview). Consumed by
+ * `BaseRequestPanel`/`BaseFeedbackPanel` to disable action buttons instead of
+ * leaving live dead-clicks that dispatch a `permission-action` event nothing
+ * answers. Named `archived` (not `readonly`) to avoid reading like the TS
+ * `readonly` modifier keyword at call sites.
+ */
+export const archivedContext = createContext<boolean>('progress-archived');
+
+/**
+ * The settable shape of `<stream-conversation>`'s `archived` property, for
+ * hosts (like the trace-viewer) that set it on a freshly created element
+ * before providing it via `archivedContext`. Naming this explicitly makes the
+ * coupling grep-able instead of an inline structural cast.
+ */
+export interface ArchivableElement extends HTMLElement {
+  archived: boolean;
+}
