@@ -429,7 +429,10 @@ return await parallel([
       invocation.signal.addEventListener('abort', () => {
         sawAbort = true;
       });
-      await delay(80);
+      // Wide margin over timeoutMs: the timeout timer must fire before this
+      // runner resolves even under heavy CI scheduler pressure, or the
+      // orphaned continuation could reach agent('two') before the abort.
+      await delay(150);
       return invocation.prompt;
     };
     await expect(
@@ -438,11 +441,11 @@ return await parallel([
 await agent('one')
 return await agent('two')`,
         runAgent: runner,
-        timeoutMs: 30,
+        timeoutMs: 50,
       }),
     ).rejects.toThrow(/timed out/);
     // Let the orphaned continuation reach its second agent() call.
-    await delay(120);
+    await delay(250);
     expect(calls).toBe(1);
     expect(sawAbort).toBe(true);
   });
