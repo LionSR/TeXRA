@@ -39,12 +39,12 @@ import {
   resolveChildControlStreamTarget,
 } from '@cli/chat/tui/state/childControls';
 import { visibleSubagentRows } from '@cli/chat/tui/state/childExecutions';
-import { NO_BYPASS } from '@cli/chat/tui/state/cliState';
 import { streamDisplayLabel } from '@cli/chat/tui/state/streamViews';
-import type {
-  ProcessOutputTail,
-  StreamSlice,
-} from '@cli/chat/tui/state/cliState';
+import {
+  NO_BYPASS,
+  type ProcessOutputTail,
+  type StreamSlice,
+} from '@cli/chat/tui/state/cliState/types';
 
 // Local imports - shared schemas
 import {
