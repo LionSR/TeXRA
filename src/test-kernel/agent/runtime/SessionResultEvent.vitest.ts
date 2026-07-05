@@ -18,7 +18,7 @@ import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordina
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
-import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
@@ -45,13 +45,13 @@ let counter = 0;
 
 function createCtx(overrides?: { logger?: TraceEmitter }): {
   ctx: AgentLaunchContext;
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
 } {
   const explicit = createRecordingHost();
   const n = counter++;
   const executionId = `exec:result-${n}` as ExecutionId;
   const streamId = `stream:result-${n}` as StreamTabId;
-  const streamStatus = new StreamStatusRegistry();
+  const streamStatus = new StreamStatusMachine();
   const config = AgentConfigSchema.parse({
     agent: 'assistant',
     model: 'test-model',
@@ -125,7 +125,7 @@ function setupResultCase(): {
   logger: TraceEmitter;
   results: ResultEvent[];
   ctx: AgentLaunchContext;
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
 } {
   const logger = new TraceEmitter();
   const results = collectResults(logger);
