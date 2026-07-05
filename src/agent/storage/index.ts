@@ -31,3 +31,9 @@ export {
   deleteExecution,
   deleteAllExecutions,
 } from './executionListing';
+export {
+  RESUMABILITY_CAUSE,
+  deriveResumability,
+  type ResumabilityCause,
+  type ResumabilityDecision,
+} from './resumability';

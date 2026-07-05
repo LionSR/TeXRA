@@ -37,6 +37,12 @@ const TOOL_USE_CONFIG: AgentConfig = {
   cliOutputFile: null,
   cliMultiAgentPresetId: null,
 };
+const WORKFLOW_CONFIG: AgentConfig = {
+  ...TOOL_USE_CONFIG,
+  agent: 'correct',
+  agentCategory: AgentCategory.Workflow,
+  instruction: 'Continue the workflow.',
+};
 
 setupPlatform({ workspacePath: '/workspace' });
 
@@ -45,7 +51,7 @@ describe('CLI history status formatting', () => {
     expect(
       resolveCliHistoryStatus({
         terminalStatus: EXECUTION_STATUS.ERROR,
-        hasFlowRecord: true,
+        resumable: false,
       }),
     ).toBe(EXECUTION_STATUS.ERROR);
   });
@@ -54,7 +60,7 @@ describe('CLI history status formatting', () => {
     expect(
       resolveCliHistoryStatus({
         terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-        hasFlowRecord: true,
+        resumable: true,
       }),
     ).toBe(CLI_HISTORY_RESUMABLE_STATUS);
 
@@ -64,7 +70,7 @@ describe('CLI history status formatting', () => {
           id: 'stopped-with-flow',
           status: resolveCliHistoryStatus({
             terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-            hasFlowRecord: true,
+            resumable: true,
           }),
         },
       ]),
@@ -77,13 +83,13 @@ describe('CLI history status formatting', () => {
     expect(
       resolveCliHistoryStatus({
         terminalStatus: '',
-        hasFlowRecord: true,
+        resumable: false,
       }),
     ).toBe('');
   });
 
   it('marks flow records without terminal status as resumable', () => {
-    expect(resolveCliHistoryStatus({ hasFlowRecord: true })).toBe(
+    expect(resolveCliHistoryStatus({ resumable: true })).toBe(
       CLI_HISTORY_RESUMABLE_STATUS,
     );
   });
@@ -112,7 +118,7 @@ describe('CLI history status formatting', () => {
   it('reports legacy terminal-status-free entries as unknown when no flow remains', () => {
     // A missing terminal status means the terminal write never happened
     // (crash, kill, old build) — reporting 'completed' would mask crashes.
-    expect(resolveCliHistoryStatus({ hasFlowRecord: false })).toBe('unknown');
+    expect(resolveCliHistoryStatus({ resumable: false })).toBe('unknown');
   });
 
   it('prints resumable details instead of inventing completed status', () => {
@@ -155,6 +161,30 @@ describe('CLI history status formatting', () => {
     expect(details?.hasFlowRecord).toBe(false);
     // Absent terminal status without a valid flow record is reported as
     // 'unknown', never invented as completed (crash-masking guard).
+    expect(details?.status).toBe('unknown');
+    expect(formatCliHistoryDetailsText(details!)).not.toContain(
+      'Resumable flow record: present',
+    );
+  });
+
+  it('does not mark non-tool-use flow records as CLI-resumable', async () => {
+    const id = 'workflow-with-flow' as ExecutionId;
+    await registerExecution(id, WORKFLOW_CONFIG, 'correct', undefined);
+    await getExecutionStore(id).write(flowKey(id), {
+      flowName: 'test',
+      params: {},
+      shared: {
+        currentRound: 1,
+        totalRounds: 2,
+        conversation: [],
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+
+    const details = await readCliHistoryDetails(id);
+
+    expect(details?.hasFlowRecord).toBe(false);
     expect(details?.status).toBe('unknown');
     expect(formatCliHistoryDetailsText(details!)).not.toContain(
       'Resumable flow record: present',

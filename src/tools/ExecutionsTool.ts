@@ -12,6 +12,7 @@ import { platform } from '@platform/platform';
 
 // Local imports - agent
 import {
+  deriveResumability,
   getExecutionStore,
   listExecutionWorkspaceFiles,
   type ChildRecord,
@@ -20,7 +21,6 @@ import {
   resolveExecutionWorkspaceFilePath,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { flowKey } from '@agent/node/persistedFlow';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
@@ -449,13 +449,13 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     ]);
 
     if (!meta && !config) {
-      const hasFlow = await store.exists(flowKey(executionId));
-      if (!hasFlow) {
+      const resumability = await deriveResumability(executionId);
+      if (!resumability.resumable) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
       return {
         status: 'executed',
-        output: `Execution: ${executionId}\nStatus: completed\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
+        output: `Execution: ${executionId}\nStatus: resumable\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
       };
     }
 
@@ -751,11 +751,11 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     const conversation = await store.readConversation();
 
     if (!conversation) {
-      // readConversation already checked the flow blob; use lightweight
-      // exists checks to distinguish "no execution" from "no messages yet"
-      const exists =
-        (await store.exists('meta')) ||
-        (await store.exists(flowKey(executionId)));
+      // Match the top-level execution lookup: a flow-only record is found only
+      // when the shared storage decision says it is resumable.
+      const meta = await store.readMeta();
+      const resumability = await deriveResumability(executionId);
+      const exists = meta !== null || resumability.resumable;
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
