@@ -1,7 +1,12 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+// Local imports - transcript
+import { streamDataDir, StreamSnapshotStore } from '@transcript';
+
 // Local imports - agent
+import { getExecutionStore } from '@agent/storage';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -10,7 +15,9 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   STREAM_PHASE,
+  type ExecutionId,
   type ProgressViewOutboundMessage,
+  type StreamTabId,
 } from '@shared/schemas';
 import {
   ProgressBackend,
@@ -18,6 +25,7 @@ import {
   type ProgressBackendUiConfig,
 } from '@shared/progressView/backend/ProgressBackend';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
+import { StorageFS } from '@utils/files';
 
 class MemoryMementoStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();
@@ -86,6 +94,33 @@ function createRecordingBackend(): {
     configureUi: () => createUiConfig(),
   });
   return { backend, messages };
+}
+
+function createIsolatedRecordingBackend(): {
+  backend: ProgressBackend;
+  messages: ProgressViewOutboundMessage[];
+  session: SessionHandle;
+} {
+  const messages: ProgressViewOutboundMessage[] = [];
+  const session = new SessionHandle();
+  const backend = new ProgressBackend({
+    storage: new MemoryMementoStorage(),
+    snapshots: new StreamSnapshotStore(),
+    session,
+    sendMessage: (message) => {
+      messages.push(message);
+      return true;
+    },
+    hasTarget: () => true,
+    configureUi: () => createUiConfig(),
+  });
+  return { backend, messages, session };
+}
+
+async function writeExecutionConfig(executionId: ExecutionId): Promise<void> {
+  await getExecutionStore(executionId).writeConfig(
+    toolUseTaskState('search', 'deepseekproT').agentConfig,
+  );
 }
 
 describe('ProgressBackend', () => {
@@ -410,6 +445,78 @@ describe('ProgressBackend', () => {
       });
     } finally {
       backend.dispose();
+    }
+  });
+
+  it('deletes the execution directory named by stream metadata when a stream is cleared', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const stream = 'tool@deepseek#a6966a' as StreamTabId;
+    const executionId = 'a6966a' as ExecutionId;
+
+    try {
+      await backend.state.snapshots.load([stream]);
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.snapshots.setTaskState(
+        stream,
+        toolUseTaskState('search', 'deepseekproT'),
+        executionId,
+      );
+      await writeExecutionConfig(executionId);
+      await backend.state.flush();
+
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+      expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
+
+      await backend.state.clearStream(stream);
+
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
+    } finally {
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('sweeps streamData orphans without deleting standalone execution history', async () => {
+    const orphanStream = 'tool@deepseek#b6966b' as StreamTabId;
+    const orphanExecution = 'b6966b' as ExecutionId;
+    const historyExecution = 'c6966c' as ExecutionId;
+    const seed = new StreamSnapshotStore();
+    await seed.load([orphanStream]);
+    seed.setTaskState(
+      orphanStream,
+      toolUseTaskState('search', 'deepseekproT'),
+      orphanExecution,
+    );
+    await writeExecutionConfig(orphanExecution);
+    await writeExecutionConfig(historyExecution);
+    await seed.flush();
+
+    const { backend, session } = createIsolatedRecordingBackend();
+    try {
+      expect(await StorageFS.exists(streamDataDir(orphanStream))).toBe(true);
+      expect(await StorageFS.exists(`executions/${orphanExecution}`)).toBe(
+        true,
+      );
+      expect(await StorageFS.exists(`executions/${historyExecution}`)).toBe(
+        true,
+      );
+
+      await backend.state.load();
+
+      expect(await StorageFS.exists(streamDataDir(orphanStream))).toBe(false);
+      expect(await StorageFS.exists(`executions/${orphanExecution}`)).toBe(
+        false,
+      );
+      expect(await StorageFS.exists(`executions/${historyExecution}`)).toBe(
+        true,
+      );
+    } finally {
+      await getExecutionStore(historyExecution).clear();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
     }
   });
 });

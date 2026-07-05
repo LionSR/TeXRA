@@ -50,6 +50,15 @@ export function encodeStreamId(id: string): string {
   return encodeURIComponent(id);
 }
 
+/** Decode a persisted stream directory name. Invalid legacy names are skipped. */
+export function decodeStreamId(encoded: string): string | undefined {
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Build the relative directory path for a stream's sidecar data: `streamData/{encoded}`. */
 export function streamDataDir(streamId: string): string {
   return path.join(STREAM_DATA_DIR, encodeStreamId(streamId));
