@@ -4,6 +4,12 @@ import { describe, it } from 'vitest';
 
 // Standard library imports
 
+// Local imports - shared
+import type { StreamTabId } from '@shared/schemas';
+
+// Local imports - tools
+import { GoalStore } from '@tools/goal';
+
 // Local imports - test support
 import { createProgressStreamLifecycleHarness } from '../support/ProgressControllerHarnesses';
 
@@ -35,6 +41,21 @@ describe('ProgressStreamLifecycleController', () => {
     assert.deepEqual(recorder.calls.get('clearBackups'), ['stream-b']);
     assert.deepEqual(recorder.calls.get('clearWebview'), ['stream-b']);
     assert.deepEqual(recorder.calls.get('deleteWebview'), ['stream-b']);
+  });
+
+  it('forgets the stream goal when deleting a stream', async () => {
+    const stream = 'stream-a' as StreamTabId;
+    await GoalStore.forget(stream);
+    await GoalStore.start(stream, 'finish the cleanup');
+    const { controller } = createProgressStreamLifecycleHarness();
+
+    try {
+      await controller.deleteStream(stream);
+
+      assert.equal(GoalStore.getForStream(stream), null);
+    } finally {
+      await GoalStore.forget(stream);
+    }
   });
 
   it('deletes active finished streams and activates the next visible stream', async () => {

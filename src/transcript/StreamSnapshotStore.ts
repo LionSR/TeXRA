@@ -24,6 +24,7 @@ import { getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import type {
   ProgressEvent,
@@ -59,7 +60,10 @@ import {
 import { getCleanAgentName } from '@shared/schemas/agent';
 
 import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
+import { StorageFS } from '@utils/files';
+import { isDirectory } from '@utils/files/fsEntryType';
 import {
+  decodeStreamId,
   STREAM_DATA_DIR,
   STREAM_DATA_KEYS,
   streamDataDir,
@@ -170,6 +174,15 @@ export class StreamSnapshotStore {
       this.kvCache.set(streamId, store);
     }
     return store;
+  }
+
+  private async readPersistedStreamDirs(): Promise<[string, number][]> {
+    try {
+      return await StorageFS.readDir(STREAM_DATA_DIR);
+    } catch (error) {
+      if (isFileNotFoundError(error)) return [];
+      throw error;
+    }
   }
 
   private streamVersion(stream: StreamTabId): number {
@@ -748,6 +761,23 @@ export class StreamSnapshotStore {
     // executionId is validated to a real ExecutionId at the single disk-read
     // entry (`readMeta`), so no cast/re-validation is needed here.
     return this.meta.get(stream)?.executionId;
+  }
+
+  /** Streams with persisted sidecars under `streamData/`. */
+  async listPersistedStreams(): Promise<StreamTabId[]> {
+    const entries = await this.readPersistedStreamDirs();
+    return entries
+      .filter(([, type]) => isDirectory(type))
+      .map(([encoded]) => decodeStreamId(encoded))
+      .filter((stream): stream is StreamTabId => stream !== undefined);
+  }
+
+  /** Execution id recorded in a stream sidecar, without seeding memory. */
+  async readPersistedExecutionId(
+    stream: StreamTabId,
+  ): Promise<ExecutionId | undefined> {
+    const meta = (await readStreamData(this.kv(stream))).meta;
+    return meta?.runDescriptor?.executionId ?? meta?.executionId;
   }
 
   getParentStreamId(stream: StreamTabId): StreamTabId | undefined {
