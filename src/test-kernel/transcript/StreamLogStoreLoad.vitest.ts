@@ -13,6 +13,7 @@ import {
   STREAM_LOG_SUMMARIES_DIR,
 } from '@transcript';
 import {
+  END_GROUP_STATUS,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -406,6 +407,75 @@ describe('StreamLogStore load', () => {
     expect(
       storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'beta')),
     ).toBeUndefined();
+  });
+
+  it('can close selected running groups with a neutral stopped status', async () => {
+    const storage = mockStorage({
+      logs: {
+        alpha: [runningGroupEntry('alpha', 1, 100)],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: true,
+        },
+      },
+    });
+
+    const store = new StreamLogStore();
+    await store.load();
+
+    const affected = await store.endRunningGroupsForStreams(
+      ['alpha'],
+      300,
+      END_GROUP_STATUS.STOPPED,
+    );
+    await store.flush();
+
+    expect(affected).toEqual(['alpha']);
+    expect(store.get('alpha')?.getRange(0).at(0)?.data).toEqual({
+      status: END_GROUP_STATUS.STOPPED,
+      endTime: 300,
+    });
+    expect(storage.fullLogReads()).toBe(1);
+  });
+
+  it('does not load selected streams whose summaries have no running group', async () => {
+    const storage = mockStorage({
+      logs: {
+        alpha: [logEntry('alpha', 1, 100)],
+        beta: [runningGroupEntry('beta', 1, 110)],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: false,
+        },
+        beta: {
+          firstTimestamp: 110,
+          lastTimestamp: 110,
+          hasRunningGroup: true,
+        },
+      },
+    });
+
+    const store = new StreamLogStore();
+    await store.load();
+
+    const affected = await store.endRunningGroupsForStreams(
+      ['alpha', 'beta'],
+      300,
+    );
+    await store.flush();
+
+    expect(affected).toEqual(['beta']);
+    expect(storage.fullLogReads()).toBe(1);
+    expect(store.get('alpha')).toBeUndefined();
+    expect(store.get('beta')?.getRange(0).at(0)?.type).toBe(
+      STREAM_LOG_ENTRY_TYPES.GROUP_END,
+    );
   });
 
   it('bounds stale running group rehydrates', async () => {
