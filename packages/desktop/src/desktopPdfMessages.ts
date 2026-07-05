@@ -10,10 +10,10 @@ import { z } from 'zod';
 // `wa-dialog` overlay — Electron's bundled Chromium renders PDFs
 // natively, no extra dependency required.
 //
-// This is the second overlay pattern (settings is the first; diff is
-// the prior). Once a third overlay arrives we should extract a shared
-// `createOverlay()` factory; today the duplication is small enough
-// that a shared abstraction would obscure rather than help.
+// This is the third overlay pattern (settings, then diff). All three now
+// share the wa-dialog shell via `createOverlayDialog` in
+// `renderer/overlayDialog.ts`; each overlay owns only its content element
+// and behavior.
 //
 // `desktop:showPdf` carries:
 //   - `title`: shown in the dialog header (e.g. "paper.pdf")
