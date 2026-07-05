@@ -385,6 +385,66 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('clears stale per-run badges when an existing stream re-enters running', async () => {
+    const { backend, messages } = createRecordingBackend();
+    const stream = 'tool-stream' as StreamTabId;
+
+    try {
+      await backend.state.snapshots.load([]);
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.snapshots.setTaskState(
+        stream,
+        toolUseTaskState('search', 'deepseekproT'),
+        'abc123' as ExecutionId,
+      );
+      backend.state.updateStreamHints(stream, {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
+      backend.state.updateStreamState(stream, (prev) => ({
+        ...prev,
+        conversationProgress: { toolCallCount: 7 },
+        roundStage: { index: 2 },
+        finishedSubagentCount: 3,
+        finishedProcessCount: 2,
+      }));
+
+      await backend.eventHandler.setStreamStatus(
+        stream,
+        STREAM_PHASE.RUNNING,
+        STREAM_PHASE.COMPLETED,
+      );
+
+      expect(
+        messages.some(
+          (message) =>
+            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+        ),
+      ).toBe(false);
+
+      const patch = messages.find(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+          message.streamInfo.name === stream,
+      );
+      if (patch?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
+        throw new Error('Expected existing stream metadata patch');
+      }
+
+      expect(patch.streamState).toMatchObject({
+        kind: AgentCategory.ToolUse,
+        status: STREAM_PHASE.RUNNING,
+        conversationProgress: { toolCallCount: 0 },
+        finishedSubagentCount: 0,
+        finishedProcessCount: 0,
+      });
+      expect(Object.hasOwn(patch.streamState, 'roundStage')).toBe(true);
+      expect(patch.streamState.roundStage).toBeUndefined();
+    } finally {
+      backend.dispose();
+    }
+  });
+
   it('revalidates and syncs the active stream when status registration changes the filter', async () => {
     const { backend, messages } = createRecordingBackend();
 
