@@ -1,3 +1,4 @@
+import { cp, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {
@@ -9,7 +10,11 @@ import {
   type ExecutionMeta,
   type ResultMeta,
 } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
+import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   EXECUTION_STATUS,
@@ -196,6 +201,89 @@ export async function readCliHistoryConfig(
   id: ExecutionId,
 ): Promise<AgentConfig | null> {
   return getExecutionStore(id).readConfig();
+}
+
+/**
+ * Load a stored execution's config + conversation as the format-agnostic
+ * {@link ChatExportInput} the html/markdown export formatters consume.
+ * Mirrors the extension's `ChatExportController.buildExportInput` so the CLI
+ * and extension render the same conversation identically.
+ *
+ * Returns `null` (not a discriminated "which piece is missing" result) when
+ * either the config or the conversation is absent, so the caller can report
+ * the same "not found" message `history show` uses for missing executions.
+ */
+export async function readCliHistoryExportInput(
+  id: ExecutionId,
+): Promise<ChatExportInput | null> {
+  const store = getExecutionStore(id);
+  const [rawConfig, conversation, meta] = await Promise.all([
+    store.readConfig(),
+    store.readConversation(),
+    store.readMeta(),
+  ]);
+  if (!rawConfig || !conversation) return null;
+
+  const config = AgentConfigSchema.parse(rawConfig);
+  return {
+    timestamp: meta?.timestamp ?? new Date().toISOString(),
+    description: meta?.description,
+    config: {
+      agent: config.agent,
+      model: config.model,
+      instruction: config.instruction,
+      inputFiles: config.inputFiles,
+      mediaFiles: config.mediaFiles,
+      contextFiles: config.contextFiles,
+      outputFiles: config.outputFiles,
+    },
+    messages: conversation,
+  };
+}
+
+/**
+ * Resolves the `--assets` flag value to the href passed into
+ * `formatChatAsHtml`. Blank (`undefined`, empty, or whitespace-only) collapses
+ * to `undefined` so the formatter's own documented `./assets` default applies
+ * — `--assets ''` must behave identically to omitting the flag, not produce a
+ * broken empty href.
+ */
+export function resolveCliHistoryExportAssetsHref(
+  raw: string | undefined,
+): string | undefined {
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+const HTML_EXPORT_ASSET_DIR_NAME = 'htmlExport';
+
+/**
+ * Stage the bundled KaTeX / highlight.js / texmath CSS + font assets into
+ * `destDir` (e.g. `<cwd>/assets`) so a default `--export html > out.html`
+ * redirect — written to the same directory — resolves the exported
+ * document's `./assets` href for real, instead of linking to a folder that
+ * was never created.
+ *
+ * Only called for the *default* assets href: an explicit `--assets <href>`
+ * means the caller is pointing at a location (local folder or CDN URL) they
+ * manage themselves, so nothing is staged for them.
+ *
+ * Returns `'missing'` (without throwing) when the CLI install doesn't have
+ * the bundled assets — e.g. a dev checkout where `copy:resources` hasn't run
+ * — so the caller can warn instead of failing the export outright.
+ */
+export async function stageCliHistoryExportAssets(params: {
+  readonly resourcesPath: string;
+  readonly destDir: string;
+}): Promise<'staged' | 'missing'> {
+  const assetsSrc = path.join(params.resourcesPath, HTML_EXPORT_ASSET_DIR_NAME);
+  const sourceExists = await stat(assetsSrc)
+    .then((info) => info.isDirectory())
+    .catch(() => false);
+  if (!sourceExists) return 'missing';
+
+  await cp(assetsSrc, params.destDir, { recursive: true });
+  return 'staged';
 }
 
 export async function deleteCliHistory(options: {
