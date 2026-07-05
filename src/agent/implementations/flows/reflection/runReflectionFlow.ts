@@ -132,7 +132,6 @@ export async function runReflectionFlow<C = unknown>(
 
   const promptBuilder = new PromptBuilder(
     prompt,
-    setting,
     userVarChannels.transient,
     logger,
   );

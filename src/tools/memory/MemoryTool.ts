@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
+import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { debug } from '@logger/logUtils';
 import { formatRelativeTime } from '@shared/utils/string';
@@ -33,7 +34,6 @@ import { countOccurrences, requireField } from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
-  MEMORY_STORAGE_ROOT,
   MAX_VIEW_LINES,
   MAX_PINNED_MEMORIES,
   DIRECTORY_LISTING_DEPTH,
@@ -250,7 +250,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     // Handle non-existent root directory gracefully - return empty listing
     // instead of error (consistent with MemoryViewMessageHandler behavior)
     if (!exists) {
-      if (resolvedPath === MEMORY_STORAGE_ROOT) {
+      if (resolvedPath === MEMORY_STORAGE_DIR) {
         return {
           status: 'executed',
           summary: 'Viewed empty memory directory',
@@ -317,7 +317,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       throw new ToolError(`File ${inputPath} already exists.`);
     }
 
-    await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
+    await StorageFS.ensureDir(MEMORY_STORAGE_DIR);
     await StorageFS.ensureDir(path.dirname(resolvedPath));
     await this.writeMemoryFile(resolvedPath, fileText);
     recordToolFileRead(inputPath);
