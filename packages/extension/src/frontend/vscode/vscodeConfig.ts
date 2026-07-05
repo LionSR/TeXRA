@@ -29,14 +29,9 @@ function workspaceConfiguration(
 function toConfigurationTarget(
   target: ConfigTarget,
 ): vscode.ConfigurationTarget {
-  if (target === 'global') return vscode.ConfigurationTarget.Global;
-  // A workspace-scoped update throws when no folder is open (e.g. an empty
-  // VS Code window) -- fall back to Global so workspace-scoped settings
-  // (like the bash-approval toggle) can still be changed there instead of
-  // erroring out. See PR #7148 review.
-  return vscode.workspace.workspaceFolders?.length
-    ? vscode.ConfigurationTarget.Workspace
-    : vscode.ConfigurationTarget.Global;
+  return target === 'global'
+    ? vscode.ConfigurationTarget.Global
+    : vscode.ConfigurationTarget.Workspace;
 }
 
 function normalizeInspection<T>(

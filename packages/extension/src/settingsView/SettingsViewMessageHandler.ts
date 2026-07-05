@@ -32,7 +32,10 @@ import { BaseViewMessageHandler } from '@common/webview';
 import { WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import {
@@ -710,6 +713,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleSetApprovalEnabled(enabled: boolean): Promise<void> {
+    // Bash approval is a per-workspace, security-adjacent setting (see
+    // BASH_APPROVAL_CONFIG_TARGET / issue #7085): writing it without a
+    // workspace open would have to fall back to a global write, silently
+    // reintroducing the cross-workspace bypass this constant exists to
+    // prevent. Refuse instead, same as other workspace-scoped settings (see
+    // `frontend/ui/dialogs.ts`).
+    if (!vscode.workspace.workspaceFolders?.length) {
+      void showLoggedMessage(
+        this.channel,
+        'Bash approval is a per-workspace setting. Open a workspace folder before changing it.',
+      );
+      return;
+    }
     await setBashApprovalEnabledShared(
       {
         workspaceState: workspaceSM,
