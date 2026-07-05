@@ -15,6 +15,7 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -26,6 +27,7 @@ import {
   type AgentSourceType,
 } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { AgentSelectionEvents } from './events';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
 
@@ -60,7 +62,16 @@ export class AgentSelectionPanel extends LitElement {
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
   @property({ attribute: false }) category: AgentCategory = 'workflow';
   @property({ attribute: false }) userTier = 'free';
-  @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
+
+  /**
+   * Commands the active host's registry declares `unsupported(...)`, sent
+   * once at webview-ready (see `unsupportedCommands` in
+   * `@shared/utils/dispatcher`). `null` before that broadcast arrives —
+   * checked via `isKnownUnsupported`, which treats "not yet known" as
+   * unsupported so a control never flashes visible then hidden.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   @state() private selectedKey: string | null = null;
 
@@ -445,7 +456,10 @@ export class AgentSelectionPanel extends LitElement {
             agent.source === AGENT_SOURCE.REMOTE &&
             this.userTier === 'Ultra' &&
             !agent.hasPath &&
-            !this.desktopHost
+            !isKnownUnsupported(
+              this.unsupportedCommands,
+              SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT,
+            )
               ? html`
                   ${renderLabeledActionButton({
                     icon: 'file-lines',
@@ -473,7 +487,11 @@ export class AgentSelectionPanel extends LitElement {
               : nothing
           }
           ${
-            builtIn && !this.desktopHost
+            builtIn &&
+            !isKnownUnsupported(
+              this.unsupportedCommands,
+              SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
+            )
               ? html`
                   ${renderLabeledActionButton({
                     icon: 'pencil',
@@ -490,7 +508,11 @@ export class AgentSelectionPanel extends LitElement {
               : nothing
           }
           ${
-            isCustom && !this.desktopHost
+            isCustom &&
+            !isKnownUnsupported(
+              this.unsupportedCommands,
+              SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT,
+            )
               ? html`
                   ${renderLabeledActionButton({
                     icon: 'trash',

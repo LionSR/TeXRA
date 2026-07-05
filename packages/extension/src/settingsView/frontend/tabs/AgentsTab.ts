@@ -21,8 +21,10 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import type { WaTabShowEvent } from '@shared/wa/tabs';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { AgentSelectionEvents } from '../components/profile/events';
@@ -152,7 +154,16 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) customAgentDirIsDefault = true;
   @property({ attribute: false }) initialSubTab?: AgentCategory;
   @property({ attribute: false }) userTier = 'free';
-  @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
+
+  /**
+   * Commands the active host's registry declares `unsupported(...)`, sent
+   * once at webview-ready (see `unsupportedCommands` in
+   * `@shared/utils/dispatcher`). `null` before that broadcast arrives —
+   * checked via `isKnownUnsupported`, which treats "not yet known" as
+   * unsupported so a control never flashes visible then hidden.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   @state() private activeSubTab: AgentCategory = 'workflow';
 
@@ -241,7 +252,10 @@ export class AgentsTab extends LitElement {
               ${waIcon('save', { slot: 'start' })} Save Team
             </wa-button>
             ${
-              this.desktopHost
+              isKnownUnsupported(
+                this.unsupportedCommands,
+                SETTINGS_VIEW_COMMANDS.CREATE_AGENT,
+              )
                 ? nothing
                 : html`
                     <wa-button
@@ -326,7 +340,7 @@ export class AgentsTab extends LitElement {
           .agents=${activeAgents}
           .category=${this.activeSubTab}
           .userTier=${this.userTier}
-          .desktopHost=${this.desktopHost}
+          .unsupportedCommands=${this.unsupportedCommands}
         ></agent-selection-panel>
       </div>
     `;
