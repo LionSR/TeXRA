@@ -45,6 +45,7 @@ import {
   type ExecutionId,
   type OutputFileInfo,
   type Plan,
+  type RoundIndexed,
   type StorageKey,
   type StreamSnapshot,
   type StreamTabId,
@@ -77,15 +78,6 @@ const SEED_IO_CONCURRENCY = 8;
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 type UsageUpdateResult =
   TokenUsageStats | undefined | Promise<TokenUsageStats | undefined>;
-
-/**
- * Round-keyed delta shape carried by the `addOutputFiles` /
- * `updateMissingOutputs` / `updateCompileFailures` progress events. Stated
- * once here so the store's mutators don't each restate the
- * `{ [round: number]: T[] }` literal. Mirrors the inline payload fields in
- * `ProgressEventPayloads`.
- */
-type RoundKeyedList<T> = { [round: number]: T[] };
 
 /**
  * Match criteria for {@link StreamSnapshotStore.findWorkflowStreamsMatching}.
@@ -324,7 +316,7 @@ export class StreamSnapshotStore {
   }
 
   private parseOutputFilesPatch(
-    filesByRound: RoundKeyedList<OutputFileInfo>,
+    filesByRound: RoundIndexed<OutputFileInfo>,
   ): OutputFilesPatch {
     const patch: OutputFilesPatch = new Map();
     for (const [round, files] of Object.entries(filesByRound)) {
@@ -410,7 +402,7 @@ export class StreamSnapshotStore {
 
   addOutputFiles(
     stream: StreamTabId,
-    filesByRound: RoundKeyedList<OutputFileInfo>,
+    filesByRound: RoundIndexed<OutputFileInfo>,
   ): void {
     const patch = this.parseOutputFilesPatch(filesByRound);
     if (patch.size === 0) return;
@@ -429,7 +421,7 @@ export class StreamSnapshotStore {
 
   updateMissingOutputs(
     stream: StreamTabId,
-    filesByRound: RoundKeyedList<string>,
+    filesByRound: RoundIndexed<string>,
   ): void {
     this.mutate(stream, () => {
       const rounds = this.getOrCreate(this.missingOutputs, stream);
@@ -443,7 +435,7 @@ export class StreamSnapshotStore {
 
   updateCompileFailures(
     stream: StreamTabId,
-    filesByRound: RoundKeyedList<CompileFailure>,
+    filesByRound: RoundIndexed<CompileFailure>,
   ): void {
     this.mutate(stream, () => {
       const rounds = this.getOrCreate(this.compileFailures, stream);
