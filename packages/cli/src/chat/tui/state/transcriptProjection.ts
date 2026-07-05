@@ -23,7 +23,7 @@ export interface ProjectStreamTranscriptOptions {
 }
 
 /**
- * Single projection edge from StreamLogStore into cliState.
+ * Single projection edge from StreamLogStore into the CLI state slices.
  *
  * Callers that know a stream reached a turn boundary should project through
  * this helper instead of open-coding sync + fallback + finalization. That keeps

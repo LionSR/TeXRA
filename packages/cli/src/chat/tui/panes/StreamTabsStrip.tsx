@@ -8,9 +8,12 @@ import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 import { textDisplayWidth, truncateToWidth } from '../render/terminalText';
-import { cliState, type StreamSlice } from '../state/cliState';
+import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
+import { parentStream as parentStreamSignal } from '../state/cliState/parentStreamSlice';
+import { streams as streamsSignal } from '../state/cliState/streamsSlice';
 import { activeStreamTreeViews } from '../state/streamViews';
 import { useSignal } from '../state/useSignal';
+import type { StreamSlice } from '../state/cliState/types';
 
 export interface StreamTabDisplayItem {
   readonly id: StreamTabId | 'ellipsis';
@@ -249,9 +252,9 @@ function StreamTabsStripView(props: {
 function StreamTabsStripFromState(props: {
   readonly width: number;
 }): React.JSX.Element | null {
-  const activeStreamId = useSignal(cliState.activeStreamId);
-  const streams = useSignal(cliState.streams);
-  const parentStream = useSignal(cliState.parentStream);
+  const activeStreamId = useSignal(activeStreamIdSignal);
+  const streams = useSignal(streamsSignal);
+  const parentStream = useSignal(parentStreamSignal);
   const items = streamTabsDisplayItems({
     activeStreamId,
     streams,

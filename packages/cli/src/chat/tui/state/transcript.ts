@@ -2,14 +2,13 @@ import { getDefaultStreamLogStore } from '@transcript';
 import { isTerminalStatus } from '@common/constants/streamStatus';
 import { type StreamLifecycleStatus, type StreamTabId } from '@shared/schemas';
 
-import {
-  cliState,
-  patchStream,
-  removeStream,
-  registerCliStateResetHook,
-  type ConversationEntry,
-} from './cliState';
+import { activeStreamId, rootStreamId } from './cliState/focusSlice';
+import { parentStream } from './cliState/parentStreamSlice';
+import { registerCliStateResetHook } from './cliState/reset';
+import { removeStream } from './cliState/removeStream';
+import { patchStream, streams } from './cliState/streamsSlice';
 import { activeStreamParentOrSelfId } from './streamViews';
+import type { ConversationEntry } from './cliState/types';
 
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
 
@@ -119,7 +118,7 @@ function appendLocalTranscriptEntry(
   if (!normalized) return;
 
   const streamId = explicitStreamId ?? defaultLocalTranscriptStreamId();
-  if (!cliState.activeStreamId.get()) cliState.activeStreamId.set(streamId);
+  if (!activeStreamId.get()) activeStreamId.set(streamId);
   const syntheticAfterSeq = getDefaultStreamLogStore().get(streamId)?.head ?? 0;
 
   patchStream(streamId, (slice) => {
@@ -160,25 +159,25 @@ export function resolveLocalTranscriptStreamId({
 
 function defaultLocalTranscriptStreamId(): StreamTabId {
   return resolveLocalTranscriptStreamId({
-    activeStreamId: cliState.activeStreamId.get(),
+    activeStreamId: activeStreamId.get(),
     fallbackStreamId: CLI_LOCAL_STREAM_ID,
-    parentStream: cliState.parentStream.get(),
-    rootStreamId: cliState.rootStreamId.get(),
+    parentStream: parentStream.get(),
+    rootStreamId: rootStreamId.get(),
   });
 }
 
 export function moveLocalTranscriptToStream(streamId: StreamTabId): void {
   if (streamId === CLI_LOCAL_STREAM_ID) return;
 
-  const localSlice = cliState.streams.get().get(CLI_LOCAL_STREAM_ID);
+  const localSlice = streams.get().get(CLI_LOCAL_STREAM_ID);
   if (!localSlice?.entries.length) return;
 
   patchStream(streamId, (slice) => ({
     ...slice,
     entries: [...localSlice.entries, ...slice.entries],
   }));
-  if (cliState.activeStreamId.get() === CLI_LOCAL_STREAM_ID) {
-    cliState.activeStreamId.set(streamId);
+  if (activeStreamId.get() === CLI_LOCAL_STREAM_ID) {
+    activeStreamId.set(streamId);
   }
   removeStream(CLI_LOCAL_STREAM_ID);
 }

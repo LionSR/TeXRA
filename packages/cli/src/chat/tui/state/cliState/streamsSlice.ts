@@ -15,7 +15,10 @@ import {
 
 import { emptySlice, type StreamSlice } from './types';
 
-export const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
+const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
+
+/** Per-stream state map, keyed by `StreamTabId`. */
+export const streams = STREAMS;
 
 export function patchStream(
   streamId: StreamTabId,

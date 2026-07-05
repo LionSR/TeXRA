@@ -14,7 +14,10 @@ import { type StreamTabId } from '@shared/schemas';
 import { unique } from '@utils/core';
 
 import { visibleSubagentRows } from './childExecutions';
-import { cliState, type StreamSlice } from './cliState';
+import { activeStreamId } from './cliState/focusSlice';
+import { parentStream } from './cliState/parentStreamSlice';
+import { streams as streamsSignal } from './cliState/streamsSlice';
+import type { StreamSlice } from './cliState/types';
 
 function orderedDescendantsFromSlice(
   slice:
@@ -62,26 +65,26 @@ export function orderedDescendantsFromTree(init: {
 }
 
 function orderedDescendants(parent: StreamTabId): StreamTabId[] {
-  const streams = cliState.streams.get();
+  const streams = streamsSignal.get();
   return orderedDescendantsFromTree({
     parent,
     parentSlice: streams.get(parent),
-    parentStream: cliState.parentStream.get(),
+    parentStream: parentStream.get(),
     streams,
   });
 }
 
 /** Returns the next stream id the focus cycle should land on, or `undefined`
  *  if the cycle would not move (no parent edges, no descendants). The caller
- *  assigns the result to `cliState.activeStreamId`. */
+ *  assigns the result to `activeStreamId`. */
 export function nextFocusForward(): StreamTabId | undefined {
-  const activeId = cliState.activeStreamId.get();
+  const activeId = activeStreamId.get();
   if (!activeId) return undefined;
 
   // If we're sitting on a child stream, walk forward through the *parent's*
   // ordered descendant list — so root → child1 → child2 → root closes the
   // cycle even when child1/child2 are leaves themselves.
-  const parent = cliState.parentStream.get().get(activeId);
+  const parent = parentStream.get().get(activeId);
   if (parent) {
     const siblings = orderedDescendants(parent);
     const idx = siblings.indexOf(activeId);
@@ -96,7 +99,7 @@ export function nextFocusForward(): StreamTabId | undefined {
 
 /** Step up to the parent stream, if one is registered. */
 export function nextFocusBack(): StreamTabId | undefined {
-  const activeId = cliState.activeStreamId.get();
+  const activeId = activeStreamId.get();
   if (!activeId) return undefined;
-  return cliState.parentStream.get().get(activeId);
+  return parentStream.get().get(activeId);
 }

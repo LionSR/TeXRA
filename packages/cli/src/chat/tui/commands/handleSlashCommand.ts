@@ -11,7 +11,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatCliSessionStatus } from '../sessionStatus';
 import { requestCliCompaction } from '../state/compactionRequest';
-import { cliState } from '../state/cliState';
+import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
+import { sessionMeta } from '../state/cliState/sessionSlice';
+import { streams } from '../state/cliState/streamsSlice';
 import { chatTuiCanStartRootRun } from '../state/sessionRunState';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
@@ -142,10 +144,10 @@ export async function handleTuiSlashCommand(
       applyCliApprovalPolicySelection(rest || 'yolo', context);
       return true;
     case 'status': {
-      const meta = cliState.sessionMeta.get();
-      const activeStreamId = cliState.activeStreamId.get();
+      const meta = sessionMeta.get();
+      const activeStreamId = activeStreamIdSignal.get();
       const slice = activeStreamId
-        ? cliState.streams.get().get(activeStreamId)
+        ? streams.get().get(activeStreamId)
         : undefined;
       // Mirror the status bar's `subscription` badge so the two never disagree.
       const subscriptionActive = await isCodexSubscriptionActive(
@@ -211,7 +213,7 @@ export async function handleTuiSlashCommand(
       return true;
     case 'compact':
       requestCliCompaction({
-        streamId: cliState.activeStreamId.get(),
+        streamId: activeStreamIdSignal.get(),
         requestManualCompaction: (streamId) =>
           executionRegistry.requestManualCompaction(streamId),
         notifyFollowUpSent,

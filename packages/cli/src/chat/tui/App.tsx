@@ -52,7 +52,21 @@ import {
   resolveChildControlDisplayTargets,
   type ChildControlMode,
 } from './state/childControls';
-import { cliState } from './state/cliState';
+import {
+  activeStreamId as activeStreamIdSignal,
+  rootRunStartAvailable as rootRunStartAvailableSignal,
+  rootStreamId as rootStreamIdSignal,
+} from './state/cliState/focusSlice';
+import {
+  activeForm as activeFormSignal,
+  childControlEscapeAction as childControlEscapeActionSignal,
+  childControlMode as childControlModeSignal,
+  reverseSearchOpen as reverseSearchOpenSignal,
+  slashPaletteOpen as slashPaletteOpenSignal,
+  transcriptViewerStreamId as transcriptViewerStreamIdSignal,
+} from './state/cliState/foregroundOverlaySlice';
+import { parentStream as parentStreamSignal } from './state/cliState/parentStreamSlice';
+import { streams as streamsSignal } from './state/cliState/streamsSlice';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { streamDisplayLabel } from './state/streamViews';
@@ -537,17 +551,17 @@ export function App(props: AppProps): React.JSX.Element {
   // Single subscription site; pass the value down so ApprovalModal renders
   // off the same read and InputBar can stay mounted but disabled.
   const pending = useSignal(currentApproval);
-  const activeStreamId = useSignal(cliState.activeStreamId);
-  const rootStreamId = useSignal(cliState.rootStreamId);
-  const streams = useSignal(cliState.streams);
-  const parentStream = useSignal(cliState.parentStream);
-  const activeForm = useSignal(cliState.activeForm);
-  const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
-  const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
-  const transcriptViewerStreamId = useSignal(cliState.transcriptViewerStreamId);
-  const rootRunStartAvailable = useSignal(cliState.rootRunStartAvailable);
-  const childControlMode = useSignal(cliState.childControlMode);
-  const childControlEscapeAction = useSignal(cliState.childControlEscapeAction);
+  const activeStreamId = useSignal(activeStreamIdSignal);
+  const rootStreamId = useSignal(rootStreamIdSignal);
+  const streams = useSignal(streamsSignal);
+  const parentStream = useSignal(parentStreamSignal);
+  const activeForm = useSignal(activeFormSignal);
+  const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
+  const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
+  const transcriptViewerStreamId = useSignal(transcriptViewerStreamIdSignal);
+  const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
+  const childControlMode = useSignal(childControlModeSignal);
+  const childControlEscapeAction = useSignal(childControlEscapeActionSignal);
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
@@ -712,7 +726,7 @@ export function App(props: AppProps): React.JSX.Element {
       : undefined;
   useEffect(() => {
     if (childControlMode === undefined) {
-      cliState.childControlEscapeAction.set('close');
+      childControlEscapeActionSignal.set('close');
     }
   }, [childControlMode]);
   const childControlHasItems = childControlTarget?.hasItems ?? false;
@@ -767,7 +781,7 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <TranscriptViewer
             availableRows={foregroundRows}
-            onClose={() => cliState.transcriptViewerStreamId.set(undefined)}
+            onClose={() => transcriptViewerStreamIdSignal.set(undefined)}
             slice={streams.get(transcriptViewerStreamId)}
             title={streamDisplayLabel({
               parentStream,
@@ -789,13 +803,13 @@ export function App(props: AppProps): React.JSX.Element {
             activeStreamId={target.streamId}
             availableRows={foregroundRows}
             mode={childControlMode}
-            onClose={() => cliState.childControlMode.set(undefined)}
+            onClose={() => childControlModeSignal.set(undefined)}
             onEscapeActionChange={(action) =>
-              cliState.childControlEscapeAction.set(action)
+              childControlEscapeActionSignal.set(action)
             }
-            onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
+            onFocusStream={(streamId) => activeStreamIdSignal.set(streamId)}
             onViewStream={(streamId) =>
-              cliState.transcriptViewerStreamId.set(streamId)
+              transcriptViewerStreamIdSignal.set(streamId)
             }
             onKillExecution={props.onKillExecution}
             slice={target.slice}
@@ -806,7 +820,7 @@ export function App(props: AppProps): React.JSX.Element {
       }
       case 'form':
         return activeForm?.render(
-          () => cliState.activeForm.set(undefined),
+          () => activeFormSignal.set(undefined),
           foregroundRows,
         );
       case 'approval':
@@ -842,12 +856,12 @@ export function App(props: AppProps): React.JSX.Element {
     const lower = value.toLowerCase();
     if (lower === 's') {
       if (!subagentControlsAvailable) return false;
-      cliState.childControlMode.set('subagents');
+      childControlModeSignal.set('subagents');
       return true;
     }
     if (lower === 'p') {
       if (!taskControlsAvailable) return false;
-      cliState.childControlMode.set('tasks');
+      childControlModeSignal.set('tasks');
       return true;
     }
     const digit = digitFromMetaShortcut(value);
@@ -859,7 +873,7 @@ export function App(props: AppProps): React.JSX.Element {
         zeroBasedIndex: digit - 1,
       });
       if (!target) return false;
-      cliState.activeStreamId.set(target);
+      activeStreamIdSignal.set(target);
       return true;
     }
     return false;
@@ -923,14 +937,14 @@ export function App(props: AppProps): React.JSX.Element {
     if (!focusShortcutsActive) return;
 
     if (key.ctrl && input.toLowerCase() === 't') {
-      if (activeStreamId) cliState.transcriptViewerStreamId.set(activeStreamId);
+      if (activeStreamId) transcriptViewerStreamIdSignal.set(activeStreamId);
       return;
     }
 
     // Tab / Shift-Tab cycles stream focus.
     if (key.tab) {
       const next = key.shift ? nextFocusBack() : nextFocusForward();
-      if (next) cliState.activeStreamId.set(next);
+      if (next) activeStreamIdSignal.set(next);
       return;
     }
 
