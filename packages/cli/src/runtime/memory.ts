@@ -81,7 +81,7 @@ export function cliMemoryStoragePathFromInput(inputPath: string): string {
       `Invalid memory path "${trimmed}". Memory paths must be relative to ${MEMORY_DISPLAY_ROOT}.`,
     );
   }
-  if (trimmed.startsWith('memories/')) {
+  if (trimmed.startsWith(`${resolveMemoryStoragePath()}/`)) {
     return resolveMemoryStoragePath(trimmed);
   }
   return displayToStoragePath(`${MEMORY_DISPLAY_ROOT}/${trimmed}`);
