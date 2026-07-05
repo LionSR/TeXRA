@@ -14,7 +14,6 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
-import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -32,6 +31,7 @@ import {
 } from '@shared/copy/onboarding';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { generateExecutionId } from '@utils/core/executionId';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 

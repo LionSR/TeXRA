@@ -11,7 +11,6 @@ import * as vscode from 'vscode';
 import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { toErrorMessage } from '@common/errors';
 import { bus, INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import type {
   InstructionAction,
@@ -23,6 +22,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'agentEventListeners';
 

@@ -12,15 +12,11 @@ import {
 import { quote as shellQuote } from 'shell-quote';
 import treeKill from 'tree-kill';
 
-// Local imports - log
-
-// Local imports - common
-import { toErrorMessage } from '@common/errors';
-
 // Internal imports
 import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 

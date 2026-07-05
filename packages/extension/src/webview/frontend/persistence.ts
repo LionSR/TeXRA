@@ -2,7 +2,7 @@
  * Persistence machinery for the Main view.
  *
  * Owns the single `PersistedState` instance (backed by the shared
- * `webviewStorage` singleton) and both restore paths (issue #7075):
+ * `webviewStorage` singleton) and both restore paths:
  *
  *   1. mount-time webview-storage restore (`restorePersistedState`), and
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`).
@@ -11,6 +11,9 @@
  * share `restorePerModeInstructions`'s legacy-migration precedence. Behavior
  * is pinned by `src/test-kernel/webview/MainAppPersistenceRestore.vitest.mts`.
  */
+
+// Third-party imports
+import { type ZodError } from 'zod';
 
 // Local imports - shared state and schemas
 import { PersistedState } from '@shared/state';
@@ -41,7 +44,6 @@ import {
   workflowInstruction$,
 } from './mainViewState';
 import { webviewStorage } from './webviewStorage';
-import type { ZodError } from 'zod';
 
 const stateManager = new PersistedState(
   webviewStorage,
@@ -53,7 +55,7 @@ const stateManager = new PersistedState(
  * Reentrancy guard around `saveState()`: while a backend-pushed restore is
  * applying a snapshot, intermediate mutations must not write partially
  * restored state back to storage. Do NOT "simplify away" without a regression
- * test proving it safe (issue #7075) — the characterization suite asserts
+ * test proving it safe — the characterization suite asserts
  * exactly one storage write per backend restore.
  */
 let saveBlockCount = 0;
@@ -272,9 +274,9 @@ export function flushPendingInstructionSave(): void {
 
 /**
  * Reset the transient runtime (save-block counter, pending debounce timer)
- * without touching stored state. Called from `MainApp`'s constructor on
- * remount in the same JS context, matching the fresh-instance slate the old
- * per-instance fields provided.
+ * and reload the cached persisted state from storage. Called from `MainApp`'s
+ * constructor on remount in the same JS context, matching the fresh-instance
+ * slate the old per-instance fields provided.
  */
 export function resetPersistenceRuntime(): void {
   saveBlockCount = 0;
@@ -282,4 +284,5 @@ export function resetPersistenceRuntime(): void {
     window.clearTimeout(instructionSaveTimer);
     instructionSaveTimer = null;
   }
+  stateManager.reload();
 }

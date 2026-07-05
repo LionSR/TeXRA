@@ -1,7 +1,7 @@
 // Local imports - log
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { runToolWithCheck } from '@utils/system';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';

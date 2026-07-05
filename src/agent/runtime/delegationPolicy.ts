@@ -9,7 +9,6 @@
 import { platform } from '@platform/platform';
 import { getExecutionStore } from '@agent/storage';
 import type { ExecutionMeta } from '@agent/storage/ExecutionKVStore';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -20,6 +19,7 @@ import {
   type NestedDelegationConfig,
   UNKNOWN_DELEGATION_DEPTH,
 } from '@shared/constants/delegationPolicy';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Read the current delegation policy from workspace state. */
 function readNestedDelegationConfig(): NestedDelegationConfig {

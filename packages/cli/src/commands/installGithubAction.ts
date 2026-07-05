@@ -1,7 +1,7 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { tryOpenBrowser } from '../runtime/browser';

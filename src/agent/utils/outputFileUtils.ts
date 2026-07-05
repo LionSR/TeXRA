@@ -1,10 +1,10 @@
 import * as path from 'node:path';
 
-import { normalizeFilePath } from '@shared/utils/path';
 import {
   WORKFLOW_OUTPUT_BASENAME,
   workflowOutputPath,
 } from '@agent/output/workflowOutputLayout';
+import { normalizeFilePath } from '@shared/utils/path';
 
 /**
  * Generates a runDir-relative output path under a round subfolder:

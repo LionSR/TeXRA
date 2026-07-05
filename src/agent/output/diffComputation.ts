@@ -5,7 +5,6 @@
  * using the diff-match-patch library.
  */
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
 import type { DiffStats } from '@shared/schemas/lineChanges';
@@ -16,6 +15,7 @@ import {
   getComparablePath,
   WorkspaceFS,
 } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { diffLineChanges } from '@utils/text/diff';
 import { countLines } from '@utils/text/stringUtils';
 
