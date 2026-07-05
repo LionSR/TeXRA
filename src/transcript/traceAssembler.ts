@@ -21,7 +21,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 
-import { getDefaultStreamLogStore } from './StreamLogStore';
+import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 
 export interface TraceDocument {
@@ -62,21 +62,19 @@ export async function assembleTrace(
     executionId,
   });
 
-  const streamLogStore = getDefaultStreamLogStore();
-  // Assumes a one-shot process (e.g. a CLI export command): `.load()` resets
-  // the store's in-memory state, so this must not run inside a long-lived
-  // host with an active session sharing the same store instance.
-  try {
-    await streamLogStore.load();
-  } catch {
-    // Persistence stays unavailable; ensureLoaded/get below will just find
-    // nothing, which the streamLogs_missing branch below already handles.
-  }
-  await streamLogStore.ensureLoaded(streamId);
+  // A fresh instance, not the shared getDefaultStreamLogStore() singleton:
+  // .load() clears all of a store's in-memory state, which would wipe out a
+  // live host's in-flight session if this ran against the shared instance.
+  // Reads the same on-disk files regardless — StreamSnapshotStore below
+  // already follows this same call-scoped-instance pattern.
+  const streamLogStore = new StreamLogStore();
+  const [, snapshot] = await Promise.all([
+    streamLogStore.load().then(() => streamLogStore.ensureLoaded(streamId)),
+    new StreamSnapshotStore().read(streamId),
+  ]);
   const log = streamLogStore.get(streamId);
   if (!log) return { status: 'streamLogs_missing' };
 
-  const snapshot = await new StreamSnapshotStore().read(streamId);
   const terminalStatus = meta?.outcome
     ? runOutcomeToExecutionStatus(meta.outcome)
     : null;

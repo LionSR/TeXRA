@@ -18,13 +18,13 @@ import { assembleTrace } from '@transcript/traceAssembler';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   EXECUTION_STATUS,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
-  type StreamTabId,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
@@ -105,7 +105,7 @@ describe('assembleTrace', () => {
       outcome: 'completed',
     });
 
-    const streamId = 'review@sonnet46T#exec-happy-path' as StreamTabId;
+    const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
     const store = getDefaultStreamLogStore();
     await store.load();
     store.append(streamId, {
@@ -159,8 +159,11 @@ describe('assembleTrace', () => {
       timestamp: '2026-07-05T00:00:00.000Z',
     });
 
-    const streamId =
-      `${executionConfig.agent}@${executionConfig.model}#${executionId}` as StreamTabId;
+    const streamId = getStreamTabId(
+      executionConfig.agent,
+      executionConfig.model,
+      { executionId },
+    );
     const store = getDefaultStreamLogStore();
     await store.load();
     store.append(streamId, {
