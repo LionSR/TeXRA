@@ -17,6 +17,7 @@ const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_AGENT_CALLS = 200;
 const MAX_FANOUT = 512;
+const DRAIN_GRACE_MS = 5_000;
 const LABEL_EXCERPT_LENGTH = 48;
 
 /**
@@ -288,8 +289,22 @@ export async function runWorkflowScript(
       // The script finished (or threw) with agent() calls still in flight
       // that it never awaited: cancel them and wait for settlement so the
       // returned journal is final and nothing runs on after the workflow.
+      // The drain is bounded — a runner that ignores the abort must not
+      // extend the run past its timeout by more than the grace period;
+      // stragglers beyond it are orphaned (their journal entries may be
+      // lost, which resume treats as a retry).
       runAbort.abort();
-      await Promise.allSettled([...pendingAgentCalls]);
+      let graceTimer: NodeJS.Timeout | undefined;
+      try {
+        await Promise.race([
+          Promise.allSettled([...pendingAgentCalls]),
+          new Promise<void>((resolve) => {
+            graceTimer = setTimeout(resolve, DRAIN_GRACE_MS);
+          }),
+        ]);
+      } finally {
+        if (graceTimer) clearTimeout(graceTimer);
+      }
     }
   }
 
@@ -311,7 +326,15 @@ function normalizeAgentOptions(
   ) {
     throw new Error('agent() options must be a plain object.');
   }
-  const source = (raw ?? {}) as Record<string, unknown>;
+  // Normalize to plain JSON data in one pass before any field reads:
+  // sandbox-defined accessors then fire exactly once, here, instead of on
+  // every host-side property access, and the retained options carry no
+  // live realm objects. (Non-terminating accessors fall under the
+  // documented preemption gate, like all post-await CPU-bound code.)
+  const source = JSON.parse(JSON.stringify(raw ?? {})) as Record<
+    string,
+    unknown
+  >;
   const options: WorkflowAgentCallOptions = {};
   for (const field of ['label', 'phase', 'agentName'] as const) {
     const value = source[field];
@@ -322,9 +345,8 @@ function normalizeAgentOptions(
     options[field] = value;
   }
   if (source.schema !== undefined) {
-    // JSON round-trip: strips cross-realm prototypes and guarantees the
-    // schema is journal-key stable (throws on functions/cycles).
-    options.schema = JSON.parse(JSON.stringify(source.schema)) as unknown;
+    // Already plain data via the normalization above; journal-key stable.
+    options.schema = source.schema;
   }
   if (source.inputFiles !== undefined) {
     if (

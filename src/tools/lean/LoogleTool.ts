@@ -8,6 +8,7 @@ import ky from 'ky';
 import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import * as logger from '@logger/logUtils';
 import { ToolResult } from '@shared/schemas/toolResult';
 import {
@@ -143,16 +144,22 @@ Useful for finding the right lemma when you know roughly what type it should hav
    * 4xx responses and non-network errors abort immediately.
    */
   private async fetchLoogle(query: string): Promise<LoogleResponse> {
+    // Cancellation for the owning agent run — parallel batches must be able
+    // to abort in-flight Loogle requests and their retry backoff.
+    const cancelSignal = getCurrentToolCallContext()?.signal;
     return pRetry(
       async () => {
         let raw: unknown;
         try {
+          const timeoutSignal = AbortSignal.timeout(LOOGLE_TIMEOUT_MS);
           raw = await ky
             .get(LOOGLE_API_URL, {
               searchParams: { q: query },
               headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
               timeout: false,
-              signal: AbortSignal.timeout(LOOGLE_TIMEOUT_MS),
+              signal: cancelSignal
+                ? AbortSignal.any([cancelSignal, timeoutSignal])
+                : timeoutSignal,
               retry: 0,
             })
             .json<unknown>();
@@ -175,6 +182,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
       {
         retries: LOOGLE_RETRIES,
         minTimeout: 1000,
+        signal: cancelSignal,
         // Jitter the backoff so batched queries don't retry in lockstep.
         randomize: true,
         onFailedAttempt: ({ error, retriesLeft }) => {

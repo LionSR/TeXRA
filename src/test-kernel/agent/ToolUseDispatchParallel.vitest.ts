@@ -241,6 +241,34 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     }
   });
 
+  it('does not share read results across a mutating barrier', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const { node, dispose } = dispatchHarness({
+      tools: {
+        read_file: probeTool(probe, 'read_file', 5, { parallelSafe: true }),
+        write_file: probeTool(probe, 'write_file', 5),
+      },
+    });
+    try {
+      const results = (await runDispatch(node, [
+        makeCall('c1', 'read_file', { path: 'x' }),
+        makeCall('c2', 'write_file', { path: 'x', content: 'new' }),
+        makeCall('c3', 'read_file', { path: 'x' }),
+      ])) as ExecResult[];
+
+      const readStarts = probe.events.filter((e) =>
+        e.startsWith('start read_file'),
+      ).length;
+      // The post-barrier read must execute again — the write may have
+      // changed what it returns, so sharing the pre-barrier result would
+      // feed the model stale contents.
+      assert.equal(readStarts, 2, 'read after a barrier must re-execute');
+      assert.equal(results[2]?.result.status, 'executed');
+    } finally {
+      dispose();
+    }
+  });
+
   it('rejects duplicates of side-effect tools instead of sharing the result', async () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
     const { node, dispose } = dispatchHarness({

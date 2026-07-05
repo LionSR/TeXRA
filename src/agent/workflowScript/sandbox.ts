@@ -228,7 +228,17 @@ export async function runScriptInSandbox(
   const evaluated = script.runInContext(context, {
     timeout: Math.min(options.timeoutMs, 5_000),
   }) as Promise<unknown>;
-  return await withTimeout(evaluated, options);
+  // Normalize the script's return value to plain JSON data so callers never
+  // hold live sandbox objects (lazy accessors firing during later
+  // formatting/persistence, realm-tied prototypes). A non-terminating
+  // accessor here is the same class as any post-await CPU-bound code —
+  // covered by the documented preemption gate.
+  const normalized = evaluated.then((value) =>
+    value === undefined
+      ? undefined
+      : (JSON.parse(JSON.stringify(value)) as unknown),
+  );
+  return await withTimeout(normalized, options);
 }
 
 async function withTimeout(

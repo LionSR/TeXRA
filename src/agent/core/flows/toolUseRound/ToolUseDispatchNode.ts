@@ -27,9 +27,9 @@ import { createSemaphore } from '@utils/core/semaphore';
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';
 import {
-  mapDuplicateCallsToPrimary,
   normalizeToolCallError,
   parseToolInput,
+  partitionDuplicateCalls,
   UNSAFE_DUPLICATE_CALL_ERROR,
 } from './toolCallParsing';
 import type { ToolUseRoundServices } from '../CycleServices';
@@ -128,20 +128,16 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     }
 
     // Deduplicate parallel calls (same tool name + identical arguments):
-    // for parallel-safe tools only the first executes and the rest share
-    // its result — the answer is already known, so re-asking the model to
-    // retry would burn a round-trip for nothing. Side-effect tools cannot
-    // share results (see _unsafeDuplicateCallIds).
+    // parallel-safe duplicates share their primary's result, but only
+    // within a contiguous safe segment — a side-effect call in between may
+    // change what a repeated read returns. Side-effect duplicates are
+    // rejected with a synthetic error (see _unsafeDuplicateCallIds).
     if (toolCalls.length > 1) {
-      for (const [dupId, primaryIndex] of mapDuplicateCallsToPrimary(
-        toolCalls,
-      )) {
-        if (this.isParallelSafe(toolCalls[primaryIndex])) {
-          this._duplicateToPrimary.set(dupId, primaryIndex);
-        } else {
-          this._unsafeDuplicateCallIds.add(dupId);
-        }
-      }
+      const partition = partitionDuplicateCalls(toolCalls, (call) =>
+        this.isParallelSafe(call),
+      );
+      this._duplicateToPrimary = partition.sharedWithPrimary;
+      this._unsafeDuplicateCallIds = partition.rejected;
 
       const duplicateCount =
         this._duplicateToPrimary.size + this._unsafeDuplicateCallIds.size;

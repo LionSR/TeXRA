@@ -19,29 +19,55 @@ export const UNSAFE_DUPLICATE_CALL_ERROR =
   'and this tool has side effects, so its result cannot be shared. ' +
   'If you intend the effect to run twice, invoke it again sequentially in your next response.';
 
+/** Duplicate-call partition for one model response (see partitionDuplicateCalls). */
+export interface DuplicateCallPartition {
+  /** Duplicate callId → index of its primary within the same safe segment. */
+  sharedWithPrimary: Map<string, number>;
+  /** Duplicates of side-effect tools — never executed, answered with an error. */
+  rejected: Set<string>;
+}
+
 /**
- * Map duplicate parallel tool calls (same name + identical arguments) to
- * their primary occurrence. Returns duplicate `callId` → index of the first
- * occurrence in `toolCalls`; only the primary executes, and duplicates
- * receive a copy of its result — a byte-identical call has a known answer,
- * so re-asking the model to retry sequentially would burn a full round-trip
- * for nothing.
+ * Partition duplicate parallel tool calls (same name + identical arguments).
+ *
+ * Parallel-safe (read-only) duplicates share their primary's result — but
+ * only within a contiguous run of parallel-safe calls: any side-effect call
+ * in between may change what a repeated read would return, so it acts as a
+ * barrier that invalidates earlier shareable signatures.
+ *
+ * Side-effect duplicates are rejected globally with a synthetic error
+ * (sharing a success would misreport an effect that never ran; running it
+ * silently twice is equally wrong) — a false positive only costs the model
+ * one explicit sequential re-issue.
  */
-export function mapDuplicateCallsToPrimary(
+export function partitionDuplicateCalls(
   toolCalls: SdkToolCall[],
-): Map<string, number> {
-  const primaryBySignature = new Map<string, number>();
-  const duplicateToPrimary = new Map<string, number>();
+  isParallelSafe: (call: SdkToolCall) => boolean,
+): DuplicateCallPartition {
+  const sharedWithPrimary = new Map<string, number>();
+  const rejected = new Set<string>();
+  const segmentPrimaries = new Map<string, number>();
+  const unsafeSeen = new Set<string>();
   for (const [index, call] of toolCalls.entries()) {
     const key = call.name + '\0' + stableStringify(call.input);
-    const primary = primaryBySignature.get(key);
-    if (primary !== undefined) {
-      duplicateToPrimary.set(call.callId, primary);
+    if (isParallelSafe(call)) {
+      const primary = segmentPrimaries.get(key);
+      if (primary !== undefined) {
+        sharedWithPrimary.set(call.callId, primary);
+      } else {
+        segmentPrimaries.set(key, index);
+      }
     } else {
-      primaryBySignature.set(key, index);
+      // Barrier: workspace state may change, so pre-barrier reads are stale.
+      segmentPrimaries.clear();
+      if (unsafeSeen.has(key)) {
+        rejected.add(call.callId);
+      } else {
+        unsafeSeen.add(key);
+      }
     }
   }
-  return duplicateToPrimary;
+  return { sharedWithPrimary, rejected };
 }
 
 /** Parse tool input, handling JSON strings and other formats from model providers. */
