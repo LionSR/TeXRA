@@ -94,7 +94,7 @@ import { getRendererPlatform } from './rendererPlatform';
 import { createPdfOverlay } from './pdfOverlay';
 import { createDiffOverlay } from './diffOverlay';
 import { createLogsDrawer } from './logsDrawer';
-import { createDialogCloseButton } from './dialogCloseButton';
+import { createOverlayDialog } from './overlayDialog';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -507,26 +507,18 @@ let settingsDialog: WaDialog | null = null;
 
 function ensureSettingsDialog(): WaDialog {
   if (settingsDialog) return settingsDialog;
-  const dialog = document.createElement('wa-dialog') as WaDialog;
-  dialog.classList.add('desktop-settings-overlay');
-  dialog.withoutHeader = true;
-  dialog.lightDismiss = false;
-  dialog.setAttribute('aria-label', 'Settings');
-  dialog.setAttribute('data-route-button', 'settings');
-  // Settings-app fills the dialog body. We append it directly so subsequent
-  // re-opens reuse the same instance (preserving tab selection and state).
-  dialog.append(settingsView);
-  const close = createDialogCloseButton(
-    'desktop-settings-close',
-    'Close settings',
-    () => {
-      dialog.open = false;
-    },
-  );
-  dialog.append(close);
-  appRoot.append(dialog);
-  settingsDialog = dialog;
-  return dialog;
+  // Settings-app fills the dialog body. We pass it as the shell content (no
+  // titled header) so subsequent re-opens reuse the same instance, preserving
+  // tab selection and state.
+  settingsDialog = createOverlayDialog({
+    appRoot,
+    prefix: 'desktop-settings',
+    ariaLabel: 'Settings',
+    closeLabel: 'Close settings',
+    content: settingsView,
+    attributes: { 'data-route-button': 'settings' },
+  }).dialog;
+  return settingsDialog;
 }
 
 function openSettingsOverlay(): void {
