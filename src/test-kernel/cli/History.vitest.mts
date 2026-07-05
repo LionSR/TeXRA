@@ -1033,44 +1033,61 @@ describe('CLI history runtime', () => {
         description: 'Polish pass',
       });
 
-      const exportInput = await readCliHistoryExportInput('a1' as ExecutionId);
+      const result = await readCliHistoryExportInput('a1' as ExecutionId);
 
-      expect(exportInput).toEqual({
-        timestamp: '2026-05-18T08:00:00.000Z',
-        description: 'Polish pass',
-        config: {
-          agent: 'correct',
-          model: 'deepseekT',
-          instruction: 'Polish the introduction.',
-          inputFiles: ['chapters/intro.tex'],
-          mediaFiles: [],
-          contextFiles: [],
-          outputFiles: ['chapters/intro.tex'],
+      expect(result).toEqual({
+        status: 'ok',
+        exportInput: {
+          timestamp: '2026-05-18T08:00:00.000Z',
+          description: 'Polish pass',
+          config: {
+            agent: 'correct',
+            model: 'deepseekT',
+            instruction: 'Polish the introduction.',
+            inputFiles: ['chapters/intro.tex'],
+            mediaFiles: [],
+            contextFiles: [],
+            outputFiles: ['chapters/intro.tex'],
+          },
+          messages: [
+            { role: 'user', content: 'Polish the lemma.' },
+            { role: 'assistant', content: 'Done.' },
+          ],
         },
-        messages: [
-          { role: 'user', content: 'Polish the lemma.' },
-          { role: 'assistant', content: 'Done.' },
-        ],
       });
     });
 
-    it('returns null (matching the "not found" path) when config is missing', async () => {
+    it('reports "not_found" only when there is no trace of the execution at all', async () => {
+      mocks.readConfig.mockResolvedValue(null);
+      mocks.readConversation.mockResolvedValue(null);
+      mocks.readMeta.mockResolvedValue(null);
+
+      await expect(
+        readCliHistoryExportInput('missing' as ExecutionId),
+      ).resolves.toEqual({ status: 'not_found' });
+    });
+
+    it('reports "incomplete" (not "not_found") when config exists but conversation does not', async () => {
+      // history show would still display this execution (it has a config) —
+      // export just has nothing to render, which is a different failure than
+      // the id not resolving to anything at all.
+      mocks.readConversation.mockResolvedValue(null);
+      mocks.readMeta.mockResolvedValue(null);
+
+      await expect(
+        readCliHistoryExportInput('a1' as ExecutionId),
+      ).resolves.toEqual({ status: 'incomplete' });
+    });
+
+    it('reports "incomplete" (not "not_found") when conversation exists but config does not', async () => {
       mocks.readConfig.mockResolvedValue(null);
       mocks.readConversation.mockResolvedValue([
         { role: 'user', content: 'hi' },
       ]);
 
       await expect(
-        readCliHistoryExportInput('missing' as ExecutionId),
-      ).resolves.toBeNull();
-    });
-
-    it('returns null when conversation is missing', async () => {
-      mocks.readConversation.mockResolvedValue(null);
-
-      await expect(
-        readCliHistoryExportInput('missing' as ExecutionId),
-      ).resolves.toBeNull();
+        readCliHistoryExportInput('a1' as ExecutionId),
+      ).resolves.toEqual({ status: 'incomplete' });
     });
 
     it('stages the bundled HTML export assets into the destination directory', async () => {

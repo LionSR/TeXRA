@@ -118,11 +118,21 @@ async function runHistoryExport(
   options: { assetsHref?: string } = {},
 ): Promise<number> {
   await initLocalCliPlatform(context);
-  const exportInput = await readCliHistoryExportInput(id);
-  if (!exportInput) {
+  const exportResult = await readCliHistoryExportInput(id);
+  if (exportResult.status === 'not_found') {
     writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
     return CliExitCode.Usage;
   }
+  if (exportResult.status === 'incomplete') {
+    writeTextStderr(
+      `Execution ${id} exists but has nothing to export yet (no stored ` +
+        'config and/or conversation). Run `texra history show ' +
+        id +
+        '` to see what is available.',
+    );
+    return CliExitCode.Usage;
+  }
+  const { exportInput } = exportResult;
 
   const assetsHref = resolveCliHistoryExportAssetsHref(options.assetsHref);
   if (format === 'html' && !isRemoteCliHistoryExportAssetsHref(assetsHref)) {
