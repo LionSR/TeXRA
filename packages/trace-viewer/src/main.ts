@@ -10,18 +10,12 @@ import '@shared/wa';
 // renderer/main.ts already uses to run these components outside VS Code.
 import '@progressView/frontend';
 import {
+  createHostEventHandlerContext,
+  createHostMessageHandlerContext,
   handleFileAction,
   handlePermissionAction,
   handleToolbarCommand,
 } from '@progressView/frontend/eventHandlers';
-import type { FrontendEventHandlerContext } from '@progressView/frontend/messageHandlerTypes';
-import {
-  appState,
-  permissions$,
-  placement,
-  setStreamLogsForId,
-  setStreamStateForId,
-} from '@progressView/frontend/progressState';
 
 import { replayTrace, type ReplayableTrace } from './replayTrace';
 
@@ -36,35 +30,12 @@ const conversationView = document.createElement(
 conversationView.archived = true;
 root.append(conversationView);
 
-function getEventHandlerContext(): FrontendEventHandlerContext {
-  return {
-    getState: () => appState.get(),
-    setState: (updater) => appState.set(updater(appState.get())),
-    setStreamState: (streamId, updater) =>
-      setStreamStateForId(streamId, updater),
-    setStreamLogs: (streamId, updater) => setStreamLogsForId(streamId, updater),
-  };
-}
-
-function getMessageHandlerContext() {
-  return {
-    ...getEventHandlerContext(),
-    getPermissions: () => permissions$.get(),
-    setPermissions: (next: ReturnType<typeof permissions$.get>) => {
-      permissions$.set(next);
-    },
-    setPlacement: (next: ReturnType<typeof placement.get>) => {
-      placement.set(next);
-    },
-  };
-}
-
 // Wired for defense-in-depth even though `archived` mode already makes
 // `emitAction`/toolbar dispatches no-ops — nothing here reaches a live host.
 conversationView.addEventListener('toolbar-command', ((e: CustomEvent) =>
-  handleToolbarCommand(e, getEventHandlerContext())) as EventListener);
+  handleToolbarCommand(e, createHostEventHandlerContext())) as EventListener);
 conversationView.addEventListener('permission-action', ((e: CustomEvent) =>
-  handlePermissionAction(e, getMessageHandlerContext())) as EventListener);
+  handlePermissionAction(e, createHostMessageHandlerContext())) as EventListener);
 conversationView.addEventListener(
   'file-action',
   handleFileAction as EventListener,
@@ -92,7 +63,7 @@ async function loadTrace(): Promise<ReplayableTrace> {
 }
 
 loadTrace()
-  .then((trace) => replayTrace(trace, getMessageHandlerContext()))
+  .then((trace) => replayTrace(trace, createHostMessageHandlerContext()))
   .catch((err) => {
     console.error('[trace-viewer] failed to load/replay trace', err);
   });

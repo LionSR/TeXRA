@@ -1,6 +1,14 @@
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
-import type { ExecutionId, StreamLogEntry, StreamTabId } from '@shared/schemas';
+import type {
+  AgentCategory,
+  ExecutionId,
+  Plan,
+  RunUsageMap,
+  StreamLogEntry,
+  StreamTabId,
+  TodoItem,
+} from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
 
@@ -16,17 +24,30 @@ export interface ReplayableTrace {
   readonly config: {
     readonly agent: string;
     readonly model: string;
-    readonly agentCategory: string;
+    readonly agentCategory: AgentCategory;
   };
   readonly meta: { readonly description?: string } | null;
   readonly entries: StreamLogEntry[];
   readonly snapshot: {
-    readonly todos?: unknown[];
-    readonly plan?: unknown;
-    readonly runUsage?: unknown;
+    readonly todos?: TodoItem[];
+    readonly plan?: Plan | null;
+    readonly runUsage?: RunUsageMap;
     readonly queuedFollowUps?: string[];
   };
 }
+
+type UpdateStreamsMessage = Extract<
+  ProgressViewOutboundMessage,
+  { command: typeof PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS }
+>;
+type LogDeltaMessage = Extract<
+  ProgressViewOutboundMessage,
+  { command: typeof PROGRESS_VIEW_COMMANDS.LOG_DELTA }
+>;
+type SyncStreamContentMessage = Extract<
+  ProgressViewOutboundMessage,
+  { command: typeof PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT }
+>;
 
 /**
  * Replays one finished execution through the REAL `dispatchMessage` pipeline
@@ -39,7 +60,7 @@ export function replayTrace(
   trace: ReplayableTrace,
   ctx: MessageHandlerContext,
 ): void {
-  const updateStreams: ProgressViewOutboundMessage = {
+  const updateStreams: UpdateStreamsMessage = {
     command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
     streams: [
       {
@@ -66,25 +87,25 @@ export function replayTrace(
         finishedProcessCount: 0,
       },
     },
-  } as unknown as ProgressViewOutboundMessage;
+  };
   dispatchMessage(updateStreams, ctx);
 
-  const logDelta: ProgressViewOutboundMessage = {
+  const logDelta: LogDeltaMessage = {
     command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
     streamId: trace.streamId,
     entries: trace.entries,
     updates: [],
     textDeltas: [],
-  } as unknown as ProgressViewOutboundMessage;
+  };
   dispatchMessage(logDelta, ctx);
 
-  const syncContent: ProgressViewOutboundMessage = {
+  const syncContent: SyncStreamContentMessage = {
     command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
     stream: trace.streamId,
     runUsage: trace.snapshot.runUsage,
     todos: trace.snapshot.todos ?? [],
     plan: trace.snapshot.plan ?? null,
     queuedFollowUps: trace.snapshot.queuedFollowUps ?? [],
-  } as unknown as ProgressViewOutboundMessage;
+  };
   dispatchMessage(syncContent, ctx);
 }

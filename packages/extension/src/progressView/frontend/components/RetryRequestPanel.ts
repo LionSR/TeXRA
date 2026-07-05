@@ -63,6 +63,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     ];
 
     const detailsText = this.formatRetryDetails(data.errorDetails);
+    const disabled = this.archived;
 
     return html`
       <div
@@ -106,7 +107,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
               text: 'Use your own API key',
               title: 'Use your own API key (k)',
               action: 'useOwnApiKey',
-              disabled: this.archived,
+              disabled,
               onClick: () => this.emitAction('useOwnApiKey'),
             }),
           )}
@@ -115,7 +116,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             text: 'Retry',
             title: 'Retry (r)',
             action: 'retry',
-            disabled: this.archived,
+            disabled,
             onClick: () => this.emitAction('retry'),
           })}
           ${renderLabeledActionButton({
@@ -123,7 +124,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             text: 'Dismiss',
             title: 'Dismiss (Esc)',
             action: 'cancel',
-            disabled: this.archived,
+            disabled,
             onClick: () => this.emitAction('cancel'),
           })}
         </div>

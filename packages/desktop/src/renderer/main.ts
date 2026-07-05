@@ -11,6 +11,8 @@ import { create as mutate } from 'mutative';
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
 import {
+  createHostEventHandlerContext,
+  createHostMessageHandlerContext,
   handleDeleteAll,
   handleFileAction,
   handleFilterChange,
@@ -27,7 +29,6 @@ import {
   runCompileFixer,
   sendFollowupCommand,
 } from '@progressView/frontend/eventHandlers';
-import type { FrontendEventHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import {
   activeStreamId$,
@@ -35,9 +36,6 @@ import {
   childStreamsByParent$,
   hasAnyStreams$,
   pendingApprovalIds$,
-  permissions$,
-  placement,
-  setStreamLogsForId,
   setStreamStateForId,
   streamFilter$,
   streamStates$,
@@ -232,33 +230,12 @@ function emptyWorkspaceTemplate(): TemplateResult {
 // PRD § 7.C: `<progress-app>` is NOT mounted in Electron; the children mount
 // directly. We recreate the message-routing and event-handler context here so
 // the same `messageDispatcher` + `eventHandlers` modules drive both hosts.
-
-function getEventHandlerContext(): FrontendEventHandlerContext {
-  return {
-    getState: () => appState.get(),
-    setState: (updater) => {
-      appState.set(updater(appState.get()));
-    },
-    setStreamState: (streamId, updater) =>
-      setStreamStateForId(streamId, updater),
-    setStreamLogs: (streamId, updater) => setStreamLogsForId(streamId, updater),
-    // savePrefs intentionally omitted on desktop — filter persistence isn't
-    // wired (yet). Filter changes still apply for the active session.
-  };
-}
-
-function getMessageHandlerContext() {
-  return {
-    ...getEventHandlerContext(),
-    getPermissions: () => permissions$.get(),
-    setPermissions: (next: ReturnType<typeof permissions$.get>) => {
-      permissions$.set(next);
-    },
-    setPlacement: (next: ReturnType<typeof placement.get>) => {
-      placement.set(next);
-    },
-  };
-}
+//
+// savePrefs intentionally omitted (matching trace-viewer's use of the same
+// shared contexts) — filter persistence isn't wired on desktop (yet). Filter
+// changes still apply for the active session.
+const getEventHandlerContext = createHostEventHandlerContext;
+const getMessageHandlerContext = createHostMessageHandlerContext;
 
 function isProgressOutboundMessage(
   raw: unknown,

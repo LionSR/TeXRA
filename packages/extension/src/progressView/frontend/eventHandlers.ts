@@ -27,10 +27,47 @@ import {
   type StreamEventDetail,
   type ToolbarCommandDetail,
 } from './events';
+import {
+  appState,
+  permissions$,
+  placement,
+  setStreamLogsForId,
+  setStreamStateForId,
+} from './progressState';
 import type {
   FrontendEventHandlerContext,
   MessageHandlerContext,
 } from './messageHandlerTypes';
+
+/**
+ * Handler contexts for a host with no live filter-persistence backend
+ * (desktop, trace-viewer) — unlike `ProgressApp`'s own versions, which wire
+ * `savePrefs` to its VS Code webview-specific `prefsManager`. Shared here so
+ * neither host hand-copies the same getters/setters over `progressState`'s
+ * signals.
+ */
+export function createHostEventHandlerContext(): FrontendEventHandlerContext {
+  return {
+    getState: () => appState.get(),
+    setState: (updater) => appState.set(updater(appState.get())),
+    setStreamState: (streamId, updater) =>
+      setStreamStateForId(streamId, updater),
+    setStreamLogs: (streamId, updater) => setStreamLogsForId(streamId, updater),
+  };
+}
+
+export function createHostMessageHandlerContext(): MessageHandlerContext {
+  return {
+    ...createHostEventHandlerContext(),
+    getPermissions: () => permissions$.get(),
+    setPermissions: (next) => {
+      permissions$.set(next);
+    },
+    setPlacement: (next) => {
+      placement.set(next);
+    },
+  };
+}
 
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,
