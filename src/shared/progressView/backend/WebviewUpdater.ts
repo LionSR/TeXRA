@@ -1,11 +1,10 @@
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   AgentCategoryFilter,
-  ConversationProgress,
-  ContextStateData,
-  OutputFileInfo,
   CompileFailure,
+  ConversationProgress,
   InquiryThreadUpdatedEvent,
+  OutputFileInfo,
   PermissionPayload,
   ProgressPermissionKind,
   ProgressViewPlacement,
@@ -17,6 +16,7 @@ import type {
   StreamTabInfo,
   Plan,
   TodoItem,
+  SyncStreamContentPayload,
   TokenUsageStats,
 } from '@shared/schemas';
 import {
@@ -43,43 +43,14 @@ export type ProgressViewMessageSender = (
  * batched here. This ensures critical UI feedback (status) isn't blocked by
  * potentially large log payloads and provides fault isolation.
  */
-export interface LogContentExtras {
-  /** Workflow output files by round (one run per tab) */
-  workflowFiles?: Record<string, OutputFileInfo[]>;
-  /** Workflow missing outputs by round */
-  workflowMissingOutputs?: Record<string, string[]>;
-  /** Workflow compile failures by round */
-  workflowCompileFailures?: Record<string, CompileFailure[]>;
-  /** Per-run usage map (both workflow and tool-use; frontend derives sum) */
-  runUsage?: Record<string, TokenUsageStats>;
-  /** Context window utilization state */
-  contextState?: ContextStateData;
-}
-
-/**
- * Payload for batched stream content hydration (tab switch).
- *
- * Extends {@link LogContentExtras} so the workflow files / usage / context
- * fields shared with incremental log updates have a single definition.
- */
-export interface SyncStreamContentPayload extends LogContentExtras {
-  stream: StreamTabId | '';
-  action?: 'render' | 'clear';
-  todos: TodoItem[];
-  plan: Plan | null;
-  queuedFollowUps: string[];
-  agentCategory?: string;
-  /** Tab-switch state previously sent by syncActiveStreamState (R2). */
-  conversationProgress?: ConversationProgress;
-  badges?: StreamBadgeSnapshot;
-  parentStreamId?: StreamTabId;
-  /** Toggle bypass state (hydrated on tab switch so toggles display correctly). */
-  toolEditBypass?: boolean;
-  superYoloBypass?: boolean;
-  goalActive?: boolean;
-  goalStatus?: GoalStatus;
-  goalObjective?: string;
-}
+export type LogContentExtras = Pick<
+  SyncStreamContentPayload,
+  | 'workflowFiles'
+  | 'workflowMissingOutputs'
+  | 'workflowCompileFailures'
+  | 'runUsage'
+  | 'contextState'
+>;
 
 /**
  * Manages webview updates for the progress view.

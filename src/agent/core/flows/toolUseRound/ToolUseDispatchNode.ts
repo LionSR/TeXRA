@@ -19,7 +19,7 @@ import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 
 // Local imports - logging
 import type { FileLocation } from '@shared/schemas';
-import { toolError, type ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 
@@ -142,12 +142,16 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     // Skip duplicate parallel calls — return a synthetic error result so
     // the model is informed and can retry sequentially if needed.
     if (this._duplicateCallIds.has(call.callId)) {
+      const duplicateResult: ToolResult = {
+        status: 'error',
+        error: DUPLICATE_CALL_ERROR,
+      };
       return {
         call,
-        result: toolError(DUPLICATE_CALL_ERROR),
+        result: duplicateResult,
         parsedInput: call.input,
         extracted: {
-          sanitizedResult: { status: 'error', error: DUPLICATE_CALL_ERROR },
+          sanitizedResult: duplicateResult,
           attachments: [],
         },
         editedFiles: [],
@@ -188,7 +192,10 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     signal?: AbortSignal,
   ): Promise<ToolResult> {
     if (!tool) {
-      return toolError(`Unknown tool ${call.name}`);
+      return {
+        status: 'error',
+        error: `Unknown tool ${call.name}`,
+      };
     }
 
     try {
@@ -213,7 +220,11 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       );
     } catch (err) {
       const { message, diagnostics } = normalizeToolCallError(call.name, err);
-      return toolError(message, diagnostics);
+      return {
+        status: 'error',
+        error: message.trim() || 'Tool execution failed.',
+        ...(diagnostics !== undefined ? { diagnostics } : {}),
+      };
     }
   }
 

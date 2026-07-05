@@ -74,7 +74,10 @@ function createLifecycleContext({
   streamId: StreamTabId;
   streamStatus: StreamStatusRegistry;
   agent?: string;
-}): AgentLaunchContext {
+}): {
+  ctx: AgentLaunchContext;
+  explicit: ReturnType<typeof createRecordingHost>;
+} {
   const explicit = createRecordingHost();
   const config = AgentConfigSchema.parse({
     agent,
@@ -103,7 +106,7 @@ function createLifecycleContext({
     },
   };
 
-  return {
+  const ctx: AgentLaunchContext = {
     config,
     setting,
     prompt,
@@ -143,6 +146,7 @@ function createLifecycleContext({
       retry: new RetryRequestCoordinatorImpl(explicit.host),
     },
   };
+  return { ctx, explicit };
 }
 
 function lifecycleFixture(
@@ -153,17 +157,18 @@ function lifecycleFixture(
   streamId: StreamTabId;
   streamStatus: StreamStatusRegistry;
   ctx: AgentLaunchContext;
+  explicit: ReturnType<typeof createRecordingHost>;
 } {
   const executionId = `execution-${slug}` as ExecutionId;
   const streamId = `stream-${slug}` as StreamTabId;
   const streamStatus = new StreamStatusRegistry();
-  const ctx = createLifecycleContext({
+  const { ctx, explicit } = createLifecycleContext({
     executionId,
     streamId,
     streamStatus,
     agent,
   });
-  return { executionId, streamId, streamStatus, ctx };
+  return { executionId, streamId, streamStatus, ctx, explicit };
 }
 
 describe('runFlowWithLifecycle', () => {
@@ -275,6 +280,31 @@ describe('runFlowWithLifecycle', () => {
       await runFlowWithLifecycle(ctx, async () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
         expect(streamStatus.getSubstate(streamId)).toBeUndefined();
+        return {
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+        };
+      });
+
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('does not emit a status event when starting an already-running stream with no substate', async () => {
+    const { executionId, streamId, streamStatus, ctx, explicit } =
+      lifecycleFixture('lifecycle-steady-running-no-substate');
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
+
+      await runFlowWithLifecycle(ctx, async () => {
+        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+        expect(streamStatus.getSubstate(streamId)).toBeUndefined();
+        expect(explicit.events).toEqual([]);
         return {
           category: 'toolUse',
           outcome: RUN_OUTCOME.COMPLETED,
