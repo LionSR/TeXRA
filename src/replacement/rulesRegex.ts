@@ -363,20 +363,18 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     // Fix space before closing braces in commands (nearly universal style)
     // '\\\\(textbf|textit|emph|underline)\\{([^{}]*)\\s+\\}': '\\\\$1{$2}', // might not working now
 
-    // Remove spaces inside textbf
-    '\\\\textbf\\{\\s+([^}]*)\\s+\\}': '\\textbf{$1}',
-    // Remove spaces inside textit
-    '\\\\textit\\{\\s+([^}]*)\\s+\\}': '\\textit{$1}',
-    // Remove spaces inside emph
-    '\\\\emph\\{\\s+([^}]*)\\s+\\}': '\\emph{$1}',
-    // Remove spaces inside underline
-    '\\\\underline\\{\\s+([^}]*)\\s+\\}': '\\underline{$1}',
-    // Remove spaces inside overbrace
-    '\\\\overbrace\\{\\s+([^}]*)\\s+\\}': '\\overbrace{$1}',
-    // Remove spaces inside underbrace
-    '\\\\underbrace\\{\\s+([^}]*)\\s+\\}': '\\underbrace{$1}',
-    // Remove spaces inside label
-    '\\\\label\\{\\s+([^}]*)\\s+\\}': '\\label{$1}',
+    // Remove spaces inside textbf/textit/emph/underline/overbrace/underbrace/label
+    ...Object.fromEntries(
+      [
+        'textbf',
+        'textit',
+        'emph',
+        'underline',
+        'overbrace',
+        'underbrace',
+        'label',
+      ].map((cmd) => [`\\\\${cmd}\\{\\s+([^}]*)\\s+\\}`, `\\${cmd}{$1}`]),
+    ),
     // Remove spaces inside caption (only horizontal whitespace, preserving newlines for multi-line captions)
     '\\\\caption\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}':
       createCaptionTrimmer('\\caption'),

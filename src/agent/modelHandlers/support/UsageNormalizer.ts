@@ -39,7 +39,7 @@ function computeCachePercentage(
  * `inputTokens` is the denominator for the cache percentage and the value
  * surfaced as `NormalizedUsage.inputTokens`.
  */
-export interface ExtractedUsageTokens {
+interface ExtractedUsageTokens {
   inputTokens: number;
   outputTokens: number;
   /** Tokens served from cache. Surfaced as `cachedInputTokens` when > 0. */
@@ -64,7 +64,7 @@ export interface ExtractedUsageTokens {
  * `T` is the provider's raw usage type (nullable for providers whose extractor
  * already tolerates a null payload).
  */
-export interface UsageNormalizerConfig<T> {
+interface UsageNormalizerConfig<T> {
   /** Usage-tracking provider identifier. */
   provider: NormalizedUsage['provider'];
   /** Reads provider-specific token counts from the raw usage object. */

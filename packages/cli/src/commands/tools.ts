@@ -99,10 +99,13 @@ async function toggleTool(
 // shell so npm/gh `.cmd` shims resolve through PATHEXT.
 function shellRun(command: string): Promise<number> {
   return new Promise((resolve) => {
-    if (process.platform === 'win32') {
-      const child = spawn(command, { shell: true, stdio: 'inherit' });
+    const wireChild = (child: ReturnType<typeof spawn>) => {
       child.on('error', () => resolve(CliExitCode.AgentError));
       child.on('exit', (code) => resolve(code ?? CliExitCode.AgentError));
+    };
+
+    if (process.platform === 'win32') {
+      wireChild(spawn(command, { shell: true, stdio: 'inherit' }));
       return;
     }
 
@@ -123,9 +126,7 @@ function shellRun(command: string): Promise<number> {
       resolve(CliExitCode.AgentError);
       return;
     }
-    const child = spawn(cmd, args, { stdio: 'inherit' });
-    child.on('error', () => resolve(CliExitCode.AgentError));
-    child.on('exit', (code) => resolve(code ?? CliExitCode.AgentError));
+    wireChild(spawn(cmd, args, { stdio: 'inherit' }));
   });
 }
 

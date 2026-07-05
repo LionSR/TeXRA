@@ -18,7 +18,7 @@ import { normalizeUsage } from '../support/UsageNormalizer';
 import type { ChatUsage } from '@openrouter/sdk/models';
 
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
-export type OpenRouterPricingConfig = StandardPricingConfig;
+type OpenRouterPricingConfig = StandardPricingConfig;
 
 /** Computes cost based on token usage and model pricing. */
 export function computeOpenRouterPrice(

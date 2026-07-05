@@ -48,7 +48,7 @@ export const RoundKeySchema = z.coerce.number().int();
  */
 export const StreamTabMetaSchema = z.object({
   /** Legacy field — no longer written, tolerated on read so we can skip it. */
-  activeRunId: z.string().nullable().optional(),
+  activeRunId: z.string().nullish(),
   parentStreamId: z.string().optional(),
   executionId: z.string().optional(),
   taskState: z.unknown().optional(),

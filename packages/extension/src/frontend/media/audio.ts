@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 
-import * as vscode from 'vscode';
 import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
@@ -45,9 +44,11 @@ function resolveSoxCommand(): ResolvedBinaryCommand | null {
 }
 
 /** Start recording audio from the microphone. */
-export async function startRecording(
-  context: vscode.ExtensionContext,
-): Promise<{ success: boolean; recordingPath?: string; error?: string }> {
+export async function startRecording(): Promise<{
+  success: boolean;
+  recordingPath?: string;
+  error?: string;
+}> {
   try {
     if (activeRecordingProcess) {
       return { success: false, error: 'Recording already in progress' };
@@ -153,9 +154,11 @@ export function killActiveRecording(): void {
 }
 
 /** Stop the current recording and transcribe it using OpenAI. */
-export async function stopRecordingAndTranscribe(
-  context: vscode.ExtensionContext,
-): Promise<{ success: boolean; text: string; error?: string }> {
+export async function stopRecordingAndTranscribe(): Promise<{
+  success: boolean;
+  text: string;
+  error?: string;
+}> {
   try {
     if (!activeRecordingProcess || !activeRecordingPath) {
       return { success: false, text: '', error: 'No active recording to stop' };

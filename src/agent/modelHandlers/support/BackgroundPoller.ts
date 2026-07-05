@@ -12,9 +12,7 @@ export interface BackgroundPollStats {
   readonly elapsedMs: number;
 }
 
-export interface BackgroundPollTimeoutContext<
-  TResponse,
-> extends BackgroundPollStats {
+interface BackgroundPollTimeoutContext<TResponse> extends BackgroundPollStats {
   readonly maxDurationMs: number;
   readonly response: TResponse;
 }
@@ -26,7 +24,7 @@ type BackgroundPollLogger = AgentTrace | (() => AgentTrace);
  *
  * @typeParam TResponse - The provider-specific response type
  */
-export interface BackgroundPollerConfig<TResponse> {
+interface BackgroundPollerConfig<TResponse> {
   /** Interval in milliseconds between consecutive poll retrievals. */
   readonly pollIntervalMs: number;
   /** Maximum total wall-clock duration for polling before giving up. */
@@ -42,7 +40,7 @@ export interface BackgroundPollerConfig<TResponse> {
  *
  * @typeParam TResponse - The provider-specific response type
  */
-export interface BackgroundPollOptions<TResponse> {
+interface BackgroundPollOptions<TResponse> {
   /**
    * The response returned by the initial create/submit call. Its id is
    * extracted to key subsequent poll retrievals.
