@@ -1,5 +1,13 @@
 // Standard library imports
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readlink,
+  realpath,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -7,7 +15,9 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
+import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
@@ -17,19 +27,40 @@ import type { AgentTrace } from '@agent/trace';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 
 // Local imports - latex
-import { LatexMediaManager } from '@latex/LatexMediaManager';
+import {
+  LatexMediaManager,
+  type MediaWorkspaceState,
+} from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolConfig } from '@shared/schemas/toolConfig';
-import { createExternalLocation } from '@utils/files';
+import {
+  createExternalLocation,
+  createWorkspaceLocation,
+  getRunDir,
+  TaskRunFileService,
+} from '@utils/files';
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(),
+  resolveLatexDir: vi.fn(),
 }));
 
 vi.mock('@latex/texTools', () => ({
   compileLatex2Pdf: mocks.compileLatex2Pdf,
 }));
+
+// Spy on resolveLatexDir while preserving its real behavior, so tests can
+// assert *how many times* the (async) baseDir resolution runs per file
+// without changing what it resolves to. This is the regression guard for
+// issue #7228: extractFiguresFromFiles and mirrorFigureDependencies used to
+// each independently resolve the same baseDir.
+vi.mock('@latex/latexParsingUtils', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@latex/latexParsingUtils')>();
+  mocks.resolveLatexDir.mockImplementation(actual.resolveLatexDir);
+  return { ...actual, resolveLatexDir: mocks.resolveLatexDir };
+});
 
 type DiffFileProcessorInternals = {
   processLineByLine(content: string): string;
@@ -162,5 +193,134 @@ describe('LatexMediaManager PDF compilation', () => {
     expect(workspaceState.media.files.map((file) => file.absolutePath)).toEqual(
       [compiledPdfPath],
     );
+  });
+});
+
+type LatexMediaManagerFigureInternals = {
+  extractFiguresFromFiles(
+    files: FileLocation[],
+    workspaceState: MediaWorkspaceState,
+  ): Promise<void>;
+  mirrorFiguresForFiles(files: FileLocation[]): Promise<void>;
+};
+
+describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
+  function installRunStoragePlatform(
+    workspaceDir: string,
+    storageRoot: string,
+  ): Promise<void> {
+    return installFakePlatform(
+      { workspacePath: workspaceDir },
+      {
+        fs: nodeFilesystem,
+        workspace: createNodeWorkspace(() => workspaceDir),
+        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+      },
+    );
+  }
+
+  async function writeFixture(): Promise<{
+    workspaceDir: string;
+    storageRoot: string;
+    texPath: string;
+    figurePath: string;
+  }> {
+    // Canonicalize up front: on macOS os.tmpdir() lives under a /tmp -> /private/tmp
+    // symlink, and resolveLatexDir follows real paths. Without this, the
+    // workspace root and the realpath'd baseDir it computes would disagree,
+    // and mirrorWorkspaceFile would (correctly, but confusingly for this test)
+    // classify the figure as external and skip mirroring it.
+    const tempDir = await realpath(await makeTempDir());
+    const workspaceDir = path.join(tempDir, 'workspace');
+    const storageRoot = path.join(tempDir, 'storage');
+    const figureDir = path.join(workspaceDir, 'figures');
+    const texPath = path.join(workspaceDir, 'main.tex');
+    const figurePath = path.join(figureDir, 'plot.png');
+
+    await mkdir(figureDir, { recursive: true });
+    await writeFile(
+      texPath,
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '\\includegraphics{figures/plot.png}',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(figurePath, 'fake-png-bytes');
+
+    await installRunStoragePlatform(workspaceDir, storageRoot);
+    return { workspaceDir, storageRoot, texPath, figurePath };
+  }
+
+  /** Resolve the symlink `mirrorWorkspaceFile` creates in run storage and
+   * assert it points back at the real workspace figure. */
+  async function expectFigureMirrored(
+    executionId: string,
+    figurePath: string,
+  ): Promise<void> {
+    const mirroredPath = path.join(getRunDir(executionId), 'figures/plot.png');
+    const stats = await lstat(mirroredPath);
+    expect(stats.isSymbolicLink()).toBe(true);
+    const target = await readlink(mirroredPath);
+    expect(
+      await realpath(path.resolve(path.dirname(mirroredPath), target)),
+    ).toBe(await realpath(figurePath));
+  }
+
+  afterEach(async () => {
+    vi.clearAllMocks();
+    await Promise.all(
+      tempDirs
+        .splice(0)
+        .map((dir) => rm(dir, { recursive: true, force: true })),
+    );
+  });
+
+  it('extractFiguresFromFiles reuses its resolved baseDir instead of re-resolving it in mirrorFigureDependencies', async () => {
+    const executionId = 'extract-basedir-dedup';
+    const { texPath, figurePath } = await writeFixture();
+
+    const workspaceState = AgentWorkspaceState.create();
+    const manager = new LatexMediaManager(
+      logger,
+      new TaskRunFileService(executionId),
+    ) as unknown as LatexMediaManagerFigureInternals;
+    await manager.extractFiguresFromFiles(
+      [createWorkspaceLocation(texPath, 'main.tex')],
+      workspaceState,
+    );
+
+    // Before the fix this was 3: once inside extractFigurePathsFromLatex,
+    // once in extractFiguresFromFiles, and once more (redundantly) in
+    // mirrorFigureDependencies. The mirror call now reuses the baseDir
+    // extractFiguresFromFiles already resolved.
+    expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
+
+    expect(workspaceState.media.files.map((f) => f.absolutePath)).toEqual([
+      figurePath,
+    ]);
+    await expectFigureMirrored(executionId, figurePath);
+  });
+
+  it('mirrorFiguresForFiles (no precomputed baseDir) still resolves and mirrors the correct path', async () => {
+    const executionId = 'mirror-basedir-fallback';
+    const { texPath, figurePath } = await writeFixture();
+
+    const manager = new LatexMediaManager(
+      logger,
+      new TaskRunFileService(executionId),
+    ) as unknown as LatexMediaManagerFigureInternals;
+    await manager.mirrorFiguresForFiles([
+      createWorkspaceLocation(texPath, 'main.tex'),
+    ]);
+
+    // Unchanged by the fix: mirrorFiguresForFiles has no precomputed baseDir,
+    // so mirrorFigureDependencies still resolves it itself (once inside
+    // extractFigurePathsFromLatex, once as the fallback resolution).
+    expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
+
+    await expectFigureMirrored(executionId, figurePath);
   });
 });

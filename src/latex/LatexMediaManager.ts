@@ -61,6 +61,7 @@ export class LatexMediaManager {
   private async mirrorFigureDependencies(
     latexFile: FileLocation,
     figures: string[],
+    baseDir?: string,
   ): Promise<void> {
     if (!this.fileService?.hasRunDirectory() || figures.length === 0) {
       return;
@@ -69,14 +70,17 @@ export class LatexMediaManager {
     // Resolve against the workspace directory so figure paths from a
     // run-storage symlink map back to real workspace files (otherwise
     // mirrorWorkspaceFile would classify them as external and skip).
-    const baseDir = await resolveLatexDir(latexFile.absolutePath);
+    // Callers that already resolved this for their own purposes (e.g.
+    // extractFiguresFromFiles) pass it in to avoid a redundant async lookup.
+    const resolvedBaseDir =
+      baseDir ?? (await resolveLatexDir(latexFile.absolutePath));
     const absolutePaths = new Set<string>();
     for (const relative of figures) {
       const trimmed = relative?.trim();
       if (!trimmed) {
         continue;
       }
-      absolutePaths.add(path.normalize(path.join(baseDir, trimmed)));
+      absolutePaths.add(path.normalize(path.join(resolvedBaseDir, trimmed)));
     }
 
     if (absolutePaths.size === 0) {
@@ -440,7 +444,7 @@ export class LatexMediaManager {
       }
 
       workspaceState.media.addMediaFiles(fileLocations);
-      mirrorTasks.push(this.mirrorFigureDependencies(file, figures));
+      mirrorTasks.push(this.mirrorFigureDependencies(file, figures, baseDir));
     }
 
     if (mirrorTasks.length > 0) {
