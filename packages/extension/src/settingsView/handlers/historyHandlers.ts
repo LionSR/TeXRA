@@ -51,14 +51,15 @@ export class HistoryHandlers {
     latexPreamble,
   });
 
-  /** Path to the bundled HTML export assets (under extension resources). */
-  private readonly htmlAssetsSrc: string;
+  /** Path to the bundled trace-viewer standalone template (under extension resources). */
+  private readonly traceViewerStandaloneTemplate: string;
 
   constructor(private readonly ctx: SettingsHandlerContext) {
-    this.htmlAssetsSrc = path.join(
+    this.traceViewerStandaloneTemplate = path.join(
       ctx.extensionContext.extensionPath,
       'resources',
-      'htmlExport',
+      'traceViewerStandalone',
+      'index.html',
     );
   }
 
@@ -145,6 +146,14 @@ export class HistoryHandlers {
     format: ChatExportFormat,
   ): Promise<void> {
     try {
+      // HTML no longer goes through buildExportInput/ChatExportInput — it
+      // reads the execution's trace directly via assembleTrace, which has
+      // its own independent (and differently-shaped) missing-data statuses.
+      if (format === 'html') {
+        await this.exportAndOpenHtml(data.historyId);
+        return;
+      }
+
       const result = await this.chatExportController.buildExportInput(
         data.historyId,
       );
@@ -157,9 +166,6 @@ export class HistoryHandlers {
       const { exportInput } = result;
 
       switch (format) {
-        case 'html':
-          await this.exportAndOpenHtml(data.historyId, exportInput);
-          return;
         case 'md':
           await this.exportAndOpenMarkdown(data.historyId, exportInput);
           return;
@@ -195,6 +201,24 @@ export class HistoryHandlers {
         void showLoggedMessage(
           this.ctx.channel,
           'No conversation data available for this execution',
+        );
+        return;
+    }
+  }
+
+  /**
+   * Translate assembleTrace's failure statuses (surfaced through
+   * ChatExportController.exportAsHtml) into a user-visible error message.
+   */
+  private reportHtmlExportError(status: 'config_missing' | 'streamLogs_missing'): void {
+    switch (status) {
+      case 'config_missing':
+        void showLoggedMessage(this.ctx.channel, 'History item not found');
+        return;
+      case 'streamLogs_missing':
+        void showLoggedMessage(
+          this.ctx.channel,
+          'No stored transcript available for this execution — it may predate transcript persistence.',
         );
         return;
     }
@@ -237,20 +261,21 @@ export class HistoryHandlers {
     }
   }
 
-  private async exportAndOpenHtml(
-    historyId: string,
-    exportInput: ChatExportInput,
-  ): Promise<void> {
-    const { absolutePath, folderName } =
-      await this.chatExportController.exportAsHtml(
-        historyId,
-        exportInput,
-        this.htmlAssetsSrc,
-      );
+  private async exportAndOpenHtml(historyId: string): Promise<void> {
+    const outcome = await this.chatExportController.exportAsHtml(
+      historyId,
+      this.traceViewerStandaloneTemplate,
+    );
 
+    if (outcome.status !== 'ok') {
+      this.reportHtmlExportError(outcome.status);
+      return;
+    }
+
+    const { absolutePath, storagePath } = outcome.result;
     await vscode.env.openExternal(vscode.Uri.file(absolutePath));
     void vscode.window.showInformationMessage(
-      `Chat exported to ${folderName}/index.html`,
+      `Chat exported: ${path.basename(storagePath)}`,
     );
   }
 

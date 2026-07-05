@@ -31,10 +31,7 @@ export type {
 export type { FormatSpec } from './chatExport/formatSpec';
 export { extractMeta } from './chatExport/formatSpec';
 export { normalizeConversationForExport as normalizeMessages } from '@agent/export/normalizeConversation';
-export {
-  generateExportFilename,
-  generateExportFolderName,
-} from './chatExport/filenames';
+export { generateExportFilename } from './chatExport/filenames';
 
 export function formatChatAsMarkdown(input: ChatExportInput): string {
   return renderDocument(input, markdownSpec);
