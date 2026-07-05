@@ -1,5 +1,7 @@
+// Third-party imports
 import pThrottle from 'p-throttle';
 
+// Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { abandonOnAbort } from '@tools/cancellation';
 
