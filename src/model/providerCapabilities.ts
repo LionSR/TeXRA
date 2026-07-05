@@ -1,4 +1,4 @@
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import type { UsageRoute } from '@shared/schemas';
 
@@ -38,20 +38,6 @@ type ProviderCapabilityResolver = (
 /** Context window the ChatGPT-subscription (Codex) backend enforces. */
 export const CODEX_SUBSCRIPTION_CONTEXT_WINDOW = 272_000;
 
-/**
- * OpenAI models the Codex backend currently serves to ChatGPT subscribers. This
- * is a hardcoded mirror of openai/codex's bundled models.json picker set and
- * WILL go stale; the backend also rejects models above the account's tier.
- */
-const CODEX_SUBSCRIPTION_MODEL_FULLNAMES: ReadonlySet<string> = new Set([
-  'gpt-5.5',
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-5.3-codex-spark',
-  'gpt-5.3-codex',
-  'gpt-5.2-codex',
-]);
-
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `fullName`. */
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
 
@@ -67,14 +53,29 @@ export function codexBackendModelId(config: {
 }
 
 /**
- * Whether a model id is eligible to route through the ChatGPT subscription.
- * True for the curated set above, date-pinned variants of those ids, or any
- * `*-codex*` name so newer Codex models are picked up without a code change.
+ * Whether `model` is eligible to route through the ChatGPT-subscription
+ * (Codex) backend.
+ *
+ * `llm-zoo` has no dedicated Codex-eligibility capability flag yet (and
+ * probing the live Codex models endpoint at refresh time is out of scope
+ * here), so this derives eligibility from registry data every OpenAI
+ * `ModelConfig` already carries instead of a hand-maintained fullName
+ * allowlist: Codex serves OpenAI's current top-reasoning-effort chat models
+ * (`capabilities.reasoningEffort === XHIGH`) that haven't been superseded or
+ * pulled (`deprecated`/`retired`), plus — as an explicit naming convention —
+ * any model whose id contains "codex", since OpenAI's own dedicated
+ * Codex-branded releases (e.g. `gpt-5.3-codex`) keep shipping under that
+ * name even after they're marked `deprecated` in favor of a newer one. A new
+ * top-effort OpenAI release resolves eligible the moment `llm-zoo` ships it,
+ * with no hardcoded edit needed here. Over-matching a model the real backend
+ * doesn't actually serve is a benign false positive: the backend is the
+ * actual gate and rejects models outside the account's tier at request time.
  */
-export function isCodexSubscriptionEligible(fullName: string): boolean {
-  const unpinnedName = fullName.replace(CODEX_MODEL_DATE_PIN, '');
-  if (CODEX_SUBSCRIPTION_MODEL_FULLNAMES.has(unpinnedName)) return true;
-  return /codex/i.test(fullName);
+export function isCodexSubscriptionEligible(model: ModelConfig): boolean {
+  const unpinnedName = codexBackendModelId(model);
+  if (/codex/i.test(unpinnedName)) return true;
+  if (model.deprecated || model.retired) return false;
+  return model.capabilities.reasoningEffort === ReasoningEffort.XHIGH;
 }
 
 const resolveChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({
@@ -84,7 +85,7 @@ const resolveChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({
   if (useOpenRouter) return null;
   if (model.provider !== ModelProvider.OPENAI) return null;
   if (model.openRouterOnly) return null;
-  if (!isCodexSubscriptionEligible(codexBackendModelId(model))) return null;
+  if (!isCodexSubscriptionEligible(model)) return null;
 
   return {
     authMode: 'chatgpt-subscription',
