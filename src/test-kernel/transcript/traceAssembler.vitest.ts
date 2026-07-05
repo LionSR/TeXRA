@@ -88,7 +88,9 @@ describe('assembleTrace', () => {
   afterEach(async () => {
     setDefaultStreamLogStore(previousStreamLogStore);
     await Promise.all(
-      tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+      tempDirs
+        .splice(0)
+        .map((dir) => rm(dir, { recursive: true, force: true })),
     );
   });
 
@@ -124,7 +126,10 @@ describe('assembleTrace', () => {
     expect(result.trace.config.agent).toBe('review');
     expect(result.trace.config.model).toBe('sonnet46T');
     expect(result.trace.entries).toHaveLength(1);
-    expect(result.trace.entries[0]).toMatchObject({ id: 'entry-1', text: 'hello' });
+    expect(result.trace.entries[0]).toMatchObject({
+      id: 'entry-1',
+      text: 'hello',
+    });
     expect(result.trace.terminalStatus).toBe(EXECUTION_STATUS.COMPLETED);
     expect(result.trace.snapshot.streamId).toBe(streamId);
   });
@@ -154,7 +159,8 @@ describe('assembleTrace', () => {
       timestamp: '2026-07-05T00:00:00.000Z',
     });
 
-    const streamId = `${executionConfig.agent}@${executionConfig.model}#${executionId}` as StreamTabId;
+    const streamId =
+      `${executionConfig.agent}@${executionConfig.model}#${executionId}` as StreamTabId;
     const store = getDefaultStreamLogStore();
     await store.load();
     store.append(streamId, {
