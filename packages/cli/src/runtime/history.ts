@@ -1,3 +1,4 @@
+import { cp, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {
@@ -10,6 +11,7 @@ import {
   type ResultMeta,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   EXECUTION_STATUS,
@@ -198,6 +200,128 @@ export async function readCliHistoryConfig(
   return getExecutionStore(id).readConfig();
 }
 
+/** Outcome of loading a stored execution's export input (see {@link readCliHistoryExportInput}). */
+export type CliHistoryExportInputResult =
+  | { readonly status: 'ok'; readonly exportInput: ChatExportInput }
+  /** No trace of this execution at all — matches `history show`'s notion of "not found". */
+  | { readonly status: 'not_found' }
+  /** The execution exists (has meta and/or config) but is missing what an
+   *  export needs (config and/or conversation) — a different failure than
+   *  "not found", so it gets a different message. */
+  | { readonly status: 'incomplete' };
+
+/**
+ * Load a stored execution's config + conversation as the format-agnostic
+ * {@link ChatExportInput} the html/markdown export formatters consume.
+ * Mirrors the extension's `ChatExportController.buildExportInput` so the CLI
+ * and extension render the same conversation identically.
+ *
+ * Distinguishes "this execution id has no stored data at all" (`not_found`
+ * — the same case `history show` reports as not found) from "this execution
+ * exists but has nothing to export" (`incomplete` — e.g. `history show`
+ * would still display it, just without a conversation to render). Reporting
+ * both as "not found" would mislead a caller whose id is valid but whose
+ * execution simply never produced a conversation.
+ *
+ * `store.readConfig()` already validates against `AgentConfigSchema`
+ * internally and falls back to `null` on a schema mismatch (see
+ * `ExecutionKVStore.readValidated`), so `config` here is never a raw,
+ * unvalidated value — no redundant re-parse (and no risk of it throwing on a
+ * corrupt record) is needed.
+ */
+export async function readCliHistoryExportInput(
+  id: ExecutionId,
+): Promise<CliHistoryExportInputResult> {
+  const store = getExecutionStore(id);
+  const [config, conversation, meta] = await Promise.all([
+    store.readConfig(),
+    store.readConversation(),
+    store.readMeta(),
+  ]);
+  if (!meta && !config && !conversation) return { status: 'not_found' };
+  if (!config || !conversation) return { status: 'incomplete' };
+
+  return {
+    status: 'ok',
+    exportInput: {
+      timestamp: meta?.timestamp ?? new Date().toISOString(),
+      description: meta?.description,
+      config: {
+        agent: config.agent,
+        model: config.model,
+        instruction: config.instruction,
+        inputFiles: config.inputFiles,
+        mediaFiles: config.mediaFiles,
+        contextFiles: config.contextFiles,
+        outputFiles: config.outputFiles,
+      },
+      messages: conversation,
+    },
+  };
+}
+
+/**
+ * Resolves the `--assets` flag value to the href passed into
+ * `formatChatAsHtml`. Blank (`undefined`, empty, or whitespace-only) collapses
+ * to `undefined` so the formatter's own documented `./assets` default applies
+ * — `--assets ''` must behave identically to omitting the flag, not produce a
+ * broken empty href.
+ */
+export function resolveCliHistoryExportAssetsHref(
+  raw: string | undefined,
+): string | undefined {
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * True when `href` names a remote location (has a URL scheme, e.g.
+ * `https://cdn/assets`) rather than a filesystem path. There is nothing to
+ * stage for a remote href — the caller manages that location themselves.
+ * A bare relative/absolute filesystem path (`./assets`, `assets`,
+ * `/abs/path`) is never mistaken for one: it has no `scheme://` prefix.
+ */
+export function isRemoteCliHistoryExportAssetsHref(
+  href: string | undefined,
+): boolean {
+  return href !== undefined && /^[a-z][a-z\d+.-]*:\/\//i.test(href);
+}
+
+const HTML_EXPORT_ASSET_DIR_NAME = 'htmlExport';
+
+/**
+ * Stage the bundled KaTeX / highlight.js / texmath CSS + font assets into
+ * `destDir` (e.g. `<cwd>/assets`) so a default `--export html > out.html`
+ * redirect — written to the same directory — resolves the exported
+ * document's `./assets` href for real, instead of linking to a folder that
+ * was never created.
+ *
+ * Called for the default href *and* any explicit local `--assets <href>`
+ * (including one that happens to spell out the documented default, e.g.
+ * `--assets ./assets`) — `fs.cp`'s recursive copy merges into an existing
+ * `destDir` rather than nesting under it, so staging is safe to repeat and
+ * safe against a `destDir` that already has unrelated content. Only a
+ * genuinely remote href (see {@link isRemoteCliHistoryExportAssetsHref})
+ * skips staging, since the caller manages that location themselves.
+ *
+ * Returns `'missing'` (without throwing) when the CLI install doesn't have
+ * the bundled assets — e.g. a dev checkout where `copy:resources` hasn't run
+ * — so the caller can warn instead of failing the export outright.
+ */
+export async function stageCliHistoryExportAssets(params: {
+  readonly resourcesPath: string;
+  readonly destDir: string;
+}): Promise<'staged' | 'missing'> {
+  const assetsSrc = path.join(params.resourcesPath, HTML_EXPORT_ASSET_DIR_NAME);
+  const sourceExists = await stat(assetsSrc)
+    .then((info) => info.isDirectory())
+    .catch(() => false);
+  if (!sourceExists) return 'missing';
+
+  await cp(assetsSrc, params.destDir, { recursive: true });
+  return 'staged';
+}
+
 export async function deleteCliHistory(options: {
   id?: ExecutionId;
   all?: boolean;
@@ -280,6 +404,15 @@ export function formatCliHistoryNotFoundText(
       : `Execution not found: ${id}`,
     'History is scoped by --cwd; use the workspace from the original run or run `texra history list --cwd <workspace>`.',
   ].join('\n');
+}
+
+/**
+ * `--export ''` (or any non-`html`/`md` value) reports this. `JSON.stringify`
+ * keeps the reported value unambiguous — an empty string reads as `""`
+ * instead of collapsing into a confusing double space after the colon.
+ */
+export function formatInvalidExportFormatText(raw: string): string {
+  return `Invalid export format: ${JSON.stringify(raw)} (use html or md)`;
 }
 
 export function cliHistoryNdjsonRecords(
