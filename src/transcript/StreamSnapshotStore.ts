@@ -84,6 +84,10 @@ const SEED_IO_CONCURRENCY = 8;
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 type UsageUpdateResult =
   TokenUsageStats | undefined | Promise<TokenUsageStats | undefined>;
+interface HydratedRunState {
+  config?: AgentConfig;
+  descriptor?: RunDescriptor;
+}
 
 /**
  * Match criteria for {@link StreamSnapshotStore.findWorkflowStreamsMatching}.
@@ -669,9 +673,9 @@ export class StreamSnapshotStore {
     patch: Partial<StreamTabMeta>,
   ): StreamTabMeta {
     const next: StreamTabMeta = {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       ...(this.meta.get(stream) ?? {}),
       ...patch,
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
     };
     this.meta.set(stream, next);
     return next;
@@ -687,6 +691,8 @@ export class StreamSnapshotStore {
       ...(next.runDescriptor !== undefined && {
         runDescriptor: next.runDescriptor,
       }),
+      ...(next.taskState !== undefined &&
+        next.runDescriptor === undefined && { taskState: next.taskState }),
       ...(next.parentStreamId !== undefined && {
         parentStreamId: next.parentStreamId,
       }),
@@ -1039,35 +1045,41 @@ export class StreamSnapshotStore {
   private async hydrateRunStateFromMeta(
     stream: StreamTabId,
     meta: StreamTabMeta,
-  ): Promise<void> {
+  ): Promise<HydratedRunState> {
     const executionId = meta.runDescriptor?.executionId ?? meta.executionId;
+    let descriptor = meta.runDescriptor;
     if (meta.runDescriptor) {
-      this.runDescriptors.set(stream, meta.runDescriptor);
+      descriptor = meta.runDescriptor;
     }
 
     if (executionId) {
-      const config = await getExecutionStore(executionId).readConfig();
-      if (config) {
-        this.runConfigs.set(stream, config);
-        this.runDescriptors.set(
-          stream,
-          meta.runDescriptor ??
-            descriptorFromConfig(stream, executionId, config),
+      let config: AgentConfig | null = null;
+      try {
+        config = await getExecutionStore(executionId).readConfig();
+      } catch (error) {
+        logger.warn(
+          CHANNEL,
+          `Could not read execution config for stream ${stream}; falling back to legacy taskState.`,
+          { data: { stream, executionId, error } },
         );
-        return;
+      }
+      if (config) {
+        return {
+          config,
+          descriptor:
+            descriptor ?? descriptorFromConfig(stream, executionId, config),
+        };
       }
     }
 
     const legacyTaskState = this.parseLegacyTaskState(stream, meta);
-    if (!legacyTaskState) return;
+    if (!legacyTaskState) return { descriptor };
     const config = legacyTaskState.agentConfig;
-    this.runConfigs.set(stream, config);
     if (executionId) {
-      this.runDescriptors.set(
-        stream,
-        descriptorFromConfig(stream, executionId, config),
-      );
+      descriptor =
+        descriptor ?? descriptorFromConfig(stream, executionId, config);
     }
+    return { config, descriptor };
   }
 
   /** Seed the in-memory accumulators for one stream + migrate legacy once. */
@@ -1095,24 +1107,42 @@ export class StreamSnapshotStore {
     this.workPlan.set(stream, data.workPlan);
     this.runDescriptors.delete(stream);
     this.runConfigs.delete(stream);
-    const meta = metaOverlay
+    let meta = metaOverlay
       ? { ...(data.meta ?? {}), ...metaOverlay }
       : data.meta;
+    let hydrated: HydratedRunState = {};
     if (meta) {
       this.meta.set(stream, meta);
-      await this.hydrateRunStateFromMeta(stream, meta);
+      hydrated = await this.hydrateRunStateFromMeta(stream, meta);
     } else {
       this.meta.delete(stream);
     }
-    if (runConfigOverlay) {
-      this.runConfigs.set(stream, runConfigOverlay);
-      const executionId = meta?.runDescriptor?.executionId ?? meta?.executionId;
-      const descriptor =
-        runDescriptorOverlay ??
-        (executionId
-          ? descriptorFromConfig(stream, executionId, runConfigOverlay)
-          : undefined);
-      if (descriptor) this.runDescriptors.set(stream, descriptor);
+    const latestMetaOverlay = this.metaOverlays.has(stream)
+      ? this.meta.get(stream)
+      : undefined;
+    if (latestMetaOverlay) {
+      meta = { ...(data.meta ?? {}), ...latestMetaOverlay };
+      this.meta.set(stream, meta);
+    }
+    const latestRunConfigOverlay =
+      latestMetaOverlay !== undefined ? this.runConfigs.get(stream) : undefined;
+    const latestRunDescriptorOverlay =
+      latestMetaOverlay !== undefined
+        ? this.runDescriptors.get(stream)
+        : undefined;
+    const runConfig =
+      latestRunConfigOverlay ?? runConfigOverlay ?? hydrated.config;
+    const executionId = meta?.runDescriptor?.executionId ?? meta?.executionId;
+    const runDescriptor =
+      latestRunDescriptorOverlay ??
+      runDescriptorOverlay ??
+      hydrated.descriptor ??
+      (runConfig && executionId
+        ? descriptorFromConfig(stream, executionId, runConfig)
+        : undefined);
+    if (runConfig) this.runConfigs.set(stream, runConfig);
+    if (runDescriptor) {
+      this.runDescriptors.set(stream, runDescriptor);
     }
     this.metaOverlays.delete(stream);
     if (outputFileOverlay) {
