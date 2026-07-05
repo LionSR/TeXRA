@@ -138,10 +138,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     });
   }
 
-  override get usesProviderManagedAutoRetry(): boolean {
-    return true;
-  }
-
   override isAutoRetryManagedByProvider(error: Error): boolean {
     if (
       error instanceof OpenRouterConnectionError ||
