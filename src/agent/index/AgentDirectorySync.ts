@@ -3,8 +3,8 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors';
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 import {

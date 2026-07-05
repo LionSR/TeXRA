@@ -10,9 +10,9 @@ import pRetry, { AbortError } from 'p-retry';
 import pTimeout from 'p-timeout';
 import * as tar from 'tar';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';

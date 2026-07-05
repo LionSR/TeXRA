@@ -6,9 +6,9 @@
 
 import * as path from 'node:path';
 
+import { normalizeFilePath } from '@shared/utils/path';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
-import { normalizeFilePath } from '@shared/utils/path';
 
 export interface RunDirectoryEntry {
   readonly path: string;

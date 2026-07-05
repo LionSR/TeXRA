@@ -11,7 +11,6 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
-import { toErrorMessage } from '@common/errors';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
@@ -21,6 +20,7 @@ import {
   getFileDirectory,
   TaskRunFileService,
 } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   addCdataToTagsMultiple,

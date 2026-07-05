@@ -5,8 +5,8 @@ import {
 } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   CliUsageError,

@@ -41,12 +41,12 @@ import {
   terminalStatusExitCode,
 } from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   EXECUTION_STATUS,
   type ExecutionId,
   sumUsageStats,
 } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';

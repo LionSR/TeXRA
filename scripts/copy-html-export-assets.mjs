@@ -2,16 +2,22 @@
 /* global console, process */
 /**
  * Copies the static third-party CSS + fonts needed by the HTML chat export
- * into `packages/extension/resources/htmlExport/`. The runtime export handler
- * copies this folder alongside each exported HTML file so the document is
- * viewable offline with the same KaTeX/highlight.js styling as the webview.
+ * into a destination `htmlExport/` folder, sourced straight from the repo
+ * root's `node_modules` (katex, highlight.js, markdown-it-texmath). Runtime
+ * export handlers copy/stage this folder alongside each exported HTML
+ * document so it's viewable offline with the same KaTeX/highlight.js styling
+ * as the webview.
  *
  * TeXRA's own styling (tokens + document sheet) is NOT copied here — it lives
  * in `src/shared/htmlExport/styles/` and is inlined into each export's <head>
  * by buildExportTemplate, so only third-party assets need staging.
  *
- * Run as part of `compile:fast` / `package:fast` so the resources are in
- * place before vsce packages the extension.
+ * Exports `stageHtmlExportAssets(destRoot)` so any package (the VS Code
+ * extension, the CLI, …) can regenerate its own copy independently — no
+ * package needs another package's build to have already run. When invoked
+ * directly, stages into `packages/extension/resources/htmlExport/` as part
+ * of `compile:fast` / `package:fast` so the resources are in place before
+ * vsce packages the extension.
  */
 
 import { copyFile, mkdir, readdir, rm } from 'node:fs/promises';
@@ -23,13 +29,6 @@ const repoRoot = path.resolve(
   '..',
 );
 const nodeModules = path.join(repoRoot, 'node_modules');
-const destRoot = path.join(
-  repoRoot,
-  'packages',
-  'extension',
-  'resources',
-  'htmlExport',
-);
 
 const katexSrc = path.join(nodeModules, 'katex', 'dist');
 const hljsThemeSrc = path.join(
@@ -67,7 +66,11 @@ async function copyDir(src, dest, filter = () => true) {
   );
 }
 
-async function main() {
+/**
+ * Stage the KaTeX / highlight.js / texmath CSS + font assets into `destRoot`.
+ * Wipes and recreates `destRoot` so stale files never linger.
+ */
+export async function stageHtmlExportAssets(destRoot) {
   await rm(destRoot, { recursive: true, force: true });
   await mkdir(destRoot, { recursive: true });
 
@@ -85,7 +88,24 @@ async function main() {
   await copyFile(texmathCssSrc, path.join(destRoot, 'texmath.css'));
 }
 
-main().catch((err) => {
-  console.error('[html-export-assets] failed:', err);
-  process.exit(1);
-});
+async function main() {
+  const destRoot = path.join(
+    repoRoot,
+    'packages',
+    'extension',
+    'resources',
+    'htmlExport',
+  );
+  await stageHtmlExportAssets(destRoot);
+}
+
+const isDirectRun =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error('[html-export-assets] failed:', err);
+    process.exit(1);
+  });
+}

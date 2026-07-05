@@ -13,8 +13,8 @@
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const GoalPromptsYamlSchema = z.object({
