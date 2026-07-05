@@ -28,7 +28,7 @@ import {
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setCliSessionApiMode } from './apiModeCommands';
 

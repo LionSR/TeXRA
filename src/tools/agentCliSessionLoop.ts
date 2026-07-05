@@ -20,9 +20,7 @@ import {
   sendFollowUp,
   wakeOrReleaseQueuedStream,
 } from '@agent/followUp/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
-import { toErrorMessage } from '@common/errors';
 import {
   deriveRunOutcome,
   legacyEndGroupStatusForOutcome,
@@ -30,6 +28,7 @@ import {
 } from '@common/constants/streamStatus';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { STREAM_STATUS } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { isCleanInterruption, logTurnSummary } from './agentCliShared';
 import type { ChildStream } from './childStream';
@@ -44,7 +43,7 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
  * Does NOT implement the session duck-type (no `session.appendFollowUp`), so
  * flow-only commands such as context compaction ignore it. Follow-ups route
  * through the WAITING state queue path: `sendFollowUp()` → stream is WAITING →
- * `ToolUseFollowUpQueue.enqueue()`.
+ * `session.followUps.enqueue()`.
  */
 class AgentCliSession implements IInterruptible {
   private interrupted = false;
@@ -217,7 +216,7 @@ export function runAgentCliSession<TTurn>(
   // unregisters against the same handle the registration used.
   const runSession = currentSession();
   const session = new AgentCliSession();
-  const queue = ToolUseFollowUpQueue.acquire(childStreamId);
+  const queue = runSession.followUps.acquire(childStreamId);
   session.setQueue(queue);
   runSession.interrupts.register(childStreamId, session);
 
@@ -300,7 +299,11 @@ export function runAgentCliSession<TTurn>(
             },
           );
         } else if (
-          !(await wakeOrReleaseQueuedStream(parentStreamId, delivery))
+          !(await wakeOrReleaseQueuedStream(
+            parentStreamId,
+            delivery,
+            runSession,
+          ))
         ) {
           logger.warn(
             'Turn result dropped: parent stream is gone and could not be resumed. The result remains in the execution report.',
@@ -330,7 +333,7 @@ export function runAgentCliSession<TTurn>(
       const projection = projectRunOutcome(outcome);
       sessionStage.end(legacyEndGroupStatusForOutcome(outcome));
       runSession.interrupts.unregister(childStreamId);
-      ToolUseFollowUpQueue.release(childStreamId);
+      runSession.followUps.release(childStreamId);
       strategy.onSessionCleanup?.();
       // Persist terminal status before childStream.finalize() untracks and
       // notifies waiters.

@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { toErrorMessage } from '@common/errors';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   buildAuthenticatedRemoteUrl,
@@ -17,6 +16,7 @@ import {
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'gitCommands';

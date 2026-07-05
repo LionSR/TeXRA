@@ -4,9 +4,9 @@ import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/toolus
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { toErrorMessage } from '@common/errors';
 import { createChannelTrace } from '@logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createChannelTrace('CliToolUseResumeData');
 

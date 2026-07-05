@@ -3,6 +3,7 @@ import { Mutex } from 'async-mutex';
 
 import { platform, tryWorkspaceState } from '@platform/platform';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   type ExecutionId,
   StreamTabIdSchema,
@@ -278,7 +279,7 @@ export const GoalStore = {
   /** Drop the record (used on complete, abandon, or conversation delete).
    *  Bootstrap-tolerant — cleanup paths shouldn't fail loudly if state isn't
    *  wired yet. */
-  async forget(streamId: StreamTabId): Promise<void> {
+  async forget(streamId: StreamTabId, session?: SessionHandle): Promise<void> {
     const state = tryWorkspaceState();
     if (!state) return;
     // Gate on raw key presence, not parse success — an unparseable or
@@ -295,9 +296,9 @@ export const GoalStore = {
       state.update(legacyStreamKey(streamId), undefined),
       removeFromIndex(streamId),
     ]);
-    // Dual-context: PlanTool forgets in-run (→ run host via ALS); the
-    // progress-view lifecycle controller forgets host-path (→ bus fallback).
-    emitRuntimeEvent('goalStateChanged', { streamId });
+    // Dual-context: PlanTool forgets in-run (→ run session via ALS); hosts
+    // pass their owning session for non-default windows.
+    emitRuntimeEvent('goalStateChanged', { streamId }, session);
   },
 
   /**
@@ -306,7 +307,10 @@ export const GoalStore = {
    * — independent keys — but the index update is a single read-filter-
    * write so concurrent `forget()` calls don't race on it.
    */
-  async forgetMany(streamIds: readonly StreamTabId[]): Promise<void> {
+  async forgetMany(
+    streamIds: readonly StreamTabId[],
+    session?: SessionHandle,
+  ): Promise<void> {
     const state = tryWorkspaceState();
     if (!state) return;
     // Same raw-presence gate as `forget` so unparseable blobs are cleaned.
@@ -323,7 +327,7 @@ export const GoalStore = {
       mutateIndex((index) => index.filter((id) => !dropped.has(id))),
     ]);
     for (const id of toRemove)
-      emitRuntimeEvent('goalStateChanged', { streamId: id });
+      emitRuntimeEvent('goalStateChanged', { streamId: id }, session);
   },
 
   /**
@@ -333,6 +337,7 @@ export const GoalStore = {
    */
   async forgetByExecutionIds(
     executionIds: readonly ExecutionId[],
+    session?: SessionHandle,
   ): Promise<void> {
     if (executionIds.length === 0) return;
     // Stream ids include the execution id as a final `#${executionId}` suffix.
@@ -342,6 +347,6 @@ export const GoalStore = {
     const streamIds = readIndex().filter((streamId) =>
       suffixes.some((suffix) => streamId.endsWith(suffix)),
     );
-    await GoalStore.forgetMany(streamIds);
+    await GoalStore.forgetMany(streamIds, session);
   },
 };

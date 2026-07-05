@@ -6,7 +6,7 @@ import { basename, isAbsolute, join, normalize, relative } from 'node:path';
 // Local imports - platform
 import type { StorageProvider } from '../interfaces/storage';
 
-export const STORAGE_LAYOUT = {
+const STORAGE_LAYOUT = {
   global: 'global-storage',
   workspace: 'workspace-storage',
   memory: 'memories',
@@ -15,8 +15,6 @@ export const STORAGE_LAYOUT = {
   original: 'original',
 } as const;
 
-export const GLOBAL_STORAGE_DIR = STORAGE_LAYOUT.global;
-export const WORKSPACE_STORAGE_DIR = STORAGE_LAYOUT.workspace;
 export const MEMORY_STORAGE_DIR = STORAGE_LAYOUT.memory;
 export const RUNS_STORAGE_DIR = STORAGE_LAYOUT.runs;
 export const LEGACY_RUNS_STORAGE_DIR = STORAGE_LAYOUT.legacyRuns;
@@ -51,7 +49,7 @@ export function workspaceStorageId(workspacePath: string | undefined): string {
 }
 
 export function resolveGlobalStoragePath(storageRoot: string): string {
-  return join(storageRoot, GLOBAL_STORAGE_DIR);
+  return join(storageRoot, STORAGE_LAYOUT.global);
 }
 
 export function resolveWorkspaceStoragePath(
@@ -60,12 +58,14 @@ export function resolveWorkspaceStoragePath(
 ): string {
   return join(
     storageRoot,
-    WORKSPACE_STORAGE_DIR,
+    STORAGE_LAYOUT.workspace,
     workspaceStorageId(workspacePath),
   );
 }
 
-export function resolveMemoryStoragePath(storagePath: string): string {
+export function resolveMemoryStoragePath(
+  storagePath: string = MEMORY_STORAGE_DIR,
+): string {
   const normalized = normalize(storagePath);
   const memoryRelative = relative(MEMORY_STORAGE_DIR, normalized);
   if (memoryRelative.startsWith('..') || isAbsolute(memoryRelative)) {
@@ -129,7 +129,7 @@ function resolveLegacyWorkspaceStoragePath(
 ): string {
   return join(
     storageRoot,
-    WORKSPACE_STORAGE_DIR,
+    STORAGE_LAYOUT.workspace,
     legacyWorkspaceStorageId(workspacePath),
   );
 }

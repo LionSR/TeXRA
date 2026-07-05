@@ -13,9 +13,9 @@ import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports - core
-import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@shared/schemas/toolResult';
 import { isTimeoutError } from '@tools/timeouts';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s

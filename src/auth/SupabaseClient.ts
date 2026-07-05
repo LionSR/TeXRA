@@ -3,8 +3,8 @@ import {
   SupabaseClient as Client,
   User,
 } from '@supabase/supabase-js';
-import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type UserAuthContext,
   type UserTier,
@@ -125,7 +125,7 @@ export class SupabaseClient {
   /**
    * Initialize the Supabase client with project credentials.
    */
-  static initialize(url: string, publicKey: string, _context?: unknown): void {
+  static initialize(url: string, publicKey: string): void {
     if (!url || !publicKey) {
       throw new Error(
         'Supabase credentials missing. Check extension configuration.',

@@ -8,11 +8,11 @@ import { nanoid } from 'nanoid';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { AbsoluteFS, getMimeType, WorkspaceFS } from '@utils/files';
 import { checkMultipleToolsInstalled } from '@utils/system';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
 const CHANNEL = 'ImgUtils';

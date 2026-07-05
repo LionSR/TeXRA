@@ -11,7 +11,8 @@ import {
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -19,6 +20,7 @@ import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 const STREAM = 'stream:tooluse-resume' as StreamTabId;
 const runtimeHost = { emit: vi.fn() };
+let detachLegacyProjection: (() => void) | undefined;
 
 function snapshot(): ToolUseSessionSnapshot {
   return { streamId: STREAM } as ToolUseSessionSnapshot;
@@ -41,9 +43,15 @@ describe('resumeToolUseSnapshot', () => {
     resumeToolUseFromSnapshotMock.mockReset();
     resumeToolUseFromSnapshotMock.mockResolvedValue(undefined);
     runtimeHost.emit.mockReset();
+    detachLegacyProjection = attachLegacyProgressEventProjection(
+      defaultSession().events,
+      runtimeHost,
+    );
   });
 
   afterEach(() => {
+    detachLegacyProjection?.();
+    detachLegacyProjection = undefined;
     ToolUseFollowUpQueue.release(STREAM);
     clearStreamStatusForTest(StreamStatusService, STREAM);
   });
@@ -135,6 +143,35 @@ describe('resumeToolUseSnapshot', () => {
       expect(session.status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
       expect(StreamStatusService.get(STREAM)).toBeUndefined();
     } finally {
+      session.status.clearStream(STREAM);
+      session.dispose();
+    }
+  });
+
+  it('preserves failed resume follow-ups in the supplied session queue only', async () => {
+    const failure = new Error('session queue resume failed');
+    resumeToolUseFromSnapshotMock.mockRejectedValue(failure);
+    const session = new SessionHandle();
+
+    try {
+      session.followUps.enqueue(
+        STREAM,
+        { text: 'session queued' },
+        { force: true },
+      );
+
+      await expect(
+        resumeToolUseSnapshot(snapshot(), {
+          runtimeHost,
+          session,
+          reportFailure: vi.fn(),
+        }),
+      ).resolves.toBe(false);
+
+      expect(session.followUps.getAll(STREAM)).toEqual(['session queued']);
+      expect(ToolUseFollowUpQueue.getAll(STREAM)).toEqual([]);
+    } finally {
+      session.followUps.release(STREAM);
       session.status.clearStream(STREAM);
       session.dispose();
     }

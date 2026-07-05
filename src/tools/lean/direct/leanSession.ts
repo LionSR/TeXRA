@@ -17,8 +17,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import pTimeout from 'p-timeout';
 
-import { toErrorMessage } from '@common/errors';
 import { debug, info, warn } from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   registerLeanServer,
   unregisterLeanServer,

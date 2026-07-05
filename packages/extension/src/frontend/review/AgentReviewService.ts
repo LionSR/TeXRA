@@ -31,7 +31,6 @@ import {
   type ReviewSeverity,
 } from '@agent/review/reviewIssues';
 import { runAgent } from '@agent/runtime/runAgent';
-import { toErrorMessage } from '@common/errors';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import {
@@ -42,6 +41,7 @@ import * as logger from '@logger/logUtils';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'AgentReview';

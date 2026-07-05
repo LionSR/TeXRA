@@ -4,6 +4,10 @@
  * tool class stays focused on path routing and storage access.
  */
 
+// Deliberately ASCII-only (`...`, code-unit slicing) rather than
+// `truncateWithEllipsis`'s Unicode `…` + grapheme-aware cut — this output
+// feeds the ExecutionsTool's plain-text conversation view, which must stay
+// pure ASCII.
 function truncate(str: string, maxLen: number): string {
   return str.length > maxLen ? `${str.slice(0, maxLen - 3)}...` : str;
 }

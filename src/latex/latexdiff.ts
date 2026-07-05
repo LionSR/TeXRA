@@ -3,12 +3,13 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
-import { formatError, toErrorMessage } from '@common/errors';
+import { formatError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import { executeCommand } from '@utils/system';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { runLatexFormatter } from './texFormatter';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';

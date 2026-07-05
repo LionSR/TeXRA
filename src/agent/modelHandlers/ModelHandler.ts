@@ -93,7 +93,6 @@ import { isTokenLimitStopReason } from './utils/stopReasonUtils';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
 import type {
-  IModelHandler,
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
@@ -101,7 +100,7 @@ import type {
   StopConditionsResult,
   TokenCountOptions,
   TokenValidationResult,
-} from './types/IModelHandler';
+} from './types/ModelHandlerContracts';
 import type {
   ServerToolExtractionResult,
   WebFetchResult,
@@ -152,7 +151,7 @@ export abstract class ModelHandler<
   C = unknown,
   Resp = unknown,
   Media = unknown,
-> implements IModelHandler<M, U, T, C, Resp> {
+> {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;

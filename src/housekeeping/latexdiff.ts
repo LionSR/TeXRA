@@ -1,8 +1,8 @@
 import * as path from 'node:path';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { findFilesFromPatterns, generateTimestamp } from './utils';
 import { TEMP_EXTENSIONS } from './constants';

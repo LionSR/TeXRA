@@ -12,7 +12,9 @@ import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentErrorKind } from '@common/errors';
 import type { StreamTransitionCause } from '@common/constants/streamStatus';
 import type {
+  ActiveChildInfo,
   EndGroupStatus,
+  ExecutionId,
   RetryErrorInfo,
   RunOutcome,
   StreamPhase,
@@ -133,6 +135,36 @@ export interface StatusEvent extends StageStamp {
   readonly substate?: StreamSubstate;
 }
 
+/** Session-owned child/process activity for a parent run stream. */
+export type ChildActivityEvent =
+  | (StageStamp & {
+      readonly type: 'child.activity';
+      readonly kind: 'subagents';
+      readonly parentStreamId: StreamTabId;
+      readonly children: readonly ActiveChildInfo[];
+    })
+  | (StageStamp & {
+      readonly type: 'child.activity';
+      readonly kind: 'processes';
+      readonly parentStreamId: StreamTabId;
+      readonly processes: readonly ActiveChildInfo[];
+    })
+  | (StageStamp & {
+      readonly type: 'child.activity';
+      readonly kind: 'parent';
+      readonly childStreamId: StreamTabId;
+      readonly parentStreamId: StreamTabId | null;
+    });
+
+/** Incremental output from a child process owned by a parent run stream. */
+export interface ProcessOutputEvent extends StageStamp {
+  readonly type: 'process.output';
+  readonly parentStreamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
 /** Context window utilisation snapshot. */
 export interface ContextStateEvent extends StageStamp {
   readonly type: 'context.state';
@@ -218,6 +250,8 @@ export type AgentEvent =
   | ToolEndEvent
   | UsageEvent
   | StatusEvent
+  | ChildActivityEvent
+  | ProcessOutputEvent
   | ContextStateEvent
   | StreamStartEvent
   | StreamChunkEvent

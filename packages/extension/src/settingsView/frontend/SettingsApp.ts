@@ -477,16 +477,25 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
   );
 
-  private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
+  private openProviderKeyFlow(target: {
+    provider: string;
+    displayName: string;
+  }): void {
     if (!this.isDesktopHost) {
-      postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, event.detail);
+      postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
+        provider: target.provider,
+      });
       return;
     }
 
+    this.providerKeyModal.set(target);
+  }
+
+  private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
     const status = this.providerKeyStatuses
       .get()
       .find((entry) => entry.provider === event.detail.provider);
-    this.providerKeyModal.set({
+    this.openProviderKeyFlow({
       provider: event.detail.provider,
       displayName: status?.displayName ?? event.detail.provider,
     });
@@ -531,15 +540,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly handleSetDefaultProviderKey = (): void => {
     const target = this.getDefaultProviderKeyTarget();
     this.selectedTabIndex.set(SETTINGS_TAB.MODELS);
-
-    if (!this.isDesktopHost) {
-      postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
-        provider: target.provider,
-      });
-      return;
-    }
-
-    this.providerKeyModal.set(target);
+    this.openProviderKeyFlow(target);
   };
 
   private handleRemoveProviderKey = forwardDetail(

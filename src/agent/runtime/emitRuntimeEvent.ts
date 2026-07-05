@@ -4,11 +4,13 @@
  * Replaces scattered `bus.emit(...)` in `src/tools` so one fact has one emit
  * path and one name, resolving the target in priority order:
  *
- * 1. a host-path caller's `session.hostChannel` (set only by hosts that own a
+ * 1. migrated Stage 3a facts go to the owning `SessionEventHub` and are
+ *    projected to the legacy host surface by `LegacyProgressEventProjection`;
+ * 2. a host-path caller's `session.hostChannel` (set only by hosts that own a
  *    non-default session, e.g. a desktop window) — when present;
- * 2. otherwise the active run's `runtimeHost`, resolved from the ambient
+ * 3. otherwise the active run's `runtimeHost`, resolved from the ambient
  *    {@link RunContext} (the in-run case — tools firing inside a run's ALS);
- * 3. otherwise the process {@link bus} — the single-session fallback that keeps
+ * 4. otherwise the process {@link bus} — the single-session fallback that keeps
  *    the extension byte-identical (its run `runtimeHost.emit` is `bus.emit`
  *    anyway) and host-path callers that pass no session unchanged.
  *
@@ -19,13 +21,96 @@
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 import { tryUseRunContext } from './RunContext';
-import type { SessionHandle } from './SessionHandle';
+import { defaultSession, type SessionHandle } from './SessionHandle';
+import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import type { SessionFact } from './SessionEventHub';
+
+function emitLegacyHostFact(host: AgentRuntimeHost, fact: SessionFact): void {
+  switch (fact.type) {
+    case 'goalStateChanged':
+      host.emit('goalStateChanged', fact.payload);
+      return;
+    case 'inquiryThreadUpdated':
+      host.emit('inquiryThreadUpdated', fact.payload);
+      return;
+    case 'clearMissingOutputs':
+      host.emit('clearMissingOutputs', fact.payload);
+      return;
+    case 'updateQueuedFollowUps':
+      host.emit('updateQueuedFollowUps', fact.payload);
+      return;
+    case 'setActiveStream':
+      host.emit('setActiveStream', fact.payload);
+      return;
+  }
+}
+
+function emitSessionFact(fact: SessionFact, session?: SessionHandle): void {
+  const owner = session ?? tryUseRunContext()?.session;
+  if (owner?.events) {
+    owner.events.emit({ scope: 'session', event: fact });
+    return;
+  }
+  if (owner?.hostChannel) {
+    emitLegacyHostFact(owner.hostChannel, fact);
+    return;
+  }
+  defaultSession().events.emit({ scope: 'session', event: fact });
+}
 
 export function emitRuntimeEvent<K extends keyof ProgressEventPayloads>(
   event: K,
   payload: ProgressEventPayloads[K],
   session?: SessionHandle,
 ): void {
+  switch (event) {
+    case 'goalStateChanged':
+      emitSessionFact(
+        {
+          type: 'goalStateChanged',
+          payload: payload as ProgressEventPayloads['goalStateChanged'],
+        },
+        session,
+      );
+      return;
+    case 'inquiryThreadUpdated':
+      emitSessionFact(
+        {
+          type: 'inquiryThreadUpdated',
+          payload: payload as ProgressEventPayloads['inquiryThreadUpdated'],
+        },
+        session,
+      );
+      return;
+    case 'clearMissingOutputs':
+      emitSessionFact(
+        {
+          type: 'clearMissingOutputs',
+          payload: payload as ProgressEventPayloads['clearMissingOutputs'],
+        },
+        session,
+      );
+      return;
+    case 'updateQueuedFollowUps':
+      emitSessionFact(
+        {
+          type: 'updateQueuedFollowUps',
+          payload: payload as ProgressEventPayloads['updateQueuedFollowUps'],
+        },
+        session,
+      );
+      return;
+    case 'setActiveStream':
+      emitSessionFact(
+        {
+          type: 'setActiveStream',
+          payload: payload as ProgressEventPayloads['setActiveStream'],
+        },
+        session,
+      );
+      return;
+  }
+
   const host = session?.hostChannel ?? tryUseRunContext()?.runtimeHost;
   if (host) host.emit(event, payload);
   else bus.emit(event, payload);

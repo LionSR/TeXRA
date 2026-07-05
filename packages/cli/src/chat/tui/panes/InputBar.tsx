@@ -3,7 +3,7 @@ import { Box, Text, useInput } from 'ink';
 
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
 import {
   DraftAttachmentStore,
