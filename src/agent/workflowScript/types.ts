@@ -42,6 +42,12 @@ export interface WorkflowAgentInvocation {
   index: number;
   prompt: string;
   options: WorkflowAgentCallOptions;
+  /**
+   * Fires when the run is aborted (wall-clock timeout). Runners should
+   * cancel the underlying agent execution so timed-out workflows stop
+   * consuming model quota instead of finishing in the background.
+   */
+  signal: AbortSignal;
 }
 
 /**

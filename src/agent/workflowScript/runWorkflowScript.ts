@@ -20,11 +20,40 @@ const MAX_FANOUT = 512;
 const LABEL_EXCERPT_LENGTH = 48;
 
 /**
+ * Thrown when the whole run must stop (agent-call cap exceeded, wall-clock
+ * timeout abort). parallel()/pipeline() rethrow it instead of converting it
+ * to a null slot, so the backstops apply inside fan-out primitives too.
+ * Detected by name, not instanceof — the error crosses the sandbox realm
+ * boundary as a realm-local copy carrying only name/message.
+ */
+export class WorkflowRunAbortError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WorkflowRunAbortError';
+  }
+}
+
+function isWorkflowAbort(error: unknown): boolean {
+  // Name check, not instanceof: abort errors re-enter host code as
+  // realm-local Error copies whose prototype chain is the sandbox's.
+  return (
+    error instanceof WorkflowRunAbortError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      (error as { name?: unknown }).name === 'WorkflowRunAbortError')
+  );
+}
+
+/**
  * Runs a workflow script: deterministic JS orchestration over host-executed
  * agents. The script's control flow (loops, fan-out, joins, reduction) runs
  * as plain code with zero model round-trips between steps; every agent()
  * call is bounded by one shared concurrency semaphore and journaled for
  * resume (same call index + same prompt/options → cached result).
+ *
+ * On wall-clock timeout the run's AbortSignal (passed to every runAgent
+ * invocation) fires and new agent() calls are refused; the orphaned script
+ * continuation can then only run pure JS to completion.
  */
 export async function runWorkflowScript(
   options: WorkflowScriptRunOptions,
@@ -40,6 +69,7 @@ export async function runWorkflowScript(
   );
   const journal = new Map<number, WorkflowJournalEntry>();
   const semaphore = createSemaphore(concurrency);
+  const runAbort = new AbortController();
   let callCounter = 0;
   let currentPhase: string | undefined;
 
@@ -49,6 +79,11 @@ export async function runWorkflowScript(
     prompt: unknown,
     rawOptions?: unknown,
   ): Promise<unknown> {
+    if (runAbort.signal.aborted) {
+      throw new WorkflowRunAbortError(
+        'Workflow run aborted (wall-clock timeout); no new agent() calls may start.',
+      );
+    }
     if (!isNonEmptyString(prompt)) {
       throw new Error(
         'agent(prompt, options?) requires a non-empty string prompt.',
@@ -58,7 +93,7 @@ export async function runWorkflowScript(
     const index = callCounter;
     callCounter += 1;
     if (callCounter > maxAgentCalls) {
-      throw new Error(
+      throw new WorkflowRunAbortError(
         `Workflow exceeded the ${maxAgentCalls} agent-call cap (runaway-loop backstop).`,
       );
     }
@@ -78,7 +113,12 @@ export async function runWorkflowScript(
     emit({ type: 'agent:start', index, label, phase: callOptions.phase });
     try {
       const result = await semaphore.run(() =>
-        runAgent({ index, prompt, options: callOptions }),
+        runAgent({
+          index,
+          prompt,
+          options: callOptions,
+          signal: runAbort.signal,
+        }),
       );
       journal.set(index, { index, key, result });
       emit({ type: 'agent:end', index, label, cached: false });
@@ -113,7 +153,15 @@ export async function runWorkflowScript(
         }
         try {
           return await thunk();
-        } catch {
+        } catch (error) {
+          if (isWorkflowAbort(error)) throw error;
+          // agent() failures already resolve to null with their own event;
+          // anything caught here is a bug in the script's own JS — surface
+          // it so a null slot is debuggable.
+          emit({
+            type: 'log',
+            message: `parallel(): item ${i} threw: ${toErrorMessage(error)}`,
+          });
           return null;
         }
       }),
@@ -137,14 +185,22 @@ export async function runWorkflowScript(
       (prev: unknown, item: unknown, index: number) => unknown
     >;
     // No barrier between stages: each item advances through its own chain
-    // independently, so wall-clock is the slowest single-item chain.
+    // independently, so wall-clock is the slowest single-item chain. Note
+    // for resume: agent() calls in stages beyond the first get journal
+    // indices in completion order, which varies run-to-run — the journal's
+    // per-index key check keeps replay safe, at the cost of cache hits.
     return Promise.all(
       items.map(async (item, index) => {
         let value: unknown = item;
         for (const stage of stageFns) {
           try {
             value = await stage(value, item, index);
-          } catch {
+          } catch (error) {
+            if (isWorkflowAbort(error)) throw error;
+            emit({
+              type: 'log',
+              message: `pipeline(): item ${index} threw: ${toErrorMessage(error)}`,
+            });
             return null;
           }
         }
@@ -153,17 +209,16 @@ export async function runWorkflowScript(
     );
   }
 
-  function concatPrimitive(
-    parts: unknown,
-    concatOptions?: { separator?: unknown },
-  ): string {
+  function concatPrimitive(parts: unknown, concatOptions?: unknown): string {
     if (!Array.isArray(parts)) {
       throw new Error('concat(parts, options?) requires an array.');
     }
+    const separatorRaw =
+      concatOptions && typeof concatOptions === 'object'
+        ? (concatOptions as { separator?: unknown }).separator
+        : undefined;
     const separator =
-      concatOptions?.separator === undefined
-        ? '\n\n'
-        : String(concatOptions.separator);
+      separatorRaw === undefined ? '\n\n' : String(separatorRaw);
     // Zero-token fan-in: drops failed (null) stage results, joins the rest.
     return parts
       .filter((part) => part !== null && part !== undefined && part !== '')
@@ -171,24 +226,44 @@ export async function runWorkflowScript(
       .join(separator);
   }
 
-  const globals: Record<string, unknown> = {
-    agent: agentPrimitive,
-    parallel: parallelPrimitive,
-    pipeline: pipelinePrimitive,
-    concat: concatPrimitive,
-    log: (message: unknown) => emit({ type: 'log', message: String(message) }),
-    phase: (title: unknown) => {
-      currentPhase = String(title);
-      emit({ type: 'phase', title: currentPhase });
-    },
-    args:
-      options.args === undefined ? undefined : structuredClone(options.args),
-  };
+  // JSON payloads for the sandbox bridge: results are revived inside the
+  // realm with the sandbox's own JSON.parse, so scripts never hold
+  // host-realm objects (see sandbox.ts). Non-JSON-safe values degrade the
+  // way JSON always does; agent results are JSON-safe by contract.
+  const toPayload = (value: unknown): string | undefined =>
+    value === undefined ? undefined : (JSON.stringify(value) ?? 'null');
 
-  const result = await runScriptInSandbox(body, globals, {
-    timeoutMs,
-    filename: `${meta.name}.workflow.js`,
-  });
+  const result = await runScriptInSandbox(
+    body,
+    {
+      asyncFns: {
+        agent: async (args) =>
+          toPayload(await agentPrimitive(args[0], args[1])),
+        parallel: async (args) => toPayload(await parallelPrimitive(args[0])),
+        pipeline: async (args) =>
+          toPayload(await pipelinePrimitive(args[0], ...args.slice(1))),
+      },
+      syncFns: {
+        concat: (args) => concatPrimitive(args[0], args[1]),
+        log: (args) => {
+          emit({ type: 'log', message: String(args[0]) });
+          return undefined;
+        },
+        phase: (args) => {
+          currentPhase = String(args[0]);
+          emit({ type: 'phase', title: currentPhase });
+          return undefined;
+        },
+      },
+      argsJson:
+        options.args === undefined ? undefined : JSON.stringify(options.args),
+    },
+    {
+      timeoutMs,
+      filename: `${meta.name}.workflow.js`,
+      onTimeout: () => runAbort.abort(),
+    },
+  );
 
   return {
     meta,
@@ -202,8 +277,11 @@ function normalizeAgentOptions(
   raw: unknown,
   currentPhase: string | undefined,
 ): WorkflowAgentCallOptions {
-  if (raw !== undefined && raw !== null && typeof raw !== 'object') {
-    throw new Error('agent() options must be an object.');
+  if (
+    (raw !== undefined && raw !== null && typeof raw !== 'object') ||
+    Array.isArray(raw)
+  ) {
+    throw new Error('agent() options must be a plain object.');
   }
   const source = (raw ?? {}) as Record<string, unknown>;
   const options: WorkflowAgentCallOptions = {};

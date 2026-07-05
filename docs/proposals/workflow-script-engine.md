@@ -111,6 +111,9 @@ finding → filtered synthesis, with no LLM needed to parse prose between
 arrows. It also benefits the existing LLM orchestrator independently of the
 engine, and aligns with the "terminal outcome as data" direction already
 ruled in `docs/proposals/error-pipeline-and-ownership.md` (`ResultEvent`).
+Naming: the script-facing option on `agent()` is `schema` (brevity inside
+scripts); `outputSchema` is the `executeAgent`-level config field it maps
+to.
 
 ### 3. Deep layers: scripted orchestration costs zero delegation depth
 
@@ -158,6 +161,11 @@ so resume retries them. This extends the existing `persistedFlow` checkpoint
 pattern and is why scripts must be deterministic — `Date.now()` and
 `Math.random()` throw inside the sandbox (pass timestamps via `args`).
 Journals persist in the execution KV store alongside the script text.
+Known limitation: `agent()` calls issued from `pipeline()` stages beyond the
+first acquire journal indices in completion order, which varies run-to-run
+with agent latency; the per-index key check keeps replay safe (a mismatch
+forces a live re-run), but multi-stage pipelines see lower resume cache-hit
+rates than sequential scripts.
 
 ### 7. One consolidated delivery; full usage roll-up
 
@@ -193,7 +201,7 @@ structured JSON at every edge, plain-code joins, one consolidated result.
    (`ToolUseDispatchNode`; per-tool `parallelSafe` flag or read-only
    allowlist). Safety fix plus the cheap latency win; no new dependencies.
    Prerequisite: the single shared abort-controller slot must become
-   per-call. *Landed (2026-07-04)*: tools declare `parallelSafe` on `ITool`
+   per-call. _Landed (2026-07-04)_: tools declare `parallelSafe` on `ITool`
    (set via `defineTool`), and contiguous runs of parallel-safe calls
    dispatch concurrently under a shared semaphore with a batch-scoped abort
    controller; duplicate parallel calls fan out the primary's result instead

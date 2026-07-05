@@ -92,9 +92,9 @@ async function runDispatch(
     node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
   ).prep(shared);
   return await withTestRunContext(noopAgentRuntimeHost, 'dispatch-test', () =>
-    (
-      node as unknown as { _exec(items: unknown[]): Promise<unknown[]> }
-    )._exec(prepped),
+    (node as unknown as { _exec(items: unknown[]): Promise<unknown[]> })._exec(
+      prepped,
+    ),
   );
 }
 

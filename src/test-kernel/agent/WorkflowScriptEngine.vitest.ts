@@ -9,7 +9,6 @@ import {
 } from '@agent/workflowScript';
 import { delay } from '@utils/core';
 
-
 const META = `export const meta = {
   name: 'test-flow',
   description: 'engine test flow',
@@ -287,5 +286,131 @@ return null`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/at least one stage/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('x', [])`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/must be a plain object/);
+  });
+
+  it('blocks Function-constructor escapes through injected primitives', async () => {
+    // agent is a realm-local wrapper, so its .constructor is the sandbox's
+    // codeGeneration-gated (Async)Function — compiling from strings throws.
+    await expect(
+      runWorkflowScript({
+        script: `${META}return agent.constructor('return process')()`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/disallowed/i);
+  });
+
+  it('gives scripts realm-local agent results, not host objects', async () => {
+    const runner = () => Promise.resolve({ nested: { data: 42 } });
+    const run = await runWorkflowScript({
+      script: `${META}
+const r = await agent('x')
+try {
+  return r.constructor.constructor('return typeof process')()
+} catch {
+  return 'blocked:' + r.nested.data
+}`,
+      runAgent: runner,
+    });
+    expect(run.result).toBe('blocked:42');
+  });
+
+  it('allows require/import mentions inside strings and comments', () => {
+    const { meta } = parseWorkflowScript(`${META}
+// you could import('node:fs') here, hypothetically
+const note = "prompts may mention require('node:fs') as prose"
+return note`);
+    expect(meta.name).toBe('test-flow');
+  });
+
+  it('anchors meta to the script start, allowing only comments before it', () => {
+    expect(() =>
+      parseWorkflowScript(`const early = 1\n${META}return early`),
+    ).toThrow(/must begin/);
+    const { meta } = parseWorkflowScript(`// header comment\n${META}return 1`);
+    expect(meta.name).toBe('test-flow');
+  });
+
+  it('keeps determinism guards non-writable and blocks argless new Date()', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+Math.random = () => 0.5
+return Math.random()`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/Math\.random\(\) is unavailable/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return new Date()`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/new Date\(\) without arguments/);
+    const explicit = await runWorkflowScript({
+      script: `${META}return new Date(0).getTime()`,
+      runAgent: echoRunner,
+    });
+    expect(explicit.result).toBe(0);
+  });
+
+  it('does not let parallel() swallow the agent-call cap', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
+        runAgent: echoRunner,
+        maxAgentCalls: 3,
+      }),
+    ).rejects.toThrow(/agent-call cap/);
+  });
+
+  it('logs script bugs swallowed by parallel() so null slots are debuggable', async () => {
+    const logs: string[] = [];
+    const run = await runWorkflowScript({
+      script: `${META}
+return await parallel([
+  () => agent('ok'),
+  () => { throw new Error('script bug here') },
+])`,
+      runAgent: echoRunner,
+      onEvent: (event) => {
+        if (event.type === 'log') logs.push(event.message);
+      },
+    });
+    expect(run.result).toEqual(['result:ok', null]);
+    expect(logs.some((message) => message.includes('script bug here'))).toBe(
+      true,
+    );
+  });
+
+  it('aborts new agent calls after the wall-clock timeout', async () => {
+    let calls = 0;
+    let sawAbort = false;
+    const runner = async (invocation: WorkflowAgentInvocation) => {
+      calls += 1;
+      invocation.signal.addEventListener('abort', () => {
+        sawAbort = true;
+      });
+      await delay(80);
+      return invocation.prompt;
+    };
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+await agent('one')
+return await agent('two')`,
+        runAgent: runner,
+        timeoutMs: 30,
+      }),
+    ).rejects.toThrow(/timed out/);
+    // Let the orphaned continuation reach its second agent() call.
+    await delay(120);
+    expect(calls).toBe(1);
+    expect(sawAbort).toBe(true);
   });
 });
