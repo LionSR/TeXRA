@@ -111,7 +111,7 @@ async function runHistoryShow(
  * stdout, to be redirected next to (or referenced by) that shared bundle's
  * `index.html?trace=<path>`.
  */
-async function runHistoryExport(
+export async function runHistoryExport(
   context: CliContext,
   id: ExecutionId,
   format: 'html' | 'md',
@@ -161,17 +161,18 @@ async function runHistoryExport(
       resourcesPath: context.resourcesPath,
       destDir,
     });
+    writeRawStdout(JSON.stringify(trace));
     if (staged === 'missing') {
       writeTextStderr(
         'Note: the bundled trace-viewer assets were not found in this CLI ' +
           'install, so nothing was staged into --assets-dir. Rebuild the ' +
           'CLI (`npm run texra-local:build`) so packages/trace-viewer builds.',
       );
+      return CliExitCode.Usage;
     }
-    writeRawStdout(JSON.stringify(trace));
     writeTextStderr(
-      `Wrote trace data for ${id}. View it via <redirected-path> next to ` +
-        `${destDir}, e.g. ${destDir}/index.html?trace=<relative-path-to-the-redirected-file>.`,
+      `Wrote trace JSON for ${id} to stdout. Save the output to a file, ` +
+        `then open ${destDir}/index.html?trace=<your-filename>.`,
     );
     return CliExitCode.Success;
   }
