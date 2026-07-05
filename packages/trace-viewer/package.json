@@ -1,0 +1,10 @@
+{
+  "name": "@texra/trace-viewer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config vite.config.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "corepack pnpm run typecheck && vite build --config vite.config.ts"
+  }
+}

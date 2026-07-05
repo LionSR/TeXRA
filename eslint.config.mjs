@@ -365,6 +365,7 @@ export default tseslint.config(
       'packages/desktop/src/**/*.ts',
       'packages/cli/src/**/*.ts',
       'packages/cli/src/**/*.tsx',
+      'packages/trace-viewer/src/**/*.ts',
     ],
     extends: [...tseslint.configs.recommended],
     languageOptions: {
@@ -376,6 +377,7 @@ export default tseslint.config(
           './packages/desktop/tsconfig.preload.json',
           './packages/desktop/tsconfig.renderer.json',
           './packages/cli/tsconfig.json',
+          './packages/trace-viewer/tsconfig.json',
         ],
         tsconfigRootDir: __dirname,
       },

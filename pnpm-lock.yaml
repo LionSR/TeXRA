@@ -768,6 +768,8 @@ importers:
         specifier: ^1.21.2
         version: 1.21.2
 
+  packages/trace-viewer: {}
+
 packages:
 
   '@alcalzone/ansi-tokenize@0.3.0':
