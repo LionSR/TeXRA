@@ -1,5 +1,5 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -67,6 +67,9 @@ import {
   preflightCliHistoryDeleteAll,
   readCliHistoryConfig,
   readCliHistoryDetails,
+  readCliHistoryExportInput,
+  resolveCliHistoryExportAssetsHref,
+  stageCliHistoryExportAssets,
 } from '@cli/runtime/history';
 
 const config = {
@@ -999,5 +1002,114 @@ describe('CLI history runtime', () => {
     expect(GoalStore.getForStream(deletedA)).toBeNull();
     expect(GoalStore.getForStream(deletedB)).toBeNull();
     expect(GoalStore.getForStream(live)?.objective).toBe('keep me');
+  });
+
+  describe('history export (--export / --assets)', () => {
+    it('resolves a blank --assets value to the documented ./assets default', () => {
+      // `--assets ''` must behave identically to omitting the flag, not
+      // produce a broken empty href passed straight to the formatter.
+      expect(resolveCliHistoryExportAssetsHref(undefined)).toBeUndefined();
+      expect(resolveCliHistoryExportAssetsHref('')).toBeUndefined();
+      expect(resolveCliHistoryExportAssetsHref('   ')).toBeUndefined();
+    });
+
+    it('trims a custom --assets href but otherwise passes it through', () => {
+      expect(resolveCliHistoryExportAssetsHref('./custom-assets')).toBe(
+        './custom-assets',
+      );
+      expect(resolveCliHistoryExportAssetsHref('  https://cdn/assets  ')).toBe(
+        'https://cdn/assets',
+      );
+    });
+
+    it('builds export input from the stored config, conversation, and meta', async () => {
+      mocks.readConversation.mockResolvedValue([
+        { role: 'user', content: 'Polish the lemma.' },
+        { role: 'assistant', content: 'Done.' },
+      ]);
+      mocks.readMeta.mockResolvedValue({
+        timestamp: '2026-05-18T08:00:00.000Z',
+        description: 'Polish pass',
+      });
+
+      const exportInput = await readCliHistoryExportInput('a1' as ExecutionId);
+
+      expect(exportInput).toEqual({
+        timestamp: '2026-05-18T08:00:00.000Z',
+        description: 'Polish pass',
+        config: {
+          agent: 'correct',
+          model: 'deepseekT',
+          instruction: 'Polish the introduction.',
+          inputFiles: ['chapters/intro.tex'],
+          mediaFiles: [],
+          contextFiles: [],
+          outputFiles: ['chapters/intro.tex'],
+        },
+        messages: [
+          { role: 'user', content: 'Polish the lemma.' },
+          { role: 'assistant', content: 'Done.' },
+        ],
+      });
+    });
+
+    it('returns null (matching the "not found" path) when config is missing', async () => {
+      mocks.readConfig.mockResolvedValue(null);
+      mocks.readConversation.mockResolvedValue([
+        { role: 'user', content: 'hi' },
+      ]);
+
+      await expect(
+        readCliHistoryExportInput('missing' as ExecutionId),
+      ).resolves.toBeNull();
+    });
+
+    it('returns null when conversation is missing', async () => {
+      mocks.readConversation.mockResolvedValue(null);
+
+      await expect(
+        readCliHistoryExportInput('missing' as ExecutionId),
+      ).resolves.toBeNull();
+    });
+
+    it('stages the bundled HTML export assets into the destination directory', async () => {
+      await withTempDir('texra-history-export-src-', async (resourcesPath) => {
+        await withTempDir('texra-history-export-dest-', async (cwd) => {
+          const htmlExportDir = path.join(resourcesPath, 'htmlExport');
+          await mkdir(htmlExportDir, { recursive: true });
+          await writeFile(
+            path.join(htmlExportDir, 'katex.min.css'),
+            '.katex{}',
+          );
+
+          const destDir = path.join(cwd, 'assets');
+          const result = await stageCliHistoryExportAssets({
+            resourcesPath,
+            destDir,
+          });
+
+          expect(result).toBe('staged');
+          expect(
+            await readFile(path.join(destDir, 'katex.min.css'), 'utf8'),
+          ).toBe('.katex{}');
+        });
+      });
+    });
+
+    it('reports "missing" instead of throwing when bundled assets are absent', async () => {
+      await withTempDir(
+        'texra-history-export-empty-',
+        async (resourcesPath) => {
+          await withTempDir('texra-history-export-dest-', async (cwd) => {
+            const result = await stageCliHistoryExportAssets({
+              resourcesPath,
+              destDir: path.join(cwd, 'assets'),
+            });
+
+            expect(result).toBe('missing');
+          });
+        },
+      );
+    });
   });
 });
