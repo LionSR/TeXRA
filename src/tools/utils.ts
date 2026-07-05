@@ -5,8 +5,6 @@ import micromatch from 'micromatch';
 import { ToolError } from '@shared/schemas/toolResult';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - tools
-
 /**
  * Compile a glob pattern into a matcher that operates on POSIX-style paths.
  * Supports `*`, `?`, and `**` tokens.

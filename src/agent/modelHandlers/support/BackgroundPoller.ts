@@ -3,8 +3,6 @@ import type { AgentTrace } from '@agent/trace';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import { delay } from '@utils/core';
 
-// Type imports
-
 export interface BackgroundPollStats {
   readonly responseId: string;
   readonly status: string;
