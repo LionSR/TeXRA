@@ -61,6 +61,7 @@ import {
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas/settingsViewMessages';
 import {
+  BASH_APPROVAL_CONFIG_TARGET,
   buildApprovalSettingsMessage,
   setBashApprovalEnabled as setBashApprovalEnabledShared,
   setWorkspaceAgentSetting,
@@ -716,7 +717,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         config: platform().config,
       },
       enabled,
-      'global',
+      BASH_APPROVAL_CONFIG_TARGET,
     );
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
