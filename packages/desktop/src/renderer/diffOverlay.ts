@@ -1,9 +1,8 @@
-import { render } from 'lit';
 import {
   DESKTOP_THEME_KIND,
   type DesktopThemeKind,
 } from '@shared/constants/desktopTheme';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { createDialogCloseButton } from './dialogCloseButton';
 import type { DesktopShowDiffMessage } from '../desktopDiffMessages';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
@@ -60,16 +59,13 @@ export function createDiffOverlay(appRoot: HTMLElement): DiffOverlayController {
     body.append(header, view);
     d.append(body);
 
-    const close = document.createElement('wa-button');
-    close.classList.add('desktop-diff-close');
-    close.setAttribute('appearance', 'plain');
-    close.setAttribute('size', 'small');
-    close.setAttribute('aria-label', 'Close diff');
-    close.setAttribute('title', 'Close diff');
-    render(waIcon('xmark'), close);
-    close.addEventListener('click', () => {
-      d.open = false;
-    });
+    const close = createDialogCloseButton(
+      'desktop-diff-close',
+      'Close diff',
+      () => {
+        d.open = false;
+      },
+    );
     d.append(close);
 
     appRoot.append(d);

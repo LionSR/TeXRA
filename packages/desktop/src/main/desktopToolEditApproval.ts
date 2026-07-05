@@ -5,7 +5,6 @@ import path from 'node:path';
 import { nanoid } from 'nanoid';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { DiffViewHost } from '@hosts/uiHosts';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
@@ -26,6 +25,7 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { setDesktopToolEditApprovalHandler } from './platform/index.js';
 

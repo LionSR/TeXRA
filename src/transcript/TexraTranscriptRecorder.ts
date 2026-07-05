@@ -388,6 +388,12 @@ export function attachTranscriptRecorder(
         // adds no row here (keeps transcript output unchanged).
         return;
 
+      case 'child.activity':
+      case 'process.output':
+        // Stage 3a child/process facts replace legacy progress events for UI
+        // badges and process panes; they were not transcript rows before.
+        return;
+
       default: {
         // Exhaustiveness check: adding a new event arm forces an error here.
         const _exhaustive: never = event;

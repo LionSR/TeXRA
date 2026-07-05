@@ -10,7 +10,6 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { debug } from '@logger/logUtils';
@@ -21,6 +20,7 @@ import {
   createWorkspaceLocation,
   WorkspaceFS,
 } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getValidatedConfig } from '@utils/config/configUtils';
 
 export type BuildDisplayFn = (

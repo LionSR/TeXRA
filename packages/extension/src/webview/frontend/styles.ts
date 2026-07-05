@@ -93,8 +93,4 @@ export const mainViewStyles: CSSResult = css`
     margin: 0;
     overflow: visible;
   }
-
-  .file-selection-group--disabled {
-    display: none;
-  }
 `;

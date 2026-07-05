@@ -1,17 +1,16 @@
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type StreamTabId,
 } from '@shared/schemas';
 import { resumeToolUseFromSnapshot } from './executeAgent';
-import { StreamStatusService } from './StreamStatusService';
+import { emitRuntimeEvent } from './emitRuntimeEvent';
+import { defaultSession, type SessionHandle } from './SessionHandle';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import type { SessionHandle } from './SessionHandle';
 
 export interface ResumeQueuedToolUseOptions {
   /** Session owning this run's coordination state. Defaults to the process session. */
@@ -55,9 +54,11 @@ export async function resumeQueuedToolUseSnapshot(
   runtimeHost: AgentRuntimeHost,
   options: ResumeQueuedToolUseOptions,
 ): Promise<boolean> {
-  const streamStatus = options.session?.status ?? StreamStatusService;
+  const session = options.session ?? defaultSession();
+  const streamStatus = session.status;
+  const followUpsQueue = session.followUps;
 
-  ToolUseFollowUpQueue.acquire(streamId);
+  followUpsQueue.acquire(streamId);
   streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
     runtimeHost,
     substate: STREAM_SUBSTATE.RESUMING,
@@ -67,8 +68,8 @@ export async function resumeQueuedToolUseSnapshot(
   let followUps: readonly FollowUpQueueInput[] = seed;
   let resumeError: { error: unknown } | undefined;
   try {
-    followUps = [...seed, ...ToolUseFollowUpQueue.drainItems(streamId)];
-    runtimeHost.emit('updateQueuedFollowUps', { streamId });
+    followUps = [...seed, ...followUpsQueue.drainItems(streamId)];
+    emitRuntimeEvent('updateQueuedFollowUps', { streamId }, session);
 
     await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
       session: options.session,
@@ -85,10 +86,10 @@ export async function resumeQueuedToolUseSnapshot(
     // Re-enqueue the drained follow-ups (explicit seed first) so a later
     // resume replays them instead of dropping them.
     for (const item of followUps) {
-      ToolUseFollowUpQueue.enqueue(streamId, item, { force: true });
+      followUpsQueue.enqueue(streamId, item, { force: true });
     }
     if (followUps.length > 0) {
-      runtimeHost.emit('updateQueuedFollowUps', { streamId });
+      emitRuntimeEvent('updateQueuedFollowUps', { streamId }, session);
     }
   } finally {
     // Only the early-failure path leaves the stream RESUMING (a started run

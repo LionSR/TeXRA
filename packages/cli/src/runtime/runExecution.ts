@@ -1,16 +1,21 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { tryPlatform } from '@platform/platform';
-import { StreamSnapshotStore } from '@transcript';
+import {
+  flushPendingRunTraces,
+  getDefaultStreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
 import { writeTerminalStatus } from '@agent/storage';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
@@ -181,6 +186,10 @@ export async function executeCliRequest(
     defaultSession(),
     runtimeHost,
   );
+  const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
+    defaultSession().events,
+    runtimeHost,
+  );
   const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
     beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
   });
@@ -210,6 +219,20 @@ export async function executeCliRequest(
       ],
     });
 
+  // Headless runs append to StreamLogStore the same as the interactive TUI
+  // (via createRunTrace's transcript recorder), but StreamLogStore.save()/
+  // flush() silently no-op until .load() has run once — without this, every
+  // headless run's streamLogs are appended in memory and then lost entirely
+  // when the process exits. Mirrors runChatTui.tsx's best-effort load. Done
+  // last (right before the run starts) so it can't delay the synchronous
+  // shutdown-hook registration above.
+  const streamLogStore = getDefaultStreamLogStore();
+  try {
+    await streamLogStore.load();
+  } catch {
+    // Persistence stays disabled; the run still executes in-memory as before.
+  }
+
   let result: ExecuteAgentResult;
   try {
     result = await (options.wrap ? options.wrap(invoke) : invoke());
@@ -226,9 +249,11 @@ export async function executeCliRequest(
       await writeTerminalStatus(ownedExecutionId, EXECUTION_STATUS.INTERRUPTED);
     }
     detachResultToast();
+    detachLegacyProgressProjection();
     uninstallApprovalHandlers();
     try {
-      await snapshotStore.flush();
+      flushPendingRunTraces();
+      await Promise.all([streamLogStore.flush(), snapshotStore.flush()]);
     } finally {
       await runtimeHost.close();
     }

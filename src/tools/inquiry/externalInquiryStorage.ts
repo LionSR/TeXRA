@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { Mutex } from 'async-mutex';
 import { z } from 'zod';
 
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createChannelTrace } from '@logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
@@ -380,12 +381,13 @@ export async function ensureExternalInquiryThreadMirror(params: {
   executionId: ExecutionId;
   threadId: ExternalInquiryThreadId;
 }): Promise<ExternalInquiryThreadMirrorPaths> {
+  const threadStoragePath = `${RUNS_STORAGE_DIR}/${params.executionId}/${EXEC_DIR}/${params.threadId}`;
   await copyGlobalDirectoryToExecution(
     threadDir(params.threadId),
-    path.join('executions', params.executionId, EXEC_DIR, params.threadId),
+    threadStoragePath,
   );
 
-  const threadPath = `/executions/${params.executionId}/${EXEC_DIR}/${params.threadId}`;
+  const threadPath = `/${threadStoragePath}`;
   return {
     executionId: params.executionId,
     threadPath,

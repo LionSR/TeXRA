@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliUsageError } from '../runtime/cliContext';
 import {

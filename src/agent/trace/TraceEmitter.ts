@@ -14,9 +14,9 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { nanoid } from 'nanoid';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type {
   AgentEvent,
@@ -241,10 +241,9 @@ export class TraceEmitter implements AgentTrace {
     // Open inside the explicit stage scope so the start event carries the
     // right stageId without forcing the caller to await.
     if (options.stageId && options.stageId !== this.activeStageId()) {
-      const nextStack = [...this.currentStageStack(), options.stageId];
-      this.stageScope.run(nextStack, () => {
-        this.emit({ type: 'stream.start', id, kind });
-      });
+      void this.withStage(options.stageId, () =>
+        this.emit({ type: 'stream.start', id, kind }),
+      );
       return new StreamHandleImpl(this, id, phaseOnly, null);
     }
 

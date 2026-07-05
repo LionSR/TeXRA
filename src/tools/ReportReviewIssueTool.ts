@@ -6,12 +6,12 @@ import {
   REVIEW_SEVERITIES,
   type ReviewIssueReport,
 } from '@agent/review/reviewIssues';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 
 const CHANNEL = 'ReportReviewIssueTool';
 logger.initialize(CHANNEL);

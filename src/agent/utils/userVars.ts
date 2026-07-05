@@ -10,7 +10,6 @@ import {
   AgentCategory,
 } from '@agent/core/definition/AgentDataclass';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
-import { toErrorMessage } from '@common/errors';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -21,6 +20,7 @@ import {
   getPromptFileName,
   getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 import {
   listExternalRoots,

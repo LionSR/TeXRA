@@ -2,7 +2,7 @@
 // still flowing through the original emitter. Approvals are intentionally
 // not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
 
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,
@@ -46,7 +46,7 @@ function sameQueuedFollowUps(
 function refreshQueuedFollowUps(
   streamId: ProgressEventPayloads['updateQueuedFollowUps']['streamId'],
 ): void {
-  const messages = ToolUseFollowUpQueue.getAll(streamId);
+  const messages = defaultSession().followUps.getAll(streamId);
   patchStream(streamId, (s) => {
     if (
       s.queuedFollowUps === messages.length &&
