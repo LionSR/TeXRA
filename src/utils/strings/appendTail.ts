@@ -9,6 +9,8 @@
 // the next reset (the webview's 100k→80k policy). It is clamped to the cap so
 // callers cannot accidentally retain more than `maxChars`.
 
+import { clamp } from '@utils/core/math';
+
 export function appendTail(
   current: string,
   chunk: string,
@@ -16,7 +18,7 @@ export function appendTail(
   retainChars: number = maxChars,
 ): string {
   const safeMaxChars = Math.max(0, maxChars);
-  const safeRetainChars = Math.min(Math.max(0, retainChars), safeMaxChars);
+  const safeRetainChars = clamp(retainChars, 0, safeMaxChars);
   if (!chunk) return current;
   const combined = current + chunk;
   if (combined.length <= safeMaxChars) return combined;
