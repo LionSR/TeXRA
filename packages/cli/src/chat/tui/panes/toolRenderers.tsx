@@ -5,6 +5,7 @@ import { Box, Text, useWindowSize } from 'ink';
 
 // Local imports - shared schemas and utilities
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
+import { toolDisplayKind } from '@tools/toolKind';
 import { isObject } from '@utils/core';
 import {
   collapseWhitespace,
@@ -148,9 +149,13 @@ function statusColor(toolUse: NormalizedToolUse): 'green' | 'red' | undefined {
 
 function isEditLikeTool(toolName: string): boolean {
   const name = lastSegmentToolName(toolName).toLowerCase();
+  if (toolDisplayKind(name) === 'edit') return true;
+  // Beyond TeXRA's own tool registry: a delegated Claude Code sub-agent
+  // reports its own built-in tool names (`edit`, `multiedit`) verbatim, and
+  // some provider tool-use variants carry a `str_replace`/`text_editor`
+  // substring instead of one of the exact names classified above.
   return (
     name === 'edit' ||
-    name === 'edit_file' ||
     name === 'multiedit' ||
     name.includes('str_replace') ||
     name.includes('text_editor')
@@ -527,7 +532,10 @@ export function UniversalToolRow({
 }
 
 function isBashTool(toolUse: NormalizedToolUse): boolean {
-  return lastSegmentToolName(toolUse.toolName).toLowerCase() === 'bash';
+  return (
+    toolDisplayKind(lastSegmentToolName(toolUse.toolName).toLowerCase()) ===
+    'bash'
+  );
 }
 
 function isMcpTool(toolUse: NormalizedToolUse): boolean {
