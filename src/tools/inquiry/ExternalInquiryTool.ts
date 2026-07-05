@@ -225,14 +225,20 @@ function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
     lines.push(`Turn ${turn.turnIndex} · ${turn.timestamp}`);
     if (turn.context) lines.push(`Context: ${turn.context}`);
     lines.push('', 'Q:', turn.question);
-    if (turn.answer) {
-      lines.push('', `A: (answered ${turn.answeredAt ?? '—'})`, turn.answer);
-      if (turn.sessionLinks?.length) {
-        lines.push('', 'Session links:');
-        for (const link of turn.sessionLinks) lines.push(`  - ${link}`);
-      }
-    } else {
-      lines.push('', '(awaiting user answer)');
+    switch (turn.kind) {
+      case 'answered':
+        lines.push('', `A: (answered ${turn.answeredAt})`, turn.answer);
+        if (turn.sessionLinks?.length) {
+          lines.push('', 'Session links:');
+          for (const link of turn.sessionLinks) lines.push(`  - ${link}`);
+        }
+        break;
+      case 'open':
+        lines.push('', '(awaiting user answer)');
+        break;
+      case 'answeredUnhydrated':
+        lines.push('', '(answer recorded but not yet loaded — reload the thread)');
+        break;
     }
   }
 
