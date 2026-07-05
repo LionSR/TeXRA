@@ -824,9 +824,7 @@ export class PRPollingSource extends PollingSourceBase<
   ): void {
     if (!state.currentShaState) return;
     state.currentShaState.pendingAnnotationRuns =
-      state.currentShaState.pendingAnnotationRuns.filter(
-        (p) => p.id !== runId,
-      );
+      state.currentShaState.pendingAnnotationRuns.filter((p) => p.id !== runId);
   }
 
   private emitCheckAnnotations(
