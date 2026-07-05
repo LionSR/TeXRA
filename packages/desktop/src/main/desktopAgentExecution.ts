@@ -844,10 +844,24 @@ export class DesktopProgressBridge {
             ([, executionId]) => !activeExecutionIds.has(executionId),
           ),
         );
-        const { waitingStreams: persistedWaitingStreams } =
-          await this.detectRaceGuardedWaitingStreams(executionIdMap);
+        const {
+          waitingStreams: persistedWaitingStreams,
+          activeExecutionIds: postDetectActiveExecutionIds,
+          allExecutionIds: postDetectAllExecutionIds,
+        } = await this.detectRaceGuardedWaitingStreams(executionIdMap);
         for (const streamId of persistedWaitingStreams) {
           waitingStreams.add(streamId);
+        }
+        // The helper only race-guards its own (persisted-record) result.
+        // waitingStreams also carries the pre-existing in-memory-scan
+        // entries from above, which predate the KV read and so never got
+        // checked against activity that happened during it -- recheck them
+        // here too, or an actively-resumed stream could still be handed to
+        // closeRunningTaskGroupsForStreams() below.
+        for (const [streamId, executionId] of postDetectAllExecutionIds) {
+          if (postDetectActiveExecutionIds.has(executionId)) {
+            waitingStreams.delete(streamId);
+          }
         }
       } catch (detectError) {
         // Keep going with whatever the in-memory scan already found -- a
