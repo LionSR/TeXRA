@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '@model';
 import { decideRunModel } from '@model/runModelDecision';
 import type { ModelOptionData } from '@shared/schemas';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
 
 const AVAILABLE_MODELS_LINE = /^Available models:.*$/m;
 
@@ -76,12 +76,10 @@ export function withDelegationModelAvailability(
   tool: ToolDefinition,
   modelNames: readonly string[] | null,
 ): ToolDefinition {
-  if (!DELEGATION_TOOLS.has(tool.name) || !tool.description) return tool;
-
-  const availableModelsLine = formatAvailableModelsLine(modelNames);
-  const description = AVAILABLE_MODELS_LINE.test(tool.description)
-    ? tool.description.replace(AVAILABLE_MODELS_LINE, availableModelsLine)
-    : `${tool.description}\n\n${availableModelsLine}`;
-
-  return { ...tool, description };
+  return replaceDelegationDescriptionBlock(
+    tool,
+    AVAILABLE_MODELS_LINE,
+    () => formatAvailableModelsLine(modelNames),
+    { appendIfMissing: true },
+  );
 }

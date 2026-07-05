@@ -2,10 +2,8 @@
 import { z } from 'zod';
 
 // Local imports - latex
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { arxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { abandonOnAbort } from '@tools/cancellation';
 import {
   type ArxivPaperMetadata,
   createArxivClient,
@@ -13,7 +11,7 @@ import {
   normaliseArxivIdentifier,
 } from '@tools/latex/arxivShared';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
-import { waitForRateLimit } from '@tools/citation/rateLimiter';
+import { rateLimitedRequest } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -51,15 +49,12 @@ export class ArxivMetadataTool extends defineTool({
 
     let entries;
     try {
-      // Respect arXiv API rate limits
-      await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
-      // Use arxiv-client's ids() method for direct ID lookup. The client
-      // has no AbortSignal hook, so a cancelled batch abandons the
-      // in-flight lookup instead of waiting it out.
-      entries = await abandonOnAbort(
-        createArxivClient().ids([requestId]).execute(),
-        getCurrentToolCallContext()?.signal,
+      // Use arxiv-client's ids() method for direct ID lookup.
+      entries = await rateLimitedRequest(
+        'arxiv',
+        ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
         'arXiv metadata lookup',
+        () => createArxivClient().ids([requestId]).execute(),
       );
     } catch (error) {
       throw new ToolError(

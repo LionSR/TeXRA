@@ -19,7 +19,7 @@
 import { getVisibleAgents } from '@agent/index/agentRegistry';
 import type { ToolDefinition } from '@model';
 import type { AgentCategory } from '@shared/schemas/agent';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
 
 /** Matches the "Available agents:" header plus its contiguous (non-blank) list
  * lines, stopping at the first blank line or end of string. Anchored to a line
@@ -69,20 +69,19 @@ export function visibleDelegationAgentsBlock(category: AgentCategory): string {
 
 /**
  * Replace the "Available agents:" block in a delegation tool's description with
- * the supplied block. Non-delegation tools and tools without a description are
- * returned untouched. The block is injected via a replacer function so a `$` in
- * an agent description (e.g. inline LaTeX math) is never read as a replacement
- * pattern.
+ * the supplied block, appending it when the description has no such block yet.
+ * A `$` in an agent description (e.g. inline LaTeX math) stays literal.
  */
 export function withDelegationAgentAvailability(
   tool: ToolDefinition,
   agentsBlock: string,
 ): ToolDefinition {
-  if (!DELEGATION_TOOLS.has(tool.name) || !tool.description) return tool;
-
-  const description = AVAILABLE_AGENTS_BLOCK.test(tool.description)
-    ? tool.description.replace(AVAILABLE_AGENTS_BLOCK, () => agentsBlock)
-    : `${tool.description}\n\n${agentsBlock}`;
-
-  return { ...tool, description };
+  return replaceDelegationDescriptionBlock(
+    tool,
+    AVAILABLE_AGENTS_BLOCK,
+    agentsBlock,
+    {
+      appendIfMissing: true,
+    },
+  );
 }
