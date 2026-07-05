@@ -216,6 +216,11 @@ async function createBridge(
   options: CreateBridgeOptions = {},
 ): Promise<TestableBridge> {
   vi.resetModules();
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  initPlatform(createFakePlatform());
   vi.doMock('@agent/runtime/ProgressViewBridge', () => ({
     setProgressViewBridge: vi.fn(),
   }));
@@ -390,6 +395,11 @@ async function createExecution(options: {
   onRunCompleted?: () => void;
 }): Promise<DesktopExecution> {
   vi.resetModules();
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  initPlatform(createFakePlatform());
   vi.doMock('@agent/runtime/ProgressViewBridge', () => ({
     setProgressViewBridge: vi.fn(),
   }));
@@ -1713,6 +1723,28 @@ describe('DesktopProgressBridge', () => {
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
       expect(retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('forgets desktop goal records when deleting a stream', async () => {
+    const stream = 'goal-stream' as StreamTabId;
+    const bridge = await createBridge([]);
+    const { GoalStore: bridgeGoalStore } = await import('@tools/goal');
+    await bridgeGoalStore.forget(stream);
+    await bridgeGoalStore.start(stream, 'finish the cleanup');
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: stream,
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      await bridge.deleteStream(stream);
+
+      expect(bridgeGoalStore.getForStream(stream)).toBeNull();
+    } finally {
+      await bridgeGoalStore.forget(stream);
       bridge.dispose();
     }
   });
