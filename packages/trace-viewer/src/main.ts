@@ -28,7 +28,9 @@ import { replayTrace, type ReplayableTrace } from './replayTrace';
 const root = document.querySelector<HTMLElement>('#app');
 if (root == null) throw new Error('Trace viewer root (#app) not found.');
 
-const conversationView = document.createElement('stream-conversation') as HTMLElement & {
+const conversationView = document.createElement(
+  'stream-conversation',
+) as HTMLElement & {
   archived: boolean;
 };
 conversationView.archived = true;
