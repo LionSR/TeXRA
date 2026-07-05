@@ -3,15 +3,13 @@ import { type Work } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { abandonOnAbort } from '@tools/cancellation';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local file imports
 import { CROSSREF_CONSTANTS, crossrefClient } from './constants';
-import { waitForRateLimit } from './rateLimiter';
+import { rateLimitedRequest } from './rateLimiter';
 
 const CrossrefDoiInputSchema = z.strictObject({
   doi: z.string().describe('DOI to look up, with or without a DOI URL prefix.'),
@@ -28,19 +26,16 @@ export class CrossrefDoiTool extends defineTool({
   protected async execute(input: CrossrefDoiInput): Promise<ToolResult> {
     const trimmedDoi = requireNonEmptyString(input.doi, 'DOI');
 
-    const response = await wrapApiCall(async () => {
-      await waitForRateLimit(
-        'crossref',
-        CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
-      );
-      // The Crossref client has no AbortSignal hook, so a cancelled batch
-      // abandons the in-flight lookup instead of waiting it out.
-      return abandonOnAbort(
-        crossrefClient.work(trimmedDoi),
-        getCurrentToolCallContext()?.signal,
-        'Crossref DOI lookup',
-      );
-    }, 'Crossref lookup failed');
+    const response = await wrapApiCall(
+      () =>
+        rateLimitedRequest(
+          'crossref',
+          CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+          'Crossref DOI lookup',
+          () => crossrefClient.work(trimmedDoi),
+        ),
+      'Crossref lookup failed',
+    );
 
     if (!response.ok || !response.content?.message) {
       throw new ToolError('Crossref response did not include metadata.');
