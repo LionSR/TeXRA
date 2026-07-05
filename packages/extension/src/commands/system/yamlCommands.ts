@@ -156,12 +156,3 @@ export async function handleParseYaml(): Promise<void> {
     await showLoggedErrorMessage(CHANNEL, 'Error parsing YAML', err);
   }
 }
-
-/**
- * `texra.parseYaml` is now registered through the shared command registry
- * in `extensionCommandSurface.ts` (see #3775). This stub is kept for the
- * existing `registerYamlCommands(context)` call site.
- */
-export function registerYamlCommands(_context: vscode.ExtensionContext): void {
-  /* registration handled by extensionCommandSurface */
-}

@@ -8,9 +8,6 @@ import {
 } from '@commands/files';
 import {
   registerLatexdiffCommands,
-  registerImageCommands,
-  registerFigureCommands,
-  registerLinterCommands,
   registerCompareCommands,
 } from '@commands/latex';
 import {
@@ -23,12 +20,7 @@ import {
   registerFollowUpCommand,
   registerResumeAgentCommand,
 } from '@commands/agent';
-import {
-  registerXmlCommands,
-  registerYamlCommands,
-  registerTextEditorCommands,
-  registerMainViewCommands,
-} from '@commands/system';
+import { registerMainViewCommands } from '@commands/system';
 import { registerStateRestoreCommand } from '@commands/history';
 import {
   registerSettingsViewCommands,
@@ -59,14 +51,8 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerCleanCommands(context);
   registerMergeCommands(context);
   registerExecuteCommand(context);
-  registerImageCommands(context);
-  registerFigureCommands(context);
-  registerXmlCommands(context);
-  registerYamlCommands(context);
   registerAuthCommands(context);
   registerStateRestoreCommand(context);
-  registerTextEditorCommands(context);
-  registerLinterCommands(context);
   registerSettingsViewCommands(context);
   registerCompareCommands(context);
   registerFollowUpCommand(context);
