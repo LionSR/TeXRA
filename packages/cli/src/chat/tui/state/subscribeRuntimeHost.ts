@@ -14,18 +14,18 @@ import {
   type StreamMetaCommand,
 } from '@shared/streams/streamMetaReducer';
 
+import { activeStreamId } from './cliState/focusSlice';
 import {
-  cliState,
-  patchStream,
   registerChildStreams,
-  removeStream,
   setParentStream,
-  type StreamSlice,
-} from './cliState';
+} from './cliState/parentStreamSlice';
+import { removeStream } from './cliState/removeStream';
+import { patchStream } from './cliState/streamsSlice';
 import { mergeChildStreams } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
+import type { StreamSlice } from './cliState/types';
 import type { StreamSnapshotStore } from '@transcript';
 
 type Emit = <K extends ProgressEvent>(
@@ -109,7 +109,7 @@ function applyToState<K extends ProgressEvent>(
       const p = payload as ProgressEventPayloads['setActiveStream'];
       const next = p.streamId;
       if (!next) {
-        cliState.activeStreamId.set(undefined);
+        activeStreamId.set(undefined);
         return;
       }
       // Register background child streams without stealing focus from the
@@ -124,7 +124,7 @@ function applyToState<K extends ProgressEvent>(
         category: p.agentCategory ?? s.category,
       }));
       if (p.suppressViewSwitch !== true) {
-        cliState.activeStreamId.set(next);
+        activeStreamId.set(next);
       }
       return;
     }

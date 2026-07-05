@@ -23,7 +23,9 @@ import {
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
-import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
+import { activeForm } from '@cli/chat/tui/state/cliState/foregroundOverlaySlice';
+import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
+import { sessionMeta } from '@cli/chat/tui/state/cliState/sessionSlice';
 import {
   CLI_STATE_SETTINGS,
   STATE_SETTINGS,
@@ -64,7 +66,7 @@ function renderConfigFormProps(): {
   resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
   openForm?: (formName: string) => void;
 } {
-  const node = cliState.activeForm.get()?.render(() => {}, 20) as {
+  const node = activeForm.get()?.render(() => {}, 20) as {
     type?: (props: unknown) => unknown;
     props?: unknown;
   };
@@ -272,7 +274,7 @@ describe('/config slash command wiring', () => {
 
     registerBuiltinSlashCommands({ getConfigStores: () => stores });
     expect(openCliSlashCommandForm('config', '')).toBe(true);
-    expect(cliState.activeForm.get()?.commandName).toBe('config');
+    expect(activeForm.get()?.commandName).toBe('config');
 
     const props = renderConfigFormProps();
     expect(props.entries?.map((entry) => entry.key)).toEqual(
@@ -345,8 +347,8 @@ describe('/config slash command wiring', () => {
       getConfigStores: () => stores,
       onApiModeSelect: (apiMode) => {
         selectedApiModes.push(apiMode);
-        cliState.sessionMeta.set({
-          ...cliState.sessionMeta.get(),
+        sessionMeta.set({
+          ...sessionMeta.get(),
           apiMode,
         });
       },
@@ -359,7 +361,7 @@ describe('/config slash command wiring', () => {
     await props.writeValue?.(openRouter, true);
 
     expect(selectedApiModes).toEqual(['personal']);
-    expect(cliState.sessionMeta.get().apiMode).toBe('personal');
+    expect(sessionMeta.get().apiMode).toBe('personal');
     expect(invalidateModelOptionsCache).toHaveBeenCalledOnce();
   });
 
@@ -387,6 +389,6 @@ describe('/config slash command wiring', () => {
     const props = renderConfigFormProps();
     props.openForm?.('tools');
 
-    expect(cliState.activeForm.get()?.commandName).toBe('tools');
+    expect(activeForm.get()?.commandName).toBe('tools');
   });
 });

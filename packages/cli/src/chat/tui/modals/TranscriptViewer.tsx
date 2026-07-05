@@ -18,7 +18,7 @@ import {
   syncTranscriptScrollState,
 } from '../state/transcriptScroll';
 import { transcriptToLines } from '../state/transcriptLines';
-import type { StreamSlice } from '../state/cliState';
+import type { StreamSlice } from '../state/cliState/types';
 
 export interface TranscriptViewerProps {
   readonly slice: StreamSlice | undefined;

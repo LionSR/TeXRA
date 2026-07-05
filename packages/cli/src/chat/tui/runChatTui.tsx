@@ -91,7 +91,18 @@ import {
 } from './render/noColorOutput';
 import { createTuiViewportController } from './render/tuiViewportController';
 import { clearApprovals } from './state/approvalQueue';
-import { cliState, patchSessionMeta, resetCliState } from './state/cliState';
+import { activeStreamId as activeStreamIdSignal } from './state/cliState/focusSlice';
+import { parentStream as parentStreamSignal } from './state/cliState/parentStreamSlice';
+import { resetCliState } from './state/cliState/reset';
+import {
+  patchSessionMeta,
+  sessionMeta as sessionMetaSignal,
+} from './state/cliState/sessionSlice';
+import { streams as streamsSignal } from './state/cliState/streamsSlice';
+import {
+  pendingExitHint,
+  pendingExitResumeId,
+} from './state/cliState/exitHintSlice';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
@@ -203,15 +214,15 @@ export type ChatTuiFocusedChildFollowUpRoute = FocusedChildFollowUpRoute;
 
 export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpRoute {
   return focusedChildFollowUpRoute({
-    activeStreamId: cliState.activeStreamId.get(),
-    parentStream: cliState.parentStream.get(),
-    streams: cliState.streams.get(),
+    activeStreamId: activeStreamIdSignal.get(),
+    parentStream: parentStreamSignal.get(),
+    streams: streamsSignal.get(),
   });
 }
 
 function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
-  const parentStream = cliState.parentStream.get();
-  const streams = cliState.streams.get();
+  const parentStream = parentStreamSignal.get();
+  const streams = streamsSignal.get();
   return focusedChildStoppedMessage({
     parentStream,
     streamId,
@@ -318,7 +329,7 @@ export async function runChat(
   let activeApprovalPolicy = context.approvalPolicy;
   const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
-    apiMode: cliState.sessionMeta.get().apiMode,
+    apiMode: sessionMetaSignal.get().apiMode,
     get approvalPolicy(): CliApprovalPolicy {
       return activeApprovalPolicy;
     },
@@ -349,7 +360,7 @@ export async function runChat(
     resetSession: resetSessionForClear,
     resumeExecution: (id: ExecutionId) => chatController.resume(id),
   });
-  cliState.sessionMeta.set({
+  sessionMetaSignal.set({
     agent,
     model,
     modelSource: defaults.modelSource,
@@ -421,7 +432,7 @@ export async function runChat(
   let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamLifecycleStatus | undefined =>
     session.streamId
-      ? cliState.streams.get().get(session.streamId)?.status
+      ? streamsSignal.get().get(session.streamId)?.status
       : undefined;
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
@@ -478,9 +489,9 @@ export async function runChat(
   };
 
   const resetSessionForClear = (): void => {
-    const activeStreamId = session.streamId ?? cliState.activeStreamId.get();
+    const activeStreamId = session.streamId ?? activeStreamIdSignal.get();
     const activeStatus = activeStreamId
-      ? cliState.streams.get().get(activeStreamId)?.status
+      ? streamsSignal.get().get(activeStreamId)?.status
       : undefined;
     const isRunPending = Boolean(session.runPromise && !session.runCompleted);
 
@@ -494,7 +505,7 @@ export async function runChat(
       return;
     }
 
-    const meta = cliState.sessionMeta.get();
+    const meta = sessionMetaSignal.get();
     if (isRunPending) chatController.stop();
     clearApprovals();
     followUpQueue.clear();
@@ -505,7 +516,7 @@ export async function runChat(
     // React/signal view). Drop them so transcript projection can't replay
     // the cleared conversation into the fresh `<Static>` scrollback.
     const store = getDefaultStreamLogStore();
-    for (const streamId of cliState.streams.get().keys()) {
+    for (const streamId of streamsSignal.get().keys()) {
       store.delete(streamId).catch(() => {
         // Best-effort: a KV failure leaves the log on disk, but the run
         // is already torn down — nothing actionable to surface here.
@@ -555,7 +566,7 @@ export async function runChat(
     // submit cannot pass chatTuiCanStartRootRun during model/auth resolution.
     const pendingStart = Promise.resolve().then(async (): Promise<void> => {
       try {
-        const meta = cliState.sessionMeta.get();
+        const meta = sessionMetaSignal.get();
         const currentAgent = meta.agent || agent;
         const currentModel = meta.model || model;
         const selection = await selectCliRunnableModel(currentModel, {
@@ -760,8 +771,8 @@ export async function runChat(
     if (pendingExitTimer) clearTimeout(pendingExitTimer);
     pendingExitTimer = undefined;
     exitArmed = false;
-    cliState.pendingExitHint.set(false);
-    cliState.pendingExitResumeId.set(undefined);
+    pendingExitHint.set(false);
+    pendingExitResumeId.set(undefined);
   };
   const removeProcessHandlers = (): void => {
     process.off('SIGINT', handleSigint);
@@ -774,10 +785,10 @@ export async function runChat(
   };
   // Persist the reopen hint to native scrollback: the main session plus each
   // resumable tool-use subagent, so any route can be continued by its own id.
-  // Read cliState before resetCliState() clears it.
+  // Read the streams slice before resetCliState() clears it.
   const printResumeHintOnExit = (): void => {
     if (!session.executionId) return;
-    const streams = cliState.streams.get();
+    const streams = streamsSignal.get();
     const hint = formatResumeHint(
       collectResumeTargets({
         rootExecutionId: session.executionId,
@@ -833,8 +844,8 @@ export async function runChat(
   };
   const armExit = (): void => {
     exitArmed = true;
-    cliState.pendingExitHint.set(true);
-    cliState.pendingExitResumeId.set(session.executionId);
+    pendingExitHint.set(true);
+    pendingExitResumeId.set(session.executionId);
     if (pendingExitTimer) clearTimeout(pendingExitTimer);
     pendingExitTimer = setTimeout(clearPendingExit, 800);
   };

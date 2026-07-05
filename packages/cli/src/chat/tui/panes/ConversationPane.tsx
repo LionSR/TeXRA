@@ -3,11 +3,12 @@
 
 import { Box, Text } from 'ink';
 
+import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
+import { streams as streamsSignal } from '../state/cliState/streamsSlice';
 import {
-  cliState,
   thinkingIndicatorVisible,
   type ConversationEntry,
-} from '../state/cliState';
+} from '../state/cliState/types';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 import { THINKING_MARKER } from '../ui/glyphs';
@@ -120,8 +121,8 @@ function renderConversationPaneEntry({
 export function ConversationPane(
   props: ConversationPaneProps = {},
 ): React.JSX.Element {
-  const activeStreamId = useSignal(cliState.activeStreamId);
-  const streams = useSignal(cliState.streams);
+  const activeStreamId = useSignal(activeStreamIdSignal);
+  const streams = useSignal(streamsSignal);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
   const displayEntries = splitTranscriptEntries(entries, slice?.status).pending;

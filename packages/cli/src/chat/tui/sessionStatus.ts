@@ -5,7 +5,7 @@ import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
-import type { BypassState } from './state/cliState';
+import type { BypassState } from './state/cliState/types';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
 const GOAL_OBJECTIVE_STATUS_LENGTH = 160;

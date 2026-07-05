@@ -20,7 +20,7 @@ import {
 } from '../state/childExecutions';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
-import type { ProcessOutputTail, StreamSlice } from '../state/cliState';
+import type { ProcessOutputTail, StreamSlice } from '../state/cliState/types';
 
 interface RowProps {
   readonly child: ActiveChildInfo;

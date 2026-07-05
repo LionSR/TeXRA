@@ -31,14 +31,16 @@ import {
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
+import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
 import {
-  cliState,
   patchStream,
-  resetCliState,
+  streams,
+} from '@cli/chat/tui/state/cliState/streamsSlice';
+import {
   thinkingIndicatorVisible,
   type ConversationEntry,
   type StreamSlice,
-} from '@cli/chat/tui/state/cliState';
+} from '@cli/chat/tui/state/cliState/types';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import {
   CLI_LOCAL_STREAM_ID,
@@ -172,7 +174,7 @@ describe('CLI conversation transcript splitting', () => {
 
     finalizeAssistantTranscriptEntries(STREAM_ID);
 
-    const slice = cliState.streams.get().get(STREAM_ID);
+    const slice = streams.get().get(STREAM_ID);
     expect(slice?.entries.map((item) => item.finalized)).toEqual([true, true]);
     const split = splitTranscriptEntries(
       slice?.entries ?? [],
@@ -201,7 +203,7 @@ describe('CLI conversation transcript splitting', () => {
       );
 
       expect(
-        cliState.streams
+        streams
           .get()
           .get(STREAM_ID)
           ?.entries.map((item) => ({
@@ -236,9 +238,7 @@ describe('CLI conversation transcript splitting', () => {
         },
       );
 
-      expect(cliState.streams.get().get(STREAM_ID)?.status).toBe(
-        STREAM_STATUS.RUNNING,
-      );
+      expect(streams.get().get(STREAM_ID)?.status).toBe(STREAM_STATUS.RUNNING);
     } finally {
       dispose();
     }
@@ -278,7 +278,7 @@ describe('CLI conversation transcript splitting', () => {
     }));
 
     let split = splitTranscriptEntries(
-      cliState.streams.get().get(STREAM_ID)?.entries ?? [],
+      streams.get().get(STREAM_ID)?.entries ?? [],
       STREAM_STATUS.RUNNING,
     );
     expect(split.finalized).toHaveLength(0);
@@ -287,7 +287,7 @@ describe('CLI conversation transcript splitting', () => {
     finalizeAssistantTranscriptEntries(STREAM_ID);
 
     split = splitTranscriptEntries(
-      cliState.streams.get().get(STREAM_ID)?.entries ?? [],
+      streams.get().get(STREAM_ID)?.entries ?? [],
       STREAM_STATUS.WAITING,
     );
     expect(split.finalized.map((e) => e.id)).toEqual(['a1', 't1']);

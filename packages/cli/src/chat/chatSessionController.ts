@@ -52,7 +52,9 @@ import { generateExecutionId } from '@utils/core/executionId';
 
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
-import { cliState, patchSessionMeta, patchStream } from './tui/state/cliState';
+import { activeStreamId, rootStreamId } from './tui/state/cliState/focusSlice';
+import { patchSessionMeta } from './tui/state/cliState/sessionSlice';
+import { patchStream } from './tui/state/cliState/streamsSlice';
 import {
   chatTuiCanStartRootRun,
   markChatTuiRunCompleted,
@@ -276,9 +278,9 @@ export function createChatSessionController(
           runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
           onStreamResolved: (resolvedStreamId) => {
             session.streamId = resolvedStreamId;
-            cliState.rootStreamId.set(resolvedStreamId);
+            rootStreamId.set(resolvedStreamId);
             moveLocalTranscriptToStream(resolvedStreamId);
-            cliState.activeStreamId.set(resolvedStreamId);
+            activeStreamId.set(resolvedStreamId);
             if (session.stopRequested) interruptActiveRun();
           },
           onBeforeWaiting: (lastResponse) => {
@@ -354,7 +356,7 @@ export function createChatSessionController(
     session.runExitCode = CliExitCode.Success;
     session.streamId = resolution.streamId;
     session.executionId = resolution.snapshot.executionId;
-    cliState.rootStreamId.set(resolution.streamId);
+    rootStreamId.set(resolution.streamId);
 
     const currentModel = resolution.config.model;
     const sessionContext = getSessionContext(currentModel);
@@ -380,7 +382,7 @@ export function createChatSessionController(
       };
     });
     projectStreamTranscript(resolution.streamId);
-    cliState.activeStreamId.set(resolution.streamId);
+    activeStreamId.set(resolution.streamId);
 
     const { wrapped, approvalsUnavailable, finalize } =
       setupRunHost(sessionContext);

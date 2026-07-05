@@ -41,13 +41,21 @@ import {
 } from '../state/approvalQueue';
 import { formatResumeCommand } from '../state/resumeHint';
 import { terminalCapabilities } from '../state/terminalCapabilities';
+import { codexPreferenceVersion as codexPreferenceVersionSignal } from '../state/cliState/codexPreferenceSlice';
 import {
-  cliState,
+  pendingExitHint as pendingExitHintSignal,
+  pendingExitResumeId as pendingExitResumeIdSignal,
+} from '../state/cliState/exitHintSlice';
+import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
+import { parentStream as parentStreamSignal } from '../state/cliState/parentStreamSlice';
+import { sessionMeta as sessionMetaSignal } from '../state/cliState/sessionSlice';
+import { streams as streamsSignal } from '../state/cliState/streamsSlice';
+import {
   NO_BYPASS,
   thinkingIndicatorVisible,
   type BypassState,
   type StreamSlice,
-} from '../state/cliState';
+} from '../state/cliState/types';
 import {
   activeStreamScope,
   nearestActiveStreamAncestor,
@@ -821,12 +829,12 @@ interface StatusBarProps {
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
-  const activeStreamId = useSignal(cliState.activeStreamId);
-  const streams = useSignal(cliState.streams);
-  const parentStream = useSignal(cliState.parentStream);
-  const sessionMeta = useSignal(cliState.sessionMeta);
-  const pendingExitHint = useSignal(cliState.pendingExitHint);
-  const pendingExitResumeId = useSignal(cliState.pendingExitResumeId);
+  const activeStreamId = useSignal(activeStreamIdSignal);
+  const streams = useSignal(streamsSignal);
+  const parentStream = useSignal(parentStreamSignal);
+  const sessionMeta = useSignal(sessionMetaSignal);
+  const pendingExitHint = useSignal(pendingExitHintSignal);
+  const pendingExitResumeId = useSignal(pendingExitResumeIdSignal);
   const approvals = useSignal(approvalQueueStatus);
   const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
@@ -845,7 +853,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // rather than read on every render: the poll re-reads the preference so an
   // external config change is reflected within the interval, and an in-process
   // `/subscription` toggle bumps `codexPreferenceVersion` to refresh at once.
-  const codexPreferenceVersion = useSignal(cliState.codexPreferenceVersion);
+  const codexPreferenceVersion = useSignal(codexPreferenceVersionSignal);
   const [subscriptionActive, setSubscriptionActive] = useState(false);
 
   useEffect(() => {
