@@ -50,6 +50,34 @@ describe('checkToolResultTextLimit', () => {
     const error = checkToolResultTextLimit(text, 100);
     assert.ok(error !== null);
     assert.ok(error.includes('Tool result too large'));
+    // The whole point of maxLength is to bound context size — the replacement
+    // itself must never exceed the requested limit, even though the default
+    // head/tail budgets (4,000 / 50,000 chars) are far larger than 100.
+    assert.ok(
+      error.length <= 100,
+      `expected replacement length ${error.length} <= 100`,
+    );
+  });
+
+  it('bounds the replacement by maxLength even when default head/tail budgets would overshoot it', () => {
+    const text = 'a'.repeat(10_000);
+    const maxLength = 500;
+    const error = checkToolResultTextLimit(text, maxLength);
+    assert.ok(error !== null);
+    assert.ok(error.length <= maxLength);
+  });
+
+  it('always elides a positive count when the head budget alone would cover the whole text', () => {
+    // text.length is only slightly over maxLength, and well under the
+    // hardcoded head budget (TOOL_RESULT_TRUNCATION_HEAD_CHARS = 4,000) — the
+    // near-boundary case where an unscaled head budget would swallow the
+    // entire text, leaving a nonsensical "0 characters elided" marker.
+    const text = 'a'.repeat(1500);
+    const maxLength = 1000;
+    const error = checkToolResultTextLimit(text, maxLength);
+    assert.ok(error !== null);
+    assert.ok(error.length <= maxLength);
+    assert.ok(!error.includes('[... 0 characters elided'));
   });
 });
 
