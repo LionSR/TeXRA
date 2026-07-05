@@ -181,12 +181,12 @@ Six subcommands. Exit codes reuse `packages/cli/src/runtime/exitCodes.ts`; score
 | Cell execution                    | `packages/cli/src/runtime/runExecution.ts`; tool-use path via `packages/cli/src/commands/agentsRun.ts`                                |
 | Compile gate / diff / structure   | `src/agent/output/compileCheck.ts`, `src/latex/latexdiff/`, `src/latex/latexToolchain.ts`, `labelSearch.ts`, `extractBibliography.ts` |
 | CAS / Lean verifiers              | `src/tools/wolfram/wolframScriptUtils.ts`, `src/tools/lean/direct/lakeCommands.ts`, `LspTools.ts`, `LoogleTool.ts`                    |
-| Issue localization                | `src/agent/review/reviewIssues.ts`; solver pattern from `resources/tool_use_agents/changeReviewer.yaml`                               |
+| Issue localization                | `src/agent/review/reviewIssues.ts`; solver pattern from `packages/extension/resources/tool_use_agents/changeReviewer.yaml`            |
 | Fresh-task supply                 | `src/latex/arxivProcessor.ts`                                                                                                         |
 | Trace archive                     | `TraceEmitter` subscriber (pattern: `src/transcript/TexraTranscriptRecorder.ts`); `AgentEvent` union                                  |
 | Usage / cost / abort              | `src/agent/core/usage/RunUsageAccumulator.ts` (`totalCost` drives `--max-cost-usd`)                                                   |
 | Providers incl. internal gateways | `src/agent/modelHandlers/` (four stacks; `baseURL` already threaded)                                                                  |
-| Solver/judge agents               | ordinary agent YAML under `resources/agents/bench/`, run via `runAgent` from `@texra/core`                                            |
+| Solver/judge agents               | ordinary agent YAML under `packages/extension/resources/agents/bench/`, run via `runAgent` (`src/agent/runtime/runAgent.ts`)          |
 | Env fingerprint                   | `texra doctor` machinery (`packages/cli/src/commands/doctor.ts`)                                                                      |
 
 All additive: new code lives in `src/bench/` (VS Code-free zone, host services via `platform()`) and `packages/cli/`. **The MVP requires zero changes to `src/agent/` core.**
