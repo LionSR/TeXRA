@@ -17,17 +17,6 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'TextEditorCommands';
 logger.initialize(CHANNEL);
 
-/**
- * `texra.testTextEditor` is now registered through the shared command
- * registry in `extensionCommandSurface.ts` (see #3775). This stub is kept
- * for the existing `registerTextEditorCommands(context)` call site.
- */
-export function registerTextEditorCommands(
-  _context: vscode.ExtensionContext,
-): void {
-  /* registration handled by extensionCommandSurface */
-}
-
 // Prompt for a line number, rejecting non-numeric input and (when `min` is
 // given) values below the floor. Shared by the start/end/insert prompts.
 async function promptLineNumber(
