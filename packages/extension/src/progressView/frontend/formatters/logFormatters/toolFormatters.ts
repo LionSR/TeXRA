@@ -16,6 +16,7 @@ import type { LogMessageData } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { toolDisplayKind } from '@tools/toolKind';
 import { isObject } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -39,12 +40,7 @@ import {
 } from '../htmlBuilders';
 import { registerProposalInput } from '../proposalInputStore';
 import { stringifyWithLanguage } from '../parseUtils';
-import {
-  TOOLS_WITH_FILE_LINK,
-  TOOLS_WITH_FILE_CONTENT,
-  TOOL_LABEL_MAP,
-  TRIVIAL_WRITE_OUTPUT,
-} from '../constants';
+import { TOOL_LABEL_MAP, TRIVIAL_WRITE_OUTPUT } from '../constants';
 
 import {
   buildBannerContent,
@@ -135,13 +131,13 @@ export function formatToolUseTemplate(
   });
 
   // Show output if present
-  const isWriteTool = TOOLS_WITH_FILE_CONTENT.has(toolName);
+  const isWriteTool = toolDisplayKind(toolName) === 'write';
   const isTrivialWriteOutput =
     isWriteTool && outputText.trim() === TRIVIAL_WRITE_OUTPUT;
   if (
     outputText &&
     !toolName.startsWith('mcp:') &&
-    !TOOLS_WITH_FILE_LINK.has(toolName) &&
+    toolDisplayKind(toolName) !== 'read' &&
     !isTrivialWriteOutput
   ) {
     sections.push(
