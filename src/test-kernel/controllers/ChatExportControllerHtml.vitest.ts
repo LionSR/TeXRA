@@ -96,7 +96,9 @@ describe('ChatExportController.exportAsHtml', () => {
   afterEach(async () => {
     setDefaultStreamLogStore(previousStreamLogStore);
     await Promise.all(
-      tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+      tempDirs
+        .splice(0)
+        .map((dir) => rm(dir, { recursive: true, force: true })),
     );
   });
 
@@ -116,7 +118,10 @@ describe('ChatExportController.exportAsHtml', () => {
       config(),
     );
 
-    const outcome = await controller.exportAsHtml('exec-missing-logs', templatePath);
+    const outcome = await controller.exportAsHtml(
+      'exec-missing-logs',
+      templatePath,
+    );
 
     expect(outcome).toEqual({ status: 'streamLogs_missing' });
   });
@@ -159,7 +164,9 @@ describe('ChatExportController.exportAsHtml', () => {
     const html = new TextDecoder().decode(written);
     expect(html).toContain('<script>window.__TEXRA_TRACE__');
     expect(html).toContain('"id":"entry-1"');
-    expect(html).toContain('<script type="module" crossorigin src="./index.js">');
+    expect(html).toContain(
+      '<script type="module" crossorigin src="./index.js">',
+    );
   });
 
   it('throws when the standalone template bundle is missing', async () => {
