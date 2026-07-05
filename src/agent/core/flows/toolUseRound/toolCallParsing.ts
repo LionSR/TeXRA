@@ -23,8 +23,12 @@ export const UNSAFE_DUPLICATE_CALL_ERROR =
 export interface DuplicateCallPartition {
   /** Duplicate callId → index of its primary within the same safe segment. */
   sharedWithPrimary: Map<string, number>;
-  /** Duplicates of side-effect tools — never executed, answered with an error. */
-  rejected: Set<string>;
+  /**
+   * Duplicates of side-effect tools, mapped to their primary's index —
+   * never executed; answered with an error only when the primary actually
+   * ran (an interrupted primary leaves the duplicate cancelled with it).
+   */
+  rejected: Map<string, number>;
 }
 
 /**
@@ -47,9 +51,9 @@ export function partitionDuplicateCalls(
   isParallelSafe: (call: SdkToolCall) => boolean,
 ): DuplicateCallPartition {
   const sharedWithPrimary = new Map<string, number>();
-  const rejected = new Set<string>();
+  const rejected = new Map<string, number>();
   const segmentPrimaries = new Map<string, number>();
-  const unsafeSeen = new Set<string>();
+  const unsafeSeen = new Map<string, number>();
   for (const [index, call] of toolCalls.entries()) {
     const key = call.name + '\0' + stableStringify(call.input);
     if (isParallelSafe(call)) {
@@ -62,8 +66,9 @@ export function partitionDuplicateCalls(
     } else {
       // Barrier: workspace state may change, so pre-barrier reads are stale.
       segmentPrimaries.clear();
-      if (unsafeSeen.has(key)) {
-        rejected.add(call.callId);
+      const unsafePrimary = unsafeSeen.get(key);
+      if (unsafePrimary !== undefined) {
+        rejected.set(call.callId, unsafePrimary);
       } else {
         // A different mutation changes workspace state, which makes an
         // identical repeat of an earlier mutation plausibly intentional
@@ -71,7 +76,7 @@ export function partitionDuplicateCalls(
         // tracking window. Parallel-safe calls do not reset it: with state
         // unchanged, an identical mutation repeat stays redundant.
         unsafeSeen.clear();
-        unsafeSeen.add(key);
+        unsafeSeen.set(key, index);
       }
     }
   }

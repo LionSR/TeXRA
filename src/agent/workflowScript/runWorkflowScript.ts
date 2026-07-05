@@ -256,6 +256,8 @@ export async function runWorkflowScript(
   // realm with the sandbox's own JSON.parse, so scripts never hold
   // host-realm objects (see sandbox.ts). Non-JSON-safe values degrade the
   // way JSON always does; agent results are JSON-safe by contract.
+  // Note: the ?? fallback is reachable — JSON.stringify returns undefined
+  // for function/symbol VALUES too, not only for undefined input.
   const toPayload = (value: unknown): string | undefined =>
     value === undefined ? undefined : (JSON.stringify(value) ?? 'null');
 
@@ -326,7 +328,7 @@ export async function runWorkflowScript(
   return {
     meta,
     result,
-    journal: [...journal.values()].sort((a, b) => a.index - b.index),
+    journal: [...journal.values()].toSorted((a, b) => a.index - b.index),
     agentCalls: callCounter,
   };
 }

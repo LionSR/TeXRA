@@ -269,6 +269,42 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     }
   });
 
+  it('leaves unsafe duplicates cancelled when their primary never ran', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    let interrupted = false;
+    const { node, dispose } = dispatchHarness({
+      tools: { write_file: probeTool(probe, 'write_file', 5) },
+      checkInterruption: () => interrupted,
+    });
+    try {
+      const calls = [
+        makeCall('c1', 'write_file', { path: 'a', content: 'x' }),
+        makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
+      ];
+      const shared = { toolCalls: calls, shouldStop: false, messages: [] };
+      const prepped = await (
+        node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
+      ).prep(shared);
+      // Interrupt lands after planning but before anything executes.
+      interrupted = true;
+      const results = (await withTestRunContext(
+        noopAgentRuntimeHost,
+        'dispatch-test',
+        () =>
+          (
+            node as unknown as { _exec(items: unknown[]): Promise<unknown[]> }
+          )._exec(prepped),
+      )) as ExecResult[];
+
+      assert.equal(probe.events.length, 0, 'nothing should execute');
+      // The duplicate must not claim a "side effects" skip when no effect
+      // happened at all — it is cancelled along with its primary.
+      assert.deepEqual(results, [null, null]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('allows an identical mutation again after a different mutation', async () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
     const { node, dispose } = dispatchHarness({

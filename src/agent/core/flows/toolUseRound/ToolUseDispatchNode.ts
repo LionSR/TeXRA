@@ -110,7 +110,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
    * synthetic error instead — the model can re-issue sequentially if it
    * truly wants the effect twice.
    */
-  private _unsafeDuplicateCallIds = new Set<string>();
+  private _unsafeDuplicateCallIds = new Map<string, number>();
 
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
@@ -231,7 +231,12 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     results: (ToolExecutionResult | null)[],
   ): void {
     for (const [index, call] of calls.entries()) {
-      if (!this._unsafeDuplicateCallIds.has(call.callId)) continue;
+      const primaryIndex = this._unsafeDuplicateCallIds.get(call.callId);
+      if (primaryIndex === undefined) continue;
+      // If the primary never ran (interrupted batch), the duplicate stays
+      // null too — a "side effects" skip message would be misleading when
+      // no effect happened at all.
+      if (!results[primaryIndex]) continue;
       const duplicateResult: ToolResult = {
         status: 'error',
         error: UNSAFE_DUPLICATE_CALL_ERROR,
@@ -326,7 +331,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
   clone(): this {
     const cloned = super.clone();
     cloned._duplicateToPrimary = new Map();
-    cloned._unsafeDuplicateCallIds = new Set();
+    cloned._unsafeDuplicateCallIds = new Map();
     return cloned;
   }
 
