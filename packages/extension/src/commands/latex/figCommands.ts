@@ -31,16 +31,6 @@ async function runLaTeXCommand(
   }
 }
 
-export function registerFigureCommands(
-  _context: vscode.ExtensionContext,
-): void {
-  // `texra.extractFigurePaths` (#3775) and the tikz commands
-  // (`texra.extractTikzFigures`, `texra.compileTikzFigures`, batch 3 in
-  // #3781) are registered through `extensionCommandSurface`. This stub
-  // is kept so `commands.ts` can keep its existing call site; the
-  // exported handlers below are referenced by the registry's actions.
-}
-
 export async function handleExtractFigurePaths(): Promise<void> {
   await runLaTeXCommand(
     'extract figure paths',

@@ -1,5 +1,4 @@
 // Third-party imports
-import * as vscode from 'vscode';
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - core
@@ -44,13 +43,4 @@ export async function handleParseXml(): Promise<void> {
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error parsing XML', err);
   }
-}
-
-/**
- * `texra.parseXml` is now registered through the shared command registry
- * in `extensionCommandSurface.ts` (see #3775). This stub is kept for the
- * existing `registerXmlCommands(context)` call site.
- */
-export function registerXmlCommands(_context: vscode.ExtensionContext): void {
-  /* registration handled by extensionCommandSurface */
 }
