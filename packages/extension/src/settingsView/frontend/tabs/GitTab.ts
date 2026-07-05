@@ -6,6 +6,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
@@ -23,6 +24,7 @@ import type { PRSubscriptionEntry } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 
 // Local imports - shared constants
 import {
@@ -182,7 +184,16 @@ export class GitTab extends LitElement {
     'none';
   @property({ attribute: false })
   prSubscriptions: readonly PRSubscriptionEntry[] = [];
-  @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
+
+  /**
+   * Commands the active host's registry declares `unsupported(...)`, sent
+   * once at webview-ready (see `unsupportedCommands` in
+   * `@shared/utils/dispatcher`). `null` before that broadcast arrives —
+   * checked via `isKnownUnsupported`, which treats "not yet known" as
+   * unsupported so a control never flashes visible then hidden.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   private handleMarkCommitsToggle(event: Event): void {
     const target = event.target as WaSwitch | null;
@@ -247,7 +258,10 @@ export class GitTab extends LitElement {
     return html`
       <div class="git-container">
         ${
-          this.desktopHost
+          isKnownUnsupported(
+            this.unsupportedCommands,
+            SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS,
+          )
             ? nothing
             : html`
                 <div class="setting-block">
@@ -328,7 +342,10 @@ export class GitTab extends LitElement {
               `
         }
         ${
-          !this.desktopHost && this.prSubscriptions.length > 0
+          !isKnownUnsupported(
+            this.unsupportedCommands,
+            SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS,
+          ) && this.prSubscriptions.length > 0
             ? html`
                 <div class="setting-block">
                   <p class="section-title">Active GitHub subscriptions</p>
