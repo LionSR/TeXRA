@@ -11,6 +11,7 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
+import type { executeCliRequest } from '@cli/runtime/runExecution';
 import {
   EXECUTION_STATUS,
   type StreamTabId,
@@ -92,6 +93,13 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   };
 }
 
+function baseRequest(): Parameters<typeof executeCliRequest>[0] {
+  return {
+    config: {},
+    executionId: 'exec-1',
+  } as Parameters<typeof executeCliRequest>[0];
+}
+
 function toolUseConfig() {
   return {
     agent: 'chat',
@@ -126,6 +134,7 @@ describe('executeCliRequest', () => {
   beforeEach(stubRunExecutionDeps);
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.all(
       tempDirs
         .splice(0)
@@ -135,10 +144,7 @@ describe('executeCliRequest', () => {
 
   it('marks headless never runs as approval-unavailable for agent execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext());
 
@@ -152,10 +158,7 @@ describe('executeCliRequest', () => {
 
   it('marks headless ask runs as approval-unavailable for agent execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext({ approvalPolicy: 'ask' }));
 
@@ -169,10 +172,7 @@ describe('executeCliRequest', () => {
 
   it('keeps yolo runs approval-available for agent execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext({ approvalPolicy: 'yolo' }));
 
@@ -186,10 +186,7 @@ describe('executeCliRequest', () => {
 
   it('hides host-unavailable tools in CLI execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(
       request,
@@ -212,10 +209,7 @@ describe('executeCliRequest', () => {
 
   it('preserves caller-provided runtime tool exclusions', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext(), {
       runtimeUnavailableTools: ['custom_tool'],
@@ -237,10 +231,7 @@ describe('executeCliRequest', () => {
 
   it('installs CLI approval handlers with the runtime prompt hook', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
     const context = cliContext({ mode: 'interactive', approvalPolicy: 'ask' });
 
     await executeCliRequest(request, context);
@@ -259,10 +250,7 @@ describe('executeCliRequest', () => {
 
   it('restores CLI approval handlers before closing the runtime host', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
     const uninstall = vi.fn();
     mocks.installCliApprovalHandlers.mockReturnValue(uninstall);
 
@@ -278,10 +266,7 @@ describe('executeCliRequest', () => {
   it('persists headless stream sidecars emitted through the runtime host', async () => {
     await installStoragePlatform();
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
     const todo: TodoItem = {
       content: 'Write the introduction',
       status: 'in_progress',
@@ -310,6 +295,53 @@ describe('executeCliRequest', () => {
     expect(snapshot.todos).toEqual([todo]);
   });
 
+  it('loads the stream log store before the run and flushes it after, in order', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { getDefaultStreamLogStore } = await import('@transcript');
+    const request = baseRequest();
+    const store = getDefaultStreamLogStore();
+    const callOrder: string[] = [];
+    vi.spyOn(store, 'load').mockImplementation(async () => {
+      callOrder.push('load');
+    });
+    vi.spyOn(store, 'flush').mockImplementation(async () => {
+      callOrder.push('flush');
+    });
+    mocks.runAgent.mockImplementationOnce(async () => {
+      callOrder.push('runAgent');
+      return {
+        category: 'toolUse',
+        executionId: 'exec-1',
+        status: 'completed',
+        streamId: 'stream-1',
+      };
+    });
+
+    await executeCliRequest(request, cliContext());
+
+    // The bug this test guards: StreamLogStore.save()/flush() silently no-op
+    // until .load() has run once, so headless runs lost their whole
+    // streamLogs timeline. `load` must precede the run, `flush` must follow it.
+    expect(callOrder).toEqual(['load', 'runAgent', 'flush']);
+  });
+
+  it('flushes the stream log store even when the run throws', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { getDefaultStreamLogStore } = await import('@transcript');
+    const request = baseRequest();
+    const store = getDefaultStreamLogStore();
+    const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
+    const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
+    mocks.runAgent.mockRejectedValueOnce(new Error('boom'));
+
+    await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
+      'boom',
+    );
+
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('closes the runtime host when sidecar flush fails', async () => {
     vi.resetModules();
     const flushError = new Error('flush failed');
@@ -329,10 +361,7 @@ describe('executeCliRequest', () => {
 
     try {
       const { executeCliRequest } = await import('@cli/runtime/runExecution');
-      const request = {
-        config: {},
-        executionId: 'exec-1',
-      } as Parameters<typeof executeCliRequest>[0];
+      const request = baseRequest();
 
       await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
         flushError,
@@ -350,10 +379,7 @@ describe('executeCliRequest', () => {
     const platform = createFakePlatform();
     initPlatform(platform);
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
     let resolveRun:
       | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
       | undefined;
@@ -393,10 +419,7 @@ describe('executeCliRequest', () => {
     const platform = createFakePlatform();
     initPlatform(platform);
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = {
-      config: {},
-      executionId: 'exec-1',
-    } as Parameters<typeof executeCliRequest>[0];
+    const request = baseRequest();
 
     await executeCliRequest(request, cliContext(), {
       registerExecution: true,

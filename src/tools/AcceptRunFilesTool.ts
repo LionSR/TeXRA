@@ -23,7 +23,11 @@ import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import {
+  ToolError,
+  type EditRecord,
+  type ToolResult,
+} from '@shared/schemas/toolResult';
 
 // Local imports - tools
 import { requireRuntimeHost } from '@tools/contextHelpers';
@@ -48,8 +52,8 @@ import {
 import { filterNotNull } from '@utils/core';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
+  findExistingRunStoragePath,
   getOriginalSnapshotPath,
-  resolveStoragePath,
 } from '@utils/files/taskRunStorage';
 
 // ============================================================================
@@ -133,7 +137,7 @@ Optional:
     const { execution_id: executionId, files, strip_criticize } = input;
     const runtimeHost = requireRuntimeHost('accept_run_files');
 
-    const runDir = await resolveStoragePath(executionId);
+    const runDir = await findExistingRunStoragePath(executionId);
     const runDirExists = runDir !== undefined;
 
     // Verify execution exists — run dir may not exist in workspace storage mode
@@ -212,7 +216,7 @@ Optional:
 
     // Phase 2: Request approval and write each file
     const results: string[] = [];
-    const edits: ToolResult['edits'] = [];
+    const edits: EditRecord[] = [];
     const acceptedEntries: {
       outputPath: string;
       originalPath: string;
@@ -288,6 +292,7 @@ Optional:
     if (changed === 0) {
       const summary = `No changes to accept from run ${executionId}`;
       return {
+        status: 'executed',
         summary,
         output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
         edits,
@@ -320,6 +325,7 @@ Optional:
         : '';
     const summary = `Accepted ${accepted}/${changed} changed ${pluralize(changed, 'file')} from run ${executionId}${strippedSuffix}${unchangedSuffix}`;
     return {
+      status: 'executed',
       summary,
       output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
       edits,
@@ -338,7 +344,7 @@ Optional:
   ): Promise<{ sourceAbsolute: string; sourceLocation: FileLocation }> {
     // Try run storage first (primary then legacy)
     if (runDirExists) {
-      const rel = await resolveStoragePath(executionId, runPath);
+      const rel = await findExistingRunStoragePath(executionId, runPath);
       if (rel) {
         const abs = StorageFS.fullPath(rel);
         // Symlinks in run storage mean the round didn't emit the file —

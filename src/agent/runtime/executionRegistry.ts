@@ -8,7 +8,7 @@
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   StreamStatusService,
-  type StreamStatusRegistry,
+  type StreamStatusMachine,
 } from '@agent/runtime/StreamStatusService';
 import {
   interruptRegistry,
@@ -138,7 +138,7 @@ export class ExecutionRegistry {
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private readonly disposeStatusListener: () => void;
   private readonly processOutput: ProcessOutputPoller;
-  private readonly streamStatus: StreamStatusRegistry;
+  private readonly streamStatus: StreamStatusMachine;
   private readonly interrupts: InterruptRegistry;
   // Persistent listeners stay attached across notifications (unlike one-shot
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
@@ -154,7 +154,7 @@ export class ExecutionRegistry {
   }: {
     readonly interrupts?: InterruptRegistry;
     readonly processOutput?: ProcessOutputPoller;
-    readonly streamStatus?: StreamStatusRegistry;
+    readonly streamStatus?: StreamStatusMachine;
   } = {}) {
     this.interrupts = interrupts;
     this.processOutput = processOutput;

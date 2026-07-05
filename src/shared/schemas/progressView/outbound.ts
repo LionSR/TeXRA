@@ -306,6 +306,11 @@ export const SyncStreamContentMessageSchema = z.object({
   goalObjective: z.string().optional(),
 });
 
+export type SyncStreamContentPayload = Omit<
+  z.infer<typeof SyncStreamContentMessageSchema>,
+  'command'
+>;
+
 const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED),
   active: z.boolean(),

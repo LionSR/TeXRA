@@ -20,11 +20,11 @@ export function requireFileReadForEdit(
     return null;
   }
   return {
+    status: 'error',
     summary: `Read ${path} before editing`,
-    output:
+    error:
       errorMessage ??
       'Edits to existing files require a prior read in this session. Please call read_file first.',
-    isError: true,
     diagnostics: { reason: 'unread-file', path },
   };
 }

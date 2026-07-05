@@ -9,6 +9,7 @@
 import { z } from 'zod';
 
 // Local imports - core
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -141,7 +142,7 @@ export class ZoteroSearchTool extends defineTool({
     year,
     library,
     include_collections,
-  }: ZoteroSearchInput) {
+  }: ZoteroSearchInput): Promise<ToolResult> {
     const port = getZoteroPort();
 
     // Build search params: use advanced tuple search when structured fields
@@ -168,6 +169,7 @@ export class ZoteroSearchTool extends defineTool({
 
     if (result.length === 0) {
       return {
+        status: 'executed',
         summary: `No results found for ${label}`,
         output: 'No matching items in Zotero library.',
       };
@@ -193,6 +195,7 @@ export class ZoteroSearchTool extends defineTool({
     });
 
     return {
+      status: 'executed',
       summary: `Found ${formatResultCount(result.length, 'item')} matching ${label}`,
       output: items.join('\n'),
     };

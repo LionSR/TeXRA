@@ -92,11 +92,6 @@ export class LatexDiffManager {
     return path.dirname(location.absolutePath);
   }
 
-  private resolveRunStorageSourceDir(location: FileLocation): string | null {
-    if (location.kind !== 'runStorage') return null;
-    return path.dirname(location.absolutePath);
-  }
-
   private logLatexdiffResult(
     result: LaTeXdiffResult,
     operation: string = 'latexdiff',
@@ -418,7 +413,9 @@ export class LatexDiffManager {
     // round directory first so same-round sibling edits win, then fall back to
     // the original source tree for unchanged inputs and bibliographies.
     const extraInputDirs = [
-      this.resolveRunStorageSourceDir(sourceLocation),
+      sourceLocation.kind === 'runStorage'
+        ? path.dirname(sourceLocation.absolutePath)
+        : null,
       this.resolveWorkspaceSourceDir(referenceLocation),
     ].filter((dir): dir is string => dir !== null);
     const ok = await compileLatex2Pdf(diffLocation, {

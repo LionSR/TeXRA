@@ -5,7 +5,13 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 // Local imports - tools
-import type { GhCheckRun, GhPullRequest } from '@tools/github/prTypes';
+import type {
+  GhCheckRun,
+  GhIssueComment,
+  GhPullRequest,
+  GhReview,
+  GhReviewComment,
+} from '@tools/github/prTypes';
 
 // Local imports - test support
 import { mockGitHubClient } from '../support/githubClientMock';
@@ -19,9 +25,9 @@ interface CiStartedState {
     typeof noopAgentRuntimeHost
   >;
   initialized: boolean;
-  seenIssueCommentIds: Set<number>;
-  seenReviewCommentIds: Set<number>;
-  seenReviewIds: Set<number>;
+  issueComments: TestDedupedResource<GhIssueComment>;
+  reviewComments: TestDedupedResource<GhReviewComment>;
+  reviews: TestDedupedResource<GhReview>;
   lastFailedCheckKeys: Set<string>;
   lastAnnotationKeys: Set<string>;
   pendingAnnotationRuns: GhCheckRun[];
@@ -43,10 +49,6 @@ interface CiStartedState {
     pagesByPage: Map<number, GhCheckRun[]>;
     lastTotalCount: number;
   };
-  sinceCursors: {
-    issueComments?: string;
-    reviewComments?: string;
-  };
   lastSuccessAt: number;
   consecutiveFailures: number;
   skipPollUntilMs: number;
@@ -56,9 +58,23 @@ interface CiStartedSource {
   pollOne(key: string, state: CiStartedState): Promise<void>;
 }
 
+interface TestDedupedResource<T> {
+  sinceCursor: string | undefined;
+  seed(items: readonly T[]): void;
+  diff(items: readonly T[], emit: (item: T) => void): void;
+}
+
 const SHA = 'abcdef1234567890';
 const OLD_SHA = '1234567890abcdef';
 let emitCiStartedEvents = false;
+
+function testDedupedResource<T>(): TestDedupedResource<T> {
+  return {
+    sinceCursor: undefined,
+    seed: vi.fn(),
+    diff: vi.fn(),
+  };
+}
 
 function createState(
   events: string[],
@@ -71,9 +87,9 @@ function createState(
     listeners: new Set([listener]),
     runtimeHostByListener: new Map([[listener, noopAgentRuntimeHost]]),
     initialized: true,
-    seenIssueCommentIds: new Set(),
-    seenReviewCommentIds: new Set(),
-    seenReviewIds: new Set(),
+    issueComments: testDedupedResource(),
+    reviewComments: testDedupedResource(),
+    reviews: testDedupedResource(),
     lastFailedCheckKeys: new Set(),
     lastAnnotationKeys: new Set(),
     pendingAnnotationRuns: [],
@@ -85,7 +101,6 @@ function createState(
     merged: false,
     mergeableState: 'clean',
     etags: {},
-    sinceCursors: {},
     lastSuccessAt: Date.now(),
     consecutiveFailures: 0,
     skipPollUntilMs: 0,

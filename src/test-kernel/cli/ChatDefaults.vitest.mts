@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { listExecutions } from '@agent/storage';
@@ -46,6 +46,13 @@ vi.mock('@utils/files/storageFS', () => ({
 
 const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
 
+beforeEach(() => {
+  mockedListExecutions.mockReset();
+  mockedListExecutions.mockResolvedValue([]);
+  mockedReadJson.mockReset();
+  mockedReadJson.mockRejectedValue(new Error('no user defaults'));
+});
+
 async function workspaceWithConfig(config: unknown): Promise<string> {
   const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
   await mkdir(join(workspace, '.texra'), { recursive: true });
@@ -68,8 +75,8 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'deepseekproT',
       source: 'builtin',
-      agentSource: 'builtin',
-      modelSource: 'builtin',
+      agentSource: 'builtin-default',
+      modelSource: 'builtin-default',
     });
   });
 
@@ -83,7 +90,7 @@ describe('CLI chat defaults', () => {
       agent: 'research',
       model: 'deepseekproT',
       source: 'builtin',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
     });
   });
 
@@ -99,8 +106,8 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'deepseekproT',
       source: 'mixed',
-      agentSource: 'workspace',
-      modelSource: 'builtin',
+      agentSource: 'workspace-config',
+      modelSource: 'builtin-default',
     });
   });
 
@@ -117,8 +124,8 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'sonnet46T',
       source: 'mixed',
-      agentSource: 'workspace',
-      modelSource: 'env',
+      agentSource: 'workspace-config',
+      modelSource: 'environment',
     });
   });
 
@@ -133,7 +140,7 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'sonnet46T',
       source: 'mixed',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
       modelSource: 'history',
     });
   });
@@ -171,7 +178,7 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
       modelSource: 'history',
     });
   });
@@ -193,7 +200,7 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
       modelSource: 'history',
     });
   });
@@ -209,7 +216,7 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
       modelSource: 'history',
     });
   });
@@ -224,8 +231,8 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
-      modelSource: 'workspace',
+      agentSource: 'builtin-default',
+      modelSource: 'workspace-config',
     });
 
     mockedReadJson.mockResolvedValueOnce({
@@ -239,8 +246,8 @@ describe('CLI chat defaults', () => {
     ).resolves.toMatchObject({
       agent: 'assistant',
       model: 'sonnet46T',
-      agentSource: 'builtin',
-      modelSource: 'user',
+      agentSource: 'builtin-default',
+      modelSource: 'user-config',
     });
   });
 
@@ -252,7 +259,7 @@ describe('CLI chat defaults', () => {
       }),
     ).resolves.toMatchObject({
       agent: 'assistant',
-      agentSource: 'builtin',
+      agentSource: 'builtin-default',
     });
   });
 
@@ -265,8 +272,65 @@ describe('CLI chat defaults', () => {
       }),
     ).resolves.toMatchObject({
       agent: 'simplifier',
-      agentSource: 'override',
+      agentSource: 'explicit-override',
     });
+  });
+
+  it('skips user and history I/O when explicit overrides resolve agent and model', async () => {
+    const workspace = await workspaceWithConfig({
+      chat: { agent: 'assistant', model: 'sonnet46T' },
+    });
+
+    await expect(
+      resolveChatDefaults({
+        cwd: workspace,
+        agentOverride: 'simplifier',
+        modelOverride: 'deepseekT',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'simplifier',
+      model: 'deepseekT',
+      source: 'mixed',
+      agentSource: 'explicit-override',
+      modelSource: 'explicit-override',
+    });
+    expect(mockedReadJson).not.toHaveBeenCalled();
+    expect(mockedListExecutions).not.toHaveBeenCalled();
+  });
+
+  it('skips user and history I/O when environment resolves agent and model', async () => {
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+        envAgent: 'assistant',
+        envModel: 'sonnet46T',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'assistant',
+      model: 'sonnet46T',
+      source: 'mixed',
+      agentSource: 'environment',
+      modelSource: 'environment',
+    });
+    expect(mockedReadJson).not.toHaveBeenCalled();
+    expect(mockedListExecutions).not.toHaveBeenCalled();
+  });
+
+  it('still loads history when only the agent is directly resolved', async () => {
+    mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
+
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+        agentOverride: 'simplifier',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'simplifier',
+      model: 'sonnet46T',
+      agentSource: 'explicit-override',
+      modelSource: 'history',
+    });
+    expect(mockedListExecutions).toHaveBeenCalledOnce();
   });
 
   it('uses prefixed command-specific workspace defaults', async () => {
@@ -300,8 +364,8 @@ describe('CLI chat defaults', () => {
       agent: 'assistant',
       model: 'deepseekT',
       source: 'user',
-      agentSource: 'user',
-      modelSource: 'user',
+      agentSource: 'user-config',
+      modelSource: 'user-config',
     });
   });
 });

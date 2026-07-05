@@ -37,7 +37,10 @@ import replacementEngine from '@replacement/engine';
 
 // Type imports
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 
 // Local imports - utils
 import { clamp, filterNotNullish } from '@utils/core';
@@ -63,7 +66,6 @@ import {
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
-  type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
@@ -2538,7 +2540,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async createToolUseFollowUpMessages(
     client: OpenAI | undefined,
     call: OpenAIResponseToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -2585,7 +2587,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     };
 
     // Create mutable copy for adding attachmentSummary/files
-    const finalResult: ToolResultPayload = { ...result };
+    const finalResult: ToolResult = { ...result };
     const canUploadFiles = this.supportsToolResultFileUpload;
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];

@@ -654,9 +654,9 @@ distinction any group renderer consumes). The mapping is explicit:
 collapse the legacy 2-value helper applies (`{completed,cancelled}→stopped`,
 `failed→error`), renamed so "ok" stops being spelled "stopped".
 
-**Tier 1 — SDK (`@texra/core` / `AgentEvent`).** `StreamStatus` does not
-leak into the SDK today (verified) — keep it that way: the SDK speaks
-`RunOutcome`, `StreamPhase`, and the `AgentEvent` union only.
+**Tier 1 — future SDK package / `AgentEvent`.** `StreamStatus` should not
+leak into a future SDK package: the SDK surface should speak `RunOutcome`,
+`StreamPhase`, and the `AgentEvent` union only.
 `ExecutionListingEntry.terminalStatus` (re-exported as free `string`)
 switches to `outcome?: RunOutcome` with the read shim. The union gaining
 `status`/`child.activity`/`process.output` arms is deliberately breaking for
@@ -724,9 +724,9 @@ ordering they force:
 4. **`requestRetry` must be co-designed with the error-pipeline plan** —
    `error-pipeline-and-ownership.md` T2 names a single retry owner; the
    interactions port is that owner's request surface, not a competitor.
-5. **SDK-breaking event work before publishing `@texra/core`.** All
-   `AgentEvent` arm additions and the `StageEndEvent.status` change are free
-   now, expensive the day the package has external consumers.
+5. **SDK-breaking event work before reintroducing/publishing an SDK package.**
+   All `AgentEvent` arm additions and the `StageEndEvent.status` change are
+   free now, expensive the day a package has external consumers.
 
 **Deliberate behavior changes (visible, and intended):**
 
@@ -739,6 +739,12 @@ ordering they force:
 - Un-attributed stop paths must name an outcome (`cancelled`), which
   _changes_ CLI history for future runs from `unknown` to `interrupted`-
   equivalent — a bug fix wearing a behavior change.
+- A lifecycle outcome for a stream already in WAITING is intentionally written
+  as `WAITING → RUNNING` (`resume`) followed by `RUNNING → outcome`
+  (`lifecycle`). The old preservation behavior left a completed cycle stuck in
+  resumable UI state; the machine now records the run outcome explicitly while
+  keeping WAITING's in-flight/resumable semantics for streams that have not
+  reached a lifecycle outcome.
 
 **Risks and their mitigations:**
 

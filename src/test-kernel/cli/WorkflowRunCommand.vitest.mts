@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
     initLocalCliPlatform: vi.fn(),
     isAuthenticated: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
-    resolveCliRunModel: vi.fn(),
+    selectCliRunModel: vi.fn(),
     writeResultMeta: vi.fn(),
   };
 });
@@ -55,7 +55,7 @@ vi.mock('@cli/runtime/runModel', () => ({
     quietLogs: true,
     renderRunProgress: false,
   })),
-  resolveCliRunModel: mocks.resolveCliRunModel,
+  selectCliRunModel: mocks.selectCliRunModel,
 }));
 
 vi.mock('@cli/commands/_helpers/output', () => ({
@@ -111,7 +111,7 @@ describe('CLI workflow run command', () => {
       path: '/agents/polish.yaml',
       tools: [],
     });
-    mocks.resolveCliRunModel.mockImplementation(
+    mocks.selectCliRunModel.mockImplementation(
       async (_context: CliContext, model: string | undefined) =>
         model ?? 'deepseekT',
     );
@@ -158,7 +158,7 @@ describe('CLI workflow run command', () => {
 
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
-    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
@@ -189,7 +189,7 @@ describe('CLI workflow run command', () => {
       'missing-agent',
       'run',
     );
-    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
@@ -214,7 +214,7 @@ describe('CLI workflow run command', () => {
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('chat', 'run');
-    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
@@ -235,7 +235,7 @@ describe('CLI workflow run command', () => {
 
     expect(mocks.initLocalCliPlatform).toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('polish', 'run');
-    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
@@ -263,7 +263,7 @@ describe('CLI workflow run command', () => {
       { readStdinText: expect.any(Function) },
       expect.any(Function),
     );
-    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.executeCliConfig).not.toHaveBeenCalled();
   });
 
@@ -514,7 +514,7 @@ describe('CLI workflow run command', () => {
 
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
-    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 });

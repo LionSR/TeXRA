@@ -1,5 +1,10 @@
 // Local imports - model surfaces
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  decideRunModel,
+  type RunModelCandidate,
+  type RunModelDecisionReason,
+} from '@model/runModelDecision';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 
@@ -28,18 +33,20 @@ export interface CliRunnableModelResolution {
 
 type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
 
-export type CliModelSelectionSource =
-  'override' | 'env' | 'config' | 'workspace' | 'user' | 'history' | 'builtin';
-
-const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
-  override: 'reject',
-  env: 'reject',
-  config: 'notice',
-  workspace: 'notice',
-  user: 'notice',
+const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
+  'explicit-override': 'reject',
+  environment: 'reject',
+  'agent-config': 'notice',
+  'command-config': 'notice',
+  'workspace-config': 'notice',
+  'user-config': 'notice',
   history: 'notice',
-  builtin: 'silent',
-} satisfies Record<CliModelSelectionSource, CliModelFallbackMode>;
+  'parent-run': 'notice',
+  'router-config': 'reject',
+  credential: 'reject',
+  'builtin-default': 'silent',
+  'access-list-default': 'silent',
+} satisfies Record<RunModelDecisionReason, CliModelFallbackMode>;
 
 export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
@@ -56,8 +63,8 @@ export interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
   'apiMode' | 'agentCategory' | 'accessList'
 > {
-  /** Source category that owns unavailable-model fallback behavior. */
-  readonly fallbackSource: CliModelSelectionSource;
+  /** Decision reason that owns unavailable-model fallback behavior. */
+  readonly fallbackReason?: RunModelDecisionReason;
   readonly noAvailableModelsMessage?: string;
 }
 
@@ -531,7 +538,7 @@ async function loadCliModelAccessList(
   );
 }
 
-export async function resolveCliModelAccessEntry(
+export async function loadCliModelAccessEntry(
   model: string,
   options: CliModelAccessEntryOptions = {},
 ): Promise<CliModelAccess | undefined> {
@@ -585,56 +592,123 @@ function formatUnavailableModelMessage(
   return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options)}`;
 }
 
-function resolveCliRunnableModelFromAccessList(
-  models: readonly CliModelAccess[],
-  model: string,
+type NormalizedCliModelCandidate = RunModelCandidate & {
+  readonly model: string;
+};
+
+function rawCliModelDecisionCandidates(
+  request: string | readonly RunModelCandidate[],
   options: CliRunnableModelOptions,
-): CliRunnableModelResolution {
-  const fallbackMode =
-    CLI_MODEL_FALLBACK_MODE_BY_SOURCE[options.fallbackSource];
-  const trimmed = model.trim();
-  const runnableEntries = runnableCliModelAccessEntries(
-    models,
-    options.apiMode,
-  );
-  const entry = findCliModelAccessEntry(models, trimmed);
-  const runnableEntry = findCliModelAccessEntry(runnableEntries, trimmed);
-  if (runnableEntry) return { model: runnableEntry.model.value };
-
-  const availableIds = modelIds(runnableEntries);
-  const unavailableMessage = formatUnavailableModelMessage(
-    trimmed,
-    entry,
-    availableIds,
-    options,
-  );
-  if (fallbackMode === 'reject' || availableIds.length === 0) {
-    throw new Error(unavailableMessage);
+): readonly RunModelCandidate[] {
+  if (typeof request !== 'string') return request;
+  if (!options.fallbackReason) {
+    throw new Error('fallbackReason is required for single-model resolution');
   }
-
-  const fallback = availableIds[0]!;
-  if (fallbackMode === 'silent') return { model: fallback };
-  return {
-    model: fallback,
-    notice: `${unavailableMessage} Using "${fallback}" instead.`,
-  };
+  return [{ model: request, reason: options.fallbackReason }];
 }
 
-export async function resolveCliRunnableModel(
-  model: string,
+export async function selectCliRunnableModel(
+  request: string | readonly RunModelCandidate[],
   options: CliRunnableModelOptions,
 ): Promise<CliRunnableModelResolution> {
   const models = await loadCliModelAccessList(options);
-  const trimmed = model.trim();
-  const modelEntry = await resolveCliModelAccessEntry(trimmed, {
-    apiMode: options.apiMode,
-    agentCategory: options.agentCategory,
-    accessList: models,
-  });
+  const requestedCandidates: NormalizedCliModelCandidate[] =
+    rawCliModelDecisionCandidates(request, options).flatMap((candidate) => {
+      const model = candidate.model?.trim();
+      return model
+        ? [
+            {
+              ...candidate,
+              model,
+              fallbackMode:
+                candidate.fallbackMode ??
+                CLI_MODEL_FALLBACK_MODE_BY_REASON[candidate.reason],
+            },
+          ]
+        : [];
+    });
+  const requestedModels = [
+    ...new Set(requestedCandidates.map((candidate) => candidate.model)),
+  ];
+  const hiddenEntries = await Promise.allSettled(
+    requestedModels.map((model) =>
+      loadCliModelAccessEntry(model, {
+        apiMode: options.apiMode,
+        agentCategory: options.agentCategory,
+        accessList: models,
+      }),
+    ),
+  );
+  const entryErrorByModel = new Map<string, unknown>();
+  let modelsWithHiddenEntry = models;
+  for (const [index, result] of hiddenEntries.entries()) {
+    const model = requestedModels[index];
+    if (!model) continue;
+    if (result.status === 'fulfilled') {
+      modelsWithHiddenEntry = withModelAccess(
+        modelsWithHiddenEntry,
+        result.value,
+      );
+    } else {
+      entryErrorByModel.set(model, result.reason);
+    }
+  }
+  const runnableEntries = runnableCliModelAccessEntries(
+    modelsWithHiddenEntry,
+    options.apiMode,
+  );
+  const availableIds = modelIds(runnableEntries);
+  const decision = decideRunModel(
+    [
+      ...requestedCandidates,
+      { model: availableIds[0], reason: 'access-list-default' },
+    ],
+    (candidate) => findCliModelAccessEntry(runnableEntries, candidate) != null,
+  );
 
-  return resolveCliRunnableModelFromAccessList(
-    withModelAccess(models, modelEntry),
-    trimmed,
+  if (decision && !decision.unavailable) {
+    const selectedModel =
+      findCliModelAccessEntry(runnableEntries, decision.model)?.model.value ??
+      decision.model;
+    if (!decision.fallbackFrom || decision.fallbackFrom.mode === 'silent') {
+      return { model: selectedModel };
+    }
+
+    const fallbackLoadError = entryErrorByModel.get(
+      decision.fallbackFrom.model,
+    );
+    if (fallbackLoadError) throw fallbackLoadError;
+
+    const unavailableMessage = formatUnavailableModelMessage(
+      decision.fallbackFrom.model,
+      findCliModelAccessEntry(
+        modelsWithHiddenEntry,
+        decision.fallbackFrom.model,
+      ),
+      availableIds,
+      options,
+    );
+    return {
+      model: selectedModel,
+      notice: `${unavailableMessage} Using "${selectedModel}" instead.`,
+    };
+  }
+
+  const selectedLoadError = decision
+    ? entryErrorByModel.get(decision.model)
+    : undefined;
+  if (selectedLoadError) throw selectedLoadError;
+
+  const requestedModel =
+    (decision?.model ??
+      requestedCandidates[0]?.model ??
+      (typeof request === 'string' ? request.trim() : '')) ||
+    '<empty>';
+  const unavailableMessage = formatUnavailableModelMessage(
+    requestedModel,
+    findCliModelAccessEntry(modelsWithHiddenEntry, requestedModel),
+    availableIds,
     options,
   );
+  throw new Error(unavailableMessage);
 }

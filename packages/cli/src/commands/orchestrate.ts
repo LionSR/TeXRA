@@ -28,7 +28,7 @@ import {
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
 import {
   getCliModelAccessList,
-  resolveCliRunnableModel,
+  selectCliRunnableModel,
   type CliModelAccess,
 } from '../runtime/modelAccess';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
@@ -63,8 +63,8 @@ async function canLaunchWithDefaultModel(
     envModel: context.envModel,
   });
   try {
-    await resolveCliRunnableModel(defaults.model, {
-      fallbackSource: defaults.modelSource,
+    await selectCliRunnableModel(defaults.model, {
+      fallbackReason: defaults.modelSource,
       apiMode,
       accessList: models,
       agentCategory: AgentCategory.ToolUse,

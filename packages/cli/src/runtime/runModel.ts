@@ -1,28 +1,18 @@
 import { toErrorMessage } from '@common/errors/errorMessage';
+import type { RunModelCandidate } from '@model/runModelDecision';
 import { AgentCategory } from '@shared/schemas/agent';
 
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
+  commandConfigModel,
   resolveKnownCliModelId,
-  resolveConfiguredModel,
 } from './cliConfig';
 import { CliUsageError, type CliContext } from './cliContext';
 import { initCliPlatform } from './initPlatform';
 import { writeTextStderr } from './logSinks';
 import { effectiveCliApiMode } from './apiAccessMode';
-import { selectCliRootModel } from './rootModelSelection';
+import { selectCliRunnableModel } from './modelAccess';
 import { shouldRenderRunProgress } from './runProgressRenderer';
-import type { CliModelSelectionSource } from './modelAccess';
-
-export type CliRunModelCandidateSource = Extract<
-  CliModelSelectionSource,
-  'override' | 'env' | 'config' | 'builtin'
->;
-
-export interface CliRunModelCandidate {
-  readonly model: string;
-  readonly source: CliRunModelCandidateSource;
-}
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
 export function assertExplicitModelKnown(
@@ -39,43 +29,39 @@ export function assertExplicitModelKnown(
   return resolved;
 }
 
-/**
- * Resolve the model candidate for a headless runner with the shared
- * precedence: explicit `-m` > `TEXRA_MODEL` env > configured `chat`/`run`
- * model > builtin. The source is part of the contract because model access
- * fallback policy depends on where the value came from.
- */
-export function resolveCliRunModelCandidate(
+function cliRunModelCandidates(
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
-): CliRunModelCandidate {
+): RunModelCandidate[] {
   const explicit = assertExplicitModelKnown(modelOverride);
-  if (explicit) return { model: explicit, source: 'override' };
-  if (context.envModel) return { model: context.envModel, source: 'env' };
-
-  const configured = resolveConfiguredModel(context.cliConfig, role);
-  if (configured) return { model: configured, source: 'config' };
-
-  return { model: CLI_BUILTIN_DEFAULT_MODEL, source: 'builtin' };
+  return [
+    { model: explicit, reason: 'explicit-override' },
+    { model: context.envModel, reason: 'environment' },
+    {
+      model: commandConfigModel(context.cliConfig, role),
+      reason: 'command-config',
+    },
+    { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
+  ];
 }
 
-export async function resolveCliRunModel(
+export async function selectCliRunModel(
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
 ): Promise<string> {
-  const candidate = resolveCliRunModelCandidate(context, modelOverride, role);
   await initCliPlatform({ ...context, quietLogs: true });
   const apiMode = effectiveCliApiMode(context);
   try {
-    const resolution = await selectCliRootModel({
-      model: candidate.model,
-      modelSource: candidate.source,
-      apiMode,
-      agentCategory:
-        role === 'chat' ? AgentCategory.ToolUse : AgentCategory.Workflow,
-    });
+    const resolution = await selectCliRunnableModel(
+      cliRunModelCandidates(context, modelOverride, role),
+      {
+        apiMode,
+        agentCategory:
+          role === 'chat' ? AgentCategory.ToolUse : AgentCategory.Workflow,
+      },
+    );
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);
     }

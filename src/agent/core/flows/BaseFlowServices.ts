@@ -12,7 +12,7 @@ import type {
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
@@ -39,7 +39,7 @@ export interface AgentCore<C = unknown> {
   setting: AgentSetting;
   prompt: AgentPrompt;
   logger: AgentTrace;
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
   userVarChannels: UserVariableChannels;
   /** Working directory override for subagent tool calls (e.g. a git worktree). */
   workingDirectory?: string;

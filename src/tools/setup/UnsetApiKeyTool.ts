@@ -39,11 +39,13 @@ export class UnsetApiKeyTool extends defineTool({
       const envExists = await platform.secrets.hasUsableApiKey(provider);
       if (envExists) {
         return {
+          status: 'executed',
           summary: `${provider} key is env-var-backed`,
           output: `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. SecretStorage has nothing to clear — unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
         };
       }
       return {
+        status: 'executed',
         summary: `No stored ${provider} API key`,
         output: `There was no stored API key for provider "${provider}" to remove.`,
       };
@@ -62,12 +64,14 @@ export class UnsetApiKeyTool extends defineTool({
     const stillPresent = await platform.secrets.hasUsableApiKey(provider);
     if (stillPresent) {
       return {
+        status: 'executed',
         summary: `Removed stored ${provider} key (env var still active)`,
         output: `Removed stored API key for provider "${provider}", but the ${envVar} environment variable is still set and will continue to provide a credential. Unset ${envVar} in your shell to fully remove it.`,
       };
     }
 
     return {
+      status: 'executed',
       summary: `Removed ${provider} API key`,
       output: `Removed stored API key for provider "${provider}".`,
     };

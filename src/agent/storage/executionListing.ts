@@ -11,6 +11,7 @@
 
 import pMap from 'p-map';
 
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { platform } from '@platform/platform';
 import {
   type AgentConfig,
@@ -20,14 +21,14 @@ import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
-import { StorageFS, WorkspaceFS, TASK_RUNS_DIR } from '@utils/files';
+import { StorageFS, WorkspaceFS } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 
 const CHANNEL = 'ExecutionListing';
-const INDEX_PATH = `${TASK_RUNS_DIR}/index.json`;
+const INDEX_PATH = `${RUNS_STORAGE_DIR}/index.json`;
 const LEGACY_HISTORY_KEY = 'texra.agentHistory';
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
 const EXECUTION_STORAGE_CONCURRENCY = 32;
@@ -117,7 +118,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     migrated = true;
   }
 
-  const entries = await readDirOrEmpty(TASK_RUNS_DIR);
+  const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
 
   // Read meta + config with bounded concurrency. Large histories should not
@@ -176,7 +177,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
 export async function deleteExecution(
   executionId: ExecutionId,
 ): Promise<boolean> {
-  const existed = await StorageFS.exists(`${TASK_RUNS_DIR}/${executionId}`);
+  const existed = await StorageFS.exists(`${RUNS_STORAGE_DIR}/${executionId}`);
   if (!existed) return false;
   try {
     await getExecutionStore(executionId).clear();
@@ -196,7 +197,7 @@ export async function deleteExecution(
 export async function deleteAllExecutions(
   exclude?: ReadonlySet<string>,
 ): Promise<ExecutionId[]> {
-  const entries = await readDirOrEmpty(TASK_RUNS_DIR);
+  const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries, exclude);
 
   try {

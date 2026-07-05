@@ -57,8 +57,8 @@ export abstract class BaseTool<T> implements ITool {
     } catch (err) {
       if (err instanceof ZodError) {
         return {
+          status: 'error',
           error: `Invalid input:\n${z.prettifyError(err)}`,
-          isError: true,
           diagnostics: {
             type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
             issues: err.issues,
@@ -66,13 +66,13 @@ export abstract class BaseTool<T> implements ITool {
           },
         };
       }
-      const message = toErrorMessage(err);
+      const message = toErrorMessage(err).trim();
       // Only include error name - stack traces waste tokens and aren't actionable by models
       const diagnostics = err instanceof Error ? { name: err.name } : undefined;
       return {
-        error: message,
-        isError: true,
-        diagnostics,
+        status: 'error',
+        error: message || 'Tool execution failed.',
+        ...(diagnostics !== undefined ? { diagnostics } : {}),
       };
     }
   }

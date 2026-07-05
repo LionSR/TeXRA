@@ -15,6 +15,9 @@ import {
 // Local imports - latex
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 
+// Local imports - model
+import { decideRunModel } from '@model/runModelDecision';
+
 // Local imports - shared
 import type {
   CompileFailure,
@@ -208,10 +211,7 @@ export class ProgressFollowUpController {
       };
     }
 
-    const model = this.resolveWorkflowModel(
-      input.taskState,
-      input.modelOptions,
-    );
+    const model = this.selectWorkflowModel(input.taskState, input.modelOptions);
     if (!model) {
       return {
         kind: 'warning',
@@ -259,15 +259,25 @@ export class ProgressFollowUpController {
     });
   }
 
-  private resolveWorkflowModel(
+  private selectWorkflowModel(
     taskState: WorkflowTaskState,
     modelOptions: readonly ProgressFollowUpModelOption[],
   ): string | null {
-    const workflowModel = taskState.agentConfig.model;
-    if (this.hasEnabledModel(modelOptions, workflowModel)) {
-      return workflowModel;
-    }
-    return modelOptions.find((option) => !option.disabled)?.value ?? null;
+    const decision = decideRunModel(
+      [
+        {
+          model: taskState.agentConfig.model,
+          reason: 'agent-config',
+          fallbackMode: 'silent',
+        },
+        {
+          model: modelOptions.find((option) => !option.disabled)?.value,
+          reason: 'access-list-default',
+        },
+      ],
+      (model) => this.hasEnabledModel(modelOptions, model),
+    );
+    return decision?.unavailable ? null : (decision?.model ?? null);
   }
 
   private buildWorkflowToolUseFollowupInstruction(

@@ -203,9 +203,9 @@ Useful for finding the right lemma when you know roughly what type it should hav
         return {
           query,
           result: {
+            status: 'error',
             summary: 'No results',
-            output: `Error: ${data.error}${suggestionText}`,
-            isError: true,
+            error: `Error: ${data.error}${suggestionText}`,
           },
         };
       }
@@ -216,6 +216,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         return {
           query,
           result: {
+            status: 'executed',
             summary: 'No results',
             output: `No theorems found matching: ${query}\n\nTry a different type signature or name pattern.`,
           },
@@ -229,6 +230,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
       return {
         query,
         result: {
+          status: 'executed',
           summary: `${hits.length} result${hits.length > 1 ? 's' : ''}`,
           output: formatted,
           results: hits,
@@ -243,21 +245,21 @@ Useful for finding the right lemma when you know roughly what type it should hav
         return {
           query,
           result: {
+            status: 'error',
             summary: 'Timeout',
-            output:
+            error:
               `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
               `The Loogle server may be overloaded. Retry the request. ` +
               `If it persists, try a simpler type signature or search by name instead.`,
-            isError: true,
           },
         };
       }
       return {
         query,
         result: {
+          status: 'error',
           summary: 'Loogle search failed',
-          output: `Error: ${toErrorMessage(err)}`,
-          isError: true,
+          error: `Error: ${toErrorMessage(err)}`,
         },
       };
     }
@@ -283,8 +285,10 @@ Useful for finding the right lemma when you know roughly what type it should hav
     let errorCount = 0;
 
     for (const { query: q, result } of results) {
-      sections.push(`## Query: \`${q}\`\n\n${result.output}`);
-      if (result.isError) {
+      const resultText =
+        result.status === 'error' ? result.error : (result.output ?? '');
+      sections.push(`## Query: \`${q}\`\n\n${resultText}`);
+      if (result.status === 'error') {
         errorCount++;
       }
       if (result.results) {
@@ -303,11 +307,21 @@ Useful for finding the right lemma when you know roughly what type it should hav
       summary = `No results across ${queries.length} queries`;
     }
 
+    const output = sections.join('\n\n---\n\n');
+    if (allFailed) {
+      return {
+        status: 'error',
+        summary,
+        error: output,
+        results: totalHits > 0 ? allResults : undefined,
+      };
+    }
+
     return {
+      status: 'executed',
       summary,
-      output: sections.join('\n\n---\n\n'),
+      output,
       results: totalHits > 0 ? allResults : undefined,
-      isError: allFailed ? true : undefined,
     };
   }
 }

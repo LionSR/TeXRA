@@ -7,6 +7,19 @@ import {
   STREAM_LOG_ENTRY_TYPES,
 } from '@shared/schemas';
 
+function logWithMessage(text = ''): StreamLog {
+  const log = new StreamLog();
+  log.append({
+    id: 'message',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp: 1,
+    text,
+    messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+  });
+  return log;
+}
+
 describe('StreamLog', () => {
   it('appends trusted entries while preserving sequence and lookup invariants', () => {
     const log = new StreamLog();
@@ -77,15 +90,7 @@ describe('StreamLog', () => {
   });
 
   it('tracks text appends separately from whole-entry updates', () => {
-    const log = new StreamLog();
-    log.append({
-      id: 'message',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      text: '',
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    const log = logWithMessage();
 
     log.appendText('message', 'hello');
     log.appendText('message', ' world');
@@ -98,15 +103,7 @@ describe('StreamLog', () => {
   });
 
   it('keeps text appended while a delta frame is in flight', () => {
-    const log = new StreamLog();
-    log.append({
-      id: 'message',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      text: '',
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    const log = logWithMessage();
 
     log.appendText('message', 'hello');
     const inFlight = log.getDirtyTextDeltas();
@@ -119,15 +116,7 @@ describe('StreamLog', () => {
   });
 
   it('drops pending text deltas when a full entry replay covers them', () => {
-    const log = new StreamLog();
-    log.append({
-      id: 'message',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      text: '',
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    const log = logWithMessage();
 
     log.appendText('message', 'hello');
     const [entry] = log.getRange(0, log.head);
@@ -138,15 +127,7 @@ describe('StreamLog', () => {
   });
 
   it('keeps only text appended while a full entry replay is in flight', () => {
-    const log = new StreamLog();
-    log.append({
-      id: 'message',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      text: 'prefix ',
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    const log = logWithMessage('prefix ');
 
     log.appendText('message', 'hello');
     const [entry] = log.getRange(0, log.head);

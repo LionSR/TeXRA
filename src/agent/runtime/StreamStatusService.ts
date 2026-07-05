@@ -40,7 +40,7 @@ interface StreamPhaseState {
   readonly substate?: StreamSubstate;
 }
 
-export function projectStatusEvent(event: StatusEvent): StreamStatusChange {
+function projectStatusEvent(event: StatusEvent): StreamStatusChange {
   return {
     streamId: event.streamId,
     status: event.phase,
@@ -91,39 +91,17 @@ export class StreamStatusMachine {
     if (!this.reservations.has(stream)) return;
     const rollbackPhase =
       this.phases.get(stream)?.phase ?? STREAM_PHASE.CANCELLED;
-    if (options.runtimeHost || options.trace || this.statusListeners.size > 0) {
-      if (
-        this.transition(
-          stream,
-          rollbackPhase,
-          STREAM_TRANSITION_CAUSE.LIFECYCLE,
-          options,
-        )
-      ) {
-        return;
-      }
-      this.reservations.delete(stream);
+    if (
+      this.transition(
+        stream,
+        rollbackPhase,
+        STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        options,
+      )
+    ) {
       return;
     }
     this.reservations.delete(stream);
-  }
-
-  clearRunningSubstate(
-    stream: StreamTabId,
-    cause: StreamTransitionCause,
-    options: StreamStatusEmitOptions = {},
-  ): boolean {
-    const state = this.phases.get(stream);
-    if (state?.phase !== STREAM_PHASE.RUNNING || !state.substate) {
-      return false;
-    }
-    this.phases.set(stream, { phase: STREAM_PHASE.RUNNING });
-    this.publishStatus(stream, STREAM_PHASE.RUNNING, {
-      ...options,
-      cause,
-      previousPhase: STREAM_PHASE.RUNNING,
-    });
-    return true;
   }
 
   transition(
@@ -132,7 +110,8 @@ export class StreamStatusMachine {
     cause: StreamTransitionCause,
     options: StreamStatusEmitOptions = {},
   ): boolean {
-    const from = this.phases.get(stream)?.phase;
+    const previousState = this.phases.get(stream);
+    const from = previousState?.phase;
     const fromReservation = this.reservations.has(stream);
     const tableFrom = fromReservation
       ? to === STREAM_PHASE.RUNNING
@@ -142,6 +121,17 @@ export class StreamStatusMachine {
     if (!canTransitionStreamPhase(tableFrom, to, cause)) return false;
 
     this.reservations.delete(stream);
+    // The table decides whether a transition is permitted, but not whether a
+    // permitted transition changes state. A steady RUNNING resume with no
+    // substate to clear must stay silent, while a real substate clear still
+    // writes and publishes from this single status owner.
+    if (
+      !fromReservation &&
+      from === to &&
+      previousState?.substate === options.substate
+    ) {
+      return true;
+    }
     this.phases.set(stream, {
       phase: to,
       ...(options.substate ? { substate: options.substate } : {}),
@@ -279,9 +269,7 @@ export class StreamStatusMachine {
         substate: STREAM_SUBSTATE.STARTING,
       };
     }
-    const state = this.phases.get(stream);
-    if (state) return state;
-    return undefined;
+    return this.phases.get(stream);
   }
 
   private publishStatus(

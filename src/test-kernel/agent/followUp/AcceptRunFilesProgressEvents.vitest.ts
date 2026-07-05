@@ -92,6 +92,15 @@ describe('accept_run_files progress events', () => {
     testApprovalHandler = undefined;
     await installTestPlatform();
     cleanupAllApprovals();
+    // Shared by every test below that stubs the execution/workspace paths;
+    // the test that doesn't need it (missing runtime host) fails before
+    // reaching either function.
+    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+    WorkspaceFS.locatePath = (target) => ({
+      kind: 'workspace',
+      absolutePath: `${workspacePath}/${target}`,
+      relativePath: target,
+    });
   });
 
   afterEach(() => {
@@ -117,12 +126,6 @@ describe('accept_run_files progress events', () => {
     StorageFS.exists = async (target) =>
       target === `executions/${executionId}` ||
       target === `executions/${executionId}/output.tex`;
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
-    });
     WorkspaceFS.exists = async () => false;
     WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => undefined;
@@ -135,7 +138,7 @@ describe('accept_run_files progress events', () => {
       { path: 'output.tex', original: 'paper.tex' },
     ]);
 
-    expect(result.isError).toBeUndefined();
+    expect(result.status).toBe('executed');
     expect(explicit.events).toContainEqual({
       event: 'workspaceFilesWritten',
       payload: { absolutePaths: [`${workspacePath}/paper.tex`] },
@@ -155,7 +158,7 @@ describe('accept_run_files progress events', () => {
       files: [{ path: 'output.tex', original: 'paper.tex' }],
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toContain('requires a tool runtime host');
     expect(writes).toBe(0);
   });
@@ -168,12 +171,6 @@ describe('accept_run_files progress events', () => {
     let writes = 0;
 
     StorageFS.exists = async (target) => target === `executions/${executionId}`;
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
-    });
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => 'new content';
     WorkspaceFS.write = async () => {
@@ -194,7 +191,7 @@ describe('accept_run_files progress events', () => {
       { path: 'draft.tex', original: 'draft.tex' },
     ]);
 
-    expect(result.isError).toBeUndefined();
+    expect(result.status).toBe('executed');
     expect(approvalOriginal).toBe('old content');
     expect(approvalProposed).toBe('new content');
     expect(result.edits?.[0]?.lineChanges).toEqual({
@@ -211,12 +208,6 @@ describe('accept_run_files progress events', () => {
     let writes = 0;
 
     StorageFS.exists = async (target) => target === `executions/${executionId}`;
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
-    });
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => 'same content';
     WorkspaceFS.write = async () => {
@@ -234,7 +225,7 @@ describe('accept_run_files progress events', () => {
       { path: 'draft.tex', original: 'draft.tex' },
     ]);
 
-    expect(result.isError).toBeUndefined();
+    expect(result.status).toBe('executed');
     expect(result.output).toContain('No changes to accept');
     expect(result.output).toContain('unchanged: draft.tex');
     expect(approvals).toBe(0);
@@ -251,12 +242,6 @@ describe('accept_run_files progress events', () => {
     StorageFS.exists = async (target) =>
       target === `executions/${executionId}` ||
       target === `executions/${executionId}/r1/Draft/appendices.tex`;
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
-    });
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => {
@@ -275,7 +260,7 @@ describe('accept_run_files progress events', () => {
       { path: 'r1/Draft/appendices.tex', original: 'Draft/appendices.tex' },
     ]);
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toContain('symlink');
     expect(result.error).toContain('did not emit');
     expect(approvals).toBe(0);

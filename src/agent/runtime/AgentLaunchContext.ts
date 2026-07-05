@@ -35,8 +35,8 @@ import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import {
   createModelHandler,
   createModelHandlerForCompatibilityKey,
-  type ModelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
+import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/utils/userVars';
@@ -72,7 +72,7 @@ import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { attachConversationProgressHub } from './conversationProgressHub';
 import { attachSessionRunFactProjector } from './SessionRunFactProjector';
-import type { StreamStatusRegistry } from './StreamStatusService';
+import type { StreamStatusMachine } from './StreamStatusService';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -80,7 +80,7 @@ export interface AgentLaunchContext extends AgentCore, AgentRunIdentity {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
   coordinators: RunCoordinators;
   attachedMemoryMisses: AttachedMemoryMiss[];
   /** Whether this tool-use run exits after one cycle instead of idling. */
@@ -260,7 +260,7 @@ async function beginRunStage(
 async function assembleAgentLaunchContext(
   input: AgentLaunchInput,
   executionId: ExecutionId,
-  streamStatus: StreamStatusRegistry,
+  streamStatus: StreamStatusMachine,
   runtimeHost: AgentRuntimeHost,
   reservedStreamId: StreamTabId | undefined,
   onActivated: (streamId: StreamTabId) => void,
@@ -475,7 +475,7 @@ async function assembleAgentLaunchContext(
 
 function acquireStreamOrThrow(
   streamId: StreamTabId,
-  streamStatus: StreamStatusRegistry,
+  streamStatus: StreamStatusMachine,
   runtimeHost: AgentRuntimeHost,
   taskType: string = 'Task',
 ): void {
@@ -514,7 +514,7 @@ function compensateFailedActivation(args: {
   configPayload: AgentConfigPayload;
   reservedStreamId?: StreamTabId;
   activatedStreamId?: StreamTabId;
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
   runtimeHost: AgentRuntimeHost;
   err: unknown;
   // The run-trace from assembleAgentLaunchContext when it was created before the

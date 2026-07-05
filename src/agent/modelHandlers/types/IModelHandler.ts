@@ -12,10 +12,12 @@ import type {
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import type { ToolResultPayload } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import type { ToolDefinition } from '@model';
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 import type { ModelConfig, ModelCapabilities } from 'llm-zoo';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
@@ -377,7 +379,7 @@ export interface IModelHandler<
   createToolUseFollowUpMessages(
     client: C | undefined,
     call: T,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -401,7 +403,7 @@ export interface IModelHandler<
    */
   createBatchedToolUseFollowUpMessages?(
     calls: T[],
-    results: ToolResultPayload[],
+    results: ToolResult[],
     attachmentsPerCall: ToolFileAttachment[][],
     workspaceState?: AgentWorkspaceState,
     text?: string,

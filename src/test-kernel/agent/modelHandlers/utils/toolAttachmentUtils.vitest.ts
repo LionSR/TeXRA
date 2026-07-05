@@ -116,52 +116,67 @@ describe('formatToolResultAsText', () => {
 });
 
 describe('extractToolAttachments', () => {
-  it('treats isError results with output as error payloads', () => {
+  it('projects source error payloads', () => {
     const { sanitizedResult } = extractToolAttachments({
-      isError: true,
-      output: 'kill failed',
+      status: 'error',
+      error: 'kill failed',
     });
 
     assert.equal(sanitizedResult.status, 'error');
     assert.equal(sanitizedResult.error, 'kill failed');
-    assert.equal(Object.hasOwn(sanitizedResult, 'isError'), false);
     assert.equal(Object.hasOwn(sanitizedResult, 'output'), false);
   });
 
-  it('lets the computed discriminator override raw status fields', () => {
+  it('rejects legacy results without a source status', () => {
+    assert.throws(() =>
+      extractToolAttachments({
+        output: 'done',
+      } as never),
+    );
+  });
+
+  it('rejects raw status values outside the source contract', () => {
+    assert.throws(() =>
+      extractToolAttachments({
+        status: 'completed',
+        output: 'done',
+      } as never),
+    );
+  });
+
+  it('projects executed payloads directly from their source status', () => {
     const { sanitizedResult } = extractToolAttachments({
-      status: 'completed',
+      status: 'executed',
       output: 'done',
-    } as never);
+    });
 
     assert.equal(sanitizedResult.status, 'executed');
     assert.equal(sanitizedResult.output, 'done');
   });
 
-  it('drops error from executed payloads when output takes priority', () => {
-    const { sanitizedResult } = extractToolAttachments({
-      output: 'usable output',
-      error: 'secondary warning',
-    });
-
-    assert.equal(sanitizedResult.status, 'executed');
-    assert.equal(sanitizedResult.output, 'usable output');
-    assert.equal(Object.hasOwn(sanitizedResult, 'error'), false);
+  it('rejects executed payloads with error fields', () => {
+    assert.throws(() =>
+      extractToolAttachments({
+        status: 'executed',
+        output: 'usable output',
+        error: 'secondary warning',
+      } as never),
+    );
   });
 
-  it('uses a non-empty fallback error for empty failing results', () => {
-    const { sanitizedResult } = extractToolAttachments({
-      isError: true,
-      error: '',
-    });
-
-    assert.equal(sanitizedResult.status, 'error');
-    assert.equal(sanitizedResult.error, 'Tool failed');
+  it('rejects empty source error text', () => {
+    assert.throws(() =>
+      extractToolAttachments({
+        status: 'error',
+        error: '',
+      } as never),
+    );
   });
 
-  it('uses summary as the error text for summary-only failures', () => {
+  it('keeps error summaries out of model payloads', () => {
     const { sanitizedResult } = extractToolAttachments({
-      isError: true,
+      status: 'error',
+      error: 'The operation failed before producing output.',
       summary: 'The operation failed before producing output.',
     });
 
@@ -173,22 +188,19 @@ describe('extractToolAttachments', () => {
     assert.equal(Object.hasOwn(sanitizedResult, 'summary'), false);
   });
 
-  it('keeps extracted attachments out of error payloads', () => {
-    const { attachments, sanitizedResult } = extractToolAttachments({
-      isError: true,
-      error: 'The operation failed.',
-      files: [
-        {
-          path: 'plot.png',
-          mimeType: 'image/png',
-          base64Data: 'aW1hZ2U=',
-        },
-      ],
-    });
-
-    assert.equal(attachments.length, 1);
-    assert.equal(sanitizedResult.status, 'error');
-    assert.equal(sanitizedResult.error, 'The operation failed.');
-    assert.equal(Object.hasOwn(sanitizedResult, 'files'), false);
+  it('rejects error payloads with file attachments', () => {
+    assert.throws(() =>
+      extractToolAttachments({
+        status: 'error',
+        error: 'The operation failed.',
+        files: [
+          {
+            path: 'plot.png',
+            mimeType: 'image/png',
+            base64Data: 'aW1hZ2U=',
+          },
+        ],
+      } as never),
+    );
   });
 });

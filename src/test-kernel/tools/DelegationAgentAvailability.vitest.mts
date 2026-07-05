@@ -52,7 +52,7 @@ function delegationRegistry(names: readonly string[]) {
         name,
         {
           definition: { name },
-          call: async () => ({ summary: '', output: '' }),
+          call: async () => ({ status: 'executed', summary: '', output: '' }),
         },
       ]),
     ),

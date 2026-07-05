@@ -17,7 +17,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
-  resolveCliRunModel,
+  selectCliRunModel,
 } from '../runtime/runModel';
 import {
   resolveCliLaunchAgent,
@@ -97,7 +97,7 @@ export async function runWorkflowAgent(
         throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
       }
 
-      const model = await resolveCliRunModel(context, init.model, 'run');
+      const model = await selectCliRunModel(context, init.model, 'run');
       const runContext = buildHeadlessRunContext(context);
       const config: AgentConfigPayload = {
         agent: init.agent,

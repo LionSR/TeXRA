@@ -1,9 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - utils
-import { isNonEmptyString } from '@utils/core';
-
 // Local imports - shared schemas
 import { LineChangesSchema, LineCountSchema } from './lineChanges';
 
@@ -14,7 +11,7 @@ import type { ZodIssue } from 'zod';
  * Base schema for file references (metadata only, no binary data).
  * Used when binary data has been stripped for serialization/logging.
  */
-export const FileReferenceSchema = z.object({
+export const FileReferenceSchema = z.looseObject({
   /** Workspace-relative or descriptive path for the file */
   path: z.string(),
   /** MIME type for the file */
@@ -46,6 +43,14 @@ export const EditRecordSchema = z.object({
   startLine: z.int().positive().optional(),
 });
 export type EditRecord = z.infer<typeof EditRecordSchema>;
+
+export const EditedFileRecordSchema = z.object({
+  path: z.string(),
+  ok: z.boolean(),
+  source: z.string(),
+  sourceDisplay: z.string(),
+});
+export type EditedFileRecord = z.infer<typeof EditedFileRecordSchema>;
 
 /**
  * Schema for flattened edit records used in state snapshots.
@@ -124,78 +129,63 @@ export function formatZodIssuesForDiagnostics(
  * Schema for tool execution results.
  * Uses looseObject to allow additional properties for forward compatibility.
  */
-export const ToolResultSchema = z.looseObject({
-  /** Detailed output from the tool */
-  output: z.string().optional(),
-  /** Brief summary of the tool execution result */
-  summary: z.string().optional(),
-  /** Error message if tool execution failed */
-  error: z.string().optional(),
+const ToolResultSharedFields = {
   /** User instruction that was processed */
   userInstruction: z.string().optional(),
   /** User-provided patch content */
   userPatch: z.string().optional(),
-  /** Statistics about line changes made */
-  lineChanges: LineChangesSchema.optional(),
-  /** Records of edits made during tool execution */
-  edits: z.array(EditRecordSchema).optional(),
-  /** Whether this result represents an error */
-  isError: z.boolean().optional(),
   /** Additional diagnostic information */
   diagnostics: z.unknown().optional(),
-  /** File attachments (may contain binary data) */
-  files: z.array(ToolFileAttachmentSchema).optional(),
-});
-export type ToolResult = z.infer<typeof ToolResultSchema>;
+  /** Summary added by handlers when attachments are available */
+  attachmentSummary: z.string().optional(),
+};
 
-// ============================================================================
-// ToolResult Normalization (status inference for ambiguous legacy results)
-// ============================================================================
-
-/**
- * Tool result status discriminant. `executed` results carry output/summary/
- * files etc.; `error` results carry a required non-empty `error` message.
- */
 export const TOOL_RESULT_STATUSES = ['executed', 'error'] as const;
 export type ToolResultStatus = (typeof TOOL_RESULT_STATUSES)[number];
 
-/**
- * Normalizes an ambiguous `ToolResultSchema` shape (no reliable `status`
- * field; only `output`/`summary`/`error`/`isError` populated ad hoc by tool
- * implementations) into a `{ status, ... }` shape that can be narrowed on
- * `status` directly.
- *
- * The computed discriminator always wins over any incidental raw `status`
- * key a result object might carry (no current tool implementation sets one,
- * but this keeps behavior unambiguous rather than trusting an unverified
- * field) — precedence rules are the single source of truth now, previously
- * duplicated as a heuristic inline in `toolAttachmentUtils.ts`: an explicit
- * `isError: true`, or non-empty `error` text with no `output`, wins as
- * `'error'`; otherwise the result is `'executed'`. When `'error'`, the
- * surfaced error text prefers `error`, then `output`, then `summary`, then a
- * generic fallback — this preserves historical behavior for tools that only
- * ever set `output`/`summary` while failing.
- */
-export const NormalizedToolResultSchema = ToolResultSchema.transform((raw) => {
-  const hasError = isNonEmptyString(raw.error);
-  const hasOutput = isNonEmptyString(raw.output);
-  const hasSummary = isNonEmptyString(raw.summary);
-  const isError = raw.isError === true;
-  const status: ToolResultStatus =
-    isError || (hasError && !hasOutput) ? 'error' : 'executed';
+export const ExecutedToolResultSchema = z
+  .object({
+    status: z.literal('executed'),
+    /** Detailed output from the tool */
+    output: z.string().optional(),
+    /** Brief summary of the tool execution result */
+    summary: z.string().optional(),
+    error: z.undefined().optional(),
+    /** Statistics about line changes made */
+    lineChanges: LineChangesSchema.optional(),
+    /** Records of edits made during tool execution */
+    edits: z.array(EditRecordSchema).optional(),
+    /** File attachments (may contain binary data) */
+    files: z.array(ToolFileAttachmentSchema).optional(),
+    /** Files edited during tool execution (for logging/tracking) */
+    editedFiles: z.array(EditedFileRecordSchema).optional(),
+    ...ToolResultSharedFields,
+  })
+  .catchall(z.unknown());
+export type ExecutedToolResult = z.infer<typeof ExecutedToolResultSchema>;
 
-  if (status !== 'error') {
-    return { ...raw, status };
-  }
+export const ErrorToolResultSchema = z
+  .object({
+    status: z.literal('error'),
+    /** Error message if tool execution failed */
+    error: z.string().min(1),
+    /** Brief summary for human-facing logs */
+    summary: z.string().optional(),
+    output: z.undefined().optional(),
+    lineChanges: z.undefined().optional(),
+    edits: z.undefined().optional(),
+    files: z.undefined().optional(),
+    editedFiles: z.undefined().optional(),
+    ...ToolResultSharedFields,
+  })
+  .catchall(z.unknown());
+export type ErrorToolResult = z.infer<typeof ErrorToolResultSchema>;
 
-  let errorText: string;
-  if (isNonEmptyString(raw.error)) errorText = raw.error;
-  else if (isNonEmptyString(raw.output)) errorText = raw.output;
-  else if (isNonEmptyString(raw.summary)) errorText = raw.summary;
-  else errorText = 'Tool failed';
-
-  return { ...raw, status, error: errorText };
-});
+export const ToolResultSchema = z.discriminatedUnion('status', [
+  ExecutedToolResultSchema,
+  ErrorToolResultSchema,
+]);
+export type ToolResult = z.infer<typeof ToolResultSchema>;
 
 export class ToolError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {

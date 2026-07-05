@@ -46,12 +46,13 @@ export class TexcountTool extends defineTool({
         errors.join('\n') ||
         'texcount did not return any output. Ensure the files exist.';
       return {
+        status: 'error',
         error: errorMessage,
-        isError: true,
       };
     }
 
     return {
+      status: 'executed',
       summary: `Analyzed: ${formatResultCount(files.length, 'file')}`,
       output:
         input.format === 'stats'
