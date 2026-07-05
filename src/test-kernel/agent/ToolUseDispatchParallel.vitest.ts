@@ -197,6 +197,12 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         [],
         'duplicate must not re-track edits',
       );
+      assert.deepEqual(
+        (results[1] as { extracted?: { attachments: unknown[] } })?.extracted
+          ?.attachments,
+        [],
+        'duplicate must not re-inject the primary attachments',
+      );
     } finally {
       dispose();
     }

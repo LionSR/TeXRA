@@ -304,7 +304,12 @@ export class ToolUseDispatchNode<C> extends BatchNode<
         call,
         result: sharedResult as ToolResult,
         parsedInput: primary.parsedInput,
-        extracted: primary.extracted,
+        extracted: {
+          sanitizedResult: primary.extracted.sanitizedResult,
+          // The primary already injected any attachments into the follow-up;
+          // repeating them per duplicate would duplicate binary context.
+          attachments: [],
+        },
         editedFiles: [],
         logRef: {
           logId: undefined,

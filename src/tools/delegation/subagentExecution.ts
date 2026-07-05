@@ -292,19 +292,21 @@ export async function executeSubagent(
   if (parentContext.stopAfterCycle) {
     const failureResult = async (
       err: unknown,
-      memoryMisses?: AgentFlowResult['memoryMisses'],
+      result?: AgentFlowResult,
     ): Promise<ToolResult> => {
       const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentError(executionId, agentName, err, {
         wallTimeMs,
         workingDirectory,
-        memoryMisses,
+        memoryMisses: result?.memoryMisses,
       });
       await Promise.all([
         writeSubagentReport(executionId, msg),
         writeSubagentResultMeta(
           executionId,
-          buildSubagentFailureResultMeta(agentName, undefined, wallTimeMs),
+          // Keep the failed run's data (partial outputs, category, cost)
+          // in the manifest, matching the async error path.
+          buildSubagentFailureResultMeta(agentName, result, wallTimeMs),
         ),
       ]);
       return {
@@ -334,7 +336,7 @@ export async function executeSubagent(
       if (result.outcome === 'failed') {
         return failureResult(
           subagentError ?? 'Subagent ended with failed outcome.',
-          result.memoryMisses,
+          result,
         );
       }
       const { msg, resultMeta } = await subagentDeliveryMessage(
