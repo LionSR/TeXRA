@@ -8,9 +8,8 @@
  * what lets a session render/resume identically across hosts and keeps the
  * future cross-host shared-root flip a configuration change, not a format one.
  *
- * The per-category file keys live here too (not just in the extension's
- * `StreamTabStore`) so the shared `StreamSnapshotStore` and every host write
- * the same filenames.
+ * The per-category file keys live here too so the shared `StreamSnapshotStore`
+ * and every host write the same filenames.
  */
 
 import * as path from 'node:path';
@@ -33,10 +32,6 @@ export const STREAM_DATA_KEYS = {
   USAGE_STATS: 'usageStats',
   /** NEW — durable todos/plan/planSummary. */
   WORK_PLAN: 'workPlan',
-  /** Legacy per-run instruction text preserved from the pre-refactor memento. */
-  LEGACY_INSTRUCTIONS: 'legacyInstructions',
-  /** On-disk key used by the pre-refactor store; read-only fallback. */
-  LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
 } as const;
 
 export type StreamDataKey =
