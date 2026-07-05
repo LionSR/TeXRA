@@ -9,6 +9,7 @@ import {
   isDeprecatedModel,
   isRetiredModel,
   MODEL_LIST_VERSION,
+  PREFERRED_DEFAULT_MODELS,
   resolveDefaultModels,
 } from '@model/modelOptionsBasic';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
@@ -114,11 +115,32 @@ describe('computeModelListVersion', () => {
     );
   });
 
-  it('is a pure function of the resolved set, wired to MODEL_LIST_VERSION', () => {
-    expect(MODEL_LIST_VERSION).toBe(computeModelListVersion(DEFAULT_MODELS));
+  it('is a pure function of the preferred (unfiltered) list, wired to MODEL_LIST_VERSION', () => {
+    expect(MODEL_LIST_VERSION).toBe(
+      computeModelListVersion(PREFERRED_DEFAULT_MODELS),
+    );
   });
 
   it('never lands in the pre-#7191 hand-bumped range (1-21), so every existing install reconciles exactly once on upgrade', () => {
     expect(MODEL_LIST_VERSION).toBeGreaterThan(21);
+  });
+
+  /**
+   * #7216 review: hashing the *resolved* (post-filter) set made the trigger
+   * blind to a status transition between two states that both filter out of
+   * that set -- most importantly deprecated -> retired. A preferred pick that
+   * is merely deprecated is still nominally servable; once the registry marks
+   * it retired, `reconcileEnabledModels`'s unconditional retired-model sweep
+   * needs to strip it from existing users, which only happens if the version
+   * hash actually changes. `gpt54` (deprecated) and `grok4` (retired) both
+   * resolve to the same empty set, so a hash of `resolveDefaultModels(...)`
+   * output would have collapsed them to the same version.
+   */
+  it('distinguishes a deprecated preferred pick from a retired one, even though both resolve to an empty set', () => {
+    expect(resolveDefaultModels(['gpt54'])).toEqual([]);
+    expect(resolveDefaultModels(['grok4'])).toEqual([]);
+    expect(computeModelListVersion(['gpt54'])).not.toBe(
+      computeModelListVersion(['grok4']),
+    );
   });
 });
