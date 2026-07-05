@@ -1,8 +1,5 @@
 import type { ExecutionListingEntry, TodoEntry } from '@agent/storage';
-import {
-  type ExecutionHandle,
-  type ExecutionStatusInfo,
-} from '@agent/runtime/executionRegistry';
+import { type ExecutionStatusInfo } from '@agent/runtime/executionRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   EXECUTION_STATUS,
@@ -65,20 +62,6 @@ export function getExecutionStatusInfo(
     status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,
     elapsed: null,
   };
-}
-
-/** Format round progress as a display line, or empty string if unavailable. */
-export function formatProgressLine(
-  handle: ExecutionHandle | undefined,
-): string {
-  const progress = handle?.getProgress();
-  if (
-    progress?.currentRound === undefined ||
-    progress.totalRounds === undefined
-  ) {
-    return '';
-  }
-  return `Progress: round ${progress.currentRound + 1}/${progress.totalRounds}`;
 }
 
 /** Format a listing entry as a single summary line. */

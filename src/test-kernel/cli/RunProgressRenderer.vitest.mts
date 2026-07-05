@@ -177,9 +177,9 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe('\r\x1b[2Kpolish paper.tex · 0s');
 
     now = 1200;
-    renderer?.handle('updateConversationProgress', {
+    renderer?.handle('updateRoundStage', {
       streamId: 'stream-1',
-      progress: { conversationTurns: 2, toolCallCount: 0 },
+      roundStage: { index: 1 },
     });
     expect(output.text).toContain('\r\x1b[2K[r2] · polish paper.tex · 1s');
 
@@ -276,9 +276,9 @@ describe('CLI run progress renderer', () => {
     );
 
     renderer?.handle('setTaskState', workflowTaskState());
-    renderer?.handle('updateConversationProgress', {
+    renderer?.handle('updateRoundStage', {
       streamId: 'stream-1',
-      progress: { conversationTurns: 1, toolCallCount: 0 },
+      roundStage: { index: 0 },
     });
 
     expect(mocks.getAgent).toHaveBeenCalledWith(
@@ -553,7 +553,7 @@ describe('CLI run progress renderer', () => {
     expect(output.text.endsWith('\n')).toBe(true);
   });
 
-  it('can claim the root stream from conversation progress', () => {
+  it('can add typed round progress after tool-call progress claims the root stream', () => {
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
       context({ colorEnabled: false }),
@@ -567,7 +567,11 @@ describe('CLI run progress renderer', () => {
 
     renderer?.handle('updateConversationProgress', {
       streamId: 'root-stream',
-      progress: { conversationTurns: 2, toolCallCount: 4 },
+      progress: { toolCallCount: 4 },
+    });
+    renderer?.handle('updateRoundStage', {
+      streamId: 'root-stream',
+      roundStage: { index: 1 },
     });
     renderer?.handle(
       'setTaskState',
@@ -578,7 +582,9 @@ describe('CLI run progress renderer', () => {
       }),
     );
 
-    expect(output.text).toBe('[r2] · running · tools: 4 · 0s\n');
+    expect(output.text).toBe(
+      'running · tools: 4 · 0s\n' + '[r2] · running · tools: 4 · 0s\n',
+    );
   });
 
   it('keeps named active children visible when earlier entries are unnamed', () => {
@@ -657,12 +663,13 @@ describe('CLI run progress renderer', () => {
       streamId: 'root-stream',
       description: 'Running Mathematician multi-agent preset',
     });
+    renderer?.handle('updateRoundStage', {
+      streamId: 'root-stream',
+      roundStage: { index: 2 },
+    });
     renderer?.handle('updateConversationProgress', {
       streamId: 'root-stream',
-      progress: {
-        conversationTurns: 3,
-        toolCallCount: 9,
-      },
+      progress: { toolCallCount: 9 },
     });
     renderer?.handle('updateActiveProcesses', {
       parentStreamId: 'root-stream',

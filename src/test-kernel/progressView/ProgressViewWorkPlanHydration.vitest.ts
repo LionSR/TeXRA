@@ -139,7 +139,8 @@ describe('progress view snapshot hydration', () => {
     state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
     state.updateStreamState(stream, (prev) => ({
       ...prev,
-      conversationProgress: { conversationTurns: 3, toolCallCount: 5 },
+      conversationProgress: { toolCallCount: 5 },
+      roundStage: { index: 2 },
       activeSubagents: [activeSubagent],
       finishedSubagentCount: 2,
     }));
@@ -166,7 +167,8 @@ describe('progress view snapshot hydration', () => {
       plan,
       queuedFollowUps: [],
       agentCategory: AgentCategory.ToolUse,
-      conversationProgress: { conversationTurns: 3, toolCallCount: 5 },
+      conversationProgress: { toolCallCount: 5 },
+      roundStage: { index: 2 },
       badges: {
         activeSubagents: [activeSubagent],
         finishedSubagentCount: 2,

@@ -18,13 +18,12 @@
  */
 
 import pMap from 'p-map';
+import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
-import {
-  TaskStateSchema,
-  isWorkflowTaskState,
-  type TaskState,
-} from '@agent/core/state/TaskState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { KVStore } from '@common/storage/KVStore';
 import type {
   ProgressEvent,
@@ -37,13 +36,16 @@ import {
   isEmptyUsage,
   OutputFileInfoListSchema,
   PersistedWorkPlanSchema,
+  RUN_DESCRIPTOR_SCHEMA_VERSION,
   planSummaryLine,
   RoundKeySchema,
   sumUsageStats,
   TokenUsageStatsParsingSchema,
+  buildRunDescriptor,
   type CompileFailure,
   type ExecutionId,
   type OutputFileInfo,
+  type RunDescriptor,
   type Plan,
   type RoundIndexed,
   type StorageKey,
@@ -103,6 +105,19 @@ function sameOutputFiles(left: string[], right: string[]): boolean {
   return left.every((file, index) => file === right[index]);
 }
 
+function descriptorFromConfig(
+  stream: StreamTabId,
+  executionId: ExecutionId,
+  config: AgentConfig,
+): RunDescriptor {
+  return buildRunDescriptor({
+    streamId: stream,
+    executionId,
+    agent: config.agent,
+    category: config.agentCategory,
+  });
+}
+
 export class StreamSnapshotStore {
   // -- In-memory accumulators (one entry per stream that has emitted) --------
   private readonly outputFiles = new Map<
@@ -120,8 +135,10 @@ export class StreamSnapshotStore {
   private readonly usage = new Map<StreamTabId, Map<string, TokenUsageStats>>();
   private readonly workPlan = new Map<StreamTabId, WorkPlanSnapshot>();
   private readonly meta = new Map<StreamTabId, StreamTabMeta>();
-  /** Typed task states (parsed once) backing the tool-use/workflow queries. */
-  private readonly taskStates = new Map<StreamTabId, TaskState>();
+  /** Immutable run descriptors parsed/emitted once per execution stream. */
+  private readonly runDescriptors = new Map<StreamTabId, RunDescriptor>();
+  /** Current run config, hydrated from executions/{id}/config.json. */
+  private readonly runConfigs = new Map<StreamTabId, AgentConfig>();
 
   // -- Per (stream, category) serialized write chains -----------------------
   private readonly pendingWrites = new Map<string, Promise<void>>();
@@ -296,7 +313,7 @@ export class StreamSnapshotStore {
     if (this.seeded.has(stream)) return;
     const data = await readStreamData(this.kv(stream));
     if (this.streamVersion(stream) !== version) return;
-    this.applyStreamData(stream, data);
+    await this.applyStreamData(stream, data);
   }
 
   // ==========================================================================
@@ -543,7 +560,8 @@ export class StreamSnapshotStore {
       ...this.usage.keys(),
       ...this.workPlan.keys(),
       ...this.meta.keys(),
-      ...this.taskStates.keys(),
+      ...this.runDescriptors.keys(),
+      ...this.runConfigs.keys(),
       ...this.seeded,
       ...this.seedChains.keys(),
       ...this.outputFileOverlays.keys(),
@@ -561,7 +579,8 @@ export class StreamSnapshotStore {
     this.usage.delete(stream);
     this.workPlan.delete(stream);
     this.meta.delete(stream);
-    this.taskStates.delete(stream);
+    this.runDescriptors.delete(stream);
+    this.runConfigs.delete(stream);
     this.seeded.delete(stream);
     this.seedChains.delete(stream);
     this.metaOverlays.delete(stream);
@@ -581,7 +600,8 @@ export class StreamSnapshotStore {
     this.usage.clear();
     this.workPlan.clear();
     this.meta.clear();
-    this.taskStates.clear();
+    this.runDescriptors.clear();
+    this.runConfigs.clear();
     this.seeded.clear();
     this.seedChains.clear();
     this.metaOverlays.clear();
@@ -635,7 +655,11 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     patch: Partial<StreamTabMeta>,
   ): StreamTabMeta {
-    const next: StreamTabMeta = { ...(this.meta.get(stream) ?? {}), ...patch };
+    const next: StreamTabMeta = {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      ...(this.meta.get(stream) ?? {}),
+      ...patch,
+    };
     this.meta.set(stream, next);
     return next;
   }
@@ -645,8 +669,11 @@ export class StreamSnapshotStore {
     // field (`!== undefined`, not falsy) so on-disk and in-memory never diverge
     // — e.g. clearing a description to "" must round-trip, not silently vanish.
     const file: StreamTabMeta = {
-      ...(next.taskState !== undefined && { taskState: next.taskState }),
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       ...(next.executionId !== undefined && { executionId: next.executionId }),
+      ...(next.runDescriptor !== undefined && {
+        runDescriptor: next.runDescriptor,
+      }),
       ...(next.parentStreamId !== undefined && {
         parentStreamId: next.parentStreamId,
       }),
@@ -681,11 +708,16 @@ export class StreamSnapshotStore {
     taskState: TaskState,
     executionId?: ExecutionId,
   ): void {
-    this.taskStates.set(stream, taskState);
-    this.queueMetaPatch(
-      stream,
-      executionId ? { taskState, executionId } : { taskState },
-    );
+    const config = taskState.agentConfig;
+    this.runConfigs.set(stream, config);
+    const descriptor = executionId
+      ? descriptorFromConfig(stream, executionId, config)
+      : undefined;
+    if (descriptor) this.runDescriptors.set(stream, descriptor);
+    this.queueMetaPatch(stream, {
+      ...(executionId ? { executionId } : {}),
+      ...(descriptor ? { runDescriptor: descriptor } : {}),
+    });
   }
 
   setParentStream(
@@ -700,7 +732,16 @@ export class StreamSnapshotStore {
   }
 
   getTaskState(stream: StreamTabId): TaskState | undefined {
-    return this.taskStates.get(stream);
+    const config = this.runConfigs.get(stream);
+    return config ? agentConfigToTaskState(config) : undefined;
+  }
+
+  getRunDescriptor(stream: StreamTabId): RunDescriptor | undefined {
+    return this.runDescriptors.get(stream);
+  }
+
+  getRunConfig(stream: StreamTabId): AgentConfig | undefined {
+    return this.runConfigs.get(stream);
   }
 
   getExecutionId(stream: StreamTabId): ExecutionId | undefined {
@@ -728,7 +769,7 @@ export class StreamSnapshotStore {
 
   /** Stream IDs that still have execution sidecar state. */
   getTaskStateStreams(): Set<StreamTabId> {
-    return new Set(this.taskStates.keys());
+    return new Set(this.runConfigs.keys());
   }
 
   /**
@@ -742,9 +783,8 @@ export class StreamSnapshotStore {
     const wantFile = match.inputFile.replaceAll('\\', '/');
     const wantOutputFiles = normalizeOutputFiles(match.outputFiles);
     const result: StreamTabId[] = [];
-    for (const [stream, state] of this.taskStates) {
-      if (!isWorkflowTaskState(state)) continue;
-      const cfg = state.agentConfig;
+    for (const [stream, cfg] of this.runConfigs) {
+      if (cfg.agentCategory !== 'workflow') continue;
       const cfgPrimaryInput = (cfg.inputFiles[0] ?? '').replaceAll('\\', '/');
       if (
         getCleanAgentName(cfg.agent) !== wantAgent ||
@@ -931,17 +971,87 @@ export class StreamSnapshotStore {
       this.kvCache.delete(stream);
       const data = await readStreamData(this.kv(stream));
       if (this.streamVersion(stream) !== version) return;
-      this.applyStreamData(stream, data);
+      await this.applyStreamData(stream, data);
     });
     this.seedChains.set(stream, next);
     return next;
   }
 
+  private parseLegacyTaskState(
+    stream: StreamTabId,
+    meta: StreamTabMeta,
+  ): TaskState | undefined {
+    if (meta.taskState === undefined) return undefined;
+    const parsed = TaskStateSchema.safeParse(meta.taskState);
+    if (parsed.success) {
+      logger.warn(
+        CHANNEL,
+        `Loaded legacy taskState for stream ${stream}; run config should come from execution config on new writes.`,
+        { data: { stream, executionId: meta.executionId } },
+      );
+      return parsed.data;
+    }
+
+    logger.warn(
+      CHANNEL,
+      `Could not parse legacy taskState for stream ${stream}; ignoring legacy run config.`,
+      {
+        data: {
+          stream,
+          executionId: meta.executionId,
+          error: z.prettifyError(parsed.error),
+        },
+      },
+    );
+    return undefined;
+  }
+
+  private async hydrateRunStateFromMeta(
+    stream: StreamTabId,
+    meta: StreamTabMeta,
+  ): Promise<void> {
+    const executionId = meta.runDescriptor?.executionId ?? meta.executionId;
+    if (meta.runDescriptor) {
+      this.runDescriptors.set(stream, meta.runDescriptor);
+    }
+
+    if (executionId) {
+      const config = await getExecutionStore(executionId).readConfig();
+      if (config) {
+        this.runConfigs.set(stream, config);
+        this.runDescriptors.set(
+          stream,
+          meta.runDescriptor ??
+            descriptorFromConfig(stream, executionId, config),
+        );
+        return;
+      }
+    }
+
+    const legacyTaskState = this.parseLegacyTaskState(stream, meta);
+    if (!legacyTaskState) return;
+    const config = legacyTaskState.agentConfig;
+    this.runConfigs.set(stream, config);
+    if (executionId) {
+      this.runDescriptors.set(
+        stream,
+        descriptorFromConfig(stream, executionId, config),
+      );
+    }
+  }
+
   /** Seed the in-memory accumulators for one stream + migrate legacy once. */
-  private applyStreamData(stream: StreamTabId, data: StreamData): void {
+  private async applyStreamData(
+    stream: StreamTabId,
+    data: StreamData,
+  ): Promise<void> {
     const metaOverlay = this.metaOverlays.has(stream)
       ? this.meta.get(stream)
       : undefined;
+    const runConfigOverlay =
+      metaOverlay !== undefined ? this.runConfigs.get(stream) : undefined;
+    const runDescriptorOverlay =
+      metaOverlay !== undefined ? this.runDescriptors.get(stream) : undefined;
     const outputFileOverlay = this.outputFileOverlays.get(stream);
     const usageOverlay = this.usageOverlays.get(stream);
     const sidecarsToWrite = new Set(data.legacyKeys);
@@ -953,20 +1063,26 @@ export class StreamSnapshotStore {
       new Map([...data.usage].filter(([, v]) => !isEmptyUsage(v))),
     );
     this.workPlan.set(stream, data.workPlan);
-    this.taskStates.delete(stream);
+    this.runDescriptors.delete(stream);
+    this.runConfigs.delete(stream);
     const meta = metaOverlay
       ? { ...(data.meta ?? {}), ...metaOverlay }
       : data.meta;
     if (meta) {
       this.meta.set(stream, meta);
-      if (meta.taskState !== undefined) {
-        const parsed = TaskStateSchema.safeParse(meta.taskState);
-        if (parsed.success) {
-          this.taskStates.set(stream, parsed.data);
-        }
-      }
+      await this.hydrateRunStateFromMeta(stream, meta);
     } else {
       this.meta.delete(stream);
+    }
+    if (runConfigOverlay) {
+      this.runConfigs.set(stream, runConfigOverlay);
+      const executionId = meta?.runDescriptor?.executionId ?? meta?.executionId;
+      const descriptor =
+        runDescriptorOverlay ??
+        (executionId
+          ? descriptorFromConfig(stream, executionId, runConfigOverlay)
+          : undefined);
+      if (descriptor) this.runDescriptors.set(stream, descriptor);
     }
     this.metaOverlays.delete(stream);
     if (outputFileOverlay) {

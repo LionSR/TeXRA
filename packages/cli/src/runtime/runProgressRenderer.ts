@@ -110,6 +110,17 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           this.render();
         }
         return true;
+      case 'updateRoundStage':
+        if (this.rootStreamTerminal) return true;
+        if (
+          this.applyRoundStage(
+            payload as ProgressEventPayloads['updateRoundStage'],
+          )
+        ) {
+          this.updateHeartbeat();
+          this.render();
+        }
+        return true;
       case 'updateActiveProcesses':
       case 'updateActiveSubagents':
         if (this.rootStreamTerminal) return true;
@@ -193,8 +204,20 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): boolean {
     if (!this.claimRootStream(payload.streamId)) return false;
 
-    this.state.round = payload.progress.conversationTurns || undefined;
     this.state.toolCallCount = payload.progress.toolCallCount || undefined;
+    this.state.phase ??= 'running';
+    return true;
+  }
+
+  private applyRoundStage(
+    payload: ProgressEventPayloads['updateRoundStage'],
+  ): boolean {
+    if (!this.claimRootStream(payload.streamId)) return false;
+
+    this.state.round = payload.roundStage.index + 1;
+    if (payload.roundStage.total !== undefined) {
+      this.state.plannedRounds = payload.roundStage.total;
+    }
     this.state.phase ??= 'running';
     return true;
   }

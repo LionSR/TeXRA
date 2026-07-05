@@ -105,9 +105,9 @@ const views = [
             status: 'running',
             lastTimestamp: 1_783_353_600_000,
             conversationProgress: {
-              conversationTurns: 1,
               toolCallCount: 1,
             },
+            roundStage: { index: 0 },
             activeSubagents: [],
             finishedSubagentCount: 0,
             activeProcesses: [],
@@ -179,9 +179,9 @@ const views = [
             status: 'running',
             lastTimestamp: 1_783_353_600_000,
             conversationProgress: {
-              conversationTurns: 4,
               toolCallCount: 12,
             },
+            roundStage: { index: 3 },
             activeSubagents: [],
             finishedSubagentCount: 0,
             activeProcesses: [],

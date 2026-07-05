@@ -44,6 +44,7 @@ export class WorkflowStreamContent extends BaseStreamContent {
         .status=${state.status}
         .substate=${state.substate}
         .progress=${state.conversationProgress}
+        .roundStage=${state.roundStage}
         .yoloActive=${false}
       ></stream-header>
 

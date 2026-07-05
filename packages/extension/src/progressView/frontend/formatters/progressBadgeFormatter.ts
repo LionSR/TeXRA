@@ -1,5 +1,5 @@
 import { html, nothing, type TemplateResult } from 'lit';
-import type { ConversationProgress } from '@shared/schemas';
+import type { ConversationProgress, RoundStage } from '@shared/schemas';
 
 /**
  * Render progress badge with conversation turns and tool call count.
@@ -7,19 +7,35 @@ import type { ConversationProgress } from '@shared/schemas';
  */
 export function renderProgressBadgeContent(
   progress: ConversationProgress | undefined,
+  roundStage: RoundStage | undefined,
 ): TemplateResult | typeof nothing {
-  if (!progress?.conversationTurns) return nothing;
-  return html`${progress.conversationTurns}
-  turns${
-    progress.toolCallCount > 0
-      ? html`, ${progress.toolCallCount} tool calls`
-      : nothing
-  }`;
+  const round =
+    roundStage !== undefined
+      ? roundStage.total !== undefined
+        ? `r${roundStage.index + 1}/${roundStage.total}`
+        : `r${roundStage.index + 1}`
+      : undefined;
+  const tools = progress?.toolCallCount ?? 0;
+  if (!round && tools <= 0) return nothing;
+  if (round && tools > 0) return html`${round}, ${tools} tool calls`;
+  if (round) return html`${round}`;
+  return html`${tools} tool calls`;
 }
 
 export function getProgressBadgeTitle(
   progress: ConversationProgress | undefined,
+  roundStage: RoundStage | undefined,
 ): string | undefined {
-  if (!progress) return undefined;
-  return `Conversation turns: ${progress.conversationTurns}, Tool calls: ${progress.toolCallCount}`;
+  const parts: string[] = [];
+  if (roundStage) {
+    parts.push(
+      roundStage.total !== undefined
+        ? `Round ${roundStage.index + 1} of ${roundStage.total}`
+        : `Round ${roundStage.index + 1}`,
+    );
+  }
+  if (progress?.toolCallCount) {
+    parts.push(`Tool calls: ${progress.toolCallCount}`);
+  }
+  return parts.length ? parts.join(', ') : undefined;
 }

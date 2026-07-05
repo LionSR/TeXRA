@@ -15,6 +15,7 @@ import {
   type ConversationProgress,
   type NormalizedToolUse,
   type Plan,
+  type RoundStage,
   type StreamLifecycleStatus,
   type StreamSubstate,
   type StreamTabId,
@@ -114,6 +115,7 @@ export interface StreamSlice {
    *  this only drives a lightweight liveness indicator. */
   readonly thinkingActive: boolean;
   readonly conversation: ConversationProgress | undefined;
+  readonly roundStage?: RoundStage | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUps: number;
   readonly queuedFollowUpMessages: readonly string[];
@@ -168,6 +170,7 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     usage: undefined,
     cumulativeUsage: undefined,
     conversation: undefined,
+    roundStage: undefined,
     entries: [],
     queuedFollowUps: 0,
     queuedFollowUpMessages: [],

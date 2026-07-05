@@ -111,8 +111,16 @@ export class ToolUseCycleNode<C> extends Node<
       },
     });
 
+    const roundStage = this.services.logger.openStage(
+      `r${roundShared.roundIndex}`,
+      {
+        kind: 'round',
+        index: roundShared.roundIndex,
+      },
+    );
+
     try {
-      await flow.run(roundShared);
+      await roundStage.run(() => flow.run(roundShared));
 
       if (roundShared.shouldStop && roundShared.lastError) {
         return {

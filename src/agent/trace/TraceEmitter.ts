@@ -210,7 +210,15 @@ export class TraceEmitter implements AgentTrace {
     }
 
     const id = options.id ?? nanoid();
-    this.emit({ type: 'stage.start', id, label, parentId });
+    this.emit({
+      type: 'stage.start',
+      id,
+      label,
+      parentId,
+      kind: options.kind,
+      index: options.index,
+      total: options.total,
+    });
     return new StageHandleImpl(this, id, defaultStatus);
   }
 

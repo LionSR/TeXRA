@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - progressView frontend
 import type {
@@ -19,10 +19,17 @@ import {
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
+const audio = vi.hoisted(() => ({
+  playCompletionSound: vi.fn(),
+}));
+
+vi.mock('@progressView/frontend/utils/audioNotification', () => audio);
+
 type TaskGroupListInternals = HTMLElement & {
   groups: TaskGroup[];
   messages: LogMessageData[];
   hasStreams: boolean;
+  isToolUse: boolean;
   terminal: boolean;
   updateComplete: Promise<boolean>;
   readonly index: MessageIndex;
@@ -50,13 +57,15 @@ function createMessage(
 
 function createGroup(
   id: string,
-  status: typeof STREAM_STATUS.RUNNING | typeof STREAM_STATUS.STOPPED,
+  status: TaskGroup['status'],
+  options: Partial<Pick<TaskGroup, 'kind' | 'name'>> = {},
 ): TaskGroup {
   return {
     id,
-    name: id,
+    name: options.name ?? id,
     startTime: 1,
     status,
+    ...(options.kind !== undefined ? { kind: options.kind } : {}),
   };
 }
 
@@ -87,6 +96,52 @@ async function renderList(
 }
 
 describe('task-group-list ungrouped message indexes', () => {
+  it('plays round-completion sound for workflow rounds only', () => {
+    const list = createList([]);
+    const running = createGroup('round-1', STREAM_STATUS.RUNNING, {
+      kind: 'round',
+    });
+    const stopped = createGroup('round-1', STREAM_STATUS.STOPPED, {
+      kind: 'round',
+    });
+
+    audio.playCompletionSound.mockClear();
+
+    list.groups = [running];
+    list.willUpdate(new Map([['groups', []]]));
+    list.groups = [stopped];
+    list.willUpdate(new Map([['groups', [running]]]));
+
+    expect(audio.playCompletionSound).toHaveBeenCalledTimes(1);
+
+    list.isToolUse = true;
+    list.groups = [running];
+    list.willUpdate(new Map([['groups', [stopped]]]));
+    list.groups = [stopped];
+    list.willUpdate(new Map([['groups', [running]]]));
+
+    expect(audio.playCompletionSound).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps legacy workflow r<N> groups eligible for completion sound', () => {
+    const list = createList([]);
+    const running = createGroup('legacy-round', STREAM_STATUS.RUNNING, {
+      name: 'r2',
+    });
+    const stopped = createGroup('legacy-round', STREAM_STATUS.STOPPED, {
+      name: 'r2',
+    });
+
+    audio.playCompletionSound.mockClear();
+
+    list.groups = [running];
+    list.willUpdate(new Map([['groups', []]]));
+    list.groups = [stopped];
+    list.willUpdate(new Map([['groups', [running]]]));
+
+    expect(audio.playCompletionSound).toHaveBeenCalledTimes(1);
+  });
+
   it('refreshes fallback timeline message refs through the ungrouped-message index', () => {
     const original = [
       createMessage('m1', 'one', 1),
