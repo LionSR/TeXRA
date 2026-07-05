@@ -321,8 +321,15 @@ const OUTPUT_PREVIEW_LINES = 20;
  * Format a completed background bash result as a delivery message.
  * Injected into the orchestrator's FollowUpQueue.
  *
- * `outputTail` and `stderrTail` are read from ephemeral temp files before
- * cleanup, since `buffer: false` means `result.stdout` is always empty.
+ * `outputTail` and `stderrTail` are accumulated from `onStdout`/`onStderr`
+ * chunks as the process runs, since `buffer: false` means `result.stdout` is
+ * always empty.
+ *
+ * `outputHead`/`stderrHead` are optional and should only be passed
+ * (non-empty) when the corresponding stream was actually truncated — the
+ * caller (bash.ts) preserves a small head budget alongside the tail so a
+ * long run's first fatal error survives even once total output exceeds the
+ * tail budget.
  */
 export function formatBashDelivery(
   executionId: string,
@@ -331,6 +338,8 @@ export function formatBashDelivery(
   result: ExecResult,
   outputTail: string,
   stderrTail: string,
+  outputHead = '',
+  stderrHead = '',
 ): string {
   const stdoutPreview = lastNLines(outputTail, OUTPUT_PREVIEW_LINES);
   const stderrPreview = lastNLines(stderrTail, OUTPUT_PREVIEW_LINES);
@@ -339,8 +348,14 @@ export function formatBashDelivery(
     `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
+  if (outputHead) {
+    lines.push(`<output-head>${escapeText(outputHead)}</output-head>`);
+  }
   if (stdoutPreview) {
     lines.push(`<output-preview>${escapeText(stdoutPreview)}</output-preview>`);
+  }
+  if (stderrHead) {
+    lines.push(`<stderr-head>${escapeText(stderrHead)}</stderr-head>`);
   }
   if (stderrPreview) {
     lines.push(`<stderr-preview>${escapeText(stderrPreview)}</stderr-preview>`);
