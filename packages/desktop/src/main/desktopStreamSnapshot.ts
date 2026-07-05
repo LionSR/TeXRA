@@ -92,6 +92,7 @@ export async function openDesktopStreamSnapshotStore(
     reject(error: unknown): void;
   }> = [];
   let writeChain = Promise.resolve();
+  let writeGeneration = 0;
 
   function currentFile(): RestoredStreamsFile {
     return {
@@ -107,6 +108,7 @@ export async function openDesktopStreamSnapshotStore(
   function enqueuePersist(
     waiters: typeof pendingUpsertWaiters = [],
   ): Promise<void> {
+    writeGeneration += 1;
     const write = writeChain.then(persist, persist);
     writeChain = write.catch(() => {});
     void write.then(
@@ -155,7 +157,17 @@ export async function openDesktopStreamSnapshotStore(
   }
 
   async function flushPendingWrites(): Promise<void> {
-    await persistPendingUpserts();
+    for (;;) {
+      const generationBeforeFlush = writeGeneration;
+      await persistPendingUpserts();
+      if (
+        pendingDebounce === undefined &&
+        pendingUpsertWaiters.length === 0 &&
+        writeGeneration === generationBeforeFlush
+      ) {
+        return;
+      }
+    }
   }
 
   return {
