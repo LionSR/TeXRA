@@ -1065,7 +1065,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return this.createOpenAIClient();
   }
 
-  override get usesProviderManagedAutoRetry(): boolean {
+  override isAutoRetryManagedByProvider(_error: Error): boolean {
     return true;
   }
 
