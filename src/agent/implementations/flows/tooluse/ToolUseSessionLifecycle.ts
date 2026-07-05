@@ -7,10 +7,13 @@ import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { StreamTabId } from '@shared/schemas';
 
 export class ToolUseSessionLifecycle implements IToolUseSession {
-  private readonly followUps = ToolUseFollowUpQueue.acquire(this.streamTabId);
+  private readonly followUps = this.queue.acquire(this.streamTabId);
   private syntheticFollowUpPending = false;
 
-  constructor(private readonly streamTabId: StreamTabId) {}
+  constructor(
+    private readonly streamTabId: StreamTabId,
+    private readonly queue: ToolUseFollowUpQueue,
+  ) {}
 
   appendFollowUp(followUp: FollowUpQueueInput): void {
     this.followUps.enqueue(followUp);
@@ -42,6 +45,6 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   }
 
   dispose(): void {
-    ToolUseFollowUpQueue.release(this.streamTabId);
+    this.queue.release(this.streamTabId);
   }
 }

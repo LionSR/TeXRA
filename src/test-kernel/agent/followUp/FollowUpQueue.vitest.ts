@@ -8,6 +8,10 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import type { StreamTabId } from '@shared/schemas';
 
 describe('FollowUpQueue', () => {
+  function createLifecycle(streamId: StreamTabId): ToolUseSessionLifecycle {
+    return new ToolUseSessionLifecycle(streamId, new ToolUseFollowUpQueue());
+  }
+
   it('batches visible follow-ups for normal user input', async () => {
     const queue = new FollowUpQueue();
 
@@ -110,9 +114,7 @@ describe('FollowUpQueue', () => {
   });
 
   it('coalesces duplicate synthetic session follow-ups', async () => {
-    const session = new ToolUseSessionLifecycle(
-      'stream:synthetic-coalesce' as StreamTabId,
-    );
+    const session = createLifecycle('stream:synthetic-coalesce' as StreamTabId);
 
     try {
       session.appendSyntheticFollowUp('compact now');
@@ -129,7 +131,7 @@ describe('FollowUpQueue', () => {
   });
 
   it('allows synthetic session follow-ups after an interrupt clears the queue', async () => {
-    const session = new ToolUseSessionLifecycle(
+    const session = createLifecycle(
       'stream:synthetic-interrupt' as StreamTabId,
     );
 
@@ -148,9 +150,7 @@ describe('FollowUpQueue', () => {
   });
 
   it('attaches media to a session follow-up', async () => {
-    const session = new ToolUseSessionLifecycle(
-      'stream:media-followup' as StreamTabId,
-    );
+    const session = createLifecycle('stream:media-followup' as StreamTabId);
 
     try {
       session.appendFollowUp({
