@@ -415,21 +415,12 @@ class ResponseProcessNode<C> extends BaseNode<
       `Last ${K_SLICE} chars:\n${result.processedResponse.slice(-K_SLICE)}`,
     );
 
-    if (modelHandler.capabilities.supportsAssistantPrefill) {
-      modelHandler.updateMessageContentWithPrefill(
-        shared.messages,
-        connector,
-        result.processedResponse,
-        workspace,
-      );
-    } else {
-      modelHandler.updateMessageContentWithoutPrefill(
-        shared.messages,
-        connector,
-        result.processedResponse,
-        workspace,
-      );
-    }
+    modelHandler.updateMessageContent(
+      shared.messages,
+      connector,
+      result.processedResponse,
+      workspace,
+    );
 
     if (result.useStreaming) {
       logger.debug(
@@ -579,19 +570,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       });
     }
 
-    if (modelHandler.capabilities.supportsAssistantPrefill) {
-      modelHandler.addContinueMessageWithPrefill(
-        shared.messages,
-        workspace,
-        setting,
-      );
-    } else {
-      modelHandler.addContinueMessageWithoutPrefill(
-        shared.messages,
-        workspace,
-        setting,
-      );
-    }
+    modelHandler.addContinueMessage(shared.messages, workspace, setting);
 
     return FlowTransition.CONTINUE;
   }
