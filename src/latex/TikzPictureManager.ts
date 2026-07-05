@@ -170,13 +170,11 @@ class TikzPictureManager {
     const compiledFiles: FileLocation[] = [];
 
     for (const [label, tikzpicturess] of labeledTikzPictures) {
-      const suffixes =
-        tikzpicturess.length > 1
-          ? tikzpicturess.map((_, i) => String.fromCharCode(97 + i))
-          : [undefined];
+      const hasMultiple = tikzpicturess.length > 1;
 
       for (const [i, tikzpictures] of tikzpicturess.entries()) {
-        const suffix = suffixes[i];
+        // Disambiguate multiple pictures under one label with a/b/c… suffixes.
+        const suffix = hasMultiple ? String.fromCharCode(97 + i) : undefined;
 
         const texLocation = await this.createStandalone(
           tikzpictures,

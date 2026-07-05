@@ -9,7 +9,6 @@ import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import { executeCommand } from '@utils/system';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { runLatexFormatter } from './texFormatter';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
@@ -27,18 +26,6 @@ export const LaTeXdiffResultSchema = z.object({
   message: z.string().optional(),
 });
 export type LaTeXdiffResult = z.infer<typeof LaTeXdiffResultSchema>;
-
-export const LaTeXdiffMultipleResultSchema = z.object({
-  success: z.boolean(),
-  results: z.object({
-    success: z.array(z.string()),
-    failed: z.array(z.string()),
-  }),
-  message: z.string().optional(),
-});
-export type LaTeXdiffMultipleResult = z.infer<
-  typeof LaTeXdiffMultipleResultSchema
->;
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -229,73 +216,6 @@ export class LaTeXdiffService {
       };
     } catch (err) {
       return this.logDiffError('Error running LaTeX diff VC', err);
-    }
-  }
-
-  async runDiffVcMultiple(
-    inputLocations: FileLocation[],
-    commitHash: string,
-    mathMarkup?: MathMarkupOption,
-  ): Promise<LaTeXdiffMultipleResult> {
-    try {
-      if (inputLocations.length === 0) {
-        const message = 'No input files provided';
-        logger.warn(this.channel, message);
-        return {
-          success: false,
-          results: { success: [], failed: [] },
-          message,
-        };
-      }
-
-      const results = { success: [] as string[], failed: [] as string[] };
-
-      for (const inputLocation of inputLocations) {
-        const inputFile = inputLocation.absolutePath;
-        try {
-          const result = await this.runDiffVc(
-            inputLocation,
-            commitHash,
-            mathMarkup,
-          );
-          if (result.success) {
-            results.success.push(inputFile);
-          } else {
-            results.failed.push(inputFile);
-          }
-        } catch (err) {
-          logger.error(
-            this.channel,
-            `Error processing ${inputFile}: ${toErrorMessage(err)}`,
-          );
-          results.failed.push(inputFile);
-        }
-      }
-
-      const summaryParts = ['LaTeX diff operations completed:'];
-      if (results.success.length > 0) {
-        summaryParts.push(`Successful:\n${results.success.join('\n')}`);
-      }
-      if (results.failed.length > 0) {
-        summaryParts.push(`Failed:\n${results.failed.join('\n')}`);
-      }
-      const summary = summaryParts.join('\n');
-
-      logger.info(this.channel, summary);
-
-      return {
-        success: results.failed.length === 0,
-        results,
-        message: summary,
-      };
-    } catch (err) {
-      const message = formatError('Error in runDiffVcMultiple', err);
-      logger.error(this.channel, message);
-      return {
-        success: false,
-        results: { success: [], failed: [] },
-        message,
-      };
     }
   }
 
