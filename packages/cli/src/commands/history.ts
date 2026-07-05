@@ -97,7 +97,8 @@ async function runHistoryShow(
  *
  * Mirrors the extension's ChatExportController.buildExportInput so the CLI
  * and the extension render the same conversation identically; the HTML path
- * reuses the Lit-SSR chat exporter (headless rendering engine for traces).
+ * reuses the Lit-SSR chat export renderer (same HTML output as the
+ * extension's chat export — not the separate Progress View trace export).
  *
  * For the default (unset) `--assets` href, also stages the bundled
  * KaTeX/highlight.js/texmath assets into `<cwd>/assets` as a side effect —
