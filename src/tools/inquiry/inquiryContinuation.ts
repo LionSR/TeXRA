@@ -164,7 +164,12 @@ async function deliverContinuation(params: {
   }
 
   const outcome = mapWakeResultToInquiryOutcome(
-    await wakeQueuedFollowUpStream(params.parentStreamId, result),
+    await wakeQueuedFollowUpStream(
+      params.parentStreamId,
+      result,
+      undefined,
+      params.session,
+    ),
   );
 
   await emitInquiryThreadUpdate(
