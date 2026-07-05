@@ -51,12 +51,14 @@ import { parseWorkingDirectory } from './pathResolution';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
 /**
- * Small head budget retained alongside the tail (mirrors the foreground
- * checkToolResultTextLimit head:tail ratio — see
- * TOOL_RESULT_TRUNCATION_HEAD_CHARS/_TAIL_CHARS). A long background build's
- * first fatal error tends to sit near the top of the log, well before the
- * tail budget's trailing window; without this, output that outgrows the tail
- * silently drops that error with no way to recover it from the follow-up.
+ * Small head budget retained alongside the tail (approximates the foreground
+ * checkToolResultTextLimit head:tail ratio of TOOL_RESULT_TRUNCATION_HEAD_CHARS
+ * /_TAIL_CHARS, 4,000/50,000 = 8.0% — this is 1,000/12,000 ≈ 8.3%, close but
+ * not identical, since the two paths have independently-sized tail budgets).
+ * A long background build's first fatal error tends to sit near the top of
+ * the log, well before the tail budget's trailing window; without this,
+ * output that outgrows the tail silently drops that error with no way to
+ * recover it from the follow-up.
  */
 const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
 /** Max chars logged to the child stream tab to prevent unbounded memory growth. */
