@@ -628,4 +628,74 @@ describe('StreamSnapshotStore', () => {
     expect(snap.executionId).toBeUndefined();
     expect(snap.description).toBe('Prior session');
   });
+
+  // Archived pre-#3061 per-run instruction reader (formerly StreamTabStore.ts,
+  // deleted in #7100 and restored here after review found no supported
+  // retention window had expired — see `readLegacyInstruction`).
+  describe('readLegacyInstruction', () => {
+    it('returns null when no archival file exists', async () => {
+      const legacy = await new StreamSnapshotStore().readLegacyInstruction(
+        STREAM,
+      );
+      expect(legacy).toBeNull();
+    });
+
+    it('reads the canonical legacyInstructions.json', async () => {
+      const dir = streamDataDir(STREAM);
+      await StorageFS.ensureDir(dir);
+      await StorageFS.write(
+        path.join(dir, 'legacyInstructions.json'),
+        JSON.stringify({
+          'run-1': { text: 'Polish the introduction', timestamp: 100 },
+        }),
+      );
+
+      const legacy = await new StreamSnapshotStore().readLegacyInstruction(
+        STREAM,
+      );
+      expect(legacy?.text).toBe('Polish the introduction');
+    });
+
+    it('falls back to the older runInstructions.json key, unmodified', async () => {
+      const dir = streamDataDir(STREAM);
+      await StorageFS.ensureDir(dir);
+      await StorageFS.write(
+        path.join(dir, 'runInstructions.json'),
+        JSON.stringify({ 'run-1': { text: 'Rewrite the abstract' } }),
+      );
+
+      const legacy = await new StreamSnapshotStore().readLegacyInstruction(
+        STREAM,
+      );
+      expect(legacy?.text).toBe('Rewrite the abstract');
+      // Read-only: no migration/rename happens on disk.
+      expect(
+        await StorageFS.exists(path.join(dir, 'runInstructions.json')),
+      ).toBe(true);
+      expect(
+        await StorageFS.exists(path.join(dir, 'legacyInstructions.json')),
+      ).toBe(false);
+    });
+
+    it('prefers meta.activeRunId when multiple archived runs exist', async () => {
+      const dir = streamDataDir(STREAM);
+      await StorageFS.ensureDir(dir);
+      await StorageFS.write(
+        path.join(dir, 'legacyInstructions.json'),
+        JSON.stringify({
+          older: { text: 'older instruction', timestamp: 100 },
+          active: { text: 'active instruction', timestamp: 50 },
+        }),
+      );
+      await StorageFS.write(
+        path.join(dir, 'meta.json'),
+        JSON.stringify({ activeRunId: 'active' }),
+      );
+
+      const legacy = await new StreamSnapshotStore().readLegacyInstruction(
+        STREAM,
+      );
+      expect(legacy?.text).toBe('active instruction');
+    });
+  });
 });
