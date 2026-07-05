@@ -47,8 +47,7 @@ export const RoundKeySchema = z.coerce.number().int();
  * schema stays `@agent`-free and can live in `@shared/schemas`; consumers that
  * need the typed value parse it with `TaskStateSchema` (which depends on
  * `@agent`). This is THE definition — the core `StreamSnapshotStore` /
- * `streamSnapshotRead` and the legacy `StreamTabStore` reader all import it
- * directly, never their own copy.
+ * `streamSnapshotRead` import it directly, never their own copy.
  */
 export const StreamTabMetaSchema = z.object({
   schemaVersion: z
@@ -66,53 +65,6 @@ export const StreamTabMetaSchema = z.object({
 });
 
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
-
-// ============================================================================
-// Legacy instructions: { runId: { text, timestamp?, ... } }
-// ============================================================================
-
-export const LegacyInstructionEntrySchema = z.looseObject({
-  text: z.string(),
-  timestamp: z.number().optional(),
-});
-
-export type LegacyInstructionEntry = z.infer<
-  typeof LegacyInstructionEntrySchema
->;
-
-export const LegacyInstructionsDataSchema = z
-  .record(z.string(), LegacyInstructionEntrySchema)
-  .catch({});
-
-/**
- * Pick the legacy instruction that best matches the workflow run users most
- * recently viewed. Prefer `preferredRunId` when available; otherwise fall back
- * to the newest timestamp, breaking ties by later insertion order.
- */
-export function selectPreferredLegacyInstruction(
-  record: Record<string, LegacyInstructionEntry>,
-  preferredRunId?: string | null,
-): LegacyInstructionEntry | null {
-  if (preferredRunId && record[preferredRunId]) {
-    return record[preferredRunId];
-  }
-
-  let selected: LegacyInstructionEntry | null = null;
-  for (const entry of Object.values(record)) {
-    if (!selected) {
-      selected = entry;
-      continue;
-    }
-
-    const nextTimestamp = entry.timestamp ?? Number.NEGATIVE_INFINITY;
-    const currentTimestamp = selected.timestamp ?? Number.NEGATIVE_INFINITY;
-    if (nextTimestamp >= currentTimestamp) {
-      selected = entry;
-    }
-  }
-
-  return selected;
-}
 
 // ============================================================================
 // Legacy detection + flattening
