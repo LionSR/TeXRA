@@ -251,6 +251,30 @@ return 'done'`,
     ).rejects.toThrow(/agent-call cap/);
   });
 
+  it('journal replays do not consume the live agent-call cap', async () => {
+    const script = `${META}
+const a = await agent('one')
+const b = await agent('two')
+return [a, b]`;
+    const first = await runWorkflowScript({ script, runAgent: echoRunner });
+    expect(first.journal).toHaveLength(2);
+
+    // Resume with both calls cached plus one new live call, under a cap
+    // that the total call count exceeds but the live count does not.
+    const liveRunner = vi.fn(echoRunner);
+    const resumed = await runWorkflowScript({
+      script: `${META}
+const a = await agent('one')
+const b = await agent('two')
+return await agent('three:' + a + b)`,
+      runAgent: liveRunner,
+      journal: first.journal,
+      maxAgentCalls: 1,
+    });
+    expect(liveRunner).toHaveBeenCalledTimes(1);
+    expect(resumed.result).toBe('result:three:result:oneresult:two');
+  });
+
   it('defaults agent phase to the active phase() and emits events', async () => {
     const invocations: WorkflowAgentInvocation[] = [];
     const events: WorkflowScriptEvent[] = [];

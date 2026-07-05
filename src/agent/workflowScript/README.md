@@ -64,7 +64,7 @@ return concat(sections, { separator: '\n\n' });
   which varies run-to-run — the per-index key check keeps replay safe, but
   multi-stage pipelines see lower resume cache-hit rates.
 - **Budgets**: one concurrency semaphore (default 4) across all `agent()`
-  calls, a lifetime call cap (default 200), a fan-out cap per
+  calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
   `parallel()`/`pipeline()` call, and a wall-clock timeout. The cap and
   timeout raise `WorkflowRunAbortError`, which `parallel()`/`pipeline()`
   deliberately do NOT convert to `null` — the whole run fails. On timeout

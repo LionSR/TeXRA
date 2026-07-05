@@ -71,6 +71,10 @@ export async function runWorkflowScript(
   const journal = new Map<number, WorkflowJournalEntry>();
   const semaphore = createSemaphore(concurrency);
   const runAbort = new AbortController();
+  // Journal replays are free: only live runAgent executions count against
+  // the runaway-loop cap, so a resume can replay past the cap and finish
+  // the remaining work.
+  let liveCallCounter = 0;
   // agent() invocations the script may have abandoned without awaiting
   // (e.g. `const p = agent('x'); return 'done'`). Drained on completion so
   // no runner keeps consuming quota or emitting events after the run ends.
@@ -97,14 +101,6 @@ export async function runWorkflowScript(
     const callOptions = normalizeAgentOptions(rawOptions, currentPhase);
     const index = callCounter;
     callCounter += 1;
-    if (callCounter > maxAgentCalls) {
-      // Abort first so in-flight sibling agents stop consuming quota — the
-      // backstop must cancel the fan-out, not just fail this one call.
-      runAbort.abort();
-      throw new WorkflowRunAbortError(
-        `Workflow exceeded the ${maxAgentCalls} agent-call cap (runaway-loop backstop).`,
-      );
-    }
 
     const label =
       callOptions.label ??
@@ -116,6 +112,16 @@ export async function runWorkflowScript(
       journal.set(index, prior);
       emit({ type: 'agent:end', index, label, cached: true });
       return prior.result;
+    }
+
+    liveCallCounter += 1;
+    if (liveCallCounter > maxAgentCalls) {
+      // Abort first so in-flight sibling agents stop consuming quota — the
+      // backstop must cancel the fan-out, not just fail this one call.
+      runAbort.abort();
+      throw new WorkflowRunAbortError(
+        `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
+      );
     }
 
     emit({ type: 'agent:start', index, label, phase: callOptions.phase });
