@@ -84,15 +84,3 @@ export async function handleCountLinterMessages(): Promise<void> {
     );
   }
 }
-
-/**
- * `texra.showLinterMessages` and `texra.countLinterMessages` are now
- * registered through the shared command registry in
- * `extensionCommandSurface.ts` (see #3775). This stub is kept for the
- * existing `registerLinterCommands(context)` call site.
- */
-export function registerLinterCommands(
-  _context: vscode.ExtensionContext,
-): void {
-  /* registration handled by extensionCommandSurface */
-}
