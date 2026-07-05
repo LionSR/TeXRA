@@ -11,10 +11,11 @@ import * as path from 'node:path';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
+import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
-import { MEMORY_STORAGE_ROOT, shouldSkipEntry } from './constants';
+import { shouldSkipEntry } from './constants';
 
 /**
  * Attribution metadata schema. Source of truth for the {@link MemoryFileMeta}
@@ -154,14 +155,14 @@ export function setPinnedMeta(
 }
 
 /**
- * Count pinned memory files under MEMORY_STORAGE_ROOT.
+ * Count pinned memory files under MEMORY_STORAGE_DIR.
  * Short-circuits once `limit` is reached to avoid unnecessary reads.
  * Returns 0 if the storage root does not exist.
  */
 export async function countPinnedMemories(limit?: number): Promise<number> {
-  const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);
+  const exists = await StorageFS.exists(MEMORY_STORAGE_DIR);
   if (!exists) return 0;
-  return countPinnedInDir(MEMORY_STORAGE_ROOT, limit ?? Infinity);
+  return countPinnedInDir(MEMORY_STORAGE_DIR, limit ?? Infinity);
 }
 
 async function countPinnedInDir(

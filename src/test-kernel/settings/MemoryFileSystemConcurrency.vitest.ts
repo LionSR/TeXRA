@@ -8,10 +8,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
+import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 
 // Local imports - settings memory
 import { walkMemoryDirectory } from '@tools/memory/memoryFileSystem';
-import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core/async';
 
@@ -57,15 +57,15 @@ describe('memory filesystem listing', () => {
 
   it('bounds metadata reads while walking large memory directories', async () => {
     vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
-      if (target === MEMORY_STORAGE_ROOT) {
+      if (target === MEMORY_STORAGE_DIR) {
         return [
           ['alpha', FileType.Directory],
           ['beta', FileType.Directory],
         ];
       }
       if (
-        target === path.join(MEMORY_STORAGE_ROOT, 'alpha') ||
-        target === path.join(MEMORY_STORAGE_ROOT, 'beta')
+        target === path.join(MEMORY_STORAGE_DIR, 'alpha') ||
+        target === path.join(MEMORY_STORAGE_DIR, 'beta')
       ) {
         return memoryFiles();
       }
@@ -90,7 +90,7 @@ describe('memory filesystem listing', () => {
       readStreamFromText(TEST_FRONTMATTER),
     );
 
-    const items = await walkMemoryDirectory(MEMORY_STORAGE_ROOT);
+    const items = await walkMemoryDirectory(MEMORY_STORAGE_DIR);
 
     expect(items).toHaveLength(FILE_COUNT_PER_DIRECTORY * 2);
     expect(maxActiveMetadataReads).toBeGreaterThan(1);

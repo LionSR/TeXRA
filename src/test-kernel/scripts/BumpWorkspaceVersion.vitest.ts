@@ -9,7 +9,6 @@ const repoRoot = process.cwd();
 const scriptPath = path.join(repoRoot, 'scripts/bump-workspace-version.mjs');
 const manifestPaths = [
   'package.json',
-  'packages/core/package.json',
   'packages/cli/package.json',
   'packages/desktop/package.json',
   'packages/extension/package.json',

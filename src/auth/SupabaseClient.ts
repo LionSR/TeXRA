@@ -125,7 +125,7 @@ export class SupabaseClient {
   /**
    * Initialize the Supabase client with project credentials.
    */
-  static initialize(url: string, publicKey: string, _context?: unknown): void {
+  static initialize(url: string, publicKey: string): void {
     if (!url || !publicKey) {
       throw new Error(
         'Supabase credentials missing. Check extension configuration.',
