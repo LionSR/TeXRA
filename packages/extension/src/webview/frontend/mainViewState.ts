@@ -1,13 +1,13 @@
 /**
  * Module-level reactive state for the Main view.
  *
- * Hoisted from `MainApp` private `signal(...)` fields (issue #7075), following
- * the same module-scope slice-store shape as `progressView/frontend/
- * progressState.ts`. Identity and reactivity are preserved: consumers still
- * read plain signals and `Signal.Computed` derivations, and `MainApp` keeps
- * its `@provide`/`@state` + `willUpdate()` context-sync idiom — only what
- * feeds `fileStateContext$`/`sessionContext$` moved from `this.xxx` fields to
- * these module-scope signals.
+ * Hoisted from `MainApp` private `signal(...)` fields, following the same
+ * module-scope slice-store shape as `progressView/frontend/progressState.ts`.
+ * Identity and reactivity are preserved: consumers still read plain signals
+ * and `Signal.Computed` derivations, and `MainApp` keeps its
+ * `@provide`/`@state` + `willUpdate()` context-sync idiom — only what feeds
+ * `fileStateContext$`/`sessionContext$` moved from `this.xxx` fields to these
+ * module-scope signals.
  *
  * Singleton scope: only one Main view per webview/page. If we ever need
  * multiple independent main-view instances on the same page, this file must
