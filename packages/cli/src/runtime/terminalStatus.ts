@@ -1,5 +1,4 @@
-import { getExecutionStore } from '@agent/storage';
-import { runAgent } from '@agent/runtime/runAgent';
+import { getExecutionStore, runAgent } from '@texra/core';
 
 import {
   legacyEndGroupStatusForOutcome,
