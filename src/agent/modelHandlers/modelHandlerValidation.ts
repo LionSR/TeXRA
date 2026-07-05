@@ -129,11 +129,7 @@ export class ModelHandlerValidation extends ModelHandler<
     return false;
   }
 
-  addContinueMessageWithPrefill(): void {
-    // The validation model always produces a complete response.
-  }
-
-  addContinueMessageWithoutPrefill(): void {
+  addContinueMessage(): void {
     // The validation model always produces a complete response.
   }
 
@@ -165,15 +161,7 @@ export class ModelHandlerValidation extends ModelHandler<
     };
   }
 
-  updateMessageContentWithPrefill(
-    messages: ChatCompletionMessageParam[],
-    _bestConnector: string,
-    newResponse: string,
-  ): void {
-    messages.push(this.createAssistantMessage(newResponse));
-  }
-
-  updateMessageContentWithoutPrefill(
+  updateMessageContent(
     messages: ChatCompletionMessageParam[],
     _bestConnector: string,
     newResponse: string,

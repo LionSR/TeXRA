@@ -548,12 +548,13 @@ export abstract class ModelHandler<
     return false;
   }
 
-  get usesProviderManagedAutoRetry(): boolean {
-    return false;
-  }
-
+  /**
+   * Whether the provider SDK already retries this error internally, so the
+   * flow-level auto-retry loop should stand down. Override in subclasses that
+   * delegate retries to the provider; the default is no provider-managed retry.
+   */
   isAutoRetryManagedByProvider(_error: Error): boolean {
-    return this.usesProviderManagedAutoRetry;
+    return false;
   }
 
   /**
@@ -878,28 +879,25 @@ export abstract class ModelHandler<
   ): boolean;
 
   /**
-   * Manages continuation for truncated responses in multi-turn conversations
-   * with prefill support. Most models with prefill don't need special handling,
-   * so the default is a no-op. Override in subclasses only if custom behavior is
-   * needed (e.g. providers without native assistant-prefill continuation).
+   * Manages continuation for truncated responses in multi-turn conversations.
+   * Models with prefill support don't need special handling (the default is a
+   * no-op there); models without it get a continuation prompt appended so the
+   * next turn resumes from where the response was cut off. Override the
+   * with-prefill branch in subclasses only if custom behavior is needed (e.g.
+   * providers without native assistant-prefill continuation).
    */
-  addContinueMessageWithPrefill(
-    _messages: M[],
-    _workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
-  ): void {
-    this.logger.debug('Skipping continuation - assistant prefill is supported');
-  }
-
-  /**
-   * Manages continuation for truncated responses in multi-turn conversations without prefill support.
-   * Updates messages array and tool state for next turn.
-   */
-  addContinueMessageWithoutPrefill(
+  addContinueMessage(
     messages: M[],
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
   ): void {
+    if (this.capabilities.supportsAssistantPrefill) {
+      this.logger.debug(
+        'Skipping continuation - assistant prefill is supported',
+      );
+      return;
+    }
+
     const continuationPrompt = this.createContinuationPrompt(
       workspaceState,
       agentSetting,
@@ -1097,13 +1095,7 @@ export abstract class ModelHandler<
       );
     }
 
-    if (!this.capabilities.supportsAssistantPrefill) {
-      this.addContinueMessageWithoutPrefill(
-        messages,
-        workspaceState,
-        agentSetting,
-      );
-    }
+    this.addContinueMessage(messages, workspaceState, agentSetting);
 
     return [false, messages];
   }
@@ -1127,38 +1119,31 @@ export abstract class ModelHandler<
   abstract normalizeUsage(rawUsage: U, responseTimeMs: number): NormalizedUsage;
 
   /**
-   * Updates model message content with response for models with prefill support.
-   * Handles cache control and content formatting.
+   * Updates model message content with the latest response. Handles cache
+   * control and content formatting, branching on whether the handler supports
+   * assistant prefill.
    */
-  updateMessageContentWithPrefill(
+  updateMessageContent(
     messages: M[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
   ): void {
     const text = bestConnector + newResponse;
-    if (
-      this.appendTextToLastAssistantMessage(messages, text, {
-        fallbackText: workspaceState.assembly.accumulatedOutput,
-      })
-    ) {
+
+    if (this.capabilities.supportsAssistantPrefill) {
+      if (
+        this.appendTextToLastAssistantMessage(messages, text, {
+          fallbackText: workspaceState.assembly.accumulatedOutput,
+        })
+      ) {
+        return;
+      }
+
+      messages.push(this.createAssistantMessageForPrefillText(text));
       return;
     }
 
-    messages.push(this.createAssistantMessageForPrefillText(text));
-  }
-
-  /**
-   * Updates model message content with response for models without prefill support.
-   * Handles cache control and content formatting.
-   */
-  updateMessageContentWithoutPrefill(
-    messages: M[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    const text = bestConnector + newResponse;
     if (
       this.appendTextToLastAssistantMessage(messages, text, {
         afterContinuationPrompt: true,

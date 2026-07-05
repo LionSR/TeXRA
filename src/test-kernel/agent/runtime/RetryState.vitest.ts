@@ -135,8 +135,7 @@ async function withSessionRetryRunContext<T>(
 }
 
 function createModelInvocationNode(input: {
-  usesProviderManagedAutoRetry: boolean;
-  isAutoRetryManagedByProvider?: (error: Error) => boolean;
+  isAutoRetryManagedByProvider: (error: Error) => boolean;
 }): ModelInvocationNode<BaseCycleFields> {
   return new ModelInvocationNode<BaseCycleFields>({
     operationName: 'Model call',
@@ -144,7 +143,6 @@ function createModelInvocationNode(input: {
     storeResponse: vi.fn(),
   }).setServices({
     modelHandler: {
-      usesProviderManagedAutoRetry: input.usesProviderManagedAutoRetry,
       isAutoRetryManagedByProvider: input.isAutoRetryManagedByProvider,
       isBackgroundModeActive: () => false,
     },
@@ -163,7 +161,7 @@ describe('RetryState', () => {
 
   it('skips flow-level auto-retry when the model handler delegates retries to the provider', () => {
     const node = createModelInvocationNode({
-      usesProviderManagedAutoRetry: true,
+      isAutoRetryManagedByProvider: () => true,
     });
 
     expect(node.shouldAutoRetry(new Error('temporary provider failure'))).toBe(
@@ -173,7 +171,7 @@ describe('RetryState', () => {
 
   it('keeps flow-level auto-retry for errors outside the provider retry boundary', () => {
     const node = createModelInvocationNode({
-      usesProviderManagedAutoRetry: true,
+      isAutoRetryManagedByProvider: () => true,
     });
     const streamError = new Error('stream closed after response started');
 
@@ -184,21 +182,10 @@ describe('RetryState', () => {
 
   it('keeps flow-level auto-retry when the handler predicate excludes an error', () => {
     const node = createModelInvocationNode({
-      usesProviderManagedAutoRetry: true,
       isAutoRetryManagedByProvider: () => false,
     });
 
     expect(node.shouldAutoRetry(new Error('rate limit'))).toBe(true);
-  });
-
-  it('uses flow-level auto-retry when the model handler has no provider-managed retry', () => {
-    const node = createModelInvocationNode({
-      usesProviderManagedAutoRetry: false,
-    });
-
-    expect(node.shouldAutoRetry(new Error('temporary provider failure'))).toBe(
-      true,
-    );
   });
 
   it('updates the injected stream status owner during manual retry', async () => {
