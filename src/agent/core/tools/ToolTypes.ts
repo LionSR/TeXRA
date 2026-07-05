@@ -15,10 +15,18 @@ import type { ToolResult } from '@shared/schemas/toolResult';
 export interface ITool {
   readonly definition: ToolDefinition;
   /**
-   * True only for tools that are side-effect-free and approval-free, so
+   * True only for tools that are side-effect-free AND approval-free, so
    * parallel calls in one model response may execute concurrently.
    * Declared on the tool (not the YAML-overridable definition) so agent
    * configs cannot mark arbitrary tools parallel-safe.
+   *
+   * The two properties are coupled on purpose and both are load-bearing in
+   * `partitionDuplicateCalls`: every non-parallel-safe call acts as an
+   * ordering barrier that clears the read-dedup segment. A read-only tool
+   * that requires user approval is therefore NOT parallel-safe — it cannot
+   * run concurrently with siblings in the same batch (it needs an approval
+   * round-trip first), so it must stay a barrier. Only set this when a call
+   * both mutates nothing and never prompts for approval.
    */
   readonly parallelSafe?: boolean;
   call(rawInput: unknown): Promise<ToolResult>;
