@@ -70,6 +70,19 @@ export function generateDiffFileName(
 }
 
 /**
+ * Ordered from most specific to least so the VC/between-round hashes are
+ * recognized before the bare `_diff` suffix that they also end with.
+ */
+const GENERATED_LATEXDIFF_ARTIFACT_PATTERNS: {
+  kind: GeneratedLatexdiffArtifactKind;
+  regex: RegExp;
+}[] = [
+  { kind: 'versionControlDiff', regex: /^(.+)-diff[0-9a-f]{6,40}$/i },
+  { kind: 'betweenRoundDiff', regex: /^(.+)_diffr\d+r\d+$/i },
+  { kind: 'workspaceDiff', regex: /^(.+)_diff$/i },
+];
+
+/**
  * Recognize filenames TeXRA/latexdiff generates so source-editing commands can
  * avoid treating diff artifacts as editable paper sources.
  */
@@ -79,16 +92,7 @@ export function detectGeneratedLatexdiffArtifact(
   const parsed = path.parse(filePath);
   if (parsed.ext.toLowerCase() !== '.tex') return null;
 
-  const patterns: {
-    kind: GeneratedLatexdiffArtifactKind;
-    regex: RegExp;
-  }[] = [
-    { kind: 'versionControlDiff', regex: /^(.+)-diff[0-9a-f]{6,40}$/i },
-    { kind: 'betweenRoundDiff', regex: /^(.+)_diffr\d+r\d+$/i },
-    { kind: 'workspaceDiff', regex: /^(.+)_diff$/i },
-  ];
-
-  for (const pattern of patterns) {
+  for (const pattern of GENERATED_LATEXDIFF_ARTIFACT_PATTERNS) {
     const match = pattern.regex.exec(parsed.name);
     const sourceStem = match?.[1];
     if (!sourceStem) continue;
