@@ -255,7 +255,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     });
   }
 
-  override get usesProviderManagedAutoRetry(): boolean {
+  override isAutoRetryManagedByProvider(_error: Error): boolean {
     return true;
   }
 

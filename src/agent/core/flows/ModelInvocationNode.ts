@@ -77,11 +77,7 @@ export class ModelInvocationNode<
       return true;
     }
 
-    const isProviderManagedAutoRetry =
-      this.services.modelHandler.isAutoRetryManagedByProvider?.(error) ??
-      this.services.modelHandler.usesProviderManagedAutoRetry === true;
-
-    if (isProviderManagedAutoRetry) {
+    if (this.services.modelHandler.isAutoRetryManagedByProvider(error)) {
       this.services.logger.debug(
         'Skipping flow-level auto-retry; the model handler uses provider-managed auto-retry.',
       );
