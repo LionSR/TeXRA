@@ -1,9 +1,23 @@
+import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
+
+import {
+  codexBackendModelId,
+  isCodexSubscriptionEligible,
+} from './providerCapabilities';
+
 /**
- * Provider-specific models the setup assistant can use when that provider is
- * the only known usable credential. Kept with model metadata so hosts do not
- * each define their own setup routing truth.
+ * Curated setup-probe model per provider — a well-known model used to verify
+ * a provider's credential during onboarding. This table is a *preference*,
+ * not the source of truth for whether that model is still servable: a
+ * provider can retire the pinned model at any time (this has already
+ * happened live for `xai: 'grok4'`), which would otherwise make the setup
+ * assistant silently probe a dead model forever. `resolveSetupModel` below
+ * validates each preference against the live `MODEL_CONFIGS` registry and
+ * substitutes a still-usable model for that provider when the pin has gone
+ * stale, so {@link SETUP_MODEL_BY_PROVIDER} always resolves to a servable
+ * model without needing this table hand-updated on every retirement.
  */
-export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
+const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   anthropic: 'opus48T',
   openai: 'gpt55',
   google: 'gemini31p',
@@ -15,6 +29,111 @@ export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   minimax: 'minimax01',
   glm: 'glm5',
 };
+
+/**
+ * The llm-zoo `ModelProvider` each setup-provider key's fallback pool is
+ * drawn from. `openRouter` has no direct llm-zoo provider of its own — its
+ * preferred pick routes an Anthropic model through OpenRouter, so it falls
+ * back within Anthropic's live models too.
+ */
+const FALLBACK_MODEL_PROVIDER: Readonly<Record<string, ModelProvider>> = {
+  anthropic: ModelProvider.ANTHROPIC,
+  openai: ModelProvider.OPENAI,
+  google: ModelProvider.GOOGLE,
+  deepseek: ModelProvider.DEEPSEEK,
+  openRouter: ModelProvider.ANTHROPIC,
+  xai: ModelProvider.XAI,
+  moonshot: ModelProvider.MOONSHOT,
+  dashscope: ModelProvider.DASHSCOPE,
+  minimax: ModelProvider.MINIMAX,
+  glm: ModelProvider.GLM,
+};
+
+/** Whether `config` is safe to hand to the setup assistant for `setupProvider`. */
+function isUsableSetupModel(
+  config: ModelConfig | undefined,
+  setupProvider: string,
+): config is ModelConfig {
+  if (!config || config.retired) return false;
+  // A direct-API setup probe needs a model reachable outside OpenRouter.
+  if (config.openRouterOnly) return false;
+  // CHATGPT_SETUP_MODEL feeds isCodexSubscriptionActive, which only accepts
+  // Codex-eligible model ids — keep the openai pick constrained so a
+  // fallback swap can't silently break ChatGPT-subscription setup.
+  if (setupProvider === 'openai') {
+    return isCodexSubscriptionEligible(codexBackendModelId(config));
+  }
+  return true;
+}
+
+/**
+ * A still-usable model for `setupProvider`, preferring a non-deprecated one.
+ * `MODEL_CONFIGS` iteration order is llm-zoo's own (not a recency contract),
+ * so this is "some live model," not necessarily the newest release.
+ */
+function fallbackSetupModel(setupProvider: string): string | undefined {
+  const modelProvider = FALLBACK_MODEL_PROVIDER[setupProvider];
+  if (!modelProvider) return undefined;
+
+  const candidates = Object.values(MODEL_CONFIGS).filter(
+    (config) =>
+      config.provider === modelProvider &&
+      isUsableSetupModel(config, setupProvider),
+  );
+  const preferNonDeprecated = candidates.find((config) => !config.deprecated);
+  return (preferNonDeprecated ?? candidates[0])?.name;
+}
+
+/**
+ * Resolve `setupProvider`'s `preferred` pick if it is still live, otherwise a
+ * usable fallback model this provider currently has in the registry. Takes
+ * `preferred` as a parameter (rather than looking it up) so callers that
+ * already know it holds a real value — like {@link SETUP_MODEL_BY_PROVIDER}
+ * below, iterating its own preference table — get back a plain `string`
+ * with no unresolved-provider case to handle.
+ */
+function resolveWithPreferred(
+  setupProvider: string,
+  preferred: string,
+): string {
+  if (isUsableSetupModel(MODEL_CONFIGS[preferred], setupProvider)) {
+    return preferred;
+  }
+  return fallbackSetupModel(setupProvider) ?? preferred;
+}
+
+/**
+ * Resolve the model the setup assistant should probe for `setupProvider`:
+ * the curated preference above when it is still live, otherwise a usable
+ * model this provider currently has in the registry. Returns `undefined`
+ * for a `setupProvider` outside {@link PREFERRED_SETUP_MODEL_BY_PROVIDER} —
+ * callers that already hold a known provider key get a plain `string` from
+ * {@link SETUP_MODEL_BY_PROVIDER} instead.
+ */
+export function resolveSetupModel(setupProvider: string): string | undefined {
+  const preferred = PREFERRED_SETUP_MODEL_BY_PROVIDER[setupProvider];
+  return preferred === undefined
+    ? undefined
+    : resolveWithPreferred(setupProvider, preferred);
+}
+
+/**
+ * Provider-specific models the setup assistant can use when that provider is
+ * the only known usable credential. Kept with model metadata so hosts do not
+ * each define their own setup routing truth. Resolved once at module load —
+ * `MODEL_CONFIGS` is static per process — via {@link resolveWithPreferred}, so
+ * a provider's curated pick going stale (retired or OpenRouter-only) degrades
+ * to a live fallback instead of hard-failing the setup probe.
+ */
+export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> =
+  Object.fromEntries(
+    Object.entries(PREFERRED_SETUP_MODEL_BY_PROVIDER).map(
+      ([provider, preferred]) => [
+        provider,
+        resolveWithPreferred(provider, preferred),
+      ],
+    ),
+  );
 
 /** Codex-eligible setup model used to prove ChatGPT subscription access. */
 export const CHATGPT_SETUP_MODEL = SETUP_MODEL_BY_PROVIDER.openai;

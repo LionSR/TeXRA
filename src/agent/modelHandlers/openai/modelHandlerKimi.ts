@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -8,13 +9,67 @@ import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 // Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
-function isKimiK25(fullName: string): boolean {
-  return fullName.startsWith('kimi-k2.5');
+/**
+ * Moonshot API `fullName`s shared by more than one TeXRA registry entry — a
+ * reasoning and a non-reasoning variant of the same Kimi model family (e.g.
+ * `kimi25`/`kimi25T` both wire to `kimi-k2.5`) distinguished only by TeXRA's
+ * `supportsReasoning` capability. Moonshot's API can't see that distinction
+ * and defaults these wire names to thinking-enabled, so the non-reasoning
+ * registry entry must explicitly send `thinking: { type: 'disabled' }`.
+ *
+ * Computed from the live registry rather than a pinned fullName literal, so
+ * a Kimi model added later that reuses this shared-fullName pattern (as
+ * `kimi26`/`kimi26T` already do) is disambiguated automatically — no new
+ * exact-name check to remember.
+ */
+const AMBIGUOUS_THINKING_DEFAULT_FULLNAMES: ReadonlySet<string> = (() => {
+  const supportsReasoningByFullName = new Map<string, boolean>();
+  const ambiguous = new Set<string>();
+  for (const config of Object.values(MODEL_CONFIGS)) {
+    if (config.provider !== ModelProvider.MOONSHOT) continue;
+    const seen = supportsReasoningByFullName.get(config.fullName);
+    if (seen !== undefined && seen !== config.capabilities.supportsReasoning) {
+      ambiguous.add(config.fullName);
+    }
+    supportsReasoningByFullName.set(
+      config.fullName,
+      config.capabilities.supportsReasoning,
+    );
+  }
+  return ambiguous;
+})();
+
+interface FixedTemperatureRule {
+  /** Resolve the temperature Moonshot requires for this model family. */
+  readonly temperature: (supportsReasoning: boolean) => number;
+  /** Whether compaction-summary calls must also drop `thinking` entirely. */
+  readonly disableThinkingInCompactionSummary?: boolean;
 }
 
-function isKimiK27Code(fullName: string): boolean {
-  return fullName === 'kimi-k2.7-code';
-}
+/**
+ * Fixed sampling temperature required by specific Moonshot API `fullName`s.
+ * Moonshot's API pins (or silently degrades) sampling for these families
+ * regardless of the caller-requested temperature; fullNames not listed here
+ * pass the requested temperature through unchanged. This is genuine
+ * per-model API knowledge that has no equivalent llm-zoo capability flag
+ * today, so it stays a small explicit table rather than a derived rule —
+ * adding a new fixed-temperature model is one new entry here, not a new
+ * `fullName === '...'` branch scattered through the handler body.
+ */
+const FIXED_TEMPERATURE_BY_FULLNAME: ReadonlyMap<string, FixedTemperatureRule> =
+  new Map<string, FixedTemperatureRule>([
+    [
+      'kimi-k2.5',
+      {
+        temperature: (supportsReasoning: boolean) =>
+          supportsReasoning ? 1 : 0.6,
+      },
+    ],
+    [
+      'kimi-k2.7-code',
+      { temperature: () => 1, disableThinkingInCompactionSummary: true },
+    ],
+  ]);
 
 /** Response from Kimi's token estimation API */
 const KimiTokenEstimateResponseSchema = z.object({
@@ -25,9 +80,12 @@ const KimiTokenEstimateResponseSchema = z.object({
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
  * Kimi K2 Thinking models return reasoning_content automatically when streaming.
  *
- * Kimi K2.5 has thinking enabled by default on the Moonshot API.
- * For non-thinking variants (supportsReasoning: false), we must explicitly
- * send `thinking: { type: 'disabled' }` to turn off thinking mode.
+ * Some Kimi model families share one Moonshot API fullName between a
+ * reasoning and non-reasoning registry entry and default to thinking
+ * enabled on the wire; see {@link AMBIGUOUS_THINKING_DEFAULT_FULLNAMES} for
+ * how the non-reasoning entry gets it explicitly disabled, and
+ * {@link FIXED_TEMPERATURE_BY_FULLNAME} for families requiring a pinned
+ * sampling temperature.
  *
  * Supports thinking mode with tool calls. When thinking mode is enabled:
  * - The model outputs reasoning_content along with tool_calls
@@ -46,10 +104,11 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
 
   protected override getThinkingParameter():
     { type: 'enabled' | 'disabled' } | undefined {
-    // Kimi K2.5 has thinking enabled by default on the Moonshot API.
-    // Explicitly disable it for non-thinking variants.
+    // See AMBIGUOUS_THINKING_DEFAULT_FULLNAMES: these wire names default to
+    // thinking-enabled on the Moonshot API, so the non-reasoning registry
+    // entry must explicitly turn it off.
     if (
-      this.config.fullName === 'kimi-k2.5' &&
+      AMBIGUOUS_THINKING_DEFAULT_FULLNAMES.has(this.config.fullName) &&
       !this.capabilities.supportsReasoning
     ) {
       return { type: 'disabled' };
@@ -64,16 +123,12 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     endTag?: string,
     tools?: ToolDefinition[],
   ) {
-    // Kimi K2.5 requires fixed temperature values:
-    // - thinking mode (supportsReasoning: true): temperature=1.0
-    // - non-thinking mode (supportsReasoning: false): temperature=0.6
-    // Kimi K2.7 Code requires temperature=1.0 for both catalog entries.
-    let temperature = _temperature;
-    if (isKimiK25(this.config.fullName)) {
-      temperature = this.capabilities.supportsReasoning ? 1 : 0.6;
-    } else if (isKimiK27Code(this.config.fullName)) {
-      temperature = 1;
-    }
+    const fixedTemperature = FIXED_TEMPERATURE_BY_FULLNAME.get(
+      this.config.fullName,
+    );
+    const temperature = fixedTemperature
+      ? fixedTemperature.temperature(this.capabilities.supportsReasoning)
+      : _temperature;
     return super.buildChatBaseParams(
       messages,
       temperature,
@@ -87,8 +142,13 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     conversationMessages: ChatCompletionMessageParam[],
   ) {
     const params = super.buildCompactionSummaryParams(conversationMessages);
-    if (isKimiK27Code(this.config.fullName)) {
-      params.temperature = 1;
+    const fixedTemperature = FIXED_TEMPERATURE_BY_FULLNAME.get(
+      this.config.fullName,
+    );
+    if (fixedTemperature?.disableThinkingInCompactionSummary) {
+      params.temperature = fixedTemperature.temperature(
+        this.capabilities.supportsReasoning,
+      );
       delete params.thinking;
     }
     return params;
