@@ -16,16 +16,24 @@ export function flowKey(runId: string): string {
 const CHANNEL = 'PersistedFlow';
 logger.initialize(CHANNEL);
 
+export const FLOW_RECORD_SCHEMA_VERSION = 1;
+
 interface NodeRecord {
   action?: string;
 }
 
 export interface FlowRecord {
+  schemaVersion?: number;
   flowName: string;
   params: Record<string, unknown>;
   shared: unknown;
   createdAt: string;
   nodes: NodeRecord[];
+}
+
+export function stampFlowRecordSchemaVersion<T extends FlowRecord>(flow: T): T {
+  flow.schemaVersion = FLOW_RECORD_SCHEMA_VERSION;
+  return flow;
 }
 
 /**
@@ -180,7 +188,7 @@ export class PersistedFlow<
     this.cachedRecord = null;
     flow.nodes.push({ action });
     flow.shared = this.serializeShared(shared);
-    await this.kv.write(key, flow);
+    await this.kv.write(key, stampFlowRecordSchemaVersion(flow));
     this.cachedRecord = flow;
     await this.fireProjection(shared);
 
@@ -231,7 +239,7 @@ export class PersistedFlow<
     this.cachedRecord = null;
     mutate?.(flow);
     flow.shared = this.serializeShared(shared);
-    await this.kv.write(key, flow);
+    await this.kv.write(key, stampFlowRecordSchemaVersion(flow));
     this.cachedRecord = flow;
     await this.fireProjection(shared);
   }
@@ -245,6 +253,7 @@ export class PersistedFlow<
     }
 
     const record: FlowRecord = {
+      schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       flowName: 'texra',
       params: this._params as Record<string, unknown>,
       shared: this.serializeShared(shared),
