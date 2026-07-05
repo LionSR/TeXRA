@@ -180,28 +180,28 @@ sweep.
    _(LOW — refines tracked P25-4)_. The detailed audit tracks `@logger/index.ts`
    as "exposes one symbol" (`createChannelTrace`). Refinement: that barrel has
    **25 real importers**, while the primary functional API (`debug/info/warn/error`
-   + `setOutputChannelFactory`, ~70 callers) and `redactSecrets` are reached only
-   via deep `@logger/logUtils` / `@logger/redaction`. So the smell is a *partial*
-   barrel (surfaces the least-used concern), not a dead one — folding the real API
-   into the index collapses ~75 deep imports onto one specifier. Same disposition
-   as P25-4 (opportunistic); the importer count is the only correction.
+   - `setOutputChannelFactory`, ~70 callers) and `redactSecrets` are reached only
+     via deep `@logger/logUtils` / `@logger/redaction`. So the smell is a _partial_
+     barrel (surfaces the least-used concern), not a dead one — folding the real API
+     into the index collapses ~75 deep imports onto one specifier. Same disposition
+     as P25-4 (opportunistic); the importer count is the only correction.
 
 ## Adjudicated traps the fan-out re-surfaced — rulings held
 
 The uninformed audit raised, and the standing rulings correctly filter, all of
 the following. No change.
 
-| Re-surfaced candidate | Ruling |
-| --- | --- |
-| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table | **Trap** — each carries real per-provider override points; only DashScope/XAI are genuinely thin. The `modelHandlers` reader rejected this itself. |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler` | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing keep it load-bearing (candidate #3 is the distinct *split* angle). |
-| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger` | **Keep** — each hook has a distinct real overrider. |
-| Per-provider SDK-error taggers (`googleSdkError`/`openRouterSdkError` empty-mapping one-liners) | **Keep** — the split exists only to keep provider SDK imports out of the base graph (documented lazy-load boundary). |
-| `SessionEventHub` `SessionFact = never` scope-arm is "dead" | **Keep** — already adjudicated in the detailed audit as an intentional multi-window extensibility placeholder. |
-| `ModelFactory` two-layer / trivial-identity factories | **No violation** — `createModelHandler` + `createModelHandlerForCompatibilityKey` are two real entries sharing logic; routes give compile-time exhaustiveness. |
-| Collapse `runAgent` / `runAgentStream` dual entry / add a `runtime/index.ts` barrel | **Trap** — deliberate naming; `@texra/core` **is** the curated barrel. |
-| `AgentTrace` over-layered / platform single-call-site ports are over-abstraction | **Keep** — trace is one `emit()` SSoT (SDK-shaped); thin ports each have three divergent host impls. |
-| `@platform` barrel / `@logger` barrel are "redundant facades" | **Known / tracked** (07-03 candidates #5/#6) — pick-one import-path churn, opportunistic; refined here by candidate #7. |
+| Re-surfaced candidate                                                                           | Ruling                                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table             | **Trap** — each carries real per-provider override points; only DashScope/XAI are genuinely thin. The `modelHandlers` reader rejected this itself.             |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                                       | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing keep it load-bearing (candidate #3 is the distinct _split_ angle).   |
+| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger`                              | **Keep** — each hook has a distinct real overrider.                                                                                                            |
+| Per-provider SDK-error taggers (`googleSdkError`/`openRouterSdkError` empty-mapping one-liners) | **Keep** — the split exists only to keep provider SDK imports out of the base graph (documented lazy-load boundary).                                           |
+| `SessionEventHub` `SessionFact = never` scope-arm is "dead"                                     | **Keep** — already adjudicated in the detailed audit as an intentional multi-window extensibility placeholder.                                                 |
+| `ModelFactory` two-layer / trivial-identity factories                                           | **No violation** — `createModelHandler` + `createModelHandlerForCompatibilityKey` are two real entries sharing logic; routes give compile-time exhaustiveness. |
+| Collapse `runAgent` / `runAgentStream` dual entry / add a `runtime/index.ts` barrel             | **Trap** — deliberate naming; `@texra/core` **is** the curated barrel.                                                                                         |
+| `AgentTrace` over-layered / platform single-call-site ports are over-abstraction                | **Keep** — trace is one `emit()` SSoT (SDK-shaped); thin ports each have three divergent host impls.                                                           |
+| `@platform` barrel / `@logger` barrel are "redundant facades"                                   | **Known / tracked** (07-03 candidates #5/#6) — pick-one import-path churn, opportunistic; refined here by candidate #7.                                        |
 
 ## Structural divergence from the Agent SDK loop — re-stated (no new action)
 
@@ -270,7 +270,7 @@ unattended.
   `createModelHandlerForCompatibilityKey` retained.
 - Change verified green: `npm run typecheck` **exit 0** (all four projects);
   `eslint` on the three changed files clean; `npx vitest run
-  ModelFactoryRouting.vitest.ts` — **36 passed**.
+ModelFactoryRouting.vitest.ts` — **36 passed**.
 - New candidates verified in-tree: `StreamStatusMachine as StreamStatusRegistry`
   (`StreamStatusService.ts:303`, test-only importers); `*WithPrefill`/`*WithoutPrefill`
   pairs (`IModelHandler.ts:289-331`, sole caller `ResponseCycleFlow.ts:418/582`);
@@ -278,8 +278,8 @@ unattended.
   `formatChatAsHtml` deep-imported around `chatExportFormatter.ts`; `@logger`
   barrel 25 importers vs ~70 `logUtils` / deep `redaction` imports.
 - PR-train non-interference confirmed: `git diff --stat` since the last-known
-  spine over `ModelFactory.ts` / `IModelHandler.ts` / `src/logger` /
-  `packages/core/src/index.ts` / `src/agent/trace` shows only the #7073
-  non-structural `ModelFactory.ts` follow-up; the four audit-area interfaces are
-  unchanged in shape.
+spine over `ModelFactory.ts` / `IModelHandler.ts` / `src/logger` /
+`packages/core/src/index.ts` / `src/agent/trace` shows only the #7073
+non-structural `ModelFactory.ts` follow-up; the four audit-area interfaces are
+unchanged in shape.
 </content>
