@@ -104,12 +104,43 @@ describe('external inquiry continuation session routing', () => {
       undefined,
       session,
     );
-    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(STREAM, {
-      status: 'sent',
-    });
+    // The wake/resume/release decision must route to the same session
+    // that owns this continuation (e.g. a desktop window), not fall back
+    // to currentSession() / the platform default.
+    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(
+      STREAM,
+      { status: 'sent' },
+      undefined,
+      session,
+    );
   });
 
-  it('delegates queued wake decisions to the follow-up owner', async () => {
+  it('delegates queued wake decisions to the follow-up owner, threading the session', async () => {
+    const session = { tag: 'desktop-session' } as unknown as SessionHandle;
+    sendFollowUpMock.mockResolvedValueOnce({
+      status: 'queued',
+      reason: 'waiting',
+    });
+    wakeQueuedFollowUpStreamMock.mockResolvedValueOnce({
+      kind: 'resumed' as const,
+    });
+
+    const outcome = await injectContinuationForAnsweredThread(
+      THREAD,
+      answeredManifest(),
+      session,
+    );
+
+    expect(outcome).toBe('resumed');
+    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(
+      STREAM,
+      { status: 'queued', reason: 'waiting' },
+      undefined,
+      session,
+    );
+  });
+
+  it('passes an undefined session through to the wake decision when none was provided', async () => {
     sendFollowUpMock.mockResolvedValueOnce({
       status: 'queued',
       reason: 'waiting',
@@ -124,10 +155,12 @@ describe('external inquiry continuation session routing', () => {
     );
 
     expect(outcome).toBe('resumed');
-    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(STREAM, {
-      status: 'queued',
-      reason: 'waiting',
-    });
+    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(
+      STREAM,
+      { status: 'queued', reason: 'waiting' },
+      undefined,
+      undefined,
+    );
   });
 
   it('archives inquiries when the follow-up owner drops a stale queue', async () => {
