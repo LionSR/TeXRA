@@ -653,6 +653,33 @@ export class DesktopProgressBridge {
     return { activeExecutionIds, allExecutionIds };
   }
 
+  /**
+   * Consults detectWaitingStreams() (the KV-store-backed, ground-truth
+   * persisted flow record check) and then re-fetches active execution ids
+   * to drop any stream that became active while that await was in flight --
+   * a narrow but real race (another window, or a headless run, could resume
+   * the stream mid-lookup). Shared by both the primary try path and the
+   * degraded catch-fallback path in repairOrphanedStreamsAfterRestart so the
+   * two can no longer silently diverge on this check the way they once did.
+   */
+  private async detectRaceGuardedWaitingStreams(
+    executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
+  ): Promise<{
+    waitingStreams: Set<StreamTabId>;
+    activeExecutionIds: Set<string>;
+    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
+  }> {
+    const waitingStreams = await detectWaitingStreams(executionIdMap);
+    const { activeExecutionIds, allExecutionIds } =
+      this.refreshActiveExecutionIds();
+    for (const [streamId, executionId] of allExecutionIds) {
+      if (activeExecutionIds.has(executionId)) {
+        waitingStreams.delete(streamId);
+      }
+    }
+    return { waitingStreams, activeExecutionIds, allExecutionIds };
+  }
+
   private resetRestartRepairStreamStatuses(
     repairStreams: ReadonlySet<StreamTabId>,
     waitingStreams: ReadonlySet<StreamTabId>,
@@ -761,16 +788,11 @@ export class DesktopProgressBridge {
           ([, executionId]) => !activeExecutionIds.has(executionId),
         ),
       );
-      const waitingStreams = await detectWaitingStreams(executionIdMap);
       const {
+        waitingStreams,
         activeExecutionIds: repairActiveExecutionIds,
         allExecutionIds: repairAllExecutionIds,
-      } = this.refreshActiveExecutionIds();
-      for (const [streamId, executionId] of repairAllExecutionIds) {
-        if (repairActiveExecutionIds.has(executionId)) {
-          waitingStreams.delete(streamId);
-        }
-      }
+      } = await this.detectRaceGuardedWaitingStreams(executionIdMap);
       const repairExecutionIdMap = new Map(
         [...repairAllExecutionIds].filter(
           ([, executionId]) => !repairActiveExecutionIds.has(executionId),
@@ -822,21 +844,8 @@ export class DesktopProgressBridge {
             ([, executionId]) => !activeExecutionIds.has(executionId),
           ),
         );
-        const persistedWaitingStreams =
-          await detectWaitingStreams(executionIdMap);
-        // Mirror the try path: a stream may have resumed and gone active
-        // while the KV read above was in flight, so re-fetch active
-        // execution ids and drop any stream that is active now before
-        // folding the persisted-record result into waitingStreams.
-        const {
-          activeExecutionIds: postDetectActiveExecutionIds,
-          allExecutionIds: postDetectAllExecutionIds,
-        } = this.refreshActiveExecutionIds();
-        for (const [streamId, executionId] of postDetectAllExecutionIds) {
-          if (postDetectActiveExecutionIds.has(executionId)) {
-            persistedWaitingStreams.delete(streamId);
-          }
-        }
+        const { waitingStreams: persistedWaitingStreams } =
+          await this.detectRaceGuardedWaitingStreams(executionIdMap);
         for (const streamId of persistedWaitingStreams) {
           waitingStreams.add(streamId);
         }
