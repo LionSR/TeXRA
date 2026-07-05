@@ -1,5 +1,6 @@
 // Third-party imports
 import OpenAI from 'openai';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - core utilities
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
@@ -99,6 +100,15 @@ type ChatCompletionSummaryParams = ChatCompletionCreateParamsNonStreaming & {
   thinking?: { type: 'enabled' | 'disabled' };
 };
 
+/**
+ * DeepSeek's official (non-OpenRouter) chat API caps `max_tokens` well below
+ * what its newer, larger-output model families allow. Used only as the
+ * threshold below which a registry entry is still bound by that legacy
+ * ceiling (see the `buildChatBaseParams` override below) — the value that
+ * gets sent is always the model's own `config.maxOutputTokens`, never this
+ * constant, so the registry entry stays the single source of truth for how
+ * many tokens a given model actually supports.
+ */
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
 
 // COMPACTION_SYSTEM_PROMPT imported from contextManagementConstants
@@ -324,13 +334,18 @@ export class ModelHandlerOpenAI<
     }
 
     if (
-      this.config.fullName === 'deepseek-chat' &&
-      !this.capabilities.supportsReasoning
+      this.config.provider === ModelProvider.DEEPSEEK &&
+      !this.capabilities.supportsReasoning &&
+      this.config.maxOutputTokens <= DEEPSEEK_OFFICIAL_API_MAX_TOKENS
     ) {
+      // Tool-use mode otherwise reduces max_tokens (getEffectiveMaxOutputTokens)
+      // to leave headroom for context growth; a model already capped at or
+      // below the official API's legacy ceiling has no headroom to spare, so
+      // use its own declared max_tokens unreduced.
       this.logger.debug(
-        `Setting max_tokens to ${DEEPSEEK_OFFICIAL_API_MAX_TOKENS} for DeepSeek-chat models from the official api`,
+        `Setting max_tokens to ${this.config.maxOutputTokens} for DeepSeek chat models capped at the official API's max_tokens ceiling`,
       );
-      baseParams.max_tokens = DEEPSEEK_OFFICIAL_API_MAX_TOKENS;
+      baseParams.max_tokens = this.config.maxOutputTokens;
     }
 
     return baseParams;
