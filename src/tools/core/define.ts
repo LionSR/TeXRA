@@ -19,6 +19,11 @@ export function defineTool<T>(def: {
   /** Static description string or function for lazy evaluation */
   description: string | (() => string);
   schema: ZodType<T, T>;
+  /**
+   * Declare the tool side-effect-free and approval-free, allowing parallel
+   * calls in one model response to execute concurrently (see ITool).
+   */
+  parallelSafe?: boolean;
 }) {
   const getDescription = (): string =>
     typeof def.description === 'function' ? def.description() : def.description;
@@ -39,6 +44,8 @@ export function defineTool<T>(def: {
   });
 
   abstract class GeneratedTool extends BaseTool<T> {
+    readonly parallelSafe = def.parallelSafe;
+
     constructor(override?: Partial<ToolDefinition>) {
       super(buildDefinition(override), def.schema);
     }

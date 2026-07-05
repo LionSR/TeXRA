@@ -108,9 +108,11 @@ export class FollowUpQueue {
 
   /**
    * Wait for at least one item, then drain one batch.
-   * Synthetic items are returned as a single-item batch; visible batches stop
-   * at the next synthetic boundary so hidden maintenance turns do not merge
-   * with user text.
+   * Batches never mix synthetic and visible items: a synthetic batch drains
+   * the contiguous run of queued synthetic items (back-to-back maintenance
+   * turns coalesce into one model turn instead of one turn each), and
+   * visible batches stop at the next synthetic boundary so hidden
+   * maintenance turns do not merge with user text.
    * Returns null if interrupted.
    */
   async waitAndDrainAll(
@@ -118,17 +120,15 @@ export class FollowUpQueue {
   ): Promise<FollowUpQueueBatch | null> {
     const first = await this.waitForNext(checkInterruption);
     if (first === null) return null;
-    if (first.origin === 'synthetic') {
-      return { items: [first], synthetic: true };
-    }
+    const synthetic = first.origin === 'synthetic';
 
     const items: FollowUpQueueBatchItem[] = [first];
     while (true) {
       const next = this.queued[0];
-      if (!next || next.origin === 'synthetic') break;
+      if (!next || (next.origin === 'synthetic') !== synthetic) break;
       items.push(this.queued.shift()!);
     }
-    return { items, synthetic: false };
+    return { items, synthetic };
   }
 
   cancelWait(): void {

@@ -4,6 +4,7 @@ import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Internal imports
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import {
   isTimeoutError,
@@ -51,18 +52,24 @@ interface DuckDuckGoResponse {
 
 export class WebSearchTool extends defineTool({
   name: 'web_search',
+  parallelSafe: true,
   description:
     'Search the web and return top results. Uses the native provider search tool when available; falls back to DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,
 }) {
   protected async execute(input: WebSearchInput): Promise<ToolResult> {
     const { query, max_results } = input;
+    // Cancellation signal for the owning agent run — without it, a
+    // cancelled run would wait out searches (and their retries) that only
+    // observe the internal timeout.
+    const cancelSignal = getCurrentToolCallContext()?.signal;
 
     let data: DuckDuckGoResponse;
     try {
       data = await pRetry(
         async () => {
           try {
+            const timeoutSignal = AbortSignal.timeout(DDG_TIMEOUT_MS);
             const response = await ky.get('https://api.duckduckgo.com/', {
               searchParams: {
                 q: query,
@@ -71,7 +78,9 @@ export class WebSearchTool extends defineTool({
                 no_html: 1,
               },
               timeout: false,
-              signal: AbortSignal.timeout(DDG_TIMEOUT_MS),
+              signal: cancelSignal
+                ? AbortSignal.any([cancelSignal, timeoutSignal])
+                : timeoutSignal,
               retry: 0,
             });
             return (await response.json()) as DuckDuckGoResponse;
@@ -80,7 +89,14 @@ export class WebSearchTool extends defineTool({
             throw new AbortError(ensureError(error));
           }
         },
-        { retries: DDG_RETRIES, minTimeout: 500, randomize: true },
+        {
+          retries: DDG_RETRIES,
+          minTimeout: 500,
+          randomize: true,
+          // Stop retrying (and skip inter-retry delays) once the run is
+          // cancelled.
+          signal: cancelSignal,
+        },
       );
     } catch (error) {
       // Defensive: ensure the specific type checks below see the real error

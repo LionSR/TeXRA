@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Shared (all surfaces)
+
+#### Improvements
+
+- **Read-only tool calls in one model response now run in parallel** —
+  contiguous batches of side-effect-free tools (file reads, grep/glob, web
+  fetch/search, arXiv/Crossref/Zotero/Loogle lookups, texcount) execute
+  concurrently, while editing tools keep their strict order. Interrupting a
+  run now also cancels in-flight web fetches/searches, Loogle and Zotero
+  requests, grep subprocesses, and glob walks immediately; arXiv/Crossref
+  lookups stop at their next cancellation point (their client libraries are
+  not mid-request abortable).
+- **Duplicate parallel tool calls no longer waste a model turn** — identical
+  read-only calls share one execution's result, and identical side-effect
+  calls are answered with a clear skip message instead of a retry prompt.
+- **Faster subagent result delivery** — the orchestrator wakes as soon as a
+  subagent finishes instead of waiting for report persistence, and
+  consecutive maintenance follow-ups batch into a single turn.
+- **Subagent runs record a structured result manifest** — outputs, line-diff
+  references, outcome, and cost are readable as JSON via the executions tool
+  (`/executions/{id}/result`), so follow-on agents can chain on data instead
+  of parsing prose.
+
 ## [0.39.3] - 2026-07-03
 
 ### Shared (all surfaces)
