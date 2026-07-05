@@ -1,7 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import {
+  clearStoreCache,
+  EXECUTION_META_SCHEMA_VERSION,
+  getExecutionStore,
+} from '@agent/storage';
+import * as logger from '@logger/logUtils';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
@@ -13,6 +18,10 @@ setupPlatform({ workspacePath: '/workspace' });
 
 beforeEach(() => {
   clearStoreCache();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('ExecutionKVStore meta read shims', () => {
@@ -30,6 +39,7 @@ describe('ExecutionKVStore meta read shims', () => {
       });
 
       await expect(getExecutionStore(id).readMeta()).resolves.toMatchObject({
+        schemaVersion: EXECUTION_META_SCHEMA_VERSION,
         terminalStatus,
         outcome,
       });
@@ -46,8 +56,36 @@ describe('ExecutionKVStore meta read shims', () => {
       });
 
       await expect(getExecutionStore(id).readMeta()).resolves.toMatchObject({
+        schemaVersion: EXECUTION_META_SCHEMA_VERSION,
         outcome,
       });
     },
   );
+
+  it('writes the current schema version for execution meta', async () => {
+    const id = 'versioned-meta' as ExecutionId;
+
+    await getExecutionStore(id).writeMeta({
+      timestamp: '2026-07-04T00:00:00.000Z',
+    });
+
+    await expect(getExecutionStore(id).read('meta')).resolves.toMatchObject({
+      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
+      timestamp: '2026-07-04T00:00:00.000Z',
+    });
+  });
+
+  it('warns when execution meta is malformed instead of silently dropping it', async () => {
+    const id = 'bad-meta' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await getExecutionStore(id).write('meta', { timestamp: 123 });
+
+    await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(`Failed to parse execution ${id} meta.json`),
+      { data: expect.any(Error) },
+    );
+  });
 });
