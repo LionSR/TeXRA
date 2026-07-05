@@ -24,7 +24,10 @@ import {
   getAllActiveExecutionIds,
 } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  sendFollowUp,
+  wakeQueuedFollowUpStream,
+} from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
 import { cleanupAllApprovals } from '@tools/approval';
 
@@ -279,6 +282,51 @@ describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
         status: 'no_session',
         streamStatus: undefined,
       });
+    } finally {
+      windowSession.followUps.release(parentStream);
+      windowSession.dispose();
+    }
+  });
+
+  it('uses the passed session for queued wake release decisions', async () => {
+    const windowSession = new SessionHandle();
+    const { host } = createRecordingHost();
+    const parentStream = 'stream:fu-wake-parent' as StreamTabId;
+
+    try {
+      windowSession.executions.track(
+        new AgentExecutionHandle(
+          'exec:fu-wake-child',
+          parentStream,
+          'stream:fu-wake-child' as StreamTabId,
+          'orchestrator',
+          'toolUse',
+          host,
+          createCoordinators(host),
+        ),
+      );
+
+      const result = await sendFollowUp(
+        parentStream,
+        'continue',
+        undefined,
+        undefined,
+        windowSession,
+      );
+      expect(result).toEqual({ status: 'queued', reason: 'children_running' });
+      expect(windowSession.followUps.getAll(parentStream)).toEqual([
+        'continue',
+      ]);
+
+      await expect(
+        wakeQueuedFollowUpStream(
+          parentStream,
+          result,
+          { tryResumeStream: async () => false },
+          windowSession,
+        ),
+      ).resolves.toEqual({ kind: 'dropped' });
+      expect(windowSession.followUps.getAll(parentStream)).toEqual([]);
     } finally {
       windowSession.followUps.release(parentStream);
       windowSession.dispose();

@@ -87,7 +87,7 @@ describe('external inquiry continuation session routing', () => {
     readExternalInquiryThreadMock.mockClear();
   });
 
-  it('passes the host-provided session through to sendFollowUp', async () => {
+  it('passes the host-provided session through to follow-up send and wake', async () => {
     const session = { tag: 'desktop-session' } as unknown as SessionHandle;
 
     const outcome: InjectionOutcome = await injectContinuationForAnsweredThread(
@@ -104,9 +104,14 @@ describe('external inquiry continuation session routing', () => {
       undefined,
       session,
     );
-    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(STREAM, {
-      status: 'sent',
-    });
+    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(
+      STREAM,
+      {
+        status: 'sent',
+      },
+      undefined,
+      session,
+    );
   });
 
   it('delegates queued wake decisions to the follow-up owner', async () => {
@@ -124,10 +129,15 @@ describe('external inquiry continuation session routing', () => {
     );
 
     expect(outcome).toBe('resumed');
-    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(STREAM, {
-      status: 'queued',
-      reason: 'waiting',
-    });
+    expect(wakeQueuedFollowUpStreamMock).toHaveBeenCalledWith(
+      STREAM,
+      {
+        status: 'queued',
+        reason: 'waiting',
+      },
+      undefined,
+      undefined,
+    );
   });
 
   it('archives inquiries when the follow-up owner drops a stale queue', async () => {
