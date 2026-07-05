@@ -34,7 +34,7 @@ import type {
 import {
   commonViewStyles,
   designTokens,
-  requestPanelStyles,
+  requestPanelSharedStyles,
 } from '@shared/styles';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
@@ -42,6 +42,7 @@ import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 import { ProgressEvents } from '../events';
 import { createBoundedIdSet } from '../utils/boundedIdSet';
 import type { PermissionState } from '../permissionState';
@@ -94,7 +95,12 @@ export function clearInquiryDraft(requestId: string): void {
 
 @customElement('external-inquiry-panel')
 export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
-  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    requestPanelSharedStyles,
+    externalInquiryPanelStyles,
+  ];
 
   @state() private answerText = '';
   @state() private sessionLinksText = '';
