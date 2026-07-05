@@ -203,41 +203,58 @@ export async function readCliHistoryConfig(
   return getExecutionStore(id).readConfig();
 }
 
+/** Outcome of loading a stored execution's export input (see {@link readCliHistoryExportInput}). */
+export type CliHistoryExportInputResult =
+  | { readonly status: 'ok'; readonly exportInput: ChatExportInput }
+  /** No trace of this execution at all — matches `history show`'s notion of "not found". */
+  | { readonly status: 'not_found' }
+  /** The execution exists (has meta and/or config) but is missing what an
+   *  export needs (config and/or conversation) — a different failure than
+   *  "not found", so it gets a different message. */
+  | { readonly status: 'incomplete' };
+
 /**
  * Load a stored execution's config + conversation as the format-agnostic
  * {@link ChatExportInput} the html/markdown export formatters consume.
  * Mirrors the extension's `ChatExportController.buildExportInput` so the CLI
  * and extension render the same conversation identically.
  *
- * Returns `null` (not a discriminated "which piece is missing" result) when
- * either the config or the conversation is absent, so the caller can report
- * the same "not found" message `history show` uses for missing executions.
+ * Distinguishes "this execution id has no stored data at all" (`not_found`
+ * — the same case `history show` reports as not found) from "this execution
+ * exists but has nothing to export" (`incomplete` — e.g. `history show`
+ * would still display it, just without a conversation to render). Reporting
+ * both as "not found" would mislead a caller whose id is valid but whose
+ * execution simply never produced a conversation.
  */
 export async function readCliHistoryExportInput(
   id: ExecutionId,
-): Promise<ChatExportInput | null> {
+): Promise<CliHistoryExportInputResult> {
   const store = getExecutionStore(id);
   const [rawConfig, conversation, meta] = await Promise.all([
     store.readConfig(),
     store.readConversation(),
     store.readMeta(),
   ]);
-  if (!rawConfig || !conversation) return null;
+  if (!meta && !rawConfig && !conversation) return { status: 'not_found' };
+  if (!rawConfig || !conversation) return { status: 'incomplete' };
 
   const config = AgentConfigSchema.parse(rawConfig);
   return {
-    timestamp: meta?.timestamp ?? new Date().toISOString(),
-    description: meta?.description,
-    config: {
-      agent: config.agent,
-      model: config.model,
-      instruction: config.instruction,
-      inputFiles: config.inputFiles,
-      mediaFiles: config.mediaFiles,
-      contextFiles: config.contextFiles,
-      outputFiles: config.outputFiles,
+    status: 'ok',
+    exportInput: {
+      timestamp: meta?.timestamp ?? new Date().toISOString(),
+      description: meta?.description,
+      config: {
+        agent: config.agent,
+        model: config.model,
+        instruction: config.instruction,
+        inputFiles: config.inputFiles,
+        mediaFiles: config.mediaFiles,
+        contextFiles: config.contextFiles,
+        outputFiles: config.outputFiles,
+      },
+      messages: conversation,
     },
-    messages: conversation,
   };
 }
 
