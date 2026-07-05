@@ -121,8 +121,9 @@ export class FollowUpInput extends LitElement {
    * Progress-view commands the active host's registry declares
    * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
    * same convention). Hides the polish button on a host where
-   * POLISH_FOLLOW_UP is unsupported, instead of leaving a control visible
-   * that can only produce an unavailable-command toast.
+   * POLISH_FOLLOW_UP is unsupported, and the microphone recording button on
+   * a host where START_RECORDING is unsupported, instead of leaving a
+   * control visible that can only produce an unavailable-command toast.
    */
   @property({ attribute: false })
   unsupportedCommands: ReadonlySet<string> | null = null;
@@ -294,16 +295,23 @@ export class FollowUpInput extends LitElement {
                       onClick: this.emitPolish,
                     })
               }
-              ${renderIconActionButton({
-                id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
-                icon: this.recordingController.state.icon,
-                label: this.recordingController.state.title,
-                tooltip: this.recordingController.state.title,
-                className: this.recordingController.state.recording
-                  ? this.recordingController.state.recordingClass
-                  : '',
-                onClick: this.recordingController.handleClick,
-              })}
+              ${
+                isKnownUnsupported(
+                  this.unsupportedCommands,
+                  PROGRESS_VIEW_COMMANDS.START_RECORDING,
+                )
+                  ? nothing
+                  : renderIconActionButton({
+                      id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
+                      icon: this.recordingController.state.icon,
+                      label: this.recordingController.state.title,
+                      tooltip: this.recordingController.state.title,
+                      className: this.recordingController.state.recording
+                        ? this.recordingController.state.recordingClass
+                        : '',
+                      onClick: this.recordingController.handleClick,
+                    })
+              }
               ${renderIconActionButton({
                 id: ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN,
                 icon: 'clear-all',

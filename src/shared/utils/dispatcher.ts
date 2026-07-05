@@ -153,6 +153,18 @@ export function createDispatcher<TMessage extends CommandMessage>(
     const entry = handlers[message.command as TMessage['command']] as
       MessageHandler<typeof message> | Unsupported;
 
+    // Defense-in-depth: TypeScript's exhaustiveness guarantee is a
+    // compile-time fact, not a runtime one. A genuinely missing key (an
+    // `as`-cast that lies, a dynamically constructed registry, etc.) yields
+    // `undefined` here, and `isUnsupported(undefined)` is `false` — so
+    // without this guard a missing entry would fall through to
+    // `entry(message)` and throw a raw `TypeError` instead of returning the
+    // same `false` the old `if (!handler) return false;` fallback gave
+    // callers.
+    if (!entry) {
+      return false;
+    }
+
     if (isUnsupported(entry)) {
       onError?.(
         new UnsupportedCommandError(message.command, entry.unsupported),
