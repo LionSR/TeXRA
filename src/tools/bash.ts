@@ -39,6 +39,7 @@ import {
 import { formatDuration } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { appendHead } from '@utils/strings/appendHead';
 import { appendTail } from '@utils/strings/appendTail';
 import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -49,6 +50,17 @@ import { createChildStream } from './childStream';
 import { parseWorkingDirectory } from './pathResolution';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
+/**
+ * Small head budget retained alongside the tail (approximates the foreground
+ * checkToolResultTextLimit head:tail ratio of TOOL_RESULT_TRUNCATION_HEAD_CHARS
+ * /_TAIL_CHARS, 4,000/50,000 = 8.0% — this is 1,000/12,000 ≈ 8.3%, close but
+ * not identical, since the two paths have independently-sized tail budgets).
+ * A long background build's first fatal error tends to sit near the top of
+ * the log, well before the tail budget's trailing window; without this,
+ * output that outgrows the tail silently drops that error with no way to
+ * recover it from the follow-up.
+ */
+const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
 /** Max chars logged to the child stream tab to prevent unbounded memory growth. */
 const BACKGROUND_LOG_CAP_CHARS = 200_000;
 const SHELL_BACKGROUNDING_PATTERN =
@@ -257,6 +269,10 @@ export class BashTool extends defineTool({
     const { childStreamId, logger } = childStream;
     let stdoutTail = '';
     let stderrTail = '';
+    let stdoutHead = '';
+    let stderrHead = '';
+    let stdoutTotalChars = 0;
+    let stderrTotalChars = 0;
     let loggedChars = 0;
     let logCapReached = false;
     // Capture the run's session inside the tool's ALS; finalizeBackground below
@@ -287,6 +303,12 @@ export class BashTool extends defineTool({
         session.setPid(p);
       },
       onStdout: (chunk) => {
+        stdoutTotalChars += chunk.length;
+        stdoutHead = appendHead(
+          stdoutHead,
+          chunk,
+          BACKGROUND_OUTPUT_HEAD_CHARS,
+        );
         stdoutTail = appendTail(
           stdoutTail,
           chunk,
@@ -295,6 +317,12 @@ export class BashTool extends defineTool({
         logChunk(chunk, 'info');
       },
       onStderr: (chunk) => {
+        stderrTotalChars += chunk.length;
+        stderrHead = appendHead(
+          stderrHead,
+          chunk,
+          BACKGROUND_OUTPUT_HEAD_CHARS,
+        );
         stderrTail = appendTail(
           stderrTail,
           chunk,
@@ -369,6 +397,13 @@ export class BashTool extends defineTool({
               `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
             );
 
+        // Only surface the head when the tail actually dropped earlier
+        // content — otherwise the tail already holds the full stream and a
+        // separate head block would just repeat it. When it did, also
+        // report how many characters sit in the gap between head and tail,
+        // mirroring the foreground `checkToolResultTextLimit` elision note.
+        const stdoutTruncated = stdoutTotalChars > stdoutTail.length;
+        const stderrTruncated = stderrTotalChars > stderrTail.length;
         const msg = formatBashDelivery(
           executionId,
           command,
@@ -376,6 +411,20 @@ export class BashTool extends defineTool({
           result,
           stdoutTail,
           stderrTail,
+          stdoutTruncated ? stdoutHead : '',
+          stderrTruncated ? stderrHead : '',
+          stdoutTruncated
+            ? Math.max(
+                0,
+                stdoutTotalChars - stdoutHead.length - stdoutTail.length,
+              )
+            : 0,
+          stderrTruncated
+            ? Math.max(
+                0,
+                stderrTotalChars - stderrHead.length - stderrTail.length,
+              )
+            : 0,
         );
 
         try {
