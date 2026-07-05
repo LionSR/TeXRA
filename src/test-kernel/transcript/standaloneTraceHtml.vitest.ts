@@ -75,7 +75,10 @@ describe('injectStandaloneTrace', () => {
 
   it('escapes a literal </script> inside trace data instead of truncating the page', () => {
     const t = trace({
-      meta: { timestamp: '2026-01-01T00:00:00.000Z', description: '</script><img src=x onerror=alert(1)>' },
+      meta: {
+        timestamp: '2026-01-01T00:00:00.000Z',
+        description: '</script><img src=x onerror=alert(1)>',
+      },
     });
     const html = injectStandaloneTrace(TEMPLATE, t);
 
@@ -84,11 +87,15 @@ describe('injectStandaloneTrace', () => {
     // The module script tag that follows must still be intact — a naive
     // injection would have let the payload's </script> close our tag early,
     // stranding the module script tag as visible text instead of markup.
-    expect(html).toContain('<script type="module" crossorigin src="./index.js"></script>');
+    expect(html).toContain(
+      '<script type="module" crossorigin src="./index.js"></script>',
+    );
 
     const match = /window\.__TEXRA_TRACE__ = (.*?);<\/script>/s.exec(html);
     const parsed = JSON.parse(match![1]);
-    expect(parsed.meta.description).toBe('</script><img src=x onerror=alert(1)>');
+    expect(parsed.meta.description).toBe(
+      '</script><img src=x onerror=alert(1)>',
+    );
   });
 
   it('throws a clear error when the template has no module script tag', () => {

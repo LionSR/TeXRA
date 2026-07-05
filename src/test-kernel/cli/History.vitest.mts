@@ -1127,9 +1127,9 @@ describe('CLI history runtime', () => {
           });
 
           expect(result).toBe('staged');
-          expect(
-            await readFile(path.join(destDir, 'index.html'), 'utf8'),
-          ).toBe('<html></html>');
+          expect(await readFile(path.join(destDir, 'index.html'), 'utf8')).toBe(
+            '<html></html>',
+          );
         });
       });
     });
@@ -1183,15 +1183,15 @@ describe('CLI history runtime', () => {
           });
 
           expect(result).toBe('staged');
-          expect(
-            await readFile(path.join(destDir, 'index.html'), 'utf8'),
-          ).toBe('<html></html>');
+          expect(await readFile(path.join(destDir, 'index.html'), 'utf8')).toBe(
+            '<html></html>',
+          );
           expect(
             await readFile(path.join(destDir, 'assets', 'index.js'), 'utf8'),
           ).toBe('js-bytes');
-          expect(
-            await readFile(path.join(destDir, 'trace.json'), 'utf8'),
-          ).toBe('pre-existing trace data');
+          expect(await readFile(path.join(destDir, 'trace.json'), 'utf8')).toBe(
+            'pre-existing trace data',
+          );
         });
       });
     });
@@ -1212,11 +1212,14 @@ describe('CLI history runtime', () => {
     });
 
     it('returns null instead of throwing when the standalone template is absent', async () => {
-      await withTempDir('texra-history-standalone-empty-', async (resourcesPath) => {
-        await expect(
-          readCliHistoryStandaloneTemplate(resourcesPath),
-        ).resolves.toBeNull();
-      });
+      await withTempDir(
+        'texra-history-standalone-empty-',
+        async (resourcesPath) => {
+          await expect(
+            readCliHistoryStandaloneTemplate(resourcesPath),
+          ).resolves.toBeNull();
+        },
+      );
     });
   });
 });

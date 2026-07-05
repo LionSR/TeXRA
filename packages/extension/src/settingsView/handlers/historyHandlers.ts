@@ -210,7 +210,9 @@ export class HistoryHandlers {
    * Translate assembleTrace's failure statuses (surfaced through
    * ChatExportController.exportAsHtml) into a user-visible error message.
    */
-  private reportHtmlExportError(status: 'config_missing' | 'streamLogs_missing'): void {
+  private reportHtmlExportError(
+    status: 'config_missing' | 'streamLogs_missing',
+  ): void {
     switch (status) {
       case 'config_missing':
         void showLoggedMessage(this.ctx.channel, 'History item not found');
