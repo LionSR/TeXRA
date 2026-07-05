@@ -79,6 +79,19 @@ export const narrowLayout = signal(false);
 /** Pending approval requests; drives permission UI and tab pulse indicator. */
 export const permissions$ = signal<PermissionState[]>([]);
 
+/**
+ * Progress-view commands the active host's inbound registry declares
+ * `unsupported(...)`, sent once with UPDATE_STREAMS (see `unsupportedCommands`
+ * in `@shared/utils/dispatcher`). Feeds StreamHeader's capability gating so
+ * it never renders a control the active host can't act on. `null` before
+ * that first UPDATE_STREAMS arrives — treated as "unsupported" by
+ * `isKnownUnsupported` so a control never flashes visible then hidden once
+ * the real capability set lands.
+ */
+export const unsupportedProgressCommands$ = signal<ReadonlySet<string> | null>(
+  null,
+);
+
 // ---------------------------------------------------------------------------
 // Selector computeds: extract fields, auto-memoized by Object.is.
 // ---------------------------------------------------------------------------
@@ -260,7 +273,10 @@ export const activeIsToolUse$ = new Signal.Computed(() => {
 export const streamContext$ = new Signal.Computed((): StreamContextValue => {
   const activeStreamInfo = activeStreamInfo$.get();
   const hasStreams = hasStreams$.get();
-  if (!activeStreamInfo) return { ...EMPTY_STREAM_CONTEXT, hasStreams };
+  const unsupportedCommands = unsupportedProgressCommands$.get();
+  if (!activeStreamInfo) {
+    return { ...EMPTY_STREAM_CONTEXT, hasStreams, unsupportedCommands };
+  }
 
   const streamState = activeStreamState$.get();
   const isToolUse = streamState ? isToolUseState(streamState) : false;
@@ -272,6 +288,7 @@ export const streamContext$ = new Signal.Computed((): StreamContextValue => {
     isToolUse,
     hasStreams,
     followupOptions,
+    unsupportedCommands,
   };
 });
 

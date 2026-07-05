@@ -63,7 +63,10 @@ function findAgentSelection(
   return options.find((opt) => agentName(opt.value) === name)?.value;
 }
 
-export const catalogHandlers: MainViewHandlerRegistry = {
+// `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
+// owns only catalog commands; see bannerSlice.ts for why (registry is now
+// exhaustive, messageDispatcher.ts is the real coverage checkpoint).
+export const catalogHandlers = {
   [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) => {
     const optionsDataByCategory = message.optionsDataByCategory;
     const fallbackOptions =
@@ -116,4 +119,4 @@ export const catalogHandlers: MainViewHandlerRegistry = {
       }
     }
   },
-};
+} satisfies Partial<MainViewHandlerRegistry>;

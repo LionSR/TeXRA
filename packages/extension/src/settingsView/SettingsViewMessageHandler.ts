@@ -14,7 +14,6 @@ import * as vscode from 'vscode';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
-import { createSettingsViewCommandHandlers } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import {
   buildToolDashboardItems,
   buildToolDashboardTerminalAction,
@@ -63,6 +62,7 @@ import {
   type SettingsMessageFor,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas/settingsViewMessages';
+import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   BASH_APPROVAL_CONFIG_TARGET,
   buildApprovalSettingsMessage,
@@ -236,12 +236,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const setAgent = (key: WorkspaceStateKey, value: string) =>
       this.updateAgentSetting(key, value);
 
-    return createSettingsViewCommandHandlers({
-      lifecycle: {
+    return {
+      ...{
         webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
         openVscodeSettings: () => this.openVscodeSettings(),
       },
-      memory: {
+      ...{
         getMemoryData: () =>
           this.withActiveWebview((w) => this.sendMemoryData(w)),
         getMemoryPreview: (data) => this.handleGetMemoryPreview(data),
@@ -254,7 +254,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         pinMemory: (data) => this.setMemoryPinned(data.storagePath, true),
         unpinMemory: (data) => this.setMemoryPinned(data.storagePath, false),
       },
-      history: {
+      ...{
         getHistoryData: () =>
           this.withActiveWebview((w) =>
             this.historyHandlers.sendHistoryData(w),
@@ -270,7 +270,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         exportChatHtml: (data) =>
           this.historyHandlers.handleExportChat(data, 'html'),
       },
-      profile: {
+      ...{
         getProfileData: () =>
           this.withActiveWebview((w) => this.sendProfileData(w)),
         selectAgent: async (data) => {
@@ -308,7 +308,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.handleSetProviderVscodeSetting(data),
         openExternalUrl: (data) => this.openExternalUrl(data.url),
       },
-      model: {
+      ...{
         getModelSelection: () =>
           this.withActiveWebview((w) => this.sendModelSelectionData(w)),
         setModelEnabled: (data) =>
@@ -338,7 +338,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
             ),
           ),
       },
-      multiAgent: {
+      ...{
         getSuperYoloEnabled: () =>
           this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
         setSuperYoloEnabled: () =>
@@ -356,7 +356,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setNestedDelegationMaxDepth: (data) =>
           this.handleSetNestedDelegationMaxDepth(data),
       },
-      agent: {
+      ...{
         getAgentSelection: () =>
           this.withActiveWebview((w) =>
             this.agentHandlers.sendAgentSelectionData(w),
@@ -396,7 +396,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         deleteAgentModePreset: (data) =>
           this.agentHandlers.handleDeleteAgentModePreset(data),
       },
-      git: {
+      ...{
         getGitAuthorSettings: () =>
           this.withActiveWebview((w) => this.sendGitAuthorSettings(w)),
         setGitMarkCommits: (data) =>
@@ -408,7 +408,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setGitWorktreeSupport: (data) =>
           setGitAuthor(StateKeys.GIT_WORKTREE_SUPPORT, data.enabled),
       },
-      github: {
+      ...{
         getGitHubTokenStatus: () =>
           this.withActiveWebview((w) =>
             this.githubHandlers.sendGitHubTokenStatus(w),
@@ -424,7 +424,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         openPRSubscriptionStream: (data) =>
           this.githubHandlers.handleOpenPRSubscriptionStream(data),
       },
-      chatGpt: {
+      ...{
         getChatGptAuthStatus: () =>
           this.withActiveWebview((w) =>
             this.chatgptHandlers.sendChatGptAuthStatus(w),
@@ -436,7 +436,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setChatGptSubscriptionToolUseOnly: (data) =>
           this.chatgptHandlers.handleSetSubscriptionToolUseOnly(data.enabled),
       },
-      approval: {
+      ...{
         getApprovalSettings: () =>
           this.withActiveWebview((w) => this.sendApprovalSettings(w)),
         setBashApprovalEnabled: (data) =>
@@ -454,7 +454,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setClaudeAgentEffort: (data) =>
           setAgent(StateKeys.CLAUDE_AGENT_EFFORT, data.effort),
       },
-      tools: {
+      ...{
         getToolDashboardData: () =>
           this.withActiveWebview((w) => this.sendToolDashboardData(w)),
         openToolInstallUrl: (data) => this.openExternalUrl(data.url),
@@ -471,7 +471,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         },
         runToolCommand: (data) => this.handleRunToolCommand(data),
       },
-      latex: {
+      ...{
         getLatexSettingsStatus: () =>
           this.withActiveWebview((w) =>
             this.latexHandlers.sendLatexSettingsStatus(w),
@@ -493,13 +493,23 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setInlineCriticismEnabled: (data) =>
           this.handleSetInlineCriticismEnabled(data.enabled),
       },
-      goal: {
+      ...{
         getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
         revealGoalStream: async (data) => {
           await revealProgressStream(data.streamId);
         },
       },
-    });
+      // Electron crash-reporter settings have no VS Code equivalent.
+      getDesktopCrashReporting: unsupported(
+        'Crash reporting is a desktop-app setting.',
+      ),
+      setDesktopCrashReportingEnabled: unsupported(
+        'Crash reporting is a desktop-app setting.',
+      ),
+      setDesktopCrashReportingDsn: unsupported(
+        'Crash reporting is a desktop-app setting.',
+      ),
+    };
   }
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
@@ -547,6 +557,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // so it doesn't block the initial render. The frontend shows a loading
     // spinner until data arrives.
     void this.sendToolDashboardData(webview);
+
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
+      commands: unsupportedCommands(this.handlerRegistry),
+    });
 
     // Auth/session changes affect included access and must not reuse a
     // pre-login/pre-logout availability snapshot.

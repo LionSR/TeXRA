@@ -44,6 +44,13 @@ export interface ProgressBackendOptions {
   getStreamControls?: GetProgressStreamControls;
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
+  /**
+   * Commands this host's progressView inbound registry declares
+   * `unsupported(...)` — pass `() => unsupportedCommands(registry)`. Threaded
+   * to {@link WebviewUpdater} so the frontend's capability gating stays a
+   * projection of the registry.
+   */
+  getUnsupportedCommands?: () => readonly string[];
 }
 
 class LocalProgressEventBus implements ProgressEventBusLike {
@@ -107,12 +114,18 @@ export class ProgressBackend {
       options.snapshots,
       this.session,
     );
-    this.webviewUpdater = new WebviewUpdater((message) => {
-      // View refreshes are best-effort; a closed transport must not take down
-      // the backend. The async wrapper funnels sync throws and rejections into
-      // one swallowed path.
-      void (async () => options.sendMessage(message))().catch(() => undefined);
-    }, options.hasTarget);
+    this.webviewUpdater = new WebviewUpdater(
+      (message) => {
+        // View refreshes are best-effort; a closed transport must not take
+        // down the backend. The async wrapper funnels sync throws and
+        // rejections into one swallowed path.
+        void (async () => options.sendMessage(message))().catch(
+          () => undefined,
+        );
+      },
+      options.hasTarget,
+      options.getUnsupportedCommands,
+    );
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,
       options.sendMessage,

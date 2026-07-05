@@ -682,6 +682,14 @@ function createWindow(options: {
     getProgress: () => agentExecution?.progress,
     ensureProgress: async () => (await getAgentExecution()).progress,
     onAsyncError: reportAsyncError,
+    // A registry entry declared `unsupported(...)` carries a user-facing
+    // reason; fall back to a generic message for a truly unrecognized
+    // command (a version-skew edge case, not expected in practice).
+    onUnsupportedCommand: (message, reason) => {
+      void showInfoMessage(
+        reason ?? `"${message.command}" is not available in the desktop app.`,
+      );
+    },
   });
   // Opened once the one-shot backfill below has settled. The onboarding IPC
   // awaits this before its first funnel derivation so a returning veteran

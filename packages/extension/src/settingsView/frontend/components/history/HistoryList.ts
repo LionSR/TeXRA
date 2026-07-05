@@ -47,6 +47,14 @@ export class HistoryList extends LitElement {
 
   @property({ attribute: false }) items: HistoryItemData[] = [];
   @property({ attribute: false }) state?: HistoryViewState;
+  /**
+   * Settings-view commands the active host's registry declares
+   * `unsupported(...)`; forwarded to each `history-item` so its per-item
+   * actions (rerun, setup, export) can hide on a host that can't act on
+   * them. See `HistoryTab`'s property of the same name.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   @property({ attribute: false }) searchTerm = '';
   @property({ attribute: false }) searchAction: SearchAction = null;
@@ -293,6 +301,7 @@ export class HistoryList extends LitElement {
           (item) => html`
             <history-item
               .item=${item}
+              .unsupportedCommands=${this.unsupportedCommands}
               .open=${
                 forceOpen || Boolean(this.state?.toggleStates.get(item.id))
               }

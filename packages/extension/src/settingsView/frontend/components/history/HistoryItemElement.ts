@@ -7,6 +7,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import Mark from 'mark.js';
 
 // Local imports - shared
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import {
   commonViewStyles,
@@ -14,9 +15,10 @@ import {
   searchHighlightStyles,
 } from '@shared/styles';
 import { AgentCategory } from '@shared/schemas/agent';
-import { markdownStyles } from '@shared/styles/markdownStyles';
-import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
+import { markdownStyles } from '@shared/styles/markdownStyles';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -53,6 +55,16 @@ export class HistoryItemElement extends LitElement {
   @property({ attribute: false }) open = false;
   /** Local index of the mark to highlight as current, or null if none in this item */
   @property({ attribute: false }) highlightedMatchIndex: number | null = null;
+  /**
+   * Settings-view commands the active host's registry declares
+   * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
+   * same convention). Hides this item's Setup/Rerun/Export buttons on a
+   * host whose registry declares the corresponding command unsupported,
+   * instead of leaving a control visible that can only produce an
+   * unavailable-command toast.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   private markInstance: Mark | null = null;
   private previousHighlightedIndex: number | null = null;
@@ -345,44 +357,79 @@ export class HistoryItemElement extends LitElement {
               tooltip: 'Delete this history item',
               action: 'delete',
             })}
-            ${renderIconActionButton({
-              id: 'history-setup-button',
-              icon: 'reply',
-              label: 'Setup',
-              tooltip: "Restore this run's setup",
-              action: 'restore',
-            })}
-            ${renderIconActionButton({
-              id: 'history-rerun-button',
-              icon: 'rotate-right',
-              label: 'Rerun',
-              tooltip: 'Rerun this task',
-              action: 'rerun',
-            })}
+            ${
+              isKnownUnsupported(
+                this.unsupportedCommands,
+                SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+              )
+                ? nothing
+                : renderIconActionButton({
+                    id: 'history-setup-button',
+                    icon: 'reply',
+                    label: 'Setup',
+                    tooltip: "Restore this run's setup",
+                    action: 'restore',
+                  })
+            }
+            ${
+              isKnownUnsupported(
+                this.unsupportedCommands,
+                SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+              )
+                ? nothing
+                : renderIconActionButton({
+                    id: 'history-rerun-button',
+                    icon: 'rotate-right',
+                    label: 'Rerun',
+                    tooltip: 'Rerun this task',
+                    action: 'rerun',
+                  })
+            }
             ${
               isToolUse
                 ? html`
-                    ${renderIconActionButton({
-                      id: 'history-export-md-button',
-                      icon: 'file-lines',
-                      label: 'Export Markdown',
-                      tooltip: 'Export as Markdown',
-                      action: 'export-md',
-                    })}
-                    ${renderIconActionButton({
-                      id: 'history-export-pdf-button',
-                      icon: 'file-pdf',
-                      label: 'Export PDF',
-                      tooltip: 'Export as LaTeX/PDF',
-                      action: 'export-tex',
-                    })}
-                    ${renderIconActionButton({
-                      id: 'history-export-html-button',
-                      icon: 'globe',
-                      label: 'Export HTML',
-                      tooltip: 'Export as shareable HTML webpage',
-                      action: 'export-html',
-                    })}
+                    ${
+                      isKnownUnsupported(
+                        this.unsupportedCommands,
+                        SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+                      )
+                        ? nothing
+                        : renderIconActionButton({
+                            id: 'history-export-md-button',
+                            icon: 'file-lines',
+                            label: 'Export Markdown',
+                            tooltip: 'Export as Markdown',
+                            action: 'export-md',
+                          })
+                    }
+                    ${
+                      isKnownUnsupported(
+                        this.unsupportedCommands,
+                        SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
+                      )
+                        ? nothing
+                        : renderIconActionButton({
+                            id: 'history-export-pdf-button',
+                            icon: 'file-pdf',
+                            label: 'Export PDF',
+                            tooltip: 'Export as LaTeX/PDF',
+                            action: 'export-tex',
+                          })
+                    }
+                    ${
+                      isKnownUnsupported(
+                        this.unsupportedCommands,
+                        SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
+                      )
+                        ? nothing
+                        : renderIconActionButton({
+                            id: 'history-export-html-button',
+                            icon: 'globe',
+                            label: 'Export HTML',
+                            tooltip: 'Export as shareable HTML webpage',
+                            action: 'export-html',
+                          })
+                    }
                   `
                 : nothing
             }

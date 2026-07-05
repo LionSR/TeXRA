@@ -29,6 +29,16 @@ export class HistoryTab extends LitElement {
   ];
 
   @property({ attribute: false }) items: HistoryItem[] = [];
+  /**
+   * Settings-view commands the active host's registry declares
+   * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
+   * same convention). Threaded down to `history-item` so per-item actions
+   * (rerun, setup, export) hide on a host that can't act on them, instead
+   * of leaving a control visible that can only produce an
+   * unavailable-command toast.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
   @state() private matchCount = '';
   @state() private searchTerm = '';
   @state() private searchAction: SearchAction = null;
@@ -80,6 +90,7 @@ export class HistoryTab extends LitElement {
 
         <history-list
           .items=${this.items}
+          .unsupportedCommands=${this.unsupportedCommands}
           .state=${this.stateStore}
           .searchTerm=${this.searchTerm}
           .searchAction=${this.searchAction}

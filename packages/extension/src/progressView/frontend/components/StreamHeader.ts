@@ -28,6 +28,7 @@ import {
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA icon component
@@ -327,6 +328,18 @@ export class StreamHeader extends LitElement {
   @property({ attribute: false }) goalActive = false;
   @property({ attribute: false }) goalStatus = '';
   @property({ attribute: false }) goalObjective = '';
+  /**
+   * Commands the active host's registry declares `unsupported(...)` (derived
+   * from `unsupportedProgressCommands$`, itself derived from the host's
+   * registry — see `@shared/utils/dispatcher`). A button whose command is in
+   * this set is hidden, the same as an execution-dependent button with no
+   * executionId, rather than rendered disabled-but-visible. `null` before
+   * the host's one-shot capability broadcast arrives — see
+   * `isKnownUnsupported`, which treats that the same as "unsupported" so a
+   * button never flashes visible then hidden.
+   */
+  @property({ attribute: false })
+  unsupportedCommands: ReadonlySet<string> | null = null;
 
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
@@ -354,6 +367,7 @@ export class StreamHeader extends LitElement {
       (btn) => {
         const { disabled, hidden } = this.getButtonState(
           btn.id,
+          btn.command,
           status,
           this.substate,
           hasExecutionId,
@@ -443,6 +457,7 @@ export class StreamHeader extends LitElement {
 
   private getButtonState(
     buttonId: string,
+    command: string,
     status: string,
     substate: StreamSubstate | undefined,
     hasExecutionId: boolean,
@@ -451,7 +466,12 @@ export class StreamHeader extends LitElement {
     const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
       : undefined;
-    const hidden = EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId;
+    // Same treatment as an execution-dependent button with no executionId:
+    // hidden, not just disabled, so the toolbar never displays a control the
+    // active host's registry has declared unsupported.
+    const hidden =
+      (EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId) ||
+      isKnownUnsupported(this.unsupportedCommands, command);
     const disabled = hidden || !enabledButtons?.has(buttonId);
     return { disabled, hidden };
   }

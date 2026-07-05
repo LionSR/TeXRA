@@ -43,6 +43,7 @@ import {
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
+import { unsupportedCommands } from '@shared/utils/dispatcher';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleProgressViewBashApprovalAction } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
@@ -375,6 +376,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       dispatchProgressViewInbound,
       this.handlerRegistry,
     );
+  }
+
+  /**
+   * Commands this registry declares `unsupported(...)`, for the derived
+   * frontend capability view (see `ProgressBackendOptions.getUnsupportedCommands`).
+   */
+  public getUnsupportedCommands(): string[] {
+    return unsupportedCommands(this.handlerRegistry);
   }
 
   private async switchView(
