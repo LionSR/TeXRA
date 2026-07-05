@@ -183,3 +183,84 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
 
   return working;
 }
+
+/** Minimal structural view of a chat content part (text or media). */
+type ChatContentPart = { type: string };
+
+/**
+ * Check a batched tool-use follow-up before building provider messages.
+ *
+ * Shared by the chat-shaped handlers (OpenAI, OpenRouter), whose batched
+ * follow-up requires exactly one result per call. Throws on a count mismatch
+ * (a programmer error that would otherwise produce a malformed request) and
+ * returns `false` when there is nothing to send so the caller can early-return.
+ * Named `check*` rather than `assert*` because it also encodes the empty-guard
+ * result rather than only throwing.
+ *
+ * @returns `true` when there is at least one call to process, `false` when empty.
+ */
+export function checkBatchedToolCalls(
+  callCount: number,
+  resultCount: number,
+): boolean {
+  if (callCount !== resultCount) {
+    throw new Error(
+      `Batched tool calls mismatch: ${callCount} calls vs ${resultCount} results`,
+    );
+  }
+  return callCount > 0;
+}
+
+/**
+ * Prepend `text` to the last user message in a chat-shaped conversation.
+ *
+ * Chat providers (OpenAI, OpenRouter) model user content as either a plain
+ * string or an array of typed parts; this mutates whichever shape is present
+ * in place — merging into the first existing text part, or unshifting a new
+ * one. A blank `text` or the absence of a user message is a no-op.
+ */
+export function prependTextToChatUserMessage<T extends MessageLike>(
+  messages: T[],
+  text: string,
+): void {
+  if (!text.trim()) return;
+
+  const lastUserMsg = messages.findLast((m) => m.role === 'user');
+  if (!lastUserMsg || !('content' in lastUserMsg)) return;
+
+  const content = lastUserMsg.content;
+  if (typeof content === 'string') {
+    lastUserMsg.content = text + content;
+  } else if (Array.isArray(content)) {
+    const firstTextPart = content.find(isTextContentItem);
+    if (firstTextPart) {
+      firstTextPart.text = text + firstTextPart.text;
+    } else {
+      content.unshift({ type: 'text', text });
+    }
+  }
+}
+
+/**
+ * Insert already-formatted media parts at the front of a user message.
+ *
+ * Operates on the specific message the caller already located and validated —
+ * NOT a re-scan of the array — so media lands on that message even if the
+ * conversation gained another user turn while async media formatting was in
+ * flight. The caller owns provider-specific media formatting and the decision
+ * to skip work when vision is unsupported or no user message exists; this
+ * shares only the string-vs-array insertion so OpenAI and OpenRouter don't
+ * diverge. A string body is promoted to a parts array with the media ahead of
+ * the text.
+ */
+export function insertMediaIntoChatUserMessage(
+  message: MessageLike,
+  formattedMedia: readonly ChatContentPart[],
+): void {
+  const content = message.content;
+  if (typeof content === 'string') {
+    message.content = [...formattedMedia, { type: 'text', text: content }];
+  } else if (Array.isArray(content)) {
+    content.unshift(...formattedMedia);
+  }
+}
