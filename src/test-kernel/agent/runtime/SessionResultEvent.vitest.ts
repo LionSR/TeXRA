@@ -1,9 +1,10 @@
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -134,16 +135,8 @@ function setupResultCase(): {
 }
 
 describe('terminal result event (SDK Step 7d PR 6)', () => {
-  beforeAll(async () => {
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(
-      createFakePlatform({
-        globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
-      }),
-    );
+  setupPlatform({
+    globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
   });
 
   it('emits exactly one completed result on a successful run', async () => {

@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { platform } from '@platform/platform';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import type { StreamTabId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 
 const STREAM_ID = 'stream:legacy-goal' as StreamTabId;
 const NOW = '2026-06-09T00:00:00.000Z';
-
-async function installPlatform(workspaceState: Record<string, unknown>) {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({ workspaceState }));
-}
 
 function legacyOdyssey(status: 'active' | 'paused' | 'complete' | 'abandoned') {
   return {
@@ -32,8 +27,10 @@ function legacyOdyssey(status: 'active' | 'paused' | 'complete' | 'abandoned') {
 describe('GoalStore legacy Odyssey migration', () => {
   it('reads active legacy Odyssey records as live goals', async () => {
     await installPlatform({
-      [`odysseys:byStream:${STREAM_ID}`]: legacyOdyssey('active'),
-      'odysseys:index': [STREAM_ID],
+      workspaceState: {
+        [`odysseys:byStream:${STREAM_ID}`]: legacyOdyssey('active'),
+        'odysseys:index': [STREAM_ID],
+      },
     });
 
     const goal = GoalStore.getForStream(STREAM_ID);
@@ -49,8 +46,10 @@ describe('GoalStore legacy Odyssey migration', () => {
 
   it('drops terminal legacy Odyssey records from the live goal surface', async () => {
     await installPlatform({
-      [`odysseys:byStream:${STREAM_ID}`]: legacyOdyssey('complete'),
-      'odysseys:index': [STREAM_ID],
+      workspaceState: {
+        [`odysseys:byStream:${STREAM_ID}`]: legacyOdyssey('complete'),
+        'odysseys:index': [STREAM_ID],
+      },
     });
 
     expect(GoalStore.getForStream(STREAM_ID)).toBeNull();

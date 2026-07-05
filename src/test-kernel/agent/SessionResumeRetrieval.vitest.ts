@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -35,12 +35,9 @@ const GOOGLE_WORKFLOW_CONFIG: AgentConfig = {
   agentCategory: AgentCategory.Workflow,
 };
 
-beforeEach(async () => {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({ workspacePath: '/workspace' }));
-});
-
 describe('retrieveSessionResumeData', () => {
+  setupPlatform({ workspacePath: '/workspace' });
+
   it('uses the persisted current model while preserving the original stream id', async () => {
     const executionId = 'abc123' as ExecutionId;
     const streamId = 'chat@gpt54#abc123' as StreamTabId;

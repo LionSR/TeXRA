@@ -1,9 +1,9 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
-import { describe, it, beforeAll, afterEach, vi } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Local imports - tests
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent core
 import {
@@ -203,15 +203,10 @@ function freshRoundShared(messages: ProviderMessage[]): ToolUseRoundShared {
 }
 
 describe('BashTool', () => {
-  beforeAll(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform({
-        workspacePath: '/workspace',
-        // Unit tests exercise the tool directly — no approval host is wired.
-        config: { 'texra.toolUse.requireBashApproval': false },
-      }),
-    );
+  setupPlatform({
+    workspacePath: '/workspace',
+    // Unit tests exercise the tool directly — no approval host is wired.
+    config: { 'texra.toolUse.requireBashApproval': false },
   });
 
   afterEach(() => {

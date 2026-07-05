@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import type { StreamTabId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 import type { StateStore } from '@platform/interfaces/state';
@@ -70,9 +70,8 @@ class BlockingFirstIndexWriteState implements StateStore {
 
 describe('GoalStore index concurrency', () => {
   it('keeps both entries when concurrent start() calls overlap during the index write', async () => {
-    const { initPlatform } = await import('@platform/platform');
     const state = new BlockingFirstIndexWriteState();
-    initPlatform(createFakePlatform({}, { workspaceState: state }));
+    await installPlatform({}, { workspaceState: state });
 
     const firstStart = GoalStore.start(STREAM_A, 'objective a');
     await state.waitForBlockedIndexWrite();

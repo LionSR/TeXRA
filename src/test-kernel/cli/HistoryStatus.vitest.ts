@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { registerExecution, getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -34,10 +34,7 @@ const TOOL_USE_CONFIG: AgentConfig = {
   cliMultiAgentPresetId: null,
 };
 
-beforeEach(async () => {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({ workspacePath: '/workspace' }));
-});
+setupPlatform({ workspacePath: '/workspace' });
 
 describe('CLI history status formatting', () => {
   it('keeps failed terminal statuses authoritative', () => {

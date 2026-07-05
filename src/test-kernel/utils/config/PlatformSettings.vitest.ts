@@ -2,17 +2,16 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
-async function initWith(options: {
+function initWith(options: {
   workspaceState?: Record<string, unknown>;
   globalState?: Record<string, unknown>;
 }): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform(options));
+  return installPlatform(options);
 }
 
 describe('readPlatformSetting', () => {

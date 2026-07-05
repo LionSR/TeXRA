@@ -1,19 +1,9 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { beforeAll, describe, it } from 'vitest';
-
-// Third-party imports
-
-// Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { describe, it } from 'vitest';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-
-beforeAll(async () => {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform());
-});
 
 describe('WorkspaceFS Test Suite', () => {
   it('delete should be idempotent - not throw when file does not exist', async () => {

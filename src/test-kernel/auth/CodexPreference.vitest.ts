@@ -2,9 +2,10 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 
 // Local imports - auth
+import { platform } from '@platform/platform';
 import {
   CODEX_PREFER_SUBSCRIPTION_KEY,
   isPreferCodexSubscription,
@@ -18,13 +19,6 @@ import type {
   ConfigTarget,
 } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
-
-async function initTestPlatform(
-  platform: ReturnType<typeof createFakePlatform>,
-): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(platform);
-}
 
 class FolderOverrideConfigProvider implements ConfigProvider {
   private readonly globalValues = new Map<string, unknown>();
@@ -76,17 +70,16 @@ class FolderOverrideConfigProvider implements ConfigProvider {
 
 describe('Codex subscription preference', () => {
   it('writes workspace preference when workspace config already controls it', async () => {
-    const platform = createFakePlatform({
+    await installPlatform({
       config: { [CODEX_PREFER_SUBSCRIPTION_KEY]: false },
     });
-    await initTestPlatform(platform);
 
     const update = await setPreferCodexSubscription(true);
 
     expect(update).toEqual({ effective: true, target: 'workspace' });
     expect(isPreferCodexSubscription()).toBe(true);
     expect(
-      platform.config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
+      platform().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
     ).toMatchObject({
       workspaceValue: true,
       effectiveValue: true,
@@ -95,7 +88,7 @@ describe('Codex subscription preference', () => {
 
   it('does not treat folder overrides as writable workspace config', async () => {
     const config = new FolderOverrideConfigProvider(false);
-    await initTestPlatform(createFakePlatform({}, { config }));
+    await installPlatform({}, { config });
 
     const update = await setPreferCodexSubscription(true);
 

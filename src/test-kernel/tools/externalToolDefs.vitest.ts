@@ -5,7 +5,7 @@ import * as assert from 'node:assert';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform/test support/tools
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 
@@ -45,20 +45,14 @@ describe('external tool definitions', () => {
   it('detects the current TeXRA CLI process through the host checker', async () => {
     const texraCli = findExternalToolDef('texra-cli');
     assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
-    // Dynamic import: the no-platform-init-outside-composition-root lint rule
-    // reserves static initPlatform imports for composition roots.
-    const { initPlatform, tryPlatform } = await import('@platform/platform');
-    const previousPlatform = tryPlatform();
-    initPlatform(
-      createFakePlatform(
-        {},
-        {
-          toolAvailability: {
-            isVscodeExtensionInstalled: () => false,
-            isTexraCliEntrypoint: () => true,
-          },
+    await installPlatform(
+      {},
+      {
+        toolAvailability: {
+          isVscodeExtensionInstalled: () => false,
+          isTexraCliEntrypoint: () => true,
         },
-      ),
+      },
     );
 
     try {
@@ -71,7 +65,7 @@ describe('external tool definitions', () => {
         'Detected; integration coming soon',
       );
     } finally {
-      initPlatform(previousPlatform ?? createFakePlatform());
+      await installPlatform();
     }
   });
 
@@ -81,20 +75,14 @@ describe('external tool definitions', () => {
     const findPath = vi
       .spyOn(BinaryResolver, 'findPath')
       .mockReturnValue('/usr/local/bin/lake');
-    // Dynamic import: the no-platform-init-outside-composition-root lint rule
-    // reserves static initPlatform imports for composition roots.
-    const { initPlatform, tryPlatform } = await import('@platform/platform');
-    const previousPlatform = tryPlatform();
-    initPlatform(
-      createFakePlatform(
-        {},
-        {
-          toolAvailability: {
-            isVscodeExtensionInstalled: () => false,
-            isTexraCliEntrypoint: () => false,
-          },
+    await installPlatform(
+      {},
+      {
+        toolAvailability: {
+          isVscodeExtensionInstalled: () => false,
+          isTexraCliEntrypoint: () => false,
         },
-      ),
+      },
     );
 
     try {
@@ -116,7 +104,7 @@ describe('external tool definitions', () => {
       });
       await expect(lean.check(missingProbeResult)).resolves.toBe(false);
     } finally {
-      initPlatform(previousPlatform ?? createFakePlatform());
+      await installPlatform();
     }
   });
 });

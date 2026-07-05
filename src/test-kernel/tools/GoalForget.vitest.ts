@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 
@@ -8,10 +8,7 @@ const STREAM_A = 'stream:forget-a' as StreamTabId;
 const STREAM_B = 'stream:forget-b' as StreamTabId;
 
 describe('GoalStore.forget (abandon-on-delete contract)', () => {
-  beforeEach(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}));
-  });
+  setupPlatform();
 
   afterEach(async () => {
     await GoalStore.forget(STREAM_A);

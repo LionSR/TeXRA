@@ -1,14 +1,12 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
-import { beforeAll, describe, it } from 'vitest';
+import { describe, it } from 'vitest';
 
 // Standard library imports
 
 // Local imports - agent components
-import {
-  createFakePlatform,
-  FakeConfigProvider,
-} from '@test/support/FakePlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -26,10 +24,7 @@ import { buildUserVars, getToolFlags } from '@agent/utils/userVars';
 // via this provider instead of patching the ESM export.
 const fakeConfig = new FakeConfigProvider();
 
-beforeAll(async () => {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({}, { config: fakeConfig }));
-});
+setupPlatform({}, { config: fakeConfig });
 
 const baseSetting: AgentSetting = {
   agentCategory: AgentCategory.Workflow,

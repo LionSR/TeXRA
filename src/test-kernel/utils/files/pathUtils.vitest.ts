@@ -1,24 +1,13 @@
 // Third-party imports
-
-// Third-party imports
 import * as assert from 'node:assert';
 import * as path from 'node:path';
-import { beforeAll, describe, it } from 'vitest';
+import { describe, it } from 'vitest';
 
 // Local imports - common
-
-// Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { isTexFile } from '@common/files/fileTypeUtils';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
-
-beforeAll(async () => {
-  // WorkspaceFS resolves relative paths against the platform workspace.
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform());
-});
 
 describe('pathUtils Test Suite', () => {
   describe('isTexFile', () => {

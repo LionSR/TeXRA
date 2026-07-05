@@ -3,15 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
-import { createFakePlatform } from '../support/FakePlatform';
+import { installPlatform } from '../support/setupPlatform';
 import type { AddCriticismSink } from '@platform/interfaces/criticism';
-
-async function installPlatform(
-  overrides: Parameters<typeof createFakePlatform>[1] = {},
-): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({}, overrides));
-}
 
 afterEach(async () => {
   await installPlatform();
@@ -20,13 +13,13 @@ afterEach(async () => {
 function installLinter(
   linter: (path: string) => Promise<GenericDiagnostic[]>,
 ): Promise<void> {
-  return installPlatform({ linter });
+  return installPlatform({}, { linter });
 }
 
 function installAddCriticismSink(
   addCriticismSink: AddCriticismSink,
 ): Promise<void> {
-  return installPlatform({ addCriticismSink });
+  return installPlatform({}, { addCriticismSink });
 }
 
 function worktreeContext() {

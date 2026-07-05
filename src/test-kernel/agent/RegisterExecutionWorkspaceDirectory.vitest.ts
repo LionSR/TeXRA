@@ -20,6 +20,7 @@ vi.mock('@agent/storage/executionListing', () => ({
 }));
 
 import { registerExecution } from '@agent/storage/executionLifecycle';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 const baseConfig = {
   agent: 'chat',
@@ -37,10 +38,9 @@ const baseConfig = {
 } as AgentConfig;
 
 describe('registerExecution', () => {
-  beforeEach(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    const { createFakePlatform } = await import('@test/support/FakePlatform');
-    initPlatform(createFakePlatform({ workspacePath: '/workspace/root' }));
+  setupPlatform({ workspacePath: '/workspace/root' });
+
+  beforeEach(() => {
     vi.clearAllMocks();
     mocks.getExecutionStore.mockReturnValue({
       writeConfig: mocks.writeConfig,
