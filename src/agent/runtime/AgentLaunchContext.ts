@@ -35,8 +35,8 @@ import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import {
   createModelHandler,
   createModelHandlerForCompatibilityKey,
-  type ModelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
+import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/utils/userVars';
