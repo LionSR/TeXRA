@@ -7,8 +7,8 @@
  * Stays `vscode`-free: reaches the keychain only through the platform port.
  */
 import { tryPlatform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createCodexAuthCoordinator } from './CodexAuthCoordinator';
 import {

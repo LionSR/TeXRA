@@ -1,6 +1,6 @@
 import { platform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';
 
 import {

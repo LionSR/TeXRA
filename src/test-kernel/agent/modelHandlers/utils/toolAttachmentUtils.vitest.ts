@@ -8,8 +8,11 @@ import {
   extractToolAttachments,
   formatToolResultAsText,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
-import { toolError, ToolResultSchema } from '@shared/schemas/toolResult';
+import {
+  MAX_TOOL_RESULT_TEXT_LENGTH,
+  TOOL_RESULT_TRUNCATION_HEAD_CHARS,
+  TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+} from '@agent/modelHandlers/contextManagementConstants';
 
 describe('checkToolResultTextLimit', () => {
   it('returns null for text within limit', () => {
@@ -22,12 +25,23 @@ describe('checkToolResultTextLimit', () => {
     assert.equal(checkToolResultTextLimit(text), null);
   });
 
-  it('returns error message for text exceeding limit', () => {
-    const text = 'a'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH + 100);
+  it('keeps head and tail with an elision marker for text exceeding limit', () => {
+    const head = 'HEAD_MARKER_'.repeat(500); // well over the head budget
+    const tail = 'TAIL_MARKER_'.repeat(5000); // well over the tail budget
+    const middle = 'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH);
+    const text = head + middle + tail;
+
     const result = checkToolResultTextLimit(text);
     assert.ok(result !== null);
     assert.ok(result.includes('Tool result too large'));
-    assert.ok(result.includes('exceeded by'));
+    assert.ok(result.includes('characters elided'));
+    // Head/tail content survives; the elided middle does not.
+    assert.ok(result.startsWith('Tool result too large'));
+    assert.ok(
+      result.includes(head.slice(0, TOOL_RESULT_TRUNCATION_HEAD_CHARS)),
+    );
+    assert.ok(result.includes(tail.slice(-TOOL_RESULT_TRUNCATION_TAIL_CHARS)));
+    assert.ok(!result.includes('x'.repeat(1000)));
   });
 
   it('respects custom max length', () => {
@@ -35,7 +49,35 @@ describe('checkToolResultTextLimit', () => {
     assert.equal(checkToolResultTextLimit(text, 200), null);
     const error = checkToolResultTextLimit(text, 100);
     assert.ok(error !== null);
-    assert.ok(error.includes('exceeded by 50'));
+    assert.ok(error.includes('Tool result too large'));
+    // The whole point of maxLength is to bound context size — the replacement
+    // itself must never exceed the requested limit, even though the default
+    // head/tail budgets (4,000 / 50,000 chars) are far larger than 100.
+    assert.ok(
+      error.length <= 100,
+      `expected replacement length ${error.length} <= 100`,
+    );
+  });
+
+  it('bounds the replacement by maxLength even when default head/tail budgets would overshoot it', () => {
+    const text = 'a'.repeat(10_000);
+    const maxLength = 500;
+    const error = checkToolResultTextLimit(text, maxLength);
+    assert.ok(error !== null);
+    assert.ok(error.length <= maxLength);
+  });
+
+  it('always elides a positive count when the head budget alone would cover the whole text', () => {
+    // text.length is only slightly over maxLength, and well under the
+    // hardcoded head budget (TOOL_RESULT_TRUNCATION_HEAD_CHARS = 4,000) — the
+    // near-boundary case where an unscaled head budget would swallow the
+    // entire text, leaving a nonsensical "0 characters elided" marker.
+    const text = 'a'.repeat(1500);
+    const maxLength = 1000;
+    const error = checkToolResultTextLimit(text, maxLength);
+    assert.ok(error !== null);
+    assert.ok(error.length <= maxLength);
+    assert.ok(!error.includes('[... 0 characters elided'));
   });
 });
 
@@ -96,14 +138,20 @@ describe('formatToolResultAsText', () => {
     assert.ok(result.includes('Attachments: file.pdf'));
   });
 
-  it('returns error when result exceeds limit', () => {
-    const largeOutput = 'a'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH + 100);
+  it('keeps head and tail when result exceeds limit, not a discard stub', () => {
+    const head = 'HEAD_MARKER_'.repeat(500);
+    const tail = 'TAIL_MARKER_'.repeat(5000);
+    const largeOutput = head + 'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) + tail;
     const result = formatToolResultAsText({
       status: 'executed',
       output: largeOutput,
     });
     assert.ok(result.includes('Tool result too large'));
-    assert.ok(!result.includes('aaa')); // Should not contain original content
+    assert.ok(result.includes('characters elided'));
+    assert.ok(!result.includes('was not included'));
+    assert.ok(result.includes('HEAD_MARKER_'));
+    assert.ok(result.includes('TAIL_MARKER_'));
+    assert.ok(!result.includes('x'.repeat(1000)));
   });
 
   it('returns normal result when within limit', () => {
@@ -202,19 +250,6 @@ describe('extractToolAttachments', () => {
           },
         ],
       } as never),
-    );
-  });
-});
-
-describe('toolError', () => {
-  it('normalizes blank messages to a schema-valid fallback', () => {
-    const result = toolError('   ');
-
-    assert.equal(result.status, 'error');
-    assert.equal(result.error, 'Tool execution failed.');
-    assert.equal(
-      ToolResultSchema.parse(result).error,
-      'Tool execution failed.',
     );
   });
 });

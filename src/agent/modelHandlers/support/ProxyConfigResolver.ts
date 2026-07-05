@@ -49,7 +49,7 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.OTHERS]: null,
 };
 
-export interface ProxyConfig {
+interface ProxyConfig {
   provider: ModelProvider;
   openRouterOnly: boolean;
   customBaseUrl?: string; // Per-model custom base URL (overrides provider default)

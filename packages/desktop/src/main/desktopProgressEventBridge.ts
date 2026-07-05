@@ -81,9 +81,10 @@ export interface DesktopProgressEventBridge {
   /**
    * Handle a progress event emitted through the runtime host.
    *
-   * The owning bridge MUST still call `bus.emit(event, payload)` itself —
-   * this method only applies the desktop-specific rail update (persist
-   * snapshot, remove ghost, route-to-progress).
+   * Applies the desktop-specific rail update (persist snapshot, remove ghost,
+   * route-to-progress). Ordinary runtime-host events are also published to the
+   * process bus by the owning bridge; session-projected facts call this through
+   * a window-local path instead.
    */
   onProgressEvent<K extends keyof ProgressEventPayloads>(
     event: K,
@@ -256,6 +257,15 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       case 'setParentStream': {
         const data = payload as ProgressEventPayloads['setParentStream'];
         this.persistStreamSnapshot(data.childStreamId);
+        return;
+      }
+      case 'goalStateChanged': {
+        const data = payload as ProgressEventPayloads['goalStateChanged'];
+        const goal = GoalStore.getForStream(data.streamId);
+        this.opts.onGoalStateChanged(data.streamId, isGoalInFlight(goal), {
+          status: goal?.status,
+          objective: goal?.objective,
+        });
         return;
       }
       default:

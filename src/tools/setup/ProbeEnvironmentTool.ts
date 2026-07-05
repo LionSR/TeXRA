@@ -6,9 +6,9 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
-import { toErrorMessage } from '@common/errors';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 

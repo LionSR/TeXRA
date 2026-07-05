@@ -3,14 +3,13 @@ import { z, ZodError, type ZodType } from 'zod';
 
 // Local imports - core tool types (single source of truth)
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { toErrorMessage } from '@common/errors';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
-  toolError,
   type ToolResult,
 } from '@shared/schemas/toolResult';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Abstract base class for tool implementations.
@@ -57,16 +56,24 @@ export abstract class BaseTool<T> implements ITool {
       return await this.execute(input);
     } catch (err) {
       if (err instanceof ZodError) {
-        return toolError(`Invalid input:\n${z.prettifyError(err)}`, {
-          type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-          issues: err.issues,
-          formatted: formatZodIssuesForDiagnostics(err.issues),
-        });
+        return {
+          status: 'error',
+          error: `Invalid input:\n${z.prettifyError(err)}`,
+          diagnostics: {
+            type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+            issues: err.issues,
+            formatted: formatZodIssuesForDiagnostics(err.issues),
+          },
+        };
       }
-      const message = toErrorMessage(err);
+      const message = toErrorMessage(err).trim();
       // Only include error name - stack traces waste tokens and aren't actionable by models
       const diagnostics = err instanceof Error ? { name: err.name } : undefined;
-      return toolError(message, diagnostics);
+      return {
+        status: 'error',
+        error: message || 'Tool execution failed.',
+        ...(diagnostics !== undefined ? { diagnostics } : {}),
+      };
     }
   }
 

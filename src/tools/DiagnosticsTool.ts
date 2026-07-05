@@ -4,11 +4,11 @@ import { toJSONSchema, z } from 'zod';
 // Internal imports
 import { platform } from '@platform/platform';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   countBySeverity,
   formatCounts,

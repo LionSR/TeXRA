@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import { AbsoluteFS } from './absoluteFS';

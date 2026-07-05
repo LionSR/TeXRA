@@ -27,7 +27,12 @@
  * session is justified only as the ownership container.
  */
 
-import { getActiveFlushers, unregisterFlushers } from '@transcript';
+import {
+  getActiveFlushers,
+  getDefaultStreamLogStore,
+  StreamLogStore,
+  unregisterFlushers,
+} from '@transcript';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { createChannelTrace } from '@logger';
@@ -60,6 +65,8 @@ export type SessionHandleInit = Partial<
     | 'subscriptions'
     | 'events'
     | 'status'
+    | 'transcripts'
+    | 'followUps'
     | 'flushers'
     | 'hostChannel'
   >
@@ -86,6 +93,10 @@ export class SessionHandle {
   readonly events: SessionEventHub;
   /** Session-scoped status plane; wraps shared status data during migration. */
   readonly status: StreamStatusMachine;
+  /** Session-owned transcript store for run traces launched in this session. */
+  readonly transcripts: StreamLogStore;
+  /** Session-owned follow-up queue owner. */
+  readonly followUps: ToolUseFollowUpQueue;
   /** This session's trace-flush callbacks (drained on dispose / shutdown). */
   readonly flushers: Set<() => void>;
   /**
@@ -99,31 +110,31 @@ export class SessionHandle {
     // member fall back to a neighboring module singleton (silent-state-split).
     const interrupts = init.interrupts ?? new InterruptRegistry();
     const status = init.status ?? new StreamStatusMachine();
+    const events = init.events ?? new SessionEventHub();
+    const transcripts = init.transcripts ?? new StreamLogStore();
+    const followUps = init.followUps ?? new ToolUseFollowUpQueue();
     const executions =
       init.executions ??
-      new ExecutionRegistry({ interrupts, streamStatus: status });
+      new ExecutionRegistry({ interrupts, streamStatus: status, events });
+    executions.attachSessionEvents(events);
     const coordinators =
       init.coordinators ?? new RunCoordinatorBridge(executions);
 
     this.interrupts = interrupts;
     this.executions = executions;
     this.coordinators = coordinators;
-    // INVARIANT (SDK Step 7d residue #9): this per-session binder reads the
-    // process-global, streamId-keyed `ToolUseFollowUpQueue` as its release
-    // source. That is coherent ONLY while the queue stays keyed by the globally-
-    // unique streamId — a session's release then touches only its own streams.
-    // If the queue is ever re-keyed (e.g. by sessionId+streamId), per-session
-    // cleanup silently breaks; the queue must move onto the session at that point.
     const subscriptions =
       init.subscriptions ??
       new ExecutionSubscriptionBinder({
         registry: executions,
-        releaseSource: ToolUseFollowUpQueue,
+        releaseSource: followUps,
         session: this,
       });
     this.subscriptions = subscriptions;
-    this.events = init.events ?? new SessionEventHub();
+    this.events = events;
     this.status = status;
+    this.transcripts = transcripts;
+    this.followUps = followUps;
     // A fresh session owns its own flusher set; the default session aliases the
     // process-module set so `createRunTrace`'s default writes still drain.
     this.flushers = init.flushers ?? new Set<() => void>();
@@ -287,6 +298,8 @@ export function defaultSession(): SessionHandle {
     coordinators: runCoordinatorBridge,
     subscriptions: executionSubscriptionBinder,
     status: StreamStatusService,
+    transcripts: getDefaultStreamLogStore(),
+    followUps: ToolUseFollowUpQueue.defaultInstance(),
     flushers: getActiveFlushers(),
   }));
 }

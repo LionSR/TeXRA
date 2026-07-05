@@ -21,18 +21,6 @@ import {
 } from './codexPreference';
 import type { ModelConfig } from 'llm-zoo';
 
-/**
- * Whether this model, under the current routing context, should go through the
- * ChatGPT subscription. Does NOT check sign-in (callers handle that): true means
- * "the user asked to prefer the subscription and this model can use it".
- */
-export function shouldUseCodexSubscription(
-  config: ModelConfig,
-  useOpenRouter: boolean,
-): boolean {
-  return resolveCodexSubscriptionCapabilities(config, useOpenRouter) !== null;
-}
-
 export function resolveCodexSubscriptionCapabilities(
   config: ModelConfig,
   useOpenRouter: boolean,
@@ -40,23 +28,8 @@ export function resolveCodexSubscriptionCapabilities(
   if (!isPreferCodexSubscription()) return null;
   return resolveProviderCapabilities({
     model: config,
-    authMode: 'chatgpt-subscription',
     useOpenRouter,
   });
-}
-
-export function shouldUseCodexSubscriptionForAgentCategory(
-  config: ModelConfig,
-  useOpenRouter: boolean,
-  agentCategory: AgentCategory | undefined,
-): boolean {
-  return (
-    resolveCodexSubscriptionCapabilitiesForAgentCategory(
-      config,
-      useOpenRouter,
-      agentCategory,
-    ) !== null
-  );
 }
 
 export function resolveCodexSubscriptionCapabilitiesForAgentCategory(

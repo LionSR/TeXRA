@@ -34,7 +34,7 @@ import {
   formatReviewComment,
   formatSubscriptionError,
 } from './formatPREvent';
-import { getNewestTimestamp, trimSet, withSince } from './formatUtils';
+import { getNewestTimestamp, withSince } from './formatUtils';
 import {
   ghGet,
   GitHubAuthError,
@@ -58,6 +58,8 @@ import {
   planAnnotationCandidates,
 } from './prCheckRunDomain';
 import {
+  DedupedResource,
+  DEFAULT_POLLING_BACKOFF_CONFIG,
   PollingSourceBase,
   type BasePollSubscriptionState,
 } from './PollingSourceBase';
@@ -95,22 +97,29 @@ function createInitialState(pr: PRKey): SubscriptionState {
     listeners: new Set(),
     runtimeHostByListener: new Map(),
     initialized: false,
-    seenIssueCommentIds: new Set(),
-    seenReviewCommentIds: new Set(),
-    seenReviewIds: new Set(),
+    issueComments: new DedupedResource<GhIssueComment>({
+      getId: (comment: GhIssueComment) => comment.id,
+      getCursor: getNewestTimestamp,
+      maxSeenIds: MAX_SEEN_IDS,
+    }),
+    reviewComments: new DedupedResource<GhReviewComment>({
+      getId: (comment: GhReviewComment) => comment.id,
+      getCursor: getNewestTimestamp,
+      maxSeenIds: MAX_SEEN_IDS,
+    }),
+    reviews: new DedupedResource<GhReview>({
+      getId: (review: GhReview) => review.id,
+      maxSeenIds: MAX_SEEN_IDS,
+    }),
     lastFailedCheckKeys: new Set(),
     lastAnnotationKeys: new Set(),
-    pendingAnnotationRuns: [],
     annotationLevelByListener: new Map(),
-    ciStartedSha: undefined,
-    ciCompleteSha: undefined,
-    ciPassedSha: undefined,
+    currentShaState: undefined,
     headSha: undefined,
     state: undefined,
     merged: false,
     mergeableState: undefined,
     etags: {},
-    sinceCursors: {},
     lastSuccessAt: Date.now(),
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
@@ -126,6 +135,10 @@ const MAX_SEEN_IDS = 1000;
 // lighting up a fleet of checks). Excess candidates stay in
 // `pendingAnnotationRuns` and are drained on subsequent ticks.
 const MAX_ANNOTATION_RUNS_PER_SUBSCRIPTION_TICK = 3;
+
+function isSubmittedReview(review: GhReview): boolean {
+  return review.state !== 'PENDING';
+}
 
 export interface PRKey {
   owner: string;
@@ -146,9 +159,9 @@ interface SubscriptionState extends BasePollSubscriptionState {
   slug: string;
   /** Initialized on first tick so we don't replay historical events. */
   initialized: boolean;
-  seenIssueCommentIds: Set<number>;
-  seenReviewCommentIds: Set<number>;
-  seenReviewIds: Set<number>;
+  issueComments: DedupedResource<GhIssueComment>;
+  reviewComments: DedupedResource<GhReviewComment>;
+  reviews: DedupedResource<GhReview>;
   lastFailedCheckKeys: Set<string>;
   /**
    * `${id}:${completed_at}` for runs observed (with annotations) on the most
@@ -157,24 +170,19 @@ interface SubscriptionState extends BasePollSubscriptionState {
    * can't mistake a still-present run for a new one.
    */
   lastAnnotationKeys: Set<string>;
-  /**
-   * Annotated runs awaiting an annotations-endpoint fetch. Populated by the
-   * 200 branch (newly-seen keys), drained on every tick (200 OR 304) so a
-   * burst that overflows the per-subscription or process-wide fetch budget
-   * isn't stranded once the check-runs cache stabilizes.
-   */
-  pendingAnnotationRuns: GhCheckRun[];
   annotationLevelByListener: Map<
     (text: string) => void,
     GitHubCheckAnnotationLevel
   >;
-  /** Head SHA for which the one-shot "CI triggered" event has been emitted. */
-  ciStartedSha: string | undefined;
-  /** Head SHA for which the one-shot "CI complete" event has been emitted. */
-  ciCompleteSha: string | undefined;
-  /** Head SHA for which the one-shot "CI passed" event has been emitted. */
-  ciPassedSha: string | undefined;
   headSha: string | undefined;
+  /**
+   * Everything scoped to the current `headSha`: the CI one-shot markers, the
+   * check-runs page cache, and the pending annotation-fetch queue. Replaced
+   * wholesale whenever `headSha` changes (see the reset in `pollOne`), so a
+   * future per-SHA field added here can't leak stale state across a push —
+   * there's no separate list of fields to remember to clear.
+   */
+  currentShaState: CurrentShaState | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
   /** Last *definite* `mergeable_state`; see `isDefiniteMergeableState`. */
@@ -185,6 +193,17 @@ interface SubscriptionState extends BasePollSubscriptionState {
     reviewComments?: string;
     reviews?: string;
   };
+}
+
+/** Per-`headSha` state; reset wholesale whenever the head SHA changes. */
+interface CurrentShaState {
+  sha: string;
+  /** Whether the one-shot "CI triggered" event has been emitted for `sha`. */
+  ciStarted: boolean;
+  /** Whether the one-shot "CI complete" event has been emitted for `sha`. */
+  ciComplete: boolean;
+  /** Whether the one-shot "CI passed" event has been emitted for `sha`. */
+  ciPassed: boolean;
   /**
    * Per-page cache for the paginated check-runs endpoint. Single-page PRs
    * touch only page 1 so still get the cheap 304 fast path; multi-page PRs
@@ -195,14 +214,13 @@ interface SubscriptionState extends BasePollSubscriptionState {
    * it tells us how many pages to walk when page 1 returns 304.
    */
   checkRunsCache?: CheckRunsCache;
-  // ISO `since` cursors for server-side filtering on the comments endpoints.
-  // Advance to the newest seen item's timestamp so PRs with >100 comments
-  // still surface new activity (default sort is oldest-first; without
-  // `since` the recent items fall off the first page).
-  sinceCursors: {
-    issueComments?: string;
-    reviewComments?: string;
-  };
+  /**
+   * Annotated runs awaiting an annotations-endpoint fetch. Populated by the
+   * 200 branch (newly-seen keys), drained on every tick (200 OR 304) so a
+   * burst that overflows the per-subscription or process-wide fetch budget
+   * isn't stranded once the check-runs cache stabilizes.
+   */
+  pendingAnnotationRuns: GhCheckRun[];
 }
 
 export class PRPollingSource extends PollingSourceBase<
@@ -216,9 +234,7 @@ export class PRPollingSource extends PollingSourceBase<
       name: 'PRPollingSource',
       pollIntervalMs: PR_POLL_INTERVAL_MS,
       maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
-      backoffBaseMs: 60_000,
-      backoffMaxMs: 3_600_000,
-      maxFailureDurationMs: 24 * 3_600_000,
+      ...DEFAULT_POLLING_BACKOFF_CONFIG,
     });
   }
 
@@ -324,14 +340,12 @@ export class PRPollingSource extends PollingSourceBase<
       // never trips. We skip BEFORE writing state.etags.pr, so the PR-detail
       // ETag is not advanced on a bad body — the next tick re-fetches the same
       // resource and re-validates (no strand).
-      const parsed = GhPullRequestSchema.safeParse(prRes.data);
-      if (!parsed.success) {
-        this.logger.warn(
-          `Skipping PR poll for ${prKeyToString(pr)}: malformed pull-request payload`,
-          { data: parsed.error },
-        );
-        return;
-      }
+      const parsed = this.validateOrSkip(
+        prRes,
+        GhPullRequestSchema,
+        `Skipping PR poll for ${prKeyToString(pr)}: malformed pull-request payload`,
+      );
+      if (!parsed) return;
       const prData = parsed.data;
       state.etags.pr = prRes.etag;
       const newHead = prData.head.sha;
@@ -356,15 +370,20 @@ export class PRPollingSource extends PollingSourceBase<
       // per-page check-runs cache: it's keyed only by page number, and the
       // ETags from the previous SHA can never match the new SHA's responses.
       // Letting it linger would cost one wasted If-None-Match per page on
-      // the first post-push tick before the cache naturally refreshes.
+      // the first post-push tick before the cache naturally refreshes. Old
+      // SHA's deferred annotations are no longer the user's focus; the new
+      // SHA's runs will re-enqueue from the next 200 tick. Replacing the
+      // whole per-SHA object (rather than clearing fields one by one) means
+      // a future per-SHA field can't be left stale across a push.
       if (state.headSha !== newHead) {
-        state.ciStartedSha = undefined;
-        state.ciCompleteSha = undefined;
-        state.ciPassedSha = undefined;
-        state.checkRunsCache = undefined;
-        // Old SHA's deferred annotations are no longer the user's focus; the
-        // new SHA's runs will re-enqueue from the next 200 tick.
-        state.pendingAnnotationRuns = [];
+        state.currentShaState = {
+          sha: newHead,
+          ciStarted: false,
+          ciComplete: false,
+          ciPassed: false,
+          checkRunsCache: undefined,
+          pendingAnnotationRuns: [],
+        };
       }
       state.headSha = newHead;
 
@@ -420,11 +439,11 @@ export class PRPollingSource extends PollingSourceBase<
 
     const issueCommentsUrl = withSince(
       `${issuePath}/comments?per_page=100`,
-      state.sinceCursors.issueComments,
+      state.issueComments.sinceCursor,
     );
     const reviewCommentsUrl = withSince(
       `${prPath}/comments?per_page=100`,
-      state.sinceCursors.reviewComments,
+      state.reviewComments.sinceCursor,
     );
     const [commentsRes, reviewCommentsRes, reviewsRes, checksOutcome] =
       await Promise.all([
@@ -439,7 +458,7 @@ export class PRPollingSource extends PollingSourceBase<
               pr.owner,
               pr.repo,
               state.headSha,
-              state.checkRunsCache,
+              state.currentShaState?.checkRunsCache,
               this.logger,
             )
           : Promise.resolve({
@@ -459,16 +478,11 @@ export class PRPollingSource extends PollingSourceBase<
     if (!state.initialized) {
       if (commentsRes.status === 200) {
         state.etags.issueComments = commentsRes.etag;
-        for (const c of commentsRes.data) state.seenIssueCommentIds.add(c.id);
-        state.sinceCursors.issueComments = getNewestTimestamp(commentsRes.data);
+        state.issueComments.seed(commentsRes.data);
       }
       if (reviewCommentsRes.status === 200) {
         state.etags.reviewComments = reviewCommentsRes.etag;
-        for (const c of reviewCommentsRes.data)
-          state.seenReviewCommentIds.add(c.id);
-        state.sinceCursors.reviewComments = getNewestTimestamp(
-          reviewCommentsRes.data,
-        );
+        state.reviewComments.seed(reviewCommentsRes.data);
       }
       if (reviewsRes.status === 200) {
         state.etags.reviews = reviewsRes.etag;
@@ -477,13 +491,12 @@ export class PRPollingSource extends PollingSourceBase<
         // when it transitions PENDING → APPROVED/CHANGES_REQUESTED/COMMENTED,
         // so if we seed the pending id here the actual submission will be
         // silently deduped later.
-        for (const r of reviewsRes.data) {
-          if (r.state !== 'PENDING') state.seenReviewIds.add(r.id);
-        }
+        state.reviews.seed(reviewsRes.data.filter(isSubmittedReview));
       }
       if (checksRes.status === 200) {
         // ETag/page caching is owned by `fetchAllCheckRuns` via
-        // `state.checkRunsCache`; nothing to record on `state.etags` here.
+        // `state.currentShaState.checkRunsCache`; nothing to record on
+        // `state.etags` here.
         const runs = checksRes.data.check_runs;
         for (const r of runs) {
           if (isCheckFailure(r)) {
@@ -498,8 +511,8 @@ export class PRPollingSource extends PollingSourceBase<
             state.lastAnnotationKeys.add(checkKey(r));
           }
         }
-        if (state.headSha && runs.length > 0) {
-          state.ciStartedSha = state.headSha;
+        if (state.headSha && runs.length > 0 && state.currentShaState) {
+          state.currentShaState.ciStarted = true;
         }
         // Seed so pre-existing terminal CI doesn't fire on the next tick —
         // we only surface transitions that happen after subscribe. See
@@ -510,17 +523,17 @@ export class PRPollingSource extends PollingSourceBase<
           runs,
           checksRes.data.total_count,
         );
-        if (complete) {
-          state.ciCompleteSha = state.headSha;
+        if (complete && state.currentShaState) {
+          state.currentShaState.ciComplete = true;
           if (passed) {
-            state.ciPassedSha = state.headSha;
+            state.currentShaState.ciPassed = true;
           }
         }
       }
       // Commit the deferred check-runs cache only after successfully
       // consuming the response. See `fetchAllCheckRuns` for why we defer.
-      if (stagedCheckRunsCache !== undefined) {
-        state.checkRunsCache = stagedCheckRunsCache;
+      if (stagedCheckRunsCache !== undefined && state.currentShaState) {
+        state.currentShaState.checkRunsCache = stagedCheckRunsCache;
       }
       state.initialized = true;
       return;
@@ -529,59 +542,46 @@ export class PRPollingSource extends PollingSourceBase<
     // Diff and emit.
     if (commentsRes.status === 200) {
       state.etags.issueComments = commentsRes.etag;
-      for (const c of commentsRes.data) {
-        if (!state.seenIssueCommentIds.has(c.id)) {
-          state.seenIssueCommentIds.add(c.id);
-          if (shouldDropBotEvent(c.user)) continue;
-          this.emit(state, formatIssueComment(state.slug, pr.pullNumber, c));
-        }
-      }
-      state.sinceCursors.issueComments =
-        getNewestTimestamp(commentsRes.data) ??
-        state.sinceCursors.issueComments;
-      trimSet(state.seenIssueCommentIds, MAX_SEEN_IDS);
+      state.issueComments.diff(commentsRes.data, (c) => {
+        if (shouldDropBotEvent(c.user)) return;
+        this.emit(state, formatIssueComment(state.slug, pr.pullNumber, c));
+      });
     }
 
     if (reviewCommentsRes.status === 200) {
       state.etags.reviewComments = reviewCommentsRes.etag;
-      for (const c of reviewCommentsRes.data) {
-        if (!state.seenReviewCommentIds.has(c.id)) {
-          state.seenReviewCommentIds.add(c.id);
-          if (shouldDropBotEvent(c.user)) continue;
-          this.emit(state, formatReviewComment(state.slug, pr.pullNumber, c));
-        }
-      }
-      state.sinceCursors.reviewComments =
-        getNewestTimestamp(reviewCommentsRes.data) ??
-        state.sinceCursors.reviewComments;
-      trimSet(state.seenReviewCommentIds, MAX_SEEN_IDS);
+      state.reviewComments.diff(reviewCommentsRes.data, (c) => {
+        if (shouldDropBotEvent(c.user)) return;
+        this.emit(state, formatReviewComment(state.slug, pr.pullNumber, c));
+      });
     }
 
     if (reviewsRes.status === 200) {
       state.etags.reviews = reviewsRes.etag;
-      for (const r of reviewsRes.data) {
-        // Same reasoning as the seeding branch: ignore PENDING drafts —
-        // they keep the same id when submitted, and emitting "reviewed"
-        // on a draft would both be misleading and prevent the real
-        // submission event from firing.
-        if (r.state === 'PENDING') continue;
-        if (!state.seenReviewIds.has(r.id)) {
-          state.seenReviewIds.add(r.id);
-          if (shouldDropBotEvent(r.user)) continue;
-          this.emit(state, formatReview(state.slug, pr.pullNumber, r));
-        }
-      }
-      trimSet(state.seenReviewIds, MAX_SEEN_IDS);
+      // Same reasoning as the seeding branch: ignore PENDING drafts — they
+      // keep the same id when submitted, and emitting "reviewed" on a draft
+      // would both be misleading and prevent the real submission event from
+      // firing.
+      state.reviews.diff(reviewsRes.data.filter(isSubmittedReview), (r) => {
+        if (shouldDropBotEvent(r.user)) return;
+        this.emit(state, formatReview(state.slug, pr.pullNumber, r));
+      });
     }
 
     if (checksRes.status === 200) {
       // ETag/page caching is owned by `fetchAllCheckRuns` via
-      // `state.checkRunsCache`; nothing to record on `state.etags` here.
+      // `state.currentShaState.checkRunsCache`; nothing to record on
+      // `state.etags` here.
       const runs = checksRes.data.check_runs;
 
       const headSha = state.headSha;
-      if (headSha && runs.length > 0 && state.ciStartedSha !== headSha) {
-        state.ciStartedSha = headSha;
+      if (
+        headSha &&
+        runs.length > 0 &&
+        state.currentShaState &&
+        !state.currentShaState.ciStarted
+      ) {
+        state.currentShaState.ciStarted = true;
         if (shouldEmitCIStartedEvents()) {
           this.emit(
             state,
@@ -625,17 +625,17 @@ export class PRPollingSource extends PollingSourceBase<
         runs,
         checksRes.data.total_count,
       );
-      if (complete && state.headSha) {
+      if (complete && state.headSha && state.currentShaState) {
         const headSha = state.headSha;
-        if (state.ciCompleteSha !== headSha) {
-          state.ciCompleteSha = headSha;
+        if (!state.currentShaState.ciComplete) {
+          state.currentShaState.ciComplete = true;
           this.emit(
             state,
             formatCIComplete(state.slug, pr.pullNumber, headSha, runs),
           );
         }
-        if (state.ciPassedSha !== headSha && passed) {
-          state.ciPassedSha = headSha;
+        if (!state.currentShaState.ciPassed && passed) {
+          state.currentShaState.ciPassed = true;
           this.emit(
             state,
             formatCIPassed(state.slug, pr.pullNumber, headSha, runs),
@@ -655,8 +655,8 @@ export class PRPollingSource extends PollingSourceBase<
     // for why we defer: this prevents a sibling rejection in the `Promise.all`
     // from advancing the cache while the diff never ran, which would cause
     // the next tick to get 304 and silently skip the missed transitions.
-    if (stagedCheckRunsCache !== undefined) {
-      state.checkRunsCache = stagedCheckRunsCache;
+    if (stagedCheckRunsCache !== undefined && state.currentShaState) {
+      state.currentShaState.checkRunsCache = stagedCheckRunsCache;
     }
   }
 
@@ -671,16 +671,18 @@ export class PRPollingSource extends PollingSourceBase<
     state: SubscriptionState,
     runs: ReadonlyArray<GhCheckRun>,
   ): void {
+    const currentShaState = state.currentShaState;
+    if (!currentShaState) return;
     const { toAppend, replacementsByIndex, newCurrentKeys } =
       planAnnotationCandidates(
         runs,
         state.lastAnnotationKeys,
-        state.pendingAnnotationRuns,
+        currentShaState.pendingAnnotationRuns,
       );
     for (const [index, run] of replacementsByIndex) {
-      state.pendingAnnotationRuns[index] = run;
+      currentShaState.pendingAnnotationRuns[index] = run;
     }
-    state.pendingAnnotationRuns.push(...toAppend);
+    currentShaState.pendingAnnotationRuns.push(...toAppend);
     state.lastAnnotationKeys = newCurrentKeys;
   }
 
@@ -697,7 +699,9 @@ export class PRPollingSource extends PollingSourceBase<
       madeProgress = false;
       for (const [key, state] of pendingEntries) {
         if (!this.has(key)) continue;
-        if (state.pendingAnnotationRuns.length === 0) continue;
+        if ((state.currentShaState?.pendingAnnotationRuns.length ?? 0) === 0) {
+          continue;
+        }
         const claims = claimsByKey.get(key) ?? 0;
         if (claims >= MAX_ANNOTATION_RUNS_PER_SUBSCRIPTION_TICK) continue;
         try {
@@ -728,7 +732,7 @@ export class PRPollingSource extends PollingSourceBase<
       ([key, state]) =>
         this.has(key) &&
         state.skipPollUntilMs <= now &&
-        state.pendingAnnotationRuns.length > 0,
+        (state.currentShaState?.pendingAnnotationRuns.length ?? 0) > 0,
     );
     if (pendingEntries.length === 0) return [];
     const startIndex = this.nextAnnotationDrainKey
@@ -768,7 +772,7 @@ export class PRPollingSource extends PollingSourceBase<
     state: SubscriptionState,
     now: number,
   ): Promise<boolean> {
-    const run = state.pendingAnnotationRuns[0];
+    const run = state.currentShaState?.pendingAnnotationRuns[0];
     if (!run) return true;
     const { pr } = state;
     try {
@@ -805,7 +809,7 @@ export class PRPollingSource extends PollingSourceBase<
         return true;
       }
       this.removePendingAnnotationRun(state, run.id);
-      state.pendingAnnotationRuns.push(run);
+      state.currentShaState?.pendingAnnotationRuns.push(run);
       this.logger.warn(
         `Annotation fetch for check ${run.id} failed; rotating to back of queue`,
         { data: err },
@@ -818,9 +822,9 @@ export class PRPollingSource extends PollingSourceBase<
     state: SubscriptionState,
     runId: number,
   ): void {
-    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
-      (p) => p.id !== runId,
-    );
+    if (!state.currentShaState) return;
+    state.currentShaState.pendingAnnotationRuns =
+      state.currentShaState.pendingAnnotationRuns.filter((p) => p.id !== runId);
   }
 
   private emitCheckAnnotations(

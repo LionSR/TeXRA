@@ -15,7 +15,7 @@ import {
   TEXRA_CLI_SUPPORTED_NODE_RANGE,
   TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY,
 } from '@shared/constants/cliRuntime';
-import { extractErrorMessage } from '@common/errors';
+import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - CLI runtime
 import { CliExitCode } from './exitCodes';

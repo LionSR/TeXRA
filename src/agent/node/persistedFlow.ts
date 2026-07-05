@@ -3,8 +3,8 @@
 
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { BaseNode, Flow, type Action } from '.';
 
@@ -224,7 +224,10 @@ export class PersistedFlow<
     mutate?: (flow: FlowRecord) => void,
   ): Promise<void> {
     const key = flowKey(this.runId);
-    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
+    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key));
+    if (!flow) {
+      throw new Error('Invalid or corrupted flow record');
+    }
     this.cachedRecord = null;
     mutate?.(flow);
     flow.shared = this.serializeShared(shared);

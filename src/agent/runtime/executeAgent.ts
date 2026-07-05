@@ -7,6 +7,7 @@ import {
   runToolUseFlow,
   type RunToolUseFlowResult,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import {
@@ -32,13 +33,11 @@ import { createChannelTrace } from '@logger';
 import {
   type StreamTabId,
   type ExecutionId,
-  type OutputFileInfo,
-  type RoundOutput,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import type {
-  CompileFailureSummary,
-  OutputFileSummary,
+import {
+  roundOutputsToCompileFailureSummaries,
+  roundOutputsToOutputSummaries,
 } from '@shared/schemas/output';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 
@@ -65,57 +64,6 @@ import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKe
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
 
-/**
- * Project `RoundOutput[]` → `OutputFileSummary[]` for inclusion in `AgentFlowResult`.
- *
- * `relativePath` falls back to `absolutePath` for `external` locations that have
- * no relative path. `originalPath` prefers `lineage.diffBase` (the snapshot used
- * for latexdiff) over `lineage.original` (the workspace source).
- */
-function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
-  return roundOutputs.flatMap((r) =>
-    r.outputs.map((o: OutputFileInfo) => ({
-      round: r.round,
-      relativePath:
-        'relativePath' in o.location
-          ? o.location.relativePath
-          : o.location.absolutePath,
-      absolutePath: o.location.absolutePath,
-      location: o.location.kind,
-      originalPath:
-        o.lineage?.diffBase?.absolutePath ??
-        o.lineage?.original?.absolutePath ??
-        null,
-      added: o.diff?.added ?? null,
-      removed: o.diff?.removed ?? null,
-    })),
-  );
-}
-
-/**
- * Project `RoundOutput[]` → `CompileFailureSummary[]` for inclusion in `AgentFlowResult`.
- *
- * `outputPath` is workspace-relative for workspace/runStorage files and absolute
- * for external files (which have no meaningful relative path). `logPath` is always
- * relative; `logAbsolutePath` is provided separately for direct file-open calls.
- */
-function toCompileFailureSummaries(
-  roundOutputs: RoundOutput[],
-): CompileFailureSummary[] {
-  return roundOutputs.flatMap((r) =>
-    r.compileFailures.map((failure) => ({
-      round: failure.round,
-      displayName: failure.displayName,
-      outputPath:
-        failure.output.kind === 'external'
-          ? failure.output.absolutePath
-          : failure.output.relativePath,
-      logPath: failure.logRelativePath,
-      logAbsolutePath: failure.log.absolutePath,
-    })),
-  );
-}
-
 /** Build a workflow AgentFlowResult from a reflection flow run. */
 function buildWorkflowFlowResult(
   result: RunReflectionFlowResult,
@@ -126,8 +74,8 @@ function buildWorkflowFlowResult(
   return {
     category: 'workflow',
     outcome: result.outcome,
-    outputs: toOutputSummaries(result.roundOutputs),
-    compileFailures: toCompileFailureSummaries(result.roundOutputs),
+    outputs: roundOutputsToOutputSummaries(result.roundOutputs),
+    compileFailures: roundOutputsToCompileFailureSummaries(result.roundOutputs),
     executionId,
     streamId,
     ...buildOptionalFlowResultFields(memoryMisses, result.totalCostUsd),
@@ -233,7 +181,7 @@ async function runToolUseAgent(
           options.onProgress?.(update);
         },
         onFollowUpConsumed: () => {
-          ctx.runtimeHost.emit('updateQueuedFollowUps', {
+          emitRuntimeEvent('updateQueuedFollowUps', {
             streamId: ctx.streamId,
           });
           options.onFollowUpConsumed?.();
@@ -545,7 +493,7 @@ export async function resumeToolUseFromSnapshot(
             // /memories protocol) that the fresh run had included.
             isSubagent,
             onFollowUpConsumed: () =>
-              ctx.runtimeHost.emit('updateQueuedFollowUps', {
+              emitRuntimeEvent('updateQueuedFollowUps', {
                 streamId: ctx.streamId,
               }),
           },

@@ -12,6 +12,7 @@ import {
   type FileLocation,
   MESSAGE_TYPES,
   type OutputFileInfo,
+  type RoundIndexed,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
@@ -50,7 +51,7 @@ export class LatexDiffManager {
 
   constructor(
     private readonly agentSetting: AgentWorkflowSetting,
-    private readonly getOutputFiles: () => { [key: number]: OutputFileInfo[] },
+    private readonly getOutputFiles: () => RoundIndexed<OutputFileInfo>,
     private readonly baseFiles: FileLocation[],
     private readonly logger: AgentTrace,
     private readonly streamId: string,

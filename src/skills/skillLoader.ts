@@ -6,8 +6,8 @@ import * as path from 'node:path';
 import { ZodError } from 'zod';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors';
 import { isObject } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
 import { collapseWhitespace } from '@utils/text/stringUtils';

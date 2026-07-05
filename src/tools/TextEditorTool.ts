@@ -6,7 +6,6 @@ import { z } from 'zod';
 
 // Local imports - tool definitions
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { toErrorMessage } from '@common/errors';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
@@ -23,6 +22,7 @@ import {
 } from '@tools/approval/toolEditApproval';
 import { assertNever } from '@utils/core';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
 

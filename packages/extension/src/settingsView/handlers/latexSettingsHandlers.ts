@@ -10,7 +10,6 @@ import * as vscode from 'vscode';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { toErrorMessage } from '@common/errors';
 import { workspaceSM } from '@common/state';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -24,6 +23,7 @@ import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
 } from '@shared/constants/latex';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getConfig,
   inspectConfig,

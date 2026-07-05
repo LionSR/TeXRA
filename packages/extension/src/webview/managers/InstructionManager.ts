@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 
 import { polishTextWithAI, FileContext } from '@agent/runtime/textEnhancement';
-import { toErrorMessage } from '@common/errors';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   PASTED_DIR,
   savePastedImageBase64,

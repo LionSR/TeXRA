@@ -9,6 +9,7 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
@@ -58,6 +59,18 @@ function startCodexChild(
     config,
     toolName: 'codex',
   });
+}
+
+function withLegacyProjection<T>(host: AgentRuntimeHost, run: () => T): T {
+  const detach = attachLegacyProgressEventProjection(
+    defaultSession().events,
+    host,
+  );
+  try {
+    return run();
+  } finally {
+    detach();
+  }
 }
 
 describe('child stream progress events', () => {
@@ -128,19 +141,23 @@ describe('child stream progress events', () => {
   it('publishes child stream lifecycle events through the explicit runtime host', () => {
     const active = createRecordingHost();
 
-    const childStream = createChildStream(executionId, parentStreamId, {
-      runtimeHost: active.host,
-      streamPrefix: 'bash',
-      streamCategory: AgentCategory.ToolUse,
-      agentName: 'test-agent',
-      description: 'Run a background bash command',
-      config,
-      toolName: 'bash',
-    });
+    const childStream = withLegacyProjection(active.host, () =>
+      createChildStream(executionId, parentStreamId, {
+        runtimeHost: active.host,
+        streamPrefix: 'bash',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'test-agent',
+        description: 'Run a background bash command',
+        config,
+        toolName: 'bash',
+      }),
+    );
 
     expect(childStream.childStreamId).toBe(childStreamId);
 
-    childStream.finalize({ autoClose: true });
+    withLegacyProjection(active.host, () =>
+      childStream.finalize({ autoClose: true }),
+    );
 
     const { events } = active;
     expect(events.map((entry) => entry.event)).toEqual([
@@ -216,10 +233,12 @@ describe('child stream progress events', () => {
   it('publishes child loop status changes through the child stream owner', async () => {
     const active = createRecordingHost();
 
-    const childStream = startCodexChild(
-      loopExecutionId,
-      active.host,
-      'Run a long-lived Codex child loop',
+    const childStream = withLegacyProjection(active.host, () =>
+      startCodexChild(
+        loopExecutionId,
+        active.host,
+        'Run a long-lived Codex child loop',
+      ),
     );
     const handle =
       defaultSession().executions.getAgentHandleByStream(loopChildStreamId);
@@ -229,7 +248,9 @@ describe('child stream progress events', () => {
     childStream.waitForInput();
     childStream.beginTurn();
     childStream.failTurn();
-    childStream.finalize({ status: STREAM_STATUS.ERROR });
+    withLegacyProjection(active.host, () =>
+      childStream.finalize({ status: STREAM_STATUS.ERROR }),
+    );
 
     const statusEvents = active.events.filter(
       (entry) => entry.event === 'updateStreamStatus',
