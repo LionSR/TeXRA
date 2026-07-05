@@ -1,10 +1,9 @@
+import * as path from 'node:path';
+
 import { defineCommand } from 'citty';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
 import { formatChatAsHtml } from '@agent/export/htmlExport/htmlFormatter';
-import type { ChatExportInput } from '@agent/export/schemas';
-import { getExecutionStore } from '@agent/storage';
 import { type ExecutionId } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -18,10 +17,17 @@ import {
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
+  readCliHistoryExportInput,
+  resolveCliHistoryExportAssetsHref,
+  stageCliHistoryExportAssets,
   type CliHistoryDeleteResult,
 } from '../runtime/history';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import {
+  writeErrorStderr,
+  writeRawStdout,
+  writeTextStderr,
+} from '../runtime/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
@@ -92,6 +98,14 @@ async function runHistoryShow(
  * Mirrors the extension's ChatExportController.buildExportInput so the CLI
  * and the extension render the same conversation identically; the HTML path
  * reuses the Lit-SSR chat exporter (headless rendering engine for traces).
+ *
+ * For the default (unset) `--assets` href, also stages the bundled
+ * KaTeX/highlight.js/texmath assets into `<cwd>/assets` as a side effect —
+ * the common `texra history show <id> --export html > out.html` redirect
+ * writes `out.html` into the same directory, so the exported document's
+ * `./assets` href resolves for real instead of pointing at a folder that was
+ * never created. An explicit `--assets <href>` is left untouched: the caller
+ * is pointing at a location (local folder or CDN URL) they manage themselves.
  */
 async function runHistoryExport(
   context: CliContext,
@@ -100,40 +114,34 @@ async function runHistoryExport(
   options: { assetsHref?: string } = {},
 ): Promise<number> {
   await initLocalCliPlatform(context);
-  const store = getExecutionStore(id);
-  const [rawConfig, conversation, meta] = await Promise.all([
-    store.readConfig(),
-    store.readConversation(),
-    store.readMeta(),
-  ]);
-  if (!rawConfig || !conversation) {
-    writeTextStderr(
-      !rawConfig
-        ? `No stored config for execution ${id}.`
-        : `No stored conversation for execution ${id}.`,
-    );
+  const exportInput = await readCliHistoryExportInput(id);
+  if (!exportInput) {
+    writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
     return CliExitCode.Usage;
   }
-  const config = AgentConfigSchema.parse(rawConfig);
-  const exportInput: ChatExportInput = {
-    timestamp: meta?.timestamp ?? new Date().toISOString(),
-    description: meta?.description,
-    config: {
-      agent: config.agent,
-      model: config.model,
-      instruction: config.instruction,
-      inputFiles: config.inputFiles,
-      mediaFiles: config.mediaFiles,
-      contextFiles: config.contextFiles,
-      outputFiles: config.outputFiles,
-    },
-    messages: conversation,
-  };
+
+  const assetsHref = resolveCliHistoryExportAssetsHref(options.assetsHref);
+  if (format === 'html' && assetsHref === undefined) {
+    const staged = await stageCliHistoryExportAssets({
+      resourcesPath: context.resourcesPath,
+      destDir: path.join(context.cwd, 'assets'),
+    });
+    if (staged === 'missing') {
+      writeTextStderr(
+        'Note: bundled HTML export assets (KaTeX/highlight.js CSS) were not ' +
+          'found in this CLI install, so math and code blocks may render ' +
+          'unstyled. Rebuild the CLI (`npm run texra-local:build`) or pass ' +
+          '--assets to point at a folder containing katex.min.css, ' +
+          'texmath.css, hljs-light.css, and hljs-dark.css.',
+      );
+    }
+  }
+
   const content =
     format === 'html'
-      ? formatChatAsHtml(exportInput, { assetsHref: options.assetsHref })
+      ? formatChatAsHtml(exportInput, { assetsHref })
       : formatChatAsMarkdown(exportInput);
-  process.stdout.write(content);
+  writeRawStdout(content);
   return CliExitCode.Success;
 }
 
@@ -244,7 +252,8 @@ const historyShowCommand = defineCliCommand({
     assets: {
       type: 'string',
       valueHint: 'href',
-      description: 'Assets href for --export html (defaults to ./assets)',
+      description:
+        'Assets href for --export html (defaults to ./assets, staged automatically)',
     },
   },
   run: (context, ctx) => {
