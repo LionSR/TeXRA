@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { initPlatform, platform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -42,7 +43,6 @@ import {
 } from '@commands/agent/resumeFromSnapshot';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
-import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -115,7 +115,7 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -288,7 +288,7 @@ export async function activate(context: vscode.ExtensionContext) {
     bus.emit('extensionDeactivating', undefined),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
-  await StorageFS.ensureDir(TASK_RUNS_DIR);
+  await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
   initializeServerSideKeyAccess(
     {

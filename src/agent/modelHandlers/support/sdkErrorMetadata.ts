@@ -6,14 +6,14 @@ import {
   type SdkErrorKind,
 } from '@common/errors/sdkErrorUtils';
 
-export type ErrorConstructor = abstract new (...args: any[]) => Error;
+type ErrorConstructor = abstract new (...args: any[]) => Error;
 
 export interface SdkErrorClassMapping {
   ctor: ErrorConstructor;
   kind: SdkErrorKind;
 }
 
-export function tagSdkError(
+function tagSdkError(
   err: unknown,
   provider: string,
   kind: SdkErrorKind,

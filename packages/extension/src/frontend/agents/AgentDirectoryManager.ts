@@ -13,13 +13,13 @@ import {
   GlobalStorageAgentDirectoryStorage,
 } from '@agent/index';
 import type { AgentDirectoryEntry, AgentSource } from '@agent/index';
-import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import { AGENT_SOURCE } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);

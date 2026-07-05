@@ -11,12 +11,12 @@ import {
 import { extractToolNames, updateAgentMeta } from '@agent/index/agentRegistry';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
 
 import { filterNotNull, filterNotNullish } from '@utils/core';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { errorDataToString } from './errorData';
 import {
   RemoteAgentListItemSchema,

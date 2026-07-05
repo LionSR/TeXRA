@@ -7,13 +7,13 @@
  */
 
 import { normalizeConversationForExport as normalizeMessages } from '@agent/export/normalizeConversation';
-import { formatLocaleTimestamp } from '@utils/text/stringUtils';
 import type {
   ChatExportInput,
   DocumentMeta,
   ExportConfig,
   ExportNode,
 } from '@agent/export/schemas';
+import { formatLocaleTimestamp } from '@utils/text/stringUtils';
 
 /** Compile-time guarantee: every node kind has a renderer. */
 export type NodeRenderers = {

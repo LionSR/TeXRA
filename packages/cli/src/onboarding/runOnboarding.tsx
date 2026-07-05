@@ -28,7 +28,6 @@ import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
 import { type SupabaseSession } from '@auth/SupabaseSession';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -42,6 +41,7 @@ import {
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
 import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';

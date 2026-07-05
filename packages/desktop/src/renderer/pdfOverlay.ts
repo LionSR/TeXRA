@@ -1,9 +1,8 @@
-import { render } from 'lit';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   isSafeAbsolutePdfPath,
   type DesktopShowPdfMessage,
 } from '../desktopPdfMessages';
+import { createDialogCloseButton } from './dialogCloseButton';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
 /**
@@ -82,16 +81,13 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
     body.append(header, frame);
     d.append(body);
 
-    const close = document.createElement('wa-button');
-    close.classList.add('desktop-pdf-close');
-    close.setAttribute('appearance', 'plain');
-    close.setAttribute('size', 'small');
-    close.setAttribute('aria-label', 'Close PDF preview');
-    close.setAttribute('title', 'Close PDF preview');
-    render(waIcon('xmark'), close);
-    close.addEventListener('click', () => {
-      d.open = false;
-    });
+    const close = createDialogCloseButton(
+      'desktop-pdf-close',
+      'Close PDF preview',
+      () => {
+        d.open = false;
+      },
+    );
     d.append(close);
 
     // `wa-hide` fires for every close (close button, Escape, close()); open()

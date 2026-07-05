@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { ensureFileOpen } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
@@ -10,6 +9,7 @@ import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 // Local imports
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'LinterUtils';
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
