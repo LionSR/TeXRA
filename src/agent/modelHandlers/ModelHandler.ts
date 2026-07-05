@@ -141,6 +141,8 @@ const END_TURN_REASONS: ProviderStopReason[] = [
  * @template U Provider-specific usage type
  * @template T Provider-specific tool call type
  * @template C Provider-specific client type
+ * @template Resp Provider-specific response object type
+ * @template Media Provider-specific media content block type
  */
 export abstract class ModelHandler<
   M extends ProviderMessage = ProviderMessage,
@@ -148,6 +150,7 @@ export abstract class ModelHandler<
   T extends SdkToolCall = SdkToolCall,
   C = unknown,
   Resp = unknown,
+  Media = unknown,
 > {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
@@ -647,7 +650,7 @@ export abstract class ModelHandler<
    */
   protected async createMediaMessage(
     mediaFiles: FileLocation[],
-  ): Promise<ReturnType<typeof this.createMediaContent>> {
+  ): Promise<Media[]> {
     const { entries, results } =
       await this.mediaProcessor.loadEntries(mediaFiles);
     this.mediaProcessor.logResults(results);
@@ -839,7 +842,7 @@ export abstract class ModelHandler<
    * Formats image content into provider-specific message format.
    * @returns Array of formatted image/document content objects
    */
-  abstract createMediaContent(mediaMessage: MediaEntry[]): any[];
+  abstract createMediaContent(mediaMessage: MediaEntry[]): Media[];
 
   /**
    * Extracts the response text and metadata from the model's response object

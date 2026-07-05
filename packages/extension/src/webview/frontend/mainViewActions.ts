@@ -57,7 +57,11 @@ import {
   workflowInstruction$,
 } from './mainViewState';
 import { saveState } from './persistence';
-import { FILE_UPDATE_COMMANDS, ONBOARDING_PLACEHOLDERS } from './store';
+import {
+  FILE_UPDATE_COMMANDS,
+  KEY_TO_FILE_TYPE,
+  ONBOARDING_PLACEHOLDERS,
+} from './store';
 
 export type MainActionPlan =
   | { readonly valid: false; readonly message: string }
@@ -194,7 +198,7 @@ export function updateMultiFiles(
   multiFiles$.set({ ...multiFiles$.get(), [listId]: files });
   saveState();
 
-  const fileType = listId.replace('Files', '') as MultipleDocumentFileType;
+  const fileType = KEY_TO_FILE_TYPE[listId];
   const command = FILE_UPDATE_COMMANDS[fileType];
   if (command) {
     postMessage(command, { fileType, files });

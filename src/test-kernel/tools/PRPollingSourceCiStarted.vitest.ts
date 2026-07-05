@@ -16,6 +16,19 @@ import type {
 // Local imports - test support
 import { mockGitHubClient } from '../support/githubClientMock';
 
+interface CurrentShaState {
+  sha: string;
+  ciStarted: boolean;
+  ciComplete: boolean;
+  ciPassed: boolean;
+  checkRunsCache?: {
+    etagsByPage: Map<number, string>;
+    pagesByPage: Map<number, GhCheckRun[]>;
+    lastTotalCount: number;
+  };
+  pendingAnnotationRuns: GhCheckRun[];
+}
+
 interface CiStartedState {
   pr: { owner: string; repo: string; pullNumber: number };
   slug: string;
@@ -30,11 +43,8 @@ interface CiStartedState {
   reviews: TestDedupedResource<GhReview>;
   lastFailedCheckKeys: Set<string>;
   lastAnnotationKeys: Set<string>;
-  pendingAnnotationRuns: GhCheckRun[];
-  ciStartedSha: string | undefined;
-  ciCompleteSha: string | undefined;
-  ciPassedSha: string | undefined;
   headSha: string | undefined;
+  currentShaState: CurrentShaState | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
   mergeableState: string | undefined;
@@ -43,11 +53,6 @@ interface CiStartedState {
     issueComments?: string;
     reviewComments?: string;
     reviews?: string;
-  };
-  checkRunsCache?: {
-    etagsByPage: Map<number, string>;
-    pagesByPage: Map<number, GhCheckRun[]>;
-    lastTotalCount: number;
   };
   lastSuccessAt: number;
   consecutiveFailures: number;
@@ -76,6 +81,21 @@ function testDedupedResource<T>(): TestDedupedResource<T> {
   };
 }
 
+function makeCurrentShaState(
+  sha: string,
+  overrides: Partial<Omit<CurrentShaState, 'sha'>> = {},
+): CurrentShaState {
+  return {
+    sha,
+    ciStarted: false,
+    ciComplete: false,
+    ciPassed: false,
+    checkRunsCache: undefined,
+    pendingAnnotationRuns: [],
+    ...overrides,
+  };
+}
+
 function createState(
   events: string[],
   overrides: Partial<CiStartedState> = {},
@@ -92,11 +112,8 @@ function createState(
     reviews: testDedupedResource(),
     lastFailedCheckKeys: new Set(),
     lastAnnotationKeys: new Set(),
-    pendingAnnotationRuns: [],
-    ciStartedSha: undefined,
-    ciCompleteSha: undefined,
-    ciPassedSha: undefined,
     headSha: SHA,
+    currentShaState: makeCurrentShaState(SHA),
     state: 'open',
     merged: false,
     mergeableState: 'clean',
@@ -199,14 +216,14 @@ describe('PRPollingSource CI-started events', () => {
   it('keeps CI-started events disabled by default while recording observed runs', async () => {
     const { ghGet, source } = await createHarness();
     const events: string[] = [];
-    const state = createState(events, { ciStartedSha: undefined });
+    const state = createState(events);
 
     queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
 
     await source.pollOne('owner/repo/pulls/7', state);
 
     expect(events).toEqual([]);
-    expect(state.ciStartedSha).toBe(SHA);
+    expect(state.currentShaState?.ciStarted).toBe(true);
   });
 
   it.each([
@@ -223,8 +240,8 @@ describe('PRPollingSource CI-started events', () => {
     const state = createState(events, {
       initialized: false,
       headSha: undefined,
+      currentShaState: undefined,
       state: undefined,
-      ciStartedSha: undefined,
     });
 
     queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
@@ -232,7 +249,8 @@ describe('PRPollingSource CI-started events', () => {
     await source.pollOne('owner/repo/pulls/7', state);
 
     expect(events).toEqual([]);
-    expect(state.ciStartedSha).toBe(SHA);
+    expect(state.currentShaState?.sha).toBe(SHA);
+    expect(state.currentShaState?.ciStarted).toBe(true);
   });
 
   it('emits a CI-started event once when check runs first appear', async () => {
@@ -240,7 +258,7 @@ describe('PRPollingSource CI-started events', () => {
       emitCiStartedEvents: true,
     });
     const events: string[] = [];
-    const state = createState(events, { ciStartedSha: undefined });
+    const state = createState(events);
 
     queuePollResponses(ghGet, SHA, [checkRun(1, 'lint'), checkRun(2, 'test')]);
 
@@ -250,7 +268,7 @@ describe('PRPollingSource CI-started events', () => {
     expect(events[0]).toContain('CI triggered');
     expect(events[0]).toContain('distinct check names');
     expect(events[0]).not.toContain('workflow');
-    expect(state.ciStartedSha).toBe(SHA);
+    expect(state.currentShaState?.ciStarted).toBe(true);
 
     queuePollResponses(ghGet, SHA, [checkRun(1, 'lint'), checkRun(2, 'test')]);
 
@@ -266,7 +284,7 @@ describe('PRPollingSource CI-started events', () => {
     const events: string[] = [];
     const state = createState(events, {
       headSha: OLD_SHA,
-      ciStartedSha: OLD_SHA,
+      currentShaState: makeCurrentShaState(OLD_SHA, { ciStarted: true }),
     });
 
     queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
@@ -275,6 +293,7 @@ describe('PRPollingSource CI-started events', () => {
 
     expect(events).toHaveLength(1);
     expect(events[0]).toContain('(head abcdef1)');
-    expect(state.ciStartedSha).toBe(SHA);
+    expect(state.currentShaState?.sha).toBe(SHA);
+    expect(state.currentShaState?.ciStarted).toBe(true);
   });
 });

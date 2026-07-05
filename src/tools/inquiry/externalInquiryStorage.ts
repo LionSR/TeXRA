@@ -33,30 +33,135 @@ const logger = createChannelTrace('ExternalInquiryStorage');
 // Schemas
 // ============================================================================
 
-const TurnBaseShape = {
+/**
+ * Fields every inquiry turn carries regardless of lifecycle state —
+ * including dispatch metadata (`suggestSearch`/`attachFiles`) which is
+ * persisted so the panel re-renders identically after reload, whether
+ * or not the turn has since been answered.
+ */
+const InquiryTurnBaseShape = {
   turnIndex: z.int().positive(),
   timestamp: z.string().min(1),
   question: z.string(),
   context: z.string().nullish(),
   questionRelativePath: z.string().min(1),
   contextRelativePath: z.string().nullish(),
-  /** Set for legacy single-shot turns. New open turns omit this. */
-  answerRelativePath: z.string().nullish(),
-  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
-  /** Set when an answer has been recorded for this turn. */
-  answer: z.string().nullish(),
-  answeredAt: z.string().nullish(),
-  /** Persisted dispatch metadata so the panel re-renders identically after reload. */
   suggestSearch: z.boolean().nullish(),
   attachFiles: z.array(z.string()).nullish(),
-  /** Open-turn draft state, debounced by the panel. */
+};
+
+/** Awaiting a user answer. Only state that carries a panel draft. */
+const OpenInquiryTurnSchema = z.object({
+  ...InquiryTurnBaseShape,
+  kind: z.literal('open'),
+  draft: InquiryDraftSchema.nullish(),
+});
+export type OpenInquiryTurn = z.infer<typeof OpenInquiryTurnSchema>;
+
+/** Answer recorded and available inline — the steady-state "done" shape. */
+const AnsweredInquiryTurnSchema = z.object({
+  ...InquiryTurnBaseShape,
+  kind: z.literal('answered'),
+  answer: z.string(),
+  answeredAt: z.string().min(1),
+  answerRelativePath: z.string().min(1),
+  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+});
+export type AnsweredInquiryTurn = z.infer<typeof AnsweredInquiryTurnSchema>;
+
+/**
+ * Legacy single-shot turn whose answer text still lives only on disk
+ * (`answerRelativePath`) and hasn't been hydrated into `answer` yet.
+ * `hydrateAnswersFromDisk` (invoked from `readExternalInquiryThread`)
+ * always attempts to promote these to `answered` on read; this variant
+ * only survives when the on-disk answer file is itself unreadable or
+ * missing (see the catch in `hydrateAnswersFromDisk`).
+ */
+const AnsweredUnhydratedInquiryTurnSchema = z.object({
+  ...InquiryTurnBaseShape,
+  kind: z.literal('answeredUnhydrated'),
+  answerRelativePath: z.string().min(1),
+  answeredAt: z.string().nullish(),
+  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+});
+export type AnsweredUnhydratedInquiryTurn = z.infer<
+  typeof AnsweredUnhydratedInquiryTurnSchema
+>;
+
+const CanonicalTurnRecordSchema = z.discriminatedUnion('kind', [
+  OpenInquiryTurnSchema,
+  AnsweredInquiryTurnSchema,
+  AnsweredUnhydratedInquiryTurnSchema,
+]);
+export type ExternalInquiryTurnRecord = z.infer<
+  typeof CanonicalTurnRecordSchema
+>;
+
+/**
+ * Raw, untagged shape turns were persisted in prior to this discriminated
+ * union — every lifecycle field is nullable and there is no `kind`. Parsing
+ * always goes through this shape first so historical manifest.json files
+ * (which never wrote `kind`) keep loading; `toCanonicalTurn` below is the
+ * single, centralized place that infers the lifecycle state from field
+ * presence, replacing the ad hoc `turn.answer`/`turn.answerRelativePath`
+ * probes that used to be scattered across this module's consumers.
+ */
+const RawTurnShape = {
+  ...InquiryTurnBaseShape,
+  answerRelativePath: z.string().nullish(),
+  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+  answer: z.string().nullish(),
+  answeredAt: z.string().nullish(),
   draft: InquiryDraftSchema.nullish(),
 };
 
-const ExternalInquiryTurnRecordSchema = z.looseObject(TurnBaseShape);
-export type ExternalInquiryTurnRecord = z.infer<
-  typeof ExternalInquiryTurnRecordSchema
->;
+function toCanonicalTurn(
+  raw: z.infer<typeof RawTurnRecordSchema>,
+): ExternalInquiryTurnRecord {
+  const base = {
+    turnIndex: raw.turnIndex,
+    timestamp: raw.timestamp,
+    question: raw.question,
+    context: raw.context ?? undefined,
+    questionRelativePath: raw.questionRelativePath,
+    contextRelativePath: raw.contextRelativePath ?? undefined,
+    suggestSearch: raw.suggestSearch ?? undefined,
+    attachFiles: raw.attachFiles ?? undefined,
+  };
+
+  if (raw.answer != null) {
+    return {
+      ...base,
+      kind: 'answered',
+      answer: raw.answer,
+      answeredAt: raw.answeredAt || raw.timestamp,
+      answerRelativePath:
+        raw.answerRelativePath ||
+        normalizeFilePath(path.join(turnDir(raw.turnIndex), 'answer.txt')),
+      sessionLinks: raw.sessionLinks ?? undefined,
+    };
+  }
+
+  if (raw.answerRelativePath) {
+    return {
+      ...base,
+      kind: 'answeredUnhydrated',
+      answerRelativePath: raw.answerRelativePath,
+      answeredAt: raw.answeredAt || undefined,
+      sessionLinks: raw.sessionLinks ?? undefined,
+    };
+  }
+
+  return {
+    ...base,
+    kind: 'open',
+    draft: raw.draft ?? undefined,
+  };
+}
+
+const RawTurnRecordSchema = z.looseObject(RawTurnShape);
+const ExternalInquiryTurnRecordSchema =
+  RawTurnRecordSchema.transform(toCanonicalTurn);
 
 const ManifestBaseShape = {
   threadId: ExternalInquiryThreadIdSchema,
@@ -125,13 +230,13 @@ export interface ExternalInquiryThreadMirrorPaths {
 export interface PersistedOpenTurn {
   threadId: ExternalInquiryThreadId;
   manifest: ExternalInquiryThreadManifest;
-  turn: ExternalInquiryTurnRecord;
+  turn: OpenInquiryTurn;
 }
 
 export interface PersistedAnsweredTurn {
   threadId: ExternalInquiryThreadId;
   manifest: ExternalInquiryThreadManifest;
-  turn: ExternalInquiryTurnRecord;
+  turn: AnsweredInquiryTurn;
   executionMirrorPaths?: ExternalInquiryExecutionMirrorPaths;
 }
 
@@ -188,10 +293,10 @@ function threadTurnDir(
 }
 
 /**
- * Hydrate inline `answer` from disk for any turn that has an
- * `answerRelativePath` but no inline `answer` field. Legacy single-shot
- * manifests stored the answer text only on disk; the new canonical
- * shape carries it inline so renderers don't need a second read.
+ * Hydrate inline `answer` from disk for any turn still tagged
+ * `answeredUnhydrated`. Legacy single-shot manifests stored the answer
+ * text only on disk; the canonical `answered` shape carries it inline so
+ * renderers don't need a second read.
  */
 async function hydrateAnswersFromDisk(
   threadId: ExternalInquiryThreadId,
@@ -202,14 +307,19 @@ async function hydrateAnswersFromDisk(
 }> {
   let didHydrate = false;
   const turns = await Promise.all(
-    manifest.turns.map(async (turn) => {
-      if (turn.answer || !turn.answerRelativePath) return turn;
+    manifest.turns.map(async (turn): Promise<ExternalInquiryTurnRecord> => {
+      if (turn.kind !== 'answeredUnhydrated') return turn;
       try {
         const content = await GlobalStorageFS.read(
           path.join(threadDir(threadId), turn.answerRelativePath),
         );
         didHydrate = true;
-        return { ...turn, answer: content };
+        return {
+          ...turn,
+          kind: 'answered',
+          answer: content,
+          answeredAt: turn.answeredAt || manifest.updatedAt,
+        };
       } catch {
         // Answer file unreadable/missing — leave the turn unhydrated (benign:
         // the manifest still loads, the answer is simply not inlined yet).
@@ -288,9 +398,8 @@ export async function ensureExternalInquiryThreadMirror(params: {
 async function mirrorThreadToExecution(params: {
   executionId: ExecutionId;
   threadId: ExternalInquiryThreadId;
-  turn: ExternalInquiryTurnRecord;
+  turn: AnsweredInquiryTurn;
 }): Promise<ExternalInquiryExecutionMirrorPaths | undefined> {
-  if (!params.turn.answerRelativePath) return undefined;
   const mirror = await ensureExternalInquiryThreadMirror({
     executionId: params.executionId,
     threadId: params.threadId,
@@ -410,14 +519,14 @@ export async function recordOpenQuestion(params: {
     }
     await Promise.all(writeOps);
 
-    const turn: ExternalInquiryTurnRecord = {
+    const turn: OpenInquiryTurn = {
       turnIndex,
       timestamp,
       question: params.question,
       context: trimmedContext,
       questionRelativePath,
       contextRelativePath,
-      // answerRelativePath, answer, answeredAt all omitted — open turn.
+      kind: 'open',
       suggestSearch: params.suggestSearch ?? undefined,
       attachFiles: params.attachFiles?.length ? params.attachFiles : undefined,
     };
@@ -457,7 +566,7 @@ export async function recordAnswerForOpenTurn(params: {
     if (existing.turns.length === 0) return null;
 
     const lastTurn = existing.turns.at(-1)!;
-    if (lastTurn.answer) return null;
+    if (lastTurn.kind !== 'open') return null;
 
     const timestamp = new Date().toISOString();
     const turnPath = threadTurnDir(params.threadId, lastTurn.turnIndex);
@@ -470,13 +579,20 @@ export async function recordAnswerForOpenTurn(params: {
       params.answer,
     );
 
-    const answeredTurn: ExternalInquiryTurnRecord = {
-      ...lastTurn,
+    const answeredTurn: AnsweredInquiryTurn = {
+      turnIndex: lastTurn.turnIndex,
+      timestamp: lastTurn.timestamp,
+      question: lastTurn.question,
+      context: lastTurn.context,
+      questionRelativePath: lastTurn.questionRelativePath,
+      contextRelativePath: lastTurn.contextRelativePath,
+      suggestSearch: lastTurn.suggestSearch,
+      attachFiles: lastTurn.attachFiles,
+      kind: 'answered',
       answer: params.answer,
       answeredAt: timestamp,
       answerRelativePath,
       sessionLinks,
-      draft: undefined,
     };
 
     const nextManifest: ExternalInquiryThreadManifest = {
@@ -551,9 +667,9 @@ export async function persistOpenTurnDraft(params: {
       return;
 
     const lastTurn = existing.turns.at(-1)!;
-    if (lastTurn.answer) return;
+    if (lastTurn.kind !== 'open') return;
 
-    const nextTurn: ExternalInquiryTurnRecord = {
+    const nextTurn: OpenInquiryTurn = {
       ...lastTurn,
       draft: params.draft ?? undefined,
     };
@@ -572,7 +688,7 @@ export function getOpenTurnDraft(
 ): InquiryDraft | undefined {
   if (manifest.status !== 'open') return undefined;
   const lastTurn = manifest.turns.at(-1);
-  if (!lastTurn || lastTurn.answer) return undefined;
+  if (!lastTurn || lastTurn.kind !== 'open') return undefined;
   return lastTurn.draft ?? undefined;
 }
 
@@ -584,9 +700,10 @@ export function manifestToTranscript(
     timestamp: turn.timestamp,
     question: turn.question,
     context: turn.context ?? undefined,
-    answer: turn.answer ?? undefined,
-    answeredAt: turn.answeredAt ?? undefined,
-    sessionLinks: turn.sessionLinks ?? undefined,
+    answer: turn.kind === 'answered' ? turn.answer : undefined,
+    answeredAt: turn.kind === 'answered' ? turn.answeredAt : undefined,
+    sessionLinks:
+      turn.kind !== 'open' ? (turn.sessionLinks ?? undefined) : undefined,
   }));
 }
 
