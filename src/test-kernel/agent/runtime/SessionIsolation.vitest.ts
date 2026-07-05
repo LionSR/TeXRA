@@ -21,7 +21,7 @@ import {
   defaultSession,
 } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { IInterruptible } from '@agent/runtime/InterruptRegistry';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
@@ -58,7 +58,7 @@ async function initTestPlatform() {
 function createLifecycleContext(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  streamStatus: StreamStatusRegistry,
+  streamStatus: StreamStatusMachine,
   session: SessionHandle,
 ): AgentLaunchContext {
   const explicit = createRecordingHost();
@@ -170,7 +170,7 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
     await initTestPlatform();
     const executionId = 'execution:iso-track' as ExecutionId;
     const streamId = 'stream:iso-track' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const sessionB = new SessionHandle();
     const ctx = createLifecycleContext(
       executionId,

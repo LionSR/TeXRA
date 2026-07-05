@@ -30,5 +30,3 @@ export const CLI_SETTING_PATHS = [
   'chat',
   'run',
 ] as const;
-
-export type CliSettingPath = (typeof CLI_SETTING_PATHS)[number];

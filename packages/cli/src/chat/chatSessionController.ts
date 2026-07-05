@@ -51,7 +51,7 @@ import { generateExecutionId } from '@utils/core/executionId';
 
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
-import { cliState, patchStream } from './tui/state/cliState';
+import { cliState, patchSessionMeta, patchStream } from './tui/state/cliState';
 import {
   chatTuiCanStartRootRun,
   markChatTuiRunCompleted,
@@ -247,8 +247,7 @@ export function createChatSessionController(
   const startRootRun = (config: AgentConfigPayload): void => {
     const currentModel = config.model;
     const sessionContext = getSessionContext(currentModel);
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
+    patchSessionMeta({
       agent: config.agent,
       model: config.model,
       canDelegate: chatAgentSupportsDelegation(config.agent),
@@ -353,8 +352,7 @@ export function createChatSessionController(
 
     const currentModel = resolution.config.model;
     const sessionContext = getSessionContext(currentModel);
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
+    patchSessionMeta({
       agent: resolution.config.agent,
       model: resolution.config.model,
       modelSource: 'history',

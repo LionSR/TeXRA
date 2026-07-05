@@ -16,7 +16,7 @@ import {
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import {
-  StreamStatusRegistry,
+  StreamStatusMachine,
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -61,7 +61,7 @@ describe('ToolUseWaitNode', () => {
           return null;
         },
       },
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
 
@@ -121,7 +121,7 @@ describe('ToolUseWaitNode', () => {
           return null;
         },
       },
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
 
@@ -175,7 +175,7 @@ describe('ToolUseWaitNode', () => {
         hasQueuedFollowUp: () => false,
         waitForFollowUp: vi.fn(),
       },
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
 
@@ -221,7 +221,7 @@ describe('ToolUseWaitNode', () => {
         createUserFollowUpMessages: vi.fn(async () => []),
       },
       runtimeHost,
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
 
@@ -295,7 +295,7 @@ describe('ToolUseWaitNode', () => {
       },
       stopAfterCycle: true,
       streamId,
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
     } as unknown as ToolUseServices;
     const node = new ToolUseWaitNode().setServices(services);
 
@@ -352,7 +352,7 @@ describe('ToolUseWaitNode', () => {
     );
     const onFollowUpConsumed = vi.fn();
     const waitForFollowUp = vi.fn();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const runtimeHost = { emit: vi.fn() };
     const services = {
       checkInterruption: () => false,
@@ -454,7 +454,7 @@ describe('ToolUseWaitNode', () => {
         waitForFollowUp,
       },
       streamId,
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
     } as unknown as ToolUseServices;
     const node = new ToolUseWaitNode().setServices(services);
 
@@ -522,7 +522,7 @@ describe('ToolUseWaitNode', () => {
         waitForFollowUp,
       },
       streamId,
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
     } as unknown as ToolUseServices;
     const node = new ToolUseWaitNode().setServices(services);
 
@@ -567,7 +567,7 @@ describe('ToolUseWaitNode', () => {
         waitForFollowUp,
       },
       streamId,
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus: new StreamStatusMachine(),
     } as unknown as ToolUseServices;
     const node = new ToolUseWaitNode().setServices(services);
 
@@ -591,7 +591,7 @@ describe('ToolUseWaitNode', () => {
 
   it('updates the injected stream status owner while waiting and resuming', async () => {
     const streamId = 'wait-node-owner' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const shared: ToolUseRunShared = {
       messages: [],
       shouldSkipCycle: false,
@@ -648,7 +648,7 @@ describe('ToolUseWaitNode', () => {
 
   it('repairs retry-cancelled parent cycles to waiting before blocking', async () => {
     const streamId = 'wait-node-retry-cancelled-wait' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const runtimeHost = { emit: vi.fn() };
     const waitForFollowUp = vi.fn(async () => null);
     const services = {
@@ -716,7 +716,7 @@ describe('ToolUseWaitNode', () => {
     );
     const info = vi.fn();
     const runtimeHost = { emit: vi.fn() };
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const services = {
       checkInterruption: () => false,
       logger: { emit: vi.fn(), error: vi.fn(), info },
