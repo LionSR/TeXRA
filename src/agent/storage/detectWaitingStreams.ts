@@ -5,46 +5,9 @@
  * mid-session. These streams can be resumed when the user sends a follow-up.
  */
 
-import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getExecutionStore } from './ExecutionKVStore';
-
-/**
- * Check if a single stream has a valid, resumable flow record.
- *
- * Used for lazy detection when a user sends a follow-up to a stream
- * that wasn't detected at startup (or when startup detection is skipped).
- *
- * Note: We read and validate the record rather than just checking existence,
- * because a corrupted/truncated record (e.g., from a crash during write)
- * would cause resume to fail, leaving the stream stuck in WAITING state.
- *
- * @returns true if a valid flow record exists (session can be resumed)
- */
-export async function hasPersistedFlowRecord(
-  executionId: ExecutionId,
-): Promise<boolean> {
-  try {
-    const kv = getExecutionStore(executionId);
-    const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
-    // Use truthy check to match resume logic in SessionResumeRetrieval.ts
-    // This rejects null, undefined, and empty objects consistently
-    return !!flowRecord?.shared;
-  } catch (err) {
-    // A corrupted/unreadable record means the stream isn't resumable; treat as
-    // no record, but log so silent KV-read failures are diagnosable.
-    logger.debug(
-      'DetectWaitingStreams',
-      `Failed to read persisted flow record for ${executionId}: ${toErrorMessage(
-        err,
-      )}`,
-    );
-    return false;
-  }
-}
+import { deriveResumability } from './resumability';
 
 /**
  * Detect streams that have persisted flow state and should be marked as WAITING.
@@ -60,7 +23,7 @@ export async function detectWaitingStreams(
   executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
 ): Promise<Set<StreamTabId>> {
   const checks = Array.from(executionIdMap, async ([streamId, executionId]) =>
-    (await hasPersistedFlowRecord(executionId)) ? streamId : null,
+    (await deriveResumability(executionId)).resumable ? streamId : null,
   );
   const results = await Promise.all(checks);
   return new Set(results.filter(filterNotNull));

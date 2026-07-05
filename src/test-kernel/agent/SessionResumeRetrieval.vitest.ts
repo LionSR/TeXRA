@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
 import { getExecutionStore } from '@agent/storage';
@@ -155,6 +155,89 @@ describe('retrieveSessionResumeData', () => {
         content: 'Continue the legacy conversation.',
       },
     ]);
+  });
+
+  it('throws when resumable tool-use storage cannot be read', async () => {
+    const executionId = 'abc129' as ExecutionId;
+    const streamId = 'chat@gpt54#abc129' as StreamTabId;
+    const store = getExecutionStore(executionId);
+    await store.write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        messages: [],
+        shouldSkipCycle: false,
+        stateSlices: {
+          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+          userChannels: {
+            input: Object.freeze({ MODEL: 'gpt54' }),
+            transient: {},
+          },
+        },
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+    const originalRead = store.read.bind(store);
+    const readSpy = vi.spyOn(store, 'read').mockImplementation(async (key) => {
+      if (key === flowKey(executionId)) {
+        throw new Error('KV timeout');
+      }
+      return originalRead(key);
+    });
+
+    try {
+      await expect(
+        retrieveSessionResumeData(
+          streamId,
+          executionId,
+          agentConfigToTaskState(CONFIG),
+        ),
+      ).rejects.toThrow(
+        `Failed to retrieve tool-use resume data for stream: ${streamId}`,
+      );
+    } finally {
+      readSpy.mockRestore();
+    }
+  });
+
+  it('throws when tool-use metadata is invalid even if the flow record is valid', async () => {
+    const executionId = 'abc130' as ExecutionId;
+    const streamId = 'chat@gpt54#abc130' as StreamTabId;
+    const store = getExecutionStore(executionId);
+    await store.write('meta', {
+      schemaVersion: 999,
+      timestamp: '2026-07-05T00:00:00.000Z',
+    });
+    await store.write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        messages: [],
+        shouldSkipCycle: false,
+        stateSlices: {
+          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+          userChannels: {
+            input: Object.freeze({ MODEL: 'gpt54' }),
+            transient: {},
+          },
+        },
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+
+    await expect(
+      retrieveSessionResumeData(
+        streamId,
+        executionId,
+        agentConfigToTaskState(CONFIG),
+      ),
+    ).rejects.toThrow(
+      `Failed to retrieve tool-use resume data for stream: ${streamId}`,
+    );
   });
 
   it('infers the legacy Google GenAI handler for old workflow transcripts', async () => {
