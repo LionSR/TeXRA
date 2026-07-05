@@ -104,25 +104,14 @@ export class StreamStatusMachine {
     this.reservations.delete(stream);
   }
 
-  clearRunningSubstate(
-    stream: StreamTabId,
-    cause: StreamTransitionCause,
-    options: StreamStatusEmitOptions = {},
-  ): boolean {
-    const state = this.phases.get(stream);
-    if (state?.phase !== STREAM_PHASE.RUNNING || !state.substate) {
-      return false;
-    }
-    return this.transition(stream, STREAM_PHASE.RUNNING, cause, options);
-  }
-
   transition(
     stream: StreamTabId,
     to: StreamPhase,
     cause: StreamTransitionCause,
     options: StreamStatusEmitOptions = {},
   ): boolean {
-    const from = this.phases.get(stream)?.phase;
+    const previousState = this.phases.get(stream);
+    const from = previousState?.phase;
     const fromReservation = this.reservations.has(stream);
     const tableFrom = fromReservation
       ? to === STREAM_PHASE.RUNNING
@@ -132,6 +121,17 @@ export class StreamStatusMachine {
     if (!canTransitionStreamPhase(tableFrom, to, cause)) return false;
 
     this.reservations.delete(stream);
+    // The table decides whether a transition is permitted, but not whether a
+    // permitted transition changes state. A steady RUNNING resume with no
+    // substate to clear must stay silent, while a real substate clear still
+    // writes and publishes from this single status owner.
+    if (
+      !fromReservation &&
+      from === to &&
+      previousState?.substate === options.substate
+    ) {
+      return true;
+    }
     this.phases.set(stream, {
       phase: to,
       ...(options.substate ? { substate: options.substate } : {}),
