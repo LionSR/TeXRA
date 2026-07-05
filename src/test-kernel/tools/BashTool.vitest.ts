@@ -460,6 +460,11 @@ describe('BashTool', () => {
       typeof deliveredText === 'string' && deliveredText.includes(tailMarker),
       'Delivered follow-up should retain the most recent output (tail)',
     );
+    assert.match(
+      deliveredText ?? '',
+      /<output-elided>[\d,]+ characters elided<\/output-elided>/,
+      'Delivered follow-up should note how many characters sit between head and tail',
+    );
   });
 
   it('accepts optional command descriptions without passing them to the shell', async () => {
