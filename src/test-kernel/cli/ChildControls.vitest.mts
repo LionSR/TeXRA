@@ -1116,6 +1116,57 @@ describe('CLI child execution controls', () => {
     ]);
   });
 
+  it('surfaces PgUp/PgDn and g/G hints once the terminal is wide enough', () => {
+    expect(
+      taskDetailKeyHintsForColumns({
+        availableColumns: 60,
+        canFocusStream: true,
+        canKill: true,
+        showScrollHint: true,
+      }),
+    ).not.toContainEqual({ key: 'PgUp/PgDn', action: 'page' });
+    expect(
+      taskDetailKeyHintsForColumns({
+        availableColumns: 84,
+        canFocusStream: true,
+        canKill: true,
+        showScrollHint: true,
+      }),
+    ).toEqual([
+      { key: '↑/↓', action: 'scroll' },
+      { key: 'PgUp/PgDn', action: 'page' },
+      { key: 'g/G', action: 'top/bottom' },
+      { key: 'f', action: 'focus stream' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'back' },
+    ]);
+    expect(
+      taskDetailKeyHintsForColumns({
+        availableColumns: undefined,
+        canFocusStream: true,
+        canKill: true,
+        showScrollHint: true,
+      }),
+    ).toEqual([
+      { key: '↑/↓', action: 'scroll' },
+      { key: 'PgUp/PgDn', action: 'page' },
+      { key: 'g/G', action: 'top/bottom' },
+      { key: 'f', action: 'focus stream' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'back' },
+    ]);
+    // No content to page/jump through: the paging hints stay hidden even
+    // when there's plenty of width, same as the arrow-key scroll hint.
+    expect(
+      taskDetailKeyHintsForColumns({
+        availableColumns: 84,
+        canFocusStream: true,
+        canKill: true,
+        showScrollHint: false,
+      }),
+    ).not.toContainEqual({ key: 'PgUp/PgDn', action: 'page' });
+  });
+
   it('budgets compact task detail output by wrapped terminal rows', () => {
     expect(taskDetailWrappedRowCount('abcd', 4)).toBe(1);
     expect(taskDetailWrappedRowCount('abcde', 4)).toBe(2);
