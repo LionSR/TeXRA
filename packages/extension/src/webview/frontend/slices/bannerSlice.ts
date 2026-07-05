@@ -27,7 +27,13 @@ function shouldForceApiKeyBanner(): boolean {
   return option?.requiresKey ?? false;
 }
 
-export const bannerHandlers: MainViewHandlerRegistry = {
+// `MainViewHandlerRegistry` is now exhaustive (every MainView outbound
+// command needs a real handler or `unsupported(...)` — see
+// `@shared/utils/dispatcher`). This slice only owns banner commands, so it's
+// typed as a `satisfies Partial<...>` subset rather than the full registry;
+// `messageDispatcher.ts` spreads all six slices together and is the actual
+// exhaustiveness checkpoint TypeScript enforces.
+export const bannerHandlers = {
   [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (message) => {
     apiKeyBanner$.set({
       visible: true,
@@ -69,4 +75,4 @@ export const bannerHandlers: MainViewHandlerRegistry = {
   [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () => {
     loginBannerVisible$.set(false);
   },
-};
+} satisfies Partial<MainViewHandlerRegistry>;

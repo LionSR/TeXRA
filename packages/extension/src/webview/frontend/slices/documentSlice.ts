@@ -64,7 +64,10 @@ function hasCommitValue(value: string): boolean {
   });
 }
 
-export const documentHandlers: MainViewHandlerRegistry = {
+// `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
+// owns only document commands; see bannerSlice.ts for why (registry is now
+// exhaustive, messageDispatcher.ts is the real coverage checkpoint).
+export const documentHandlers = {
   [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: (message) => {
     const files = message.files ?? [];
     fileOptions$.set({ ...fileOptions$.get(), editedFile: files });
@@ -195,4 +198,4 @@ export const documentHandlers: MainViewHandlerRegistry = {
     multiFiles$.set({ ...mf, [listId]: merged });
     saveState();
   },
-};
+} satisfies Partial<MainViewHandlerRegistry>;

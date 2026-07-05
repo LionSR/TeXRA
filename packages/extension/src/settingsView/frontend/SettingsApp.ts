@@ -26,6 +26,7 @@ import {
   type SettingsTabName,
   type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
+import { assertSupported, isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
@@ -107,6 +108,7 @@ import {
   toolDashboardItems,
   toolDashboardLoaded,
   toolUseAgents,
+  unsupportedCommands,
   userEmail,
   workflowAgents,
   type ProviderKeyModalTarget,
@@ -191,11 +193,18 @@ export class SettingsApp extends SettingsAppBase {
   // from the domain slices under `./slices/` (see `messageDispatcher.ts`).
   // HISTORY_CLEARED is overridden here to additionally clear the
   // `<history-tab>` search box — a DOM ref this component owns via `@query`,
-  // not signal state, so it can't live in the slice itself.
+  // not signal state, so it can't live in the slice itself. `assertSupported`
+  // narrows the known-real `historySlice` handler out of the `Handler |
+  // Unsupported` union `SettingsViewOutboundHandlerRegistry` now requires
+  // (see `@shared/utils/dispatcher`) — this call site invokes a specific
+  // entry directly rather than going through the dispatcher, so it needs the
+  // narrowing dispatch itself would otherwise provide.
   private readonly messageHandlers: SettingsViewOutboundHandlerRegistry = {
     ...settingsViewHandlers,
     [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: (data) => {
-      settingsViewHandlers[SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]?.(data);
+      assertSupported(
+        settingsViewHandlers[SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED],
+      )(data);
       this.historyTab?.clearSearch();
     },
   };
@@ -600,7 +609,10 @@ export class SettingsApp extends SettingsAppBase {
   );
 
   private renderHeader(): TemplateResult {
-    const settingsButton = this.isDesktopHost
+    const settingsButton = isKnownUnsupported(
+      unsupportedCommands.get(),
+      SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+    )
       ? nothing
       : html`
           <wa-button
@@ -721,7 +733,12 @@ export class SettingsApp extends SettingsAppBase {
           @wa-tab-show=${this.handleTabShow}
         >
           ${SETTINGS_TABS.filter(
-            (tab) => tab.panel !== 'goal' || !desktopHost,
+            (tab) =>
+              tab.panel !== 'goal' ||
+              !isKnownUnsupported(
+                unsupportedCommands.get(),
+                SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+              ),
           ).map(
             (tab) =>
               html`<wa-tab panel=${tab.panel}
@@ -747,7 +764,10 @@ export class SettingsApp extends SettingsAppBase {
           </wa-tab-panel>
 
           ${
-            desktopHost
+            isKnownUnsupported(
+              unsupportedCommands.get(),
+              SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+            )
               ? nothing
               : html`
                   <wa-tab-panel name="goal">
@@ -759,6 +779,7 @@ export class SettingsApp extends SettingsAppBase {
           <wa-tab-panel name="history">
             <history-tab
               .items=${historyItems.get()}
+              .unsupportedCommands=${unsupportedCommands.get()}
               @history-action=${this.handleHistoryAction}
               @history-clear=${this.handleClearHistory}
             ></history-tab>
@@ -857,7 +878,10 @@ export class SettingsApp extends SettingsAppBase {
               .items=${toolDashboardItems.get()}
               .loaded=${toolDashboardLoaded.get()}
               .bashApprovalEnabled=${bashApprovalEnabled.get()}
-              .showDesktopCrashReporting=${this.isDesktopHost}
+              .showDesktopCrashReporting=${!isKnownUnsupported(
+                unsupportedCommands.get(),
+                SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,
+              )}
               .desktopCrashReportingEnabled=${desktopCrashReportingEnabled.get()}
               .desktopCrashReportingConfigured=${desktopCrashReportingConfigured.get()}
               @tool-open-url=${this.handleToolOpenUrl}

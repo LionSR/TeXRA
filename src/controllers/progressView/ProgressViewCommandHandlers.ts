@@ -149,10 +149,18 @@ export interface ProgressViewCommandActions {
  * commands are plain action plumbing; follow-up image persistence, the
  * bypass-toggle symmetry rules, and approval routing carry shared policy so
  * hosts do not each reimplement them.
+ *
+ * Returns only the subset of commands this factory owns (not the full
+ * exhaustive registry) via `satisfies Partial<...>`: `satisfies` still gives
+ * each handler below its correct per-command parameter type, but keeps the
+ * function's real return type to exactly the keys present here. Each host
+ * spreads this into its own registry alongside its host-specific commands
+ * (including `unsupported(...)` for anything it doesn't implement); that
+ * final spread is what TypeScript checks for full command coverage.
  */
 export function createProgressViewCommandHandlers(
   actions: ProgressViewCommandActions,
-): ProgressViewInboundHandlerRegistry {
+) {
   const { lifecycle, run, file, followUp, approval, externalInquiry } = actions;
   const { runtimeHost, showInfo } = actions.bypass;
 
@@ -338,7 +346,7 @@ export function createProgressViewCommandHandlers(
         externalInquiry.sessionContext,
       );
     },
-  };
+  } satisfies Partial<ProgressViewInboundHandlerRegistry>;
 }
 
 async function saveFollowUpImages(

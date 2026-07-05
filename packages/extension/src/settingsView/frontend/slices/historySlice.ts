@@ -13,7 +13,13 @@ import { toNewestFirstByTimestamp } from '@utils/core';
 
 import { historyItems } from '../settingsState';
 
-export const historyHandlers: SettingsViewOutboundHandlerRegistry = {
+// `SettingsViewOutboundHandlerRegistry` is now exhaustive (every SettingsView
+// outbound command needs a real handler or `unsupported(...)` — see
+// `@shared/utils/dispatcher`). This slice only owns history commands, so
+// it's typed as a `satisfies Partial<...>` subset rather than the full
+// registry; `messageDispatcher.ts` spreads all slices together and is the
+// actual exhaustiveness checkpoint TypeScript enforces.
+export const historyHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY]: (data) => {
     historyItems.set(
       toNewestFirstByTimestamp(data.historyItems, (item) => item.timestamp),
@@ -23,4 +29,4 @@ export const historyHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: () => {
     historyItems.set([]);
   },
-};
+} satisfies Partial<SettingsViewOutboundHandlerRegistry>;

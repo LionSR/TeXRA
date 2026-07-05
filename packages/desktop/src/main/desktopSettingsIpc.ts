@@ -6,7 +6,6 @@ import {
   isAllowedLatexInstallCommand,
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
-import { createSettingsViewCommandHandlers } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
@@ -64,8 +63,10 @@ import {
   type LatexSettingsStatus,
   type ProviderKeyStatus,
   type ReasoningLevel,
+  type SettingsViewInboundHandlerRegistry,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
+import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   BASH_APPROVAL_CONFIG_TARGET,
   buildApprovalSettingsMessage,
@@ -120,13 +121,14 @@ import {
   getCachedToolCheckResults,
   refreshDefaultDisabledToolCache,
 } from './desktopSettingsIpcHelpers.js';
+import {
+  createDesktopErrorReporter,
+  type DesktopCommandMessage,
+  type DesktopMessageHandler,
+} from './desktopIpcTypes.js';
 import type { ConfigProvider } from '@platform/interfaces/config';
 import type { StateStore } from '@platform/interfaces/state';
 import type { PlatformSecrets } from '@platform/secrets';
-import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
-} from './desktopIpcTypes.js';
 
 type ToolDashboardBuilder = (
   cachedResults?: ExternalToolCheckResult[],
@@ -196,7 +198,14 @@ export function createDesktopSettingsIpc(
 ): DesktopSettingsIpc {
   const workspaceState = options.workspaceState ?? platform().workspaceState;
   const globalState = options.globalState ?? platform().globalState;
-  const onError = options.onError ?? defaultOnError;
+  // Commands declared `unsupported(...)` in settingsHandlers below surface as
+  // a visible info dialog instead of a console-only error log.
+  const onError = createDesktopErrorReporter(
+    options.onError ?? defaultOnError,
+    (error) => {
+      void options.showInfoMessage?.(error.reason);
+    },
+  );
   const loadAgentRegistry = options.loadAgents ?? loadAgents;
   const loadAgentOptionsData =
     options.loadAgentOptionsData ?? computeAgentOptionsData;
@@ -503,12 +512,6 @@ export function createDesktopSettingsIpc(
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
     });
-  }
-
-  async function showUnsupportedHistoryAction(action: string): Promise<void> {
-    await options.showInfoMessage?.(
-      `${action} from history is not available in the desktop app yet.`,
-    );
   }
 
   async function postToolDashboardData(postOptions?: {
@@ -1103,10 +1106,64 @@ export function createDesktopSettingsIpc(
   const setAgent = (key: WorkspaceStateKey, value: string) =>
     updateAgentSetting(key, value);
 
-  // WEBVIEW_READY stays outside this registry: it is a broadcast in desktop so
-  // startup and onboarding handlers can observe it after settings handles it.
-  const settingsHandlers = createSettingsViewCommandHandlers({
-    memory: {
+  const settingsHandlers: SettingsViewInboundHandlerRegistry = {
+    // WEBVIEW_READY is intercepted in handleMessage below, before reaching
+    // the dispatcher, so this entry is never actually invoked — it exists
+    // only to satisfy the exhaustive registry type.
+    webviewReady: () => {},
+    // VS Code-only surfaces with no desktop equivalent.
+    openVscodeSettings: unsupported('No VS Code settings in the desktop app.'),
+    setProviderVscodeSetting: unsupported(
+      'VS Code provider settings are not applicable in the desktop app.',
+    ),
+    // Not yet wired on desktop.
+    selectAgent: unsupported(
+      'Selecting an agent from Settings is not available in the desktop app yet.',
+    ),
+    createAgent: unsupported(
+      'Creating custom agents is not available in the desktop app yet.',
+    ),
+    customizeAgent: unsupported(
+      'Customizing agents is not available in the desktop app yet.',
+    ),
+    deleteCustomAgent: unsupported(
+      'Deleting custom agents is not available in the desktop app yet.',
+    ),
+    viewRemoteAgentPrompt: unsupported(
+      'Viewing a remote agent prompt is not available in the desktop app yet.',
+    ),
+    getGitHubTokenStatus: unsupported(
+      'GitHub PR subscriptions are not available in the desktop app yet.',
+    ),
+    setGitHubToken: unsupported(
+      'GitHub PR subscriptions are not available in the desktop app yet.',
+    ),
+    removeGitHubToken: unsupported(
+      'GitHub PR subscriptions are not available in the desktop app yet.',
+    ),
+    openGitHubTokenUrl: unsupported(
+      'GitHub PR subscriptions are not available in the desktop app yet.',
+    ),
+    getPRSubscriptions: unsupported(
+      'GitHub PR subscriptions are not available in the desktop app yet.',
+    ),
+    unsubscribePR: unsupported(
+      'GitHub PR subscriptions are not available in the desktop app yet.',
+    ),
+    openPRSubscriptionStream: unsupported(
+      'GitHub PR subscriptions are not available in the desktop app yet.',
+    ),
+    getInlineCriticismEnabled: unsupported(
+      'Inline criticism is not available in the desktop app yet.',
+    ),
+    setInlineCriticismEnabled: unsupported(
+      'Inline criticism is not available in the desktop app yet.',
+    ),
+    getGoalList: unsupported('Goals are not available in the desktop app yet.'),
+    revealGoalStream: unsupported(
+      'Goals are not available in the desktop app yet.',
+    ),
+    ...{
       getMemoryData: () => postMemoryData(),
       getMemoryPreview: (data) => postMemoryPreview(data.storagePath),
       getMemoryEnabled: () => postMemoryEnabled(),
@@ -1117,17 +1174,27 @@ export function createDesktopSettingsIpc(
       pinMemory: (data) => setMemoryPinned(data.storagePath, true),
       unpinMemory: (data) => setMemoryPinned(data.storagePath, false),
     },
-    history: {
+    ...{
       getHistoryData: () => postHistoryData(),
       deleteAgent: (data) => deleteHistoryItem(data.historyId),
       clearHistory: () => clearHistory(),
-      rerunAgent: () => showUnsupportedHistoryAction('Rerun'),
-      restoreAgent: () => showUnsupportedHistoryAction('Setup'),
-      exportChatMd: () => showUnsupportedHistoryAction('Markdown export'),
-      exportChatTex: () => showUnsupportedHistoryAction('LaTeX export'),
-      exportChatHtml: () => showUnsupportedHistoryAction('HTML export'),
+      rerunAgent: unsupported(
+        'Rerun from history is not available in the desktop app yet.',
+      ),
+      restoreAgent: unsupported(
+        'Setup from history is not available in the desktop app yet.',
+      ),
+      exportChatMd: unsupported(
+        'Markdown export from history is not available in the desktop app yet.',
+      ),
+      exportChatTex: unsupported(
+        'LaTeX export from history is not available in the desktop app yet.',
+      ),
+      exportChatHtml: unsupported(
+        'HTML export from history is not available in the desktop app yet.',
+      ),
     },
-    profile: {
+    ...{
       getProfileData: () => postProfileData(),
       signIn: () => signIn(),
       signOut: () => signOut(),
@@ -1149,7 +1216,7 @@ export function createDesktopSettingsIpc(
       openExternalUrl: (data) =>
         options.openExternalUrl?.(data.url) ?? Promise.resolve(),
     },
-    model: {
+    ...{
       getModelSelection: () => postModelSelectionData(),
       setModelEnabled: (data) =>
         updateModelEnabled({
@@ -1165,7 +1232,7 @@ export function createDesktopSettingsIpc(
       setPreferShortModelNames: (data) =>
         updatePreferShortModelNames(data.enabled),
     },
-    multiAgent: {
+    ...{
       getSuperYoloEnabled: () => postSuperYoloEnabled(),
       setSuperYoloEnabled: () => postSuperYoloEnabled(),
       setAllowOrchestratorKill: (data) =>
@@ -1181,7 +1248,7 @@ export function createDesktopSettingsIpc(
       setNestedDelegationMaxDepth: (data) =>
         updateNestedDelegationMaxDepth(data.value),
     },
-    agent: {
+    ...{
       getAgentSelection: () => postAgentSelectionData(),
       setAgentEnabled: (data) =>
         updateAgentEnabled({
@@ -1209,7 +1276,7 @@ export function createDesktopSettingsIpc(
       saveAgentModePreset: () => saveAgentModePreset(),
       deleteAgentModePreset: (data) => deleteAgentModePreset(data.presetId),
     },
-    git: {
+    ...{
       getGitAuthorSettings: () => postGitAuthorSettings(),
       setGitMarkCommits: (data) =>
         setGitAuthor(StateKeys.GIT_MARK_COMMITS, data.enabled),
@@ -1220,7 +1287,7 @@ export function createDesktopSettingsIpc(
       setGitWorktreeSupport: (data) =>
         setGitAuthor(StateKeys.GIT_WORKTREE_SUPPORT, data.enabled),
     },
-    chatGpt: {
+    ...{
       getChatGptAuthStatus: () => postChatGptAuthStatus(),
       signInChatGpt: () => signInChatGpt(),
       signOutChatGpt: () => signOutChatGpt(),
@@ -1229,7 +1296,7 @@ export function createDesktopSettingsIpc(
       setChatGptSubscriptionToolUseOnly: (data) =>
         setChatGptSubscriptionToolUseOnly(data.enabled),
     },
-    approval: {
+    ...{
       getApprovalSettings: () => postApprovalSettings(),
       setBashApprovalEnabled: (data) => updateBashApprovalEnabled(data.enabled),
       setCodexSandboxMode: (data) =>
@@ -1245,7 +1312,7 @@ export function createDesktopSettingsIpc(
       setClaudeAgentEffort: (data) =>
         setAgent(StateKeys.CLAUDE_AGENT_EFFORT, data.effort),
     },
-    tools: {
+    ...{
       getToolDashboardData: () => postToolDashboardData(),
       openToolInstallUrl: (data) =>
         options.openExternalUrl?.(data.url) ?? Promise.resolve(),
@@ -1256,7 +1323,7 @@ export function createDesktopSettingsIpc(
       runToolCommand: (data) =>
         runToolCommand({ toolId: data.toolId, kind: data.kind }),
     },
-    latex: {
+    ...{
       getLatexSettingsStatus: () => postLatexSettingsStatus(),
       applyLatexSettings: () => postLatexSettingsStatus(),
       installLatexWorkshop: () =>
@@ -1279,13 +1346,13 @@ export function createDesktopSettingsIpc(
       setLatexConfigValue: (data) =>
         updateLatexConfigValue({ field: data.field, value: data.value }),
     },
-    desktopCrashReporting: {
+    ...{
       getDesktopCrashReporting: () => postDesktopCrashReportingStatus(),
       setDesktopCrashReportingEnabled: (data) =>
         updateDesktopCrashReportingEnabled(data.enabled),
       setDesktopCrashReportingDsn: () => updateDesktopCrashReportingDsn(),
     },
-  });
+  };
 
   return {
     refreshAuthDependentData,
@@ -1298,6 +1365,10 @@ export function createDesktopSettingsIpc(
       if (!parsed.success) return false;
       if (parsed.data.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY) {
         if (parsed.data.view === 'settings') {
+          options.postToRenderer({
+            command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
+            commands: unsupportedCommands(settingsHandlers),
+          });
           if (options.sendStartupCatalogData) {
             runAsync(postInitialSettingsData());
           } else {
@@ -1307,7 +1378,13 @@ export function createDesktopSettingsIpc(
         }
         return false;
       }
-      return dispatchSettingsViewInbound(message, settingsHandlers, onError);
+      // A successful parse conclusively identifies this as a settings
+      // command, so claim it (true) even when the matched entry is
+      // `unsupported(...)` — the dispatcher's `false` there means "no
+      // function ran," not "not mine"; onError already surfaces the
+      // unsupported reason as visible feedback (see `onError` above).
+      dispatchSettingsViewInbound(message, settingsHandlers, onError);
+      return true;
     },
   };
 }

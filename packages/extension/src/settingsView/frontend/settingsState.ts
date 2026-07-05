@@ -175,6 +175,17 @@ export const inlineCriticismEnabled = signal(false);
 export const goalItems = signal<readonly Goal[]>([]);
 
 // ---------------------------------------------------------------------------
+// Derived capability view: commands the active host's inbound registry
+// declares `unsupported(...)`, sent once at webview-ready (see
+// `unsupportedCommands` in `@shared/utils/dispatcher`). Replaces
+// `isDesktopHost` checks for command-availability gating. `null` before
+// that broadcast arrives — checked via `isKnownUnsupported`, which treats
+// "not yet known" as unsupported so a control never flashes visible then
+// hidden once the real capability set lands.
+// ---------------------------------------------------------------------------
+export const unsupportedCommands = signal<ReadonlySet<string> | null>(null);
+
+// ---------------------------------------------------------------------------
 // Reset — module-level state is shared across remounts in the same JS context
 // (tests, hot reload). Mirrors `resetProgressState()` in progressState.ts.
 // ---------------------------------------------------------------------------
@@ -244,4 +255,6 @@ export function resetSettingsState(): void {
   inlineCriticismEnabled.set(false);
 
   goalItems.set([]);
+
+  unsupportedCommands.set(null);
 }

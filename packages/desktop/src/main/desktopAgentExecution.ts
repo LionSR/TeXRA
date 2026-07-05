@@ -72,6 +72,7 @@ import type { MementoStorage } from '@shared/progressView/backend/persistence/Pe
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   cleanupUnscopedApprovals,
   handleProgressViewBashApprovalAction,
@@ -249,6 +250,8 @@ export class DesktopProgressBridge {
       },
       hasTarget: () => true,
       getStreamControls: getProgressStreamControls,
+      getUnsupportedCommands: () =>
+        unsupportedCommands(this.progressViewInboundHandlers),
       configureUi: ({ webviewUpdater }) => {
         // The desktop renderer is always attached (no sidebar/editor re-target),
         // so every show/resolve reaches the webview.
@@ -574,6 +577,78 @@ export class DesktopProgressBridge {
           `"${labels[data.action]}" requires the VS Code extension.`,
         );
       },
+      // These are intercepted in desktopProgressIpc.ts's passThroughCommands
+      // (theme/debug-mode/switch-view) or handled before dispatch even
+      // reaches this registry (webview-ready), so these entries are never
+      // actually invoked — they exist only to satisfy the exhaustive
+      // registry type.
+      setTheme: () => {},
+      setDebugMode: () => {},
+      switchView: () => {},
+      webviewReady: () => {},
+      // Trivially wireable with existing desktop infrastructure.
+      showInformationMessage: (data) => {
+        void this.options.showInfoMessage?.(data.text);
+      },
+      restoreProposalConfig: async (data) => {
+        await this.agentProposalController.restoreProposalConfig(data.proposal);
+      },
+      // Not yet wired on desktop.
+      restoreState: unsupported(
+        'Restoring a saved run is not available in the desktop app yet.',
+      ),
+      compactResponse: unsupported(
+        'Compacting a response is not available in the desktop app yet.',
+      ),
+      diffStream: unsupported(
+        'Viewing a diff for this stream is not available in the desktop app yet.',
+      ),
+      packStream: unsupported(
+        'Packing output files is not available in the desktop app yet.',
+      ),
+      cleanStream: unsupported(
+        'Cleaning output files is not available in the desktop app yet.',
+      ),
+      retryStreamRequest: unsupported(
+        'Retrying with a new API key is not available in the desktop app yet.',
+      ),
+      cancelRetryRequest: unsupported(
+        'Canceling a retry request is not available in the desktop app yet.',
+      ),
+      useOwnApiKey: unsupported(
+        'Using your own API key is not available in the desktop app yet.',
+      ),
+      polishFollowUp: unsupported(
+        'Polishing follow-up text is not available in the desktop app yet.',
+      ),
+      setupFollowup: unsupported(
+        'Follow-up agent selection is not available in the desktop app yet.',
+      ),
+      runFollowup: unsupported(
+        'Follow-up agent selection is not available in the desktop app yet.',
+      ),
+      getFollowupOptions: unsupported(
+        'Follow-up agent selection is not available in the desktop app yet.',
+      ),
+      startRecording: unsupported(
+        'Voice dictation is not available in the desktop app yet.',
+      ),
+      stopRecording: unsupported(
+        'Voice dictation is not available in the desktop app yet.',
+      ),
+      runCompileFixer: unsupported(
+        'The compile fixer is not available in the desktop app yet.',
+      ),
+      openMemoryView: unsupported(
+        'Opening the memory view from a stream is not available in the desktop app yet.',
+      ),
+      openProfile: unsupported(
+        'Opening the profile view from a stream is not available in the desktop app yet.',
+      ),
+      // Pop-out-to-editor is a VS Code editor-tab concept; the desktop app is
+      // a single window.
+      popOut: unsupported('Pop-out to editor is a VS Code-only feature.'),
+      popBack: unsupported('Pop-out to editor is a VS Code-only feature.'),
     };
   }
 

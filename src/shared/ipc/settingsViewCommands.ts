@@ -162,4 +162,12 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_LATEX_CONFIG_VALUES: 'updateLatexConfigValues',
   UPDATE_INLINE_CRITICISM_ENABLED: 'updateInlineCriticismEnabled',
   UPDATE_GOAL_LIST: 'updateGoalList',
+  /**
+   * Commands this host's inbound registry declares `unsupported(...)`
+   * (see `unsupportedCommands` in `@shared/utils/dispatcher`), sent once at
+   * webview-ready. Drives the frontend's capability-derived UI (e.g. hiding
+   * the "Open VS Code Settings" button on desktop) instead of an
+   * `isDesktopHost` check.
+   */
+  SET_UNSUPPORTED_COMMANDS: 'setUnsupportedCommands',
 } as const;

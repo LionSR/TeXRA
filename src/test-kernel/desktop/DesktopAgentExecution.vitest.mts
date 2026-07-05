@@ -29,6 +29,7 @@ import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { assertSupported } from '@shared/utils/dispatcher';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 
 // Local imports - desktop test paths
@@ -797,10 +798,11 @@ describe('DesktopProgressBridge', () => {
         taskState,
       });
 
-      const runNew =
-        bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW];
+      const runNew = assertSupported(
+        bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW],
+      );
       expect(runNew).toBeTypeOf('function');
-      const runPromise = runNew?.({
+      const runPromise = runNew({
         command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
         stream: 'stream-new',
       });
@@ -2178,10 +2180,11 @@ describe('DesktopProgressBridge', () => {
         taskState,
       });
 
-      const runNew =
-        bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW];
+      const runNew = assertSupported(
+        bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW],
+      );
       expect(runNew).toBeTypeOf('function');
-      await runNew?.({
+      await runNew({
         command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
         stream: 'stream-new',
       });
@@ -2437,12 +2440,13 @@ describe('DesktopProgressBridge', () => {
       });
       messages.length = 0;
 
-      const handleProposal =
+      const handleProposal = assertSupported(
         bridge.progressViewInboundHandlers[
           PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION
-        ];
+        ],
+      );
       expect(handleProposal).toBeTypeOf('function');
-      await handleProposal?.({
+      await handleProposal({
         command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
         proposalId: 'proposal-1',
         action: 'setup',

@@ -46,6 +46,7 @@ export class WorkflowStreamContent extends BaseStreamContent {
         .progress=${state.conversationProgress}
         .roundStage=${state.roundStage}
         .yoloActive=${false}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
       ></stream-header>
 
       <workflow-hint-banner></workflow-hint-banner>
@@ -70,6 +71,7 @@ export class WorkflowStreamContent extends BaseStreamContent {
         .filesByRound=${state.files}
         .failuresByRound=${state.compileFailures}
         .showRoundHeaders=${true}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
       ></file-list>
 
       <workflow-tool-use-followup-section
@@ -77,6 +79,7 @@ export class WorkflowStreamContent extends BaseStreamContent {
         .hasOutputFiles=${hasOutputFiles(state.files)}
         .options=${this.streamContext.followupOptions}
         .streamModel=${streamInfo.model ?? null}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
       ></workflow-tool-use-followup-section>
     `;
   }

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
-  createProgressViewCommandHandlers,
+  createProgressViewCommandHandlers as createSharedProgressViewCommandHandlers,
   type ProgressViewCommandActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -11,8 +11,10 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ProgressViewInboundMessageSchema,
   dispatchProgressViewInbound,
+  type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
+import { assertSupported, unsupported } from '@shared/utils/dispatcher';
 import {
   cleanupAllApprovals,
   isApprovalBypassedForStream,
@@ -27,6 +29,27 @@ vi.mock('@utils/files/pastedImageUtils', () => ({
 }));
 
 const savePastedImageBase64Mock = vi.mocked(savePastedImageBase64);
+
+/**
+ * `createProgressViewCommandHandlers` returns only the cross-host shared
+ * subset of commands (see its `satisfies Partial<...>` return). Each real
+ * host pads the rest with its own handlers or `unsupported(...)`; this test
+ * only exercises the shared subset, so it pads the remainder with a generic
+ * unsupported marker to satisfy dispatchProgressViewInbound's exhaustive
+ * registry type.
+ */
+function createProgressViewCommandHandlers(
+  actions: ProgressViewCommandActions,
+): ProgressViewInboundHandlerRegistry {
+  const shared = createSharedProgressViewCommandHandlers(actions);
+  const full: Record<string, unknown> = {};
+  for (const command of new Set(Object.values(PROGRESS_VIEW_COMMANDS))) {
+    full[command] =
+      (shared as Record<string, unknown>)[command] ??
+      unsupported('not covered by this test');
+  }
+  return full as ProgressViewInboundHandlerRegistry;
+}
 
 function createActions(
   overrides: Partial<ProgressViewCommandActions> = {},
@@ -295,7 +318,7 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
     const actions = createActions();
     const handlers = createProgressViewCommandHandlers(actions);
 
-    await handlers[PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]?.(
+    await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP])(
       parseSendFollowUpMessage({
         command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
         stream: 'stream-a',
@@ -325,7 +348,7 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
       fileName: 'pasted_2.png',
     };
 
-    await handlers[PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]?.(
+    await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP])(
       parseSendFollowUpMessage({
         command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
         stream: 'stream-a',
