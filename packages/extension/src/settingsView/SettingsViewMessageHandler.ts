@@ -34,7 +34,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import {
   showLoggedErrorMessage,
-  showLoggedMessage,
+  showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
@@ -717,10 +717,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // BASH_APPROVAL_CONFIG_TARGET / issue #7085): writing it without a
     // workspace open would have to fall back to a global write, silently
     // reintroducing the cross-workspace bypass this constant exists to
-    // prevent. Refuse instead, same as other workspace-scoped settings (see
-    // `frontend/ui/dialogs.ts`).
+    // prevent. Refuse instead -- this is an expected, non-error condition
+    // (no folder open yet), so inform rather than alarm.
     if (!vscode.workspace.workspaceFolders?.length) {
-      void showLoggedMessage(
+      void showLoggedInfoMessage(
         this.channel,
         'Bash approval is a per-workspace setting. Open a workspace folder before changing it.',
       );
