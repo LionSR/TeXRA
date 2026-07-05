@@ -1,6 +1,7 @@
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { consume } from '@lit/context';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -39,6 +40,7 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
+import { archivedContext } from '../contexts/streamContexts';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
 import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
@@ -341,6 +343,10 @@ export class StreamHeader extends LitElement {
   @property({ attribute: false })
   unsupportedCommands: ReadonlySet<string> | null = null;
 
+  /** Read-only trace-viewer export: no toolbar action reaches a live backend. */
+  @consume({ context: archivedContext, subscribe: true })
+  private archived = false;
+
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
       return nothing;
@@ -365,13 +371,17 @@ export class StreamHeader extends LitElement {
     // anchor by `for=${btn.id}` within this shadow root instead.
     const toolbarButtonViews = (toolbarButtons as ToolbarButton[]).map(
       (btn) => {
-        const { disabled, hidden } = this.getButtonState(
+        const { disabled: computedDisabled, hidden } = this.getButtonState(
           btn.id,
           btn.command,
           status,
           this.substate,
           hasExecutionId,
         );
+        // Read-only trace-viewer export: no toolbar action reaches a live
+        // backend. handleToolbarClick already checks the disabled attribute
+        // before dispatching, so this one flag both looks and behaves inert.
+        const disabled = this.archived || computedDisabled;
         const isActive = Boolean(
           btn.isToggle &&
           (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN

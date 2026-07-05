@@ -79,8 +79,13 @@
   --wa-font-family-heading: var(--wa-font-family-body);
   --wa-font-family-mono:
     ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Referenced by BackgroundTasksPanel.ts/UsagePanel.ts/GoalTab.ts but not
+     defined anywhere else in this bridge — confirmed gaps against the actual
+     --wa-* surface those components consume. */
+  --wa-font-family-code: var(--wa-font-family-mono);
   --wa-font-size-m: var(--desktop-font-size, 1rem);
   --wa-font-weight-normal: var(--desktop-font-weight, 400);
+  --wa-font-weight-semibold: 600;
   --wa-editor-font-size: var(--desktop-font-size, 13px);
 
   /* Surface / text. */

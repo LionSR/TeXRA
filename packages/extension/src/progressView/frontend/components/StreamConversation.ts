@@ -3,7 +3,7 @@
 // Third-party imports
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared
 import type { InquiryThreadUpdatedEvent } from '@shared/schemas';
@@ -20,6 +20,7 @@ import {
   streamContext$,
 } from '../progressState';
 import {
+  archivedContext,
   EMPTY_INQUIRY_THREADS,
   EMPTY_LOG_CONTEXT,
   EMPTY_STREAM_BY_ID,
@@ -86,6 +87,16 @@ export class StreamConversation extends SignalWatcher(LitElement) {
   @state()
   private inquiryThreadsContextValue: InquiryThreadUpdatedEvent[] =
     EMPTY_INQUIRY_THREADS;
+
+  /**
+   * Externally settable (unlike the signal-derived contexts above): every
+   * live host leaves this `false`; the trace-viewer sets it once at mount
+   * (`conversationView.archived = true`) since it has no live backend for
+   * request-panel actions to reach.
+   */
+  @provide({ context: archivedContext })
+  @property({ type: Boolean })
+  archived = false;
 
   /** Sync signal-computed values into @provide/@state context properties. */
   protected override willUpdate(): void {

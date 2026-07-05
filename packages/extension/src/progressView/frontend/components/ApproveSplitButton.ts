@@ -157,6 +157,9 @@ export class ApproveSplitButton extends LitElement {
   /** When true, surface the proposal "Super Yolo (this session)" menu item. */
   @property({ type: Boolean }) canSuperYolo = false;
 
+  /** Read-only trace-viewer export: render inert, no bypass split-menu. */
+  @property({ type: Boolean }) disabled = false;
+
   override render(): TemplateResult {
     const approveButton = renderLabeledActionButton({
       icon: 'check',
@@ -164,9 +167,10 @@ export class ApproveSplitButton extends LitElement {
       title: this.approveTitle,
       action: 'approve',
       className: 'approve-split-main',
+      disabled: this.disabled,
       onClick: () => this.emit('approve'),
     });
-    if (!this.canBypass && !this.canSuperYolo) {
+    if (this.disabled || (!this.canBypass && !this.canSuperYolo)) {
       return approveButton;
     }
     return html`

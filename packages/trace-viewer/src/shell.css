@@ -1,0 +1,12 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+#app.trace-viewer-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+}

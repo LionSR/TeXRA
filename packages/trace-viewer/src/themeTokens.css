@@ -1,0 +1,13 @@
+/**
+ * Theme tokens for the TeXRA trace-viewer (static export) renderer — a third
+ * host bridge alongside the VS Code extension's `common.css` and the desktop
+ * Electron renderer's `themeTokens.css` (see `src/shared/wa/index.ts`'s
+ * header comment for the full list).
+ *
+ * A static trace export should default to looking the same as the desktop
+ * app, so this bridge is desktop's verbatim, imported rather than
+ * copy-pasted — a byte-for-byte duplicate would only invite the two to
+ * silently drift. If trace-viewer ever needs its own palette, replace this
+ * `@import` with an independent bridge like the other two hosts have.
+ */
+@import '../../desktop/src/renderer/themeTokens.css';

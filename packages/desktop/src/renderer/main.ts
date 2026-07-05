@@ -11,6 +11,8 @@ import { create as mutate } from 'mutative';
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
 import {
+  createHostEventHandlerContext,
+  createHostMessageHandlerContext,
   handleDeleteAll,
   handleFileAction,
   handleFilterChange,
@@ -27,7 +29,6 @@ import {
   runCompileFixer,
   sendFollowupCommand,
 } from '@progressView/frontend/eventHandlers';
-import type { FrontendEventHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import {
   activeStreamId$,
@@ -35,9 +36,6 @@ import {
   childStreamsByParent$,
   hasAnyStreams$,
   pendingApprovalIds$,
-  permissions$,
-  placement,
-  setStreamLogsForId,
   setStreamStateForId,
   streamFilter$,
   streamStates$,
@@ -233,33 +231,10 @@ function emptyWorkspaceTemplate(): TemplateResult {
 // PRD § 7.C: `<progress-app>` is NOT mounted in Electron; the children mount
 // directly. We recreate the message-routing and event-handler context here so
 // the same `messageDispatcher` + `eventHandlers` modules drive both hosts.
-
-function getEventHandlerContext(): FrontendEventHandlerContext {
-  return {
-    getState: () => appState.get(),
-    setState: (updater) => {
-      appState.set(updater(appState.get()));
-    },
-    setStreamState: (streamId, updater) =>
-      setStreamStateForId(streamId, updater),
-    setStreamLogs: (streamId, updater) => setStreamLogsForId(streamId, updater),
-    // savePrefs intentionally omitted on desktop — filter persistence isn't
-    // wired (yet). Filter changes still apply for the active session.
-  };
-}
-
-function getMessageHandlerContext() {
-  return {
-    ...getEventHandlerContext(),
-    getPermissions: () => permissions$.get(),
-    setPermissions: (next: ReturnType<typeof permissions$.get>) => {
-      permissions$.set(next);
-    },
-    setPlacement: (next: ReturnType<typeof placement.get>) => {
-      placement.set(next);
-    },
-  };
-}
+//
+// savePrefs intentionally omitted (matching trace-viewer's use of the same
+// shared contexts) — filter persistence isn't wired on desktop (yet). Filter
+// changes still apply for the active session.
 
 function isProgressOutboundMessage(
   raw: unknown,
@@ -725,7 +700,7 @@ window.addEventListener('message', (event) => {
   // Progress view messages: dispatch directly into the shared messageDispatcher
   // — no need to mount <progress-app> for plumbing. PRD § 7.C.
   if (isProgressOutboundMessage(event.data)) {
-    dispatchMessage(event.data, getMessageHandlerContext());
+    dispatchMessage(event.data, createHostMessageHandlerContext());
     return;
   }
 });
@@ -736,26 +711,29 @@ window.addEventListener('message', (event) => {
 
 function wireRailTabs(): void {
   railTabs.addEventListener('stream-switch', ((e: CustomEvent) => {
-    handleStreamSwitch(e, getEventHandlerContext());
+    handleStreamSwitch(e, createHostEventHandlerContext());
     // Switching to a stream pulls the user out of the launcher view.
     setRouteState('progress');
   }) as EventListener);
   railTabs.addEventListener('stream-delete', ((e: CustomEvent) =>
-    handleStreamDelete(e, getEventHandlerContext())) as EventListener);
+    handleStreamDelete(e, createHostEventHandlerContext())) as EventListener);
   railTabs.addEventListener('filter-change', ((e: CustomEvent) =>
-    handleFilterChange(e, getEventHandlerContext())) as EventListener);
+    handleFilterChange(e, createHostEventHandlerContext())) as EventListener);
   railTabs.addEventListener('delete-all', handleDeleteAll as EventListener);
 }
 
 function wireConversation(): void {
-  const ctx = getEventHandlerContext;
+  const ctx = createHostEventHandlerContext;
   conversationView.addEventListener('stream-switch', ((e: CustomEvent) => {
     handleStreamSwitch(e, ctx());
   }) as EventListener);
   conversationView.addEventListener('toolbar-command', ((e: CustomEvent) =>
     handleToolbarCommand(e, ctx())) as EventListener);
   conversationView.addEventListener('permission-action', ((e: CustomEvent) =>
-    handlePermissionAction(e, getMessageHandlerContext())) as EventListener);
+    handlePermissionAction(
+      e,
+      createHostMessageHandlerContext(),
+    )) as EventListener);
   conversationView.addEventListener(
     'file-action',
     handleFileAction as EventListener,

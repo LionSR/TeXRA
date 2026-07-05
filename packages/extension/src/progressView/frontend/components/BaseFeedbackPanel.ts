@@ -68,6 +68,9 @@ export abstract class BaseFeedbackPanel<
   // ===========================================================================
 
   override handleKeyboardShortcut(key: string): boolean {
+    // Read-only trace-viewer export: no action can reach a live backend, so
+    // none of the accelerators should appear to do anything either.
+    if (this.archived) return false;
     switch (key) {
       case 'y':
         this.emitAction('approve');
@@ -177,6 +180,7 @@ export abstract class BaseFeedbackPanel<
       <approve-split-button
         .approveTitle=${approveTitle}
         .canBypass=${this.canBypass}
+        .disabled=${this.archived}
         @approve=${() => this.emitAction('approve')}
         @approve-session=${() => this.emitAction(APPROVE_SESSION_ACTION)}
       ></approve-split-button>
@@ -216,6 +220,7 @@ export abstract class BaseFeedbackPanel<
       text: this.showFeedback ? 'Submit' : 'Reject',
       title: this.showFeedback ? 'Submit rejection (n)' : rejectTitle,
       action: 'reject',
+      disabled: this.archived,
       onClick: () => this.handleRejectAction(),
     });
   }

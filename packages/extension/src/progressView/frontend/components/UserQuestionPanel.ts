@@ -183,6 +183,10 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   }
 
   private submitAnswers(): void {
+    // Bypasses the base class's emitAction chokepoint (dispatches
+    // permission-action directly), so the archived/read-only trace-viewer
+    // guard has to be repeated here.
+    if (this.archived) return;
     const data = this.permission.data;
     const answers: UserQuestionAnswers = {};
 
