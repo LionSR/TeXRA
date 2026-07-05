@@ -32,7 +32,7 @@ The same razor is the Bitter Lesson applied to benchmark content: verify **outco
 
 `texra bench` is a citty command group (`packages/cli/src/commands/bench.ts`, registered in `root.ts`), backed by a VS Code-free `src/bench/` (schemas in Zod v4, types via `z.infer`).
 
-Three phases, each a pure function over on-disk state:
+Three phases, each idempotent over on-disk state (not pure — `run` spends model tokens and `grade` may call a judge — but re-running a phase over the same digests is a no-op, never a duplicate spend):
 
 ```
 bench run    : suite + models   ->  evidence dirs   (spends model tokens)
@@ -94,7 +94,7 @@ The suite file adds `name`, `version` (semver: MAJOR = tasks changed, scores inc
 This is the reason to exist — checks no generic harness has:
 
 - **`compile`** — hard gate via `compileCheck.ts`.
-- **`cas-equal`** — the final claimed result (`\benchresult{...}` or `<answer>` block) verified CAS-equivalent to gold, robust to renotation, via `executeWolframCode` or SymPy. Outcome-level only: no credit for matching a human derivation path.
+- **`cas-equal`** — the final claimed result (`\benchresult{...}` or `<answer>` block) verified CAS-equivalent to gold via `executeWolframCode` or SymPy, targeting robustness to renotation (how far that can be pushed is open — §15). Outcome-level only: no credit for matching a human derivation path.
 - **`lean-check`** — `runLakeCommand` against a pinned mathlib toolchain; binary per lemma. Lean LSP/Loogle tools are available _to the solver_ — this measures interactive theorem proving. Proof tasks need only a statement, no gold solution: difficulty can outgrow the task's author.
 - **`diff-align`** — math-aware latexdiff between the model's fix and gold: edits inside injected spans must match; edits outside are penalized.
 - **`issue-match`** — reported `ReviewIssue`s (`src/agent/review/reviewIssues.ts`) matched to gold defects within a line window → precision/recall.
@@ -127,7 +127,7 @@ bench-results/<suite@version>/<runId>/<model>/<task>/trial-<n>/
 ```
 
 - **Comparability rule:** two scores are comparable iff their digest tuples match; `bench report` refuses mixed comparisons.
-- **Regrade, don't rerun:** graders are pure functions over these directories; `bench grade --regrade --diff-against <old>` recomputes history at zero model cost and attributes every delta to the grader diff.
+- **Regrade, don't rerun:** graders never mutate these directories, only read them; `bench grade --regrade --diff-against <old>` recomputes history at zero model cost and attributes every delta to the grader diff.
 - **Hermetic execution:** a published container image pins TeX Live / Lean / wolframscript; `env.json` records the fingerprint; network off by default, web tools disabled via the existing `runtimeUnavailableTools` mechanism (`src/agent/runtime/RunContext.ts`). No new sandbox layer.
 - **Determinism honesty:** providers offer no usable seeds; replicate variance is measured and reported, never pretended away.
 
@@ -146,7 +146,7 @@ This single export delegates everything that is not our comparative advantage:
 - **Lab-scale execution** — Harbor already runs thousands of cloud containers; we don't build a fleet scheduler.
 - **RL rollouts** — Harbor generates rollouts over the same task format; our graders become reward functions without a `bench rollout` engine of our own.
 - **Agent-agnosticism** — labs run their own agents (Claude Code, internal scaffolds) against our tasks under Harbor; we don't build adapter shims.
-- **Internal model endpoints** — `baseURL` is already threaded through every handler stack in `src/agent/modelHandlers/`; pointing at an internal openai-compatible gateway is configuration, not code.
+- **Internal model endpoints** — `customBaseUrl` (`resolveBaseUrl`, `src/agent/modelHandlers/support/ProxyConfigResolver.ts`) is already threaded through every handler stack in `src/agent/modelHandlers/`; pointing at an internal openai-compatible gateway is configuration, not code.
 
 The local `bench run` runner remains for task development and small suites — authors need a tight loop — but competing with Harbor on scale is a non-goal. We compete on verifiers and task supply, not on the harness.
 
@@ -185,7 +185,7 @@ Six subcommands. Exit codes reuse `packages/cli/src/runtime/exitCodes.ts`; score
 | Fresh-task supply                 | `src/latex/arxivProcessor.ts`                                                                                                         |
 | Trace archive                     | `TraceEmitter` subscriber (pattern: `src/transcript/TexraTranscriptRecorder.ts`); `AgentEvent` union                                  |
 | Usage / cost / abort              | `src/agent/core/usage/RunUsageAccumulator.ts` (`totalCost` drives `--max-cost-usd`)                                                   |
-| Providers incl. internal gateways | `src/agent/modelHandlers/` (four stacks; `baseURL` already threaded)                                                                  |
+| Providers incl. internal gateways | `src/agent/modelHandlers/` (four stacks; `customBaseUrl` already threaded)                                                            |
 | Solver/judge agents               | ordinary agent YAML under `packages/extension/resources/agents/bench/`, run via `runAgent` (`src/agent/runtime/runAgent.ts`)          |
 | Env fingerprint                   | `texra doctor` machinery (`packages/cli/src/commands/doctor.ts`)                                                                      |
 
@@ -242,7 +242,7 @@ Everything below existed in v2 (`git show 5581658`). Each was cut for failing ne
 | `kind:` task taxonomy field                                                                                                                                          | The graders list already defines the task; kinds are docs/tags                                                                                                                                                                      | Never — keep it in documentation                                                                |
 | `scaffold: minimal\|texra` dual-condition machinery                                                                                                                  | The agent YAML digest in the identity tuple already distinguishes scaffolds; the default agent is minimal                                                                                                                           | Never — a scaffold comparison is just two runs with different agent digests                     |
 | `bench.lock.json` as a separate artifact                                                                                                                             | Same digests, one more file; folded into `cell.json`/run metadata                                                                                                                                                                   | Never                                                                                           |
-| `models.bench.yaml` overlay                                                                                                                                          | `baseURL` config already exists; document it, don't build it                                                                                                                                                                        | Handler stacks grow per-lab auth needs config can't express                                     |
+| `models.bench.yaml` overlay                                                                                                                                          | `customBaseUrl` config already exists; document it, don't build it                                                                                                                                                                  | Handler stacks grow per-lab auth needs config can't express                                     |
 | `samplingParams` core-schema addition                                                                                                                                | Providers largely ignore seeds; temperature already exists and is recorded                                                                                                                                                          | A major provider honors seeds well enough to reduce replicate variance                          |
 | pass@k, self-correction curves, `bench diff` command, GitHub-Action distribution                                                                                     | All derivable offline from `scores.jsonl` / composable from `report --fail-under` + the existing `texra install-github-action`                                                                                                      | Never — they're recipes, not features                                                           |
 | Public/private split governance, canary-scan service, monthly-cadence commitments                                                                                    | Operator policy, not harness code; `canaryGuid` + `createdAfter` fields stay (cheap now, breaking to add later)                                                                                                                     | A consortium actually forms around a private split                                              |
