@@ -9,9 +9,8 @@ import {
   streamStateContext,
   type StreamContextValue,
 } from '../contexts/streamContexts';
-import { isToolUseState } from '../store';
+import { renderStreamHeader } from './streamHeaderView';
 
-import './StreamHeader';
 import './TerminalCommandStrip';
 import './LogList';
 
@@ -32,23 +31,16 @@ export class ProcessStreamContent extends LitElement {
     const streamState = this.streamContext.streamState;
     if (!streamInfo || !streamState) return nothing;
 
-    // Bash streams register as tool-use kind; bind bypass toggles so the
-    // header reflects active YOLO / Super YOLO state.
-    const toolUse = isToolUseState(streamState) ? streamState : null;
+    // Bash streams register as tool-use kind, so renderStreamHeader reflects
+    // their active YOLO / Super YOLO state from the shared tool-use fields.
     const command = streamInfo.command ?? streamInfo.description ?? '';
 
     return html`
-      <stream-header
-        .stream=${streamInfo}
-        .status=${streamState.status}
-        .substate=${streamState.substate}
-        .progress=${streamState.conversationProgress}
-        .roundStage=${streamState.roundStage}
-        .yoloActive=${Boolean(toolUse?.toolEditBypass)}
-        .superYoloActive=${Boolean(toolUse?.superYoloBypass)}
-        .goalActive=${Boolean(toolUse?.goalActive)}
-        .unsupportedCommands=${this.streamContext.unsupportedCommands}
-      ></stream-header>
+      ${renderStreamHeader(
+        streamInfo,
+        streamState,
+        this.streamContext.unsupportedCommands,
+      )}
 
       <terminal-command-strip .command=${command}></terminal-command-strip>
 

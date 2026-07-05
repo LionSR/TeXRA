@@ -1,0 +1,45 @@
+/**
+ * Shared `<stream-header>` wiring for the stream-content containers.
+ *
+ * The tool-use, workflow, and process containers each render an identical
+ * eight-property `<stream-header>`; the only variation is the bypass/goal
+ * flags, which exist only on tool-use state. Centralizing it here keeps the
+ * header contract in one place so adding a prop touches a single call site.
+ */
+
+// Third-party imports
+import { html, type TemplateResult } from 'lit';
+
+// Local imports - shared schemas
+import type { StreamTabInfo } from '@shared/schemas';
+
+// Local imports - progress view
+import { isToolUseState, type StreamState } from '../store';
+
+// Side-effect import - register the <stream-header> element
+import './StreamHeader';
+
+/**
+ * Render the stream header for a container. Bypass and goal indicators are only
+ * meaningful for tool-use streams; workflow/process states report them as off.
+ */
+export function renderStreamHeader(
+  streamInfo: StreamTabInfo,
+  state: StreamState,
+  unsupportedCommands: ReadonlySet<string> | null,
+): TemplateResult {
+  const toolUse = isToolUseState(state) ? state : null;
+  return html`
+    <stream-header
+      .stream=${streamInfo}
+      .status=${state.status}
+      .substate=${state.substate}
+      .progress=${state.conversationProgress}
+      .roundStage=${state.roundStage}
+      .yoloActive=${Boolean(toolUse?.toolEditBypass)}
+      .superYoloActive=${Boolean(toolUse?.superYoloBypass)}
+      .goalActive=${Boolean(toolUse?.goalActive)}
+      .unsupportedCommands=${unsupportedCommands}
+    ></stream-header>
+  `;
+}
