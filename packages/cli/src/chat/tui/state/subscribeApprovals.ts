@@ -51,7 +51,7 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 
 import { assertNever } from '@utils/core';
 import { notify } from '../notifications/terminalNotifier';
-import { patchSessionMeta } from './cliState';
+import { patchSessionMeta } from './cliState/sessionSlice';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,

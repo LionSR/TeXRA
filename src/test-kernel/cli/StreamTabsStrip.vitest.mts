@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
+import {
+  NO_BYPASS,
+  type StreamSlice,
+} from '@cli/chat/tui/state/cliState/types';
 import {
   activeStreamParentOrSelfId,
   activeStreamScope,

@@ -28,7 +28,7 @@ import type {
   ConversationEntry,
   ProcessOutputTail,
   StreamSlice,
-} from './cliState';
+} from './cliState/types';
 
 export type ChildControlMode = 'subagents' | 'tasks';
 

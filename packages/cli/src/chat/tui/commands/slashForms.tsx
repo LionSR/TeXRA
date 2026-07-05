@@ -1,4 +1,4 @@
-import { cliState } from '../state/cliState';
+import { activeForm } from '../state/cliState/foregroundOverlaySlice';
 
 import { findSlashCommand, type SlashCommand } from './slashRegistry';
 
@@ -8,7 +8,7 @@ export function openRegisteredCliSlashForm(
 ): boolean {
   const Form = command.formComponent;
   if (!Form) return false;
-  cliState.activeForm.set({
+  activeForm.set({
     commandName: command.name,
     escapeAction: command.formEscapeAction,
     render: (close, availableRows) => (
