@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - latex utilities
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { getTeXCount } from '@latex/texcount';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
@@ -40,7 +41,12 @@ export class TexcountTool extends defineTool({
       throw new ToolError('No LaTeX files provided for texcount.');
     }
 
-    const { output, errors } = await getTeXCount(files, { mode: input.mode });
+    // Thread the tool call's abort signal to the texcount subprocess so a
+    // cancelled parallel batch terminates it instead of waiting it out.
+    const { output, errors } = await getTeXCount(files, {
+      mode: input.mode,
+      signal: getCurrentToolCallContext()?.signal,
+    });
 
     if (!output) {
       const errorMessage =

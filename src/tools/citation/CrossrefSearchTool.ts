@@ -7,7 +7,9 @@ import {
 import { z } from 'zod';
 
 // Local imports
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { abandonOnAbort } from '@tools/cancellation';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@utils/text/stringUtils';
@@ -75,7 +77,13 @@ export class CrossrefSearchTool extends defineTool({
         'crossref',
         CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
       );
-      return crossrefClient.works(options);
+      // The Crossref client has no AbortSignal hook, so a cancelled batch
+      // abandons the in-flight search instead of waiting it out.
+      return abandonOnAbort(
+        crossrefClient.works(options),
+        getCurrentToolCallContext()?.signal,
+        'Crossref search',
+      );
     }, 'Crossref search failed');
 
     if (!response.ok || !response.content?.message) {

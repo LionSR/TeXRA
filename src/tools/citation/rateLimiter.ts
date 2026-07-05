@@ -1,7 +1,7 @@
 import pThrottle from 'p-throttle';
 
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolError } from '@shared/schemas/toolResult';
+import { abandonOnAbort } from '@tools/cancellation';
 
 const limiters = new Map<
   string,
@@ -10,19 +10,17 @@ const limiters = new Map<
 
 /**
  * Enforces a minimum delay between consecutive requests to the same API.
- * Observes the owning run's cancellation: an interrupt during (or before)
- * the throttle wait stops the call from reaching the remote API. The
- * remote call itself may not be abortable (third-party clients), so this
- * wait is the main cancellation point for rate-limited lookup tools.
+ * Observes the owning run's cancellation: the throttle wait itself is
+ * raced against the tool call's abort signal, so an interrupt returns
+ * immediately instead of waiting out queued rate-limit slots. The
+ * abandoned wait still consumes its slot when it later resolves, which
+ * only delays subsequent callers by at most one interval.
  */
 export async function waitForRateLimit(
   apiName: string,
   minDelayMs: number,
 ): Promise<void> {
   const signal = getCurrentToolCallContext()?.signal;
-  if (signal?.aborted) {
-    throw new ToolError('Cancelled before contacting the API.');
-  }
   let limiter = limiters.get(apiName);
   if (!limiter || limiter.minDelayMs !== minDelayMs) {
     limiter = {
@@ -33,8 +31,5 @@ export async function waitForRateLimit(
     };
     limiters.set(apiName, limiter);
   }
-  await limiter.wait();
-  if (signal?.aborted) {
-    throw new ToolError('Cancelled before contacting the API.');
-  }
+  await abandonOnAbort(limiter.wait(), signal, 'before contacting the API');
 }
