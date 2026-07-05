@@ -8,6 +8,7 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import { logSdkError, type StreamHandle } from '@agent/trace';
+import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -38,10 +39,14 @@ import { tagOpenRouterSdkError } from './openRouterSdkError';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAITools } from '../toolConversion';
 import {
+  checkBatchedToolCalls,
+  insertMediaIntoChatUserMessage,
+  prependTextToChatUserMessage,
+} from '../openai/openAIMessageUtils';
+import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../utils/toolAttachmentUtils';
-import { parseToolArguments } from '../utils/parseArguments';
 import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
 import {
   OpenRouterStreamAggregator,
@@ -83,7 +88,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   ChatUsage | null,
   OpenRouterToolCall,
   OpenRouter,
-  ChatResult
+  ChatResult,
+  ChatContentItems
 > {
   // ── Client-side compaction state ──────────────────────────────────────
   private lastKnownInputTokens = 0;
@@ -652,7 +658,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         provider: 'openrouter' as const,
         callId: call.id,
         name: call.function.name,
-        input: parseToolArguments(call.function.arguments, this.logger),
+        input: parseToolInput(call.function.arguments, call.id, this.logger),
         raw: call,
       }));
   }
@@ -692,12 +698,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatMessages[]> {
-    if (calls.length !== results.length) {
-      throw new Error(
-        `Batched tool calls mismatch: ${calls.length} calls vs ${results.length} results`,
-      );
-    }
-    if (calls.length === 0) return [];
+    if (!checkBatchedToolCalls(calls.length, results.length)) return [];
 
     const callMsg: ChatMessages = {
       role: 'assistant',
@@ -814,26 +815,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ---------------------------------------------------------------------------
 
   prependTextToUserMessage(messages: ChatMessages[], text: string): void {
-    if (!text.trim()) return;
-    const lastUserMsg = messages.findLast((m) => m.role === 'user');
-    if (!lastUserMsg || !('content' in lastUserMsg)) return;
-
-    if (typeof lastUserMsg.content === 'string') {
-      (lastUserMsg as ChatUserMessage).content = text + lastUserMsg.content;
-    } else if (Array.isArray(lastUserMsg.content)) {
-      const firstTextPart = (lastUserMsg.content as ChatContentItems[]).find(
-        (p) => p.type === 'text',
-      );
-      if (firstTextPart && 'text' in firstTextPart) {
-        const part = firstTextPart as ChatContentText;
-        part.text = text + part.text;
-      } else {
-        (lastUserMsg.content as ChatContentItems[]).unshift({
-          type: 'text',
-          text,
-        });
-      }
-    }
+    prependTextToChatUserMessage(messages, text);
   }
 
   async addMediaToUserMessage(
@@ -846,14 +828,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
     try {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
-      if (typeof lastUserMsg.content === 'string') {
-        (lastUserMsg as ChatUserMessage).content = [
-          ...formattedMedia,
-          { type: 'text', text: lastUserMsg.content },
-        ];
-      } else if (Array.isArray(lastUserMsg.content)) {
-        (lastUserMsg.content as ChatContentItems[]).unshift(...formattedMedia);
-      }
+      insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
     } catch (err) {
       logSdkError(this.logger, 'Error adding media to user message', err, {
         operation: 'add media to user message',

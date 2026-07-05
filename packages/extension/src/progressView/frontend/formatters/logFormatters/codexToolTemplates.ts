@@ -41,7 +41,7 @@ type CodexToolRenderer = (input: unknown) => TemplateResult | typeof nothing;
 
 /** Lenient schema for parsing codex tool input in the renderer. */
 const CodexInputDisplaySchema = z.object({
-  prompt: z.string().optional().default(''),
+  prompt: z.string().default(''),
   sandbox_mode: z.string().optional(),
   thread_id: z.string().optional(),
 });

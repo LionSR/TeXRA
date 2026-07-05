@@ -39,9 +39,6 @@ prompts:
 
 - `userRequest` MUST have the same number of entries as `rounds`. Round 1
   → one entry; round 2 → two entries.
-- Do NOT emit `prefills`. The field is deprecated --- reasoning models
-  ignore it at runtime, and other models do fine when the userRequest
-  spells out the expected `<documents>...</documents>` wrapper.
 - Always include `{{ INSTRUCTION }}` somewhere so user instructions pass
   through.
 - System prompts should use LaTeX formatting (`\begin{itemize}`,

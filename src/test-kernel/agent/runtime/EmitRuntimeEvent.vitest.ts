@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - runtime
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
@@ -13,27 +13,42 @@ import { createRecordingHost } from '../progressTestUtils';
 const streamId = (s: string): StreamTabId => s as StreamTabId;
 
 describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
-  it('falls back to the process bus with no session and no run context', () => {
+  it('routes migrated facts to the default session instead of the process bus', () => {
+    const sessionSeen: unknown[] = [];
     const seen: unknown[] = [];
+    const detachSession = defaultSession().events.subscribe(
+      (event) => sessionSeen.push(event),
+      { scope: 'session' },
+    );
     const off = bus.on('goalStateChanged', (p) => seen.push(p));
     try {
       emitRuntimeEvent('goalStateChanged', { streamId: streamId('s:bus') });
-      expect(seen).toEqual([{ streamId: 's:bus' }]);
+      expect(sessionSeen).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'goalStateChanged',
+            payload: { streamId: 's:bus' },
+          },
+        },
+      ]);
+      expect(seen).toEqual([]);
     } finally {
+      detachSession();
       off();
     }
   });
 
-  it("emits through the active run's runtimeHost when inside a run context", () => {
+  it("keeps non-migrated events on the active run's runtimeHost", () => {
     const run = createRecordingHost();
     const busSeen: unknown[] = [];
-    const off = bus.on('goalStateChanged', (p) => busSeen.push(p));
+    const off = bus.on('requestShowError', (p) => busSeen.push(p));
     try {
       withRunContext(createRunContext({ runtimeHost: run.host }), () => {
-        emitRuntimeEvent('goalStateChanged', { streamId: streamId('s:run') });
+        emitRuntimeEvent('requestShowError', { message: 'run error' });
       });
       expect(run.events).toEqual([
-        { event: 'goalStateChanged', payload: { streamId: 's:run' } },
+        { event: 'requestShowError', payload: { message: 'run error' } },
       ]);
       // Not double-emitted onto the bus.
       expect(busSeen).toEqual([]);
@@ -42,10 +57,15 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
     }
   });
 
-  it('prefers an explicit session hostChannel over the run context and bus', () => {
+  it('prefers an explicit session event hub over the run context and bus for migrated facts', () => {
     const channel = createRecordingHost();
     const run = createRecordingHost();
     const session = new SessionHandle({ hostChannel: channel.host });
+    const sessionSeen: unknown[] = [];
+    const detachSession = session.events.subscribe(
+      (event) => sessionSeen.push(event),
+      { scope: 'session' },
+    );
     const busSeen: unknown[] = [];
     const off = bus.on('goalStateChanged', (p) => busSeen.push(p));
     try {
@@ -56,12 +76,20 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
           session,
         );
       });
-      expect(channel.events).toEqual([
-        { event: 'goalStateChanged', payload: { streamId: 's:chan' } },
+      expect(sessionSeen).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'goalStateChanged',
+            payload: { streamId: 's:chan' },
+          },
+        },
       ]);
+      expect(channel.events).toEqual([]);
       expect(run.events).toEqual([]);
       expect(busSeen).toEqual([]);
     } finally {
+      detachSession();
       off();
       session.dispose();
     }

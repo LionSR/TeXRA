@@ -20,10 +20,13 @@ import { createChannelTrace } from '@logger';
 import { unique } from '@utils/core';
 
 import {
+  type ConditionalResponse,
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
 } from './githubClient';
+import { trimSet } from './formatUtils';
+import type { ZodType } from 'zod';
 
 import type { Disposable } from '@platform/interfaces/disposable';
 
@@ -45,6 +48,73 @@ export interface PollingSourceConfig {
   backoffBaseMs: number;
   backoffMaxMs: number;
   maxFailureDurationMs: number;
+}
+
+type SuccessfulConditionalResponse<T> = Extract<
+  ConditionalResponse<T>,
+  { status: 200 }
+>;
+
+export const DEFAULT_POLLING_BACKOFF_CONFIG = {
+  backoffBaseMs: 60_000,
+  backoffMaxMs: 3_600_000,
+  maxFailureDurationMs: 24 * 3_600_000,
+} satisfies Pick<
+  PollingSourceConfig,
+  'backoffBaseMs' | 'backoffMaxMs' | 'maxFailureDurationMs'
+>;
+
+interface DedupedResourceOptions<T, Id> {
+  getId(item: T): Id;
+  getCursor?(items: readonly T[]): string | undefined;
+  maxSeenIds: number;
+  sinceCursor?: string;
+}
+
+export class DedupedResource<T, Id = number> {
+  readonly seenIds: Set<Id>;
+  sinceCursor: string | undefined;
+
+  private readonly getId: (item: T) => Id;
+  private readonly getCursor:
+    ((items: readonly T[]) => string | undefined) | undefined;
+  private readonly maxSeenIds: number;
+
+  constructor(options: DedupedResourceOptions<T, Id>) {
+    this.getId = options.getId;
+    this.getCursor = options.getCursor;
+    this.maxSeenIds = options.maxSeenIds;
+    this.sinceCursor = options.sinceCursor;
+    this.seenIds = new Set();
+  }
+
+  seed(items: readonly T[]): void {
+    for (const item of items) {
+      this.seenIds.add(this.getId(item));
+    }
+    this.advanceCursor(items);
+    this.trim();
+  }
+
+  diff(items: readonly T[], emit: (item: T) => void): void {
+    for (const item of items) {
+      const id = this.getId(item);
+      if (this.seenIds.has(id)) continue;
+      this.seenIds.add(id);
+      emit(item);
+    }
+    this.advanceCursor(items);
+    this.trim();
+  }
+
+  private advanceCursor(items: readonly T[]): void {
+    const newest = this.getCursor?.(items);
+    if (newest) this.sinceCursor = newest;
+  }
+
+  private trim(): void {
+    trimSet(this.seenIds, this.maxSeenIds);
+  }
 }
 
 /**
@@ -166,6 +236,30 @@ export abstract class PollingSourceBase<
         this.logger.warn('Listener threw', { data: err });
       }
     }
+  }
+
+  protected validateOrSkip<T>(
+    res: SuccessfulConditionalResponse<unknown>,
+    schema: ZodType<T>,
+    label: string,
+  ): SuccessfulConditionalResponse<T> | undefined;
+  protected validateOrSkip<T>(
+    res: ConditionalResponse<unknown>,
+    schema: ZodType<T>,
+    label: string,
+  ): ConditionalResponse<T> | undefined;
+  protected validateOrSkip<T>(
+    res: ConditionalResponse<unknown>,
+    schema: ZodType<T>,
+    label: string,
+  ): ConditionalResponse<T> | undefined {
+    if (res.status === 304) return res;
+    const parsed = schema.safeParse(res.data);
+    if (!parsed.success) {
+      this.logger.warn(label, { data: parsed.error });
+      return undefined;
+    }
+    return { ...res, data: parsed.data };
   }
 
   /**

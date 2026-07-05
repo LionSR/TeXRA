@@ -157,7 +157,7 @@ export function mapAnthropicEffort(
 }
 
 /** Inputs needed to build the thinking/effort portion of a create request. */
-export interface ThinkingConfigInput {
+interface ThinkingConfigInput {
   fullName: string;
   reasoningEffort: ReasoningEffort | null;
   maxTokens: number;
@@ -165,7 +165,7 @@ export interface ThinkingConfigInput {
 }
 
 /** Resolved thinking configuration to apply onto the create-request params. */
-export interface ThinkingConfigResult {
+interface ThinkingConfigResult {
   thinking: NonNullable<MessageCreateParams['thinking']>;
   /** Present only for adaptive-thinking models; merge onto output_config. */
   outputConfig?: Pick<BetaOutputConfig, 'effort'>;

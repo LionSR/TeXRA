@@ -1,164 +1,26 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
 // Local imports
-import type { ExtensionCommandActions } from '@commands/extensionCommandSurface';
 import {
-  awaitTrue,
-  definedHandler,
-  dispatchCommandFromRegistry,
-  type CommandHandler,
-} from '@shared/commands/registry';
-import { AgentCategorySchema } from '@shared/schemas/agent';
-import { StreamTabIdSchema } from '@shared/schemas/identifiers';
-
-// Re-implement the extension's no-arg handler map here in test form. We
-// can't import the real `extensionCommandSurface.ts` from a vitest run
-// because it transitively pulls in `vscode`. The point of this test is
-// not to re-test the dispatcher (covered in CommandRegistry.vitest.ts);
-// it's to lock in that each newly migrated id (#3771, #3775, #3781)
-// calls the right `actions.*` method, AND that async failures
-// propagate through the dispatcher (regression guard for #3782).
+  EXTENSION_COMMAND_HANDLERS,
+  EXTENSION_HIDDEN_ALIASES,
+  EXTENSION_PARAMETERIZED_HANDLERS,
+  EXTENSION_REGISTRY_CATALOG_COMMAND_IDS,
+  type ExtensionCommandActions,
+} from '@commands/extensionCommandHandlers';
+import {
+  commandCatalog,
+  type CommandCatalogEntry,
+} from '@shared/commands/catalog';
+import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
-const HANDLERS = {
-  'texra.showDashboard': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.showSettings()),
-  'texra.showSettingsView': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.showSettings()),
-  'texra.cleanOutput': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.cleanOutput()),
-  'texra.cleanBuild': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.cleanBuild()),
-  'texra.indentTeX': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.indentTeX()),
-  'texra.auth.signIn': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.signIn()),
-  'texra.auth.chatgpt.signIn': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.signInChatGpt()),
-  'texra.auth.signOut': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.signOut()),
-  'texra.auth.viewProfile': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.viewProfile()),
-  'texra.showMemory': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.showSettings(SETTINGS_TAB.MEMORY)),
-  'texra.runSetupAssistant': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.runSetupAssistant()),
-  'texra.openGettingStarted': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.openGettingStarted()),
-  'texra.createSampleProject': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.createSampleProject()),
-  'texra.downloadArXivSource': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.downloadArXivSource()),
-  'texra.testConnection': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.testConnection()),
-  'texra.testAgentLoading': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.testAgentLoading()),
-  'texra.loadSpecificAgent': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.loadSpecificAgent()),
-  'texra.openProgressViewInTab': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.openProgressViewInTab()),
-  'texra.openDoc': definedHandler(
-    z.string(),
-    (actions: ExtensionCommandActions, page) =>
-      awaitTrue(actions.openDoc(page)),
-  ),
-  'texra.stopAgent': definedHandler(
-    StreamTabIdSchema,
-    (actions: ExtensionCommandActions, streamId) => {
-      actions.stopAgent(streamId);
-      return true;
-    },
-  ),
-  'texra.compactResponse': definedHandler(
-    StreamTabIdSchema,
-    (actions: ExtensionCommandActions, streamId) =>
-      awaitTrue(actions.compactResponse(streamId)),
-  ),
-  // Batch 2 (#3775) — no-arg host-context commands.
-  'texra.parseXml': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.parseXml()),
-  'texra.parseYaml': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.parseYaml()),
-  'texra.testTextEditor': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.testTextEditor()),
-  'texra.indentCurrentTeX': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.indentCurrentTeX()),
-  'texra.applyReplacements': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.applyReplacements()),
-  'texra.fixCompilation': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.fixCompilation()),
-  'texra.getTeXCount': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.getTeXCount()),
-  'texra.countPdfPages': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.countPdfPages()),
-  'texra.showLinterMessages': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.showLinterMessages()),
-  'texra.countLinterMessages': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.countLinterMessages()),
-  'texra.extractFigurePaths': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.extractFigurePaths()),
-  // Batch 3 (#3781) — additional no-arg commands; same async pattern.
-  'texra.encodeImageToBase64': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.encodeImageToBase64()),
-  'texra.convertPdfToImages': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.convertPdfToImages()),
-  'texra.extractTikzFigures': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.extractTikzFigures()),
-  'texra.compileTikzFigures': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.compileTikzFigures()),
-  'texra.cloneOverleafProject': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.cloneOverleafProject()),
-  // Batch 4 (#3781) — settings/api/agent surface follow-ups. Mirrors the
-  // real `EXTENSION_COMMAND_HANDLERS` shape so each migrated id is
-  // exercised through the dispatcher without importing the host-coupled
-  // surface. The `ApiProvider` schema is duplicated locally because
-  // `SecretManager` carries a `vscode` import.
-  'texra.removeApiKey': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.removeApiKey()),
-  'texra.showImportOptions': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.showImportOptions()),
-  'texra.toggleView': (actions: ExtensionCommandActions) =>
-    awaitTrue(actions.toggleView()),
-  'texra.showProgressView': definedHandler(
-    z.object({ inPlace: z.boolean().optional() }).partial().optional(),
-    (actions: ExtensionCommandActions, parsed) =>
-      awaitTrue(actions.showProgressView(parsed?.inPlace === true)),
-  ),
-  'texra.setApiKey': definedHandler(
-    z
-      .enum([
-        'openai',
-        'anthropic',
-        'openRouter',
-        'google',
-        'xai',
-        'deepseek',
-        'moonshot',
-        'dashscope',
-        'minimax',
-        'glm',
-      ])
-      .optional(),
-    (actions: ExtensionCommandActions, provider) =>
-      awaitTrue(actions.setApiKey(provider)),
-  ),
-  'texra.createAgentWithAI': definedHandler(
-    AgentCategorySchema.optional(),
-    (actions: ExtensionCommandActions, category) =>
-      awaitTrue(actions.createAgentWithAI(category ?? 'workflow')),
-  ),
-  'texra.execute': definedHandler(
-    z.unknown(),
-    (actions: ExtensionCommandActions, input) =>
-      awaitTrue(actions.execute(input)),
-  ),
-  // The typed handlers carry their own argument shapes via
-  // `definedHandler`. Matching the registry map's per-entry TArgs widening
-  // (`any`) keeps inference per entry without unifying every entry on
-  // `unknown`.
-} satisfies Record<string, CommandHandler<ExtensionCommandActions, any>>;
+// `extensionCommandHandlers.ts` is deliberately free of `vscode` imports,
+// so — unlike `extensionCommandSurface.ts`, which wires the real actions
+// against VS Code APIs — the real handler map can be exercised here
+// directly. There is no hand-copied re-implementation to drift out of
+// sync with the production map.
 
 function makeActions(): ExtensionCommandActions {
   return {
@@ -199,7 +61,6 @@ function makeActions(): ExtensionCommandActions {
     extractTikzFigures: vi.fn().mockResolvedValue(undefined),
     compileTikzFigures: vi.fn().mockResolvedValue(undefined),
     cloneOverleafProject: vi.fn().mockResolvedValue(undefined),
-    // Batch 4 (#3781).
     removeApiKey: vi.fn().mockResolvedValue(undefined),
     showImportOptions: vi.fn().mockResolvedValue(undefined),
     toggleView: vi.fn().mockResolvedValue(undefined),
@@ -209,6 +70,48 @@ function makeActions(): ExtensionCommandActions {
     execute: vi.fn().mockResolvedValue(undefined),
   };
 }
+
+describe('extension command registry — catalog-driven registration', () => {
+  it('registers exactly the catalog ids tagged extensionRegistry, plus hidden aliases', () => {
+    const registered = [
+      ...Object.keys(EXTENSION_COMMAND_HANDLERS),
+      ...Object.keys(EXTENSION_PARAMETERIZED_HANDLERS),
+    ].sort();
+    const expected = [
+      ...EXTENSION_REGISTRY_CATALOG_COMMAND_IDS,
+      ...EXTENSION_HIDDEN_ALIASES,
+    ].sort();
+    expect(registered).toEqual(expected);
+  });
+
+  it('flags a catalog entry tagged extensionRegistry that has no handler', () => {
+    // Guards the assertion above against a false-positive pass: if a
+    // future catalog entry is tagged `extensionRegistry: true` without a
+    // matching handler, the id set comparison must fail rather than
+    // silently pass.
+    const taggedIds = new Set(
+      (commandCatalog as readonly CommandCatalogEntry[])
+        .filter((entry) => entry.extensionRegistry === true)
+        .map((entry) => entry.id),
+    );
+    const registeredIds = new Set([
+      ...Object.keys(EXTENSION_COMMAND_HANDLERS),
+      ...Object.keys(EXTENSION_PARAMETERIZED_HANDLERS),
+    ]);
+    for (const id of taggedIds) {
+      expect(registeredIds.has(id)).toBe(true);
+    }
+  });
+
+  it.each(EXTENSION_HIDDEN_ALIASES)(
+    'hidden alias %s is absent from the public catalog',
+    (id) => {
+      expect(commandCatalog.some((entry) => (entry.id as string) === id)).toBe(
+        false,
+      );
+    },
+  );
+});
 
 describe('extension command surface — newly migrated commands (#3771, #3775, #3781)', () => {
   it.each([
@@ -253,7 +156,11 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     ['texra.toggleView', 'toggleView'],
   ] as const)('%s dispatches to actions.%s', async (id, actionKey) => {
     const actions = makeActions();
-    const result = dispatchCommandFromRegistry(id, HANDLERS, actions);
+    const result = dispatchCommandFromRegistry(
+      id,
+      EXTENSION_COMMAND_HANDLERS,
+      actions,
+    );
     // Async handlers return a promise; awaiting must resolve to `true`.
     await expect(Promise.resolve(result)).resolves.toBe(true);
     expect(actions[actionKey]).toHaveBeenCalledOnce();
@@ -263,7 +170,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(
       'texra.showMemory',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
     );
     await expect(Promise.resolve(result)).resolves.toBe(true);
@@ -272,11 +179,23 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     );
   });
 
+  it('texra.showAgents (parameterized) passes the agents sub-tab', async () => {
+    const actions = makeActions();
+    await EXTENSION_PARAMETERIZED_HANDLERS['texra.showAgents'](
+      actions,
+      'toolUse',
+    );
+    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
+      SETTINGS_TAB.AGENTS,
+      'toolUse',
+    );
+  });
+
   it('texra.openDoc forwards parsed page argument', async () => {
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(
       'texra.openDoc',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
       undefined,
       'getting-started',
@@ -290,7 +209,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     expect(
       dispatchCommandFromRegistry(
         'texra.openDoc',
-        HANDLERS,
+        EXTENSION_COMMAND_HANDLERS,
         actions,
         undefined,
         42,
@@ -304,7 +223,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     expect(
       dispatchCommandFromRegistry(
         'texra.stopAgent',
-        HANDLERS,
+        EXTENSION_COMMAND_HANDLERS,
         actions,
         undefined,
         'stream-1',
@@ -317,7 +236,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(
       'texra.compactResponse',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
       undefined,
       'stream-2',
@@ -331,7 +250,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     expect(
       dispatchCommandFromRegistry(
         'texra.compactResponse',
-        HANDLERS,
+        EXTENSION_COMMAND_HANDLERS,
         actions,
         undefined,
         '',
@@ -345,7 +264,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(
       'texra.showProgressView',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
     );
     await expect(Promise.resolve(result)).resolves.toBe(true);
@@ -356,7 +275,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(
       'texra.showProgressView',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
       undefined,
       { inPlace: true },
@@ -369,7 +288,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(
       'texra.setApiKey',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
       undefined,
       'anthropic',
@@ -382,7 +301,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(
       'texra.setApiKey',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
     );
     await expect(Promise.resolve(result)).resolves.toBe(true);
@@ -394,7 +313,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     expect(
       dispatchCommandFromRegistry(
         'texra.setApiKey',
-        HANDLERS,
+        EXTENSION_COMMAND_HANDLERS,
         actions,
         undefined,
         'not-a-provider',
@@ -407,7 +326,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(
       'texra.createAgentWithAI',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
     );
     await expect(Promise.resolve(result)).resolves.toBe(true);
@@ -420,7 +339,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(
       'texra.createAgentWithAI',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
       undefined,
       'toolUse',
@@ -436,7 +355,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     const payload = { config: { name: 'test' } };
     const result = dispatchCommandFromRegistry(
       'texra.execute',
-      HANDLERS,
+      EXTENSION_COMMAND_HANDLERS,
       actions,
       undefined,
       payload,
@@ -464,7 +383,11 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
 
       (actions[actionKey] as any).mockRejectedValueOnce(failure);
 
-      const result = dispatchCommandFromRegistry(id, HANDLERS, actions);
+      const result = dispatchCommandFromRegistry(
+        id,
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+      );
       await expect(Promise.resolve(result)).rejects.toBe(failure);
     });
 
@@ -476,7 +399,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
 
       const result = dispatchCommandFromRegistry(
         'texra.compactResponse',
-        HANDLERS,
+        EXTENSION_COMMAND_HANDLERS,
         actions,
         undefined,
         'stream-3',

@@ -30,7 +30,6 @@ import {
 import { currentSession } from '@agent/runtime/SessionHandle';
 
 // Local imports - utils
-import { toErrorMessage } from '@common/errors';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
@@ -43,6 +42,7 @@ import { requireRunStream } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { clamp, unique } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';

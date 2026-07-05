@@ -82,6 +82,28 @@ export const MULTI_FILE_COMMAND_TO_KEY: Record<string, keyof MultiFiles> = {
   [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: 'outputFiles',
 };
 
+/** Maps a `MultipleDocumentFileType` to its `MultiFiles` key. */
+export const FILE_TYPE_TO_KEY: Record<
+  MultipleDocumentFileType,
+  keyof MultiFiles
+> = {
+  input: 'inputFiles',
+  context: 'contextFiles',
+  media: 'mediaFiles',
+  output: 'outputFiles',
+};
+
+/** Reverse of {@link FILE_TYPE_TO_KEY}: maps a `MultiFiles` key back to its file type. */
+export const KEY_TO_FILE_TYPE: Record<
+  keyof MultiFiles,
+  MultipleDocumentFileType
+> = {
+  inputFiles: 'input',
+  contextFiles: 'context',
+  mediaFiles: 'media',
+  outputFiles: 'output',
+};
+
 // =========================================================================
 // Placeholder Configuration
 // =========================================================================

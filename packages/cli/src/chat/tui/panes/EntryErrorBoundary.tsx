@@ -14,8 +14,8 @@
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
 
-import { toErrorMessage } from '@common/errors';
 import * as logUtils from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { WARNING } from '../ui/glyphs';
 

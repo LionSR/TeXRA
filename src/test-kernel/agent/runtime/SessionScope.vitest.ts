@@ -25,8 +25,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { type Plan, type StreamTabId } from '@shared/schemas';
+import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
 import { cleanupAllApprovals } from '@tools/approval';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -142,6 +141,61 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
   });
 });
 
+describe('session-owned transcripts and follow-up queues (Stage 3a)', () => {
+  it("writes run trace entries to the launching session's transcript store only", () => {
+    const launching = new SessionHandle();
+    const sibling = new SessionHandle();
+    const streamId = 'stream:session-transcript-owner' as StreamTabId;
+
+    try {
+      const handle = createRunTrace(
+        streamId,
+        launching.transcripts,
+        launching.flushers,
+      );
+      try {
+        const output = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+        output.append('owned by launching session');
+
+        expect(
+          launching.transcripts
+            .get(streamId)
+            ?.getRange(0)
+            .map((entry) => entry.text),
+        ).toEqual(['owned by launching session']);
+        expect(sibling.transcripts.get(streamId)).toBeUndefined();
+        expect(getDefaultStreamLogStore().get(streamId)).toBeUndefined();
+      } finally {
+        handle.dispose();
+      }
+    } finally {
+      launching.dispose();
+      sibling.dispose();
+    }
+  });
+
+  it('keeps same-stream follow-up queues isolated by session', () => {
+    const a = new SessionHandle();
+    const b = new SessionHandle();
+    const streamId = 'stream:session-followups' as StreamTabId;
+
+    try {
+      a.followUps.acquire(streamId);
+      b.followUps.acquire(streamId);
+      a.followUps.enqueue(streamId, { text: 'from a' });
+      b.followUps.enqueue(streamId, { text: 'from b' });
+
+      a.followUps.release(streamId);
+
+      expect(a.followUps.getAll(streamId)).toEqual([]);
+      expect(b.followUps.getAll(streamId)).toEqual(['from b']);
+    } finally {
+      a.dispose();
+      b.dispose();
+    }
+  });
+});
+
 describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
   it("clears only the given session's coordinator requests", async () => {
     const a = new SessionHandle();
@@ -226,7 +280,7 @@ describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
         streamStatus: undefined,
       });
     } finally {
-      ToolUseFollowUpQueue.release(parentStream);
+      windowSession.followUps.release(parentStream);
       windowSession.dispose();
     }
   });
