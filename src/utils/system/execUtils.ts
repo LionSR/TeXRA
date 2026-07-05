@@ -12,10 +12,6 @@ import {
 import { quote as shellQuote } from 'shell-quote';
 import treeKill from 'tree-kill';
 
-// Local imports - log
-
-// Local imports - common
-
 // Internal imports
 import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas/opResults';

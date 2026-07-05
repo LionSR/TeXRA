@@ -1,8 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
-
 // Local imports - media utilities
 import {
   startRecording,
