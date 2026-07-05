@@ -82,9 +82,10 @@ aliases until a future SDK surface is enforced with a build and import-boundary 
   - `frontend/files/` - File lister and discovery utilities
   - `frontend/latex/` - LaTeX build integration, linting
   - `frontend/media/` - Image and audio handling
-- `src/common/` holds backend-only helpers (errors, state, files, base webview classes). Import them through the `@common/*` alias for clarity.
-  - `common/state/` - State managers including `pendingStateManager`
-  - `common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
+- `src/common/` holds backend-only helpers (errors, files, parsing, storage, constants). Import them through the `@common/*` alias for clarity.
+- `packages/extension/src/common/` holds extension-only helpers (state managers, webview base classes):
+  - `packages/extension/src/common/state/` - State managers including `pendingStateManager`
+  - `packages/extension/src/common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
 - `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
   - `utils/core/` - Async, type-guard, math, comparator, and URL primitives (`debounce`, `delay`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`); re-exports string primitives from `utils/text/stringUtils` for browser-safe barrel access
   - `utils/files/` - Filesystem utilities, rules, and vars

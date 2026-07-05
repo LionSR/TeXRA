@@ -16,8 +16,8 @@ import {
   type MessageConnection,
 } from 'vscode-jsonrpc/node';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export type NotificationHandler = (params: unknown) => void;
 export type ServerRequestHandler = (params: unknown) => Promise<unknown>;

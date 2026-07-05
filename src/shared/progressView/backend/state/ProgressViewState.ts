@@ -12,7 +12,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { toErrorMessage } from '@common/errors';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
@@ -39,6 +38,7 @@ import {
 } from '@shared/state/PersistedState';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { clamp } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = StreamTabInfoSchema.pick({

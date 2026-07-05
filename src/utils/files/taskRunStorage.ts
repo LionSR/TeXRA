@@ -2,10 +2,11 @@
 import * as path from 'node:path';
 import { promises as fs } from 'node:fs';
 
-import { isFileNotFoundError, toErrorMessage } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { type ExecutionId, type FileLocation } from '@shared/schemas';
 import { WORKFLOW_OUTPUT_BASENAME } from '@shared/constants/workflowOutput';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   createRunStorageLocation,

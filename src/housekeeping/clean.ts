@@ -3,12 +3,12 @@ import { sync as globSync } from 'glob';
 import { MODELS } from 'llm-zoo';
 
 // Internal imports
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import { EXCLUDED_DIRS } from '@shared/constants/workspaceDirs';
 import { WorkspaceFS } from '@utils/files';
 import { unique } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { TEMP_EXTENSIONS, PACK_EXTENSIONS, HISTORY_DIR } from './constants';

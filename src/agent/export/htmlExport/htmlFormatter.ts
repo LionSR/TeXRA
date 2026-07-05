@@ -191,6 +191,14 @@ function headerRows(meta: DocumentMeta): Array<[string, string]> {
   return rows;
 }
 
+/**
+ * Default `assetsHref` when the caller doesn't supply one. Exported so
+ * callers that stage assets on disk (e.g. the CLI's `history show --export
+ * html`) can target the same path `formatChatAsHtml` falls back to, instead
+ * of duplicating the string.
+ */
+export const DEFAULT_HTML_EXPORT_ASSETS_HREF = './assets';
+
 export interface HtmlExportOptions {
   /** Path the document uses to reach the assets folder. Defaults to `./assets`. */
   readonly assetsHref?: string;
@@ -209,7 +217,7 @@ export function formatChatAsHtml(
 
   const template = buildExportTemplate({
     title,
-    assetsHref: options.assetsHref ?? './assets',
+    assetsHref: options.assetsHref ?? DEFAULT_HTML_EXPORT_ASSETS_HREF,
     header: {
       title,
       // Suppress the subtitle when it would echo the title verbatim.

@@ -116,15 +116,14 @@ sweep.
 
 ### Core / runtime
 
-1. **`StreamStatusMachine as StreamStatusRegistry` test-only alias** _(LOW)_.
-   `src/agent/runtime/StreamStatusService.ts:303` re-exports the same-file class
-   under a legacy name consumed **only** by ~10 test-kernel vitest files; no
-   production code uses `StreamStatusRegistry`. Per CLAUDE.md ("update tests to use
-   the underlying type directly rather than through wrappers") the alias can be
-   dropped once the tests are repointed to `StreamStatusMachine`. Not a pure
-   deletion — it touches the test suite, so reviewed-train. (Distinct from the
-   `StreamStatusRegistry.onDidChange` module-subscription item already tracked in
-   the detailed audit §; that references the pre-rename name.)
+1. **`StreamStatusMachine as StreamStatusRegistry` test-only alias** _(LOW;
+   resolved by Checkpoint A, 2026-07-05)_. This checkpoint originally found
+   `src/agent/runtime/StreamStatusService.ts:303` re-exporting the same-file
+   class under a legacy name consumed **only** by test-kernel vitest files; no
+   production code used `StreamStatusRegistry`. Checkpoint A repointed the tests
+   to `StreamStatusMachine` and deleted the alias. (Distinct from the
+   `StreamStatusRegistry.onDidChange` module-subscription item already tracked
+   in the detailed audit §; that references the pre-rename name.)
 
 2. **`executionRegistry.ts` handle re-export facade** _(LOW — arguable, keep)_.
    `executionRegistry.ts:41-50` surfaces `ExecutionHandle` / `AgentExecutionHandle`
@@ -252,11 +251,11 @@ typecheck + lint + routing test green), a pure-deletion the 07-03 fan-out missed
 in the same class as that pass's `PersistedFlow.attach`/`getRunId` deletion.
 Everything else the fresh audit surfaced is reviewed-train (port narrowing incl.
 the `*WithPrefill` collapse and the auto-retry-ownership merge, the
-`StreamStatusRegistry` alias drop, the `formatChatAsHtml` / `@logger` surface
-coherence, the strategic Google-handler consolidation) — fold these into the
-canonical plan's surface / multi-tenant track through the reviewed PR train. Do
-not re-open the adjudicated traps, and do not sweep the reviewed-train items
-unattended.
+`formatChatAsHtml` / `@logger` surface coherence, the strategic Google-handler
+consolidation). The `StreamStatusRegistry` alias drop has since landed through
+Checkpoint A. Fold the remaining items into the canonical plan's surface /
+multi-tenant track through the reviewed PR train. Do not re-open the adjudicated
+traps, and do not sweep the remaining reviewed-train items unattended.
 
 ## Verified (this checkpoint)
 
@@ -276,12 +275,13 @@ unattended.
 - Change verified green: `npm run typecheck` **exit 0** (all four projects);
   `eslint` on the three changed files clean; `npx vitest run
 ModelFactoryRouting.vitest.ts` — **36 passed**.
-- New candidates verified in-tree: `StreamStatusMachine as StreamStatusRegistry`
-  (`StreamStatusService.ts:303`, test-only importers); `*WithPrefill`/`*WithoutPrefill`
-  pairs (`IModelHandler.ts:289-331`, sole caller `ResponseCycleFlow.ts:418/582`);
-  auto-retry pair (`IModelHandler.ts:226/233`, caller `ModelInvocationNode.ts:81`);
-  `formatChatAsHtml` deep-imported around `chatExportFormatter.ts`; `@logger`
-  barrel 25 importers vs ~70 `logUtils` / deep `redaction` imports.
+- New candidates verified in-tree at checkpoint time: the now-resolved
+  `StreamStatusMachine as StreamStatusRegistry` alias; `*WithPrefill` /
+  `*WithoutPrefill` pairs (`IModelHandler.ts:289-331`, sole caller
+  `ResponseCycleFlow.ts:418/582`); auto-retry pair (`IModelHandler.ts:226/233`,
+  caller `ModelInvocationNode.ts:81`); `formatChatAsHtml` deep-imported around
+  `chatExportFormatter.ts`; `@logger` barrel 25 importers vs ~70 `logUtils` /
+  deep `redaction` imports.
 - PR-train non-interference confirmed: `git diff --stat` since the last-known
 spine over `ModelFactory.ts` / `IModelHandler.ts` / `src/logger` /
 then-current `packages/core/src/index.ts` / `src/agent/trace` shows only the #7073

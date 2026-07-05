@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors';
 import {
   LaTeXCompileOptionsSchema,
   type LaTeXCompileOptions,
@@ -13,6 +12,7 @@ import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';
