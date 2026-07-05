@@ -83,7 +83,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   ChatUsage | null,
   OpenRouterToolCall,
   OpenRouter,
-  ChatResult
+  ChatResult,
+  ChatContentItems
 > {
   // ── Client-side compaction state ──────────────────────────────────────
   private lastKnownInputTokens = 0;

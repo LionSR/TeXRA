@@ -108,7 +108,8 @@ export class ModelHandlerOpenAI<
   ExtendedCompletionUsage | null,
   TCall,
   OpenAI,
-  ChatCompletion
+  ChatCompletion,
+  ChatCompletionContentPart
 > {
   // ── Client-side compaction state ──────────────────────────────────────
   /** Tracks prompt_tokens from the last API response for compaction threshold checks. */
