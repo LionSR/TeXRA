@@ -129,11 +129,11 @@ export class ModelHandlerValidation extends ModelHandler<
     return false;
   }
 
-  addContinueMessageWithPrefill(): void {
-    // The validation model always produces a complete response.
-  }
-
-  addContinueMessageWithoutPrefill(): void {
+  addContinueMessage(
+    _messages: ChatCompletionMessageParam[],
+    _workspaceState: AgentWorkspaceState,
+    _agentSetting: AgentSetting,
+  ): void {
     // The validation model always produces a complete response.
   }
 
@@ -165,18 +165,11 @@ export class ModelHandlerValidation extends ModelHandler<
     };
   }
 
-  updateMessageContentWithPrefill(
+  updateMessageContent(
     messages: ChatCompletionMessageParam[],
     _bestConnector: string,
     newResponse: string,
-  ): void {
-    messages.push(this.createAssistantMessage(newResponse));
-  }
-
-  updateMessageContentWithoutPrefill(
-    messages: ChatCompletionMessageParam[],
-    _bestConnector: string,
-    newResponse: string,
+    _workspaceState: AgentWorkspaceState,
   ): void {
     messages.push(this.createAssistantMessage(newResponse));
   }

@@ -1409,7 +1409,7 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
   });
 });
 
-describe('ModelHandlerAnthropic updateMessageContentWithPrefill', () => {
+describe('ModelHandlerAnthropic updateMessageContent (prefill)', () => {
   it('creates a new assistant message when no prefill assistant turn exists', () => {
     const handler = createAnthropicHandler({ supportsAssistantPrefill: true });
     stubHandlerForTest(handler);
@@ -1422,7 +1422,7 @@ describe('ModelHandlerAnthropic updateMessageContentWithPrefill', () => {
     ];
     const workspaceState = AgentWorkspaceState.create();
 
-    handler.updateMessageContentWithPrefill(
+    handler.updateMessageContent(
       messages,
       '',
       '<latex_document>...</latex_document>',
@@ -1449,7 +1449,7 @@ describe('ModelHandlerAnthropic updateMessageContentWithPrefill', () => {
     ];
     const workspaceState = AgentWorkspaceState.create();
 
-    handler.updateMessageContentWithPrefill(
+    handler.updateMessageContent(
       messages,
       '',
       'body</latex_document>',

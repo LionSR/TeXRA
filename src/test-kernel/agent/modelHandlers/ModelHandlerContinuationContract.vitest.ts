@@ -135,17 +135,8 @@ const cases: ContinuationCase[] = [
       ];
       const workspaceState = createWorkspaceState();
 
-      handler.addContinueMessageWithoutPrefill(
-        messages,
-        workspaceState,
-        agentSetting,
-      );
-      handler.updateMessageContentWithoutPrefill(
-        messages,
-        '',
-        ' resumed',
-        workspaceState,
-      );
+      handler.addContinueMessage(messages, workspaceState, agentSetting);
+      handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
       assertSingleAssistantTurn(messages);
       assert.equal(messages.at(-1)?.role, 'assistant');
@@ -167,17 +158,8 @@ const cases: ContinuationCase[] = [
       ];
       const workspaceState = createWorkspaceState();
 
-      handler.addContinueMessageWithoutPrefill(
-        messages,
-        workspaceState,
-        agentSetting,
-      );
-      handler.updateMessageContentWithoutPrefill(
-        messages,
-        '',
-        ' resumed',
-        workspaceState,
-      );
+      handler.addContinueMessage(messages, workspaceState, agentSetting);
+      handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
       assertSingleAssistantTurn(messages);
       assert.equal(
@@ -198,17 +180,8 @@ const cases: ContinuationCase[] = [
       ];
       const workspaceState = createWorkspaceState();
 
-      handler.addContinueMessageWithoutPrefill(
-        messages,
-        workspaceState,
-        agentSetting,
-      );
-      handler.updateMessageContentWithoutPrefill(
-        messages,
-        '',
-        ' resumed',
-        workspaceState,
-      );
+      handler.addContinueMessage(messages, workspaceState, agentSetting);
+      handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
       assertSingleAssistantTurn(messages);
       assert.equal(messages.at(-1)?.role, 'assistant');
@@ -230,17 +203,8 @@ const cases: ContinuationCase[] = [
       ];
       const workspaceState = createWorkspaceState();
 
-      handler.addContinueMessageWithoutPrefill(
-        messages,
-        workspaceState,
-        agentSetting,
-      );
-      handler.updateMessageContentWithoutPrefill(
-        messages,
-        '',
-        ' resumed',
-        workspaceState,
-      );
+      handler.addContinueMessage(messages, workspaceState, agentSetting);
+      handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
       assertSingleAssistantTurn(messages);
       assert.equal(messages.at(-1)?.role, 'model');
@@ -259,17 +223,8 @@ const cases: ContinuationCase[] = [
       ];
       const workspaceState = createWorkspaceState();
 
-      handler.addContinueMessageWithoutPrefill(
-        messages,
-        workspaceState,
-        agentSetting,
-      );
-      handler.updateMessageContentWithoutPrefill(
-        messages,
-        '',
-        ' resumed',
-        workspaceState,
-      );
+      handler.addContinueMessage(messages, workspaceState, agentSetting);
+      handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
       assertSingleAssistantTurn(messages);
       assert.equal(messages.at(-1)?.type, 'model_output');
@@ -293,17 +248,8 @@ const cases: ContinuationCase[] = [
       ];
       const workspaceState = createWorkspaceState();
 
-      handler.addContinueMessageWithoutPrefill(
-        messages,
-        workspaceState,
-        agentSetting,
-      );
-      handler.updateMessageContentWithoutPrefill(
-        messages,
-        '',
-        ' resumed',
-        workspaceState,
-      );
+      handler.addContinueMessage(messages, workspaceState, agentSetting);
+      handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
       assertSingleAssistantTurn(messages);
       assert.equal(messages.at(-1)?.role, 'assistant');
@@ -335,11 +281,7 @@ describe('model handler continuation contract', () => {
     ];
     const workspaceState = createWorkspaceState();
 
-    handler.addContinueMessageWithoutPrefill(
-      messages,
-      workspaceState,
-      agentSetting,
-    );
+    handler.addContinueMessage(messages, workspaceState, agentSetting);
 
     assert.equal(messages.length, 3);
     assert.equal(textFromGoogleContent(messages[1]!), 'follow-up');
@@ -348,12 +290,7 @@ describe('model handler continuation contract', () => {
       /continue responding exactly from where you left/i,
     );
 
-    handler.updateMessageContentWithoutPrefill(
-      messages,
-      '',
-      ' resumed',
-      workspaceState,
-    );
+    handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
     assert.equal(messages.length, 3);
     assert.equal(textFromGoogleContent(messages[1]!), 'follow-up');
@@ -376,11 +313,7 @@ describe('model handler continuation contract', () => {
     ];
     const workspaceState = createWorkspaceState();
 
-    handler.addContinueMessageWithoutPrefill(
-      messages,
-      workspaceState,
-      agentSetting,
-    );
+    handler.addContinueMessage(messages, workspaceState, agentSetting);
 
     assert.equal(messages.length, 3);
     assert.equal(textFromResponseContent(messages[1]!), 'follow-up');
@@ -389,12 +322,7 @@ describe('model handler continuation contract', () => {
       /continue responding exactly from where you left/i,
     );
 
-    handler.updateMessageContentWithoutPrefill(
-      messages,
-      '',
-      ' resumed',
-      workspaceState,
-    );
+    handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
     assert.equal(messages.length, 3);
     assert.equal(textFromResponseContent(messages[1]!), 'follow-up');
@@ -412,11 +340,7 @@ describe('model handler continuation contract', () => {
     ];
     const workspaceState = createWorkspaceState();
 
-    handler.addContinueMessageWithoutPrefill(
-      messages,
-      workspaceState,
-      agentSetting,
-    );
+    handler.addContinueMessage(messages, workspaceState, agentSetting);
 
     assert.equal(messages.length, 3);
     assert.equal(textFromInteractionStep(messages[1]!), 'follow-up');
@@ -425,12 +349,7 @@ describe('model handler continuation contract', () => {
       /continue responding exactly from where you left/i,
     );
 
-    handler.updateMessageContentWithoutPrefill(
-      messages,
-      '',
-      ' resumed',
-      workspaceState,
-    );
+    handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
     assert.equal(messages.length, 3);
     assert.equal(textFromInteractionStep(messages[1]!), 'follow-up');
