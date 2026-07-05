@@ -15,6 +15,7 @@ import type {
   OutputFileInfo,
   PlanApprovalPermission,
   RetryPermission,
+  RoundIndexed,
   StorageKey,
   StreamPhase,
   StreamSubstate,
@@ -100,13 +101,13 @@ export interface ProgressEventPayloads {
     substate?: StreamSubstate;
   };
   addOutputFiles: StreamScopedPayload & {
-    filesByRound: { [key: number]: OutputFileInfo[] };
+    filesByRound: RoundIndexed<OutputFileInfo>;
   };
   updateMissingOutputs: StreamScopedPayload & {
-    filesByRound: { [key: number]: string[] };
+    filesByRound: RoundIndexed<string>;
   };
   updateCompileFailures: StreamScopedPayload & {
-    filesByRound: { [key: number]: CompileFailure[] };
+    filesByRound: RoundIndexed<CompileFailure>;
   };
   /**
    * Clear the "missing outputs" marker. Either target a specific tab via

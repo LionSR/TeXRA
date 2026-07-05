@@ -27,6 +27,7 @@ import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 // Local imports - main view
 import { MULTIPLE_DOCUMENT_FILE_TYPES, SESSION_TYPES } from './constants';
 import { SESSION_DEFAULTS } from './sessionDefaults';
+import { DEFAULT_MULTI_FILES, FILE_TYPE_TO_KEY } from './store';
 import {
   checkboxValues$,
   commit$,
@@ -211,16 +212,17 @@ export function handleRestoreState(
 }
 
 function restoreFileArrays(state: MainViewPersistedState): void {
-  multiFiles$.set(
-    Object.fromEntries(
-      MULTIPLE_DOCUMENT_FILE_TYPES.map((type) => {
-        const key = `${type}Files` as keyof MultiFiles;
-        const files =
-          type === 'output' ? [] : state[key as keyof MainViewPersistedState];
-        return [key, Array.isArray(files) ? files : []];
-      }),
-    ) as MultiFiles,
+  const next = MULTIPLE_DOCUMENT_FILE_TYPES.reduce<MultiFiles>(
+    (acc, type) => {
+      const key = FILE_TYPE_TO_KEY[type];
+      const files =
+        type === 'output' ? [] : state[key as keyof MainViewPersistedState];
+      acc[key] = Array.isArray(files) ? files : [];
+      return acc;
+    },
+    { ...DEFAULT_MULTI_FILES },
   );
+  multiFiles$.set(next);
 }
 
 function clearForNewSession(): void {
