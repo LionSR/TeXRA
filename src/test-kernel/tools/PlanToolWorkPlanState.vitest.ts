@@ -2,10 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import {
-  FakeConfigProvider,
-  createFakePlatform,
-} from '@test/support/FakePlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { platform, type Platform } from '@platform/platform';
 import {
   FileInteractionState,
   WorkPlanState,
@@ -27,8 +26,6 @@ import {
   type RecordedProgressEvent,
 } from '../agent/progressTestUtils';
 
-import type { Platform } from '@platform/platform';
-
 const plan: Plan = {
   objective: [
     'Refactor the plan state boundary.',
@@ -47,12 +44,8 @@ const followUpPlan: Plan = {
 };
 
 async function installPlatform(flagOn: boolean): Promise<Platform> {
-  const { initPlatform } = await import('@platform/platform');
-  const platform = createFakePlatform({
-    config: { [GOAL_FEATURE_FLAG_KEY]: flagOn },
-  });
-  initPlatform(platform);
-  return platform;
+  await installFakePlatform({ config: { [GOAL_FEATURE_FLAG_KEY]: flagOn } });
+  return platform();
 }
 
 function startPlanUpdate(streamId: StreamTabId, objective: string) {

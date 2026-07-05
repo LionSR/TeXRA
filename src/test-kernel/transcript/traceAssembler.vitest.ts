@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
@@ -27,26 +28,24 @@ import {
   type ExecutionId,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import type { Platform } from '@platform/platform';
 
 const tempDirs: string[] = [];
 
-async function installStoragePlatform(): Promise<void> {
+async function buildStoragePlatform(): Promise<Platform> {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-trace-'));
   tempDirs.push(tempDir);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform(
-      { workspacePath: workspaceDir },
-      {
-        fs: nodeFilesystem,
-        workspace: createNodeWorkspace(() => workspaceDir),
-        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-        globalState: new MemoryStateStore(),
-        workspaceState: new MemoryStateStore(),
-      },
-    ),
+  return createFakePlatform(
+    { workspacePath: workspaceDir },
+    {
+      fs: nodeFilesystem,
+      workspace: createNodeWorkspace(() => workspaceDir),
+      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+      globalState: new MemoryStateStore(),
+      workspaceState: new MemoryStateStore(),
+    },
   );
 }
 
@@ -74,6 +73,8 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 describe('assembleTrace', () => {
   let previousStreamLogStore: StreamLogStore;
 
+  setupPlatform(buildStoragePlatform);
+
   beforeEach(() => {
     // A fresh store per test, not the process-wide singleton: StreamLogStore's
     // underlying KVStore caches a "directory already ensured" flag for its own
@@ -95,7 +96,6 @@ describe('assembleTrace', () => {
   });
 
   it('assembles a full trace document, deriving streamId from agent/model/executionId', async () => {
-    await installStoragePlatform();
     const executionId = 'exec-happy-path' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
@@ -135,13 +135,11 @@ describe('assembleTrace', () => {
   });
 
   it('returns config_missing when no config was ever written', async () => {
-    await installStoragePlatform();
     const result = await assembleTrace('exec-no-config' as ExecutionId);
     expect(result).toEqual({ status: 'config_missing' });
   });
 
   it('returns streamLogs_missing for a pre-#7057 execution (config exists, streamLogs never persisted)', async () => {
-    await installStoragePlatform();
     const executionId = 'exec-no-logs' as ExecutionId;
     await getExecutionStore(executionId).writeConfig(config());
 
@@ -156,7 +154,6 @@ describe('assembleTrace', () => {
     // "${streamPrefix}#executionId" id, not getStreamTabId's
     // "agent@model#executionId" — the config's own agent/model would derive
     // the wrong id entirely for these.
-    await installStoragePlatform();
     const executionId = 'exec-child-1' as ExecutionId;
     const executionConfig = config({
       agent: 'orchestrator',
@@ -195,7 +192,6 @@ describe('assembleTrace', () => {
   });
 
   it('returns a null terminalStatus when meta has no recorded outcome', async () => {
-    await installStoragePlatform();
     const executionId = 'exec-no-outcome' as ExecutionId;
     const executionConfig = config();
     await getExecutionStore(executionId).writeConfig(executionConfig);

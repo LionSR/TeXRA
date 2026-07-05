@@ -1,7 +1,5 @@
-const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-  import('@platform/platform'),
-  import('./FakePlatform'),
-]);
-initPlatform(createFakePlatform());
+import { installPlatform } from './setupPlatform';
+
+await installPlatform();
 
 export {};

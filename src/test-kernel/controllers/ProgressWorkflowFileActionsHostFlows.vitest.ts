@@ -1,6 +1,6 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
-import { beforeAll, describe, it } from 'vitest';
+import { describe, it } from 'vitest';
 
 // Standard library imports
 
@@ -9,16 +9,6 @@ import {
   ProgressWorkflowFileActionsController,
   type ProgressWorkflowFileActionsControllerDeps,
 } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-
-// Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
-
-beforeAll(async () => {
-  // openTaskStorage resolves the run-storage path through the platform
-  // before handing it to the host opener.
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform());
-});
 
 type LogEntry = { message: string; error: unknown };
 

@@ -1,6 +1,8 @@
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { installPlatform } from '@test/support/setupPlatform';
+
 const originalGitHubToken = process.env.GITHUB_TOKEN;
 const originalGhToken = process.env.GH_TOKEN;
 
@@ -63,20 +65,13 @@ describe('getGitHubToken', () => {
     process.env.GITHUB_TOKEN = 'github-env-token';
     process.env.GH_TOKEN = 'gh-env-token';
 
-    const [{ initPlatform }, { createFakePlatform }, githubAuth] =
-      await Promise.all([
-        import('@platform/platform'),
-        import('@test/support/FakePlatform'),
-        import('@tools/github/githubAuth'),
-      ]);
+    const githubAuth = await import('@tools/github/githubAuth');
 
-    initPlatform(
-      createFakePlatform({
-        secrets: {
-          [githubAuth.GITHUB_TOKEN_STORAGE_KEY]: 'gh-secret-token',
-        },
-      }),
-    );
+    await installPlatform({
+      secrets: {
+        [githubAuth.GITHUB_TOKEN_STORAGE_KEY]: 'gh-secret-token',
+      },
+    });
 
     await expect(githubAuth.getGitHubToken()).resolves.toBe('gh-secret-token');
   });
@@ -84,20 +79,13 @@ describe('getGitHubToken', () => {
   it('ignores blank platform secrets before using environment fallbacks', async () => {
     process.env.GH_TOKEN = 'gh-env-token';
 
-    const [{ initPlatform }, { createFakePlatform }, githubAuth] =
-      await Promise.all([
-        import('@platform/platform'),
-        import('@test/support/FakePlatform'),
-        import('@tools/github/githubAuth'),
-      ]);
+    const githubAuth = await import('@tools/github/githubAuth');
 
-    initPlatform(
-      createFakePlatform({
-        secrets: {
-          [githubAuth.GITHUB_TOKEN_STORAGE_KEY]: '   ',
-        },
-      }),
-    );
+    await installPlatform({
+      secrets: {
+        [githubAuth.GITHUB_TOKEN_STORAGE_KEY]: '   ',
+      },
+    });
 
     await expect(githubAuth.getGitHubToken()).resolves.toBe('gh-env-token');
   });

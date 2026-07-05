@@ -4,7 +4,7 @@ import { setImmediate } from 'node:timers/promises';
 import { afterEach, describe, it, vi } from 'vitest';
 
 // Local imports - tests
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 
 // Local imports - auth
 import * as serverKeysModule from '@auth/serverKeys';
@@ -69,12 +69,9 @@ async function createSettingsIpc(options: {
   infos: string[];
   onApiKeyChanged?: () => Promise<void>;
 }) {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform(
-      { workspacePath: '/workspace' },
-      { secrets: options.secrets },
-    ),
+  await installPlatform(
+    { workspacePath: '/workspace' },
+    { secrets: options.secrets },
   );
   vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
     canUseServerSideKeys: async () => false,

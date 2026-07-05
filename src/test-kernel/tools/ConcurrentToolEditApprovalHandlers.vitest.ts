@@ -3,7 +3,7 @@ import * as assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports - tests
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent types
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -28,21 +28,19 @@ import {
  * stole the first window's in-flight prompt.
  */
 describe('Concurrent per-run tool edit approval handlers', () => {
-  beforeEach(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        { workspacePath: '/workspace', config: {}, files: {} },
-        {
-          toolEditApproval: () => {
-            throw new Error(
-              'platform().toolEditApproval should not be reached when the ' +
-                'RunContext supplies its own toolEditApprovalHandler',
-            );
-          },
-        },
-      ),
-    );
+  setupPlatform(
+    { workspacePath: '/workspace', config: {}, files: {} },
+    {
+      toolEditApproval: () => {
+        throw new Error(
+          'platform().toolEditApproval should not be reached when the ' +
+            'RunContext supplies its own toolEditApprovalHandler',
+        );
+      },
+    },
+  );
+
+  beforeEach(() => {
     cleanupAllApprovals();
   });
 

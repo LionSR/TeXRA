@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - tests
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - runtime
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -16,20 +16,19 @@ import {
 } from '@tools/OpenPdfTool';
 
 describe('OpenPdfTool', () => {
-  beforeEach(async () => {
-    await installPlatform(
-      createFakePlatform({
-        workspacePath: '/workspace',
-        storagePath: '/storage',
-        files: {
-          '/workspace/paper.pdf': '%PDF-1.4\n',
-          '/workspace/figures/result.pdf': '%PDF-1.4\n',
-          '/run/paper.pdf': '%PDF-1.4\n',
-          '/storage/executions/run-1/output.pdf': '%PDF-1.4\n',
-          '/workspace/paper.tex': '\\documentclass{article}',
-        },
-      }),
-    );
+  setupPlatform({
+    workspacePath: '/workspace',
+    storagePath: '/storage',
+    files: {
+      '/workspace/paper.pdf': '%PDF-1.4\n',
+      '/workspace/figures/result.pdf': '%PDF-1.4\n',
+      '/run/paper.pdf': '%PDF-1.4\n',
+      '/storage/executions/run-1/output.pdf': '%PDF-1.4\n',
+      '/workspace/paper.tex': '\\documentclass{article}',
+    },
+  });
+
+  beforeEach(() => {
     setOpenPdfOpener(undefined);
   });
 
@@ -160,13 +159,6 @@ describe('OpenPdfTool', () => {
     expect(openPdf).not.toHaveBeenCalled();
   });
 });
-
-async function installPlatform(
-  platform: ReturnType<typeof createFakePlatform>,
-) {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(platform);
-}
 
 function createRuntimeHost(): AgentRuntimeHost {
   return { emit: vi.fn() };

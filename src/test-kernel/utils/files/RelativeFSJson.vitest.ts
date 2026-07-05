@@ -8,8 +8,11 @@ import { promises as fs } from 'node:fs';
 import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { z } from 'zod';
 
+// Local imports - platform
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+
 // Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - utils
 import { RelativeFS } from '@utils/files/relativeFS';
@@ -23,15 +26,11 @@ class TestRelativeFS extends RelativeFS {
 }
 
 describe('RelativeFS JSON helpers', () => {
-  beforeAll(async () => {
-    // RelativeFS goes through the platform filesystem; back it with the real
-    // node filesystem since this suite writes to a real temp directory.
-    const [{ initPlatform }, { nodeFilesystem }] = await Promise.all([
-      import('@platform/platform'),
-      import('@platform/defaults/nodeFilesystem'),
-    ]);
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+  // RelativeFS goes through the platform filesystem; back it with the real
+  // node filesystem since this suite writes to a real temp directory.
+  setupPlatform({}, { fs: nodeFilesystem });
 
+  beforeAll(async () => {
     await fs
       .rm(BASE_DIR, { recursive: true, force: true })
       .catch(() => undefined);

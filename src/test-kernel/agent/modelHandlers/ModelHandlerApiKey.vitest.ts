@@ -8,6 +8,7 @@ import {
 } from 'llm-zoo';
 
 // Local imports - handler under test
+import { installPlatform } from '@test/support/setupPlatform';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as serverKeysModule from '@auth/serverKeys';
@@ -65,11 +66,7 @@ function stubServerSideKeyService(
 async function initFakePlatform(
   secrets: Record<string, string> = {},
 ): Promise<void> {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(createFakePlatform({ secrets }));
+  await installPlatform({ secrets });
   invalidateApiKeyCache();
 }
 

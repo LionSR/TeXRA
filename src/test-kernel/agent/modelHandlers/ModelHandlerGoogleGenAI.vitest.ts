@@ -1,6 +1,6 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
-import { beforeAll, describe, it } from 'vitest';
+import { describe, it } from 'vitest';
 
 // Standard library imports
 
@@ -10,9 +10,6 @@ import {
   createPartFromText,
   createPartFromUri,
 } from '@google/genai';
-
-// Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - agent
 import {
@@ -41,13 +38,6 @@ import type {
   FunctionCall,
   Content,
 } from '@google/genai';
-
-// Vitest isolates files, so this suite installs its own platform
-// (pathToLocation resolves through platform workspace services).
-beforeAll(async () => {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform());
-});
 
 interface LoggerStub extends Partial<AgentTrace> {
   streamId: string;
