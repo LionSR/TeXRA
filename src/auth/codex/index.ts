@@ -65,8 +65,6 @@ export {
 export {
   resolveCodexSubscriptionCapabilities,
   resolveCodexSubscriptionCapabilitiesForAgentCategory,
-  shouldUseCodexSubscription,
-  shouldUseCodexSubscriptionForAgentCategory,
 } from './codexRouting';
 export { isCodexSubscriptionActive } from './codexActive';
 export {

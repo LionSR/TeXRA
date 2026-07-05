@@ -9,7 +9,7 @@ import type { ExecutionId } from '@shared/schemas';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import { getCleanAgentName } from '@shared/schemas/agent';
 import { WorkspaceFS } from '@utils/files';
-import { resolveRunDir } from '@utils/files/taskRunStorage';
+import { findRunDir } from '@utils/files/taskRunStorage';
 
 import { HISTORY_DIR } from './constants';
 import { generateTimestamp } from './utils';
@@ -32,7 +32,7 @@ export async function runPackRunDir(
     `Packing runDir for execution ${executionId} (agent=${agent}, model=${model}, inputFile=${inputFile})`,
   );
 
-  const runDirAbsolute = await resolveRunDir(executionId);
+  const runDirAbsolute = await findRunDir(executionId);
   if (!runDirAbsolute) {
     logger.warn(
       CHANNEL,
@@ -73,13 +73,13 @@ export async function runPackRunDir(
 
 /**
  * Delete a run's runDir. Irreversible. Used when the user discards a run
- * from the progress-view toolbar. Resolves through `resolveRunDir` so the
+ * from the progress-view toolbar. Uses `findRunDir` so the
  * legacy `taskRuns/` location is cleaned up too.
  */
 export async function runCleanRunDir(
   executionId: ExecutionId,
 ): Promise<FileOpResult> {
-  const runDirAbsolute = await resolveRunDir(executionId);
+  const runDirAbsolute = await findRunDir(executionId);
   if (!runDirAbsolute) {
     logger.warn(
       CHANNEL,

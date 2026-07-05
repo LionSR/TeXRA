@@ -74,6 +74,7 @@ export class WolframTool extends defineTool({
     });
     if (result.success) {
       return {
+        status: 'executed',
         summary: wolframRunSummary(input.code),
         output: result.output ?? '',
       };

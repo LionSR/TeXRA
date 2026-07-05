@@ -25,7 +25,7 @@ export interface SettingsMemoryControllerDeps {
   loadMemoryPreview(storagePath: string): Promise<MemoryPreview>;
   isMemoryEnabled(): boolean;
   setMemoryEnabled(enabled: boolean): Promise<void>;
-  resolveStoragePath(storagePath: string): string;
+  memoryStoragePath(storagePath: string): string;
   storage: SettingsMemoryStorage;
   maxPinnedMemories: number;
   parseMemoryFile(raw: string): {
@@ -67,7 +67,7 @@ export class SettingsMemoryController {
   async getMemoryPreviewMessage(
     storagePath: string,
   ): Promise<SettingsMemoryMessage> {
-    const resolvedPath = this.deps.resolveStoragePath(storagePath);
+    const resolvedPath = this.deps.memoryStoragePath(storagePath);
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
       preview: await this.deps.loadMemoryPreview(resolvedPath),
@@ -78,7 +78,7 @@ export class SettingsMemoryController {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
       preview: {
-        storagePath: this.deps.resolveStoragePath(storagePath),
+        storagePath: this.deps.memoryStoragePath(storagePath),
         error: true,
       },
     };
@@ -105,7 +105,7 @@ export class SettingsMemoryController {
     if (!confirmed) return null;
 
     await this.deps.storage.delete(
-      this.deps.resolveStoragePath(input.storagePath),
+      this.deps.memoryStoragePath(input.storagePath),
       {
         recursive: true,
       },
@@ -132,7 +132,7 @@ export class SettingsMemoryController {
     storagePath: string,
     pinned: boolean,
   ): Promise<SettingsMemoryMessage | null> {
-    const resolvedPath = this.deps.resolveStoragePath(storagePath);
+    const resolvedPath = this.deps.memoryStoragePath(storagePath);
     const raw = await this.deps.storage.read(resolvedPath);
     const { meta, content } = this.deps.parseMemoryFile(raw);
 

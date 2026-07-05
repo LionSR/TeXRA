@@ -12,8 +12,8 @@ import {
   modelSelectItemsForCliMode,
   noRunnableModelAccessReason,
   runnableCliModelAccessEntries,
-  resolveCliModelAccessEntry,
-  resolveCliRunnableModel,
+  loadCliModelAccessEntry,
+  selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -64,7 +64,7 @@ function model(
 }
 
 type ResolveCliRunnableModelOptions = Parameters<
-  typeof resolveCliRunnableModel
+  typeof selectCliRunnableModel
 >[1];
 
 function resolveModelFromAccessList(
@@ -72,7 +72,7 @@ function resolveModelFromAccessList(
   model: string,
   options: Omit<ResolveCliRunnableModelOptions, 'accessList'>,
 ) {
-  return resolveCliRunnableModel(model, { ...options, accessList });
+  return selectCliRunnableModel(model, { ...options, accessList });
 }
 
 const INTERACTIVE_RECOVERY = {
@@ -94,7 +94,7 @@ describe('CLI model access resolution', () => {
       resolveModelFromAccessList(
         [model('sonnet46T'), model('opus48T')],
         'opus48T',
-        { fallbackSource: 'override' },
+        { fallbackReason: 'explicit-override' },
       ),
     ).resolves.toEqual({ model: 'opus48T' });
   });
@@ -115,21 +115,21 @@ describe('CLI model access resolution', () => {
 
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackSource: 'override',
+        fallbackReason: 'explicit-override',
       }),
     ).rejects.toThrow(
       'Model "missingModel" is not available in the active API mode (missing api key). Available models: deepseekT.',
     );
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackSource: 'env',
+        fallbackReason: 'environment',
       }),
     ).rejects.toThrow(
       'Model "missingModel" is not available in the active API mode (missing api key). Available models: deepseekT.',
     );
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackSource: 'config',
+        fallbackReason: 'command-config',
       }),
     ).resolves.toEqual({
       model: 'deepseekT',
@@ -138,7 +138,7 @@ describe('CLI model access resolution', () => {
     });
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackSource: 'history',
+        fallbackReason: 'history',
       }),
     ).resolves.toEqual({
       model: 'deepseekT',
@@ -147,7 +147,7 @@ describe('CLI model access resolution', () => {
     });
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackSource: 'builtin',
+        fallbackReason: 'builtin-default',
       }),
     ).resolves.toEqual({ model: 'deepseekT' });
   });
@@ -167,7 +167,7 @@ describe('CLI model access resolution', () => {
           }),
         ],
         'opus48T',
-        { fallbackSource: 'override' },
+        { fallbackReason: 'explicit-override' },
       ),
     ).rejects.toThrow(
       'Model "opus48T" is not available in the active API mode (not included). Available models: sonnet46T.',
@@ -190,7 +190,7 @@ describe('CLI model access resolution', () => {
           model('sonnet46T'),
         ],
         'opus48T',
-        { fallbackSource: 'config' },
+        { fallbackReason: 'command-config' },
       ),
     ).resolves.toEqual({
       model: 'deepseekT',
@@ -215,7 +215,7 @@ describe('CLI model access resolution', () => {
           model('gpt55'),
         ],
         'deepseekT',
-        { fallbackSource: 'builtin' },
+        { fallbackReason: 'builtin-default' },
       ),
     ).resolves.toEqual({ model: 'gpt55' });
   });
@@ -688,7 +688,7 @@ describe('CLI model access resolution', () => {
           }),
         ],
         'deepseekT',
-        { fallbackSource: 'override', apiMode: 'included' },
+        { fallbackReason: 'explicit-override', apiMode: 'included' },
       ),
     ).rejects.toThrow(
       'Model "deepseekT" is not available in the active API mode (api key set). Available models: sonnet46T.',
@@ -713,7 +713,7 @@ describe('CLI model access resolution', () => {
           }),
         ],
         'sonnet46T',
-        { fallbackSource: 'config', apiMode: 'personal' },
+        { fallbackReason: 'command-config', apiMode: 'personal' },
       ),
     ).resolves.toEqual({
       model: 'deepseekT',
@@ -737,7 +737,7 @@ describe('CLI model access resolution', () => {
           }),
         ],
         'gemini31p',
-        { fallbackSource: 'config' },
+        { fallbackReason: 'command-config' },
       ),
     ).rejects.toThrow(
       'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included relay access, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
@@ -762,7 +762,7 @@ describe('CLI model access resolution', () => {
           }),
         ],
         'gemini31p',
-        { fallbackSource: 'config', apiMode: 'personal' },
+        { fallbackReason: 'command-config', apiMode: 'personal' },
       ),
     ).rejects.toThrow(
       'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
@@ -785,7 +785,7 @@ describe('CLI model access resolution', () => {
         ],
         'gemini31p',
         {
-          fallbackSource: 'config',
+          fallbackReason: 'command-config',
           noAvailableModelsMessage:
             'Run `texra login` for included relay access.',
         },
@@ -870,8 +870,8 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliRunnableModel('haiku3', {
-        fallbackSource: 'override',
+      selectCliRunnableModel('haiku3', {
+        fallbackReason: 'explicit-override',
         apiMode: 'included',
         accessList: [],
       }),
@@ -893,8 +893,8 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliRunnableModel('haiku3', {
-        fallbackSource: 'override',
+      selectCliRunnableModel('haiku3', {
+        fallbackReason: 'explicit-override',
         apiMode: 'included',
         accessList: [],
       }),
@@ -1221,8 +1221,8 @@ describe('CLI model access resolution', () => {
       ]);
 
     await expect(
-      resolveCliRunnableModel('HIDDENFIXTUREMODEL', {
-        fallbackSource: 'override',
+      selectCliRunnableModel('HIDDENFIXTUREMODEL', {
+        fallbackReason: 'explicit-override',
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
     expect(computeModelOptionsDataMock).toHaveBeenNthCalledWith(
@@ -1242,8 +1242,8 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliRunnableModel('hiddenFixtureModel', {
-        fallbackSource: 'override',
+      selectCliRunnableModel('hiddenFixtureModel', {
+        fallbackReason: 'explicit-override',
         apiMode: 'personal',
         accessList: [
           model('deepseekT', {
@@ -1265,6 +1265,22 @@ describe('CLI model access resolution', () => {
     );
   });
 
+  it('ignores stale lower-priority hidden candidates after a runnable winner', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([]);
+
+    await expect(
+      selectCliRunnableModel(
+        [
+          { model: 'sonnet46T', reason: 'explicit-override' },
+          { model: 'hiddenFixtureModel', reason: 'environment' },
+        ],
+        {
+          accessList: [model('sonnet46T')],
+        },
+      ),
+    ).resolves.toEqual({ model: 'sonnet46T' });
+  });
+
   it('resolves hidden model entries for diagnostic commands', async () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('hiddenFixtureModel', {
@@ -1276,7 +1292,7 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliModelAccessEntry('HIDDENFIXTUREMODEL', {
+      loadCliModelAccessEntry('HIDDENFIXTUREMODEL', {
         apiMode: 'personal',
         accessList: [model('sonnet46T')],
       }),
@@ -1301,7 +1317,7 @@ describe('CLI model access resolution', () => {
       resolveModelFromAccessList(
         [model('userFacingFixture')],
         'user-facing-fixture',
-        { fallbackSource: 'override' },
+        { fallbackReason: 'explicit-override' },
       ),
     ).resolves.toEqual({ model: 'userFacingFixture' });
 
@@ -1315,7 +1331,7 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliModelAccessEntry('User Facing Fixture', {
+      loadCliModelAccessEntry('User Facing Fixture', {
         apiMode: 'personal',
         accessList: [model('sonnet46T')],
       }),
@@ -1341,8 +1357,8 @@ describe('CLI model access resolution', () => {
       .mockResolvedValueOnce([]);
 
     await expect(
-      resolveCliRunnableModel('hiddenFixtureModel', {
-        fallbackSource: 'override',
+      selectCliRunnableModel('hiddenFixtureModel', {
+        fallbackReason: 'explicit-override',
       }),
     ).rejects.toThrow(
       'Model "hiddenFixtureModel" is configured but has no option data.',

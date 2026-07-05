@@ -6,8 +6,11 @@ import {
   type CliApiMode,
 } from '@cli/runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
-import { formatCliNoAvailableModelsRecovery } from '@cli/runtime/modelAccess';
-import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
+import { setCliHelperModel } from '@cli/runtime/initPlatform';
+import {
+  formatCliNoAvailableModelsRecovery,
+  selectCliRunnableModel,
+} from '@cli/runtime/modelAccess';
 
 import { cliState } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
@@ -27,17 +30,16 @@ async function reconcileRootModelAfterApiModeChange(
   if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
 
   const { model: currentModel, modelSource } = cliState.sessionMeta.get();
-  const selection = await selectCliRootModel({
-    model: currentModel,
-    modelSource,
+  const selection = await selectCliRunnableModel(currentModel, {
+    fallbackReason: modelSource,
     apiMode,
     noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
       apiMode,
       CHAT_API_MODE_MODEL_RECOVERY,
     ),
     agentCategory: AgentCategory.ToolUse,
-    persistAsHelperModel: true,
   });
+  await setCliHelperModel(selection.model);
   if (selection.model === currentModel) return undefined;
 
   cliState.sessionMeta.set({

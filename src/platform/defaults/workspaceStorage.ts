@@ -1,13 +1,25 @@
 // Node imports
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, isAbsolute, join, normalize, relative } from 'node:path';
 
 // Local imports - platform
 import type { StorageProvider } from '../interfaces/storage';
 
-export const GLOBAL_STORAGE_DIR = 'global-storage';
-export const WORKSPACE_STORAGE_DIR = 'workspace-storage';
+const STORAGE_LAYOUT = {
+  global: 'global-storage',
+  workspace: 'workspace-storage',
+  memory: 'memories',
+  runs: 'executions',
+  legacyRuns: 'taskRuns',
+  original: 'original',
+} as const;
+
+export const GLOBAL_STORAGE_DIR = STORAGE_LAYOUT.global;
+export const WORKSPACE_STORAGE_DIR = STORAGE_LAYOUT.workspace;
+export const MEMORY_STORAGE_DIR = STORAGE_LAYOUT.memory;
+export const RUNS_STORAGE_DIR = STORAGE_LAYOUT.runs;
+export const LEGACY_RUNS_STORAGE_DIR = STORAGE_LAYOUT.legacyRuns;
 
 type WorkspacePathSource = string | undefined | (() => string | undefined);
 
@@ -51,6 +63,66 @@ export function resolveWorkspaceStoragePath(
     WORKSPACE_STORAGE_DIR,
     workspaceStorageId(workspacePath),
   );
+}
+
+export function resolveMemoryStoragePath(
+  storagePath: string = MEMORY_STORAGE_DIR,
+): string {
+  const normalized = normalize(storagePath);
+  const memoryRelative = relative(MEMORY_STORAGE_DIR, normalized);
+  if (memoryRelative.startsWith('..') || isAbsolute(memoryRelative)) {
+    throw new Error(`Invalid memory path: ${storagePath}`);
+  }
+  return memoryRelative
+    ? join(MEMORY_STORAGE_DIR, memoryRelative)
+    : MEMORY_STORAGE_DIR;
+}
+
+export function resolveRunStoragePath(...segments: string[]): string {
+  return segments.length
+    ? join(RUNS_STORAGE_DIR, ...segments)
+    : RUNS_STORAGE_DIR;
+}
+
+export function resolveLegacyRunStoragePath(...segments: string[]): string {
+  return segments.length
+    ? join(LEGACY_RUNS_STORAGE_DIR, ...segments)
+    : LEGACY_RUNS_STORAGE_DIR;
+}
+
+export function resolveRunOriginalSnapshotPath(
+  executionId: string,
+  workspaceRelativePath: string,
+): string {
+  return resolveRunStoragePath(
+    executionId,
+    STORAGE_LAYOUT.original,
+    workspaceRelativePath,
+  );
+}
+
+export function resolveRunStorageRelativePath(
+  absolutePath: string,
+  runDirectory: string,
+): string | undefined {
+  const relativePath = relative(runDirectory, absolutePath).replaceAll(
+    '\\',
+    '/',
+  );
+  if (relativePath.startsWith('..') || isAbsolute(relativePath))
+    return undefined;
+  return relativePath || undefined;
+}
+
+export async function resolveExistingRunStoragePath(
+  segments: readonly string[],
+  exists: (storagePath: string) => Promise<boolean>,
+): Promise<string | undefined> {
+  const primary = resolveRunStoragePath(...segments);
+  if (await exists(primary)) return primary;
+  const legacy = resolveLegacyRunStoragePath(...segments);
+  if (await exists(legacy)) return legacy;
+  return undefined;
 }
 
 function resolveLegacyWorkspaceStoragePath(

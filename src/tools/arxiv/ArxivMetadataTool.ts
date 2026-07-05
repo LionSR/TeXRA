@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports - latex
 import { toErrorMessage } from '@common/errors';
 import { arxivProcessor } from '@latex/arxivProcessor';
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   type ArxivPaperMetadata,
   createArxivClient,
@@ -37,7 +37,7 @@ export class ArxivMetadataTool extends defineTool({
   description: 'Fetch bibliographic metadata for an arXiv paper.',
   schema: ArxivMetadataInputSchema,
 }) {
-  protected async execute(input: ArxivMetadataInput) {
+  protected async execute(input: ArxivMetadataInput): Promise<ToolResult> {
     const rawId = input.id.trim();
     const validationError = arxivProcessor.validateId(rawId);
     if (validationError) {
@@ -79,6 +79,7 @@ export class ArxivMetadataTool extends defineTool({
     };
 
     return {
+      status: 'executed',
       summary: `Retrieved: ${metadata.id}`,
       output: JSON.stringify(metadata, null, 2),
     };

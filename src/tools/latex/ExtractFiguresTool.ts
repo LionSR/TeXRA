@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
@@ -31,7 +32,9 @@ export class ExtractLatexFiguresTool extends defineTool({
     'Resolve and list figure assets referenced by a LaTeX document, returning attachments when available.',
   schema: ExtractFiguresInputSchema,
 }) {
-  protected async execute({ texPath }: ExtractFiguresInput) {
+  protected async execute({
+    texPath,
+  }: ExtractFiguresInput): Promise<ToolResult> {
     const { path, display } = await resolveLatexFileOrThrow(texPath);
 
     const figurePaths = await extractFigurePathsFromLatex(
@@ -42,6 +45,7 @@ export class ExtractLatexFiguresTool extends defineTool({
     if (uniqueFigures.length === 0) {
       const summary = `No figures found in ${display}.`;
       return {
+        status: 'executed',
         summary,
         output: formatToolOutput('Figures', null),
       };
@@ -65,6 +69,7 @@ export class ExtractLatexFiguresTool extends defineTool({
       : output;
 
     return {
+      status: 'executed',
       summary,
       output: fullOutput,
       files: attachments,

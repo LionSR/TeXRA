@@ -136,6 +136,7 @@ export class EditFileTool extends defineTool({
       : replacementSummary;
 
     return {
+      status: 'executed',
       summary,
       output,
       userPatch: approval.userPatch,

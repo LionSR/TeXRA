@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '@model';
+import { decideRunModel } from '@model/runModelDecision';
 import type { ModelOptionData } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 
@@ -29,7 +30,7 @@ function normalizeModelName(model: string | null | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
-export function resolveDelegationModelFromAvailableNames(input: {
+export function selectDelegationModelFromAvailableNames(input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
   readonly availableModels: readonly string[];
@@ -45,18 +46,30 @@ export function resolveDelegationModelFromAvailableNames(input: {
     );
   }
 
-  const requestedModel = normalizeModelName(input.requestedModel);
-  if (requestedModel) {
-    if (availableModels.includes(requestedModel)) return requestedModel;
+  const decision = decideRunModel(
+    [
+      { model: input.requestedModel, reason: 'explicit-override' },
+      {
+        model: input.parentModel,
+        reason: 'parent-run',
+        fallbackMode: 'silent',
+      },
+      { model: availableModels[0], reason: 'access-list-default' },
+    ],
+    (model) => availableModels.includes(model),
+  );
+  if (!decision) {
+    throw new Error(
+      'No models are currently available for delegation in the active API mode. Switch API mode or configure a provider API key before delegating.',
+    );
+  }
+  if (decision.unavailable) {
+    const requestedModel = normalizeModelName(input.requestedModel);
     throw new Error(
       `Model "${requestedModel}" is not currently available for delegation in the active API mode. Available models: ${availableModels.join(', ')}.`,
     );
   }
-
-  const parentModel = normalizeModelName(input.parentModel);
-  return parentModel && availableModels.includes(parentModel)
-    ? parentModel
-    : availableModels[0]!;
+  return decision.model;
 }
 
 export function withDelegationModelAvailability(

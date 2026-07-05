@@ -2,6 +2,8 @@
 // `cliState.streams[].entries`. Approval/permission entries land in side
 // panels and modals; tool rows render inline alongside assistant prose.
 
+import { isDeepStrictEqual } from 'node:util';
+
 import { flushPendingRunTraces, getDefaultStreamLogStore } from '@transcript';
 import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import {
@@ -83,12 +85,9 @@ function latestLogActivityIsThinking(
  *  via Zod passthrough, so a `===` compare would defeat the cache the
  *  moment any upstream code reconstructs `data` (deserialization,
  *  structured clone, future log replay). Inputs are small — tool call
- *  args, not output — so a JSON serialization is cheap. */
+ *  args, not output — so a structural comparison is cheap. */
 function inputEqual(prev: unknown, next: unknown): boolean {
-  if (prev === next) return true;
-  // Tool-arg inputs are plain JSON values (model-supplied, Zod passthrough),
-  // never circular, so JSON.stringify can't throw here.
-  return JSON.stringify(prev) === JSON.stringify(next);
+  return prev === next || isDeepStrictEqual(prev, next);
 }
 
 // Field-by-field — a stringified signature over the whole NormalizedToolUse
@@ -137,11 +136,10 @@ function entriesEqual(
   ) {
     return false;
   }
-  if (prev.role === 'tool') {
-    if (!prev.toolUse || !next.toolUse) return prev.toolUse === next.toolUse;
+  if (prev.role === 'tool' && next.role === 'tool') {
     return toolUseEqual(prev.toolUse, next.toolUse);
   }
-  if (prev.role === 'process') {
+  if (prev.role === 'process' && next.role === 'process') {
     return prev.process === next.process;
   }
   return true;
@@ -149,14 +147,14 @@ function entriesEqual(
 
 function logEntryRole(
   messageType: string | undefined,
-): ConversationEntry['role'] {
+): 'assistant' | 'error' | 'user' {
   if (messageType === MESSAGE_TYPES.USER_MESSAGE) return 'user';
   if (messageType === MESSAGE_TYPES.ERROR) return 'error';
   return 'assistant';
 }
 
 function renderLogEntryText(
-  role: ConversationEntry['role'],
+  role: 'assistant' | 'error' | 'user',
   text: string,
 ): string {
   switch (role) {
@@ -168,8 +166,6 @@ function renderLogEntryText(
       return appendCliApiSwitchHint(text);
     case 'user':
       return summarizeFollowupMessage(text);
-    default:
-      return text;
   }
 }
 
@@ -181,7 +177,7 @@ function renderLogEntry(
     // Cache hit: same `data` reference as last sync, no re-normalize.
     // Promotion to `<Static>` is decided later by `finalizeSettledPrefix`
     // over the ordered slice, so a cache hit just returns `prev` as-is.
-    if (prev?.toolUse && toolUseSourceCache.get(prev) === entry.data) {
+    if (prev?.role === 'tool' && toolUseSourceCache.get(prev) === entry.data) {
       return prev;
     }
 
@@ -255,7 +251,7 @@ function isSettledEntry(
     case 'process':
       return true;
     case 'tool':
-      return entry.toolUse?.status === TOOL_USE_STATUS.COMPLETED;
+      return entry.toolUse.status === TOOL_USE_STATUS.COMPLETED;
     case 'assistant':
       return (
         !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1

@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
+import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { debug } from '@logger/logUtils';
 import { formatRelativeTime } from '@shared/utils/string';
@@ -33,7 +34,6 @@ import { countOccurrences, requireField } from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
-  MEMORY_STORAGE_ROOT,
   MAX_VIEW_LINES,
   MAX_PINNED_MEMORIES,
   DIRECTORY_LISTING_DEPTH,
@@ -250,8 +250,9 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     // Handle non-existent root directory gracefully - return empty listing
     // instead of error (consistent with MemoryViewMessageHandler behavior)
     if (!exists) {
-      if (resolvedPath === MEMORY_STORAGE_ROOT) {
+      if (resolvedPath === MEMORY_STORAGE_DIR) {
         return {
+          status: 'executed',
           summary: 'Viewed empty memory directory',
           output: `The memory directory is empty. This is a fresh start - use the create command to add memory files.`,
         };
@@ -274,6 +275,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
       const header = `Contents of ${inputPath} (showing ${start}\u2013${end} of ${total}, up to 2 levels deep):`;
       return {
+        status: 'executed',
         summary: `Listed directory: ${inputPath} (${start}\u2013${end} of ${total})`,
         output: `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
       };
@@ -315,12 +317,13 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       throw new ToolError(`File ${inputPath} already exists.`);
     }
 
-    await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
+    await StorageFS.ensureDir(MEMORY_STORAGE_DIR);
     await StorageFS.ensureDir(path.dirname(resolvedPath));
     await this.writeMemoryFile(resolvedPath, fileText);
     recordToolFileRead(inputPath);
 
     return {
+      status: 'executed',
       summary: `Created memory file: ${inputPath}`,
       output: `File created successfully at: ${inputPath}`,
     };
@@ -368,6 +371,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const numbered = formatLinesWithNumbers(updatedLines);
 
     return {
+      status: 'executed',
       summary: `Replaced text in: ${inputPath}`,
       output: `The file has been edited.\n${numbered.join('\n')}`,
     };
@@ -404,6 +408,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     recordToolFileRead(inputPath);
 
     return {
+      status: 'executed',
       summary: `Inserted text at line ${insertLine} in: ${inputPath}`,
       output: `The file ${inputPath} has been edited.`,
     };
@@ -421,6 +426,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     await StorageFS.delete(resolvedPath, { recursive: true });
     return {
+      status: 'executed',
       summary: `Deleted: ${inputPath}`,
       output: `Successfully deleted ${inputPath}`,
     };
@@ -448,6 +454,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     await StorageFS.rename(resolvedOldPath, resolvedNewPath);
     return {
+      status: 'executed',
       summary: `Renamed: ${oldPathInput} to ${newPathInput}`,
       output: `Successfully renamed ${oldPathInput} to ${newPathInput}`,
     };
@@ -460,6 +467,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const { meta, content } = await this.readMemoryFile(resolvedPath);
     if (meta?.pinned) {
       return {
+        status: 'executed',
         summary: `Already pinned: ${inputPath}`,
         output: `The memory file ${inputPath} is already pinned.`,
       };
@@ -476,6 +484,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
 
     return {
+      status: 'executed',
       summary: `Pinned memory: ${inputPath}`,
       output: `Successfully pinned ${inputPath} as a core long-term memory. (${pinnedCount + 1}/${MAX_PINNED_MEMORIES} pinned)`,
     };
@@ -488,6 +497,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const { meta, content } = await this.readMemoryFile(resolvedPath);
     if (!meta?.pinned) {
       return {
+        status: 'executed',
         summary: `Not pinned: ${inputPath}`,
         output: `The memory file ${inputPath} is not pinned.`,
       };
@@ -497,6 +507,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
 
     return {
+      status: 'executed',
       summary: `Unpinned memory: ${inputPath}`,
       output: `Successfully unpinned ${inputPath}.`,
     };

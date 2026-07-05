@@ -28,6 +28,7 @@ import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
+  type AgentSetting,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -1276,24 +1277,42 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 });
 
+/**
+ * Creates a fresh temp directory with an `r0/output.xml` path for prefill
+ * tests, invokes `run` with that path, and removes the directory afterward
+ * regardless of outcome.
+ */
+async function withTempOutputPath(
+  prefix: string,
+  run: (outputPath: string) => Promise<void>,
+): Promise<void> {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const outputPath = path.join(tempDir, 'r0', 'output.xml');
+  try {
+    await run(outputPath);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+/** Build the workflow AgentSetting shared by the latex_document prefill tests. */
+function createLatexAgentSetting(): AgentSetting {
+  return AgentSettingSchema.parse({
+    agentCategory: AgentCategory.Workflow,
+    documentTag: 'latex_document',
+    endTag: '</latex_document>',
+  });
+}
+
 describe('ModelHandlerAnthropic output prefill initialization', () => {
   it('writes assistant prefills for non-XML workflow outputs', async () => {
-    const tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'anthropic-prefill-'),
-    );
-    const outputPath = path.join(tempDir, 'r0', 'output.xml');
-
-    try {
+    await withTempOutputPath('anthropic-prefill-', async (outputPath) => {
       const handler = createAnthropicHandler({
         supportsAssistantPrefill: true,
       });
       stubHandlerForTest(handler);
 
-      const agentSetting = AgentSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-        documentTag: 'latex_document',
-        endTag: '</latex_document>',
-      });
+      const agentSetting = createLatexAgentSetting();
       const messages: MessageParam[] = [
         {
           role: 'user',
@@ -1320,28 +1339,17 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
       assert.deepEqual(updatedMessages.at(-1)?.content, [
         { type: 'text', text: prefill },
       ]);
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
+    });
   });
 
   it('skips assistant prefill message when prefill is empty', async () => {
-    const tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'anthropic-prefill-empty-'),
-    );
-    const outputPath = path.join(tempDir, 'r0', 'output.xml');
-
-    try {
+    await withTempOutputPath('anthropic-prefill-empty-', async (outputPath) => {
       const handler = createAnthropicHandler({
         supportsAssistantPrefill: true,
       });
       stubHandlerForTest(handler);
 
-      const agentSetting = AgentSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-        documentTag: 'latex_document',
-        endTag: '</latex_document>',
-      });
+      const agentSetting = createLatexAgentSetting();
       const userMessage: MessageParam = {
         role: 'user',
         content: [{ type: 'text', text: 'revise the document' }],
@@ -1364,28 +1372,17 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
       assert.equal(workspaceState.assembly.accumulatedOutput, '');
       assert.equal(updatedMessages.length, 1);
       assert.equal(updatedMessages.at(-1)?.role, 'user');
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
+    });
   });
 
   it('skips pseudo-prefill instruction when prefill is empty (thinking-only models)', async () => {
-    const tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'anthropic-pseudo-empty-'),
-    );
-    const outputPath = path.join(tempDir, 'r0', 'output.xml');
-
-    try {
+    await withTempOutputPath('anthropic-pseudo-empty-', async (outputPath) => {
       const handler = createAnthropicHandler({
         supportsAssistantPrefill: false,
       });
       stubHandlerForTest(handler);
 
-      const agentSetting = AgentSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-        documentTag: 'latex_document',
-        endTag: '</latex_document>',
-      });
+      const agentSetting = createLatexAgentSetting();
       const userText = 'revise the document';
       const messages: MessageParam[] = [
         {
@@ -1408,9 +1405,7 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
       const last = updatedMessages.at(-1);
       assert.equal(last?.role, 'user');
       assert.deepEqual(last?.content, [{ type: 'text', text: userText }]);
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
+    });
   });
 });
 

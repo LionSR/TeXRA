@@ -96,6 +96,18 @@ function dispatch(
   handler?.(message as never, ctx);
 }
 
+function registerWorkflowStream(
+  state: ProgressState,
+  streamId: StreamTabId,
+): void {
+  state.streamById.set(streamId, {
+    name: streamId,
+    label: 'stream-a',
+    agentCategory: AgentCategory.Workflow,
+    creationTimestamp: 1,
+  });
+}
+
 describe('process output frontend state', () => {
   it('patches one stream metadata record without replacing siblings', () => {
     const streamId = 'stream-a' as StreamTabId;
@@ -109,12 +121,7 @@ describe('process output frontend state', () => {
       agentCategory: AgentCategory.ToolUse,
       creationTimestamp: 2,
     });
-    state.streamById.set(streamId, {
-      name: streamId,
-      label: 'stream-a',
-      agentCategory: AgentCategory.Workflow,
-      creationTimestamp: 1,
-    });
+    registerWorkflowStream(state, streamId);
     state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
     state.streamStates.set(
       siblingId,
@@ -249,12 +256,7 @@ describe('process output frontend state', () => {
   it('updates and clears stream substate with status changes', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
-    state.streamById.set(streamId, {
-      name: streamId,
-      label: 'stream-a',
-      agentCategory: AgentCategory.Workflow,
-      creationTimestamp: 1,
-    });
+    registerWorkflowStream(state, streamId);
     state.streamStates.set(
       streamId,
       createStreamState(AgentCategory.Workflow, {
@@ -298,12 +300,7 @@ describe('process output frontend state', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
     state.activeStreamId = streamId;
-    state.streamById.set(streamId, {
-      name: streamId,
-      label: 'stream-a',
-      agentCategory: AgentCategory.Workflow,
-      creationTimestamp: 1,
-    });
+    registerWorkflowStream(state, streamId);
     state.streamStates.set(
       streamId,
       createStreamState(AgentCategory.Workflow, {

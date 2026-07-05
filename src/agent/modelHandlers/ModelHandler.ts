@@ -52,7 +52,10 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - tools
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
@@ -89,7 +92,6 @@ import { isTokenLimitStopReason } from './utils/stopReasonUtils';
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
-import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 import type {
   IModelHandler,
   CreateResponseOptions,
@@ -198,10 +200,6 @@ export abstract class ModelHandler<
 
   public setAgentCategory(agentCategory?: AgentCategory | null): void {
     this.agentCategory = agentCategory ?? undefined;
-  }
-
-  protected getAgentCategory(): AgentCategory | undefined {
-    return this.agentCategory;
   }
 
   /** Common pricing fields used by providers with standard cache-read rebates. */
@@ -1268,7 +1266,7 @@ export abstract class ModelHandler<
   abstract createToolUseFollowUpMessages(
     client: C | undefined,
     call: T,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,

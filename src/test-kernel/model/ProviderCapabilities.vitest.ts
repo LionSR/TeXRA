@@ -25,10 +25,9 @@ const gpt55Config: ModelConfig = {
 };
 
 describe('provider capabilities', () => {
-  it('resolves ChatGPT subscription profile from model and auth mode', () => {
+  it('resolves ChatGPT subscription profile from model routing context', () => {
     const capabilities = resolveProviderCapabilities({
       model: gpt55Config,
-      authMode: 'chatgpt-subscription',
       useOpenRouter: false,
     });
 
@@ -50,21 +49,6 @@ describe('provider capabilities', () => {
         supportsToolResultFileUpload: false,
         failWhenFallbackOutputBudgetIsReduced: true,
       },
-    });
-  });
-
-  it('keeps API-key profile on llm-zoo model metadata', () => {
-    const capabilities = resolveProviderCapabilities({
-      model: gpt55Config,
-      authMode: 'api-key',
-      useOpenRouter: false,
-    });
-
-    expect(capabilities).toMatchObject({
-      authMode: 'api-key',
-      contextWindow: 1_050_000,
-      inputPrice: 5,
-      outputPrice: 30,
     });
   });
 });

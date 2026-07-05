@@ -152,6 +152,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
 
       if (!result.submitted) {
         return {
+          status: 'executed',
           output: result.feedback
             ? `The user declined to answer: ${result.feedback}`
             : 'The user declined to answer.',
@@ -161,11 +162,13 @@ The tool returns a JSON object whose keys are the original question texts and wh
       const answers = UserQuestionAnswersSchema.parse(result.answers ?? {});
       if (Object.keys(answers).length === 0) {
         return {
+          status: 'executed',
           output: 'The user submitted no answers.',
         };
       }
 
       return {
+        status: 'executed',
         output: JSON.stringify({ answers }, null, 2),
         summary: `Answered ${Object.keys(answers).length} user question(s).`,
       };

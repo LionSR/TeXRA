@@ -46,7 +46,7 @@ vi.mock('@agent/storage', async () => {
 });
 
 vi.mock('@utils/files/taskRunStorage', () => ({
-  resolveStoragePath: vi.fn(async () => undefined),
+  findExistingRunStoragePath: vi.fn(async () => undefined),
 }));
 
 vi.mock('@cli/runtime/toolUseResumeData', () => ({
@@ -83,6 +83,19 @@ const config = {
   memories: [],
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
+
+/** Creates a temp dir for the test body, then removes it (recursively) after. */
+async function withTempDir(
+  prefix: string,
+  fn: (dir: string) => Promise<void>,
+): Promise<void> {
+  const dir = await mkdtemp(path.join(tmpdir(), prefix));
+  try {
+    await fn(dir);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
 
 describe('CLI history runtime', () => {
   beforeEach(async () => {
@@ -685,8 +698,7 @@ describe('CLI history runtime', () => {
   });
 
   it('surfaces persisted workspace files without parsing provider messages', async () => {
-    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
-    try {
+    await withTempDir('texra-history-', async (workspace) => {
       await writeFile(path.join(workspace, 'durable.md'), '# durable');
       mocks.readConfig.mockResolvedValue({
         ...config,
@@ -714,14 +726,11 @@ describe('CLI history runtime', () => {
       expect(details?.files).toEqual([
         { path: 'workspace/durable.md', size: 9, isDirectory: false },
       ]);
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
-    }
+    });
   });
 
   it('preserves persisted paths inside a top-level workspace directory', async () => {
-    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
-    try {
+    await withTempDir('texra-history-', async (workspace) => {
       await mkdir(path.join(workspace, 'workspace'));
       await writeFile(path.join(workspace, 'review.md'), 'wrong');
       await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');
@@ -737,14 +746,11 @@ describe('CLI history runtime', () => {
       expect(details?.files).toEqual([
         { path: 'workspace/workspace/review.md', size: 6, isDirectory: false },
       ]);
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
-    }
+    });
   });
 
   it('surfaces workspace files written by tool-use calls', async () => {
-    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
-    try {
+    await withTempDir('texra-history-', async (workspace) => {
       await writeFile(path.join(workspace, 'review.md'), '# report');
       await writeFile(path.join(workspace, 'draft.tex'), 'old text');
       mocks.readConfig.mockResolvedValue({
@@ -790,14 +796,11 @@ describe('CLI history runtime', () => {
       expect(formatCliHistoryDetailsText(details!)).toContain(
         '8\tworkspace/review.md',
       );
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
-    }
+    });
   });
 
   it('surfaces workspace files from Responses function call records', async () => {
-    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
-    try {
+    await withTempDir('texra-history-', async (workspace) => {
       await writeFile(path.join(workspace, 'response.md'), 'response');
       mocks.readConfig.mockResolvedValue({
         ...config,
@@ -818,14 +821,11 @@ describe('CLI history runtime', () => {
       expect(details?.files).toEqual([
         { path: 'workspace/response.md', size: 8, isDirectory: false },
       ]);
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
-    }
+    });
   });
 
   it('surfaces workspace files from Google functionCall parts', async () => {
-    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
-    try {
+    await withTempDir('texra-history-', async (workspace) => {
       await mkdir(path.join(workspace, 'subdir'));
       await writeFile(path.join(workspace, 'subdir', 'gemini.md'), 'gemini');
       mocks.readConfig.mockResolvedValue({
@@ -853,16 +853,13 @@ describe('CLI history runtime', () => {
       expect(details?.files).toEqual([
         { path: 'workspace/subdir/gemini.md', size: 6, isDirectory: false },
       ]);
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
-    }
+    });
   });
 
   it('does not surface missing files or tool paths outside the workspace', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'texra-history-root-'));
-    const workspace = path.join(root, 'workspace');
-    const outsidePath = path.join(root, 'outside.md');
-    try {
+    await withTempDir('texra-history-root-', async (root) => {
+      const workspace = path.join(root, 'workspace');
+      const outsidePath = path.join(root, 'outside.md');
       await mkdir(workspace);
       await writeFile(outsidePath, 'outside');
       mocks.readConfig.mockResolvedValue({
@@ -902,9 +899,7 @@ describe('CLI history runtime', () => {
       const details = await readCliHistoryDetails('a1' as ExecutionId);
 
       expect(details?.files).toEqual([]);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('reports not-found deletion through the structured result', async () => {

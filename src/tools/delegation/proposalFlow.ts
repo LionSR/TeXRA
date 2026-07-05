@@ -37,7 +37,7 @@ import {
 } from '@tools/approval';
 import {
   availableModelNamesFromOptions,
-  resolveDelegationModelFromAvailableNames,
+  selectDelegationModelFromAvailableNames,
 } from '@tools/delegationModelAvailability';
 
 // Local imports - delegation
@@ -49,7 +49,7 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'continue directly with available context, or ask the user a clarifying question.',
 ].join(' ');
 
-export async function resolveAvailableDelegationModel(input: {
+export async function selectAvailableDelegationModel(input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
   readonly agentCategory: AgentCategory;
@@ -57,7 +57,7 @@ export async function resolveAvailableDelegationModel(input: {
   const modelOptions = await computeModelOptionsData(undefined, undefined, {
     agentCategory: input.agentCategory,
   });
-  return resolveDelegationModelFromAvailableNames({
+  return selectDelegationModelFromAvailableNames({
     ...input,
     availableModels: availableModelNamesFromOptions(modelOptions),
   });
@@ -116,19 +116,20 @@ function proposalResultToToolResult(
         ? `\nUser feedback: ${feedback}`
         : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
       return {
+        status: 'error',
         summary: `User rejected delegation to '${agentName}'`,
-        output: `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
-        isError: true,
+        error: `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
       };
     }
     case 'timeout':
       return {
+        status: 'error',
         summary: `Delegation to '${agentName}' timed out`,
-        output: `Delegation to '${agentName}' timed out waiting for user approval.\nYour delegation was: ${echo}`,
-        isError: true,
+        error: `Delegation to '${agentName}' timed out waiting for user approval.\nYour delegation was: ${echo}`,
       };
     case 'setup':
       return {
+        status: 'executed',
         summary: `User opened '${agentName}' for editing`,
         output: `Delegation opened for editing. The user will run it manually when ready.\nYour delegation was: ${echo}`,
       };
@@ -174,23 +175,23 @@ export async function proposeAndExecute(
     throw new Error(`Unexpected non-approve proposal result: ${result.action}`);
   }
   // Route an approved model override through the same availability gate the
-  // initial delegation uses (resolveAvailableDelegationModel), so a model that
+  // initial delegation uses (selectAvailableDelegationModel), so a model that
   // is unavailable in the active API mode fails synchronously here instead of
   // launching and then failing asynchronously. Re-selecting the proposed model
   // needs no re-check — it was already resolved when the proposal was built.
   let modelOverride: string | undefined;
   if (result.model && result.model !== proposal.model) {
     try {
-      modelOverride = await resolveAvailableDelegationModel({
+      modelOverride = await selectAvailableDelegationModel({
         requestedModel: result.model,
         parentModel: proposal.model,
         agentCategory: proposal.agentCategory,
       });
     } catch (err) {
       return {
+        status: 'error',
         summary: `Approved model override '${result.model}' is not available`,
-        output: `Cannot launch with model '${result.model}': ${toErrorMessage(err)} Re-propose the delegation.`,
-        isError: true,
+        error: `Cannot launch with model '${result.model}': ${toErrorMessage(err)} Re-propose the delegation.`,
       };
     }
   }
@@ -206,9 +207,9 @@ export async function proposeAndExecute(
   // synchronously instead of after an async launch.
   if (agentOverride && !resolvedAgentOverride) {
     return {
+      status: 'error',
       summary: `Approved agent override '${agentOverride}' is not available`,
-      output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
-      isError: true,
+      error: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
     };
   }
 

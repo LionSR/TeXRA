@@ -26,7 +26,10 @@ import type { ToolDefinition } from '@model';
 // Local imports - tools and utils
 import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
@@ -46,7 +49,6 @@ import { toOpenAITools } from '../toolConversion';
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
-  type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
 import { ModelHandler } from '../ModelHandler';
@@ -1268,7 +1270,7 @@ export class ModelHandlerOpenAI<
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
     call: TCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1305,7 +1307,7 @@ export class ModelHandlerOpenAI<
    */
   async createBatchedToolUseFollowUpMessages(
     calls: TCall[],
-    results: ToolResultPayload[],
+    results: ToolResult[],
     _attachmentsPerCall: ToolFileAttachment[][],
     workspaceState?: AgentWorkspaceState,
     text?: string,

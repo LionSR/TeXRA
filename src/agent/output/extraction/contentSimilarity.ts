@@ -6,8 +6,7 @@
  * diff, so blocks can be routed to filenames without trusting response order.
  */
 
-import { diff_match_patch } from 'diff-match-patch';
-
+import { diffTextLevenshtein } from '@utils/text/diff';
 import {
   isClosingMarkdownFence,
   type MarkdownFence,
@@ -63,15 +62,11 @@ export function collectLatexFencedBlocks(
  * `diff_levenshtein` counts a substitution as delete-plus-insert, which can
  * exceed the longer length for very different documents.
  */
-function documentSimilarity(
-  dmp: InstanceType<typeof diff_match_patch>,
-  a: string,
-  b: string,
-): number {
+function documentSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   const maxLength = Math.max(a.length, b.length, 1);
-  const diffs = dmp.diff_main(a, b, true);
-  return Math.max(0, 1 - dmp.diff_levenshtein(diffs) / maxLength);
+  const distance = diffTextLevenshtein(a, b, { checkLines: true });
+  return Math.max(0, 1 - distance / maxLength);
 }
 
 /**
@@ -87,9 +82,8 @@ export function assignByContentSimilarity(
   files: ReadonlyArray<{ name: string; content: string }>,
   minSimilarity = 0.15,
 ): Array<{ content: string; name: string } | null> {
-  const dmp = new diff_match_patch();
   const scores = candidates.map((candidate) =>
-    files.map((file) => documentSimilarity(dmp, candidate, file.content)),
+    files.map((file) => documentSimilarity(candidate, file.content)),
   );
   const bestScoreOf = scores.map((row) => Math.max(...row));
 

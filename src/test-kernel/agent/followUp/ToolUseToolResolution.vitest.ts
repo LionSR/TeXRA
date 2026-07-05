@@ -14,6 +14,7 @@ function testTool(name: string): ITool {
   return {
     definition: { name },
     call: async (): Promise<ToolResult> => ({
+      status: 'executed',
       summary: `${name} called`,
       output: '',
     }),

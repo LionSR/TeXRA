@@ -1,10 +1,11 @@
 import * as path from 'node:path';
 
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { AgentTrace } from '@agent/trace';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
-import { ensureRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 export interface DebugContext {
   logger: AgentTrace;
@@ -57,7 +58,7 @@ export async function maybeSaveDebugObject({
   try {
     // Use appropriate file system based on whether we have an execution context
     const filePath = executionId
-      ? path.join(TASK_RUNS_DIR, executionId, debugFileName)
+      ? path.join(RUNS_STORAGE_DIR, executionId, debugFileName)
       : debugFileName;
     const fs = executionId ? StorageFS : WorkspaceFS;
 

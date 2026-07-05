@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 // Local imports - core
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -45,7 +45,11 @@ export class ZoteroExportTool extends defineTool({
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroExportInputSchema,
 }) {
-  protected async execute({ citekeys, format, library }: ZoteroExportInput) {
+  protected async execute({
+    citekeys,
+    format,
+    library,
+  }: ZoteroExportInput): Promise<ToolResult> {
     const port = getZoteroPort();
     const translator = format || 'biblatex';
 
@@ -70,6 +74,7 @@ export class ZoteroExportTool extends defineTool({
     }
 
     return {
+      status: 'executed',
       summary: `Exported ${citekeys.length} ${pluralize(citekeys.length, 'entry')} as ${translator}`,
       output: exported,
     };

@@ -65,7 +65,6 @@ const ACTIONS = selectorGroup(ITEM_NAMES, '__actions');
 const FEEDBACKS = selectorGroup(ITEM_NAMES, '__feedback');
 const FEEDBACK_INPUTS = selectorGroup(ITEM_NAMES, '__feedback-input');
 const FEEDBACK_ACTIVE = selectorGroup(ITEM_NAMES, '--feedback-active');
-const BADGES = unsafeCSS('.external-inquiry-request__mode-badge');
 const SCROLLABLE_DETAILS = selectorGroup(
   ITEM_NAMES.filter((n) => n !== 'workflow-proposal'),
   '__details',
@@ -240,17 +239,6 @@ export const requestPanelStyles: CSSResult = css`
     :is(${ACTIONS})
     wa-button[data-action='reject']::part(base) {
     color: var(--wa-color-warning-border-quiet);
-  }
-
-  /* Shared badge base */
-  :is(${BADGES}) {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: ${sp.tiny} var(--border-radius-large);
-    border-radius: var(--border-radius);
-    white-space: nowrap;
   }
 
   /* Type-specific item accent + matching header icon color (see PANEL_TYPES / ACCENT_RULES) */
@@ -661,11 +649,6 @@ export const requestPanelStyles: CSSResult = css`
     font-variant-numeric: tabular-nums;
     min-width: 3ch;
     text-align: center;
-  }
-
-  .external-inquiry-request__mode-badge {
-    background: var(--wa-color-neutral-fill-quiet);
-    color: var(--wa-color-neutral-on-quiet);
   }
 
   .external-inquiry-request__context {

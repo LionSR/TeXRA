@@ -214,9 +214,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     if (isCodexSubscriptionToolUseOnly() && !this.isToolUseMode()) return null;
     return resolveProviderCapabilities({
       model: this.config,
-      authMode: 'chatgpt-subscription',
       useOpenRouter: false,
-      agentCategory: this.getAgentCategory(),
     });
   }
 
