@@ -2,7 +2,7 @@ import {
   DESKTOP_THEME_KIND,
   type DesktopThemeKind,
 } from '@shared/constants/desktopTheme';
-import { createDialogCloseButton } from './dialogCloseButton';
+import { createOverlayDialog } from './overlayDialog';
 import type { DesktopShowDiffMessage } from '../desktopDiffMessages';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
@@ -28,26 +28,6 @@ export function createDiffOverlay(appRoot: HTMLElement): DiffOverlayController {
 
   function ensure(): WaDialog {
     if (dialog) return dialog;
-    const d = document.createElement('wa-dialog') as WaDialog;
-    d.classList.add('desktop-diff-overlay');
-    d.withoutHeader = true;
-    d.lightDismiss = false;
-    d.setAttribute('aria-label', 'Compare files');
-
-    const body = document.createElement('section');
-    body.classList.add('desktop-diff-body');
-
-    const header = document.createElement('header');
-    header.classList.add('desktop-diff-header');
-    const t = document.createElement('h2');
-    t.classList.add('desktop-diff-title');
-    t.textContent = 'Compare';
-    titleEl = t;
-    const s = document.createElement('p');
-    s.classList.add('desktop-diff-subtitle');
-    subtitleEl = s;
-    header.append(t, s);
-
     // Lazily create the <texra-diff-view> on first show (Monaco is heavy
     // to import; defer until actually needed). The element is reused
     // across re-opens — Lit's @property setter handles content swaps.
@@ -56,21 +36,18 @@ export function createDiffOverlay(appRoot: HTMLElement): DiffOverlayController {
     view.hostTheme = currentTheme;
     viewEl = view;
 
-    body.append(header, view);
-    d.append(body);
-
-    const close = createDialogCloseButton(
-      'desktop-diff-close',
-      'Close diff',
-      () => {
-        d.open = false;
-      },
-    );
-    d.append(close);
-
-    appRoot.append(d);
-    dialog = d;
-    return d;
+    const shell = createOverlayDialog({
+      appRoot,
+      prefix: 'desktop-diff',
+      ariaLabel: 'Compare files',
+      closeLabel: 'Close diff',
+      title: 'Compare',
+      content: view,
+    });
+    titleEl = shell.titleEl ?? null;
+    subtitleEl = shell.subtitleEl ?? null;
+    dialog = shell.dialog;
+    return dialog;
   }
 
   function open(payload: DesktopShowDiffMessage): void {
