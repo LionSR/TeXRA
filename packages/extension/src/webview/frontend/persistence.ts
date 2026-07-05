@@ -272,9 +272,9 @@ export function flushPendingInstructionSave(): void {
 
 /**
  * Reset the transient runtime (save-block counter, pending debounce timer)
- * without touching stored state. Called from `MainApp`'s constructor on
- * remount in the same JS context, matching the fresh-instance slate the old
- * per-instance fields provided.
+ * and reload the cached persisted state from storage. Called from `MainApp`'s
+ * constructor on remount in the same JS context, matching the fresh-instance
+ * slate the old per-instance fields provided.
  */
 export function resetPersistenceRuntime(): void {
   saveBlockCount = 0;
@@ -282,4 +282,5 @@ export function resetPersistenceRuntime(): void {
     window.clearTimeout(instructionSaveTimer);
     instructionSaveTimer = null;
   }
+  stateManager.reload();
 }
