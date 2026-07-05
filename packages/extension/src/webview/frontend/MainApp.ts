@@ -102,6 +102,8 @@ import {
   DEFAULT_CHECKBOX_VALUES,
   FILE_UPDATE_COMMANDS,
   MULTI_FILE_COMMAND_TO_KEY,
+  FILE_TYPE_TO_KEY,
+  KEY_TO_FILE_TYPE,
   ONBOARDING_PLACEHOLDERS,
   FILE_SELECT_CONFIGS,
 } from './store';
@@ -749,7 +751,7 @@ export class MainApp extends MainAppBase {
     this.multiFiles.set({ ...this.multiFiles.get(), [listId]: files });
     this.saveState();
 
-    const fileType = listId.replace('Files', '') as MultipleDocumentFileType;
+    const fileType = KEY_TO_FILE_TYPE[listId];
     const command = FILE_UPDATE_COMMANDS[fileType];
     if (command) {
       postMessage(command, { fileType, files });
@@ -1188,16 +1190,17 @@ export class MainApp extends MainAppBase {
   }
 
   private restoreFileArrays(state: MainViewPersistedState): void {
-    this.multiFiles.set(
-      Object.fromEntries(
-        MULTIPLE_DOCUMENT_FILE_TYPES.map((type) => {
-          const key = `${type}Files` as keyof MultiFiles;
-          const files =
-            type === 'output' ? [] : state[key as keyof MainViewPersistedState];
-          return [key, Array.isArray(files) ? files : []];
-        }),
-      ) as MultiFiles,
+    const next = MULTIPLE_DOCUMENT_FILE_TYPES.reduce<MultiFiles>(
+      (acc, type) => {
+        const key = FILE_TYPE_TO_KEY[type];
+        const files =
+          type === 'output' ? [] : state[key as keyof MainViewPersistedState];
+        acc[key] = Array.isArray(files) ? files : [];
+        return acc;
+      },
+      { ...DEFAULT_MULTI_FILES },
     );
+    this.multiFiles.set(next);
   }
 
   private clearForNewSession(): void {
