@@ -21,11 +21,128 @@ const DRAIN_GRACE_MS = 5_000;
 const LABEL_EXCERPT_LENGTH = 48;
 
 /**
+ * Fan-out primitives, defined INSIDE the sandbox realm (trusted prelude,
+ * compiled by the host, run before the script body). They must not live
+ * host-side: parallel/pipeline/concat consume script-created arrays,
+ * thunks, and promises, and any host code that calls a method on a
+ * sandbox array (`thunks.map(hostCb)`) or awaits a sandbox thenable hands
+ * the script a host-realm function whose .constructor is the host's
+ * ungated Function constructor. Realm-side, every callback and resolve
+ * function a script can capture is realm-local and codegen-gated.
+ *
+ * agent() and log() are the bridged globals installed before this prelude
+ * runs; concurrency, journaling, and the call cap all stay host-side in
+ * agentPrimitive.
+ */
+const ORCHESTRATION_PRELUDE = `
+'use strict';
+(() => {
+  const MAX_FANOUT = ${MAX_FANOUT};
+  const define = (name, value) =>
+    Object.defineProperty(globalThis, name, {
+      value,
+      writable: false,
+      configurable: false,
+    });
+  // The run-stop backstop (call cap, timeout abort) must propagate out of
+  // fan-out instead of degrading into a null slot; matched by name because
+  // the host error arrives as a realm-local copy.
+  const isRunAbort = (error) =>
+    error !== null &&
+    typeof error === 'object' &&
+    error.name === 'WorkflowRunAbortError';
+  const errorText = (error) =>
+    error !== null && typeof error === 'object' && 'message' in error
+      ? String(error.message)
+      : String(error);
+
+  define('parallel', async function parallel(thunks) {
+    if (!Array.isArray(thunks)) {
+      throw new Error(
+        'parallel(thunks) requires an array of zero-arg functions.',
+      );
+    }
+    if (thunks.length > MAX_FANOUT) {
+      throw new Error('parallel() accepts at most ' + MAX_FANOUT + ' items.');
+    }
+    return Promise.all(
+      thunks.map(async (thunk, i) => {
+        if (typeof thunk !== 'function') {
+          throw new Error('parallel(): item ' + i + ' is not a function.');
+        }
+        try {
+          return await thunk();
+        } catch (error) {
+          if (isRunAbort(error)) throw error;
+          // agent() failures already resolve to null with their own event;
+          // anything caught here is a bug in the script's own JS — surface
+          // it so a null slot is debuggable.
+          log('parallel(): item ' + i + ' threw: ' + errorText(error));
+          return null;
+        }
+      }),
+    );
+  });
+
+  define('pipeline', async function pipeline(items, ...stages) {
+    if (!Array.isArray(items)) {
+      throw new Error('pipeline(items, ...stages) requires an items array.');
+    }
+    if (items.length > MAX_FANOUT) {
+      throw new Error('pipeline() accepts at most ' + MAX_FANOUT + ' items.');
+    }
+    if (stages.length === 0 || stages.some((s) => typeof s !== 'function')) {
+      throw new Error('pipeline() requires at least one stage function.');
+    }
+    // No barrier between stages: each item advances through its own chain
+    // independently, so wall-clock is the slowest single-item chain. Note
+    // for resume: agent() calls in stages beyond the first get journal
+    // indices in completion order, which varies run-to-run — the journal's
+    // per-index key check keeps replay safe, at the cost of cache hits.
+    return Promise.all(
+      items.map(async (item, index) => {
+        // The first stage receives (item, item, index): prev is seeded with
+        // the item itself, not undefined.
+        let value = item;
+        for (const stage of stages) {
+          try {
+            value = await stage(value, item, index);
+          } catch (error) {
+            if (isRunAbort(error)) throw error;
+            log('pipeline(): item ' + index + ' threw: ' + errorText(error));
+            return null;
+          }
+        }
+        return value;
+      }),
+    );
+  });
+
+  define('concat', function concat(parts, options) {
+    if (!Array.isArray(parts)) {
+      throw new Error('concat(parts, options?) requires an array.');
+    }
+    const separatorRaw =
+      options !== null && typeof options === 'object'
+        ? options.separator
+        : undefined;
+    const separator = separatorRaw === undefined ? '\\n\\n' : String(separatorRaw);
+    // Zero-token fan-in: drops failed (null) stage results, joins the rest.
+    return parts
+      .filter((part) => part !== null && part !== undefined && part !== '')
+      .map(String)
+      .join(separator);
+  });
+})();
+`;
+
+/**
  * Thrown when the whole run must stop (agent-call cap exceeded, wall-clock
- * timeout abort). parallel()/pipeline() rethrow it instead of converting it
- * to a null slot, so the backstops apply inside fan-out primitives too.
- * Detected by name, not instanceof — the error crosses the sandbox realm
- * boundary as a realm-local copy carrying only name/message.
+ * timeout abort). The realm-side parallel()/pipeline() rethrow it by name
+ * instead of converting it to a null slot, so the backstops apply inside
+ * fan-out primitives too. Detected by name, not instanceof — the error
+ * crosses the sandbox realm boundary as a realm-local copy carrying only
+ * name/message.
  */
 export class WorkflowRunAbortError extends Error {
   constructor(message: string) {
@@ -161,97 +278,6 @@ export async function runWorkflowScript(
     }
   }
 
-  async function parallelPrimitive(thunks: unknown): Promise<unknown[]> {
-    if (!Array.isArray(thunks)) {
-      throw new Error(
-        'parallel(thunks) requires an array of zero-arg functions.',
-      );
-    }
-    if (thunks.length > MAX_FANOUT) {
-      throw new Error(`parallel() accepts at most ${MAX_FANOUT} items.`);
-    }
-    return Promise.all(
-      thunks.map(async (thunk, i) => {
-        if (typeof thunk !== 'function') {
-          throw new Error(`parallel(): item ${i} is not a function.`);
-        }
-        try {
-          return await thunk();
-        } catch (error) {
-          if (isWorkflowAbort(error)) throw error;
-          // agent() failures already resolve to null with their own event;
-          // anything caught here is a bug in the script's own JS — surface
-          // it so a null slot is debuggable.
-          emit({
-            type: 'log',
-            message: `parallel(): item ${i} threw: ${toErrorMessage(error)}`,
-          });
-          return null;
-        }
-      }),
-    );
-  }
-
-  async function pipelinePrimitive(
-    items: unknown,
-    ...stages: unknown[]
-  ): Promise<unknown[]> {
-    if (!Array.isArray(items)) {
-      throw new Error('pipeline(items, ...stages) requires an items array.');
-    }
-    if (items.length > MAX_FANOUT) {
-      throw new Error(`pipeline() accepts at most ${MAX_FANOUT} items.`);
-    }
-    if (stages.length === 0 || stages.some((s) => typeof s !== 'function')) {
-      throw new Error('pipeline() requires at least one stage function.');
-    }
-    const stageFns = stages as Array<
-      (prev: unknown, item: unknown, index: number) => unknown
-    >;
-    // No barrier between stages: each item advances through its own chain
-    // independently, so wall-clock is the slowest single-item chain. Note
-    // for resume: agent() calls in stages beyond the first get journal
-    // indices in completion order, which varies run-to-run — the journal's
-    // per-index key check keeps replay safe, at the cost of cache hits.
-    return Promise.all(
-      items.map(async (item, index) => {
-        // The first stage receives (item, item, index): prev is seeded with
-        // the item itself, not undefined.
-        let value: unknown = item;
-        for (const stage of stageFns) {
-          try {
-            value = await stage(value, item, index);
-          } catch (error) {
-            if (isWorkflowAbort(error)) throw error;
-            emit({
-              type: 'log',
-              message: `pipeline(): item ${index} threw: ${toErrorMessage(error)}`,
-            });
-            return null;
-          }
-        }
-        return value;
-      }),
-    );
-  }
-
-  function concatPrimitive(parts: unknown, concatOptions?: unknown): string {
-    if (!Array.isArray(parts)) {
-      throw new Error('concat(parts, options?) requires an array.');
-    }
-    const separatorRaw =
-      concatOptions && typeof concatOptions === 'object'
-        ? (concatOptions as { separator?: unknown }).separator
-        : undefined;
-    const separator =
-      separatorRaw === undefined ? '\n\n' : String(separatorRaw);
-    // Zero-token fan-in: drops failed (null) stage results, joins the rest.
-    return parts
-      .filter((part) => part !== null && part !== undefined && part !== '')
-      .map(String)
-      .join(separator);
-  }
-
   // JSON payloads for the sandbox bridge: results are revived inside the
   // realm with the sandbox's own JSON.parse, so scripts never hold
   // host-realm objects (see sandbox.ts). Non-JSON-safe values degrade the
@@ -276,12 +302,8 @@ export async function runWorkflowScript(
               pendingAgentCalls.delete(invocation);
             }
           },
-          parallel: async (args) => toPayload(await parallelPrimitive(args[0])),
-          pipeline: async (args) =>
-            toPayload(await pipelinePrimitive(args[0], ...args.slice(1))),
         },
         syncFns: {
-          concat: (args) => concatPrimitive(args[0], args[1]),
           log: (args) => {
             emit({ type: 'log', message: String(args[0]) });
             return undefined;
@@ -294,6 +316,7 @@ export async function runWorkflowScript(
         },
         argsJson:
           options.args === undefined ? undefined : JSON.stringify(options.args),
+        realmPreludes: [ORCHESTRATION_PRELUDE],
       },
       {
         timeoutMs,
@@ -343,11 +366,10 @@ function normalizeAgentOptions(
   ) {
     throw new Error('agent() options must be a plain object.');
   }
-  // Normalize to plain JSON data in one pass before any field reads:
-  // sandbox-defined accessors then fire exactly once, here, instead of on
-  // every host-side property access, and the retained options carry no
-  // live realm objects. (Non-terminating accessors fall under the
-  // documented preemption gate, like all post-await CPU-bound code.)
+  // Arguments crossed the bridge as JSON text (see sandbox.ts marshalArgs),
+  // so `raw` is already plain, accessor-free host data; the round-trip here
+  // is a cheap defensive copy that also keeps this function safe if it is
+  // ever called with a value that did not come through the bridge.
   const source = JSON.parse(JSON.stringify(raw ?? {})) as Record<
     string,
     unknown

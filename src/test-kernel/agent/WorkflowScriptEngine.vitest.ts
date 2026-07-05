@@ -337,6 +337,92 @@ return null`,
     ).rejects.toThrow(/disallowed/i);
   });
 
+  it('does not leak a host Function via a callback passed to parallel()', async () => {
+    // parallel/pipeline/concat run realm-side, so the thunk a script hands
+    // them is only ever invoked by sandbox code: its `this`/args and any
+    // .constructor it can reach are realm-local and codegen-gated. A host
+    // callback would carry the ungated host Function constructor.
+    const run = await runWorkflowScript({
+      script: `${META}
+const results = await parallel([
+  () => {
+    try {
+      // If parallel() were host-side, the thunk's own constructor chain
+      // would reach the host Function; realm-side it hits the gated one.
+      const F = (() => {}).constructor
+      return F('return typeof process')()
+    } catch (error) {
+      return 'blocked:' + (error && error.name)
+    }
+  },
+])
+return results[0]`,
+      runAgent: echoRunner,
+    });
+    expect(typeof run.result).toBe('string');
+    expect(run.result).toMatch(/^blocked:/);
+  });
+
+  it('does not leak a host Function through an overridden array method', async () => {
+    // The classic escape: override the array's own filter/map so the
+    // dispatcher passes a host callback into it. concat() runs realm-side,
+    // so the override only ever receives realm-local callables.
+    const run = await runWorkflowScript({
+      script: `${META}
+let captured = null
+const parts = ['a', 'b']
+parts.filter = function (cb) {
+  captured = cb
+  return this
+}
+concat(parts)
+try {
+  const escaped = captured.constructor('return typeof process')()
+  return 'leaked:' + escaped
+} catch (error) {
+  return 'blocked:' + (error && error.name)
+}`,
+      runAgent: echoRunner,
+    });
+    expect(run.result).toMatch(/^blocked:/);
+  });
+
+  it('parses meta strings containing astral Unicode without shifting offsets', () => {
+    const { meta } = parseWorkflowScript(
+      `export const meta = {
+  name: 'emoji-flow',
+  // comment with an emoji 😀 and a symbol 𝕏
+  description: 'progress 😀 report 𝕏 done',
+}\nreturn 1`,
+    );
+    expect(meta.name).toBe('emoji-flow');
+    expect(meta.description).toBe('progress 😀 report 𝕏 done');
+  });
+
+  it('keeps resolve callbacks realm-local for a malicious thenable', async () => {
+    // parallel() awaits thunk results realm-side, so a hand-rolled thenable
+    // receives a realm-created resolve callback — its .constructor is the
+    // sandbox's codegen-gated Function, so the escape attempt throws and
+    // the thenable can only resolve with data.
+    const run = await runWorkflowScript({
+      script: `${META}
+const results = await parallel([
+  () => ({
+    then(resolve) {
+      try {
+        resolve('leaked:' + resolve.constructor('return typeof process')())
+      } catch (error) {
+        resolve('blocked:' + (error && error.name))
+      }
+    },
+  }),
+])
+return results[0]`,
+      runAgent: echoRunner,
+    });
+    expect(run.result).toMatch(/^blocked:/);
+  });
+
   it('gives scripts realm-local agent results, not host objects', async () => {
     const runner = () => Promise.resolve({ nested: { data: 42 } });
     const run = await runWorkflowScript({

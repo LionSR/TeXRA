@@ -40,14 +40,24 @@ return concat(sections, { separator: '\n\n' });
   execution path so the engine consumes the typed `AgentFlowResult` — never
   the XML follow-up delivery string.
 - **Sandbox**: `node:vm` with code generation disabled and no
-  `require`/`process`. Host primitives are installed behind **realm-local
-  bridge wrappers** (`sandbox.ts`): scripts never hold host-realm callables
-  or objects — async results cross as JSON and are revived with the
-  sandbox's own `JSON.parse`, and host errors are re-thrown as realm-local
-  Errors. This closes the classic `fn.constructor('return process')()`
-  escape. Script bodies are forced into strict mode so sandbox-authored
-  thunks invoked from host code cannot walk `arguments.callee.caller` to a
-  host function. Known hard limit: `node:vm` cannot preempt CPU-bound
+  `require`/`process`. The boundary is **data-only in both directions**
+  (`sandbox.ts`): only JSON text crosses it, so neither side ever holds the
+  other realm's callables or objects. Scripts reach the host through
+  realm-local bridge wrappers whose arguments are stringified realm-side
+  (with a pristine, prelude-captured `JSON.stringify`) and whose results
+  arrive as JSON revived with the sandbox's own `JSON.parse`; host errors
+  are re-thrown as realm-local Errors. The script's own return value is
+  reported through a result channel as JSON text rather than awaited
+  host-side. Crucially, the fan-out primitives (`parallel`, `pipeline`,
+  `concat`) run **inside the realm** as a trusted prelude — they consume
+  script-created arrays, thunks, and promises, so running them host-side
+  would hand the script a host callback (via an overridden `arr.map`) or a
+  host resolve function (via a malicious `thenable.then`) whose
+  `.constructor` is the host's ungated `Function`. This closes the classic
+  `fn.constructor('return process')()` escape in both directions. Script
+  bodies are also forced into strict mode (defense in depth) so
+  sandbox-authored thunks cannot walk `arguments.callee.caller` to a host
+  function. Known hard limit: `node:vm` cannot preempt CPU-bound
   continuations after an `await` (`await agent(...); while (true) {}`
   blocks the event loop, defeating both the vm timeout and the wall-clock
   timer) — the preemptible-isolate swap (quickjs-emscripten) behind the
@@ -66,8 +76,9 @@ return concat(sections, { separator: '\n\n' });
 - **Budgets**: one concurrency semaphore (default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
   `parallel()`/`pipeline()` call, and a wall-clock timeout. The cap and
-  timeout raise `WorkflowRunAbortError`, which `parallel()`/`pipeline()`
-  deliberately do NOT convert to `null` — the whole run fails. On timeout
+  timeout raise `WorkflowRunAbortError`, which the realm-side
+  `parallel()`/`pipeline()` match by name and deliberately do NOT convert
+  to `null` — the whole run fails. On timeout
   the run's `AbortSignal` (on every `runAgent` invocation) fires and new
   `agent()` calls are refused; runners should cancel in-flight work on it.
 - **Debuggability**: a thrown error inside a `parallel()` thunk or

@@ -6,18 +6,33 @@ import { WorkflowScriptParseError } from './parseScript';
 
 export interface SandboxHostBridge {
   /**
-   * Async primitives (agent, parallel, pipeline). The host returns the
-   * result JSON-stringified; the realm-local wrapper revives it with the
-   * sandbox's own JSON so scripts only ever hold realm-local values.
+   * Async primitives (agent). Arguments arrive as plain host data — the
+   * realm-local wrapper JSON-stringifies them with the sandbox's pristine
+   * (prelude-captured) JSON.stringify before crossing, and this module
+   * parses them host-side, so host code never touches sandbox objects.
+   * The host returns the result JSON-stringified; the realm-local wrapper
+   * revives it with the sandbox's own JSON so scripts only ever hold
+   * realm-local values.
    */
   asyncFns: Record<string, (args: unknown[]) => Promise<string | undefined>>;
   /**
-   * Sync primitives (concat, log, phase). Must return only primitives
-   * (string/undefined) — primitives cross realms without leaking objects.
+   * Sync primitives (log, phase). Same data-only argument marshaling as
+   * asyncFns. Must return only primitives (string/undefined) — primitives
+   * cross realms without leaking objects.
    */
   syncFns: Record<string, (args: unknown[]) => string | undefined>;
   /** JSON payload for the `args` global; undefined installs `args` as undefined. */
   argsJson: string | undefined;
+  /**
+   * Trusted realm-side preludes run after the bridge is installed and
+   * before the script body. Fan-out primitives (parallel, pipeline,
+   * concat) live here so thunks, arrays, and promises produced by the
+   * script never cross into host code — awaiting a sandbox thenable or
+   * passing a host callback into a sandbox-dispatched array method would
+   * hand the script a host-realm function whose .constructor is the
+   * host's ungated Function constructor.
+   */
+  realmPreludes?: string[];
 }
 
 export interface SandboxOptions {
@@ -97,18 +112,29 @@ const DETERMINISM_PRELUDE = `
 
 /**
  * Installs host primitives behind realm-local wrapper functions. Scripts
- * never touch host-realm callables or objects: the wrappers are created by
- * this (sandbox-compiled) code, so their .constructor is the sandbox's
- * codeGeneration-gated Function; async results arrive as JSON text and are
- * revived with the sandbox's own JSON.parse; host errors are re-thrown as
- * realm-local Errors carrying only name/message strings. This closes the
- * classic node:vm escape (hostFn.constructor === host Function), which
- * static import bans cannot catch.
+ * never touch host-realm callables or objects, and host code never touches
+ * sandbox objects: the wrappers are created by this (sandbox-compiled)
+ * code, so their .constructor is the sandbox's codeGeneration-gated
+ * Function; arguments leave the realm as JSON text (pristine stringify,
+ * captured before script code runs); async results arrive as JSON text and
+ * are revived with the sandbox's own JSON.parse; host errors are re-thrown
+ * as realm-local Errors carrying only name/message strings; the script's
+ * own settlement is reported through the installResult channel as JSON
+ * text rather than awaited host-side. This closes the classic node:vm
+ * escape (hostFn.constructor === host Function) in both directions — a
+ * host callback handed to a sandbox-dispatched method, or a host resolve
+ * function handed to a sandbox thenable, would reopen it — which static
+ * import bans cannot catch.
  */
 const BRIDGE_PRELUDE = `
 'use strict';
 (() => {
   const parseJson = JSON.parse;
+  // Pristine stringify captured before any script code runs: argument
+  // marshaling must not be subvertible by a script reassigning
+  // JSON.stringify, and stringifying realm-side means host code only ever
+  // parses text — it never walks a sandbox object graph.
+  const stringifyJson = JSON.stringify;
   const define = (name, value) =>
     Object.defineProperty(globalThis, name, {
       value,
@@ -126,13 +152,14 @@ const BRIDGE_PRELUDE = `
     }
     return realmError;
   };
+  const marshalArgs = (args) => stringifyJson(args) ?? '[]';
   return {
     installAsync(name, hostInvoke) {
       define(name, function (...args) {
         const pending = (async () => {
           let payload;
           try {
-            payload = await hostInvoke(args);
+            payload = await hostInvoke(marshalArgs(args));
           } catch (err) {
             throw toRealmError(err);
           }
@@ -147,7 +174,7 @@ const BRIDGE_PRELUDE = `
     installSync(name, hostInvoke) {
       define(name, function (...args) {
         try {
-          return hostInvoke(args);
+          return hostInvoke(marshalArgs(args));
         } catch (err) {
           throw toRealmError(err);
         }
@@ -155,6 +182,32 @@ const BRIDGE_PRELUDE = `
     },
     installValue(name, json) {
       define(name, json === undefined ? undefined : parseJson(json));
+    },
+    installResult(hostDeliver) {
+      // Result channel: the trusted body wrapper (compiled by the host,
+      // running realm-side) reports the script's settlement here as JSON
+      // text. Only strings reach hostDeliver, so the host never awaits or
+      // .then()s a sandbox promise — a script that overrides its realm's
+      // Promise.prototype.then can only capture realm-local callbacks.
+      // First delivery wins; a script calling this early merely forges
+      // its own result (no capability crosses either way).
+      let delivered = false;
+      define('__wfDeliverResult', function (value, isError) {
+        if (delivered) return;
+        delivered = true;
+        if (isError) {
+          const err = toRealmError(value);
+          hostDeliver(
+            undefined,
+            stringifyJson({ name: err.name, message: err.message }),
+          );
+          return;
+        }
+        hostDeliver(
+          value === undefined ? undefined : (stringifyJson(value) ?? 'null'),
+          undefined,
+        );
+      });
     },
   };
 })();
@@ -164,6 +217,7 @@ interface RealmBridgeInstaller {
   installAsync(name: string, hostInvoke: unknown): void;
   installSync(name: string, hostInvoke: unknown): void;
   installValue(name: string, json: string | undefined): void;
+  installResult(hostDeliver: unknown): void;
 }
 
 // vm.Script is context-independent; compile the preludes once per process.
@@ -199,24 +253,93 @@ export async function runScriptInSandbox(
   );
   PRELUDE_SCRIPT.runInContext(context);
   const installer = BRIDGE_SCRIPT.runInContext(context) as RealmBridgeInstaller;
+  // Arguments arrive as JSON text (marshaled realm-side with the pristine
+  // stringify); parse them here so bridge fns receive plain host data and
+  // no host code path ever dispatches through a sandbox object.
+  const parseArgs = (argsJson: unknown): unknown[] => {
+    if (typeof argsJson !== 'string') return [];
+    try {
+      const parsed = JSON.parse(argsJson) as unknown;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
   for (const [name, fn] of Object.entries(bridge.asyncFns)) {
-    installer.installAsync(name, fn);
+    installer.installAsync(name, (argsJson: unknown) =>
+      fn(parseArgs(argsJson)),
+    );
   }
   for (const [name, fn] of Object.entries(bridge.syncFns)) {
-    installer.installSync(name, fn);
+    installer.installSync(name, (argsJson: unknown) => fn(parseArgs(argsJson)));
   }
   installer.installValue('args', bridge.argsJson);
+
+  // The script's settlement arrives through the realm-side result channel
+  // as JSON text — never by awaiting the sandbox promise host-side, which
+  // would pass host-realm resolve callbacks into a (script-overridable)
+  // sandbox `then`.
+  let deliverResolve!: (value: unknown) => void;
+  let deliverReject!: (error: Error) => void;
+  const delivered = new Promise<unknown>((resolve, reject) => {
+    deliverResolve = resolve;
+    deliverReject = reject;
+  });
+  installer.installResult((payload?: string, errorJson?: string) => {
+    if (typeof errorJson === 'string') {
+      let name = 'Error';
+      let message = errorJson;
+      try {
+        const parsed = JSON.parse(errorJson) as {
+          name?: unknown;
+          message?: unknown;
+        };
+        name = typeof parsed.name === 'string' ? parsed.name : 'Error';
+        message = typeof parsed.message === 'string' ? parsed.message : '';
+      } catch {
+        // Fall back to the raw text as the message.
+      }
+      const error = new Error(message);
+      error.name = name;
+      deliverReject(error);
+      return;
+    }
+    if (typeof payload !== 'string') {
+      deliverResolve(undefined);
+      return;
+    }
+    try {
+      deliverResolve(JSON.parse(payload));
+    } catch (error) {
+      deliverReject(
+        new Error(
+          `Workflow script returned malformed result JSON: ${toErrorMessage(error)}`,
+        ),
+      );
+    }
+  });
+
+  for (const prelude of bridge.realmPreludes ?? []) {
+    new vm.Script(prelude, {
+      filename: 'workflow-orchestration.js',
+    }).runInContext(context, { timeout: 1_000 });
+  }
 
   let script: vm.Script;
   try {
     // Strict mode is load-bearing, not style: it poisons
-    // arguments.callee/.caller for every function the script defines, so a
-    // sandbox-authored thunk invoked from host code (parallel/pipeline)
-    // cannot walk .caller up to a host function and reach the host's
-    // Function constructor.
-    script = new vm.Script(`(async () => {\n'use strict';\n${body}\n})()`, {
-      filename: options.filename,
-    });
+    // arguments.callee/.caller for every function the script defines
+    // (defense in depth on top of the data-only bridge). The trailing
+    // .then is trusted host-authored code running realm-side, so even if
+    // the script's synchronous prologue replaced Promise.prototype.then,
+    // the callbacks it captures are realm-local functions.
+    script = new vm.Script(
+      `(async () => {\n'use strict';\n${body}\n})().then(\n` +
+        `  (value) => { __wfDeliverResult(value, false); },\n` +
+        `  (error) => { __wfDeliverResult(error, true); },\n` +
+        `);`,
+      { filename: options.filename },
+    );
   } catch (error) {
     throw new WorkflowScriptParseError(
       `Workflow script syntax error: ${toErrorMessage(error)}`,
@@ -225,20 +348,10 @@ export async function runScriptInSandbox(
 
   // The vm-level timeout only bounds the synchronous portion; the overall
   // async run is bounded by the race below.
-  const evaluated = script.runInContext(context, {
+  script.runInContext(context, {
     timeout: Math.min(options.timeoutMs, 5_000),
-  }) as Promise<unknown>;
-  // Normalize the script's return value to plain JSON data so callers never
-  // hold live sandbox objects (lazy accessors firing during later
-  // formatting/persistence, realm-tied prototypes). A non-terminating
-  // accessor here is the same class as any post-await CPU-bound code —
-  // covered by the documented preemption gate.
-  const normalized = evaluated.then((value) =>
-    value === undefined
-      ? undefined
-      : (JSON.parse(JSON.stringify(value)) as unknown),
-  );
-  return await withTimeout(normalized, options);
+  });
+  return await withTimeout(delivered, options);
 }
 
 async function withTimeout(

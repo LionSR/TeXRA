@@ -101,7 +101,11 @@ export function parseWorkflowScript(source: string): ParsedWorkflowScript {
  * runtime in the sandbox, so the static ban deliberately stays simple.
  */
 function maskStringsAndComments(source: string): string {
-  const out = [...source];
+  // split('') keeps UTF-16 units so indices map 1:1 onto the original.
+  // [...source] would iterate code points and shorten the mask after any
+  // astral character (e.g. an emoji in a meta description), shifting every
+  // later match/brace offset.
+  const out = source.split('');
   const blank = (from: number, to: number) => {
     for (let k = from; k < to && k < out.length; k++) {
       if (out[k] !== '\n') out[k] = ' ';
