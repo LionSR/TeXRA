@@ -300,6 +300,4 @@ export class StreamStatusMachine {
   }
 }
 
-export { StreamStatusMachine as StreamStatusRegistry };
-
 export const StreamStatusService = new StreamStatusMachine();
