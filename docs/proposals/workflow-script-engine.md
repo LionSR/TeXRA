@@ -68,7 +68,8 @@ return await agent('Merge these drafts, unify notation.', {
   between stages (wall-clock = slowest single-item chain, not
   sum-of-slowest-per-stage). A throwing stage drops that item to `null`.
 - `concat(parts, {separator}?)` → zero-token fan-in for ordered text parts
-  (the common "chapter = N drafted sections" case). LLM merge (via a
+  (the common "chapter = N drafted sections" case); drops `null`/`undefined`
+  (failed stages) and empty strings. LLM merge (via a
   combiner agent such as `merge.yaml`) stays available for reconciliation
   that genuinely needs a model.
 - `log()` / `phase()` / `args` → progress narration, grouping,

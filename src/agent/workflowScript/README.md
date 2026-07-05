@@ -29,7 +29,8 @@ return concat(sections, { separator: '\n\n' });
 - `parallel(thunks)` — concurrent barrier; failed thunks resolve to `null`.
 - `pipeline(items, ...stages)` — per-item stage chains with **no barrier**
   between stages; a throwing stage drops that item to `null`.
-- `concat(parts, {separator}?)` — zero-token fan-in for text parts.
+- `concat(parts, {separator}?)` — zero-token fan-in for text parts;
+  drops `null`/`undefined` (failed stages) and empty strings.
 - `log(msg)` / `phase(title)` / `args` — progress + parameterization.
 
 ## Boundaries (deliberate for the prototype)

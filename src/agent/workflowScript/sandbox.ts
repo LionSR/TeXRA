@@ -241,7 +241,12 @@ async function withTimeout(
       promise,
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
-          options.onTimeout?.();
+          try {
+            options.onTimeout?.();
+          } catch {
+            // The timeout rejection below must fire even if the abort
+            // callback throws; otherwise the race never settles.
+          }
           // The script continuation is orphaned past this point; suppress
           // its eventual settlement so it cannot surface as an unhandled
           // rejection after the run already reported the timeout.
