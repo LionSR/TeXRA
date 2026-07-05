@@ -124,8 +124,15 @@ export async function setBashApprovalEnabled(
  *
  * Gated by a per-workspace marker so it runs at most once per workspace,
  * and never overwrites a workspace that already has its own explicit
- * override (e.g. set via the post-#7148 UI) -- this only ever acts on a
- * value the user never got a chance to set at the new, correct scope.
+ * override at either the `workspace` or resource-scoped `workspaceFolder`
+ * level (`texra.toolUse.requireBashApproval` is declared `resource`-scoped,
+ * so post-#7148 UI writes commonly land as `workspaceFolderValue`) -- this
+ * only ever acts on a value the user never got a chance to set at the new,
+ * correct scope. The one-shot marker is only ever set once the legacy
+ * global value has been dealt with for real: either there was none to begin
+ * with, or clearing it actually succeeded. If the clear throws, the marker
+ * is left unset so a later activation gets another chance to retry it,
+ * rather than permanently stranding the stale global bypass.
  */
 export async function migrateLegacyGlobalBashApprovalOverride(
   ports: Pick<ApprovalHandlerPorts, 'workspaceState' | 'config'>,
@@ -149,7 +156,17 @@ export async function migrateLegacyGlobalBashApprovalOverride(
   const legacyGlobalValue = inspection?.globalValue;
 
   if (legacyGlobalValue !== undefined) {
-    if (inspection?.workspaceValue === undefined) {
+    // `texra.toolUse.requireBashApproval` is `resource`-scoped, so an
+    // existing explicit override for this workspace can land in either
+    // `workspaceValue` (the pre-#7148 write path) or `workspaceFolderValue`
+    // (post-#7148 UI writes, which target the open folder). Treat either as
+    // "this workspace already made its own choice" and never overwrite it
+    // with the legacy global value.
+    const hasExplicitWorkspaceOverride =
+      inspection?.workspaceValue !== undefined ||
+      inspection?.workspaceFolderValue !== undefined;
+
+    if (!hasExplicitWorkspaceOverride) {
       try {
         await config.update(
           BASH_APPROVAL_CONFIG_KEY,
@@ -177,10 +194,16 @@ export async function migrateLegacyGlobalBashApprovalOverride(
     try {
       await config.update(BASH_APPROVAL_CONFIG_KEY, undefined, 'global');
     } catch (err) {
+      // Clearing the stale global value failed -- leave the one-shot marker
+      // unset so a later activation retries the clear instead of
+      // permanently giving up on it. Otherwise the uncleared global `false`
+      // would keep silently bypassing approval for every other,
+      // not-yet-migrated workspace with no way to ever fix it.
       logger.warn(
         CHANNEL,
         `Failed to clear legacy global ${BASH_APPROVAL_CONFIG_KEY} override: ${toErrorMessage(err)}`,
       );
+      return;
     }
   }
 
