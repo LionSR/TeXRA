@@ -48,11 +48,15 @@ function reconcileEnabledModels(
   // Generic deprecated-model sweep for users upgrading past version 16: remove
   // models the registry now marks as deprecated so normal dropdowns stay
   // current. Introduced at version 15 (sonnet/opus tiers) and re-bumped to 16
-  // when opus47/opus47T were deprecated in favor of opus48/opus48T. Bump the
-  // guard to the current MODEL_LIST_VERSION whenever the registry deprecates
-  // more defaults. Version 18 leads DEFAULT_MODELS with gemini35f and version
-  // 19 adds fable5; both only add or reorder models (no removals), so the
-  // deprecated-model sweep intentionally remains guarded at version 16.
+  // when opus47/opus47T were deprecated in favor of opus48/opus48T. Version
+  // 18 leads DEFAULT_MODELS with gemini35f and version 19 adds fable5; both
+  // only add or reorder models (no removals), so the deprecated-model sweep
+  // intentionally remains guarded at version 16. These thresholds are frozen
+  // historical facts about specific past migrations, not tied to the current
+  // value of MODEL_LIST_VERSION: since #7191, that value is a hash of the
+  // resolved default set rather than a hand-bumped integer, so it no longer
+  // makes sense to "bump the guard to the current version" -- a future
+  // one-time sweep would add its own new numeric threshold here instead.
   if ((previousVersion ?? 0) < 16) {
     for (const model of currentModels) {
       if (isDeprecatedModel(model)) strippedSet.add(model);
@@ -60,7 +64,11 @@ function reconcileEnabledModels(
   }
 
   // Retired models are hard unavailable even for users with included relay
-  // access. Strip them whenever this refresh version is crossed.
+  // access. Strip them whenever this refresh version is crossed. (Version 21
+  // was the last hand-bumped MODEL_LIST_VERSION before #7191 switched to a
+  // hash-derived value, which always lands above this range -- see
+  // MODEL_LIST_HASH_BASE in modelOptionsBasic.ts -- so this sweep still fires
+  // exactly once for every pre-#7191 install.)
   if ((previousVersion ?? 0) < 21) {
     for (const model of currentModels) {
       if (isRetiredModel(model)) strippedSet.add(model);
