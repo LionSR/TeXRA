@@ -1,5 +1,12 @@
+import * as path from 'node:path';
+
 import { defineCommand } from 'citty';
 
+import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
+import {
+  DEFAULT_HTML_EXPORT_ASSETS_HREF,
+  formatChatAsHtml,
+} from '@agent/export/htmlExport/htmlFormatter';
 import { type ExecutionId } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -9,14 +16,23 @@ import {
   formatCliHistoryDetailsText,
   formatCliHistoryNotFoundText,
   formatCliHistoryText,
+  formatInvalidExportFormatText,
+  isRemoteCliHistoryExportAssetsHref,
   listCliHistoryEntries,
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
+  readCliHistoryExportInput,
+  resolveCliHistoryExportAssetsHref,
+  stageCliHistoryExportAssets,
   type CliHistoryDeleteResult,
 } from '../runtime/history';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import {
+  writeErrorStderr,
+  writeRawStdout,
+  writeTextStderr,
+} from '../runtime/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
@@ -78,6 +94,75 @@ async function runHistoryShow(
     ndjson: { kind: 'history-detail', detail: details },
     text: formatCliHistoryDetailsText(details),
   });
+  return CliExitCode.Success;
+}
+
+/**
+ * Export a stored conversation to stdout as a standalone document.
+ *
+ * Mirrors the extension's ChatExportController.buildExportInput so the CLI
+ * and the extension render the same conversation identically; the HTML path
+ * reuses the Lit-SSR chat export renderer (same HTML output as the
+ * extension's chat export — not the separate Progress View trace export).
+ *
+ * For any local (non-URL) `--assets` href — the unset default `./assets` or
+ * an explicit local path, including one that spells out the default — also
+ * stages the bundled KaTeX/highlight.js/texmath assets into that path
+ * (resolved against `--cwd`) as a side effect. The common
+ * `texra history show <id> --export html > out.html` redirect writes
+ * `out.html` into the same directory, so the exported document's asset href
+ * resolves for real instead of pointing at a folder that was never created.
+ * A genuinely remote href (e.g. a CDN URL) is left untouched: the caller
+ * manages that location themselves.
+ */
+async function runHistoryExport(
+  context: CliContext,
+  id: ExecutionId,
+  format: 'html' | 'md',
+  options: { assetsHref?: string } = {},
+): Promise<number> {
+  await initLocalCliPlatform(context);
+  const exportResult = await readCliHistoryExportInput(id);
+  if (exportResult.status === 'not_found') {
+    writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+    return CliExitCode.Usage;
+  }
+  if (exportResult.status === 'incomplete') {
+    writeTextStderr(
+      `Execution ${id} exists but has nothing to export yet (no stored ` +
+        'config and/or conversation). Run `texra history show ' +
+        id +
+        '` to see what is available.',
+    );
+    return CliExitCode.Usage;
+  }
+  const { exportInput } = exportResult;
+
+  const assetsHref = resolveCliHistoryExportAssetsHref(options.assetsHref);
+  if (format === 'html' && !isRemoteCliHistoryExportAssetsHref(assetsHref)) {
+    const staged = await stageCliHistoryExportAssets({
+      resourcesPath: context.resourcesPath,
+      destDir: path.resolve(
+        context.cwd,
+        assetsHref ?? DEFAULT_HTML_EXPORT_ASSETS_HREF,
+      ),
+    });
+    if (staged === 'missing') {
+      writeTextStderr(
+        'Note: bundled HTML export assets (KaTeX/highlight.js CSS) were not ' +
+          'found in this CLI install, so math and code blocks may render ' +
+          'unstyled. Rebuild the CLI (`npm run texra-local:build`) or pass ' +
+          '--assets to point at a folder containing katex.min.css, ' +
+          'texmath.css, hljs-light.css, and hljs-dark.css.',
+      );
+    }
+  }
+
+  const content =
+    format === 'html'
+      ? formatChatAsHtml(exportInput, { assetsHref })
+      : formatChatAsMarkdown(exportInput);
+  writeRawStdout(content);
   return CliExitCode.Success;
 }
 
@@ -179,12 +264,34 @@ const historyShowCommand = defineCliCommand({
       description:
         'Show the full stored conversation instead of only the final preview',
     },
+    export: {
+      type: 'string',
+      valueHint: 'html|md',
+      description:
+        'Export the stored conversation to stdout as a standalone html or md document',
+    },
+    assets: {
+      type: 'string',
+      valueHint: 'href',
+      description:
+        'Assets href for --export html (defaults to ./assets, staged automatically)',
+    },
   },
   run: (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
       writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
       return Promise.resolve(CliExitCode.Usage);
+    }
+    const exportFormat = optString(ctx.args.export);
+    if (exportFormat !== undefined) {
+      if (exportFormat !== 'html' && exportFormat !== 'md') {
+        writeTextStderr(formatInvalidExportFormatText(exportFormat));
+        return Promise.resolve(CliExitCode.Usage);
+      }
+      return runHistoryExport(context, id, exportFormat, {
+        assetsHref: optString(ctx.args.assets),
+      });
     }
     return runHistoryShow(context, id, { full: ctx.args.full === true });
   },

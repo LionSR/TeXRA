@@ -33,7 +33,6 @@ These `.yaml` files have two main parts (and thankfully, YAML is usually less pr
 
 1.  **`settings`**: Define general operational parameters. For example:
     - `agentCategory`: Is it a `workflow` agent (structured Chain-of-Thought reasoning with XML-wrapped output) or a `toolUse` agent (interactive conversation that can call tools like file editing, web search, etc.)?
-    - `prefills`: Text the agent should automatically start its response with (e.g., `<scratchpad>`).
     - _(Other settings control output format, inheritance, etc. See [Configuration](./configuration.md) and [Custom Agents](./custom-agents.md) for full details)._
 2.  **`prompts`**: Contain text templates that TeXRA fills with your specific context (input files, instructions) to guide the LLM at different stages:
     - `systemPrompt`: Sets the overall role and high-level instructions for the LLM.
