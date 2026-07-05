@@ -732,7 +732,10 @@ function wireConversation(): void {
   conversationView.addEventListener('toolbar-command', ((e: CustomEvent) =>
     handleToolbarCommand(e, ctx())) as EventListener);
   conversationView.addEventListener('permission-action', ((e: CustomEvent) =>
-    handlePermissionAction(e, createHostMessageHandlerContext())) as EventListener);
+    handlePermissionAction(
+      e,
+      createHostMessageHandlerContext(),
+    )) as EventListener);
   conversationView.addEventListener(
     'file-action',
     handleFileAction as EventListener,
