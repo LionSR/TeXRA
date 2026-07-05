@@ -14,7 +14,11 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import {
+  StreamStatusMachine,
+  StreamStatusService,
+} from '@agent/runtime/StreamStatusService';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
   executionRegistry,
@@ -374,6 +378,52 @@ describe('ToolUseFollowUp', () => {
       ]);
     } finally {
       executionRegistry.untrack(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
+  });
+
+  it('routes the wake decision to an explicitly passed session instead of currentSession()', async () => {
+    // Regression for #7161: an explicit session param must decide
+    // active/resuming (and therefore wake/release) on its own state, not
+    // silently fall back to the process default session.
+    const parentStreamId = 'parent-stream-session-routing' as StreamTabId;
+
+    await initResumePlatform({ tryResumeStream: async () => false });
+
+    const result = { status: 'queued' as const, reason: 'waiting' as const };
+
+    const routedSession = new SessionHandle({
+      status: new StreamStatusMachine(),
+    });
+    seedStreamStatusForTest(
+      routedSession.status,
+      parentStreamId,
+      STREAM_STATUS.RUNNING,
+    );
+
+    try {
+      // The explicit session marks this stream RUNNING (active), so passing
+      // it must make the wake decision defer to it.
+      assert.deepEqual(
+        await wakeQueuedFollowUpStream(
+          parentStreamId,
+          result,
+          undefined,
+          routedSession,
+        ),
+        { kind: 'active_or_resuming' },
+      );
+
+      // Without an explicit session, the decision falls back to
+      // currentSession() (the process default), whose StreamStatusService
+      // has no state for this stream — proving the two sessions are not
+      // conflated and the routed session's state actually drove the result
+      // above.
+      assert.deepEqual(await wakeQueuedFollowUpStream(parentStreamId, result), {
+        kind: 'queued_resume_failed',
+      });
+    } finally {
+      clearStreamStatusForTest(routedSession.status, parentStreamId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });
