@@ -15,6 +15,7 @@ import type { AgentTrace } from '@agent/trace';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import {
   currentSession,
   type SessionHandle,
@@ -84,7 +85,8 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     StreamTabId,
     Map<K, BoundSubscription>
   >();
-  private hooksRegistered = false;
+  private sourceHooksRegistered = false;
+  private readonly hookedReleaseQueues = new WeakSet<ToolUseFollowUpQueue>();
 
   constructor(
     private readonly opts: StreamSubscriptionRegistryOptions<K, Input>,
@@ -98,12 +100,12 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     input: Input,
     runtimeHost: AgentRuntimeHost,
   ): boolean {
-    this.ensureHooks();
     const key = this.opts.keyOf(input);
     // Capture the session HERE: bind() runs inside the run's AsyncLocalStorage
     // (the github tool's execute()), but onEvent fires later from a detached
     // polling timer where the ALS is empty.
     const session = currentSession();
+    this.ensureHooks(session);
     let bound = this.perStream.get(streamId);
     if (!bound) {
       bound = new Map();
@@ -139,9 +141,11 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       )
         .then((result) => {
           if (result.status === 'sent' || result.status === 'queued') {
-            subscription.runtimeHost.emit('updateQueuedFollowUps', {
-              streamId,
-            });
+            emitRuntimeEvent(
+              'updateQueuedFollowUps',
+              { streamId },
+              subscription.session,
+            );
           }
         })
         .catch((err: unknown) => {
@@ -233,9 +237,22 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     }));
   }
 
-  private ensureHooks(): void {
-    if (this.hooksRegistered) return;
-    ToolUseFollowUpQueue.onRelease((streamId) => {
+  private ensureHooks(session: SessionHandle): void {
+    this.ensureReleaseHook(session.followUps);
+    if (this.sourceHooksRegistered) return;
+    // The polling source can detach subscriptions unilaterally (PR closed,
+    // auth failure, 24 h unreachable). Listen to the source directly; the
+    // progress event is for UI refresh, not for internal bookkeeping.
+    this.opts.source.onKeysChanged((keys) => {
+      this.pruneMissingSourceKeys(keys);
+    });
+    this.sourceHooksRegistered = true;
+  }
+
+  private ensureReleaseHook(queue: ToolUseFollowUpQueue): void {
+    if (this.hookedReleaseQueues.has(queue)) return;
+    this.hookedReleaseQueues.add(queue);
+    queue.onRelease((streamId) => {
       const bound = this.perStream.get(streamId);
       if (!bound) return;
       const runtimeHosts = [...bound.values()].map(
@@ -247,13 +264,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       }
       this.emitBindingsChanged(runtimeHosts);
     });
-    // The polling source can detach subscriptions unilaterally (PR closed,
-    // auth failure, 24 h unreachable). Listen to the source directly; the
-    // progress event is for UI refresh, not for internal bookkeeping.
-    this.opts.source.onKeysChanged((keys) => {
-      this.pruneMissingSourceKeys(keys);
-    });
-    this.hooksRegistered = true;
   }
 
   private pruneMissingSourceKeys(keys: readonly K[]): void {

@@ -1,6 +1,12 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - transcript
+import {
+  STREAM_LOGS_DIR,
+  type StreamSnapshotStore as ProgressSnapshotStore,
+} from '@transcript';
+
 // Local imports - agent state
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
@@ -27,10 +33,6 @@ import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCap
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-import {
-  STREAM_LOGS_DIR,
-  type StreamSnapshotStore as ProgressSnapshotStore,
-} from '@transcript';
 
 type Bridge = {
   openFileCompile(filePath: string): Promise<void>;
@@ -77,6 +79,15 @@ type BridgeWithSession = TestableBridge & {
       cleanupAllRequests(): void;
     };
     status: StreamStatusMachine;
+    followUps: {
+      enqueue(
+        streamId: StreamTabId,
+        followUp: { text: string },
+        options?: { force?: boolean },
+      ): boolean;
+      getAll(streamId: StreamTabId): string[];
+      release(streamId: StreamTabId): void;
+    };
   };
 };
 
@@ -84,6 +95,12 @@ function bridgeStatus(
   bridge: TestableBridge,
 ): BridgeWithSession['session']['status'] {
   return (bridge as BridgeWithSession).session.status;
+}
+
+function bridgeFollowUps(
+  bridge: TestableBridge,
+): BridgeWithSession['session']['followUps'] {
+  return (bridge as BridgeWithSession).session.followUps;
 }
 
 type DesktopExecution = {
@@ -2178,8 +2195,6 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromSnapshot,
     });
-    const { ToolUseFollowUpQueue } =
-      await import('@agent/followUp/ToolUseFollowUpQueueManager');
     const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
 
     try {
@@ -2188,7 +2203,7 @@ describe('DesktopProgressBridge', () => {
         executionId: 'exec-1',
         taskState,
       });
-      ToolUseFollowUpQueue.enqueue(
+      bridgeFollowUps(bridge).enqueue(
         'stream-1',
         { text: 'queued follow-up' },
         { force: true },
@@ -2230,7 +2245,7 @@ describe('DesktopProgressBridge', () => {
         origin: 'user',
       });
     } finally {
-      ToolUseFollowUpQueue.release('stream-1');
+      bridgeFollowUps(bridge).release('stream-1');
       bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }
@@ -2252,8 +2267,6 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromSnapshot,
     });
-    const { ToolUseFollowUpQueue } =
-      await import('@agent/followUp/ToolUseFollowUpQueueManager');
 
     try {
       bridge.handleProgressEvent('setTaskState', {
@@ -2261,19 +2274,19 @@ describe('DesktopProgressBridge', () => {
         executionId: 'exec-1',
         taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
-      ToolUseFollowUpQueue.enqueue(
+      bridgeFollowUps(bridge).enqueue(
         'stream-1',
         { text: 'queued follow-up' },
         { force: true },
       );
 
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
-      expect(ToolUseFollowUpQueue.getAll('stream-1')).toEqual([
+      expect(bridgeFollowUps(bridge).getAll('stream-1')).toEqual([
         'queued follow-up',
       ]);
       expect(bridgeStatus(bridge).get('stream-1')).toBe(STREAM_STATUS.WAITING);
     } finally {
-      ToolUseFollowUpQueue.release('stream-1');
+      bridgeFollowUps(bridge).release('stream-1');
       bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }

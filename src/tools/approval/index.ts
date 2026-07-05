@@ -12,7 +12,6 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingUserQuestions,
@@ -50,7 +49,7 @@ export function cleanupApprovalsForStream(
  * (pending approvals, bypass flags, coordinator requests) AND the follow-up
  * queue. These two always need to be cleared together when a stream is
  * removed, so this is the single function hosts should call instead of
- * combining {@link cleanupApprovalsForStream} + `ToolUseFollowUpQueue.release`
+ * combining {@link cleanupApprovalsForStream} + `session.followUps.release`
  * manually.
  *
  * Host-specific teardown (webview state, backup files, goal store, etc.)
@@ -61,7 +60,7 @@ export function releaseStreamResources(
   session: SessionHandle = defaultSession(),
 ): void {
   cleanupApprovalsForStream(streamId, session);
-  ToolUseFollowUpQueue.release(streamId);
+  session.followUps.release(streamId);
 }
 
 /**

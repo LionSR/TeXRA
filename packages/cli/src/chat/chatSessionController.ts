@@ -21,6 +21,7 @@ import {
   executeAgent,
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
@@ -227,12 +228,17 @@ export function createChatSessionController(
       defaultSession(),
       wrapped,
     );
+    const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
+      defaultSession().events,
+      wrapped,
+    );
     disposers.push(installTuiApprovals(wrapped, sessionContext));
     return {
       wrapped,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
         detachResultToast();
+        detachLegacyProgressProjection();
         if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
         markChatTuiRunCompleted(session);
         void runtimeHost.close();
