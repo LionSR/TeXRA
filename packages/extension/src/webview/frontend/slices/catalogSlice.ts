@@ -1,0 +1,119 @@
+/**
+ * Catalog slice: model/agent option pushes from the host.
+ */
+
+// Local imports - shared IPC and schemas
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import type { AgentOptionData, MainViewHandlerRegistry } from '@shared/schemas';
+import { agentName } from '@shared/schemas/agent';
+import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
+// Constants-only module: safe for the webview bundle (no platform imports).
+
+// Local imports - main view
+import { SESSION_TYPES } from '../constants';
+import {
+  modelOptions$,
+  toolUseAgent$,
+  toolUseAgentOptions$,
+  toolUseModelOptions$,
+  workflowAgent$,
+  workflowAgentOptions$,
+  workflowModelOptions$,
+} from '../mainViewState';
+import {
+  enterToolUseSession,
+  refreshModelSelectionForActiveSession,
+} from '../mainViewActions';
+
+/**
+ * Exact value match first, then plain-name match (source changes and
+ * plain-name defaults), then the caller's preferred fallback list. With no
+ * fallback list (workflow), an unresolvable agent keeps the stale value so
+ * the dropdown shows no selection and execution errors explicitly.
+ */
+function validateAgentSelection(
+  options: AgentOptionData[],
+  currentValue: string,
+  preferredFallback: readonly string[] = [],
+): string {
+  if (options.some((opt) => opt.value === currentValue)) {
+    return currentValue;
+  }
+  // Match by name: handles source changes, plain-name defaults, and remote
+  // rows whose value still carries legacy decorated storage names.
+  const name = agentName(currentValue);
+  const byName = options.find((opt) => agentName(opt.value) === name);
+  if (byName) return byName.value;
+  for (const preferred of preferredFallback) {
+    const match = options.find((opt) => agentName(opt.value) === preferred);
+    if (match) return match.value;
+  }
+  // No match — keep stale value so the UI shows no selection.
+  // Execution will error with "unknown agent" if the user proceeds.
+  return currentValue;
+}
+
+function findAgentSelection(
+  options: AgentOptionData[],
+  candidate: string,
+): string | undefined {
+  const exact = options.find((opt) => opt.value === candidate);
+  if (exact) return exact.value;
+  const name = agentName(candidate);
+  return options.find((opt) => agentName(opt.value) === name)?.value;
+}
+
+export const catalogHandlers: MainViewHandlerRegistry = {
+  [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) => {
+    const optionsDataByCategory = message.optionsDataByCategory;
+    const fallbackOptions =
+      message.optionsData ??
+      optionsDataByCategory?.workflow ??
+      optionsDataByCategory?.toolUse;
+    if (!fallbackOptions) return;
+
+    modelOptions$.set(fallbackOptions);
+    if (optionsDataByCategory) {
+      if (Object.hasOwn(optionsDataByCategory, SESSION_TYPES.WORKFLOW)) {
+        workflowModelOptions$.set(optionsDataByCategory.workflow);
+      }
+      if (Object.hasOwn(optionsDataByCategory, SESSION_TYPES.TOOL_USE)) {
+        toolUseModelOptions$.set(optionsDataByCategory.toolUse);
+      }
+    }
+    refreshModelSelectionForActiveSession();
+  },
+
+  [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (message) => {
+    const optionsData = message.optionsData ?? {};
+
+    if (optionsData.workflow) {
+      workflowAgentOptions$.set(optionsData.workflow);
+      workflowAgent$.set(
+        validateAgentSelection(optionsData.workflow, workflowAgent$.get()),
+      );
+    }
+
+    if (optionsData.toolUse) {
+      toolUseAgentOptions$.set(optionsData.toolUse);
+      const selectedToolUseAgent = message.selectedToolUseAgent
+        ? findAgentSelection(optionsData.toolUse, message.selectedToolUseAgent)
+        : undefined;
+      toolUseAgent$.set(
+        selectedToolUseAgent ??
+          validateAgentSelection(
+            optionsData.toolUse,
+            toolUseAgent$.get(),
+            // State 2 sanity (PRD: agent-native onboarding): a persisted agent
+            // that no longer resolves (e.g. BYOK user with the sign-in-only
+            // 'orchestrator' default) falls back along the preferred list
+            // instead of leaving the dropdown with no selection.
+            PREFERRED_TOOL_USE_AGENTS,
+          ),
+      );
+      if (selectedToolUseAgent) {
+        enterToolUseSession();
+      }
+    }
+  },
+};
