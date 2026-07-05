@@ -39,6 +39,7 @@ import {
   createProgressBackendUiConfig,
   type ApprovalRequestHandlerSet,
 } from '@shared/progressView/backend/progressBackendUiConfig';
+import { repairRestartedStreams } from '@shared/progressView/backend/restartRepair';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
@@ -455,10 +456,18 @@ export class ProgressViewProvider
   }
 
   public async cleanupTasksAfterRestart(): Promise<void> {
-    const waitingStreams = await detectWaitingStreams(
-      this.state.snapshots.getExecutionIdMap(),
-    );
-    await this.resetRunningStreamStatuses(waitingStreams);
+    const executionIds = this.state.snapshots.getExecutionIdMap();
+    const waitingStreams = await detectWaitingStreams(executionIds);
+    await repairRestartedStreams({
+      streamStatus: this.state.streamStatus,
+      waitingStreams,
+      executionIds,
+      repairStreams: executionIds.keys(),
+      closeRunningGroups: (streamIds, status, now) =>
+        this.state.endRunningTaskGroups(now, streamIds, status),
+      statusEmitOptions: { trace: this.logger },
+      logger: this.logger,
+    });
     this.syncFullView({ forceRebuild: true });
   }
 
@@ -471,26 +480,6 @@ export class ProgressViewProvider
       this._mainViewProvider?.getActiveMode() === 'progress' &&
       this._mainViewProvider.getWebviewView()?.visible === true
     );
-  }
-
-  private async resetRunningStreamStatuses(
-    waitingStreams: Set<StreamTabId>,
-  ): Promise<void> {
-    const affectedStreams =
-      this.eventHandler.resetRunningTasksToError(waitingStreams);
-
-    const streamsWithRunningGroups = await this.state.endRunningTaskGroups(
-      Date.now(),
-      affectedStreams,
-    );
-
-    for (const streamId of streamsWithRunningGroups) {
-      if (!affectedStreams.includes(streamId)) {
-        this.logger.debug(
-          `Stream ${streamId} had running groups but wasn't marked as affected`,
-        );
-      }
-    }
   }
 
   public async setActiveStream(streamId: StreamTabId): Promise<void> {
