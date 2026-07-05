@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
-import { registerExecution, getExecutionStore } from '@agent/storage';
+import {
+  EXECUTION_META_SCHEMA_VERSION,
+  registerExecution,
+  getExecutionStore,
+} from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { flowKey } from '@agent/node/persistedFlow';
@@ -116,6 +120,7 @@ describe('CLI history status formatting', () => {
       id: 'abc123' as ExecutionId,
       status: CLI_HISTORY_RESUMABLE_STATUS,
       meta: {
+        schemaVersion: EXECUTION_META_SCHEMA_VERSION,
         timestamp: '2026-06-03T05:03:06.717Z',
         category: 'toolUse',
         delegationDepth: 0,
