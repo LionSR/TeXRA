@@ -22,13 +22,15 @@ export interface ResumeStreamPorts {
   /** Runtime host receiving the RESUMING/WAITING status updates. */
   readonly runtimeHost: AgentRuntimeHost;
   /**
-   * Resolve the persisted task state + execution id for a stream, or `undefined`
+   * Resolve the persisted run state + execution id for a stream, or `undefined`
    * when there is nothing to resume. The host owns any "no state" messaging it
    * surfaces in the `undefined` case (the orchestrator stays silent there).
    */
   resolveResumeState(
     streamId: StreamTabId,
-  ): Promise<{ taskState: TaskState; executionId: ExecutionId } | undefined>;
+  ): Promise<
+    { runState: AgentConfig | TaskState; executionId: ExecutionId } | undefined
+  >;
   /** Resume a tool-use snapshot (host injects its failure surface). */
   resumeToolUseSnapshot(snapshot: ToolUseSessionSnapshot): Promise<boolean>;
   /**
@@ -88,7 +90,7 @@ export async function resolveAndResumeStream(
     const resume = await retrieveSessionResumeData(
       streamId,
       resolved.executionId,
-      resolved.taskState,
+      resolved.runState,
     );
     if (!resume) {
       await ports.reportNoResumableSession?.(streamId);

@@ -25,7 +25,9 @@ export const syncHandlers: HandlerRegistry = {
       data.plan !== undefined ||
       data.queuedFollowUps !== undefined;
     const hasMeta =
-      data.conversationProgress !== undefined || data.badges !== undefined;
+      data.conversationProgress !== undefined ||
+      'roundStage' in data ||
+      data.badges !== undefined;
     const hasRunUsage = data.runUsage !== undefined;
     const hasContext = data.contextState !== undefined;
 
@@ -99,6 +101,9 @@ export const syncHandlers: HandlerRegistry = {
 
           if (data.conversationProgress) {
             draft.conversationProgress = data.conversationProgress;
+          }
+          if ('roundStage' in data) {
+            draft.roundStage = data.roundStage;
           }
           if (data.badges) {
             draft.activeSubagents = data.badges.activeSubagents;

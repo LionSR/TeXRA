@@ -34,6 +34,7 @@ import {
   STREAM_STATUS,
   type ExecutionId,
   type StorageKey,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
@@ -149,6 +150,8 @@ function createLifecycleContext({
   return { ctx, explicit };
 }
 
+let lifecycleFixtureCounter = 0;
+
 function lifecycleFixture(
   slug: string,
   agent?: string,
@@ -159,7 +162,8 @@ function lifecycleFixture(
   ctx: AgentLaunchContext;
   explicit: ReturnType<typeof createRecordingHost>;
 } {
-  const executionId = `execution-${slug}` as ExecutionId;
+  const executionId =
+    `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as ExecutionId;
   const streamId = `stream-${slug}` as StreamTabId;
   const streamStatus = new StreamStatusMachine();
   const { ctx, explicit } = createLifecycleContext({
@@ -245,6 +249,41 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
+  it('emits run config before the RUNNING status projection', async () => {
+    const { executionId, streamId, streamStatus, ctx, explicit } =
+      lifecycleFixture('lifecycle-run-config-before-running');
+
+    try {
+      await runFlowWithLifecycle(ctx, async () => ({
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.COMPLETED,
+        executionId,
+        streamId,
+      }));
+
+      const setTaskStateIndex = explicit.events.findIndex(
+        (event) => event.event === 'setTaskState',
+      );
+      const runningIndex = explicit.events.findIndex((event) => {
+        if (event.event !== 'updateStreamStatus') return false;
+        const payload = event.payload as {
+          streamId: StreamTabId;
+          status: StreamPhase;
+        };
+        return (
+          payload.streamId === streamId &&
+          payload.status === STREAM_PHASE.RUNNING
+        );
+      });
+
+      expect(setTaskStateIndex).toBeGreaterThanOrEqual(0);
+      expect(runningIndex).toBeGreaterThanOrEqual(0);
+      expect(setTaskStateIndex).toBeLessThan(runningIndex);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
   it('admits run start from a stale terminal phase via resume semantics', async () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-stale-terminal-start',
@@ -304,7 +343,11 @@ describe('runFlowWithLifecycle', () => {
       await runFlowWithLifecycle(ctx, async () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
         expect(streamStatus.getSubstate(streamId)).toBeUndefined();
-        expect(explicit.events).toEqual([]);
+        expect(
+          explicit.events.filter(
+            (entry) => entry.event === 'updateStreamStatus',
+          ),
+        ).toEqual([]);
         return {
           category: 'toolUse',
           outcome: RUN_OUTCOME.COMPLETED,

@@ -27,7 +27,7 @@ function basePorts(
   return {
     runtimeHost,
     resolveResumeState: vi.fn(async () => ({
-      taskState: { agentConfig: { agent: 'a', model: 'm' } } as never,
+      runState: { agent: 'a', model: 'm' } as never,
       executionId: 'exec-1' as never,
     })),
     resumeToolUseSnapshot: vi.fn(async () => true),

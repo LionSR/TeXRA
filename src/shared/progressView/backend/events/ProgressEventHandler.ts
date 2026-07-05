@@ -93,6 +93,22 @@ export class ProgressEventHandler {
     }
   }
 
+  private handleRunningTransition(
+    streamId: StreamTabId,
+  ): AgentCategory | undefined {
+    const knownCategory = this.getStreamCategory(streamId);
+    const category = knownCategory ?? AgentCategory.Workflow;
+    this.state.clearStreamHints(streamId);
+    this.state.getOrCreateStreamState(streamId, category);
+    this.state.resetFinishedChildCounters(streamId);
+    this.state.pruneInterruptHandles();
+
+    if (this.state.activeStream === streamId) {
+      this.maybeUpdateFilterForCategory(knownCategory);
+    }
+    return knownCategory;
+  }
+
   setupEventListeners(bus: ProgressEventBusLike): ProgressEventSubscription {
     const controller = new AbortController();
     const { signal } = controller;
@@ -113,6 +129,7 @@ export class ProgressEventHandler {
         setTaskState: (_, data) => this.handleSetTaskState(data),
         updateConversationProgress: (_, data) =>
           this.handleUpdateConversationProgress(data),
+        updateRoundStage: (_, data) => this.handleUpdateRoundStage(data),
         updateActiveSubagents: (_, data) =>
           this.updateActiveChildren(data.parentStreamId, {
             activeField: 'activeSubagents',
@@ -376,13 +393,9 @@ export class ProgressEventHandler {
     const isActiveStream = this.state.activeStream === streamId;
     const category = taskState.agentConfig.agentCategory;
 
-    // Coordinate persistence + ephemeral side effects (formerly state.setTaskState).
-    // taskState + executionId go in a single meta.json write.
+    // Legacy compatibility payload. The snapshot store derives the current
+    // config and run descriptor from this but no longer writes meta.taskState.
     this.state.snapshots.setTaskState(streamId, taskState, executionId);
-    this.state.clearStreamHints(streamId);
-    this.state.getOrCreateStreamState(streamId, category);
-    this.state.resetFinishedChildCounters(streamId);
-    this.state.pruneInterruptHandles();
 
     if (isActiveStream) {
       this.maybeUpdateFilterForCategory(category);
@@ -425,6 +438,23 @@ export class ProgressEventHandler {
         () => this.flushProgressUpdates(),
         PROGRESS_THROTTLE_MS,
       );
+    }
+  }
+
+  private handleUpdateRoundStage(
+    data: ProgressEventPayloads['updateRoundStage'],
+  ): void {
+    const { streamId, roundStage } = data;
+    this.state.updateStreamState(streamId, (prev) => ({
+      ...prev,
+      roundStage,
+    }));
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      this.state.activeStream === streamId
+    ) {
+      this.webviewUpdater.updateRoundStage(streamId, roundStage);
     }
   }
 
@@ -525,12 +555,14 @@ export class ProgressEventHandler {
 
     // Optionally include active-stream state (replaces syncActiveStreamState).
     let conversationProgress: ConversationProgress | undefined;
+    let roundStage: StreamExecutionState['roundStage'] | undefined;
     let badges: StreamBadgeSnapshot | undefined;
     let parentStreamId: StreamTabId | undefined;
     if (includeActiveState) {
       const streamState = this.state.getStreamState(stream);
       if (streamState) {
         conversationProgress = streamState.conversationProgress;
+        roundStage = streamState.roundStage;
         badges = this.toBadgeSnapshot(streamState);
       }
       parentStreamId = this.state.snapshots.getParentStreamId(stream);
@@ -548,6 +580,7 @@ export class ProgressEventHandler {
       queuedFollowUps,
       agentCategory,
       conversationProgress,
+      roundStage,
       badges,
       parentStreamId,
       ...streamControls,
@@ -602,15 +635,23 @@ export class ProgressEventHandler {
       this.state.streamLogs.releaseEntries(streamId);
     }
 
+    const isNewRunningTransition =
+      status === STREAM_PHASE.RUNNING && _previousStatus !== status;
+    const runningCategory = isNewRunningTransition
+      ? this.handleRunningTransition(streamId)
+      : undefined;
+
     if (!this.webviewUpdater.isAvailable()) return;
 
     const isNewStream = !this.state.streamLogs.has(streamId);
     this.state.streamLogs.ensureStream(streamId);
-    // Persisted streams may be in stream logs but missing from _streamStates;
-    // getOrCreateStreamState is idempotent so safe to call unconditionally.
-    const streamCategory = this.getStreamCategory(streamId);
+    // Persisted streams may be in stream logs but missing from _streamStates.
+    // The first RUNNING transition already created/reset the state above.
+    const streamCategory = runningCategory ?? this.getStreamCategory(streamId);
     const category = streamCategory ?? AgentCategory.Workflow;
-    this.state.getOrCreateStreamState(streamId, category);
+    if (!isNewRunningTransition) {
+      this.state.getOrCreateStreamState(streamId, category);
+    }
 
     if (isNewStream) {
       const previousFilter = this.state.agentCategoryFilter;
@@ -700,10 +741,9 @@ export class ProgressEventHandler {
   }
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
-    const taskState = this.state.snapshots.getTaskState(streamId);
+    const config = this.state.snapshots.getRunConfig(streamId);
     return (
-      taskState?.agentConfig?.agentCategory ??
-      this.state.getStreamHints(streamId).agentCategory
+      config?.agentCategory ?? this.state.getStreamHints(streamId).agentCategory
     );
   }
 

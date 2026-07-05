@@ -579,7 +579,7 @@ describe('DesktopProgressBridge', () => {
         'setTaskState',
         {
           streamId: 'desktop-host-stream',
-          executionId: 'desktop-host-exec',
+          executionId: 'de57e0',
           taskState: TaskStateSchema.parse(workflowTaskState()),
         },
         session,
@@ -589,7 +589,7 @@ describe('DesktopProgressBridge', () => {
         expect(streamSnapshotStore.upsert).toHaveBeenCalledWith(
           expect.objectContaining({
             streamId: 'desktop-host-stream',
-            executionId: 'desktop-host-exec',
+            executionId: 'de57e0',
           }),
         );
       });
@@ -610,7 +610,11 @@ describe('DesktopProgressBridge', () => {
       });
       bridge.handleProgressEvent('updateConversationProgress', {
         streamId: 'parent',
-        progress: { conversationTurns: 3, toolCallCount: 5 },
+        progress: { toolCallCount: 5 },
+      });
+      bridge.handleProgressEvent('updateRoundStage', {
+        streamId: 'parent',
+        roundStage: { index: 2 },
       });
       bridge.handleProgressEvent('updateActiveProcesses', {
         parentStreamId: 'parent',
@@ -636,7 +640,8 @@ describe('DesktopProgressBridge', () => {
         creationTimestamp: 1_000,
       });
       expect(streamSync?.streamStates?.parent).toMatchObject({
-        conversationProgress: { conversationTurns: 3, toolCallCount: 5 },
+        conversationProgress: { toolCallCount: 5 },
+        roundStage: { index: 2 },
         activeSubagents: [{ executionId: 'agent-1', agentName: 'reviewer' }],
         finishedSubagentCount: 0,
         activeProcesses: [{ executionId: 'process-1', agentName: 'bash' }],
@@ -1677,14 +1682,14 @@ describe('DesktopProgressBridge', () => {
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'toolUse',
       snapshot: {
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         streamId: 'stream-1',
         agentConfig: taskState.agentConfig,
       },
     }));
     const bridge = await createBridge([], {
       kvRead: vi.fn(async () => ({
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         taskState,
       })),
       retrieveSessionResumeData,
@@ -1693,14 +1698,14 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setTaskState', {
         streamId: 'stream-1',
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         taskState,
       });
 
       await bridge.deleteStream('stream-1');
       bridge.handleProgressEvent('setTaskState', {
         streamId: 'stream-1',
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         taskState,
       });
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
@@ -1980,7 +1985,7 @@ describe('DesktopProgressBridge', () => {
       trace.emit({
         type: 'result',
         outcome: RUN_OUTCOME.COMPLETED,
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         streamId: 'stream-1',
         agentName: 'proofreader',
         category: 'workflow',
@@ -2152,15 +2157,7 @@ describe('DesktopProgressBridge', () => {
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         'stream-1',
         executionId,
-        expect.objectContaining({
-          activeFiles: expect.objectContaining({
-            input: false,
-            context: false,
-            media: false,
-            output: false,
-          }),
-          agentConfig: expect.objectContaining(taskState.agentConfig),
-        }),
+        expect.objectContaining(taskState.agentConfig),
       );
       expectWorkflowResume(runAgent, taskState, executionId);
     } finally {
@@ -2237,15 +2234,7 @@ describe('DesktopProgressBridge', () => {
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         'stream-1',
         executionId,
-        expect.objectContaining({
-          activeFiles: expect.objectContaining({
-            input: false,
-            context: false,
-            media: false,
-            output: false,
-          }),
-          agentConfig: expect.objectContaining(taskState.agentConfig),
-        }),
+        expect.objectContaining(taskState.agentConfig),
       );
       expectWorkflowResume(runAgent, taskState, executionId);
     } finally {
@@ -2258,7 +2247,7 @@ describe('DesktopProgressBridge', () => {
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'toolUse',
       snapshot: {
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         streamId: 'stream-1',
         agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
       },
@@ -2274,7 +2263,7 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setTaskState', {
         streamId: 'stream-1',
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         taskState,
       });
       bridgeFollowUps(bridge).enqueue(
@@ -2286,12 +2275,12 @@ describe('DesktopProgressBridge', () => {
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         'stream-1',
-        'exec-1',
-        taskState,
+        'ec1001',
+        taskState.agentConfig,
       );
       expect(resumeToolUseFromSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({
-          executionId: 'exec-1',
+          executionId: 'ec1001',
           streamId: 'stream-1',
         }),
         expect.objectContaining({ emit: expect.any(Function) }),
@@ -2329,7 +2318,7 @@ describe('DesktopProgressBridge', () => {
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'toolUse',
       snapshot: {
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         streamId: 'stream-1',
         agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
       },
@@ -2345,7 +2334,7 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setTaskState', {
         streamId: 'stream-1',
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
       bridgeFollowUps(bridge).enqueue(
@@ -2400,7 +2389,7 @@ describe('DesktopProgressBridge', () => {
       return {
         type: 'toolUse',
         snapshot: {
-          executionId: 'exec-1',
+          executionId: 'ec1001',
           streamId: 'stream-1',
           agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
         },
@@ -2411,7 +2400,7 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setTaskState', {
         streamId: 'stream-1',
-        executionId: 'exec-1',
+        executionId: 'ec1001',
         taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
 

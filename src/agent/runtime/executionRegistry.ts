@@ -29,7 +29,6 @@ import {
 import { formatDuration } from '@utils/core';
 import {
   type ExecutionHandle,
-  type ExecutionProgress,
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
   AgentExecutionHandle,
@@ -41,7 +40,6 @@ import type { SessionEventHub } from './SessionEventHub';
 
 export type { ExecutionHandle } from './ExecutionHandle';
 export {
-  type ExecutionProgress,
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
   type AgentRunHandle,
@@ -498,16 +496,9 @@ export class ExecutionRegistry {
     }
   }
 
-  updateProgress(executionId: string, update: ExecutionProgress): void {
-    const handle = this.handles.get(executionId);
-    if (!handle) return;
-    handle.updateProgress(update);
-    this.notifyWaiters(executionId);
-  }
-
   /**
-   * Wait for any change on an execution: status transition, progress update,
-   * kill, or completion (untrack). Pass an AbortSignal for timeout cleanup.
+   * Wait for any change on an execution: status transition, kill, or
+   * completion (untrack). Pass an AbortSignal for timeout cleanup.
    */
   waitForChange(executionId: string, signal?: AbortSignal): Promise<void> {
     return new Promise<void>((resolve) => {

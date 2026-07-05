@@ -31,6 +31,12 @@ export interface StageOptions {
   readonly id?: string;
   /** Parent stage id; otherwise the active stage from the run scope. */
   readonly parentId?: string;
+  /** Semantic stage kind consumed by host progress surfaces. */
+  readonly kind?: 'run' | 'round' | 'phase' | 'session';
+  /** Zero-based stage index, currently used for round stages. */
+  readonly index?: number;
+  /** Planned total count, when known, currently used for workflow rounds. */
+  readonly total?: number;
   /**
    * Status to emit at stage.end when no explicit status is supplied.
    * Defaults to `stopped`.

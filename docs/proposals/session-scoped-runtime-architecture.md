@@ -1,7 +1,7 @@
 # Session-scoped runtime architecture: facts, interactions, and status ownership
 
-> **Status:** Partially landed proposal (Stages 0-3a plus Checkpoint A; status
-> refreshed by #6964 on 2026-07-05). Companion to the diagnosis in
+> **Status:** Partially landed proposal (Stages 0-3b plus Checkpoint A; status
+> refreshed by #6965 on 2026-07-05). Companion to the diagnosis in
 > `tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this document is the
 > target design. It covers the event/logger chain, the
 > approval/interaction RPC machinery, stream status, and the execution registries
@@ -832,12 +832,11 @@ deleted.
    the `SessionFact` channel for the non-run emitters,
    `child.activity`/`process.output` arms, and `session.transcripts` /
    `session.followUps` instances (fixes L1 and deletes the binder invariant
-   comment). Remaining Stage 3 work keeps the same track: the `run.start`
-   `RunDescriptor` arm (retiring `setTaskState` and moving its run-start
-   piggy-backs onto the `→ running` transition from stage 2) and typed round
-   stages (`kind`/`index`/`total`), deleting the `ExecutionProgress` round
-   counters and the round half of `conversationProgress`. The persistence
-   facade lands here too:
+   comment). Stage 3b (#6965) lands the `run.start` `RunDescriptor` arm,
+   moves the run-start piggy-backs onto the `→ running` transition from stage
+   2, and lands typed round stages (`kind`/`index`/`total`) while shrinking
+   `conversationProgress` to `toolCallCount`. Remaining Stage 3 work is the
+   persistence facade:
    `session.stores` atomic delete + orphan sweep, the single
    `deriveResumability` and shared `repairAfterRestart` primitives (repair
    uses stage 2's `restart-repair` cause), and deletion of the

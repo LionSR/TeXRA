@@ -73,6 +73,8 @@ interface CachedStream {
   toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
   status: string | null;
+  /** Whether this cached stream is tool-use. */
+  isToolUse: boolean;
   /** Whether to render this stream's logs in terminal style. */
   terminalMode: boolean;
 }
@@ -134,6 +136,7 @@ export class LogList extends LitElement {
         this.streamContext.updatedMessageBaseGeneration;
       entry.messageGeneration = this.streamContext.messageGeneration;
       entry.status = this.streamContext.streamStatus;
+      entry.isToolUse = this.streamContext.isToolUse;
       entry.terminalMode = this.streamContext.terminalMode;
 
       // Evict oldest non-active entries when cache exceeds cap
@@ -146,6 +149,7 @@ export class LogList extends LitElement {
       return html`<task-group-list
         .hasStreams=${this.streamContext.hasStreams}
         .streamStatus=${this.streamContext.streamStatus}
+        .isToolUse=${this.streamContext.isToolUse}
       ></task-group-list>`;
     }
 
@@ -163,6 +167,7 @@ export class LogList extends LitElement {
           .messageGeneration=${data.messageGeneration}
           .hasStreams=${this.streamContext.hasStreams}
           .streamStatus=${data.status}
+          .isToolUse=${data.isToolUse}
           .toggleStates=${data.toggleStates}
           ?terminal=${data.terminalMode}
         ></task-group-list>
@@ -244,6 +249,7 @@ export class LogList extends LitElement {
       toggleStates,
       ref: createRef<TaskGroupList>(),
       status: null,
+      isToolUse: false,
       terminalMode: false,
     };
     this.streamCache.set(streamId, entry);
