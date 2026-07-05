@@ -6,11 +6,10 @@
  * and generic read/write for arbitrary keys.
  */
 
-import * as path from 'node:path';
-
 import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   type AgentConfig,
   AgentConfigSchema,
@@ -29,7 +28,6 @@ import {
   OutputFileSummarySchema,
 } from '@shared/schemas/output';
 import { byString, filterNotNull } from '@utils/core';
-import { TASK_RUNS_DIR } from '@utils/files';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
@@ -173,7 +171,7 @@ export interface ExecutionKVStore {
  */
 class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   constructor(private readonly executionId: ExecutionId) {
-    super(path.join(TASK_RUNS_DIR, executionId));
+    super(resolveRunStoragePath(executionId));
   }
 
   async clear(): Promise<void> {

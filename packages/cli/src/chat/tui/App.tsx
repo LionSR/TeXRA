@@ -546,14 +546,11 @@ export function App(props: AppProps): React.JSX.Element {
   const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
   const transcriptViewerStreamId = useSignal(cliState.transcriptViewerStreamId);
   const rootRunStartAvailable = useSignal(cliState.rootRunStartAvailable);
+  const childControlMode = useSignal(cliState.childControlMode);
+  const childControlEscapeAction = useSignal(cliState.childControlEscapeAction);
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
-  const [childControlMode, setChildControlMode] = useState<
-    ChildControlMode | undefined
-  >(undefined);
-  const [childControlEscapeAction, setChildControlEscapeAction] =
-    useState('close');
   const [tipHour] = useState(() => new Date().getHours());
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
@@ -714,7 +711,9 @@ export function App(props: AppProps): React.JSX.Element {
       ? childControlTargets[childControlMode]
       : undefined;
   useEffect(() => {
-    if (childControlMode === undefined) setChildControlEscapeAction('close');
+    if (childControlMode === undefined) {
+      cliState.childControlEscapeAction.set('close');
+    }
   }, [childControlMode]);
   const childControlHasItems = childControlTarget?.hasItems ?? false;
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
@@ -790,8 +789,10 @@ export function App(props: AppProps): React.JSX.Element {
             activeStreamId={target.streamId}
             availableRows={foregroundRows}
             mode={childControlMode}
-            onClose={() => setChildControlMode(undefined)}
-            onEscapeActionChange={setChildControlEscapeAction}
+            onClose={() => cliState.childControlMode.set(undefined)}
+            onEscapeActionChange={(action) =>
+              cliState.childControlEscapeAction.set(action)
+            }
             onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
             onViewStream={(streamId) =>
               cliState.transcriptViewerStreamId.set(streamId)
@@ -841,12 +842,12 @@ export function App(props: AppProps): React.JSX.Element {
     const lower = value.toLowerCase();
     if (lower === 's') {
       if (!subagentControlsAvailable) return false;
-      setChildControlMode('subagents');
+      cliState.childControlMode.set('subagents');
       return true;
     }
     if (lower === 'p') {
       if (!taskControlsAvailable) return false;
-      setChildControlMode('tasks');
+      cliState.childControlMode.set('tasks');
       return true;
     }
     const digit = digitFromMetaShortcut(value);

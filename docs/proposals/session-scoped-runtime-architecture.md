@@ -654,9 +654,9 @@ distinction any group renderer consumes). The mapping is explicit:
 collapse the legacy 2-value helper applies (`{completed,cancelled}→stopped`,
 `failed→error`), renamed so "ok" stops being spelled "stopped".
 
-**Tier 1 — SDK (`@texra/core` / `AgentEvent`).** `StreamStatus` does not
-leak into the SDK today (verified) — keep it that way: the SDK speaks
-`RunOutcome`, `StreamPhase`, and the `AgentEvent` union only.
+**Tier 1 — future SDK package / `AgentEvent`.** `StreamStatus` should not
+leak into a future SDK package: the SDK surface should speak `RunOutcome`,
+`StreamPhase`, and the `AgentEvent` union only.
 `ExecutionListingEntry.terminalStatus` (re-exported as free `string`)
 switches to `outcome?: RunOutcome` with the read shim. The union gaining
 `status`/`child.activity`/`process.output` arms is deliberately breaking for
@@ -724,9 +724,9 @@ ordering they force:
 4. **`requestRetry` must be co-designed with the error-pipeline plan** —
    `error-pipeline-and-ownership.md` T2 names a single retry owner; the
    interactions port is that owner's request surface, not a competitor.
-5. **SDK-breaking event work before publishing `@texra/core`.** All
-   `AgentEvent` arm additions and the `StageEndEvent.status` change are free
-   now, expensive the day the package has external consumers.
+5. **SDK-breaking event work before reintroducing/publishing an SDK package.**
+   All `AgentEvent` arm additions and the `StageEndEvent.status` change are
+   free now, expensive the day a package has external consumers.
 
 **Deliberate behavior changes (visible, and intended):**
 

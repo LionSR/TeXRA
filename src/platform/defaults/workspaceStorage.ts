@@ -6,7 +6,7 @@ import { basename, isAbsolute, join, normalize, relative } from 'node:path';
 // Local imports - platform
 import type { StorageProvider } from '../interfaces/storage';
 
-export const STORAGE_LAYOUT = {
+const STORAGE_LAYOUT = {
   global: 'global-storage',
   workspace: 'workspace-storage',
   memory: 'memories',
@@ -65,7 +65,9 @@ export function resolveWorkspaceStoragePath(
   );
 }
 
-export function resolveMemoryStoragePath(storagePath: string): string {
+export function resolveMemoryStoragePath(
+  storagePath: string = MEMORY_STORAGE_DIR,
+): string {
   const normalized = normalize(storagePath);
   const memoryRelative = relative(MEMORY_STORAGE_DIR, normalized);
   if (memoryRelative.startsWith('..') || isAbsolute(memoryRelative)) {
