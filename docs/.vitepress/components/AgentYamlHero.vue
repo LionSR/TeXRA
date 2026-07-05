@@ -5,7 +5,7 @@
 // right of each key explaining its role. Standalone (no MockupFrame) — just the
 // focused code card. Keys use --mk-syn-keyword, template vars are --mk-accent
 // chips, values are plain mono text. Mirrors the prose of the YAML-structure
-// section (agentCategory / prefills / systemPrompt / userPrefix / userRequest).
+// section (agentCategory / systemPrompt / userPrefix / userRequest).
 //
 // The root carries `.mockup` so the shared `--mk-*` colour + dimensional tokens
 // resolve here and the card flips cleanly between the docs light / dark themes.
@@ -30,13 +30,6 @@ import MockCard from './MockCard.vue';
           ><span class="kw">agentCategory</span>: workflow</code
         >
         <span class="yh-note">workflow vs toolUse</span>
-      </div>
-      <div class="yh-line indent">
-        <code class="yh-code"
-          ><span class="kw">prefills</span>:
-          <span class="tag">&lt;scratchpad&gt;</span></code
-        >
-        <span class="yh-note">starts every response</span>
       </div>
       <div class="yh-line indent">
         <code class="yh-code"
