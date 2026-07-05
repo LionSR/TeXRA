@@ -30,6 +30,7 @@ import {
   mapDuplicateCallsToPrimary,
   normalizeToolCallError,
   parseToolInput,
+  UNSAFE_DUPLICATE_CALL_ERROR,
 } from './toolCallParsing';
 import type { ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
@@ -82,7 +83,10 @@ interface ToolExecutionResult {
  * under a small semaphore; any other tool acts as a barrier and runs alone,
  * preserving ordering guarantees when tools have dependencies (e.g., read
  * file then edit file). Duplicate parallel calls (identical name+arguments)
- * execute once, and the duplicates receive a copy of the primary's result.
+ * to parallel-safe tools execute once, with duplicates receiving a copy of
+ * the primary's result; duplicates of side-effect tools get a synthetic
+ * error instead, since sharing a success would misreport an effect that
+ * never ran.
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
@@ -99,9 +103,19 @@ export class ToolUseDispatchNode<C> extends BatchNode<
    */
   private _duplicateToPrimary = new Map<string, number>();
 
+  /**
+   * Duplicates of side-effect tools. Fanning the primary's success out
+   * would report an effect that never ran (two identical appends would
+   * "succeed" twice while running once), so these are answered with a
+   * synthetic error instead — the model can re-issue sequentially if it
+   * truly wants the effect twice.
+   */
+  private _unsafeDuplicateCallIds = new Set<string>();
+
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
     this._duplicateToPrimary.clear();
+    this._unsafeDuplicateCallIds.clear();
     const toolCalls = shared.toolCalls ?? [];
 
     if (shared.shouldStop || toolCalls.length === 0) {
@@ -113,24 +127,27 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       return [];
     }
 
-    // Deduplicate parallel calls: when multiple calls have the same tool name
-    // and identical arguments, only the first executes; the rest share its
-    // result (the answer is already known — no reason to charge the model an
-    // extra round-trip to re-issue the call).
+    // Deduplicate parallel calls (same tool name + identical arguments):
+    // for parallel-safe tools only the first executes and the rest share
+    // its result — the answer is already known, so re-asking the model to
+    // retry would burn a round-trip for nothing. Side-effect tools cannot
+    // share results (see _unsafeDuplicateCallIds).
     if (toolCalls.length > 1) {
-      this._duplicateToPrimary = mapDuplicateCallsToPrimary(toolCalls);
+      for (const [dupId, primaryIndex] of mapDuplicateCallsToPrimary(
+        toolCalls,
+      )) {
+        if (this.isParallelSafe(toolCalls[primaryIndex])) {
+          this._duplicateToPrimary.set(dupId, primaryIndex);
+        } else {
+          this._unsafeDuplicateCallIds.add(dupId);
+        }
+      }
 
-      if (this._duplicateToPrimary.size > 0) {
-        const dupNames = [
-          ...new Set(
-            toolCalls
-              .filter((c) => this._duplicateToPrimary.has(c.callId))
-              .map((c) => c.name),
-          ),
-        ];
+      const duplicateCount =
+        this._duplicateToPrimary.size + this._unsafeDuplicateCallIds.size;
+      if (duplicateCount > 0) {
         this.services.logger.debug(
-          `Deduplicated ${this._duplicateToPrimary.size} parallel tool call(s) with identical name and arguments`,
-          { data: dupNames },
+          `Deduplicated ${duplicateCount} parallel tool call(s) with identical name and arguments (${this._unsafeDuplicateCallIds.size} side-effect duplicate(s) rejected)`,
         );
       }
     }
@@ -155,9 +172,12 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       calls.length,
     ).fill(null);
     // Duplicates execute nothing — schedule only the live calls, then copy
-    // the primaries' results onto the duplicates afterwards.
+    // the primaries' results (or synthetic errors) onto them afterwards.
     const live = calls.flatMap((call, index) =>
-      this._duplicateToPrimary.has(call.callId) ? [] : [index],
+      this._duplicateToPrimary.has(call.callId) ||
+      this._unsafeDuplicateCallIds.has(call.callId)
+        ? []
+        : [index],
     );
     const batchController = new AbortController();
     this.services.setAbortController(batchController);
@@ -199,9 +219,37 @@ export class ToolUseDispatchNode<C> extends BatchNode<
         );
       }
       this.fanOutDuplicateResults(calls, results);
+      this.rejectUnsafeDuplicates(calls, results);
       return results;
     } finally {
       this.services.setAbortController(null);
+    }
+  }
+
+  /** Answer side-effect duplicates with a synthetic error (never executed). */
+  private rejectUnsafeDuplicates(
+    calls: SdkToolCall[],
+    results: (ToolExecutionResult | null)[],
+  ): void {
+    for (const [index, call] of calls.entries()) {
+      if (!this._unsafeDuplicateCallIds.has(call.callId)) continue;
+      results[index] = {
+        call,
+        result: toolError(UNSAFE_DUPLICATE_CALL_ERROR),
+        parsedInput: call.input,
+        extracted: {
+          sanitizedResult: {
+            status: 'error',
+            error: UNSAFE_DUPLICATE_CALL_ERROR,
+          },
+          attachments: [],
+        },
+        editedFiles: [],
+        logRef: {
+          logId: undefined,
+          groupId: this.services.logger.activeStageId(),
+        },
+      };
     }
   }
 
@@ -268,6 +316,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
   clone(): this {
     const cloned = super.clone();
     cloned._duplicateToPrimary = new Map();
+    cloned._unsafeDuplicateCallIds = new Set();
     return cloned;
   }
 

@@ -74,6 +74,51 @@ return await agent('Merge these drafts, unify notation.', {
 - `log()` / `phase()` / `args` → progress narration, grouping,
   parameterization.
 
+## Design stance: smaller than Claude Code, native to TeXRA
+
+Claude Code's Workflow tool is the proof of pattern, not the spec. TeXRA's
+engine should be **less, but wiser** — every feature must earn its place in
+an academic-writing product whose unit of work is a document, not a diff.
+
+**Deliberately not adopted (v1):**
+
+- **No token-budget API inside scripts** (`budget.remaining()` loops) — cost
+  governance belongs to the host and the user, not to script logic.
+- **No nested `workflow()`** — one flat script per delegation. If a workflow
+  needs a sub-workflow, that is the orchestrator's decision to make with a
+  second delegation, visible in the execution tree.
+- **No per-call model/effort/agentType overrides** — an `agent()` call names
+  a TeXRA agent (`agentName`), and the agent's YAML owns model policy. One
+  source of truth; scripts stay declarative about _what_, not _how_.
+- **No worktree isolation** — TeXRA runs are already execution-scoped in run
+  storage (`executions/{id}/`), with lineage instead of git.
+- **`pipeline()` is on probation** — if v1 usage shows document pipelines are
+  served by `parallel()` + sequential `agent()` chains + file lineage, it is
+  dropped. Primitives must earn their keep.
+
+**TeXRA workflow agents are the unit of work.** `agent()` composes the
+existing YAML agents — `merge`, `polish`, `correct`, user-defined agents —
+with their native `inputFiles`/`outputFiles` semantics. Reflection rounds
+stay _inside_ the agent (scripts compose agents; they do not re-implement
+rounds), the `merge` agent is the canonical LLM reduce, `concat()` the
+zero-token reduce, and the engine automates the file hand-off between
+stages that today costs two orchestrator round-trips per edge.
+
+**Where TeXRA aims to be better, not bigger:**
+
+1. **Document-native results** — a stage's return value is TeXRA's currency:
+   `OutputFileSummary[]` plus lineage and line diffs, so reviewing a
+   ten-agent pipeline means reading diffs, not scrollback.
+2. **Durable resume** — script + journal persist in the execution KV store,
+   so a workflow resumes across host restarts, not just within a session.
+3. **Reproducibility as a feature** — deterministic scripts + named agents +
+   journals give academics a rerunnable derivation record for how a
+   document was produced.
+4. **Workflows as first-class artifacts** — a good orchestration is saved
+   next to the agent YAMLs as a named, `args`-parameterized asset, and the
+   `agentCreator` flow extends naturally to agents authoring workflow
+   scripts themselves.
+
 ## Design decisions (grounded in the 2026-07 architecture audit)
 
 ### 1. Results are consumed typed, never as XML

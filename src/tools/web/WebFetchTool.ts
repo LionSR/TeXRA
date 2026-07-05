@@ -8,6 +8,7 @@ import TurndownService from 'turndown';
 import { z } from 'zod';
 
 // Local imports - core
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import {
   isTimeoutError,
@@ -110,6 +111,10 @@ export class WebFetchTool extends defineTool({
 
   protected async execute(input: WebFetchInput): Promise<ToolResult> {
     const { url, prompt } = input;
+    // Cancellation signal for the owning agent run — without it, a
+    // cancelled run would wait out fetches (and their retries) that only
+    // observe the internal timeout.
+    const cancelSignal = getCurrentToolCallContext()?.signal;
 
     const parsedUrl = new URL(url);
     const hostname = parsedUrl.hostname.toLowerCase();
@@ -140,10 +145,14 @@ export class WebFetchTool extends defineTool({
           let response: Response;
           try {
             // AbortSignal.timeout covers both connection and body read;
-            // ky's own timeout only clears once headers arrive.
+            // ky's own timeout only clears once headers arrive. The run's
+            // cancellation signal joins in so interrupts abort the fetch.
+            const timeoutSignal = AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS);
             response = await ky.get(url, {
               timeout: false,
-              signal: AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS),
+              signal: cancelSignal
+                ? AbortSignal.any([cancelSignal, timeoutSignal])
+                : timeoutSignal,
               retry: 0,
             });
           } catch (error: unknown) {
@@ -162,7 +171,14 @@ export class WebFetchTool extends defineTool({
           const text = await readBodyWithLimit(response, MAX_CONTENT_BYTES);
           return { rawBody: text, contentType: ct };
         },
-        { retries: WEB_FETCH_RETRIES, minTimeout: 500, randomize: true },
+        {
+          retries: WEB_FETCH_RETRIES,
+          minTimeout: 500,
+          randomize: true,
+          // Stop retrying (and skip inter-retry delays) once the run is
+          // cancelled.
+          signal: cancelSignal,
+        },
       ));
     } catch (error) {
       // Defensive: ensure the specific type checks below see the real error

@@ -14,6 +14,11 @@ import {
 import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+export const UNSAFE_DUPLICATE_CALL_ERROR =
+  'Duplicate parallel call skipped — same tool name and arguments as an earlier call in this batch, ' +
+  'and this tool has side effects, so its result cannot be shared. ' +
+  'If you intend the effect to run twice, invoke it again sequentially in your next response.';
+
 /**
  * Map duplicate parallel tool calls (same name + identical arguments) to
  * their primary occurrence. Returns duplicate `callId` → index of the first

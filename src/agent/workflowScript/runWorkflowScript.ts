@@ -81,7 +81,7 @@ export async function runWorkflowScript(
   ): Promise<unknown> {
     if (runAbort.signal.aborted) {
       throw new WorkflowRunAbortError(
-        'Workflow run aborted (wall-clock timeout); no new agent() calls may start.',
+        'Workflow run aborted (timeout or call cap); no new agent() calls may start.',
       );
     }
     if (!isNonEmptyString(prompt)) {
@@ -93,6 +93,9 @@ export async function runWorkflowScript(
     const index = callCounter;
     callCounter += 1;
     if (callCounter > maxAgentCalls) {
+      // Abort first so in-flight sibling agents stop consuming quota — the
+      // backstop must cancel the fan-out, not just fail this one call.
+      runAbort.abort();
       throw new WorkflowRunAbortError(
         `Workflow exceeded the ${maxAgentCalls} agent-call cap (runaway-loop backstop).`,
       );

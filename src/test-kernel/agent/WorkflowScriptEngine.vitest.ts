@@ -337,6 +337,7 @@ return note`);
   });
 
   it('keeps determinism guards non-writable and blocks argless new Date()', async () => {
+    // Strict mode makes assignment to the non-writable guard throw outright.
     await expect(
       runWorkflowScript({
         script: `${META}
@@ -344,7 +345,7 @@ Math.random = () => 0.5
 return Math.random()`,
         runAgent: echoRunner,
       }),
-    ).rejects.toThrow(/Math\.random\(\) is unavailable/);
+    ).rejects.toThrow(/read only property|unavailable/i);
     await expect(
       runWorkflowScript({
         script: `${META}return new Date()`,
@@ -412,5 +413,51 @@ return await agent('two')`,
     await delay(120);
     expect(calls).toBe(1);
     expect(sawAbort).toBe(true);
+  });
+
+  it('aborts in-flight agents when the call cap trips', async () => {
+    let sawAbort = false;
+    const runner = async (invocation: WorkflowAgentInvocation) => {
+      invocation.signal.addEventListener('abort', () => {
+        sawAbort = true;
+      });
+      await delay(30);
+      return invocation.prompt;
+    };
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
+        runAgent: runner,
+        maxAgentCalls: 3,
+      }),
+    ).rejects.toThrow(/agent-call cap/);
+    expect(sawAbort).toBe(true);
+  });
+
+  it('blocks caller-chain escapes from sloppy-mode thunks (strict scripts)', async () => {
+    // parallel() invokes thunks from host code; without forced strict mode
+    // a sloppy thunk could walk arguments.callee.caller to a host function.
+    const run = await runWorkflowScript({
+      script: `${META}
+return await parallel([function () {
+  try {
+    return arguments.callee.caller.constructor('return typeof process')()
+  } catch {
+    return 'blocked'
+  }
+}])`,
+      runAgent: echoRunner,
+    });
+    expect(run.result).toEqual(['blocked']);
+  });
+
+  it('removes Intl so scripts cannot read the wall clock implicitly', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return new Intl.DateTimeFormat().format()`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow();
   });
 });

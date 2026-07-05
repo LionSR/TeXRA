@@ -44,9 +44,14 @@ return concat(sections, { separator: '\n\n' });
   or objects — async results cross as JSON and are revived with the
   sandbox's own `JSON.parse`, and host errors are re-thrown as realm-local
   Errors. This closes the classic `fn.constructor('return process')()`
-  escape. `node:vm` is still not a certified isolate; the quickjs-emscripten
-  swap behind the same `runScriptInSandbox` signature remains the
-  destination before untrusted scripts are ever accepted.
+  escape. Script bodies are forced into strict mode so sandbox-authored
+  thunks invoked from host code cannot walk `arguments.callee.caller` to a
+  host function. Known hard limit: `node:vm` cannot preempt CPU-bound
+  continuations after an `await` (`await agent(...); while (true) {}`
+  blocks the event loop, defeating both the vm timeout and the wall-clock
+  timer) — the preemptible-isolate swap (quickjs-emscripten) behind the
+  same `runScriptInSandbox` signature is a **hard gate** before this engine
+  is wired to a `delegate_workflow_script` tool.
 - **Determinism**: `Date.now()`, `Math.random()`, and argless `new Date()`
   throw inside scripts, installed non-writable so scripts cannot restore
   them (`new Date(timestamp)` stays usable). Resume relies on replaying the

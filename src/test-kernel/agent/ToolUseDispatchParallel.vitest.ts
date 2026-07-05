@@ -234,4 +234,32 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
       dispose();
     }
   });
+
+  it('rejects duplicates of side-effect tools instead of sharing the result', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const { node, dispose } = dispatchHarness({
+      tools: { write_file: probeTool(probe, 'write_file', 5) },
+    });
+    try {
+      const results = (await runDispatch(node, [
+        makeCall('c1', 'write_file', { path: 'a', content: 'x' }),
+        makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
+      ])) as ExecResult[];
+
+      const startCount = probe.events.filter((e) =>
+        e.startsWith('start '),
+      ).length;
+      assert.equal(startCount, 1, 'the side effect must run exactly once');
+      assert.equal(results[0]?.result.status, 'executed');
+      // The duplicate must NOT claim the effect ran twice.
+      assert.equal(results[1]?.result.status, 'error');
+      assert.ok(
+        results[1]?.result.status === 'error' &&
+          results[1].result.error.includes('side effects'),
+        'duplicate should explain why it was skipped',
+      );
+    } finally {
+      dispose();
+    }
+  });
 });

@@ -83,6 +83,15 @@ const DETERMINISM_PRELUDE = `
     writable: false,
     configurable: false,
   });
+
+  // Intl.DateTimeFormat().format() with no argument reads the wall clock.
+  // Deterministic orchestration scripts have no use for locale APIs, so
+  // remove Intl wholesale rather than chase its implicit-"now" paths.
+  Object.defineProperty(globalThis, 'Intl', {
+    value: undefined,
+    writable: false,
+    configurable: false,
+  });
 })();
 `;
 
@@ -166,10 +175,12 @@ const BRIDGE_SCRIPT = new vm.Script(BRIDGE_PRELUDE, {
  * script cannot reach host-realm function constructors or objects.
  *
  * PROTOTYPE NOTE: `node:vm` is still not a certified security boundary the
- * way a separate isolate is — the planned quickjs-emscripten swap (see
- * README) remains the destination before scripts from untrusted sources are
- * ever accepted. Callers depend only on `runScriptInSandbox`, so the swap
- * stays behind this signature.
+ * way a separate isolate is, and it cannot preempt CPU-bound continuations:
+ * the vm-level timeout covers only the initial synchronous portion, so
+ * `await agent(...); while (true) {}` blocks the event loop and defeats the
+ * wall-clock timer. A preemptible isolate (quickjs-emscripten) behind this
+ * same `runScriptInSandbox` signature is a HARD GATE before the engine is
+ * wired to a delegate_workflow_script tool and real execution.
  */
 export async function runScriptInSandbox(
   body: string,
@@ -192,7 +203,12 @@ export async function runScriptInSandbox(
 
   let script: vm.Script;
   try {
-    script = new vm.Script(`(async () => {\n${body}\n})()`, {
+    // Strict mode is load-bearing, not style: it poisons
+    // arguments.callee/.caller for every function the script defines, so a
+    // sandbox-authored thunk invoked from host code (parallel/pipeline)
+    // cannot walk .caller up to a host function and reach the host's
+    // Function constructor.
+    script = new vm.Script(`(async () => {\n'use strict';\n${body}\n})()`, {
       filename: options.filename,
     });
   } catch (error) {
