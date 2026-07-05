@@ -237,7 +237,10 @@ function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
         lines.push('', '(awaiting user answer)');
         break;
       case 'answeredUnhydrated':
-        lines.push('', '(answer recorded but not yet loaded — reload the thread)');
+        lines.push(
+          '',
+          '(answer recorded but not yet loaded — reload the thread)',
+        );
         break;
     }
   }

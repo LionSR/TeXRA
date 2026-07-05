@@ -811,8 +811,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Add media if provided (images and native PDFs)
     if (mediaFiles?.length && this.capabilities.supportsVision) {
       try {
-        const formattedMediaContent =
-          await this.createMediaMessage(mediaFiles);
+        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
       } catch (err) {
         logSdkError(

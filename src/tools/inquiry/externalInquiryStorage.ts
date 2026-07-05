@@ -698,7 +698,8 @@ export function manifestToTranscript(
     context: turn.context ?? undefined,
     answer: turn.kind === 'answered' ? turn.answer : undefined,
     answeredAt: turn.kind === 'answered' ? turn.answeredAt : undefined,
-    sessionLinks: turn.kind !== 'open' ? (turn.sessionLinks ?? undefined) : undefined,
+    sessionLinks:
+      turn.kind !== 'open' ? (turn.sessionLinks ?? undefined) : undefined,
   }));
 }
 

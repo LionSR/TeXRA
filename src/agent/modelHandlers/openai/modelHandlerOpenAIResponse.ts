@@ -1152,8 +1152,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.capabilities.supportsNativeAudio)
     ) {
       try {
-        const formattedMediaContent =
-          await this.createMediaMessage(mediaFiles);
+        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
       } catch (err) {
         logSdkError(
