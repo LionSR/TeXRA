@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -19,28 +20,22 @@ let testApprovalHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
 
-async function installTestPlatform(): Promise<void> {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(
-    createFakePlatform(
-      {
-        workspacePath,
-        storagePath,
-        globalStoragePath: '/global/.texra/storage',
+function installTestPlatform(): Promise<void> {
+  return installPlatform(
+    {
+      workspacePath,
+      storagePath,
+      globalStoragePath: '/global/.texra/storage',
+    },
+    {
+      toolEditApproval: (request) => {
+        const handler = testApprovalHandler;
+        if (!handler) {
+          throw new Error('No test handler. Set `testApprovalHandler`.');
+        }
+        return handler(request);
       },
-      {
-        toolEditApproval: (request) => {
-          const handler = testApprovalHandler;
-          if (!handler) {
-            throw new Error('No test handler. Set `testApprovalHandler`.');
-          }
-          return handler(request);
-        },
-      },
-    ),
+    },
   );
 }
 

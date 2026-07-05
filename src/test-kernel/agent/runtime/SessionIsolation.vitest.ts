@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
 import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { installPlatform } from '@test/support/setupPlatform';
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -43,16 +44,10 @@ vi.mock('@agent/storage', () => ({
   writeTerminalStatus: storageMocks.writeTerminalStatus,
 }));
 
-async function initTestPlatform() {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(
-    createFakePlatform({
-      globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
-    }),
-  );
+function initTestPlatform(): Promise<void> {
+  return installPlatform({
+    globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
+  });
 }
 
 function createLifecycleContext(

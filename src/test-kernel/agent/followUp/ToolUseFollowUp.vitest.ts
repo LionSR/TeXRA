@@ -6,6 +6,7 @@ import { describe, it, afterEach } from 'vitest';
 
 // Local imports - agent
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -38,9 +39,8 @@ type ResumeHost = NonNullable<
   NonNullable<Parameters<typeof createFakePlatform>[1]>['agentResume']
 >;
 
-async function initResumePlatform(agentResume: ResumeHost): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({}, { agentResume }));
+function initResumePlatform(agentResume: ResumeHost): Promise<void> {
+  return installPlatform({}, { agentResume });
 }
 
 function trackChildHandle(

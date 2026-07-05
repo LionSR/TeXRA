@@ -18,7 +18,7 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import {
   AbsoluteFS,
   createWorkspaceLocation,
@@ -35,22 +35,19 @@ async function makeTempDir(prefix: string): Promise<string> {
   return dir;
 }
 
-async function installPlatform(
+function installPlatform(
   workspaceDir: string,
   storageRoot: string,
 ): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform(
-      { workspacePath: workspaceDir },
-      {
-        fs: nodeFilesystem,
-        workspace: createNodeWorkspace(() => workspaceDir),
-        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-        globalState: new MemoryStateStore(),
-        workspaceState: new MemoryStateStore(),
-      },
-    ),
+  return installFakePlatform(
+    { workspacePath: workspaceDir },
+    {
+      fs: nodeFilesystem,
+      workspace: createNodeWorkspace(() => workspaceDir),
+      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+      globalState: new MemoryStateStore(),
+      workspaceState: new MemoryStateStore(),
+    },
   );
 }
 

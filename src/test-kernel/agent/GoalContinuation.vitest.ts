@@ -2,10 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  FakeConfigProvider,
-  createFakePlatform,
-} from '@test/support/FakePlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { platform, type Platform } from '@platform/platform';
 import { maybeBuildGoalContinuation } from '@agent/goal';
 import type { StreamTabId } from '@shared/schemas';
 import {
@@ -13,7 +12,6 @@ import {
   GOAL_FEATURE_FLAG_KEY,
 } from '@shared/schemas/goal';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
-import type { Platform } from '@platform/platform';
 
 const STREAM_ID = 'stream:goal-cont' as StreamTabId;
 // Pre-rename canonical key, still honored read-only for back-compat.
@@ -26,10 +24,8 @@ async function installPlatform(flagOn: boolean): Promise<Platform> {
 async function installPlatformWithConfig(
   config: Record<string, unknown>,
 ): Promise<Platform> {
-  const { initPlatform } = await import('@platform/platform');
-  const platform = createFakePlatform({ config });
-  initPlatform(platform);
-  return platform;
+  await installFakePlatform({ config });
+  return platform();
 }
 
 describe('isGoalEnabled', () => {

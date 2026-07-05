@@ -9,6 +9,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import type {
@@ -22,26 +23,24 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { StorageFS } from '@utils/files';
+import type { Platform } from '@platform/platform';
 
 const tempDirs: string[] = [];
 
-async function installPlatform(): Promise<void> {
+async function buildSnapshotPlatform(): Promise<Platform> {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-snapshot-'));
   tempDirs.push(tempDir);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform(
-      { workspacePath: workspaceDir },
-      {
-        fs: nodeFilesystem,
-        workspace: createNodeWorkspace(() => workspaceDir),
-        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-        globalState: new MemoryStateStore(),
-        workspaceState: new MemoryStateStore(),
-      },
-    ),
+  return createFakePlatform(
+    { workspacePath: workspaceDir },
+    {
+      fs: nodeFilesystem,
+      workspace: createNodeWorkspace(() => workspaceDir),
+      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+      globalState: new MemoryStateStore(),
+      workspaceState: new MemoryStateStore(),
+    },
   );
 }
 
@@ -84,6 +83,8 @@ function outputFile(relativePath: string, round: number): OutputFileInfo {
 }
 
 describe('StreamSnapshotStore', () => {
+  setupPlatform(buildSnapshotPlatform);
+
   afterEach(async () => {
     await Promise.all(
       tempDirs
@@ -93,8 +94,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('persists todos/plan/usage from progress events and reassembles them on a fresh store', async () => {
-    await installPlatform();
-
     const writer = new StreamSnapshotStore();
 
     writer.handleProgressEvent('updateTodos', {
@@ -143,7 +142,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('returns an empty (valid) snapshot for a stream with no sidecar', async () => {
-    await installPlatform();
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.streamId).toBe(STREAM);
     expect(snap.todos).toEqual([]);
@@ -152,7 +150,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('migrates the legacy nested {runId:{round}} shape to flat ONCE at the load entry', async () => {
-    await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
     await StorageFS.write(
@@ -177,7 +174,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('seeds existing disk data before an unloaded progress mutation, so it is not erased', async () => {
-    await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
     // A prior session persisted usage for run-1.
@@ -204,7 +200,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('resolves pre-seed usage after merging existing disk usage', async () => {
-    await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
     await StorageFS.write(
@@ -234,7 +229,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('returns pre-seed usage only after a partial preload baseline is merged', async () => {
-    await installPlatform();
     const dir = streamDataDir(OTHER_STREAM);
     await StorageFS.ensureDir(dir);
     await StorageFS.write(
@@ -266,7 +260,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('includes the disk baseline in a pre-seed usage result for the same run', async () => {
-    await installPlatform();
     const dir = streamDataDir(OTHER_STREAM);
     await StorageFS.ensureDir(dir);
     await StorageFS.write(
@@ -297,7 +290,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('returns output files immediately for streams outside a partial preload without erasing disk outputs', async () => {
-    await installPlatform();
     const dir = streamDataDir(OTHER_STREAM);
     await StorageFS.ensureDir(dir);
     const prior = outputFile('prior.tex', 0);
@@ -322,7 +314,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('keeps output overlays when flattening legacy output files after preload', async () => {
-    await installPlatform();
     const dir = streamDataDir(OTHER_STREAM);
     await StorageFS.ensureDir(dir);
     const prior = outputFile('prior.tex', 0);
@@ -347,7 +338,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('makes task state readable immediately while preserving later seeded sidecars', async () => {
-    await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
     await StorageFS.write(
@@ -387,7 +377,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('load refreshes already-seeded streams from disk instead of keeping stale memory', async () => {
-    await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
     await StorageFS.write(
@@ -417,7 +406,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('treats streams created after load as new so direct mutators stay synchronous', async () => {
-    await installPlatform();
     const store = new StreamSnapshotStore();
     await store.load([]);
 
@@ -433,7 +421,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('deleteStream cancels queued writes before removing the sidecar directory', async () => {
-    await installPlatform();
     const dir = streamDataDir(STREAM);
     const store = new StreamSnapshotStore();
     await store.load([]);
@@ -445,14 +432,12 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('returns a frozen shared empty work plan default', async () => {
-    await installPlatform();
     const empty = new StreamSnapshotStore().getWorkPlan(STREAM);
     expect(Object.isFrozen(empty)).toBe(true);
     expect(Object.isFrozen(empty.todos)).toBe(true);
   });
 
   it('degrades gracefully when workPlan.json is valid JSON but the wrong shape', async () => {
-    await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
     // Corrupt-but-parseable payload must NOT throw and abort read()/resume.
@@ -466,7 +451,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('ignores a workPlan.json stamped with a newer schemaVersion (forward-compat gate)', async () => {
-    await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
     // A file from a FUTURE schema must be read as empty, not have its unknown
@@ -486,7 +470,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('drops a malformed executionId at the read entry without aborting the snapshot', async () => {
-    await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
     // A legacy/corrupt executionId would trip the strict ExecutionIdSchema in

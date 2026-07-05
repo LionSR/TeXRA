@@ -3,7 +3,7 @@ import * as assert from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - tests
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 
 // Local imports - latex
 import { tikzPictureManager } from '@latex/TikzPictureManager';
@@ -11,9 +11,8 @@ import { tikzPictureManager } from '@latex/TikzPictureManager';
 // Local imports - utils
 import { pathToLocation } from '@utils/files';
 
-async function installPlatform(files: Record<string, string>) {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({ workspacePath: '/workspace', files }));
+function installPlatform(files: Record<string, string>) {
+  return installFakePlatform({ workspacePath: '/workspace', files });
 }
 
 describe('TikzPictureManager', () => {

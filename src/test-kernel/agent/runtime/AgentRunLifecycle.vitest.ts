@@ -7,6 +7,8 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
+import { platform } from '@platform/platform';
+import { installPlatform } from '@test/support/setupPlatform';
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -52,17 +54,12 @@ vi.mock('@agent/storage', () => ({
 }));
 
 async function initLifecycleTestPlatform(firstRunDone: boolean) {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  const fake = createFakePlatform({
+  await installPlatform({
     globalState: {
       [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: firstRunDone,
     },
   });
-  initPlatform(fake);
-  return fake;
+  return platform();
 }
 
 function createLifecycleContext({

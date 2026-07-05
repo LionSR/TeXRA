@@ -5,6 +5,7 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
+import { installPlatform } from '@test/support/setupPlatform';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import {
   CODEX_BACKEND_BASE_URL,
@@ -17,23 +18,15 @@ import { AgentCategory } from '@shared/schemas/agent';
 
 import type { ResponseUsage } from 'openai/resources/responses/responses';
 
-// Dynamic import keeps `initPlatform` out of the static import graph (it is
-// restricted to composition roots); the routing tests use the same pattern.
-async function initFakePlatformWithSubscription(
+function initFakePlatformWithSubscription(
   extraConfig: Record<string, unknown> = {},
 ): Promise<void> {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(
-    createFakePlatform({
-      config: {
-        'texra.chatgptCodex.preferSubscription': true,
-        ...extraConfig,
-      },
-    }),
-  );
+  return installPlatform({
+    config: {
+      'texra.chatgptCodex.preferSubscription': true,
+      ...extraConfig,
+    },
+  });
 }
 
 const config: ModelConfig = {

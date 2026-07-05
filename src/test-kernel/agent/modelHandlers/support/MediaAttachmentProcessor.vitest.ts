@@ -15,7 +15,7 @@ import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
 import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
@@ -79,12 +79,10 @@ describe('MediaAttachmentProcessor', () => {
   const originalExists = absoluteFsAny.exists;
   const originalStat = absoluteFsAny.stat;
 
-  beforeAll(async () => {
-    // Vitest isolates files, so this suite installs its own platform.
-    // Real node fs is required because fixtures live in os.tmpdir().
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+  // Real node fs is required because fixtures live in os.tmpdir().
+  setupPlatform({}, { fs: nodeFilesystem });
 
+  beforeAll(() => {
     absoluteFsAny.exists = async (filePath: string) => {
       if (!path.isAbsolute(filePath)) {
         throw new Error(`Expected absolute path, received ${filePath}`);
