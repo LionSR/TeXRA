@@ -75,7 +75,7 @@ const ExecutionMetaBaseSchema = z.object({
   delegationDepth: z.int().nonnegative().optional(),
 });
 
-const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
+export const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
   (
     meta,
   ): z.infer<typeof ExecutionMetaBaseSchema> & { outcome?: RunOutcome } => {

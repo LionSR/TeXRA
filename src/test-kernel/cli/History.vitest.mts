@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   readResultMeta: vi.fn(),
   readReport: vi.fn(),
   exists: vi.fn(),
+  deriveResumability: vi.fn(),
   listExecutions: vi.fn(),
   deleteExecution: vi.fn(),
   deleteAllExecutions: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('@agent/storage', async () => {
       readReport: mocks.readReport,
       exists: mocks.exists,
     })),
+    deriveResumability: mocks.deriveResumability,
     listExecutions: mocks.listExecutions,
     deleteExecution: mocks.deleteExecution,
     deleteAllExecutions: mocks.deleteAllExecutions,
@@ -118,6 +120,10 @@ describe('CLI history runtime', () => {
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
+    mocks.deriveResumability.mockResolvedValue({
+      resumable: false,
+      cause: 'missing-flow',
+    });
     mocks.readCliToolUseResumeData.mockResolvedValue(null);
     mocks.readCliToolUseResumeDataForListing.mockResolvedValue(null);
   });
@@ -301,6 +307,10 @@ describe('CLI history runtime', () => {
       agentCategory: 'toolUse',
     } as AgentConfig;
     mocks.readConfig.mockResolvedValue(toolUseConfig);
+    mocks.deriveResumability.mockResolvedValue({
+      resumable: true,
+      cause: 'interrupted-with-flow',
+    });
     mocks.readCliToolUseResumeDataForListing.mockResolvedValue({
       streamId: 'chat@gpt54#a1',
       config: toolUseConfig,

@@ -2,15 +2,15 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
-import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResumeDetection';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { deriveResumability } from '@agent/storage';
 import {
   sendFollowUp,
   wakeQueuedFollowUpStream,
   type SendFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
+import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResumeDetection';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { createChannelTrace } from '@logger';
@@ -46,8 +46,8 @@ async function lazyDetectWaitingStatus(
 
   inFlightDetections.add(streamId);
   try {
-    const hasFlow = await hasPersistedFlowRecord(executionId);
-    if (hasFlow) {
+    const resumability = await deriveResumability(executionId);
+    if (resumability.resumable) {
       const repaired = StreamStatusService.transitionToWaiting(
         streamId,
         'restart-repair',
