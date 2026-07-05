@@ -9,7 +9,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { RunContext } from '@agent/runtime/RunContext';
-import { isAbortError, toErrorMessage } from '@common/errors';
+import { isAbortError } from '@common/errors';
 import type {
   ExecutionId,
   StorageKey,
@@ -23,6 +23,7 @@ import {
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { formatDuration } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';

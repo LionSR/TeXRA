@@ -1,9 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
-import { toErrorMessage } from '@common/errors';
-
 // Local imports - media utilities
 import {
   startRecording,
@@ -11,6 +8,7 @@ import {
 } from '@frontend/media/audio';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'RecordingManager';
 logger.initialize(CHANNEL);

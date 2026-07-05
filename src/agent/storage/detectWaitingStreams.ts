@@ -6,10 +6,10 @@
  */
 
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getExecutionStore } from './ExecutionKVStore';
 
 /**

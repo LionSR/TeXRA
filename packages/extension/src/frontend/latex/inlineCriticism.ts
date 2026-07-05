@@ -19,13 +19,13 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { toErrorMessage } from '@common/errors';
 import { globalSM, GlobalStateKey } from '@common/state';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import type { ManualCriticismEntry } from '@platform/interfaces/criticism';
 

@@ -1,5 +1,5 @@
 import { tryPlatform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runCli } from '../commands/root';
 import { formatCrashReportLine, readCliBugsUrl } from '../runtime/cliContext';

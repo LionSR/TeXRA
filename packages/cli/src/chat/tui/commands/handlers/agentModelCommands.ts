@@ -16,8 +16,8 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
