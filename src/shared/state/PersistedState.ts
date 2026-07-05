@@ -151,6 +151,11 @@ export class PersistedState<T extends Record<string, unknown>> {
     this.storage.set(this.key, this.state);
   }
 
+  /** Reload current state from the backing storage. */
+  reload(): void {
+    this.state = this.load();
+  }
+
   /** Partial update (merge) */
   update(partial: Partial<T>): void {
     this.setState({ ...this.state, ...partial });
