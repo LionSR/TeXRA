@@ -2,7 +2,7 @@
  * Persistence machinery for the Main view.
  *
  * Owns the single `PersistedState` instance (backed by the shared
- * `webviewStorage` singleton) and both restore paths (issue #7075):
+ * `webviewStorage` singleton) and both restore paths:
  *
  *   1. mount-time webview-storage restore (`restorePersistedState`), and
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`).
@@ -55,7 +55,7 @@ const stateManager = new PersistedState(
  * Reentrancy guard around `saveState()`: while a backend-pushed restore is
  * applying a snapshot, intermediate mutations must not write partially
  * restored state back to storage. Do NOT "simplify away" without a regression
- * test proving it safe (issue #7075) — the characterization suite asserts
+ * test proving it safe — the characterization suite asserts
  * exactly one storage write per backend restore.
  */
 let saveBlockCount = 0;
