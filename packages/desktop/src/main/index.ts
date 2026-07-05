@@ -955,8 +955,12 @@ if (protocolLifecycle.shouldContinue) {
       // so we treat it as "no snapshot available" and continue.
       let streamSnapshotStore: DesktopStreamSnapshotStore | undefined;
       try {
-        streamSnapshotStore = await openDesktopStreamSnapshotStore(
+        const openedStreamSnapshotStore = await openDesktopStreamSnapshotStore(
           join(app.getPath('userData'), 'streams.json'),
+        );
+        streamSnapshotStore = openedStreamSnapshotStore;
+        lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+          openedStreamSnapshotStore.flush(),
         );
       } catch (error) {
         console.warn('Failed to open desktop stream snapshot store', error);

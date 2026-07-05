@@ -33,6 +33,7 @@ import {
 } from '@shared/schemas';
 
 const STREAMS_KEY = 'restoredStreams';
+export const DESKTOP_STREAM_SNAPSHOT_WRITE_DEBOUNCE_MS = 100;
 const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
   STREAM_PHASE.RUNNING,
   STREAM_PHASE.WAITING,
@@ -54,6 +55,8 @@ export interface DesktopStreamSnapshotStore {
   remove(streamId: StreamTabId): Promise<void>;
   /** Replace the entire snapshot list. */
   replaceAll(snapshots: RestoredStreamSnapshot[]): Promise<void>;
+  /** Persist any pending debounced snapshot update. */
+  flush(): Promise<void>;
   /** Current in-memory snapshot list (post-hydrate). */
   getAll(): RestoredStreamSnapshot[];
 }
@@ -77,19 +80,82 @@ export async function openDesktopStreamSnapshotStore(
   const raw = store.get<unknown>(STREAMS_KEY);
 
   // Live in-memory list keyed by streamId, seeded from the persisted file.
-  // We always rewrite the whole `streams` array on every change — the rail
-  // rarely has more than a dozen entries, so the cost is trivial and the
-  // code stays simple (no merge bugs vs. partial updates).
+  // We still rewrite the whole `streams` array, but frequent status/activity
+  // upserts share one debounced write. Destructive edits stay immediate so
+  // callers can rely on durability when remove()/replaceAll() resolve.
   const live = new Map<StreamTabId, RestoredStreamSnapshot>(
     parseHydrated(raw, log).map((s) => [s.streamId, s]),
   );
+  let pendingDebounce: ReturnType<typeof setTimeout> | undefined;
+  let pendingUpsertWaiters: Array<{
+    resolve(): void;
+    reject(error: unknown): void;
+  }> = [];
+  let writeChain = Promise.resolve();
 
-  async function persist(): Promise<void> {
-    const file: RestoredStreamsFile = {
+  function currentFile(): RestoredStreamsFile {
+    return {
       version: 1,
       streams: [...live.values()],
     };
-    await store.set(STREAMS_KEY, file);
+  }
+
+  async function persist(): Promise<void> {
+    await store.set(STREAMS_KEY, currentFile());
+  }
+
+  function enqueuePersist(
+    waiters: typeof pendingUpsertWaiters = [],
+  ): Promise<void> {
+    const write = writeChain.then(persist, persist);
+    writeChain = write.catch(() => {});
+    void write.then(
+      () => {
+        for (const waiter of waiters) waiter.resolve();
+      },
+      (error: unknown) => {
+        for (const waiter of waiters) waiter.reject(error);
+      },
+    );
+    return write;
+  }
+
+  function clearPendingDebounce(): typeof pendingUpsertWaiters {
+    if (pendingDebounce) {
+      clearTimeout(pendingDebounce);
+      pendingDebounce = undefined;
+    }
+    const waiters = pendingUpsertWaiters;
+    pendingUpsertWaiters = [];
+    return waiters;
+  }
+
+  function persistPendingUpserts(): Promise<void> {
+    const waiters = clearPendingDebounce();
+    return waiters.length > 0 ? enqueuePersist(waiters) : writeChain;
+  }
+
+  function schedulePersist(): Promise<void> {
+    const promise = new Promise<void>((resolve, reject) => {
+      pendingUpsertWaiters.push({ resolve, reject });
+    });
+    if (pendingDebounce) clearTimeout(pendingDebounce);
+    pendingDebounce = setTimeout(() => {
+      pendingDebounce = undefined;
+      void persistPendingUpserts().catch(() => {
+        // Individual upsert promises receive the rejection through their waiters.
+      });
+    }, DESKTOP_STREAM_SNAPSHOT_WRITE_DEBOUNCE_MS);
+    return promise;
+  }
+
+  async function persistImmediately(): Promise<void> {
+    const waiters = clearPendingDebounce();
+    await enqueuePersist(waiters);
+  }
+
+  async function flushPendingWrites(): Promise<void> {
+    await persistPendingUpserts();
   }
 
   return {
@@ -104,18 +170,21 @@ export async function openDesktopStreamSnapshotStore(
     },
     async upsert(snapshot) {
       live.set(snapshot.streamId, snapshot);
-      await persist();
+      await schedulePersist();
     },
     async remove(streamId) {
       if (!live.delete(streamId)) return;
-      await persist();
+      await persistImmediately();
     },
     async replaceAll(snapshots) {
       live.clear();
       for (const snapshot of snapshots) {
         live.set(snapshot.streamId, snapshot);
       }
-      await persist();
+      await persistImmediately();
+    },
+    async flush() {
+      await flushPendingWrites();
     },
     getAll() {
       return [...live.values()];
