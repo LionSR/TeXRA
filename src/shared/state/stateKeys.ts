@@ -64,6 +64,13 @@ export enum WorkspaceStateKey {
    * key absent) so reset-to-default isn't silently undone on next start.
    */
   LATEX_SETTINGS_MIGRATED = 'texra.latexSettingsMigrated',
+  /**
+   * One-shot per-workspace marker for the legacy global-scope bash-approval
+   * override migration. Set after
+   * `migrateLegacyGlobalBashApprovalOverride()` runs for this workspace;
+   * subsequent activations skip it. See issue #7169.
+   */
+  BASH_APPROVAL_GLOBAL_MIGRATED = 'texra.bashApprovalGlobalMigrated',
 }
 
 export enum GlobalStateKey {
