@@ -29,9 +29,6 @@ import {
   extractCodeOnlyInput,
 } from '@progressView/frontend/formatters/parseUtils';
 import {
-  TOOLS_WITH_DIFF_INPUT,
-  TOOLS_WITH_FILE_LINK,
-  TOOLS_WITH_FILE_CONTENT,
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
@@ -42,6 +39,7 @@ import {
 } from '@shared/schemas/codex';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { toolDisplayKind } from '@tools/toolKind';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
 import type { TextEditorInput } from '@tools/TextEditorTool';
@@ -469,17 +467,17 @@ const TOOL_SECTION_BUILDERS: Array<{
 }> = [
   {
     match: (ctx) =>
-      TOOLS_WITH_DIFF_INPUT.has(ctx.toolName) && isObject(ctx.input),
+      toolDisplayKind(ctx.toolName) === 'edit' && isObject(ctx.input),
     build: buildEditDiffInputSections,
   },
   {
     match: (ctx) =>
-      TOOLS_WITH_FILE_LINK.has(ctx.toolName) && Boolean(ctx.filePath),
+      toolDisplayKind(ctx.toolName) === 'read' && Boolean(ctx.filePath),
     build: buildFileLinkSections,
   },
   {
     match: (ctx) =>
-      TOOLS_WITH_FILE_CONTENT.has(ctx.toolName) && Boolean(ctx.filePath),
+      toolDisplayKind(ctx.toolName) === 'write' && Boolean(ctx.filePath),
     build: buildFileContentSections,
   },
   {
