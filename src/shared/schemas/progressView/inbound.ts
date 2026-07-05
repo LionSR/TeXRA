@@ -158,7 +158,7 @@ const ExternalInquiryActionMessageSchema = z
     answer: z.string().min(1).optional(),
     sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
     feedback: z.string().optional(),
-    draft: InquiryDraftSchema.nullable().optional(),
+    draft: InquiryDraftSchema.nullish(),
   })
   .superRefine((message, ctx) => {
     if (message.action === 'submit' && !message.answer) {

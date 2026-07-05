@@ -1,7 +1,7 @@
 # Session-scoped runtime architecture: facts, interactions, and status ownership
 
-> **Status:** Partially landed proposal (Stages 0-2; status refreshed
-> 2026-07-04). Companion to the diagnosis in
+> **Status:** Partially landed proposal (Stages 0-2 plus Checkpoint A; status
+> refreshed 2026-07-05). Companion to the diagnosis in
 > `tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this document is the
 > target design. It covers the event/logger chain, the
 > approval/interaction RPC machinery, stream status, and the execution registries
@@ -772,11 +772,11 @@ ordering they force:
   trace→bus and others still emit directly, relative order between two
   related facts can invert. Stages therefore migrate whole fact _clusters_
   (e.g. status+result together), never half of a causally-linked pair.
-- **Multi-window desktop reality check.** L1–L3's "live bug" severity
-  assumes >1 `DesktopAgentExecution` per process actually ships. The
-  per-window session comments say yes, but verify before paying stages 3–5;
-  if single-window, those stages are pre-payment for a planned feature and
-  should be re-prioritized honestly.
+- **Multi-window desktop reality check.** Checkpoint A recorded the maintainer
+  pre-flight answer on 2026-07-05: for desktop, do the wisest thing. The
+  checkpoint treats multi-window desktop as supported/intended unless current
+  code proves it mechanically impossible, so L1–L3 remain correctness work for
+  stages 3–5 rather than pre-payment.
 - **Collision with the active PR train.** This branch was force-updated
   mid-audit by concurrent maintainer work; the program only works as small,
   independently shippable PRs per stage — a long-lived refactor branch

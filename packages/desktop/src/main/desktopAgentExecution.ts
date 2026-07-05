@@ -640,6 +640,19 @@ export class DesktopProgressBridge {
     return executionIds;
   }
 
+  private refreshActiveExecutionIds(): {
+    activeExecutionIds: Set<string>;
+    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
+  } {
+    const activeExecutionIds = new Set(getAllActiveExecutionIds());
+    const allExecutionIds = this.getRestartRepairExecutionIdMap();
+    this.progressEvents.forgetActiveRestoredStreams(
+      activeExecutionIds,
+      allExecutionIds,
+    );
+    return { activeExecutionIds, allExecutionIds };
+  }
+
   private resetRestartRepairStreamStatuses(
     repairStreams: ReadonlySet<StreamTabId>,
     waitingStreams: ReadonlySet<StreamTabId>,
@@ -741,24 +754,18 @@ export class DesktopProgressBridge {
     try {
       await this.state.streamLogs.load();
       this.progressEvents.hydrateRestoredStreams();
-      const activeExecutionIds = new Set(getAllActiveExecutionIds());
-      const allExecutionIds = this.getRestartRepairExecutionIdMap();
-      this.progressEvents.forgetActiveRestoredStreams(
-        activeExecutionIds,
-        allExecutionIds,
-      );
+      const { activeExecutionIds, allExecutionIds } =
+        this.refreshActiveExecutionIds();
       const executionIdMap = new Map(
         [...allExecutionIds].filter(
           ([, executionId]) => !activeExecutionIds.has(executionId),
         ),
       );
       const waitingStreams = await detectWaitingStreams(executionIdMap);
-      const repairActiveExecutionIds = new Set(getAllActiveExecutionIds());
-      const repairAllExecutionIds = this.getRestartRepairExecutionIdMap();
-      this.progressEvents.forgetActiveRestoredStreams(
-        repairActiveExecutionIds,
-        repairAllExecutionIds,
-      );
+      const {
+        activeExecutionIds: repairActiveExecutionIds,
+        allExecutionIds: repairAllExecutionIds,
+      } = this.refreshActiveExecutionIds();
       for (const [streamId, executionId] of repairAllExecutionIds) {
         if (repairActiveExecutionIds.has(executionId)) {
           waitingStreams.delete(streamId);
@@ -801,12 +808,7 @@ export class DesktopProgressBridge {
         }
       }
       this.progressEvents.hydrateRestoredStreams();
-      const activeExecutionIds = new Set(getAllActiveExecutionIds());
-      const allExecutionIds = this.getRestartRepairExecutionIdMap();
-      this.progressEvents.forgetActiveRestoredStreams(
-        activeExecutionIds,
-        allExecutionIds,
-      );
+      this.refreshActiveExecutionIds();
       const affectedStreams = this.resetRestartRepairStreamStatuses(
         new Set(this.progressEvents.restoredStreams.keys()),
         waitingStreams,

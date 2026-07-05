@@ -20,7 +20,7 @@ import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
  * Characterization tests for MainApp's persistence/restore machinery.
  *
  * These pin down the CURRENT behavior of the two independently-triggered
- * restore paths (issue #7075):
+ * restore paths:
  *   1. mount-time webview-storage restore (`restorePersistedState`), and
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`),
  * including the legacy single-`instruction` migration precedence, the forced
