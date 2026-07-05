@@ -1,11 +1,16 @@
 // Local imports - agent
 import { deleteExecution as deleteStoredExecution } from '@agent/storage/executionListing';
 
+// Local imports - logger
+import * as logger from '@logger/logUtils';
+
 // Local imports - shared
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 // Local imports - transcript
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+
+const CHANNEL = 'SessionStores';
 
 export interface SessionStoresOptions {
   streamLogs: StreamLogStore;
@@ -69,19 +74,29 @@ export class SessionStores {
     const orphanedStreams = persistedStreams.filter(
       (stream) => !liveStreams.has(stream),
     );
+    const sweptStreams: StreamTabId[] = [];
     const executionIds = new Set<ExecutionId>();
 
     await Promise.all(
       orphanedStreams.map(async (stream) => {
-        const executionId =
-          await this.snapshots.readPersistedExecutionId(stream);
-        if (executionId) executionIds.add(executionId);
-        await this.snapshots.deleteStream(stream);
+        try {
+          const executionId =
+            await this.snapshots.readPersistedExecutionId(stream);
+          await this.snapshots.deleteStream(stream);
+          sweptStreams.push(stream);
+          if (executionId) executionIds.add(executionId);
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Skipping orphaned stream cleanup for ${stream}; startup will continue.`,
+            { data: error },
+          );
+        }
       }),
     );
     await this.deleteExecutionIds(executionIds);
 
-    return { streams: orphanedStreams, executionIds: [...executionIds] };
+    return { streams: sweptStreams, executionIds: [...executionIds] };
   }
 
   private async deleteExecutionIds(

@@ -10,6 +10,9 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { bus } from '@eventBus/ProgressEventBus';
 
+// Local imports - logger
+import * as logger from '@logger/logUtils';
+
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -574,6 +577,68 @@ describe('ProgressBackend', () => {
       );
     } finally {
       await getExecutionStore(historyExecution).clear();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('continues sweeping streamData orphans when one orphan cleanup fails', async () => {
+    const failingStream = 'tool@deepseek#d6966d' as StreamTabId;
+    const sweptStream = 'tool@deepseek#e6966e' as StreamTabId;
+    const failingExecution = 'd6966d' as ExecutionId;
+    const sweptExecution = 'e6966e' as ExecutionId;
+    const seed = new StreamSnapshotStore();
+    await seed.load([failingStream, sweptStream]);
+    seed.setTaskState(
+      failingStream,
+      toolUseTaskState('search', 'deepseekproT'),
+      failingExecution,
+    );
+    seed.setTaskState(
+      sweptStream,
+      toolUseTaskState('search', 'deepseekproT'),
+      sweptExecution,
+    );
+    await writeExecutionConfig(failingExecution);
+    await writeExecutionConfig(sweptExecution);
+    await seed.flush();
+
+    const { backend, session } = createIsolatedRecordingBackend();
+    const originalDeleteStream = backend.state.snapshots.deleteStream.bind(
+      backend.state.snapshots,
+    );
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const deleteSpy = vi
+      .spyOn(backend.state.snapshots, 'deleteStream')
+      .mockImplementation(async (stream) => {
+        if (stream === failingStream) {
+          throw new Error('locked stream sidecar');
+        }
+        await originalDeleteStream(stream);
+      });
+
+    try {
+      await expect(backend.state.load()).resolves.toBeUndefined();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        'SessionStores',
+        `Skipping orphaned stream cleanup for ${failingStream}; startup will continue.`,
+        { data: expect.any(Error) },
+      );
+      expect(await StorageFS.exists(streamDataDir(failingStream))).toBe(true);
+      expect(await StorageFS.exists(`executions/${failingExecution}`)).toBe(
+        true,
+      );
+      expect(await StorageFS.exists(streamDataDir(sweptStream))).toBe(false);
+      expect(await StorageFS.exists(`executions/${sweptExecution}`)).toBe(
+        false,
+      );
+    } finally {
+      deleteSpy.mockRestore();
+      warnSpy.mockRestore();
+      await getExecutionStore(failingExecution).clear();
+      await getExecutionStore(sweptExecution).clear();
       await backend.state.clearAll();
       backend.dispose();
       session.dispose();
