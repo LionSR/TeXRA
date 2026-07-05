@@ -17,7 +17,9 @@ import {
   taskDetailKeyHintsForColumns,
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import {
+  jumpTaskDetailScrollState,
   moveTaskDetailScrollState,
+  pageTaskDetailScrollState,
   syncTaskDetailScrollState,
   taskDetailFollowTailScrollOffsetForColumns,
   taskDetailInitialScrollOffset,
@@ -1484,6 +1486,184 @@ describe('CLI child execution controls', () => {
       followsTail: true,
       offset: 9,
     });
+  });
+
+  it('pages task detail scroll by the visible row budget (PgUp/PgDn)', () => {
+    const tailing = { executionId: 'task-1', followsTail: true, offset: 9 };
+    expect(pageTaskDetailScrollState(tailing, 9, 'up', 3)).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 6,
+    });
+    expect(
+      pageTaskDetailScrollState(
+        { executionId: 'task-1', followsTail: false, offset: 6 },
+        9,
+        'up',
+        3,
+      ),
+    ).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 3,
+    });
+    expect(
+      pageTaskDetailScrollState(
+        { executionId: 'task-1', followsTail: false, offset: 3 },
+        9,
+        'down',
+        3,
+      ),
+    ).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 6,
+    });
+
+    // Clamps at the boundaries instead of overshooting.
+    const top = { executionId: 'task-1', followsTail: false, offset: 1 };
+    expect(pageTaskDetailScrollState(top, 9, 'up', 3)).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 0,
+    });
+    expect(
+      pageTaskDetailScrollState(
+        { executionId: 'task-1', followsTail: false, offset: 8 },
+        9,
+        'down',
+        3,
+        9,
+      ),
+    ).toEqual({
+      executionId: 'task-1',
+      followsTail: true,
+      offset: 9,
+    });
+
+    // A page landing exactly on the follow offset re-arms tail-following.
+    expect(
+      pageTaskDetailScrollState(
+        { executionId: 'task-1', followsTail: false, offset: 3 },
+        9,
+        'down',
+        3,
+        6,
+      ),
+    ).toEqual({
+      executionId: 'task-1',
+      followsTail: true,
+      offset: 6,
+    });
+
+    // A zero/negative page size still advances by at least one row.
+    expect(pageTaskDetailScrollState(tailing, 9, 'up', 0)).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 8,
+    });
+  });
+
+  it('jumps task detail scroll to the top and back to the tail (g/G)', () => {
+    const manual = { executionId: 'task-1', followsTail: false, offset: 4 };
+    expect(jumpTaskDetailScrollState(manual, 9, 'top')).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 0,
+    });
+    expect(jumpTaskDetailScrollState(manual, 9, 'bottom')).toEqual({
+      executionId: 'task-1',
+      followsTail: true,
+      offset: 9,
+    });
+    expect(jumpTaskDetailScrollState(manual, 9, 'bottom', 4)).toEqual({
+      executionId: 'task-1',
+      followsTail: true,
+      offset: 4,
+    });
+
+    const tailing = { executionId: 'task-1', followsTail: true, offset: 9 };
+    expect(jumpTaskDetailScrollState(tailing, 9, 'top')).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 0,
+    });
+  });
+
+  it('anchors a PgUp jump when earlier output rewraps, like manual scrolling', () => {
+    const availableColumns = 20;
+    const visibleRowBudget = 1;
+    const beforeLines = ['intro', 'target marker', 'after'];
+    const beforeContext = {
+      availableColumns,
+      compact: true,
+      tailLines: beforeLines,
+    };
+    const beforeMaxOffset = taskDetailInitialScrollOffset(
+      taskDetailScrollableOutputRowCountForColumns(beforeContext),
+      visibleRowBudget,
+    );
+    const beforeFollowOffset = taskDetailFollowTailScrollOffsetForColumns({
+      ...beforeContext,
+      visibleRowBudget,
+    });
+
+    const paged = pageTaskDetailScrollState(
+      { executionId: 'task-1', followsTail: true, offset: beforeFollowOffset },
+      beforeMaxOffset,
+      'up',
+      1,
+      beforeFollowOffset,
+      beforeContext,
+    );
+
+    expect(paged).toEqual({
+      anchor: { lineIndex: 1, wrappedRowOffset: 0 },
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 1,
+    });
+
+    const afterLines = [
+      'intro expanded before anchor '.repeat(2),
+      'target marker',
+      'after',
+    ];
+    const afterContext = {
+      availableColumns,
+      compact: true,
+      tailLines: afterLines,
+    };
+    const afterMaxOffset = taskDetailInitialScrollOffset(
+      taskDetailScrollableOutputRowCountForColumns(afterContext),
+      visibleRowBudget,
+    );
+    const afterFollowOffset = taskDetailFollowTailScrollOffsetForColumns({
+      ...afterContext,
+      visibleRowBudget,
+    });
+    const synced = syncTaskDetailScrollState(
+      paged,
+      'task-1',
+      afterMaxOffset,
+      afterFollowOffset,
+      afterContext,
+    );
+    const visibleOffset = taskDetailVisibleScrollOffset(
+      synced,
+      afterMaxOffset,
+      afterFollowOffset,
+      afterContext,
+    );
+
+    expect(visibleOffset).toBeGreaterThan(paged.offset);
+    expect(
+      taskDetailVisibleOutputRowsFromOffsetForColumns({
+        ...afterContext,
+        offset: visibleOffset,
+        visibleRowBudget,
+      }),
+    ).toEqual(['target marker']);
   });
 
   it('keeps the highlighted picker item inside the visible window', () => {

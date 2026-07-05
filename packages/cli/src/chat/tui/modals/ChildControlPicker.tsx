@@ -23,6 +23,9 @@ import {
 } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import {
+  jumpTaskDetailScrollState,
+  moveTaskDetailScrollState,
+  pageTaskDetailScrollState,
   syncTaskDetailScrollState,
   taskDetailFollowTailScrollOffsetForColumns,
   taskDetailInitialScrollOffset,
@@ -30,7 +33,6 @@ import {
   taskDetailScrollContextKey,
   taskDetailVisibleOutputRowsFromOffsetForColumns,
   taskDetailVisibleScrollOffset,
-  moveTaskDetailScrollState,
   type TaskDetailScrollContext,
   type TaskDetailScrollState,
 } from '../state/taskDetailScroll';
@@ -593,6 +595,52 @@ function TaskDetailView({
           current,
           maxOffset,
           'down',
+          followOffset,
+          scrollContext,
+        ),
+      );
+    }
+    if (key.pageUp) {
+      setScrollState((current) =>
+        pageTaskDetailScrollState(
+          current,
+          maxOffset,
+          'up',
+          visibleLineCount,
+          followOffset,
+          scrollContext,
+        ),
+      );
+    }
+    if (key.pageDown) {
+      setScrollState((current) =>
+        pageTaskDetailScrollState(
+          current,
+          maxOffset,
+          'down',
+          visibleLineCount,
+          followOffset,
+          scrollContext,
+        ),
+      );
+    }
+    if (input === 'g') {
+      setScrollState((current) =>
+        jumpTaskDetailScrollState(
+          current,
+          maxOffset,
+          'top',
+          followOffset,
+          scrollContext,
+        ),
+      );
+    }
+    if (input === 'G') {
+      setScrollState((current) =>
+        jumpTaskDetailScrollState(
+          current,
+          maxOffset,
+          'bottom',
           followOffset,
           scrollContext,
         ),
