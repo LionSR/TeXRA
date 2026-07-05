@@ -163,12 +163,23 @@ export async function runCompileCheck(
       ctx.logger.warn(`Compile check: ${displayName} errored: ${message}`, {
         data: err,
       });
+      // logRelativePath must stay a real, resolvable path: downstream
+      // consumers build a `/files/${logRelativePath}` deep link and an "open
+      // compile log" action around `log.absolutePath` — a placeholder string
+      // here would silently break both. Fall back to the output file's own
+      // comparable path (still useful context, even though it isn't a log).
+      let fallbackRelativePath: string;
+      try {
+        fallbackRelativePath = getComparablePath(outputFile.location);
+      } catch {
+        fallbackRelativePath = outputFile.location.absolutePath;
+      }
       failures.push({
         round: currentRound,
         displayName,
         output: outputFile.location,
         log: outputFile.location,
-        logRelativePath: '(no log available)',
+        logRelativePath: fallbackRelativePath,
       });
       failureLogExcerpts.push(
         `Compile check errored for ${displayName}\n\n${message}`,
@@ -203,6 +214,13 @@ interface PerFileOptions {
 // log filenames legible.
 const PATH_HASH_LENGTH = 8;
 
+// Cap on the sanitized stem portion of safeName (before the hash suffix).
+// Most filesystems reject a single path component over ~255 bytes; a deeply
+// nested or very long output path plus the round prefix, hash, and `.log`
+// extension could otherwise exceed that. The hash is derived from the full,
+// untruncated path, so truncating the stem never reintroduces collisions.
+const MAX_SANITIZED_STEM_LENGTH = 200;
+
 async function compileOne(
   ctx: CompileCheckContext,
   outputFile: OutputFileInfo,
@@ -236,7 +254,8 @@ async function compileOne(
     .update(pathForSafeName)
     .digest('hex')
     .slice(0, PATH_HASH_LENGTH);
-  const safeName = `${legacySafeName}_${pathHash}`;
+  const sanitizedStem = legacySafeName.slice(0, MAX_SANITIZED_STEM_LENGTH);
+  const safeName = `${sanitizedStem}_${pathHash}`;
   const buildDir = path.join(
     opts.compileRoot,
     'build',
