@@ -22,8 +22,11 @@ export interface DesktopProgressIpcOptions {
   progress?: DesktopProgressIpcBridge;
   getProgress?: () => DesktopProgressIpcBridge | undefined;
   ensureProgress?: () => Promise<DesktopProgressIpcBridge>;
-  /** `reason` is set when the command matched a registry entry declared
-   *  `unsupported(...)`; undefined for a genuinely unrecognized command. */
+  /** Called for a recognized command that wasn't dispatched to a real
+   *  handler — either the matched registry entry is `unsupported(...)`
+   *  (`reason` set to its message), or the progress bridge isn't
+   *  constructed yet (`reason` undefined). A schema-invalid message never
+   *  reaches this callback; `handleMessage` returns `false` for it instead. */
   onUnsupportedCommand?: (
     message: ProgressViewInboundMessage,
     reason?: string,

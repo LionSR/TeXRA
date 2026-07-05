@@ -90,9 +90,9 @@ export type DispatcherFn<TMessage extends CommandMessage> = (
  * `isDesktopHost` check.
  *
  * Takes any `HandlerRegistry<TMessage>` (widened to a plain string-keyed
- * record here — TypeScript can't invert the mapped mapped type to infer
- * `TMessage` from a call site's concrete registry value, and this function
- * only needs to read each entry, not reconstruct its per-command type).
+ * record here — TypeScript can't invert the mapped type to infer `TMessage`
+ * from a call site's concrete registry value, and this function only needs
+ * to read each entry, not reconstruct its per-command type).
  */
 export function unsupportedCommands(
   handlers: Readonly<Record<string, unknown>>,

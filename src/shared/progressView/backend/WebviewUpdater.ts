@@ -91,12 +91,14 @@ export class WebviewUpdater {
     agentFilter: AgentCategoryFilter,
     streamStates?: Record<StreamTabId, StreamMetadata>,
   ): void {
+    const unsupportedCommands = this.getUnsupportedCommands?.();
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
       streams,
       activeStream,
-      unsupportedCommands: this.getUnsupportedCommands?.() as
-        string[] | undefined,
+      unsupportedCommands: unsupportedCommands
+        ? [...unsupportedCommands]
+        : undefined,
       agentFilter,
       streamStates,
     });

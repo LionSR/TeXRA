@@ -15,6 +15,9 @@ import {
 } from '../mainViewActions';
 import { saveState } from '../persistence';
 
+// `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
+// owns only session commands; see bannerSlice.ts for why (registry is now
+// exhaustive, messageDispatcher.ts is the real coverage checkpoint).
 export const sessionHandlers = {
   [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (message) => {
     const sessionType = parseSessionType(message.sessionType ?? undefined);

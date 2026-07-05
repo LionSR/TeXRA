@@ -12,6 +12,9 @@ import { instruction$, isPolishing$, isRecording$ } from '../mainViewState';
 import { setInstruction, showInformation } from '../mainViewActions';
 import { saveState } from '../persistence';
 
+// `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
+// owns only chat commands; see bannerSlice.ts for why (registry is now
+// exhaustive, messageDispatcher.ts is the real coverage checkpoint).
 export const chatHandlers = {
   [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (message) => {
     isPolishing$.set(false);

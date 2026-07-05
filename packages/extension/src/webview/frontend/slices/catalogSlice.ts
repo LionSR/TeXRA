@@ -63,6 +63,9 @@ function findAgentSelection(
   return options.find((opt) => agentName(opt.value) === name)?.value;
 }
 
+// `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
+// owns only catalog commands; see bannerSlice.ts for why (registry is now
+// exhaustive, messageDispatcher.ts is the real coverage checkpoint).
 export const catalogHandlers = {
   [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) => {
     const optionsDataByCategory = message.optionsDataByCategory;

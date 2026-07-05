@@ -619,10 +619,10 @@ export class DesktopProgressBridge {
         'Retrying with a new API key is not available in the desktop app yet.',
       ),
       cancelRetryRequest: unsupported(
-        'Retrying with a new API key is not available in the desktop app yet.',
+        'Canceling a retry request is not available in the desktop app yet.',
       ),
       useOwnApiKey: unsupported(
-        'Retrying with a new API key is not available in the desktop app yet.',
+        'Using your own API key is not available in the desktop app yet.',
       ),
       polishFollowUp: unsupported(
         'Polishing follow-up text is not available in the desktop app yet.',
