@@ -32,6 +32,8 @@ export interface RestartRepairOptions {
     now: number,
   ): Promise<readonly StreamTabId[]>;
   repairStreams?: Iterable<StreamTabId>;
+  /** Retry terminal metadata after an earlier repair already moved a stream to FAILED. */
+  retryFailedStreams?: boolean;
   statusEmitOptions?: StreamStatusEmitOptions;
   writeTerminalStatus?: (
     executionId: ExecutionId,
@@ -178,7 +180,11 @@ export async function repairRestartedStreams(
       continue;
     }
 
-    if (currentStatus === STREAM_PHASE.FAILED && !isWaitingStream) {
+    if (
+      options.retryFailedStreams === true &&
+      currentStatus === STREAM_PHASE.FAILED &&
+      !isWaitingStream
+    ) {
       failedStreams.push(streamId);
       continue;
     }

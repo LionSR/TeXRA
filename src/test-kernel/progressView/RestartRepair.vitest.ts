@@ -278,6 +278,7 @@ describe('repairRestartedStreams', () => {
       waitingStreams: new Set(),
       executionIds: new Map([[streamId, executionId]]),
       repairStreams: [streamId],
+      retryFailedStreams: true,
       closeRunningGroups,
       writeTerminalStatus,
       now: 567,
@@ -297,6 +298,40 @@ describe('repairRestartedStreams', () => {
       executionId,
       EXECUTION_STATUS.ERROR,
     );
+  });
+
+  it('does not retry historical failed streams unless retry is requested', async () => {
+    const streamId = 'stream-historical-failed' as StreamTabId;
+    const executionId = 'execution-historical-failed' as ExecutionId;
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+    streamStatus.transition(
+      streamId,
+      STREAM_PHASE.FAILED,
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    );
+    const closeRunningGroups = vi.fn(
+      async (streamIds: readonly StreamTabId[]) => [...streamIds],
+    );
+    const writeTerminalStatus = vi.fn(async () => undefined);
+
+    const result = await repairRestartedStreams({
+      streamStatus,
+      waitingStreams: new Set(),
+      executionIds: new Map([[streamId, executionId]]),
+      repairStreams: [streamId],
+      closeRunningGroups,
+      writeTerminalStatus,
+    });
+
+    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+    expect(result).toMatchObject({
+      failedStreams: [],
+      closedFailedGroups: [],
+      terminalStatusUpdated: [],
+    });
+    expect(closeRunningGroups).not.toHaveBeenCalled();
+    expect(writeTerminalStatus).not.toHaveBeenCalled();
   });
 
   it('can terminalize stale WAITING streams through the resume choreography', async () => {

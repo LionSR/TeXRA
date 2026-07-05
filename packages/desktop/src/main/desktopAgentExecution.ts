@@ -933,6 +933,7 @@ export class DesktopProgressBridge {
           waitingStreams,
           executionIds: repairExecutionIds,
           repairStreams: fallbackRepairStreams,
+          retryFailedStreams: true,
           closeRunningGroups: (streamIds, status, now) =>
             this.closeRunningTaskGroupsForStreams(streamIds, status, now),
           statusEmitOptions: {

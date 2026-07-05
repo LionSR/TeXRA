@@ -388,9 +388,15 @@ export class StreamLogStore {
     status: EndGroupStatus = END_GROUP_STATUS.ERROR,
   ): Promise<StreamTabId[]> {
     if (streamIds.length === 0) return [];
-    await pMap(streamIds, (id) => this.ensureLoaded(id), {
-      concurrency: STREAM_LOG_LOAD_CONCURRENCY,
-    });
+    const streamsToLoad = streamIds.filter(
+      (id) =>
+        !this.logs.has(id) && this.summaries.get(id)?.hasRunningGroup === true,
+    );
+    if (streamsToLoad.length > 0) {
+      await pMap(streamsToLoad, (id) => this.ensureLoaded(id), {
+        concurrency: STREAM_LOG_LOAD_CONCURRENCY,
+      });
+    }
 
     const affected = this.endRunningGroupsInLoadedLogs(
       now,
