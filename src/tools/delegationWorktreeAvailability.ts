@@ -15,7 +15,7 @@
  */
 
 import type { ToolDefinition } from '@model';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
 import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
 
 /** The single "Git worktree support:" line, anchored to a line start. */
@@ -36,14 +36,16 @@ const WORKTREE_DISABLED_LINE =
 export function withDelegationWorktreeAvailability(
   tool: ToolDefinition,
 ): ToolDefinition {
-  if (!DELEGATION_TOOLS.has(tool.name) || !tool.description) return tool;
-  if (!WORKTREE_LINE.test(tool.description)) return tool;
-
-  const line = isWorktreeSupportEnabled()
-    ? WORKTREE_ENABLED_LINE
-    : WORKTREE_DISABLED_LINE;
-  return {
-    ...tool,
-    description: tool.description.replace(WORKTREE_LINE, () => line),
-  };
+  // Replace-only: a tool with no "Git worktree support:" line takes no
+  // `working_directory`, so the line must never be appended. The setting is
+  // read lazily, only when the anchor is present.
+  return replaceDelegationDescriptionBlock(
+    tool,
+    WORKTREE_LINE,
+    () =>
+      isWorktreeSupportEnabled()
+        ? WORKTREE_ENABLED_LINE
+        : WORKTREE_DISABLED_LINE,
+    { appendIfMissing: false },
+  );
 }
