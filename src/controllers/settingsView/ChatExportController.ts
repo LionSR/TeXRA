@@ -19,6 +19,7 @@ import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import {
   formatChatAsMarkdown,
   formatChatAsLatex,
+  formatChatAsHtml,
   generateExportFilename,
   generateExportFolderName,
   type ChatExportInput,
@@ -158,8 +159,6 @@ export class ChatExportController {
     exportInput: ChatExportInput,
     assetsSrc: string,
   ): Promise<HtmlExportResult> {
-    const { formatChatAsHtml } =
-      await import('@agent/export/htmlExport/htmlFormatter');
     const fsExtra = (await import('fs-extra')).default;
 
     const folderName = generateExportFolderName(exportInput);

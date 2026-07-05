@@ -2,11 +2,11 @@ import * as path from 'node:path';
 
 import { defineCommand } from 'citty';
 
-import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
 import {
   DEFAULT_HTML_EXPORT_ASSETS_HREF,
   formatChatAsHtml,
-} from '@agent/export/htmlExport/htmlFormatter';
+  formatChatAsMarkdown,
+} from '@agent/export/chatExportFormatter';
 import { type ExecutionId } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';

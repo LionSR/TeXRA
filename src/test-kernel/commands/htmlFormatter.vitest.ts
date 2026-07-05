@@ -4,8 +4,10 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { formatChatAsHtml } from '@agent/export/htmlExport/htmlFormatter';
-import type { ChatExportInput } from '@agent/export/chatExportFormatter';
+import {
+  formatChatAsHtml,
+  type ChatExportInput,
+} from '@agent/export/chatExportFormatter';
 
 const fixture: ChatExportInput = {
   timestamp: '2026-05-23T10:00:00.000Z',

@@ -1,6 +1,6 @@
 /**
  * Template-driven formatters for exporting chat conversations
- * as Markdown or LaTeX documents.
+ * as Markdown, LaTeX, or HTML documents.
  *
  * Architecture (pandoc-style):
  *   raw messages → normalizeMessages() → ExportNode[] → FormatSpec → string
@@ -14,8 +14,9 @@
  * under the extension's `resources/`), so it is passed into `formatChatAsLatex`
  * rather than imported here.
  *
- * The implementation lives in `./chatExport/`; this file is the public entry
- * point so callers import a single stable surface.
+ * The implementation lives in `./chatExport/` (Markdown/LaTeX) and
+ * `./htmlExport/` (HTML); this file is the public entry point so callers
+ * import a single stable surface.
  */
 
 import type { ChatExportInput } from '@agent/export/schemas';
@@ -35,6 +36,11 @@ export {
   generateExportFilename,
   generateExportFolderName,
 } from './chatExport/filenames';
+export {
+  formatChatAsHtml,
+  DEFAULT_HTML_EXPORT_ASSETS_HREF,
+  type HtmlExportOptions,
+} from './htmlExport/htmlFormatter';
 
 export function formatChatAsMarkdown(input: ChatExportInput): string {
   return renderDocument(input, markdownSpec);

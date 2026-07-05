@@ -28,13 +28,12 @@ import {
 import { renderTemplateToHtml } from '@shared/htmlExport/ssrRender';
 import { tryParseUrl } from '@utils/core';
 
-import {
-  extractMeta,
-  normalizeMessages,
-  type ChatExportInput,
-  type DocumentMeta,
-  type ExportNode,
-} from '../chatExportFormatter';
+// Imported from the underlying modules rather than `../chatExportFormatter`
+// (the documented single entry point) to avoid a circular dependency: that
+// barrel re-exports `formatChatAsHtml` from this file.
+import { extractMeta } from '../chatExport/formatSpec';
+import { normalizeConversationForExport as normalizeMessages } from '../normalizeConversation';
+import type { ChatExportInput, DocumentMeta, ExportNode } from '../schemas';
 
 let cachedProcessor: MarkdownProcessor | null = null;
 
