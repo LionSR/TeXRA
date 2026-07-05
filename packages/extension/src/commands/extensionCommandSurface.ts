@@ -72,13 +72,6 @@ import {
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
 
-export type {
-  ExtensionCommandActions,
-  ExtensionRegistryCommandId,
-  ExtensionRegistryCatalogCommandId,
-} from './extensionCommandHandlers';
-export { EXTENSION_HIDDEN_ALIASES } from './extensionCommandHandlers';
-
 const RESET_CHANNEL = 'mainViewCommands';
 const CHATGPT_SIGN_IN_CHANNEL = 'ChatGptSubscription';
 

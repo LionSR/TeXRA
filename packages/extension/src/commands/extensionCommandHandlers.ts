@@ -3,11 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
-import {
-  commandCatalog,
-  type CommandCatalogEntry,
-  type CommandId,
-} from '@shared/commands/catalog';
+import { commandCatalog } from '@shared/commands/catalog';
 import {
   awaitTrue,
   definedHandler,
@@ -64,10 +60,13 @@ const ShowProgressViewArgSchema = z.unknown();
  * constraint below is the compile-time signal that a handler still needs
  * to be authored (real per-command behavior can't be generated).
  */
-export type ExtensionRegistryCatalogCommandId = Extract<
+type ExtensionRegistryCatalogEntry = Extract<
   (typeof commandCatalog)[number],
   { extensionRegistry: true }
->['id'];
+>;
+
+export type ExtensionRegistryCatalogCommandId =
+  ExtensionRegistryCatalogEntry['id'];
 
 /**
  * Compatibility ids intentionally absent from the shared catalog — they
@@ -89,11 +88,13 @@ export type ExtensionRegistryCommandId =
  * register every catalog entry tagged `extensionRegistry: true` (and flag
  * strays that no longer belong).
  */
-export const EXTENSION_REGISTRY_CATALOG_COMMAND_IDS: readonly CommandId[] = (
-  commandCatalog as readonly CommandCatalogEntry[]
-)
-  .filter((entry) => entry.extensionRegistry === true)
-  .map((entry) => entry.id as CommandId);
+export const EXTENSION_REGISTRY_CATALOG_COMMAND_IDS: readonly ExtensionRegistryCatalogCommandId[] =
+  commandCatalog
+    .filter(
+      (entry): entry is ExtensionRegistryCatalogEntry =>
+        'extensionRegistry' in entry && entry.extensionRegistry === true,
+    )
+    .map((entry) => entry.id);
 
 /**
  * Capabilities the registry handlers need from the extension host. Mirrors
