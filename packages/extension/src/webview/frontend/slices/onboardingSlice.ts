@@ -14,7 +14,7 @@ import {
   sessionHintDismissed$,
 } from '../mainViewState';
 
-export const onboardingHandlers: MainViewHandlerRegistry = {
+export const onboardingHandlers = {
   [MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL]: (message) => {
     onboardingFunnelState$.set(message.state);
   },
@@ -32,4 +32,4 @@ export const onboardingHandlers: MainViewHandlerRegistry = {
   [MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER]: () => {
     sessionHintDismissed$.set(true);
   },
-};
+} satisfies Partial<MainViewHandlerRegistry>;

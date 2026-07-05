@@ -4,6 +4,7 @@ import {
   ProgressViewInboundMessageSchema,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
+import { UnsupportedCommandError } from '@shared/utils/dispatcher';
 
 import {
   createDesktopErrorReporter,
@@ -21,7 +22,12 @@ export interface DesktopProgressIpcOptions {
   progress?: DesktopProgressIpcBridge;
   getProgress?: () => DesktopProgressIpcBridge | undefined;
   ensureProgress?: () => Promise<DesktopProgressIpcBridge>;
-  onUnsupportedCommand?: (message: ProgressViewInboundMessage) => void;
+  /** `reason` is set when the command matched a registry entry declared
+   *  `unsupported(...)`; undefined for a genuinely unrecognized command. */
+  onUnsupportedCommand?: (
+    message: ProgressViewInboundMessage,
+    reason?: string,
+  ) => void;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -39,10 +45,33 @@ export function createDesktopProgressIpc(
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
   const onUnsupportedCommand =
     options.onUnsupportedCommand ??
-    ((message: ProgressViewInboundMessage) =>
-      console.warn(`Unsupported desktop Progress command: ${message.command}`));
+    ((message: ProgressViewInboundMessage, reason?: string) =>
+      console.warn(
+        `Unsupported desktop Progress command: ${message.command}${reason ? ` (${reason})` : ''}`,
+      ));
   const getProgress = () => options.getProgress?.() ?? options.progress;
   const ensureProgress = options.ensureProgress;
+
+  // Splits a dispatch's onError callback: an UnsupportedCommandError (a
+  // registry entry declared `unsupported(...)`) is captured for
+  // onUnsupportedCommand's visible feedback below instead of being logged
+  // as a generic error.
+  function dispatchAndReport(
+    message: DesktopCommandMessage,
+    handlers: Parameters<typeof dispatchProgressViewInbound>[1],
+    parsed: ProgressViewInboundMessage,
+  ): boolean {
+    let unsupportedReason: string | undefined;
+    const handled = dispatchProgressViewInbound(message, handlers, (error) => {
+      if (error instanceof UnsupportedCommandError) {
+        unsupportedReason = error.reason;
+        return;
+      }
+      reportAsyncError(error);
+    });
+    if (!handled) onUnsupportedCommand(parsed, unsupportedReason);
+    return handled;
+  }
 
   return {
     handleMessage(message: DesktopCommandMessage): boolean {
@@ -69,16 +98,11 @@ export function createDesktopProgressIpc(
       if (!progress && ensureProgress) {
         void ensureProgress()
           .then((loaded) => {
-            if (
-              dispatchProgressViewInbound(
-                message,
-                loaded.progressViewInboundHandlers,
-                reportAsyncError,
-              )
-            ) {
-              return;
-            }
-            onUnsupportedCommand(result.data);
+            dispatchAndReport(
+              message,
+              loaded.progressViewInboundHandlers,
+              result.data,
+            );
           })
           .catch(reportAsyncError);
         return true;
@@ -88,17 +112,11 @@ export function createDesktopProgressIpc(
         return true;
       }
 
-      if (
-        dispatchProgressViewInbound(
-          message,
-          progress.progressViewInboundHandlers,
-          reportAsyncError,
-        )
-      ) {
-        return true;
-      }
-      // Recognized but unhandled command: consume it with a warning.
-      onUnsupportedCommand(result.data);
+      dispatchAndReport(
+        message,
+        progress.progressViewInboundHandlers,
+        result.data,
+      );
       return true;
     },
   };

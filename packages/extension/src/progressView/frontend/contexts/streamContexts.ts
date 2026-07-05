@@ -35,6 +35,13 @@ export interface StreamContextValue {
   hasStreams: boolean;
   /** Tool-use follow-up options for completed workflow streams. */
   followupOptions: FollowupOptionsState | null;
+  /**
+   * Progress-view commands the active host's inbound registry declares
+   * `unsupported(...)` (see `unsupportedCommands` in `@shared/utils/dispatcher`).
+   * StreamHeader derives its button visibility from this instead of an
+   * `isDesktopHost` check.
+   */
+  unsupportedCommands: ReadonlySet<string>;
 }
 
 /** Default empty stream context value. */
@@ -44,6 +51,7 @@ export const EMPTY_STREAM_CONTEXT: StreamContextValue = {
   isToolUse: false,
   hasStreams: false,
   followupOptions: null,
+  unsupportedCommands: new Set(),
 };
 
 export const streamStateContext = createContext<StreamContextValue>(

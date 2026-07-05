@@ -46,6 +46,7 @@ export class ProcessStreamContent extends LitElement {
         .yoloActive=${Boolean(toolUse?.toolEditBypass)}
         .superYoloActive=${Boolean(toolUse?.superYoloBypass)}
         .goalActive=${Boolean(toolUse?.goalActive)}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
       ></stream-header>
 
       <terminal-command-strip .command=${command}></terminal-command-strip>

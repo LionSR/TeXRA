@@ -45,6 +45,7 @@ export class WorkflowStreamContent extends BaseStreamContent {
         .substate=${state.substate}
         .progress=${state.conversationProgress}
         .yoloActive=${false}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
       ></stream-header>
 
       <workflow-hint-banner></workflow-hint-banner>

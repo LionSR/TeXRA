@@ -4,10 +4,75 @@ type CommandMessage = { command: string };
 
 type MessageHandler<T> = (data: T) => Promise<void> | void;
 
+/**
+ * Marks a command as a deliberate per-host decision rather than an
+ * implementation gap. A host with no real handler for a command declares
+ * `unsupported(reason)` for it instead of omitting the key, so the fact
+ * "this host doesn't do X" lives in exactly one place: the registry itself.
+ *
+ * {@link HandlerRegistry} requires every command in the shared message union
+ * to map to either a real handler or an `Unsupported` marker, so adding a
+ * command to the shared schema without deciding it for a given host is a
+ * compile error there, not a message that silently no-ops at runtime.
+ */
+export interface Unsupported {
+  readonly unsupported: string;
+}
+
+/** Declares a command unsupported on the current host, with a user-facing reason. */
+export function unsupported(reason: string): Unsupported {
+  return { unsupported: reason };
+}
+
+export function isUnsupported(value: unknown): value is Unsupported {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { unsupported?: unknown }).unsupported === 'string'
+  );
+}
+
+/**
+ * Narrows a registry entry to its handler, throwing if it is an
+ * {@link Unsupported} marker. For call sites (mainly tests) that invoke a
+ * specific registry entry directly instead of going through a dispatcher —
+ * production code should prefer the dispatcher, which turns `Unsupported`
+ * into visible feedback rather than a thrown error.
+ */
+export function assertSupported<T>(entry: T | Unsupported): T {
+  if (isUnsupported(entry)) {
+    throw new Error(
+      `Expected a supported handler but this command is unsupported: ${entry.unsupported}`,
+    );
+  }
+  return entry;
+}
+
+/**
+ * Thrown into a dispatcher's `onError` callback when the matched command
+ * resolves to an {@link Unsupported} registry entry. Distinguishes "this host
+ * deliberately doesn't do this" from a genuine parse/handler failure so
+ * callers can surface it as visible feedback (toast/dialog) instead of an
+ * error log.
+ */
+export class UnsupportedCommandError extends Error {
+  constructor(
+    readonly command: string,
+    readonly reason: string,
+  ) {
+    super(`Command "${command}" is unsupported on this host: ${reason}`);
+    this.name = 'UnsupportedCommandError';
+  }
+}
+
+/**
+ * Every command in `TMessage`'s union maps to either a real handler or an
+ * explicit {@link Unsupported} marker. There is no missing/optional case:
+ * omitting a command is a compile error, not a silent runtime drop.
+ */
 export type HandlerRegistry<TMessage extends CommandMessage> = {
-  [K in TMessage['command']]?: MessageHandler<
-    Extract<TMessage, { command: K }>
-  >;
+  [K in TMessage['command']]:
+    MessageHandler<Extract<TMessage, { command: K }>> | Unsupported;
 };
 
 export type DispatcherFn<TMessage extends CommandMessage> = (
@@ -15,6 +80,27 @@ export type DispatcherFn<TMessage extends CommandMessage> = (
   handlers: HandlerRegistry<TMessage>,
   onError?: (error: unknown) => void,
 ) => boolean;
+
+/**
+ * Projects a registry to the list of commands it declares `unsupported(...)`.
+ * This is how the frontend capability view stays derived from the registry
+ * instead of duplicating the same fact in a hand-maintained manifest: a host
+ * computes this once (e.g. at webview-ready) from its own registry and sends
+ * it down, and the frontend gates controls off the result instead of an
+ * `isDesktopHost` check.
+ *
+ * Takes any `HandlerRegistry<TMessage>` (widened to a plain string-keyed
+ * record here — TypeScript can't invert the mapped mapped type to infer
+ * `TMessage` from a call site's concrete registry value, and this function
+ * only needs to read each entry, not reconstruct its per-command type).
+ */
+export function unsupportedCommands(
+  handlers: Readonly<Record<string, unknown>>,
+): string[] {
+  return Object.keys(handlers).filter((command) =>
+    isUnsupported(handlers[command]),
+  );
+}
 
 /**
  * Creates a type-safe message dispatcher for a given schema.
@@ -30,6 +116,7 @@ export type DispatcherFn<TMessage extends CommandMessage> = (
  * // Usage:
  * dispatchMyViewInbound(raw, {
  *   'my-command': (msg) => console.log(msg.payload),
+ *   'other-command': unsupported('Not available on this host yet.'),
  * });
  * ```
  */
@@ -48,14 +135,17 @@ export function createDispatcher<TMessage extends CommandMessage>(
     }
 
     const message = parseResult.data;
-    const handler = handlers[message.command as TMessage['command']] as
-      MessageHandler<typeof message> | undefined;
+    const entry = handlers[message.command as TMessage['command']] as
+      MessageHandler<typeof message> | Unsupported;
 
-    if (!handler) {
+    if (isUnsupported(entry)) {
+      onError?.(
+        new UnsupportedCommandError(message.command, entry.unsupported),
+      );
       return false;
     }
 
-    const handlerResult = handler(message);
+    const handlerResult = entry(message);
     if (handlerResult instanceof Promise) {
       handlerResult.catch((error) => onError?.(error));
     }

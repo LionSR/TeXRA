@@ -255,10 +255,19 @@ export class SettingsApp extends SettingsAppBase {
   // Goal settings state
   private readonly goalItems = signal<readonly Goal[]>([]);
 
+  // Derived capability view: commands the active host's inbound registry
+  // declares `unsupported(...)`, sent once at webview-ready (see
+  // `unsupportedCommands` in `@shared/utils/dispatcher`). Replaces
+  // `isDesktopHost` checks for command-availability gating.
+  private readonly unsupportedCommands = signal<ReadonlySet<string>>(new Set());
+
   // Outbound message handlers (extension host → settings webview). Each entry
   // receives the already-parsed, typed message and updates the matching
   // signal(s). The dispatcher handles parsing and command lookup.
   private readonly messageHandlers: SettingsViewOutboundHandlerRegistry = {
+    [SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS]: (data) => {
+      this.unsupportedCommands.set(new Set(data.commands));
+    },
     [SETTINGS_VIEW_COMMANDS.SET_TAB]: (data) => {
       this.selectedTabIndex.set(data.tabIndex);
       this.agentSubTab.set(data.agentSubTab);
@@ -794,7 +803,9 @@ export class SettingsApp extends SettingsAppBase {
   );
 
   private renderHeader(): TemplateResult {
-    const settingsButton = this.isDesktopHost
+    const settingsButton = this.unsupportedCommands
+      .get()
+      .has(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS)
       ? nothing
       : html`
           <wa-button
@@ -915,7 +926,11 @@ export class SettingsApp extends SettingsAppBase {
           @wa-tab-show=${this.handleTabShow}
         >
           ${SETTINGS_TABS.filter(
-            (tab) => tab.panel !== 'goal' || !desktopHost,
+            (tab) =>
+              tab.panel !== 'goal' ||
+              !this.unsupportedCommands
+                .get()
+                .has(SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST),
           ).map(
             (tab) =>
               html`<wa-tab panel=${tab.panel}
@@ -1051,7 +1066,9 @@ export class SettingsApp extends SettingsAppBase {
               .items=${this.toolDashboardItems.get()}
               .loaded=${this.toolDashboardLoaded.get()}
               .bashApprovalEnabled=${this.bashApprovalEnabled.get()}
-              .showDesktopCrashReporting=${this.isDesktopHost}
+              .showDesktopCrashReporting=${!this.unsupportedCommands
+                .get()
+                .has(SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING)}
               .desktopCrashReportingEnabled=${this.desktopCrashReportingEnabled.get()}
               .desktopCrashReportingConfigured=${this.desktopCrashReportingConfigured.get()}
               @tool-open-url=${this.handleToolOpenUrl}

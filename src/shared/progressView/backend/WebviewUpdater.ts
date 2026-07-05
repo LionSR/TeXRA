@@ -62,6 +62,14 @@ export class WebviewUpdater {
   constructor(
     private readonly send: ProgressViewMessageSender,
     private readonly hasTarget: () => boolean,
+    /**
+     * Commands this host's inbound registry declares `unsupported(...)`
+     * (see `unsupportedCommands` in `@shared/utils/dispatcher`). Included
+     * with every stream-tabs update so the frontend's capability gating
+     * (e.g. StreamHeader) stays derived from the registry, never a
+     * host-check ternary.
+     */
+    private readonly getUnsupportedCommands?: () => readonly string[],
   ) {}
 
   /**
@@ -87,6 +95,8 @@ export class WebviewUpdater {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
       streams,
       activeStream,
+      unsupportedCommands: this.getUnsupportedCommands?.() as
+        string[] | undefined,
       agentFilter,
       streamStates,
     });

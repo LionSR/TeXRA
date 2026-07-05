@@ -280,7 +280,17 @@ describe('desktop settings IPC', () => {
         view: 'settings',
       }),
     ).toBe(false);
-    expect(posted).toEqual([
+    // First post is the derived capability broadcast (commands this host's
+    // registry declares `unsupported(...)`); asserted structurally rather
+    // than as an exact list so it doesn't need updating every time a
+    // command's per-host support decision changes.
+    expect(posted[0]).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
+      commands: expect.arrayContaining([
+        SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+      ]),
+    });
+    expect(posted.slice(1)).toEqual([
       {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
         markCommits: DEFAULT_GIT_MARK_COMMITS,

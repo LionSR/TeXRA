@@ -107,6 +107,8 @@ export class ProgressViewProvider
       sendMessage: (message) => this.sendToActiveProgressWebview(message),
       hasTarget: () => this.getActiveWebview() !== undefined,
       getStreamControls: getProgressStreamControls,
+      getUnsupportedCommands: () =>
+        this.messageHandler.getUnsupportedCommands(),
       configureUi: ({ webviewUpdater: u }) => {
         const canSend = () => this.canSendToWebview();
         this.approvalHandlers = buildApprovalRequestHandlerSet({

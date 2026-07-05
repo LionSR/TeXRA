@@ -15,7 +15,7 @@ import {
 } from '../mainViewActions';
 import { saveState } from '../persistence';
 
-export const sessionHandlers: MainViewHandlerRegistry = {
+export const sessionHandlers = {
   [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (message) => {
     const sessionType = parseSessionType(message.sessionType ?? undefined);
     if (sessionType) {
@@ -32,4 +32,4 @@ export const sessionHandlers: MainViewHandlerRegistry = {
     refreshInstructionPlaceholder();
     saveState();
   },
-};
+} satisfies Partial<MainViewHandlerRegistry>;

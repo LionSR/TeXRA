@@ -27,7 +27,7 @@ function shouldForceApiKeyBanner(): boolean {
   return option?.requiresKey ?? false;
 }
 
-export const bannerHandlers: MainViewHandlerRegistry = {
+export const bannerHandlers = {
   [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (message) => {
     apiKeyBanner$.set({
       visible: true,
@@ -69,4 +69,4 @@ export const bannerHandlers: MainViewHandlerRegistry = {
   [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () => {
     loginBannerVisible$.set(false);
   },
-};
+} satisfies Partial<MainViewHandlerRegistry>;

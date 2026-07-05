@@ -46,6 +46,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
         .yoloActive=${Boolean(currentState.toolEditBypass)}
         .superYoloActive=${Boolean(currentState.superYoloBypass)}
         .goalActive=${Boolean(currentState.goalActive)}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
       ></stream-header>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>

@@ -63,7 +63,7 @@ function findAgentSelection(
   return options.find((opt) => agentName(opt.value) === name)?.value;
 }
 
-export const catalogHandlers: MainViewHandlerRegistry = {
+export const catalogHandlers = {
   [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) => {
     const optionsDataByCategory = message.optionsDataByCategory;
     const fallbackOptions =
@@ -116,4 +116,4 @@ export const catalogHandlers: MainViewHandlerRegistry = {
       }
     }
   },
-};
+} satisfies Partial<MainViewHandlerRegistry>;

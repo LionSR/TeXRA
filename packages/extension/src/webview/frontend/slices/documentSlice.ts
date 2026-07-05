@@ -64,7 +64,7 @@ function hasCommitValue(value: string): boolean {
   });
 }
 
-export const documentHandlers: MainViewHandlerRegistry = {
+export const documentHandlers = {
   [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: (message) => {
     const files = message.files ?? [];
     fileOptions$.set({ ...fileOptions$.get(), editedFile: files });
@@ -195,4 +195,4 @@ export const documentHandlers: MainViewHandlerRegistry = {
     multiFiles$.set({ ...mf, [listId]: merged });
     saveState();
   },
-};
+} satisfies Partial<MainViewHandlerRegistry>;

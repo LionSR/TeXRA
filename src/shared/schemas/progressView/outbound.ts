@@ -47,6 +47,14 @@ export const UpdateStreamsMessageSchema = z.object({
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
   agentFilter: AgentCategoryFilterSchema,
   streamStates: z.record(z.string(), StreamMetadataSchema).optional(),
+  /**
+   * Commands this host's inbound registry declares `unsupported(...)` —
+   * derived once from the registry (see `unsupportedCommands` in
+   * `@shared/utils/dispatcher`), not a hand-maintained list. Drives
+   * StreamHeader's capability gating so it renders no control the active
+   * host can't act on.
+   */
+  unsupportedCommands: z.array(z.string()).optional(),
 });
 
 export const UpdateStreamMetadataMessageSchema = z.object({
