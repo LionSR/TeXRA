@@ -76,6 +76,7 @@ export class SessionStores {
     );
     const sweptStreams: StreamTabId[] = [];
     const executionIds = new Set<ExecutionId>();
+    const sweptExecutionIds: ExecutionId[] = [];
 
     await Promise.all(
       orphanedStreams.map(async (stream) => {
@@ -94,9 +95,22 @@ export class SessionStores {
         }
       }),
     );
-    await this.deleteExecutionIds(executionIds);
+    await Promise.all(
+      [...executionIds].map(async (executionId) => {
+        try {
+          const deleted = await this.deleteExecution(executionId);
+          if (deleted) sweptExecutionIds.push(executionId);
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
+            { data: error },
+          );
+        }
+      }),
+    );
 
-    return { streams: sweptStreams, executionIds: [...executionIds] };
+    return { streams: sweptStreams, executionIds: sweptExecutionIds };
   }
 
   private async deleteExecutionIds(
