@@ -14,9 +14,9 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { nanoid } from 'nanoid';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type {
   AgentEvent,

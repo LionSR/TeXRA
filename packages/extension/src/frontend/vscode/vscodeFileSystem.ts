@@ -7,9 +7,9 @@ import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 
+import * as nodeFsOps from '@platform/defaults/nodeFsOps';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import * as nodeFsOps from '@platform/defaults/nodeFsOps';
 import type {
   FileSystemProvider,
   FileStat,
