@@ -769,38 +769,4 @@ export class ProgressEventHandler {
   getAllStreamSubstates(): Map<StreamTabId, StreamSubstate> {
     return this.state.streamStatus.getAllSubstates();
   }
-
-  resetRunningTasksToError(waitingStreams: Set<StreamTabId>): StreamTabId[] {
-    const affectedStreams: StreamTabId[] = [];
-
-    for (const [streamId, status] of this.state.streamStatus.entries()) {
-      if (status !== STREAM_PHASE.RUNNING) continue;
-
-      if (waitingStreams.has(streamId)) {
-        this.state.streamStatus.transition(
-          streamId,
-          STREAM_PHASE.WAITING,
-          'restart-repair',
-          { trace: this.logger },
-        );
-        this.logger.debug(
-          `Stream ${streamId} restored to WAITING after reload`,
-        );
-        continue;
-      }
-
-      this.state.streamStatus.transition(
-        streamId,
-        STREAM_PHASE.FAILED,
-        'restart-repair',
-        { trace: this.logger },
-      );
-      affectedStreams.push(streamId);
-      this.logger.debug(
-        `Stream ${streamId} set to ERROR during restart recovery`,
-      );
-    }
-
-    return affectedStreams;
-  }
 }

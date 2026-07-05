@@ -18,6 +18,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  type EndGroupStatus,
   StreamTabInfoSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
@@ -315,11 +316,11 @@ export class ProgressViewState {
   async endRunningTaskGroups(
     now: number = Date.now(),
     streamIds?: readonly StreamTabId[],
+    status?: EndGroupStatus,
   ): Promise<StreamTabId[]> {
-    const affectedFromLogs = await this.streamLogs.endRunningGroups(
-      now,
-      streamIds,
-    );
+    const affectedFromLogs = streamIds
+      ? await this.streamLogs.endRunningGroupsForStreams(streamIds, now, status)
+      : await this.streamLogs.endRunningGroups(now, [], status);
     if (affectedFromLogs.length > 0) {
       await this.streamLogs.save();
     }
