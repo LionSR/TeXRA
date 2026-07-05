@@ -6,12 +6,10 @@ import {
   type FileContext,
 } from '@agent/runtime/textEnhancement';
 
-// Local imports - common
-import { toErrorMessage } from '@common/errors';
-
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type UpdateFollowUpTextMessage = Extract<
   ProgressViewOutboundMessage,

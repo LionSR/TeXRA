@@ -24,7 +24,6 @@ import {
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { setPreferCodexSubscription } from '@auth/codex';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
-import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler } from '@common/webview';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
@@ -54,6 +53,7 @@ import {
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';

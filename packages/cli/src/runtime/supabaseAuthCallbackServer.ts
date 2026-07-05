@@ -15,9 +15,9 @@ import {
   type SupabaseSession,
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { escapeHtml } from '@shared/utils/xmlEscape';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const LOOPBACK_HOST = '127.0.0.1';
 const CALLBACK_PATH = '/auth-callback';

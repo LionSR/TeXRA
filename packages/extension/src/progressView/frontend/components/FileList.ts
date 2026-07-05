@@ -56,7 +56,7 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
   // up across rounds in one shadow root. Sanitize to a valid id the
   // <wa-tooltip> anchors to via `for`. These buttons live in a flex
   // `.file-actions` row (not a wa-button-group), so the sibling tooltip is safe.
-  const buttonId = `${opts.idPrefix}-${opts.command}`.replace(
+  const buttonId = `${opts.idPrefix}-${opts.command}`.replaceAll(
     /[^a-zA-Z0-9_-]/g,
     '-',
   );

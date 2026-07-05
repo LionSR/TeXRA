@@ -7,6 +7,7 @@ import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/pa
 
 // Local imports - agent components
 import { logSdkError } from '@agent/trace';
+import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -55,7 +56,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../utils/toolAttachmentUtils';
-import { parseToolArguments } from '../utils/parseArguments';
 import { ModelHandler } from '../ModelHandler';
 import {
   BaseReasoningStreamAggregator,
@@ -113,7 +113,8 @@ export class ModelHandlerOpenAI<
   ExtendedCompletionUsage | null,
   TCall,
   OpenAI,
-  ChatCompletion
+  ChatCompletion,
+  ChatCompletionContentPart
 > {
   // ── Client-side compaction state ──────────────────────────────────────
   /** Tracks prompt_tokens from the last API response for compaction threshold checks. */
@@ -1165,8 +1166,8 @@ export class ModelHandlerOpenAI<
     return this.config.provider;
   }
 
-  protected parseArguments(raw: unknown): unknown {
-    return parseToolArguments(raw, this.logger);
+  protected parseArguments(raw: unknown, callId: string): unknown {
+    return parseToolInput(raw, callId, this.logger);
   }
 
   extractToolUse(responseObject: ChatCompletion): TCall[] {
@@ -1188,7 +1189,7 @@ export class ModelHandlerOpenAI<
       provider: this.toolCallProvider,
       callId: call.id,
       name: call.function.name,
-      input: this.parseArguments(call.function.arguments),
+      input: this.parseArguments(call.function.arguments, call.id),
       raw: call,
     })) as TCall[];
   }

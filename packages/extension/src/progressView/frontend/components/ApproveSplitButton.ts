@@ -41,7 +41,8 @@ const SUPER_YOLO_VALUE = 'approve-super-yolo';
  * Awesome's `wa-select` (Enter/Space dispatch `wa-select`, not a DOM click on
  * the item), so the menu stays keyboard-accessible. Layout/colors are scoped
  * here; the host is width-capped to match the `.action-button` rule in
- * `requestPanelStyles` (#6658) so Approve stays button-sized like its siblings.
+ * `requestPanelSharedStyles` (#6658) so Approve stays button-sized like its
+ * siblings.
  */
 @customElement('approve-split-button')
 export class ApproveSplitButton extends LitElement {
@@ -49,7 +50,7 @@ export class ApproveSplitButton extends LitElement {
     designTokens,
     commonViewStyles,
     css`
-      /* Mirror the .action-button cap (requestPanelStyles, #6658): hug content
+      /* Mirror the .action-button cap (requestPanelSharedStyles, #6658): hug content
          and width-cap so Approve stays button-sized instead of growing to fill
          the action row like its Reject/Setup siblings. min-width: auto keeps the
          label (plus caret) from clipping. */

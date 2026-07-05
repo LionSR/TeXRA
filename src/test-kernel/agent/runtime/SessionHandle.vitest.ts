@@ -2,8 +2,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import { getActiveFlushers } from '@transcript';
+import { getActiveFlushers, getDefaultStreamLogStore } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
@@ -72,6 +73,10 @@ describe('SessionHandle', () => {
     expect(defaultSession().subscriptions).toBe(executionSubscriptionBinder);
     expect(defaultSession().status).toBe(StreamStatusService);
     expect(defaultSession().events).toBeDefined();
+    expect(defaultSession().transcripts).toBe(getDefaultStreamLogStore());
+    expect(defaultSession().followUps).toBe(
+      ToolUseFollowUpQueue.defaultInstance(),
+    );
     expect(defaultSession().flushers).toBe(getActiveFlushers());
     expect(defaultSession().hostChannel).toBeUndefined();
   });
@@ -85,6 +90,8 @@ describe('SessionHandle', () => {
       expect(fresh.subscriptions).not.toBe(executionSubscriptionBinder);
       expect(fresh.status).not.toBe(StreamStatusService);
       expect(fresh.events).not.toBe(defaultSession().events);
+      expect(fresh.transcripts).not.toBe(defaultSession().transcripts);
+      expect(fresh.followUps).not.toBe(defaultSession().followUps);
       expect(fresh.flushers).not.toBe(getActiveFlushers());
       expect(fresh.hostChannel).toBeUndefined();
     } finally {

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { toErrorMessage } from '@common/errors';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   countBySeverity,
   formatCounts,

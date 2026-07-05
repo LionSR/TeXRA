@@ -41,7 +41,7 @@ import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/m
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
-import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
+import { AgentError, getSdkErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import {
@@ -52,6 +52,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas/agent';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
@@ -335,7 +336,11 @@ async function assembleAgentLaunchContext(
   // runs outside any ALS, so it resolves to the process default. Either way the
   // child is tracked in the same session as its launcher.
   const session = input.session ?? currentSession();
-  const rawRunTrace = createRunTrace(streamId, undefined, session.flushers);
+  const rawRunTrace = createRunTrace(
+    streamId,
+    session.transcripts,
+    session.flushers,
+  );
   const detachSessionTrace = session.attachRunTrace(
     rawRunTrace.trace,
     streamId,

@@ -1,4 +1,4 @@
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export function isCliFetchStackLog(args: readonly unknown[]): boolean {
   const [first] = args;

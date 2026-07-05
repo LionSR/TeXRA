@@ -8,6 +8,7 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import { logSdkError, type StreamHandle } from '@agent/trace';
+import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -46,7 +47,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../utils/toolAttachmentUtils';
-import { parseToolArguments } from '../utils/parseArguments';
 import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
 import {
   OpenRouterStreamAggregator,
@@ -88,7 +88,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   ChatUsage | null,
   OpenRouterToolCall,
   OpenRouter,
-  ChatResult
+  ChatResult,
+  ChatContentItems
 > {
   // ── Client-side compaction state ──────────────────────────────────────
   private lastKnownInputTokens = 0;
@@ -657,7 +658,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         provider: 'openrouter' as const,
         callId: call.id,
         name: call.function.name,
-        input: parseToolArguments(call.function.arguments, this.logger),
+        input: parseToolInput(call.function.arguments, call.id, this.logger),
         raw: call,
       }));
   }

@@ -24,7 +24,7 @@ import type {
   ProviderKeyStatus,
   ProviderVscodeSetting,
 } from '@shared/schemas/settingsViewMessages';
-import { profileViewStyles } from './styles';
+import { providerKeyListStyles } from './ProviderKeyList.styles';
 import { ProviderKeyEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
@@ -36,7 +36,7 @@ export class ProviderKeyList extends LitElement {
     designTokens,
     commonViewStyles,
     statusCheckIconStyles,
-    profileViewStyles,
+    providerKeyListStyles,
   ];
 
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];

@@ -15,8 +15,8 @@ import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
 } from '@platform/interfaces/lifecycle';
-import { toErrorMessage } from '@common/errors';
 import { warn } from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanSession } from './leanSession';

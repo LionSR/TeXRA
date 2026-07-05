@@ -1,12 +1,12 @@
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 
-import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { ExternalOpener } from '@hosts/uiHosts';
 import type { FileLocation } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { createExternalLocation } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { buildDesktopShowPdfMessage } from '../desktopPdfMessages.js';
 

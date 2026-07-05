@@ -31,7 +31,7 @@ import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 // Local imports - agent runtime
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
@@ -166,7 +166,7 @@ function roundServices(opts: {
     } satisfies AgentPrompt,
     userVarChannels: { input: {}, transient: {} },
     logger: opts.logger,
-    streamStatus: new StreamStatusRegistry(),
+    streamStatus: new StreamStatusMachine(),
     client: {} as OpenAI,
     fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,

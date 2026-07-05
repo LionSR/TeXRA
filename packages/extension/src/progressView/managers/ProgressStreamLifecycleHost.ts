@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 
 import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type { StreamTabId } from '@shared/schemas';
 import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
@@ -54,11 +53,11 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
 
   cleanupDeletedStreams(streams: StreamTabId[]): void {
     // Process-wide approval reset for the single-session extension host.
-    // ToolUseFollowUpQueue has no bulk-release method, so queues are released
-    // per stream after the approval sweep.
+    // Queues are session-owned, so they are released per stream after the
+    // approval sweep through the same helper used by single-stream deletes.
     cleanupAllApprovals();
     for (const stream of streams) {
-      ToolUseFollowUpQueue.release(stream);
+      releaseStreamResources(stream);
     }
     this.backupCleaner.clearAllBackups();
     this.provider.webviewBridge.clearAll();

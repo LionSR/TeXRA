@@ -8,7 +8,7 @@ export { designTokens, animationStyles } from './litStyles';
 
 // Component styles
 export { selectStyles, compactFormControlStyles } from './selectStyles';
-export { requestPanelStyles } from './requestPanelStyles';
+export { requestPanelSharedStyles, sp } from './requestPanelSharedStyles';
 export { viewTabStyles, waTabThemeTokenStyles } from './viewTabStyles';
 
 // Shared list-view styles: search highlighting

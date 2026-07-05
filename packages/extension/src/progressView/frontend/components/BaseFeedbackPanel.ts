@@ -123,7 +123,7 @@ export abstract class BaseFeedbackPanel<
    * Standard approve/reject panel shell: the BEM block with its
    * `--feedback-active` modifier, `__details`, `__actions` (approve/reject
    * plus optional extra buttons), and `__feedback` section. Keeps the class
-   * structure that `requestPanelStyles` targets defined in one place.
+   * structure that `requestPanelSharedStyles` targets defined in one place.
    */
   protected renderRequestShell(options: {
     /** BEM block name, e.g. 'approval-request'. */

@@ -31,7 +31,10 @@ import { BaseViewMessageHandler } from '@common/webview';
 import { WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedInfoMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import {
@@ -61,6 +64,7 @@ import {
 } from '@shared/schemas/settingsViewMessages';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
+  BASH_APPROVAL_CONFIG_TARGET,
   buildApprovalSettingsMessage,
   setBashApprovalEnabled as setBashApprovalEnabledShared,
   setWorkspaceAgentSetting,
@@ -724,6 +728,22 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleSetApprovalEnabled(enabled: boolean): Promise<void> {
+    // Bash approval is a per-workspace, security-adjacent setting (see
+    // BASH_APPROVAL_CONFIG_TARGET / issue #7085). VS Code throws when
+    // writing a Workspace-target setting with no folder open, so refuse the
+    // write up front rather than let that throw surface -- this is an
+    // expected, non-error condition (no folder open yet), so inform rather
+    // than alarm. Re-send the persisted settings afterwards so the webview's
+    // (optimistically-toggled) switch snaps back to the actual, unwritten
+    // value instead of drifting from it.
+    if (!vscode.workspace.workspaceFolders?.length) {
+      void showLoggedInfoMessage(
+        this.channel,
+        'Bash approval is a per-workspace setting. Open a workspace folder before changing it.',
+      );
+      await this.withActiveWebview((w) => this.sendApprovalSettings(w));
+      return;
+    }
     await setBashApprovalEnabledShared(
       {
         workspaceState: workspaceSM,
@@ -731,7 +751,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         config: platform().config,
       },
       enabled,
-      'global',
+      BASH_APPROVAL_CONFIG_TARGET,
     );
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }

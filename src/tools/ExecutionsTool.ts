@@ -30,12 +30,7 @@ import {
 import { currentSession } from '@agent/runtime/SessionHandle';
 
 // Local imports - utils
-import { toErrorMessage } from '@common/errors';
-import {
-  ExecutionIdSchema,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
@@ -47,22 +42,15 @@ import { requireRunStream } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { clamp, unique } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
-import {
-  formatResultCount,
-  formatTimestamp,
-  splitContentLines,
-} from '@utils/text/stringUtils';
-import { formatSize } from './memory/memoryUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 import {
   formatListingLine,
-  formatProgressLine,
-  formatStatusInfo,
   formatTodoHeader,
   formatTodoSection,
-  getAvailablePaths,
   getExecutionStatusInfo,
   resolveExecutionDisplayCategory,
 } from './executionFormatters';
@@ -82,6 +70,17 @@ import {
   listenForFollowUp,
   shouldSkipWait,
 } from './executions/waitCoordination';
+import {
+  buildCompletedSummaryLines,
+  buildRunningSummaryLines,
+  buildSummaryTailLines,
+  formatChildLine,
+  formatListingHeader,
+  shouldSuppressAutoDeliveredSubagentReport,
+  type ExecutionSummaryOptions,
+} from './executions/summaryFormat';
+import { formatSizedEntryLines } from './executions/fileListingFormat';
+import { formatProcessOutputSections } from './executions/processOutputFormat';
 
 // ============================================================================
 // Schema
@@ -166,31 +165,6 @@ const ExecutionsToolInputSchema = z.strictObject({
 });
 
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
-
-interface ExecutionSummaryOptions {
-  readonly suppressAutoDeliveredSubagentReport?: boolean;
-}
-
-function isCallerParentOfToolUseSubagent(
-  handle: unknown,
-  callerStreamId: StreamTabId | undefined,
-): boolean {
-  return (
-    callerStreamId != null &&
-    handle instanceof AgentExecutionHandle &&
-    handle.category === 'toolUse' &&
-    handle.parentStreamId !== handle.childStreamId &&
-    handle.parentStreamId === callerStreamId
-  );
-}
-
-function shouldSuppressAutoDeliveredSubagentReport(
-  options: ExecutionSummaryOptions,
-  handle: unknown,
-): boolean {
-  if (!options.suppressAutoDeliveredSubagentReport) return false;
-  return isCallerParentOfToolUseSubagent(handle, tryUseRunContext()?.streamId);
-}
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
@@ -414,12 +388,8 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     const bgCount = activeIds.filter(
       (id) => currentSession().executions.getHandle(id)?.category === 'process',
     ).length;
-    const bgSuffix =
-      bgCount > 0
-        ? `, ${formatResultCount(bgCount, 'background process', 'background processes')} running`
-        : '';
 
-    const header = `Executions (showing ${start}\u2013${end} of ${total}${bgSuffix}, most recent first):`;
+    const header = formatListingHeader(start, end, total, bgCount);
     return {
       status: 'executed',
       output: `${header}\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
@@ -444,20 +414,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       ]);
 
       const info = currentSession().executions.getStatus(handle);
-      const lines = [
-        `Execution: ${executionId}`,
-        `Agent: ${handle.agentName}`,
-        `Category: ${handle.category}`,
-        `Started: ${new Date(handle.startedAt).toISOString()}`,
-        `Status: ${formatStatusInfo(info)}`,
-      ];
-
-      const progressLine = formatProgressLine(handle);
-      if (progressLine) lines.push(progressLine);
-
-      if (meta?.parentExecutionId) {
-        lines.push(`Parent: ${meta.parentExecutionId}`);
-      }
+      const lines = buildRunningSummaryLines(executionId, handle, info, meta);
 
       await this.appendSummaryTail(
         lines,
@@ -503,24 +460,13 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       meta?.category ?? config?.agentCategory,
     );
     const info = getExecutionStatusInfo(executionId, meta?.terminalStatus);
-    const lines = [
-      `Execution: ${executionId}`,
-      `Agent: ${config?.agent ?? 'unknown'}`,
-      ...(category ? [`Category: ${category}`] : []),
-      ...(category === 'process'
-        ? []
-        : [`Model: ${config?.model ?? 'default'}`]),
-      `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
-      `Status: ${formatStatusInfo(info)}`,
-    ];
-
-    if (meta?.description) {
-      lines.push(`Description: ${meta.description}`);
-    }
-
-    if (meta?.parentExecutionId) {
-      lines.push(`Parent: ${meta.parentExecutionId}`);
-    }
+    const lines = buildCompletedSummaryLines(
+      executionId,
+      config,
+      category,
+      info,
+      meta,
+    );
 
     await this.appendSummaryTail(
       lines,
@@ -551,24 +497,15 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     options: { readonly suppressReport?: boolean } = {},
   ): Promise<void> {
     await this.appendChildren(lines, children);
-
-    if (todos.length > 0) {
-      lines.push('', ...formatTodoSection(todos));
-    }
-
-    if (report && options.suppressReport) {
-      lines.push(
-        '',
-        `Result: delivered automatically to this parent stream as a follow-up message. Use /executions/${executionId}/report to read the persisted report explicitly.`,
-      );
-    } else if (report) {
-      lines.push('', 'Result:', report);
-    }
-
-    const paths = getAvailablePaths(category, children.length > 0);
     lines.push(
-      '',
-      `Available paths: ${paths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
+      ...buildSummaryTailLines(
+        executionId,
+        category,
+        children.length > 0,
+        todos,
+        report,
+        options,
+      ),
     );
   }
 
@@ -577,13 +514,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     const metas = await Promise.all(
       children.map((c) => getExecutionStore(c.id).readMeta()),
     );
-    return children.map((child, i) => {
-      const childMeta = metas[i];
-      const info = getExecutionStatusInfo(child.id, childMeta?.terminalStatus);
-      const ts = formatTimestamp(child.timestamp);
-      const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
-      return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
-    });
+    return children.map((child, i) => formatChildLine(child, metas[i]));
   }
 
   /** Append formatted child entries to output lines. */
@@ -715,13 +646,12 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         readText(handle.outputPaths.stdout),
         readText(handle.outputPaths.stderr),
       ]);
-      const sections: string[] = [`Output for ${executionId}:`];
-      if (stdout) sections.push('', '<stdout>', stdout, '</stdout>');
-      if (stderr) sections.push('', '<stderr>', stderr, '</stderr>');
-      if (!stdout && !stderr) sections.push('', '(no output yet)');
       return {
         status: 'executed',
-        output: applyViewRange(sections.join('\n'), viewRange),
+        output: applyViewRange(
+          formatProcessOutputSections(executionId, stdout, stderr),
+          viewRange,
+        ),
       };
     }
 
@@ -838,10 +768,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       };
     }
 
-    const lines = entries.map((entry) => {
-      const sizeStr = entry.isDir ? '<dir>' : formatSize(entry.size);
-      return `${sizeStr.padStart(8)}  ${entry.path}`;
-    });
+    const lines = formatSizedEntryLines(entries);
 
     return {
       status: 'executed',
@@ -896,10 +823,13 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       };
     }
 
-    const lines = entries.map((entry) => {
-      const sizeStr = entry.isDirectory ? '<dir>' : formatSize(entry.size);
-      return `${sizeStr.padStart(8)}  ${entry.path}`;
-    });
+    const lines = formatSizedEntryLines(
+      entries.map((entry) => ({
+        path: entry.path,
+        size: entry.size,
+        isDir: entry.isDirectory,
+      })),
+    );
 
     return {
       status: 'executed',

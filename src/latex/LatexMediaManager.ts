@@ -4,12 +4,12 @@ import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import { toErrorMessage } from '@common/errors';
 
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas/toolConfig';
 import { TaskRunFileService, flexibleFS, pathToLocation } from '@utils/files';
 import { filterNotNullish } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isFile } from '@utils/files/fsEntryType';
 import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 

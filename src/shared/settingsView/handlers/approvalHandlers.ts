@@ -31,6 +31,12 @@ export interface ApprovalHandlerPorts extends SettingsStatePorts {
   readonly config: ConfigProvider;
 }
 
+// Bash-approval gating is a security-adjacent bypass: keep it scoped per
+// workspace (not global) so disabling it in one project can't silently
+// disable approval everywhere else. Both hosts must reference this constant
+// rather than hardcoding their own target.
+export const BASH_APPROVAL_CONFIG_TARGET: ConfigTarget = 'workspace';
+
 export function buildApprovalSettingsMessage(
   ports: ApprovalHandlerPorts,
 ): UpdateApprovalSettingsMessage {

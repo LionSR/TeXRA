@@ -11,7 +11,7 @@ import {
 } from '@agent/runtime/executionRegistry';
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
-import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -41,7 +41,7 @@ describe('executionRegistry', () => {
   it('uses its interrupt registry when terminating agent handles', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ interrupts, streamStatus });
     const executionId = 'exec-injected-interrupt-test';
     const parentStreamId = 'parent-injected-interrupt-test' as StreamTabId;
@@ -73,7 +73,7 @@ describe('executionRegistry', () => {
   it('owns visible stream stop policy for root and children', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ interrupts, streamStatus });
     const rootStreamId = 'root-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-stop-policy-test' as StreamTabId;
@@ -137,7 +137,7 @@ describe('executionRegistry', () => {
   it('interrupts grandchildren when killing a subagent chain', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ interrupts, streamStatus });
     const rootStreamId = 'root-cascade-test' as StreamTabId;
     const childStreamId = 'child-cascade-test' as StreamTabId;
@@ -187,7 +187,7 @@ describe('executionRegistry', () => {
   it('detaches descendants when killing with detached subagents', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ interrupts, streamStatus });
     const rootStreamId = 'root-detach-kill-test' as StreamTabId;
     const childStreamId = 'child-detach-kill-test' as StreamTabId;
@@ -251,7 +251,7 @@ describe('executionRegistry', () => {
   it('detaches children when stopping a stream with detached subagents', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ interrupts, streamStatus });
     const rootStreamId = 'root-detach-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-detach-stop-policy-test' as StreamTabId;
@@ -342,7 +342,7 @@ describe('executionRegistry', () => {
   it('stops a registered stream before its execution handle is tracked', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ interrupts, streamStatus });
     const streamId = 'untracked-stop-policy-test' as StreamTabId;
     const interrupt = vi.fn();
@@ -372,7 +372,7 @@ describe('executionRegistry', () => {
 
   it('marks an ownerless stream stopped when a host can publish status', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const streamId = 'ownerless-stop-policy-test' as StreamTabId;
 
@@ -396,7 +396,7 @@ describe('executionRegistry', () => {
   });
 
   it('reports no target when no execution, interrupt, or host owns the stream', () => {
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const streamId = 'missing-stop-target-test' as StreamTabId;
 
@@ -414,7 +414,7 @@ describe('executionRegistry', () => {
 
   it('reports agent status from its stream-status owner', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const parentStreamId = 'parent-owned-status-test' as StreamTabId;
     const childStreamId = 'child-owned-status-test' as StreamTabId;
@@ -450,7 +450,7 @@ describe('executionRegistry', () => {
 
   it('publishes initial status when tracking an agent execution', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const parentStreamId = 'parent-track-agent-status-test' as StreamTabId;
     const childStreamId = 'child-track-agent-status-test' as StreamTabId;
@@ -483,7 +483,7 @@ describe('executionRegistry', () => {
 
   it('updates live agent status without reviving stopped or stale handles', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const parentStreamId = 'parent-update-agent-status-test' as StreamTabId;
     const childStreamId = 'child-update-agent-status-test' as StreamTabId;
@@ -538,7 +538,7 @@ describe('executionRegistry', () => {
 
   it('finishes agent executions without overwriting explicit stops', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const parentStreamId = 'parent-finish-agent-status-test' as StreamTabId;
     const childStreamId = 'child-finish-agent-status-test' as StreamTabId;
@@ -573,7 +573,7 @@ describe('executionRegistry', () => {
 
   it('finishes waiting agent executions through a lifecycle terminal phase', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const parentStreamId = 'parent-finish-waiting-agent-test' as StreamTabId;
     const childStreamId = 'child-finish-waiting-agent-test' as StreamTabId;
@@ -619,7 +619,7 @@ describe('executionRegistry', () => {
 
   it('can finish an agent execution from its handle after untracking', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const parentStreamId = 'parent-finish-untracked-agent-test' as StreamTabId;
     const childStreamId = 'child-finish-untracked-agent-test' as StreamTabId;
@@ -840,7 +840,7 @@ describe('executionRegistry', () => {
 
   it('owns tool-use follow-up admission from status, context, and children', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const activeStreamId = 'stream-follow-up-active-test' as StreamTabId;
     const resumingStreamId = 'stream-follow-up-resuming-test' as StreamTabId;
@@ -980,7 +980,7 @@ describe('executionRegistry', () => {
 
   it('detaches its stream-status listener when disposed', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusRegistry();
+    const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-dispose-runtime-host-test';
     const parentStreamId = 'parent-dispose-runtime-host-test' as StreamTabId;

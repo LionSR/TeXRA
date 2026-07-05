@@ -9,6 +9,7 @@ import type {
   ProgressPermissionKind,
   ProgressViewPlacement,
   ProgressViewOutboundMessage,
+  RoundIndexed,
   StreamMetadata,
   StreamPhase,
   StreamSubstate,
@@ -136,7 +137,7 @@ export class WebviewUpdater {
   updateFiles(
     stream: StreamTabId,
     payload: {
-      rounds?: { [key: number]: OutputFileInfo[] };
+      rounds?: RoundIndexed<OutputFileInfo>;
       reset?: boolean;
     },
   ): void {
@@ -150,7 +151,7 @@ export class WebviewUpdater {
   updateMissingOutputs(
     stream: StreamTabId,
     payload: {
-      rounds?: { [key: number]: string[] };
+      rounds?: RoundIndexed<string>;
       reset?: boolean;
     },
   ): void {
@@ -164,7 +165,7 @@ export class WebviewUpdater {
   updateCompileFailures(
     stream: StreamTabId,
     payload: {
-      rounds?: { [key: number]: CompileFailure[] };
+      rounds?: RoundIndexed<CompileFailure>;
       reset?: boolean;
     },
   ): void {

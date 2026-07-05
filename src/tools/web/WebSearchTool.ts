@@ -4,7 +4,6 @@ import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Internal imports
-import { ensureError, toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import {
   isTimeoutError,
@@ -12,6 +11,7 @@ import {
   unwrapAbortError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
 const DDG_RETRIES = 2;

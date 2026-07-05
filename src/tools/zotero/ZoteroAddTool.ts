@@ -24,12 +24,12 @@ import { z } from 'zod';
 
 // Local imports - core
 import pTimeout from 'p-timeout';
-import { toErrorMessage } from '@common/errors';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { isTimeoutError } from '@tools/timeouts';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - zotero

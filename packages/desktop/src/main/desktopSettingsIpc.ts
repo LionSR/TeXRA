@@ -32,7 +32,6 @@ import {
   setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@auth/codex';
-import { toErrorMessage } from '@common/errors';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -69,6 +68,7 @@ import {
 } from '@shared/schemas/settingsViewMessages';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
+  BASH_APPROVAL_CONFIG_TARGET,
   buildApprovalSettingsMessage,
   setBashApprovalEnabled,
   setWorkspaceAgentSetting,
@@ -85,6 +85,7 @@ import {
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { StorageFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   applyGitAuthorSettings,
   buildGitAuthorSettingsMessage,
@@ -917,7 +918,7 @@ export function createDesktopSettingsIpc(
     await setBashApprovalEnabled(
       { workspaceState, globalState, config: getConfigProvider() },
       enabled,
-      'workspace',
+      BASH_APPROVAL_CONFIG_TARGET,
     );
     postApprovalSettings();
   }
