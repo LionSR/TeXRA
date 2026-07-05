@@ -64,24 +64,30 @@ function reconcileEnabledModels(
   }
 
   // Retired models are hard unavailable even for users with included relay
-  // access. Strip them whenever this refresh version is crossed. (Version 21
-  // was the last hand-bumped MODEL_LIST_VERSION before #7191 switched to a
-  // hash-derived value, which always lands above this range -- see
-  // MODEL_LIST_HASH_BASE in modelOptionsBasic.ts -- so this sweep still fires
-  // exactly once for every pre-#7191 install.)
-  if ((previousVersion ?? 0) < 21) {
-    for (const model of currentModels) {
-      if (isRetiredModel(model)) strippedSet.add(model);
-    }
+  // access. This sweep runs on every reconciliation, unconditionally --
+  // deliberately *not* gated behind a version threshold like the two sweeps
+  // above. `reconcileEnabledModels` only ever runs when MODEL_LIST_VERSION
+  // has changed (see `refreshModelListStateIfNeeded`), and since #7191 that
+  // version is a hash of the resolved default set: it changes again every
+  // time a future pick quietly retires, at which point the user's persisted
+  // version is already a hash-derived value from a prior run, permanently
+  // past any legacy "< N" gate. Freezing this sweep behind such a gate (it
+  // used to read `previousVersion < 21`, the last hand-bumped version before
+  // #7191) would mean it fires exactly once during the pre-#7191 migration
+  // and then never again -- silently leaving future retired defaults stuck in
+  // an existing user's enabled-models list. Running it unconditionally keeps
+  // it correct across both versioning schemes, at negligible cost (the set of
+  // currently-enabled models is small).
+  for (const model of currentModels) {
+    if (isRetiredModel(model)) strippedSet.add(model);
   }
 
   const kept = currentModels.filter((model) => !strippedSet.has(model));
-  const added = DEFAULT_MODELS.filter(
-    (model) =>
-      !kept.includes(model) &&
-      !isDeprecatedModel(model) &&
-      !isRetiredModel(model),
-  );
+  // DEFAULT_MODELS is already resolved against the live registry --
+  // resolveDefaultModels (modelOptionsBasic.ts) drops retired/deprecated
+  // picks before this module ever sees them -- so the only remaining check
+  // here is "not already present".
+  const added = DEFAULT_MODELS.filter((model) => !kept.includes(model));
 
   return {
     models: [...kept, ...added],
