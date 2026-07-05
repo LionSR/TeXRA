@@ -158,7 +158,10 @@ describe('assembleTrace', () => {
     // the wrong id entirely for these.
     await installStoragePlatform();
     const executionId = 'exec-child-1' as ExecutionId;
-    const executionConfig = config({ agent: 'orchestrator', model: 'deepseekT' });
+    const executionConfig = config({
+      agent: 'orchestrator',
+      model: 'deepseekT',
+    });
     await getExecutionStore(executionId).writeConfig(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
