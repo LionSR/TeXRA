@@ -10,11 +10,11 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
+  assembleTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-import { assembleTrace } from '@transcript/traceAssembler';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -148,6 +148,47 @@ describe('assembleTrace', () => {
     const result = await assembleTrace(executionId);
 
     expect(result).toEqual({ status: 'streamLogs_missing' });
+  });
+
+  it('resolves a child stream by executionId suffix when its id does not match the derived agent@model#executionId format', async () => {
+    // Background child streams (bash/codex/claude subagents, see
+    // @tools/childStream.createChildStream) use a tool-specific
+    // "${streamPrefix}#executionId" id, not getStreamTabId's
+    // "agent@model#executionId" — the config's own agent/model would derive
+    // the wrong id entirely for these.
+    await installStoragePlatform();
+    const executionId = 'exec-child-1' as ExecutionId;
+    const executionConfig = config({ agent: 'orchestrator', model: 'deepseekT' });
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-05T00:00:00.000Z',
+      outcome: 'completed',
+    });
+
+    const derivedId = getStreamTabId('orchestrator', 'deepseekT', {
+      executionId,
+    });
+    const actualChildStreamId = `bash@tool#${executionId}`;
+    expect(actualChildStreamId).not.toBe(derivedId);
+
+    const store = getDefaultStreamLogStore();
+    await store.load();
+    store.append(actualChildStreamId as ReturnType<typeof getStreamTabId>, {
+      id: 'entry-1',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'child stream output',
+    });
+    await store.flush();
+
+    const result = await assembleTrace(executionId);
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.trace.streamId).toBe(actualChildStreamId);
+    expect(result.trace.entries).toHaveLength(1);
   });
 
   it('returns a null terminalStatus when meta has no recorded outcome', async () => {
