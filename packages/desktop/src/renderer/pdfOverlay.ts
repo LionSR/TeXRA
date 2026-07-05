@@ -2,7 +2,7 @@ import {
   isSafeAbsolutePdfPath,
   type DesktopShowPdfMessage,
 } from '../desktopPdfMessages';
-import { createDialogCloseButton } from './dialogCloseButton';
+import { createOverlayDialog } from './overlayDialog';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
 /**
@@ -46,26 +46,6 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
 
   function ensure(): WaDialog {
     if (dialog) return dialog;
-    const d = document.createElement('wa-dialog') as WaDialog;
-    d.classList.add('desktop-pdf-overlay');
-    d.withoutHeader = true;
-    d.lightDismiss = false;
-    d.setAttribute('aria-label', 'PDF preview');
-
-    const body = document.createElement('section');
-    body.classList.add('desktop-pdf-body');
-
-    const header = document.createElement('header');
-    header.classList.add('desktop-pdf-header');
-    const t = document.createElement('h2');
-    t.classList.add('desktop-pdf-title');
-    t.textContent = 'Preview';
-    titleEl = t;
-    const s = document.createElement('p');
-    s.classList.add('desktop-pdf-subtitle');
-    subtitleEl = s;
-    header.append(t, s);
-
     // Use an `<iframe>` (not `<webview>`) — `<webview>` requires
     // `webviewTag: true` in webPreferences which we don't enable.
     // Electron's main BrowserWindow renders PDFs in iframes via the
@@ -78,17 +58,17 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
     frame.setAttribute('sandbox', 'allow-same-origin');
     frameEl = frame;
 
-    body.append(header, frame);
-    d.append(body);
-
-    const close = createDialogCloseButton(
-      'desktop-pdf-close',
-      'Close PDF preview',
-      () => {
-        d.open = false;
-      },
-    );
-    d.append(close);
+    const shell = createOverlayDialog({
+      appRoot,
+      prefix: 'desktop-pdf',
+      ariaLabel: 'PDF preview',
+      closeLabel: 'Close PDF preview',
+      title: 'Preview',
+      content: frame,
+    });
+    titleEl = shell.titleEl ?? null;
+    subtitleEl = shell.subtitleEl ?? null;
+    const d = shell.dialog;
 
     // `wa-hide` fires for every close (close button, Escape, close()); open()
     // sets wantOpen back to true. wa-after-hide runs after the hide animation
@@ -108,7 +88,6 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
       if (frameEl) frameEl.removeAttribute('src');
     });
 
-    appRoot.append(d);
     dialog = d;
     return d;
   }

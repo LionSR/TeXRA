@@ -1,0 +1,76 @@
+import { createDialogCloseButton } from './dialogCloseButton';
+import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+
+/**
+ * Shared scaffolding for the desktop's imperative `wa-dialog` overlays
+ * (settings, diff, PDF). Each overlay used to hand-build the same shell —
+ * `withoutHeader` / `lightDismiss` / `aria-label`, an optional titled header,
+ * an absolutely-positioned close button, and the `appRoot.append`. Centralizing
+ * it keeps overlays owning only their content and behavior, and stops the
+ * near-identical shells (and their `desktop-*` class families) from drifting.
+ */
+export interface OverlayDialogOptions {
+  appRoot: HTMLElement;
+  /**
+   * CSS class family. Derives `${prefix}-overlay` and `${prefix}-close`, plus
+   * `${prefix}-body` / `-header` / `-title` / `-subtitle` when `title` is set.
+   */
+  prefix: string;
+  ariaLabel: string;
+  closeLabel: string;
+  /** The overlay's content element (iframe, diff view, settings-app). */
+  content: HTMLElement;
+  /** When set, wraps `content` in a titled `<section>` header shell. */
+  title?: string;
+  /** Extra attributes to set on the dialog (e.g. `data-route-button`). */
+  attributes?: Record<string, string>;
+}
+
+export interface OverlayDialogHandle {
+  dialog: WaDialog;
+  /** Present only when `title` was supplied (the diff/PDF header overlays). */
+  titleEl?: HTMLElement;
+  subtitleEl?: HTMLElement;
+}
+
+/** Build a closed wa-dialog shell with shared chrome and append it to `appRoot`. */
+export function createOverlayDialog(
+  options: OverlayDialogOptions,
+): OverlayDialogHandle {
+  const { prefix } = options;
+  const dialog = document.createElement('wa-dialog') as WaDialog;
+  dialog.classList.add(`${prefix}-overlay`);
+  dialog.withoutHeader = true;
+  dialog.lightDismiss = false;
+  dialog.setAttribute('aria-label', options.ariaLabel);
+  for (const [name, value] of Object.entries(options.attributes ?? {})) {
+    dialog.setAttribute(name, value);
+  }
+
+  let titleEl: HTMLElement | undefined;
+  let subtitleEl: HTMLElement | undefined;
+  if (options.title == null) {
+    dialog.append(options.content);
+  } else {
+    const body = document.createElement('section');
+    body.classList.add(`${prefix}-body`);
+    const header = document.createElement('header');
+    header.classList.add(`${prefix}-header`);
+    titleEl = document.createElement('h2');
+    titleEl.classList.add(`${prefix}-title`);
+    titleEl.textContent = options.title;
+    subtitleEl = document.createElement('p');
+    subtitleEl.classList.add(`${prefix}-subtitle`);
+    header.append(titleEl, subtitleEl);
+    body.append(header, options.content);
+    dialog.append(body);
+  }
+
+  dialog.append(
+    createDialogCloseButton(`${prefix}-close`, options.closeLabel, () => {
+      dialog.open = false;
+    }),
+  );
+  options.appRoot.append(dialog);
+  return { dialog, titleEl, subtitleEl };
+}
