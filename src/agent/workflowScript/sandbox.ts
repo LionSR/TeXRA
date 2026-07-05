@@ -125,7 +125,9 @@ const DETERMINISM_PRELUDE = `
  * are revived with the sandbox's own JSON.parse; host errors are re-thrown
  * as realm-local Errors carrying only name/message strings; the script's
  * own settlement is reported through the installResult channel as JSON
- * text rather than awaited host-side. This closes the classic node:vm
+ * text rather than awaited host-side (the deliver fn is a realm-local value
+ * wired transiently into the kickoff, never a script-visible global). This
+ * closes the classic node:vm
  * escape (hostFn.constructor === host Function) in both directions — a
  * host callback handed to a sandbox-dispatched method, or a host resolve
  * function handed to a sandbox thenable, would reopen it — which static
@@ -189,15 +191,16 @@ const BRIDGE_PRELUDE = `
       define(name, json === undefined ? undefined : parseJson(json));
     },
     installResult(hostDeliver) {
-      // Result channel: the trusted body wrapper (compiled by the host,
-      // running realm-side) reports the script's settlement here as JSON
-      // text. Only strings reach hostDeliver, so the host never awaits or
-      // .then()s a sandbox promise — a script that overrides its realm's
-      // Promise.prototype.then can only capture realm-local callbacks.
-      // First delivery wins; a script calling this early merely forges
-      // its own result (no capability crosses either way).
+      // Result channel: reports the script's settlement to the host as JSON
+      // text (never by the host awaiting a sandbox promise, which would pass
+      // host-realm resolve callbacks into a script-overridable then). This
+      // returns the realm-local deliver function instead of installing it as
+      // a global: the host wires it into the kickoff as a transient binding
+      // the script body can never name, so a script cannot forge an early
+      // result and then run model work after the run is reported complete.
+      // First delivery wins.
       let delivered = false;
-      define('__wfDeliverResult', function (value, isError) {
+      return function (value, isError) {
         if (delivered) return;
         delivered = true;
         if (isError) {
@@ -208,11 +211,29 @@ const BRIDGE_PRELUDE = `
           );
           return;
         }
-        hostDeliver(
-          value === undefined ? undefined : (stringifyJson(value) ?? 'null'),
-          undefined,
-        );
-      });
+        // Serialize realm-side so an unserializable return value (BigInt,
+        // circular object) is reported through the error path immediately
+        // rather than throwing here and leaving the host promise to hang
+        // until the wall-clock timeout.
+        let payload;
+        try {
+          payload =
+            value === undefined ? undefined : (stringifyJson(value) ?? 'null');
+        } catch (err) {
+          const realmErr = toRealmError(err);
+          hostDeliver(
+            undefined,
+            stringifyJson({
+              name: realmErr.name,
+              message:
+                'Workflow result is not JSON-serializable: ' +
+                realmErr.message,
+            }),
+          );
+          return;
+        }
+        hostDeliver(payload, undefined);
+      };
     },
   };
 })();
@@ -222,7 +243,8 @@ interface RealmBridgeInstaller {
   installAsync(name: string, hostInvoke: unknown): void;
   installSync(name: string, hostInvoke: unknown): void;
   installValue(name: string, json: string | undefined): void;
-  installResult(hostDeliver: unknown): void;
+  /** Returns the realm-local deliver function (never installed as a global). */
+  installResult(hostDeliver: unknown): unknown;
 }
 
 // vm.Script is context-independent; compile the preludes once per process.
@@ -232,6 +254,21 @@ const PRELUDE_SCRIPT = new vm.Script(DETERMINISM_PRELUDE, {
 const BRIDGE_SCRIPT = new vm.Script(BRIDGE_PRELUDE, {
   filename: 'workflow-bridge.js',
 });
+
+// Caller-supplied realm preludes (fan-out primitives) are compile-time
+// constants too, so compile each once and reuse across runs — same policy
+// as the two built-in preludes above.
+const realmPreludeCache = new Map<string, vm.Script>();
+function compileRealmPrelude(source: string): vm.Script {
+  let compiled = realmPreludeCache.get(source);
+  if (!compiled) {
+    compiled = new vm.Script(source, {
+      filename: 'workflow-orchestration.js',
+    });
+    realmPreludeCache.set(source, compiled);
+  }
+  return compiled;
+}
 
 /**
  * Evaluates a workflow script body in a fresh `node:vm` realm. Dynamic code
@@ -252,10 +289,10 @@ export async function runScriptInSandbox(
   bridge: SandboxHostBridge,
   options: SandboxOptions,
 ): Promise<unknown> {
-  const context = vm.createContext(
-    {},
-    { codeGeneration: { strings: false, wasm: false } },
-  );
+  const sandbox: Record<string, unknown> = {};
+  const context = vm.createContext(sandbox, {
+    codeGeneration: { strings: false, wasm: false },
+  });
   PRELUDE_SCRIPT.runInContext(context);
   const installer = BRIDGE_SCRIPT.runInContext(context) as RealmBridgeInstaller;
   // Arguments arrive as JSON text (marshaled realm-side with the pristine
@@ -290,70 +327,82 @@ export async function runScriptInSandbox(
     deliverResolve = resolve;
     deliverReject = reject;
   });
-  installer.installResult((payload?: string, errorJson?: string) => {
-    if (typeof errorJson === 'string') {
-      let name = 'Error';
-      let message = errorJson;
-      try {
-        const parsed = JSON.parse(errorJson) as {
-          name?: unknown;
-          message?: unknown;
-        };
-        name = typeof parsed.name === 'string' ? parsed.name : 'Error';
-        message = typeof parsed.message === 'string' ? parsed.message : '';
-      } catch {
-        // Fall back to the raw text as the message.
+  const deliverFn = installer.installResult(
+    (payload?: string, errorJson?: string) => {
+      if (typeof errorJson === 'string') {
+        let name = 'Error';
+        let message = errorJson;
+        try {
+          const parsed = JSON.parse(errorJson) as {
+            name?: unknown;
+            message?: unknown;
+          };
+          name = typeof parsed.name === 'string' ? parsed.name : 'Error';
+          message = typeof parsed.message === 'string' ? parsed.message : '';
+        } catch {
+          // Fall back to the raw text as the message.
+        }
+        const error = new Error(message);
+        error.name = name;
+        deliverReject(error);
+        return;
       }
-      const error = new Error(message);
-      error.name = name;
-      deliverReject(error);
-      return;
-    }
-    if (typeof payload !== 'string') {
-      deliverResolve(undefined);
-      return;
-    }
-    try {
-      deliverResolve(JSON.parse(payload));
-    } catch (error) {
-      deliverReject(
-        new Error(
-          `Workflow script returned malformed result JSON: ${toErrorMessage(error)}`,
-        ),
-      );
-    }
-  });
+      if (typeof payload !== 'string') {
+        deliverResolve(undefined);
+        return;
+      }
+      try {
+        deliverResolve(JSON.parse(payload));
+      } catch (error) {
+        deliverReject(
+          new Error(
+            `Workflow script returned malformed result JSON: ${toErrorMessage(error)}`,
+          ),
+        );
+      }
+    },
+  );
 
   for (const prelude of bridge.realmPreludes ?? []) {
-    new vm.Script(prelude, {
-      filename: 'workflow-orchestration.js',
-    }).runInContext(context, { timeout: 1_000 });
+    compileRealmPrelude(prelude).runInContext(context, { timeout: 1_000 });
   }
 
-  let script: vm.Script;
+  let bodyThunk: unknown;
   try {
-    // Strict mode is load-bearing, not style: it poisons
-    // arguments.callee/.caller for every function the script defines
-    // (defense in depth on top of the data-only bridge). The trailing
-    // .then is trusted host-authored code running realm-side, so even if
-    // the script's synchronous prologue replaced Promise.prototype.then,
-    // the callbacks it captures are realm-local functions.
-    script = new vm.Script(
-      `(async () => {\n'use strict';\n${body}\n})().then(\n` +
-        `  (value) => { __wfDeliverResult(value, false); },\n` +
-        `  (error) => { __wfDeliverResult(error, true); },\n` +
-        `);`,
-      { filename: options.filename },
-    );
+    // Compile the body as a standalone thunk in its OWN scope: the delivery
+    // function is not visible to it (it is neither a global nor a lexical
+    // binding of the body), so a script cannot forge an early result. Strict
+    // mode is load-bearing, not style — it poisons arguments.callee/.caller
+    // for every function the script defines (defense in depth on top of the
+    // data-only bridge).
+    bodyThunk = new vm.Script(`(async () => {\n'use strict';\n${body}\n})`, {
+      filename: options.filename,
+    }).runInContext(context);
   } catch (error) {
     throw new WorkflowScriptParseError(
       `Workflow script syntax error: ${toErrorMessage(error)}`,
     );
   }
 
+  // Wire the body thunk and deliver fn in as transient globals, then run a
+  // kickoff that captures them into locals and deletes the globals BEFORE
+  // the body runs — so the body can never name the delivery channel. Both
+  // are realm-local values (the deliver fn closes over the host callback but
+  // never exposes it), so nothing host-realm crosses into script scope.
+  sandbox.__wfBody = bodyThunk;
+  sandbox.__wfDeliver = deliverFn;
+  const kickoff = new vm.Script(
+    `(() => {\n` +
+      `  const body = __wfBody, deliver = __wfDeliver;\n` +
+      `  delete globalThis.__wfBody;\n` +
+      `  delete globalThis.__wfDeliver;\n` +
+      `  body().then((value) => deliver(value, false), (error) => deliver(error, true));\n` +
+      `})();`,
+    { filename: 'workflow-kickoff.js' },
+  );
   // The vm-level timeout only bounds the synchronous portion; the overall
   // async run is bounded by the race below.
-  script.runInContext(context, {
+  kickoff.runInContext(context, {
     timeout: Math.min(options.timeoutMs, 5_000),
   });
   return await withTimeout(delivered, options);

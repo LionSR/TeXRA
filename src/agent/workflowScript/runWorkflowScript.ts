@@ -282,10 +282,23 @@ export async function runWorkflowScript(
   // realm with the sandbox's own JSON.parse, so scripts never hold
   // host-realm objects (see sandbox.ts). Non-JSON-safe values degrade the
   // way JSON always does; agent results are JSON-safe by contract.
-  // Note: the ?? fallback is reachable — JSON.stringify returns undefined
-  // for function/symbol VALUES too, not only for undefined input.
-  const toPayload = (value: unknown): string | undefined =>
-    value === undefined ? undefined : (JSON.stringify(value) ?? 'null');
+  // The ?? fallback is reachable — JSON.stringify returns undefined for
+  // function/symbol VALUES too, not only for undefined input — so hitting
+  // it means a runner returned a non-JSON-safe result (a contract
+  // violation); log it so the resulting `null` is debuggable.
+  const toPayload = (value: unknown): string | undefined => {
+    if (value === undefined) return undefined;
+    const json = JSON.stringify(value);
+    if (json === undefined) {
+      emit({
+        type: 'log',
+        message:
+          'agent() result was not JSON-serializable (function/symbol?); coercing to null.',
+      });
+      return 'null';
+    }
+    return json;
+  };
 
   let result: unknown;
   try {
@@ -325,15 +338,19 @@ export async function runWorkflowScript(
       },
     );
   } finally {
+    // Abort unconditionally once the sandbox returns: any agent() call the
+    // script schedules from an abandoned promise chain after its result was
+    // delivered must be refused (agentPrimitive checks runAbort at entry),
+    // not silently run model work past the reported-complete point.
+    runAbort.abort();
     if (pendingAgentCalls.size > 0) {
       // The script finished (or threw) with agent() calls still in flight
-      // that it never awaited: cancel them and wait for settlement so the
-      // returned journal is final and nothing runs on after the workflow.
-      // The drain is bounded — a runner that ignores the abort must not
-      // extend the run past its timeout by more than the grace period;
-      // stragglers beyond it are orphaned (their journal entries may be
-      // lost, which resume treats as a retry).
-      runAbort.abort();
+      // that it never awaited: wait for settlement so the returned journal
+      // is final and nothing runs on after the workflow. The drain is
+      // bounded — a runner that ignores the abort must not extend the run
+      // past its timeout by more than the grace period; stragglers beyond
+      // it are orphaned (their journal entries may be lost, which resume
+      // treats as a retry).
       let graceTimer: NodeJS.Timeout | undefined;
       try {
         await Promise.race([

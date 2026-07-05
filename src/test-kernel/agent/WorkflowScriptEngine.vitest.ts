@@ -423,6 +423,52 @@ return results[0]`,
     expect(run.result).toMatch(/^blocked:/);
   });
 
+  it('reports an unserializable return value as an error, not a timeout', async () => {
+    // A BigInt (or circular object) cannot be JSON-encoded; the realm-side
+    // deliver must route that through the error path immediately instead of
+    // throwing and leaving the host promise to hang until the wall clock.
+    await expect(
+      runWorkflowScript({
+        script: `${META}return 1n`,
+        runAgent: echoRunner,
+        timeoutMs: 5_000,
+      }),
+    ).rejects.toThrow(/not JSON-serializable/i);
+  });
+
+  it('does not expose the result delivery channel to scripts', async () => {
+    // The kickoff captures and deletes __wfDeliver/__wfBody before the body
+    // runs, so a script cannot forge an early result through them.
+    const run = await runWorkflowScript({
+      script: `${META}
+return [typeof globalThis.__wfDeliver, typeof globalThis.__wfBody]`,
+      runAgent: echoRunner,
+    });
+    expect(run.result).toEqual(['undefined', 'undefined']);
+  });
+
+  it('aborts un-awaited agent() calls left pending when the script returns', async () => {
+    // A script that fires an agent() call without awaiting it, then returns,
+    // must not leave model work running past the reported-complete point:
+    // the unconditional post-run abort fires the call's signal.
+    let sawAbort = false;
+    const runner = (invocation: WorkflowAgentInvocation) =>
+      new Promise<string>((resolve) => {
+        invocation.signal.addEventListener('abort', () => {
+          sawAbort = true;
+          resolve('aborted');
+        });
+      });
+    const run = await runWorkflowScript({
+      script: `${META}
+agent('detached')
+return 'done'`,
+      runAgent: runner,
+    });
+    expect(run.result).toBe('done');
+    expect(sawAbort).toBe(true);
+  });
+
   it('gives scripts realm-local agent results, not host objects', async () => {
     const runner = () => Promise.resolve({ nested: { data: 42 } });
     const run = await runWorkflowScript({
