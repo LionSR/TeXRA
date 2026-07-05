@@ -11,14 +11,12 @@ import type {
   Plan,
   StorageKey,
   StreamTabId,
+  SyncStreamContentPayload,
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
 import { ProgressEventHandler } from '@shared/progressView/backend/events/ProgressEventHandler';
-import type {
-  SyncStreamContentPayload,
-  WebviewUpdater,
-} from '@shared/progressView/backend/WebviewUpdater';
+import type { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import type { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';

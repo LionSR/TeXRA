@@ -64,7 +64,7 @@ async function canLaunchWithDefaultModel(
   });
   try {
     await selectCliRunnableModel(defaults.model, {
-      fallbackSource: defaults.modelSource,
+      fallbackReason: defaults.modelSource,
       apiMode,
       accessList: models,
       agentCategory: AgentCategory.ToolUse,

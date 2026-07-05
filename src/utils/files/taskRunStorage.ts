@@ -18,6 +18,7 @@ import {
   ensureParentDir,
   ensureRunDir,
   getRunDir,
+  getOriginalSnapshotPath,
   getRunStorageAbsolutePath,
   shouldSkipRelocation,
   snapshotExists,
@@ -166,10 +167,9 @@ export class TaskRunFileService {
       const stats = await fs.stat(target.absolutePath);
       if (!stats.isFile()) return;
 
-      const snapshotRelative = path.join('original', target.relativePath);
-      const snapshotAbsolute = getRunStorageAbsolutePath(
+      const snapshotAbsolute = getOriginalSnapshotPath(
         executionId,
-        snapshotRelative,
+        target.relativePath,
       );
 
       if (await snapshotExists(snapshotAbsolute)) return;
@@ -328,9 +328,9 @@ export class TaskRunFileService {
         // (cls/sty/bib/figures) have no snapshot and fall through to the
         // workspace mirror at `runDir/<rel>`, which is correct — those
         // are never written to.
-        const snapshotAbsolute = getRunStorageAbsolutePath(
+        const snapshotAbsolute = getOriginalSnapshotPath(
           executionId,
-          path.join('original', relativePath),
+          relativePath,
         );
         const workspaceMirrorAbsolute = getRunStorageAbsolutePath(
           executionId,

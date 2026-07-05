@@ -76,12 +76,6 @@ export function resolveMemoryStoragePath(storagePath: string): string {
     : MEMORY_STORAGE_DIR;
 }
 
-export function resolveMemoryStorageRelativePath(relativePath: string): string {
-  return relativePath
-    ? join(MEMORY_STORAGE_DIR, relativePath)
-    : MEMORY_STORAGE_DIR;
-}
-
 export function resolveRunStoragePath(...segments: string[]): string {
   return segments.length
     ? join(RUNS_STORAGE_DIR, ...segments)

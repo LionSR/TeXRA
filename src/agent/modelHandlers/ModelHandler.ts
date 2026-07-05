@@ -202,10 +202,6 @@ export abstract class ModelHandler<
     this.agentCategory = agentCategory ?? undefined;
   }
 
-  protected getAgentCategory(): AgentCategory | undefined {
-    return this.agentCategory;
-  }
-
   /** Common pricing fields used by providers with standard cache-read rebates. */
   protected standardPricingConfig(): StandardPricingConfig {
     return {

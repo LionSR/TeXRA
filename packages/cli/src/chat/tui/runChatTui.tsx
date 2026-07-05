@@ -298,7 +298,7 @@ export async function runChat(
   let modelSelection: CliRunnableModelResolution;
   try {
     modelSelection = await selectCliRunnableModel(defaults.model, {
-      fallbackSource: defaults.modelSource,
+      fallbackReason: defaults.modelSource,
       apiMode,
       noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         apiMode,
@@ -562,7 +562,7 @@ export async function runChat(
         const currentAgent = meta.agent || agent;
         const currentModel = meta.model || model;
         const selection = await selectCliRunnableModel(currentModel, {
-          fallbackSource: meta.model ? meta.modelSource : defaults.modelSource,
+          fallbackReason: meta.model ? meta.modelSource : defaults.modelSource,
           apiMode: meta.apiMode,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             meta.apiMode,
