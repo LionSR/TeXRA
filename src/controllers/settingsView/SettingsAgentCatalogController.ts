@@ -45,6 +45,20 @@ export type SettingsAgentPresetApplyResult =
   | { ok: false; reason: 'unknownPreset' };
 
 /**
+ * True when a persisted enabled-keys list marks this agent enabled. The list
+ * stores each agent as its resolved `source:name` key, but older workspaces
+ * persisted bare agent names — match either so a legacy roster keeps working.
+ */
+export function enabledKeysIncludeAgent(
+  enabledKeys: readonly string[],
+  entry: { source: AgentSource; name: string },
+): boolean {
+  return (
+    enabledKeys.includes(agentKeyOf(entry)) || enabledKeys.includes(entry.name)
+  );
+}
+
+/**
  * Minimal catalog surface needed to apply a preset roster. Structurally a
  * subset of {@link SettingsAgentCatalogState}, so the controller's state port
  * satisfies it directly.
@@ -211,7 +225,6 @@ export class SettingsAgentCatalogController {
     entry: SettingsAgentCatalogEntry,
     enabledKeys: string[] | undefined,
   ): AgentSelectionItem {
-    const key = agentKeyOf(entry);
     return {
       name: entry.name,
       source: entry.source,
@@ -223,8 +236,7 @@ export class SettingsAgentCatalogController {
       // undefined = never configured -> all enabled; [] = explicitly none enabled.
       enabled:
         enabledKeys === undefined ||
-        enabledKeys.includes(key) ||
-        enabledKeys.includes(entry.name),
+        enabledKeysIncludeAgent(enabledKeys, entry),
     };
   }
 
