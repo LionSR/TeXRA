@@ -37,7 +37,6 @@ const baseSetting: AgentSetting = {
   temperature: 1,
   isRewrite: true,
   rounds: 1,
-  prefills: [],
   endTag: '</documents>',
   requiredFiles: {},
   requiredFilesInternal: {},

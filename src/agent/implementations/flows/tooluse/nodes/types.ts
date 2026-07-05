@@ -13,7 +13,7 @@ import {
   type UserVariableChannels,
 } from '@agent/core/definition/AgentCycleOptions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
+import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type { RetryErrorInfo } from '@shared/schemas';
 

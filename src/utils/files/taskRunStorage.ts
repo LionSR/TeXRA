@@ -40,11 +40,9 @@ export {
   ensureRunDir,
   getOriginalSnapshotPath,
   getRunDir,
-  LEGACY_RUNS_DIR,
   findRunDir,
   findExistingRunStoragePath,
   runStorageLocationFromAbsolutePath,
-  TASK_RUNS_DIR,
 } from './runStorageFs';
 
 logger.initialize(CHANNEL);

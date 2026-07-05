@@ -91,7 +91,7 @@ import {
 } from './render/noColorOutput';
 import { createTuiViewportController } from './render/tuiViewportController';
 import { clearApprovals } from './state/approvalQueue';
-import { cliState, resetCliState } from './state/cliState';
+import { cliState, patchSessionMeta, resetCliState } from './state/cliState';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
@@ -298,7 +298,7 @@ export async function runChat(
   let modelSelection: CliRunnableModelResolution;
   try {
     modelSelection = await selectCliRunnableModel(defaults.model, {
-      fallbackSource: defaults.modelSource,
+      fallbackReason: defaults.modelSource,
       apiMode,
       noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         apiMode,
@@ -328,10 +328,7 @@ export async function runChat(
   const getApprovalPolicy = (): CliApprovalPolicy => activeApprovalPolicy;
   const setApprovalPolicy = (policy: CliApprovalPolicy): void => {
     activeApprovalPolicy = policy;
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
-      approvalPolicy: policy,
-    });
+    patchSessionMeta({ approvalPolicy: policy });
   };
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (interruptActive, resetSessionForClear,
@@ -562,7 +559,7 @@ export async function runChat(
         const currentAgent = meta.agent || agent;
         const currentModel = meta.model || model;
         const selection = await selectCliRunnableModel(currentModel, {
-          fallbackSource: meta.model ? meta.modelSource : defaults.modelSource,
+          fallbackReason: meta.model ? meta.modelSource : defaults.modelSource,
           apiMode: meta.apiMode,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             meta.apiMode,

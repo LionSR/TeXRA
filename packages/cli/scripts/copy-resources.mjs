@@ -2,6 +2,8 @@ import { cp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { stageHtmlExportAssets } from '../../../scripts/copy-html-export-assets.mjs';
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const packageDir = path.resolve(scriptDir, '..');
 const source = path.resolve(packageDir, '../extension/resources');
@@ -33,4 +35,10 @@ await Promise.all([
   cp(path.join(repoRoot, 'skills'), path.join(target, 'skills'), {
     recursive: true,
   }),
+  // Sourced directly from root node_modules (katex, highlight.js,
+  // markdown-it-texmath) rather than copied from the extension package's own
+  // `resources/htmlExport/`, so `texra history show --export html` has real
+  // KaTeX/highlight.js CSS assets to stage regardless of whether the
+  // extension package has been built in this checkout.
+  stageHtmlExportAssets(path.join(target, 'htmlExport')),
 ]);

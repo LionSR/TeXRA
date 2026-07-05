@@ -1,5 +1,5 @@
 import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
-import type { AgentEntry } from './agentRegistry';
+import type { AgentEntry } from './agentEntry';
 
 export function toRemoteAgentProfileData(entry: AgentEntry): RemoteAgent {
   return {

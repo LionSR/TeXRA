@@ -70,8 +70,9 @@ The extension host is bundled with esbuild and the webviews with Vite (`compile:
 ### Directory organization
 
 This repository is a pnpm workspace. Repo-root `src/` contains shared core logic and host-neutral tests,
-`packages/extension/` contains the VS Code extension, `packages/desktop/` contains the Electron shell, and
-`packages/core/` exposes the shared package surface.
+`packages/extension/` contains the VS Code extension, and `packages/desktop/` contains the Electron shell.
+There is currently no `@texra/core` workspace package. Hosts import shared core through the repo-root path
+aliases until a future SDK surface is enforced with a build and import-boundary lint gate.
 
 - `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
   - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)

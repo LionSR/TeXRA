@@ -11,6 +11,7 @@ import {
 
 import {
   cliState,
+  patchSessionMeta,
   setCliSessionModelOverride,
 } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
@@ -63,8 +64,7 @@ export function applyInitialCliAgentSelection(
     appendLocalAssistantTranscript(usageError);
     return;
   }
-  cliState.sessionMeta.set({
-    ...cliState.sessionMeta.get(),
+  patchSessionMeta({
     agent: nextAgent,
     canDelegate: chatAgentSupportsDelegation(nextAgent),
   });
@@ -80,7 +80,7 @@ export async function applyCliModelSelection(
     try {
       const { apiMode } = cliState.sessionMeta.get();
       const selection = await selectCliRunnableModel(nextModel, {
-        fallbackSource: 'override',
+        fallbackReason: 'explicit-override',
         apiMode,
         noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
           apiMode,

@@ -28,7 +28,11 @@ import { ModelListForm } from '../forms/ModelListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
-import { cliState, setCliSessionModelOverride } from '../state/cliState';
+import {
+  cliState,
+  patchSessionMeta,
+  setCliSessionModelOverride,
+} from '../state/cliState';
 import { loginFromChat } from './handlers/loginCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
@@ -111,17 +115,11 @@ export function registerBuiltinSlashCommands(options?: {
   onError?: ErrorHandler;
 }): void {
   const onAgentSelect: AgentSelectHandler =
-    options?.onAgentSelect ??
-    ((agent) => {
-      cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), agent });
-    });
+    options?.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
   const onModelSelect: ModelSelectHandler =
     options?.onModelSelect ?? setCliSessionModelOverride;
   const onApiModeSelect: ApiModeSelectHandler =
-    options?.onApiModeSelect ??
-    ((apiMode) => {
-      cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), apiMode });
-    });
+    options?.onApiModeSelect ?? ((apiMode) => patchSessionMeta({ apiMode }));
   const onLoginSelect: LoginSelectHandler =
     options?.onLoginSelect ?? loginFromChat;
   const canSelectAgent = options?.canSelectAgent ?? (() => true);

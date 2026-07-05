@@ -1,8 +1,4 @@
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-
 export const MEMORY_DISPLAY_ROOT = '/memories';
-
-export const MEMORY_STORAGE_ROOT = MEMORY_STORAGE_DIR;
 
 export const MAX_VIEW_LINES = 999_999;
 

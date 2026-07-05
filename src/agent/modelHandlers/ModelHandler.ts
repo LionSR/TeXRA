@@ -93,7 +93,6 @@ import { isTokenLimitStopReason } from './utils/stopReasonUtils';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
 import type {
-  IModelHandler,
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
@@ -101,7 +100,7 @@ import type {
   StopConditionsResult,
   TokenCountOptions,
   TokenValidationResult,
-} from './types/IModelHandler';
+} from './types/ModelHandlerContracts';
 import type {
   ServerToolExtractionResult,
   WebFetchResult,
@@ -149,7 +148,7 @@ export abstract class ModelHandler<
   T extends SdkToolCall = SdkToolCall,
   C = unknown,
   Resp = unknown,
-> implements IModelHandler<M, U, T, C, Resp> {
+> {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;
@@ -200,10 +199,6 @@ export abstract class ModelHandler<
 
   public setAgentCategory(agentCategory?: AgentCategory | null): void {
     this.agentCategory = agentCategory ?? undefined;
-  }
-
-  protected getAgentCategory(): AgentCategory | undefined {
-    return this.agentCategory;
   }
 
   /** Common pricing fields used by providers with standard cache-read rebates. */

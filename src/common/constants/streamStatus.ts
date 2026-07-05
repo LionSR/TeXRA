@@ -13,6 +13,7 @@ import {
   type RunOutcome,
   type StreamPhase,
   type StreamStatus,
+  type StreamStatusTrait,
 } from '@shared/schemas';
 
 // ============================================================================
@@ -198,15 +199,25 @@ export function canTransitionStreamPhase(
 // (`STREAM_STATUS_TRAITS`); these are thin readers over it. Do not declare
 // new status lists by hand — add a trait column instead.
 
-/** Check if a status indicates active execution (running or resuming). */
-export function isActiveStatus(status: string | undefined): boolean {
+/** Shared trait lookup: a `StreamPhase` value parses straight to the phase
+ *  predicate, otherwise falls back to the legacy `StreamStatus` trait table. */
+function hasStatusTrait(
+  status: string | undefined,
+  phasePredicate: (phase: StreamPhase | undefined) => boolean,
+  trait: StreamStatusTrait,
+): boolean {
   const phase = StreamPhaseSchema.safeParse(status);
-  if (phase.success) return isActivePhase(phase.data);
+  if (phase.success) return phasePredicate(phase.data);
   return (
     status !== undefined &&
     Object.hasOwn(STREAM_STATUS_TRAITS, status) &&
-    STREAM_STATUS_TRAITS[status as StreamStatus].active
+    STREAM_STATUS_TRAITS[status as StreamStatus][trait]
   );
+}
+
+/** Check if a status indicates active execution (running or resuming). */
+export function isActiveStatus(status: string | undefined): boolean {
+  return hasStatusTrait(status, isActivePhase, 'active');
 }
 
 /**
@@ -214,33 +225,19 @@ export function isActiveStatus(status: string | undefined): boolean {
  * and it must not be evicted from memory or acquired by a new run.
  */
 export function isInFlightStatus(status: string | undefined): boolean {
-  const phase = StreamPhaseSchema.safeParse(status);
-  if (phase.success) return isInFlightPhase(phase.data);
-  return (
-    status !== undefined &&
-    Object.hasOwn(STREAM_STATUS_TRAITS, status) &&
-    STREAM_STATUS_TRAITS[status as StreamStatus].inFlight
-  );
+  return hasStatusTrait(status, isInFlightPhase, 'inFlight');
 }
 
 /** Check if a status is terminal (execution ended). */
 export function isTerminalStatus(status: string | undefined): boolean {
-  const phase = StreamPhaseSchema.safeParse(status);
-  if (phase.success) return isTerminalPhase(phase.data);
-  return (
-    status !== undefined &&
-    Object.hasOwn(STREAM_STATUS_TRAITS, status) &&
-    STREAM_STATUS_TRAITS[status as StreamStatus].terminal
-  );
+  return hasStatusTrait(status, isTerminalPhase, 'terminal');
 }
 
 /** Check if elapsed-time displays should keep advancing for this status. */
 export function isLiveElapsedStatus(status: string | undefined): boolean {
-  const phase = StreamPhaseSchema.safeParse(status);
-  if (phase.success) return phase.data === STREAM_PHASE.RUNNING;
-  return (
-    status !== undefined &&
-    Object.hasOwn(STREAM_STATUS_TRAITS, status) &&
-    STREAM_STATUS_TRAITS[status as StreamStatus].liveElapsed
+  return hasStatusTrait(
+    status,
+    (phase) => phase === STREAM_PHASE.RUNNING,
+    'liveElapsed',
   );
 }
