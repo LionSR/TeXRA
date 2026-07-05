@@ -116,6 +116,46 @@ const runContextScope = new AsyncLocalStorage<RunContext>();
 // Factory
 // ---------------------------------------------------------------------------
 
+type CommonRunContextFieldNames =
+  | 'runtimeHost'
+  | 'streamId'
+  | 'executionId'
+  | 'coordinators'
+  | 'agentName'
+  | 'workingDirectory'
+  | 'delegationDepth'
+  | 'approvalPromptsUnavailable'
+  | 'runtimeUnavailableTools'
+  | 'stopAfterCycle'
+  | 'session'
+  | 'toolEditApprovalHandler';
+
+/**
+ * Fields shared by both `RunContext` kinds, forwarded as-is from the input
+ * options. The return type is `Pick<T, ...>` (rather than inferred from the
+ * function body) so the `live` branch's `CreateLaunchRunContextFields`
+ * guarantees — e.g. a required `streamId` — survive the call instead of
+ * widening back to the optional `bare` shape.
+ */
+function commonRunContextFields<T extends CreateRunContextBase>(
+  options: T,
+): Pick<T, CommonRunContextFieldNames> {
+  return {
+    runtimeHost: options.runtimeHost,
+    streamId: options.streamId,
+    executionId: options.executionId,
+    coordinators: options.coordinators,
+    agentName: options.agentName,
+    workingDirectory: options.workingDirectory,
+    delegationDepth: options.delegationDepth,
+    approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+    runtimeUnavailableTools: options.runtimeUnavailableTools,
+    stopAfterCycle: options.stopAfterCycle,
+    session: options.session,
+    toolEditApprovalHandler: options.toolEditApprovalHandler,
+  } as Pick<T, CommonRunContextFieldNames>;
+}
+
 /**
  * Build a run context from caller-facing model-source options.
  *
@@ -129,42 +169,11 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  const common = {
-    runtimeHost: options.runtimeHost,
-    streamId: options.streamId,
-    executionId: options.executionId,
-    coordinators: options.coordinators,
-    agentName: options.agentName,
-    workingDirectory: options.workingDirectory,
-    delegationDepth: options.delegationDepth,
-    approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-    runtimeUnavailableTools: options.runtimeUnavailableTools,
-    stopAfterCycle: options.stopAfterCycle,
-    session: options.session,
-    toolEditApprovalHandler: options.toolEditApprovalHandler,
-  };
-
   if (options.modelSource === 'live') {
-    const {
-      getModel,
-      model,
-      streamId,
-      executionId,
-      coordinators,
-      agentName,
-      session,
-    } = options;
+    const { getModel, model } = options;
     return Object.freeze({
       kind: 'launch',
-      ...common,
-      // Re-assert the narrowed (required) fields: `common` was built from the
-      // pre-narrowing union type, so its copies of these fields are typed as
-      // optional even though `options` here guarantees them present.
-      streamId,
-      executionId,
-      coordinators,
-      agentName,
-      session,
+      ...commonRunContextFields(options),
       get model() {
         return getModel() ?? model;
       },
@@ -174,7 +183,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
   const { model } = options;
   return Object.freeze({
     kind: 'bare',
-    ...common,
+    ...commonRunContextFields(options),
     get model() {
       return model;
     },

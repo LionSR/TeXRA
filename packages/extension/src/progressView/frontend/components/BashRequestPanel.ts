@@ -11,7 +11,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import {
   commonViewStyles,
   designTokens,
-  requestPanelStyles,
+  requestPanelSharedStyles,
 } from '@shared/styles';
 
 // Local imports - progress view styles
@@ -23,13 +23,17 @@ import { buildCodeBlock } from '../formatters/htmlBuilders';
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
+// Local imports - styles
+import { bashRequestPanelStyles } from './BashRequestPanel.styles';
+
 @customElement('bash-request-panel')
 export class BashRequestPanel extends BaseFeedbackPanel<'bash'> {
   static override styles = [
     designTokens,
     commonViewStyles,
     codeBlockStyles,
-    requestPanelStyles,
+    requestPanelSharedStyles,
+    bashRequestPanelStyles,
   ];
 
   override render(): TemplateResult {

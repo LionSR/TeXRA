@@ -42,6 +42,11 @@ export function orderedDescendantsFromTree(init: {
     init.streams.has(id),
   );
   const seen = new Set(out);
+  // `parentStream` is populated by its own `setParentStream` event, decoupled
+  // from the `activeSubagents`/`childStreams` updates the slice-derived list
+  // above reads. This walk is not redundant with it: it catches an edge
+  // registered before its parent's slice reflects the child (event-ordering),
+  // so a child stream is never unreachable from the focus cycle.
   for (const [child, recordedParent] of init.parentStream) {
     if (
       recordedParent !== init.parent ||

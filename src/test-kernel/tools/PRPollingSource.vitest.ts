@@ -17,6 +17,10 @@ import {
 } from '@tools/github/PRPollingSource';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 
+interface CurrentShaState {
+  pendingAnnotationRuns: GhCheckRun[];
+}
+
 interface AnnotationDrainState {
   pr: { owner: string; repo: string; pullNumber: number };
   slug: string;
@@ -29,7 +33,7 @@ interface AnnotationDrainState {
     (text: string) => void,
     GitHubCheckAnnotationLevel
   >;
-  pendingAnnotationRuns: GhCheckRun[];
+  currentShaState: CurrentShaState | undefined;
   lastSuccessAt: number;
   consecutiveFailures: number;
   skipPollUntilMs: number;
@@ -92,7 +96,7 @@ function createDrainState(runs: GhCheckRun[]): AnnotationDrainState {
     listeners: new Set(),
     runtimeHostByListener: new Map(),
     annotationLevelByListener: new Map(),
-    pendingAnnotationRuns: runs,
+    currentShaState: { pendingAnnotationRuns: runs },
     lastSuccessAt: Date.now(),
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
@@ -124,7 +128,7 @@ describe('PRPollingSource annotation drain', () => {
       42,
       expect.any(Number),
     );
-    expect(state.pendingAnnotationRuns).toEqual([run]);
+    expect(state.currentShaState?.pendingAnnotationRuns).toEqual([run]);
     expect(state.skipPollUntilMs).toBe(1_800_000_000_000);
   });
 
@@ -157,9 +161,15 @@ describe('PRPollingSource annotation drain', () => {
     expect(
       vi.mocked(source.fetchAnnotations).mock.calls.map((call) => call[2]),
     ).toEqual([1, 4, 7, 2, 5, 8, 3, 6, 9]);
-    expect(firstState.pendingAnnotationRuns.map((run) => run.id)).toEqual([]);
-    expect(secondState.pendingAnnotationRuns.map((run) => run.id)).toEqual([]);
-    expect(thirdState.pendingAnnotationRuns.map((run) => run.id)).toEqual([]);
+    expect(
+      firstState.currentShaState?.pendingAnnotationRuns.map((run) => run.id),
+    ).toEqual([]);
+    expect(
+      secondState.currentShaState?.pendingAnnotationRuns.map((run) => run.id),
+    ).toEqual([]);
+    expect(
+      thirdState.currentShaState?.pendingAnnotationRuns.map((run) => run.id),
+    ).toEqual([]);
   });
 
   it('filters check annotations by each listener minimum level', async () => {
@@ -221,7 +231,7 @@ describe('PRPollingSource annotation drain', () => {
       .fn()
       .mockResolvedValue([annotation('warning', 'format warning')]);
 
-    state.pendingAnnotationRuns = [createCheckRun(13)];
+    state.currentShaState = { pendingAnnotationRuns: [createCheckRun(13)] };
     await source.drainAnnotationQueues([[key, state]]);
 
     expect(listener).not.toHaveBeenCalled();
@@ -231,7 +241,7 @@ describe('PRPollingSource annotation drain', () => {
       listener,
       noopAgentRuntimeHost,
     );
-    state.pendingAnnotationRuns = [createCheckRun(14)];
+    state.currentShaState = { pendingAnnotationRuns: [createCheckRun(14)] };
 
     await source.drainAnnotationQueues([[key, state]]);
 

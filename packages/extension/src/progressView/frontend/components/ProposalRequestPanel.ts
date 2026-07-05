@@ -18,7 +18,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   commonViewStyles,
   designTokens,
-  requestPanelStyles,
+  requestPanelSharedStyles,
   selectStyles,
 } from '@shared/styles';
 
@@ -47,6 +47,7 @@ import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { APPROVE_SUPER_YOLO_ACTION } from '../events';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
@@ -72,7 +73,8 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
     designTokens,
     commonViewStyles,
     markdownStyles,
-    requestPanelStyles,
+    requestPanelSharedStyles,
+    proposalRequestPanelStyles,
     selectStyles,
   ];
 
