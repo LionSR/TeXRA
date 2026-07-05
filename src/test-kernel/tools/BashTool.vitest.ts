@@ -31,13 +31,15 @@ import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 // Local imports - agent runtime
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 
 // Internal imports
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
+import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import type { StreamTabId } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { BashTool } from '@tools/bash';
@@ -164,7 +166,7 @@ function roundServices(opts: {
     } satisfies AgentPrompt,
     userVarChannels: { input: {}, transient: {} },
     logger: opts.logger,
-    streamStatus: new StreamStatusRegistry(),
+    streamStatus: new StreamStatusMachine(),
     client: {} as OpenAI,
     fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,
@@ -342,6 +344,38 @@ describe('BashTool', () => {
       unsubscribe();
       runTrace.dispose();
     }
+  });
+
+  it('keeps head and tail of an oversized command failure instead of discarding it', async () => {
+    // Simulates a huge broken latexmk log: engine name up front, error detail
+    // at the tail (where LaTeX/build errors cluster), filler in between.
+    const hugeStderr =
+      'ENGINE_HEADER '.repeat(400) +
+      'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) +
+      'TAIL_ERROR_DETAIL '.repeat(5000);
+
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
+      success: false,
+      stdout: null,
+      stderr: hugeStderr,
+      timedOut: false,
+      exitCode: 1,
+    });
+
+    const result = await new BashTool().call({ command: 'latexmk -pdf p.tex' });
+    assert.equal(result.status, 'error');
+
+    // This is exactly the choke point every model handler funnels through
+    // before sending tool output back to the model.
+    const text = formatToolResultAsText(result);
+    assert.ok(
+      text.includes('characters elided'),
+      'Oversized result should be elided, not replaced wholesale',
+    );
+    assert.ok(!text.includes('was not included'));
+    assert.ok(text.includes('ENGINE_HEADER'));
+    assert.ok(text.includes('TAIL_ERROR_DETAIL'));
+    assert.ok(!text.includes('x'.repeat(1000)));
   });
 
   it('accepts optional command descriptions without passing them to the shell', async () => {

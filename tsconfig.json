@@ -80,7 +80,6 @@
     "src/test-kernel",
     "supabase",
     "packages/desktop",
-    "packages/core",
     "packages/extension/vite.config.ts",
     "packages/extension/esbuild.config.mjs"
   ]

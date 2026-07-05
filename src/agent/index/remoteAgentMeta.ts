@@ -2,9 +2,9 @@
 
 import { platform } from '@platform/platform';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';

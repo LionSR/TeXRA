@@ -258,10 +258,8 @@ export class StreamLogStore {
     if (this.loadFailed.has(streamId)) void this.ensureLoaded(streamId);
     const logInstance = this.getOrCreate(streamId);
     const appended = logInstance.append(entry);
-    this.refreshSummary(streamId, logInstance);
-    this.markDirty(streamId);
+    this.commitChange(streamId, logInstance);
     void this.save();
-    this.notify(streamId);
     return appended;
   }
 
@@ -276,10 +274,8 @@ export class StreamLogStore {
     const updated = logInstance.update(id, patch);
     if (!updated) return undefined;
 
-    this.refreshSummary(streamId, logInstance);
-    this.markDirty(streamId);
+    this.commitChange(streamId, logInstance);
     void this.save();
-    this.notify(streamId);
     return updated;
   }
 
@@ -294,10 +290,8 @@ export class StreamLogStore {
     const updated = logInstance.appendText(id, appendText);
     if (!updated) return undefined;
 
-    this.refreshSummary(streamId, logInstance);
-    this.markDirty(streamId);
+    this.commitChange(streamId, logInstance);
     void this.save();
-    this.notify(streamId);
     return updated;
   }
 
@@ -422,9 +416,7 @@ export class StreamLogStore {
 
       if (updatedAny) {
         affected.push(streamId);
-        this.refreshSummary(streamId, logInstance);
-        this.markDirty(streamId);
-        this.notify(streamId);
+        this.commitChange(streamId, logInstance);
       }
     }
 
@@ -541,6 +533,13 @@ export class StreamLogStore {
       if (!this.summaries.has(streamId)) this.summaries.set(streamId, {});
     }
     return logInstance;
+  }
+
+  /** Shared post-mutation bookkeeping for append/update/appendText/endRunningGroups. */
+  private commitChange(streamId: StreamTabId, logInstance: StreamLog): void {
+    this.refreshSummary(streamId, logInstance);
+    this.markDirty(streamId);
+    this.notify(streamId);
   }
 
   private refreshSummary(streamId: StreamTabId, logInstance: StreamLog): void {

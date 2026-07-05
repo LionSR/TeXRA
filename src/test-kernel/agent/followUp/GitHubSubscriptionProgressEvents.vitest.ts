@@ -12,7 +12,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // Local imports - agent runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared schemas
 import type { StreamTabId } from '@shared/schemas';
@@ -223,7 +223,7 @@ describe('GitHub subscription progress events', () => {
     const streamId = 'stream-a' as StreamTabId;
     const host = createRecordingHost();
     const source = new RegistryTestSource();
-    const session = { tag: 'window-session' } as unknown as SessionHandle;
+    const session = new SessionHandle();
     const registry = new StreamSubscriptionRegistry<string, string>({
       name: 'test subscriptions',
       source,
@@ -232,24 +232,28 @@ describe('GitHub subscription progress events', () => {
     });
     sendFollowUpMock.mockClear();
 
-    withRunContext(
-      createRunContext({
-        runtimeHost: host.host,
+    try {
+      withRunContext(
+        createRunContext({
+          runtimeHost: host.host,
+          streamId,
+          session,
+        }),
+        () => registry.bind(streamId, 'owner/repo', host.host),
+      );
+
+      source.emit('owner/repo', 'new github event');
+
+      expect(sendFollowUpMock).toHaveBeenCalledWith(
         streamId,
+        'new github event',
+        undefined,
+        undefined,
         session,
-      }),
-      () => registry.bind(streamId, 'owner/repo', host.host),
-    );
-
-    source.emit('owner/repo', 'new github event');
-
-    expect(sendFollowUpMock).toHaveBeenCalledWith(
-      streamId,
-      'new github event',
-      undefined,
-      undefined,
-      session,
-    );
+      );
+    } finally {
+      session.dispose();
+    }
   });
 
   it('warns instead of leaking an unhandled rejection when delivery fails', async () => {

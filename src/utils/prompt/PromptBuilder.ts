@@ -1,17 +1,12 @@
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import type {
-  AgentPrompt,
-  AgentWorkflowSetting,
-} from '@agent/core/definition/AgentDataclass';
+import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import { ensureArray } from '@utils/core';
 import { loadTexraRules } from '@utils/files/rulesUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 
 // Local imports - utilities
 import { renderPrompt } from './promptUtils';
-
-type PromptBuilderSetting = Pick<AgentWorkflowSetting, 'prefills'>;
 
 /** Instructions appended to tool-use agent prompts */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
@@ -117,16 +112,14 @@ export async function getSystemPromptWithRules(
  *
  * @example
  * ```ts
- * const builder = new PromptBuilder(prompt, setting, vars, logger);
+ * const builder = new PromptBuilder(prompt, vars, logger);
  * const initial = await builder.buildInitialPrompts();
  * const firstRoundRequest = await builder.buildUserRequest(1);
- * const prefill = await builder.buildPrefill(0);
  * ```
  */
 export class PromptBuilder {
   constructor(
     private readonly agentPrompt: AgentPrompt,
-    private readonly agentSetting: PromptBuilderSetting,
     private readonly userVars: Record<string, unknown>,
     private readonly logger?: AgentTrace,
   ) {}
@@ -167,30 +160,6 @@ export class PromptBuilder {
     }
 
     return renderPrompt(template, this.userVars);
-  }
-
-  /**
-   * Return the prefill value that should seed the assistant response.
-   *
-   * @param currRound Zero-based conversation round index
-   * @remarks Reuses the first configured prefill when subsequent rounds omit a value.
-   */
-  public async buildPrefill(currRound: number): Promise<string> {
-    const prefills = this.agentSetting.prefills;
-    if (!prefills || prefills.length === 0) {
-      return '';
-    }
-
-    const normalizedRound = Math.max(0, currRound);
-    if (normalizedRound < prefills.length) {
-      return prefills[normalizedRound] ?? '';
-    }
-
-    this.logger?.debug(
-      `No prefill configured for round ${currRound}. Reusing first prefill.`,
-    );
-
-    return prefills[0] ?? '';
   }
 
   private getRoundTemplate(currRound: number): string | undefined {
@@ -235,12 +204,7 @@ export async function buildInitialToolUsePrompts(
     nestedDelegationBlocked?: boolean;
   },
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
-  const builder = new PromptBuilder(
-    agentPrompt,
-    { prefills: [] },
-    userVars,
-    logger,
-  );
+  const builder = new PromptBuilder(agentPrompt, userVars, logger);
   const initial = await builder.buildInitialPrompts();
 
   const memoryEnabled = options?.resolvedToolNames?.includes('memory') ?? false;

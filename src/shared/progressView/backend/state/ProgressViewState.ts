@@ -1,18 +1,14 @@
 import { z } from 'zod';
 
-import {
-  setDefaultStreamLogStore,
-  StreamLogStore,
-  StreamSnapshotStore,
-} from '@transcript';
+import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { toErrorMessage } from '@common/errors';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
@@ -39,6 +35,7 @@ import {
 } from '@shared/state/PersistedState';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { clamp } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = StreamTabInfoSchema.pick({
@@ -135,6 +132,7 @@ export class ProgressViewState {
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
   readonly streamStatus: StreamStatusMachine;
+  readonly followUps: ToolUseFollowUpQueue;
 
   private readonly logger: AgentTrace;
   private readonly session: SessionHandle;
@@ -152,8 +150,8 @@ export class ProgressViewState {
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
       ProgressViewPrefsSchema,
     );
-    this.streamLogs = new StreamLogStore();
-    setDefaultStreamLogStore(this.streamLogs);
+    this.streamLogs = session.transcripts;
+    this.followUps = session.followUps;
     this.snapshots = snapshots;
   }
 

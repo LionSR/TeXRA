@@ -10,10 +10,6 @@ settings:
   isRewrite: true
   documentTag: documents
   endTag: </documents>
-  # `prefills` is deprecated and almost never needed. Reasoning-capable
-  # models ignore it at runtime, and other models do fine when the
-  # userRequest spells out the expected `<documents>...</documents>`
-  # wrapper. Omit it.
 
 # --- Agent Prompts ---
 prompts:

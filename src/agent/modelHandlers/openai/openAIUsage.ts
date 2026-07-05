@@ -18,7 +18,7 @@ import { normalizeUsage } from '../support/UsageNormalizer';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
 
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
-export type OpenAIPricingConfig = StandardPricingConfig;
+type OpenAIPricingConfig = StandardPricingConfig;
 
 /**
  * Cached prompt tokens. OpenAI reports them under
