@@ -18,7 +18,10 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
-import { StateSlicesSchema } from '@agent/implementations/flows/tooluse/nodes/types';
+import {
+  migrateSharedState,
+  StateSlicesSchema,
+} from '@agent/implementations/flows/tooluse/nodes/types';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
@@ -56,40 +59,15 @@ type WorkflowResumeData = z.infer<typeof WorkflowResumeDataSchema>;
 
 export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
-/** Fields shared by both `messages` (current) and `conversation` (legacy) branches. */
-const SharedToolUseFields = z.object({
+const CurrentToolUseFlowRecordStateSchema = z.looseObject({
+  messages: z.array(ProviderMessageSchema),
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
   stateSlices: StateSlicesSchema,
 });
 
-/** Core fields schema — accepts `messages` (current) or `conversation` (legacy), normalizing to `messages`. */
-const ToolUseStateFieldsSchema = z
-  .union([
-    SharedToolUseFields.extend({ messages: z.array(ProviderMessageSchema) }),
-    SharedToolUseFields.extend({
-      conversation: z.array(ProviderMessageSchema),
-    }),
-  ])
-  .transform((data) => ({
-    messages: 'messages' in data ? data.messages : data.conversation,
-    modelHandlerCompatibilityKey:
-      data.modelHandlerCompatibilityKey ?? undefined,
-    stateSlices: data.stateSlices,
-  }));
-
-/**
- * Schema that accepts both flat and legacy formats, normalizing to flat.
- * - Flat format: { messages, stateSlices, ... }
- * - Legacy format: { state: { messages, stateSlices, ... } }
- */
-const ToolUseFlowRecordStateSchema = z
-  .union([
-    ToolUseStateFieldsSchema,
-    z.object({ state: ToolUseStateFieldsSchema }),
-  ])
-  .transform((data) => ('state' in data ? data.state : data));
-
-type NormalizedToolUseState = z.infer<typeof ToolUseFlowRecordStateSchema>;
+type NormalizedToolUseState = z.infer<
+  typeof CurrentToolUseFlowRecordStateSchema
+>;
 
 /**
  * Minimal schema for validating workflow flow record exists and has resumable state.
@@ -168,9 +146,16 @@ async function retrieveToolUseResumeData(
       return null;
     }
 
-    // Parse shared state, supporting both flat and legacy formats
-    const parseResult = ToolUseFlowRecordStateSchema.safeParse(
-      flowRecord.shared,
+    const migrationResult = migrateSharedState(flowRecord.shared);
+    if (migrationResult === null) {
+      logger.warn(
+        `Invalid flow record structure for execution: ${executionId}`,
+      );
+      return null;
+    }
+
+    const parseResult = CurrentToolUseFlowRecordStateSchema.safeParse(
+      migrationResult.data,
     );
     if (!parseResult.success) {
       logger.warn(

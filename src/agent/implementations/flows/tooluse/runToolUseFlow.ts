@@ -15,6 +15,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   PersistedFlow,
   flowKey,
+  stampFlowRecordSchemaVersion,
   type FlowRecord,
 } from '@agent/node/persistedFlow';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
@@ -365,7 +366,10 @@ export async function runToolUseFlow<C = unknown>(
             logger.debug('Migrated legacy shared state to flat format');
           }
           flowRecord.shared = migratedData;
-          await kv.write(flowKey(executionId), flowRecord);
+          await kv.write(
+            flowKey(executionId),
+            stampFlowRecordSchemaVersion(flowRecord),
+          );
         }
       }
     }
