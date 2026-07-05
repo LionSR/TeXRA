@@ -2,8 +2,10 @@
 import { z } from 'zod';
 
 // Local imports - latex
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { arxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { abandonOnAbort } from '@tools/cancellation';
 import {
   type ArxivPaperMetadata,
   createArxivClient,
@@ -34,6 +36,7 @@ export type ArxivMetadataInput = z.infer<typeof ArxivMetadataInputSchema>;
 
 export class ArxivMetadataTool extends defineTool({
   name: 'arxiv_metadata',
+  parallelSafe: true,
   description: 'Fetch bibliographic metadata for an arXiv paper.',
   schema: ArxivMetadataInputSchema,
 }) {
@@ -50,8 +53,14 @@ export class ArxivMetadataTool extends defineTool({
     try {
       // Respect arXiv API rate limits
       await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
-      // Use arxiv-client's ids() method for direct ID lookup
-      entries = await createArxivClient().ids([requestId]).execute();
+      // Use arxiv-client's ids() method for direct ID lookup. The client
+      // has no AbortSignal hook, so a cancelled batch abandons the
+      // in-flight lookup instead of waiting it out.
+      entries = await abandonOnAbort(
+        createArxivClient().ids([requestId]).execute(),
+        getCurrentToolCallContext()?.signal,
+        'arXiv metadata lookup',
+      );
     } catch (error) {
       throw new ToolError(
         `Failed to query arXiv API: ${toErrorMessage(error)}`,

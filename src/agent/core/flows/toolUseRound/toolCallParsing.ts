@@ -14,27 +14,73 @@ import {
 import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export const DUPLICATE_CALL_ERROR =
-  'Duplicate parallel call skipped — same tool name and arguments as an earlier call in this batch. ' +
-  'To run identical calls, invoke them sequentially in separate responses.';
+export const UNSAFE_DUPLICATE_CALL_ERROR =
+  'Duplicate parallel call skipped — same tool name and arguments as an earlier call in this batch, ' +
+  'and this tool has side effects, so its result cannot be shared. ' +
+  'If you intend the effect to run twice, invoke it again sequentially in your next response.';
+
+/** Duplicate-call partition for one model response (see partitionDuplicateCalls). */
+export interface DuplicateCallPartition {
+  /** Duplicate callId → index of its primary within the same safe segment. */
+  sharedWithPrimary: Map<string, number>;
+  /**
+   * Duplicates of side-effect tools, mapped to their primary's index —
+   * never executed; answered with an error only when the primary actually
+   * ran (an interrupted primary leaves the duplicate cancelled with it).
+   */
+  rejected: Map<string, number>;
+}
 
 /**
- * Identify duplicate parallel tool calls (same name + identical arguments).
- * Returns the set of `callId`s that should be skipped (all but the first
- * occurrence of each unique call signature).
+ * Partition duplicate parallel tool calls (same name + identical arguments).
+ *
+ * Parallel-safe (read-only) duplicates share their primary's result — but
+ * only within a contiguous run of parallel-safe calls: any side-effect call
+ * in between may change what a repeated read would return, so it acts as a
+ * barrier that invalidates earlier shareable signatures.
+ *
+ * Side-effect duplicates are rejected with a synthetic error (sharing a
+ * success would misreport an effect that never ran; running it silently
+ * twice is equally wrong) — a false positive only costs the model one
+ * explicit sequential re-issue. The rejection window resets when a
+ * different side-effect call runs in between, since changed state makes an
+ * identical repeat plausibly intentional.
  */
-export function findDuplicateCallIds(toolCalls: SdkToolCall[]): Set<string> {
-  const seen = new Set<string>();
-  const duplicates = new Set<string>();
-  for (const call of toolCalls) {
+export function partitionDuplicateCalls(
+  toolCalls: SdkToolCall[],
+  isParallelSafe: (call: SdkToolCall) => boolean,
+): DuplicateCallPartition {
+  const sharedWithPrimary = new Map<string, number>();
+  const rejected = new Map<string, number>();
+  const segmentPrimaries = new Map<string, number>();
+  const unsafeSeen = new Map<string, number>();
+  for (const [index, call] of toolCalls.entries()) {
     const key = call.name + '\0' + stableStringify(call.input);
-    if (seen.has(key)) {
-      duplicates.add(call.callId);
+    if (isParallelSafe(call)) {
+      const primary = segmentPrimaries.get(key);
+      if (primary !== undefined) {
+        sharedWithPrimary.set(call.callId, primary);
+      } else {
+        segmentPrimaries.set(key, index);
+      }
     } else {
-      seen.add(key);
+      // Barrier: workspace state may change, so pre-barrier reads are stale.
+      segmentPrimaries.clear();
+      const unsafePrimary = unsafeSeen.get(key);
+      if (unsafePrimary !== undefined) {
+        rejected.set(call.callId, unsafePrimary);
+      } else {
+        // A different mutation changes workspace state, which makes an
+        // identical repeat of an earlier mutation plausibly intentional
+        // again (e.g. write x; edit x; write x as a restore) — reset the
+        // tracking window. Parallel-safe calls do not reset it: with state
+        // unchanged, an identical mutation repeat stays redundant.
+        unsafeSeen.clear();
+        unsafeSeen.set(key, index);
+      }
     }
   }
-  return duplicates;
+  return { sharedWithPrimary, rejected };
 }
 
 /** Parse tool input, handling JSON strings and other formats from model providers. */

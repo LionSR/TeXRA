@@ -11,6 +11,7 @@
 import ky, { HTTPError } from 'ky';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
 // Local imports - core
 import { ToolError } from '@shared/schemas/toolResult';
@@ -203,13 +204,19 @@ export async function callBetterBibTeX<T>(
 ): Promise<T> {
   const url = `http://127.0.0.1:${port}/better-bibtex/json-rpc`;
 
+  // Cancellation for the owning agent run — a cancelled parallel batch must
+  // abort a hung Zotero request instead of waiting out its timeout.
+  const cancelSignal = getCurrentToolCallContext()?.signal;
+  const timeoutSignal = AbortSignal.timeout(timeout);
   let raw: unknown;
   try {
     raw = await ky
       .post(url, {
         json: { jsonrpc: '2.0', method, params, id: 1 },
         timeout: false,
-        signal: AbortSignal.timeout(timeout),
+        signal: cancelSignal
+          ? AbortSignal.any([cancelSignal, timeoutSignal])
+          : timeoutSignal,
         retry: 0,
       })
       .json<unknown>();

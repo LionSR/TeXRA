@@ -45,6 +45,47 @@ describe('FollowUpQueue', () => {
     });
   });
 
+  it('coalesces a contiguous run of synthetic follow-ups into one batch', async () => {
+    const queue = new FollowUpQueue();
+
+    queue.enqueueSynthetic('maintenance one');
+    queue.enqueueSynthetic('maintenance two');
+    queue.enqueue({ text: 'user text' });
+
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: [
+        { text: 'maintenance one', origin: 'synthetic' },
+        { text: 'maintenance two', origin: 'synthetic' },
+      ],
+      synthetic: true,
+    });
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: [{ text: 'user text', origin: 'user' }],
+      synthetic: false,
+    });
+  });
+
+  it('does not merge synthetic batches across a visible item', async () => {
+    const queue = new FollowUpQueue();
+
+    queue.enqueueSynthetic('maintenance one');
+    queue.enqueue({ text: 'user text' });
+    queue.enqueueSynthetic('maintenance two');
+
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: [{ text: 'maintenance one', origin: 'synthetic' }],
+      synthetic: true,
+    });
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: [{ text: 'user text', origin: 'user' }],
+      synthetic: false,
+    });
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: [{ text: 'maintenance two', origin: 'synthetic' }],
+      synthetic: true,
+    });
+  });
+
   it('carries media file paths on their own visible batch items', async () => {
     const queue = new FollowUpQueue();
 

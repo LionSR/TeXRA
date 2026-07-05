@@ -10,8 +10,10 @@ import {
 import { z } from 'zod';
 
 // Local imports
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { warn } from '@logger/logUtils';
 import type { ToolResult } from '@shared/schemas/toolResult';
+import { abandonOnAbort } from '@tools/cancellation';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
@@ -64,6 +66,7 @@ export type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
 
 export class ArxivSearchTool extends defineTool({
   name: 'arxiv_search',
+  parallelSafe: true,
   description:
     'Search arXiv for papers and return basic metadata for each hit. Use field="author" for author name searches.',
   schema: ArxivSearchInputSchema,
@@ -132,7 +135,13 @@ export class ArxivSearchTool extends defineTool({
 
     const entries = await wrapApiCall(async () => {
       await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
-      return client.execute();
+      // The arXiv client has no AbortSignal hook, so a cancelled batch
+      // abandons the in-flight search instead of waiting it out.
+      return abandonOnAbort(
+        client.execute(),
+        getCurrentToolCallContext()?.signal,
+        'arXiv search',
+      );
     }, 'Failed to query arXiv API');
 
     const results: ArxivSearchResult[] = entries.map((entry) => {

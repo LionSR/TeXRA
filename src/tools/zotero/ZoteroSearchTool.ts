@@ -129,6 +129,7 @@ function collectionPath(chain: BbtCollectionChain): string {
 
 export class ZoteroSearchTool extends defineTool({
   name: 'zotero_search',
+  parallelSafe: true,
   description:
     'Search Zotero library by citation key, title, author, or year. ' +
     'Prefer the structured title/author/year fields over a single query string. ' +
