@@ -36,8 +36,6 @@ class TestPollingSource extends PollingSourceBase<
   string,
   BasePollSubscriptionState
 > {
-  private keysChangedEventCount = 0;
-
   constructor() {
     super({
       name: 'TestPollingSource',
@@ -58,7 +56,7 @@ class TestPollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedEvent(): void {
-    this.keysChangedEventCount += 1;
+    // No-op: this test double doesn't need to observe key-change events.
   }
 
   failWithAuthError(state: BasePollSubscriptionState): void {

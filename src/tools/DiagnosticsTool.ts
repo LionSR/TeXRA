@@ -140,12 +140,18 @@ export class DiagnosticsTool extends defineTool({
       };
 
       if (command === 'count') {
-        return { summary, output: header, diagnostics: baseDiagnostics };
+        return {
+          status: 'executed',
+          summary,
+          output: header,
+          diagnostics: baseDiagnostics,
+        };
       }
 
       const messageDetails =
         messages.length > 0 ? `\n\n${formatMessageList(messages)}` : '';
       return {
+        status: 'executed',
         summary,
         output: `${header}${messageDetails}`,
         diagnostics: { ...baseDiagnostics, messages },
@@ -176,6 +182,7 @@ export class DiagnosticsTool extends defineTool({
       });
       if (!result.accepted) {
         return {
+          status: 'executed',
           summary: 'Criticism not accepted',
           output:
             'Inline criticism diagnostics are disabled. Enable "texra.inlineCriticism.enabled" in settings to surface critiques as diagnostics.',
@@ -183,7 +190,7 @@ export class DiagnosticsTool extends defineTool({
       }
       const where = result.resolvedPath || absolutePath;
       const summary = `Added criticism for ${where}:${line} (S${severity}/C${confidence})`;
-      return { summary, output: summary };
+      return { status: 'executed', summary, output: summary };
     } catch (error) {
       const detail = toErrorMessage(error);
       logger.error(CHANNEL, `Failed to add criticism: ${detail}`);

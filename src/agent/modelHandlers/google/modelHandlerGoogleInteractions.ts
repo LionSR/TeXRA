@@ -33,7 +33,10 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 
 // Local imports - utils
 import { filterNotNull, isNonEmptyString, isObject } from '@utils/core';
@@ -66,7 +69,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
   loadAttachmentBuffer,
-  type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { convertToolSchema, toGoogleTools } from '../toolConversion';
 import { GOOGLE_FINISH } from '../types/StopReasonTypes';
@@ -1103,7 +1105,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
     call: GoogleToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1145,7 +1147,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
-    results: ToolResultPayload[],
+    results: ToolResult[],
     attachmentsPerCall: ToolFileAttachment[][],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1189,14 +1191,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   /**
-   * Reconstruct the model-generated steps of the just-finished turn: the
-   * thought steps (carrying their signatures, sourced from the reasoning cache
-   * populated by `processThinkingBlock`), optional assistant text, then the
-   * function-call steps. Carried verbatim in the transcript so the backend can
-   * validate reasoning across tool turns (resent each round in stateless mode;
-   * retained server-side once sent in chained mode).
-   */
-  /**
    * Build a `thought` step from an optional signature and thinking summary, or
    * `undefined` when both are empty (an empty thought step is noise on the wire).
    */
@@ -1212,6 +1206,14 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     } satisfies ThoughtStep;
   }
 
+  /**
+   * Reconstruct the model-generated steps of the just-finished turn: the
+   * thought steps (carrying their signatures, sourced from the reasoning cache
+   * populated by `processThinkingBlock`), optional assistant text, then the
+   * function-call steps. Carried verbatim in the transcript so the backend can
+   * validate reasoning across tool turns (resent each round in stateless mode;
+   * retained server-side once sent in chained mode).
+   */
   private buildAssistantTurnSteps(
     calls: GoogleToolCall[],
     workspaceState: AgentWorkspaceState | undefined,
@@ -1243,7 +1245,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   /** Build a `function_result` step, embedding tool-result images inline. */
   private async buildFunctionResultStep(
     call: GoogleToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
   ): Promise<FunctionResultStep> {
     const subcontent: FunctionResultSubcontent[] = [];
@@ -1539,14 +1541,20 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         return withUpdated(result);
       }
 
-      const params: CreateModelInteractionParamsNonStreaming = {
+      // Not annotated with `CreateModelInteractionParamsNonStreaming`: the
+      // SDK's public export of that name (`Interactions.*`) is only the
+      // request-body subset and doesn't line up with the (unexported)
+      // parameter type its own `create()` overload for this shape expects,
+      // so an explicit annotation here would make TS fall through to
+      // `create()`'s most general overload and lose the precise response type.
+      // Leaving `params` inferred keeps its structural type (which does
+      // include `model`/`input`/`store` from `commonParams`) matching that
+      // overload, so `response` comes back correctly typed with no cast.
+      const params = {
         ...commonParams,
-        stream: false,
+        stream: false as const,
       };
-      const response = (await client.interactions.create(
-        params,
-        requestOptions,
-      )) as unknown as GoogleGenAIInteraction;
+      const response = await client.interactions.create(params, requestOptions);
       this.finalizeChain(response, base.length, stateful);
       return withUpdated({ response });
     } catch (error) {
@@ -1600,9 +1608,17 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * commonParams, so chaining composes with background unchanged. Cancels the
    * in-flight interaction on abort. Mirrors ModelHandlerOpenAIResponse.
    */
-  private async executeBackgroundPath(
+  // Generic (rather than annotating `commonParams` with the public
+  // `CreateModelInteractionParamsNonStreaming` alias) so the caller's actual
+  // request-shape fields (`model`/`input`/`store`/…) survive into
+  // `submitParams` below — see the comment on the sibling non-streaming
+  // `create()` call in `createResponseImpl` for why the public alias by
+  // itself would make TS pick `create()`'s most general overload.
+  private async executeBackgroundPath<
+    P extends Omit<CreateModelInteractionParamsNonStreaming, 'stream'>,
+  >(
     client: GoogleGenAI,
-    commonParams: Omit<CreateModelInteractionParamsNonStreaming, 'stream'>,
+    commonParams: P,
     totalStepCount: number,
     stateful: boolean,
     requestOptions: { fetchOptions: { signal: AbortSignal } } | undefined,
@@ -1618,9 +1634,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
 
     // background:true forces store:true (already true under `stateful`).
-    const submitParams: CreateModelInteractionParamsNonStreaming = {
+    const submitParams = {
       ...commonParams,
-      stream: false,
+      stream: false as const,
       store: true,
       background: true,
     };
@@ -1632,10 +1648,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // SMOKE-TEST: the initial status of a background:true create, and whether
     // background:true is accepted with store:true (and rejected/ignored with
     // store:false), are unconfirmed offline; verify on a real-key run.
-    const submitted = (await client.interactions.create(
+    const submitted = await client.interactions.create(
       submitParams,
       requestOptions,
-    )) as unknown as GoogleGenAIInteraction;
+    );
 
     const completed = await this.pollBackgroundInteraction(
       client,
@@ -1685,11 +1701,11 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         retrieve: async (id, sig) => {
           const opts = sig ? { fetchOptions: { signal: sig } } : requestOptions;
           try {
-            return (await client.interactions.get(
+            return await client.interactions.get(
               id,
               ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
               opts,
-            )) as unknown as GoogleGenAIInteraction;
+            );
           } catch (err) {
             // Tag and rethrow — a user-abort surfaces as-is; a transient poll
             // error (5xx/429/network) re-enters createResponse via PocketFlow's
@@ -1876,11 +1892,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
             break;
 
           case 'interaction.completed':
-            // The completed event carries the final status/usage/steps. Cast to
-            // the handler's Resp shape (steps non-optional downstream is tolerated
-            // via the `?? []` reads in extractors).
-            completedInteraction =
-              event.interaction as unknown as GoogleGenAIInteraction;
+            // The completed event's `interaction` field is already structurally
+            // compatible with GoogleGenAIInteraction (same required id/status,
+            // same optional usage/steps), so no cast is needed here.
+            completedInteraction = event.interaction;
             break;
 
           case 'error': {
@@ -1919,7 +1934,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
           finalizedSteps.length > 0
             ? finalizedSteps
             : (completedInteraction?.steps ?? []),
-      } as unknown as GoogleGenAIInteraction;
+      };
 
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);

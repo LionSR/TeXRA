@@ -30,6 +30,7 @@ export class ApplyPathTool extends defineTool({
 
     if (result.success) {
       return {
+        status: 'executed',
         summary: 'Applied patch',
         output: result.stdout ?? '',
       };

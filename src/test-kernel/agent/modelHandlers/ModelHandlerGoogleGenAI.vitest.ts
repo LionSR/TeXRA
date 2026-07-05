@@ -110,6 +110,13 @@ function buildGoogleConfig(
   };
 }
 
+function createGoogleGenAIHandler(): ModelHandlerGoogleGenAI {
+  const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+  const { logger } = createLoggerStub();
+  handler.setLogger(logger);
+  return handler;
+}
+
 class GoogleHandlerTestDouble extends ModelHandlerGoogleGenAI {
   constructor(
     config: ModelConfig,
@@ -405,9 +412,7 @@ describe('validateGoogleMessageHistory', () => {
 
 describe('ModelHandlerGoogleGenAI createUserFollowUpMessages', () => {
   it('merges with existing user message to maintain alternating turns', async () => {
-    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
-    const { logger } = createLoggerStub();
-    handler.setLogger(logger);
+    const handler = createGoogleGenAIHandler();
 
     // Start with messages ending in user (simulating after tool response)
     const messages: Content[] = [
@@ -434,9 +439,7 @@ describe('ModelHandlerGoogleGenAI createUserFollowUpMessages', () => {
   });
 
   it('adds new user message when last message is model', async () => {
-    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
-    const { logger } = createLoggerStub();
-    handler.setLogger(logger);
+    const handler = createGoogleGenAIHandler();
 
     // Start with messages ending in model
     const messages: Content[] = [
@@ -460,12 +463,11 @@ describe('ModelHandlerGoogleGenAI createUserFollowUpMessages', () => {
 
 describe('ModelHandlerGoogleGenAI tool attachments', () => {
   it('embeds tool attachments as function response parts with inline data', async () => {
-    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
-    const { logger } = createLoggerStub();
-    handler.setLogger(logger);
+    const handler = createGoogleGenAIHandler();
 
     const attachmentBytes = new Uint8Array([1, 2, 3, 4]);
     const toolResult = {
+      status: 'executed' as const,
       output: 'generated figures',
       files: [
         {

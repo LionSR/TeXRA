@@ -45,6 +45,7 @@ export class VerifySetupTool extends defineTool({
         ]);
         const ok = gm || magick;
         return {
+          status: 'executed',
           summary: `Verify gm/magick: ${ok ? 'ok' : 'missing'}`,
           output: ok
             ? `Verified: ${gm ? '"gm"' : '"magick"'} is installed and on PATH.`
@@ -62,6 +63,7 @@ export class VerifySetupTool extends defineTool({
       }
       const ok = await isToolPresent(name);
       return {
+        status: 'executed',
         summary: `Verify ${name}: ${ok ? 'ok' : 'missing'}`,
         output: ok
           ? `Verified: "${name}" is installed and on PATH.`
@@ -126,6 +128,7 @@ export class VerifySetupTool extends defineTool({
     }
 
     return {
+      status: 'executed',
       summary: verificationSummary,
       output: lines.join('\n'),
     };

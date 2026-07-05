@@ -40,7 +40,7 @@ describe('InvokeCommandTool allowlist', () => {
       args: ['openai', fakeSecret],
     });
 
-    assert.ok(!result.isError);
+    assert.equal(result.status, 'executed');
     assert.equal(invocations[0].args.length, 2, 'args still forwarded');
     assert.ok(
       !(result.summary ?? '').includes(fakeSecret),
@@ -63,7 +63,7 @@ describe('InvokeCommandTool allowlist', () => {
       args: ['openai'],
     });
 
-    assert.ok(!('isError' in result) || !result.isError, 'should not error');
+    assert.equal(result.status, 'executed');
     assert.equal(invocations.length, 1);
     assert.equal(invocations[0].command, 'texra.setApiKey');
     assert.deepEqual(invocations[0].args, ['openai']);
@@ -86,7 +86,7 @@ describe('InvokeCommandTool allowlist', () => {
       args: ['ms-python.python'],
     });
 
-    assert.ok(result.isError, 'should report an error');
+    assert.equal(result.status, 'error');
     assert.match(
       result.error ?? '',
       /not in the setup allowlist/,
@@ -107,7 +107,7 @@ describe('InvokeCommandTool allowlist', () => {
       'texra.refreshAllOptions',
     ]) {
       const result = await tool.call({ command: cmd, args: [] });
-      assert.ok(result.isError, `${cmd} should be rejected`);
+      assert.equal(result.status, 'error');
     }
     assert.equal(invocations.length, 0);
   });
@@ -116,9 +116,9 @@ describe('InvokeCommandTool allowlist', () => {
     const { tool, invocations } = setupTool();
 
     const empty = await tool.call({ command: '', args: [] });
-    assert.ok(empty.isError);
+    assert.equal(empty.status, 'error');
     const blank = await tool.call({ command: '   ', args: [] });
-    assert.ok(blank.isError);
+    assert.equal(blank.status, 'error');
     assert.equal(invocations.length, 0);
   });
 

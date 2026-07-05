@@ -60,7 +60,7 @@ describe('DiagnosticsTool', () => {
       path: 'paper.tex',
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     // Now caught by DiagnosticsInputSchema's discriminated union (the `add`
     // variant requires these fields) rather than a hand-rolled message, so
     // the structured Zod diagnostics list each missing field individually.

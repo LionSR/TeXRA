@@ -205,7 +205,7 @@ export async function handleTestTextEditor(): Promise<void> {
 
     const result = await textEditorTool.call(input);
 
-    if (result.isError) {
+    if (result.status === 'error') {
       await showLoggedErrorMessage(
         CHANNEL,
         'Error from text editor tool',

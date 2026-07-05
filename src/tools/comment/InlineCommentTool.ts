@@ -137,6 +137,7 @@ export class InlineCommentTool extends defineTool({
   protected async execute(input: InlineCommentInput): Promise<ToolResult> {
     if (!provider.available()) {
       return {
+        status: 'executed',
         summary: 'Inline comments unavailable',
         output:
           'Inline comments require the VS Code extension host and are not available in this environment.',
@@ -179,6 +180,7 @@ export class InlineCommentTool extends defineTool({
       const where = result.resolvedPath || resolved.absolute;
       const summary = `Opened comment thread ${result.threadId} at ${where}:${line}`;
       return {
+        status: 'executed',
         summary,
         output: `${summary}\nThe user can reply or resolve it in the editor; read replies with the "list" command.`,
       };
@@ -199,7 +201,7 @@ export class InlineCommentTool extends defineTool({
       return this.threadNotFound(threadId);
     }
     const summary = `Replied to comment thread ${threadId}`;
-    return { summary, output: summary };
+    return { status: 'executed', summary, output: summary };
   }
 
   private setResolved(
@@ -216,7 +218,7 @@ export class InlineCommentTool extends defineTool({
       return this.threadNotFound(threadId);
     }
     const summary = `${resolved ? 'Resolved' : 'Reopened'} comment thread ${threadId}`;
-    return { summary, output: summary };
+    return { status: 'executed', summary, output: summary };
   }
 
   private list(input: InlineCommentInput): ToolResult {
@@ -231,6 +233,7 @@ export class InlineCommentTool extends defineTool({
     const threads = provider.list({ absolutePath });
     if (threads.length === 0) {
       return {
+        status: 'executed',
         summary: 'No comment threads',
         output: input.path
           ? `No comment threads in ${input.path}.`
@@ -240,11 +243,16 @@ export class InlineCommentTool extends defineTool({
     const summary = `${threads.length} comment thread${
       threads.length === 1 ? '' : 's'
     }`;
-    return { summary, output: threads.map(formatThread).join('\n\n') };
+    return {
+      status: 'executed',
+      summary,
+      output: threads.map(formatThread).join('\n\n'),
+    };
   }
 
   private threadNotFound(threadId: string): ToolResult {
     return {
+      status: 'executed',
       summary: 'Thread not found',
       output: `No comment thread with id "${threadId}". Use the "list" command to see open threads.`,
     };

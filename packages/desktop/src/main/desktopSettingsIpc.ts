@@ -1,4 +1,5 @@
 import { platform, tryPlatform } from '@platform/platform';
+import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import {
@@ -82,8 +83,6 @@ import {
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
-import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
-import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
@@ -476,8 +475,8 @@ export function createDesktopSettingsIpc(
   }
 
   async function openMemoryFolder(): Promise<void> {
-    await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
-    await options.openPath?.(StorageFS.fullPath(MEMORY_STORAGE_ROOT));
+    await StorageFS.ensureDir(resolveMemoryStoragePath());
+    await options.openPath?.(StorageFS.fullPath(resolveMemoryStoragePath()));
   }
 
   async function postHistoryData(): Promise<void> {

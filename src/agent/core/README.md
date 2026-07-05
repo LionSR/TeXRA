@@ -29,7 +29,7 @@ depend on neither. Don't introduce imports that point back outward (e.g.
 This diagram covers dependencies _within_ `core`. Two `flows/` files also take
 narrow, accepted dependencies on host-agnostic collaborators outside `core`
 that aren't otherwise abstracted: `BaseFlowServices.ts` and `RetryState.ts`
-take `type`-only imports of `AgentRuntimeHost`/`StreamStatusRegistry` from
+take `type`-only imports of `AgentRuntimeHost`/`StreamStatusMachine` from
 `@agent/runtime` (the shared service-injection contract every flow node
 receives; `CycleServices.ts` only inherits these transitively through
 `BaseFlowContextInit`, not via its own import), and `RetryState.ts`

@@ -81,12 +81,8 @@ function runFormSelection<T>({
     onDone(value);
   }
 
-  const runAction = (): Promise<void> => {
-    try {
-      return Promise.resolve(action());
-    } catch (error: unknown) {
-      return Promise.reject(error);
-    }
+  const runAction = async (): Promise<void> => {
+    await action();
   };
 
   void runAction()

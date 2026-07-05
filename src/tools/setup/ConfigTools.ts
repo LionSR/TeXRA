@@ -109,6 +109,7 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
     const value = getSetupPlatform().config.get(input.key);
     const json = JSON.stringify(value, null, 2) ?? 'undefined';
     return {
+      status: 'executed',
       summary: `Read ${input.key}`,
       output: `${input.key}:\n${json}`,
     };
@@ -164,6 +165,7 @@ Anything outside this list must be changed through the settings UI — invoke \`
     const before = JSON.stringify(previous);
     const after = JSON.stringify(parsed.data);
     return {
+      status: 'executed',
       summary: `Updated ${input.key} (${input.target})`,
       output: `Updated ${input.key} (${input.target} scope): ${before ?? 'undefined'} → ${after}.`,
     };

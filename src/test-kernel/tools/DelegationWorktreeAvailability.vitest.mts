@@ -131,7 +131,7 @@ describe('resolveAgentTools worktree annotation', () => {
       registry: new MapToolRegistry({
         delegate_agent: {
           definition: { name: 'delegate_agent' },
-          call: async () => ({ summary: '', output: '' }),
+          call: async () => ({ status: 'executed', summary: '', output: '' }),
         },
       }),
       logger: { warn: () => {} },

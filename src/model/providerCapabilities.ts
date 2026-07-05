@@ -1,9 +1,8 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import type { UsageRoute } from '@shared/schemas';
-import type { AgentCategory } from '@shared/schemas/agent';
 
-export type ProviderAuthMode = 'api-key' | 'chatgpt-subscription';
+export type ProviderAuthMode = 'chatgpt-subscription';
 
 export interface OpenAIResponseProviderCapabilities {
   readonly backgroundMode: 'base' | 'disabled';
@@ -29,9 +28,7 @@ export interface ProviderCapabilityProfile {
 
 export interface ProviderCapabilityKey {
   readonly model: ModelConfig;
-  readonly authMode: ProviderAuthMode;
   readonly useOpenRouter: boolean;
-  readonly agentCategory?: AgentCategory;
 }
 
 type ProviderCapabilityResolver = (
@@ -80,17 +77,7 @@ export function isCodexSubscriptionEligible(fullName: string): boolean {
   return /codex/i.test(fullName);
 }
 
-const openAIApiKeyCapabilities: ProviderCapabilityResolver = ({ model }) => {
-  if (model.provider !== ModelProvider.OPENAI) return null;
-  return {
-    authMode: 'api-key',
-    contextWindow: model.contextWindow,
-    inputPrice: model.inputPrice,
-    outputPrice: model.outputPrice,
-  };
-};
-
-const openAIChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({
+const resolveChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({
   model,
   useOpenRouter,
 }) => {
@@ -123,23 +110,9 @@ const openAIChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({
   };
 };
 
-export const ProviderCapabilities: Partial<
-  Record<
-    ModelProvider,
-    Partial<Record<ProviderAuthMode, ProviderCapabilityResolver>>
-  >
-> = {
-  [ModelProvider.OPENAI]: {
-    'api-key': openAIApiKeyCapabilities,
-    'chatgpt-subscription': openAIChatGptSubscriptionCapabilities,
-  },
-};
-
-/** Resolve the active provider profile for a model/auth-mode pair. */
+/** Resolve the active ChatGPT-subscription provider profile. */
 export function resolveProviderCapabilities(
   key: ProviderCapabilityKey,
 ): ProviderCapabilityProfile | null {
-  return (
-    ProviderCapabilities[key.model.provider]?.[key.authMode]?.(key) ?? null
-  );
+  return resolveChatGptSubscriptionCapabilities(key);
 }

@@ -16,9 +16,17 @@ import { afterEach, describe, expect, it } from 'vitest';
 // Local imports - platform
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import {
+  LEGACY_RUNS_STORAGE_DIR,
+  MEMORY_STORAGE_DIR,
+  resolveExistingRunStoragePath,
   WorkspaceStorageProvider,
   resolveGlobalStoragePath,
+  resolveLegacyRunStoragePath,
+  resolveMemoryStoragePath,
+  resolveRunOriginalSnapshotPath,
+  resolveRunStoragePath,
   resolveWorkspaceStoragePath,
+  RUNS_STORAGE_DIR,
   workspaceStorageId,
 } from '@platform/defaults/workspaceStorage';
 
@@ -71,13 +79,45 @@ describe('workspace storage defaults', () => {
     expect(workspaceStorageId(undefined)).toMatch(/^no-workspace-[0-9a-f]{8}$/);
   });
 
-  it('resolves global and workspace storage paths from one root', async () => {
+  it('snapshots global, workspace, memory, and run storage layout paths', async () => {
     const root = await makeTempDir();
     const workspacePath = '/workspace/a';
+    const existingCurrent = await resolveExistingRunStoragePath(
+      ['run-1', 'result.json'],
+      async (storagePath) => storagePath === 'executions/run-1/result.json',
+    );
+    const existingLegacy = await resolveExistingRunStoragePath(
+      ['legacy-run'],
+      async (storagePath) => storagePath === 'taskRuns/legacy-run',
+    );
 
-    expect(resolveGlobalStoragePath(root)).toBe(join(root, 'global-storage'));
-    expect(resolveWorkspaceStoragePath(root, workspacePath)).toBe(
+    expect([
+      resolveGlobalStoragePath(root),
+      resolveWorkspaceStoragePath(root, workspacePath),
+      MEMORY_STORAGE_DIR,
+      resolveMemoryStoragePath('memories/project.md'),
+      RUNS_STORAGE_DIR,
+      resolveRunStoragePath('run-1', 'result.json'),
+      resolveRunOriginalSnapshotPath('run-1', 'Draft/Draft.tex'),
+      LEGACY_RUNS_STORAGE_DIR,
+      resolveLegacyRunStoragePath('legacy-run'),
+      existingCurrent,
+      existingLegacy,
+    ]).toEqual([
+      join(root, 'global-storage'),
       join(root, 'workspace-storage', workspaceStorageId(workspacePath)),
+      'memories',
+      'memories/project.md',
+      'executions',
+      'executions/run-1/result.json',
+      'executions/run-1/original/Draft/Draft.tex',
+      'taskRuns',
+      'taskRuns/legacy-run',
+      'executions/run-1/result.json',
+      'taskRuns/legacy-run',
+    ]);
+    expect(() => resolveMemoryStoragePath('not-memories/project.md')).toThrow(
+      'Invalid memory path',
     );
   });
 

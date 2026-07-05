@@ -102,6 +102,7 @@ export class ArxivDownloadTool extends defineTool({
     ].join('\n');
 
     return {
+      status: 'executed',
       summary,
       output,
     };

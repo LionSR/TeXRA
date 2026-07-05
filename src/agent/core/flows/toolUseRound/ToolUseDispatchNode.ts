@@ -142,12 +142,16 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     // Skip duplicate parallel calls — return a synthetic error result so
     // the model is informed and can retry sequentially if needed.
     if (this._duplicateCallIds.has(call.callId)) {
+      const duplicateResult: ToolResult = {
+        status: 'error',
+        error: DUPLICATE_CALL_ERROR,
+      };
       return {
         call,
-        result: { error: DUPLICATE_CALL_ERROR, isError: true as const },
+        result: duplicateResult,
         parsedInput: call.input,
         extracted: {
-          sanitizedResult: { status: 'error', error: DUPLICATE_CALL_ERROR },
+          sanitizedResult: duplicateResult,
           attachments: [],
         },
         editedFiles: [],
@@ -188,7 +192,10 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     signal?: AbortSignal,
   ): Promise<ToolResult> {
     if (!tool) {
-      return { error: `Unknown tool ${call.name}`, isError: true };
+      return {
+        status: 'error',
+        error: `Unknown tool ${call.name}`,
+      };
     }
 
     try {
@@ -213,7 +220,11 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       );
     } catch (err) {
       const { message, diagnostics } = normalizeToolCallError(call.name, err);
-      return { error: message, isError: true, diagnostics };
+      return {
+        status: 'error',
+        error: message.trim() || 'Tool execution failed.',
+        ...(diagnostics !== undefined ? { diagnostics } : {}),
+      };
     }
   }
 
@@ -302,7 +313,9 @@ export class ToolUseDispatchNode<C> extends BatchNode<
             toolName: call.name,
             input: parsedInput ?? call.raw,
             output:
-              result.error ?? result.output ?? 'Tool execution cancelled.',
+              result.status === 'error'
+                ? result.error
+                : (result.output ?? 'Tool execution cancelled.'),
             isError: true,
           },
           'failed',
@@ -311,8 +324,14 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       return null;
     }
 
-    const trackedEdits = tracker.recordEdits(result.edits);
-    if (!result.lineChanges && trackedEdits.lineChanges) {
+    const trackedEdits = tracker.recordEdits(
+      result.status === 'executed' ? result.edits : undefined,
+    );
+    if (
+      result.status === 'executed' &&
+      !result.lineChanges &&
+      trackedEdits.lineChanges
+    ) {
       result.lineChanges = trackedEdits.lineChanges;
     }
 
@@ -375,7 +394,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     }
 
     // Collect and add valid media file locations
-    if (result.files?.length) {
+    if (result.status === 'executed' && result.files?.length) {
       const validLocations: FileLocation[] = [];
       for (const attachment of result.files) {
         if (!isNonEmptyString(attachment.path)) {

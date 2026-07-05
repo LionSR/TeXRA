@@ -1,5 +1,9 @@
 # Agent SDK Readiness — Verification Checkpoint (2026-07-01)
 
+> **Packaging note (2026-07-05):** #7099 later demotes/deletes the unused
+> `@texra/core` package. Mentions below are historical checkpoint observations,
+> not current workspace layout.
+
 **Status:** Verification checkpoint, not a new audit. Read alongside the canonical
 [`agent-sdk-readiness.md`](./agent-sdk-readiness.md), the
 [`agent-sdk-readiness-delta-2026-06-24.md`](./agent-sdk-readiness-delta-2026-06-24.md)

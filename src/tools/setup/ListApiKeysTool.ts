@@ -36,6 +36,7 @@ export class ListApiKeysTool extends defineTool({
 
     if (storedKeys.length === 0) {
       return {
+        status: 'executed',
         summary: 'No secrets stored',
         output: 'SecretStorage is empty — no API keys or tokens are stored.',
       };
@@ -105,6 +106,7 @@ export class ListApiKeysTool extends defineTool({
         : `${providerKeys.length}/${providers.length} provider keys`;
 
     return {
+      status: 'executed',
       summary: `${storedKeys.length} stored secret${storedKeys.length === 1 ? '' : 's'}: ${providerSummary}`,
       output: lines.join('\n'),
     };

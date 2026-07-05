@@ -76,6 +76,7 @@ function buildModelHint(config: ModelConfig): string {
 export function buildBaseModelOption(
   model: string,
   config: ModelConfig,
+  hintConfig: ModelConfig = config,
 ): ModelOptionData {
   return {
     value: model,
@@ -83,7 +84,7 @@ export function buildBaseModelOption(
     provider: config.provider,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
-    hint: buildModelHint(config),
+    hint: buildModelHint(hintConfig),
   };
 }
 

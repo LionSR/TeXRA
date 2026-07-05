@@ -71,6 +71,23 @@ function toolUseTaskState(agent: string, model: string): TaskState {
   } as TaskState;
 }
 
+function createRecordingBackend(): {
+  backend: ProgressBackend;
+  messages: ProgressViewOutboundMessage[];
+} {
+  const messages: ProgressViewOutboundMessage[] = [];
+  const backend = new ProgressBackend({
+    storage: new MemoryMementoStorage(),
+    sendMessage: (message) => {
+      messages.push(message);
+      return true;
+    },
+    hasTarget: () => true,
+    configureUi: () => createUiConfig(),
+  });
+  return { backend, messages };
+}
+
 describe('ProgressBackend', () => {
   it('constructs the shared progress backend service graph', () => {
     let servicesFromConfig: ProgressBackendServices | undefined;
@@ -148,16 +165,7 @@ describe('ProgressBackend', () => {
   });
 
   it('sends the full metadata set once for full-view sync', () => {
-    const messages: ProgressViewOutboundMessage[] = [];
-    const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
-      sendMessage: (message) => {
-        messages.push(message);
-        return true;
-      },
-      hasTarget: () => true,
-      configureUi: () => createUiConfig(),
-    });
+    const { backend, messages } = createRecordingBackend();
 
     for (let i = 0; i < 20; i += 1) {
       backend.state.streamLogs.ensureStream(`history-${i}`);
@@ -195,16 +203,7 @@ describe('ProgressBackend', () => {
   });
 
   it('patches one stream for subagent registration and run-start metadata', async () => {
-    const messages: ProgressViewOutboundMessage[] = [];
-    const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
-      sendMessage: (message) => {
-        messages.push(message);
-        return true;
-      },
-      hasTarget: () => true,
-      configureUi: () => createUiConfig(),
-    });
+    const { backend, messages } = createRecordingBackend();
     const subscription = backend.setupEventListeners(bus);
 
     try {
@@ -312,16 +311,7 @@ describe('ProgressBackend', () => {
   });
 
   it('does not switch category filters for unknown-category status streams', async () => {
-    const messages: ProgressViewOutboundMessage[] = [];
-    const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
-      sendMessage: (message) => {
-        messages.push(message);
-        return true;
-      },
-      hasTarget: () => true,
-      configureUi: () => createUiConfig(),
-    });
+    const { backend, messages } = createRecordingBackend();
 
     try {
       backend.state.streamLogs.ensureStream('tool-stream');
@@ -361,16 +351,7 @@ describe('ProgressBackend', () => {
   });
 
   it('revalidates and syncs the active stream when status registration changes the filter', async () => {
-    const messages: ProgressViewOutboundMessage[] = [];
-    const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
-      sendMessage: (message) => {
-        messages.push(message);
-        return true;
-      },
-      hasTarget: () => true,
-      configureUi: () => createUiConfig(),
-    });
+    const { backend, messages } = createRecordingBackend();
 
     try {
       backend.state.streamLogs.ensureStream('tool-stream');

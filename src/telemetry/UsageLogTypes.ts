@@ -15,7 +15,7 @@ const UsageLogMetadataSchema = z.object({
   streamId: z.string().optional(),
 });
 
-const UsageLogStatsSchema = z.object({
+export const UsageLogStatsSchema = z.object({
   inputTokens: z.int().nonnegative(),
   outputTokens: z.int().nonnegative(),
   cost: z.number().nonnegative(),
@@ -25,6 +25,16 @@ const UsageLogStatsSchema = z.object({
   cacheCreationInputTokens: z.int().nonnegative().optional(),
   reasoningTokens: z.int().nonnegative().optional(),
 });
+
+/**
+ * Field names here intentionally follow this wire schema, not
+ * `NormalizedUsage`'s (e.g. `cacheCreationInputTokens` vs.
+ * `cacheCreationTokens`) — this is the persisted/billing log contract, so
+ * renaming it isn't free. Callers building a log payload from
+ * `NormalizedUsage` should type their intermediate object as (a `Pick` of)
+ * `UsageLogStats` rather than hand-duplicating this field list.
+ */
+export type UsageLogStats = z.infer<typeof UsageLogStatsSchema>;
 
 export const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
   UsageLogStatsSchema.shape,

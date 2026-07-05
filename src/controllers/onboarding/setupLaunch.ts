@@ -1,18 +1,8 @@
-/**
- * Host-neutral setup-assistant launch helpers (PRD: agent-native onboarding).
- *
- * The VS Code host owns a richer launch path (`setupAssistantCommand.ts`) with
- * interactive credential/routing prompts. Hosts without a quick-pick UI (the
- * Electron desktop shell) need a smaller, prompt-free path: resolve a model the
- * user's current credentials can actually call and build the execute request the
- * shared agent-run path consumes. This module keeps that resolution truth in one
- * agnostic place so desktop does not re-derive setup routing.
- */
-
 import { platform } from '@platform/platform';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { lookupApiKey, API_PROVIDERS } from '@model/apiProviders';
+import { decideRunModel } from '@model/runModelDecision';
 import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
@@ -21,8 +11,6 @@ import type { MainViewExecuteMessage } from '@shared/mainView';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { isNonEmptyString } from '@utils/core';
-// Used only by `resolveDesktopSetupModel` below — the shared
-// `resolveSetupModelExcludingOpenRouter` scan has no routing-flag dependency.
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -31,25 +19,11 @@ export const SETUP_INSTRUCTION =
   'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
 
 /**
- * Pick a model from the user's non-OpenRouter credentials, in priority
- * order: ChatGPT/Codex subscription, server-side keys for the default
- * agent model, server-side keys for any per-provider setup model, then a
- * direct provider API key. Returns `null` when none resolve.
- *
- * Named for what it excludes, not just "direct" keys: it also covers the
- * ChatGPT subscription and server-side-key paths, which aren't
- * secrets-lookup credentials either. The one thing every path here shares
- * is that none of them need the OpenRouter routing flag.
- *
- * This is the credential-priority core shared by every host's setup-model
- * resolution: the VS Code extension's `resolveLaunchModel`
- * (`setupAssistantCommand.ts`) layers its interactive OpenRouter-flag flip
- * on top of this, and `resolveDesktopSetupModel` below layers desktop's
- * flag-only (non-interactive) OpenRouter handling on top of it. Keeping the
- * priority order in one place means the two hosts can't silently drift on
- * which credential wins.
+ * Scan non-OpenRouter setup credentials in host-shared priority order:
+ * ChatGPT/Codex subscription, server-side default, server-side provider setup
+ * model, then direct provider key.
  */
-export async function resolveSetupModelExcludingOpenRouter(
+export async function selectSetupCredentialModelExcludingOpenRouter(
   secrets: PlatformSecrets,
 ): Promise<string | null> {
   if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
@@ -80,37 +54,35 @@ export async function resolveSetupModelExcludingOpenRouter(
 }
 
 /**
- * Pick a model the setup agent can actually call given the user's current
- * credentials and the global `useOpenRouter` routing flag. Returns `null` when
- * no credential resolves to a runnable model (the caller refuses launch rather
- * than starting a run that fails at runtime). Mirrors the extension's
- * `resolveLaunchModel`, minus the interactive OpenRouter-flag flip: desktop has
- * no routing prompt, so OpenRouter is chosen only when the flag is already on
- * AND an OpenRouter key exists. A bare OpenRouter key with the flag off yields
- * `null` rather than an unrouted (and doomed) run.
+ * Desktop has no routing prompt, so OpenRouter is chosen only when the flag is
+ * already on and an OpenRouter key exists.
  */
-export async function resolveDesktopSetupModel(): Promise<string | null> {
+export async function selectDesktopSetupModel(): Promise<string | null> {
   const secrets = platform().secrets;
+  const useOpenRouter = getUseOpenRouter();
 
-  // Global OR routing re-routes every call through OpenRouter regardless of
-  // provider, so a direct/server pick would be misrouted — short-circuit to the
-  // OR-routed default. But only when an OpenRouter key is actually configured:
-  // otherwise the run would fail at inference time, so refuse launch (the caller
-  // surfaces "no runnable model"). Mirrors the extension's `ensureRoutingConfigured`.
-  if (getUseOpenRouter()) {
-    if (isNonEmptyString(await lookupApiKey(secrets, 'openRouter'))) {
-      return SETUP_MODEL_BY_PROVIDER.openRouter;
-    }
+  const routerModel =
+    useOpenRouter && isNonEmptyString(await lookupApiKey(secrets, 'openRouter'))
+      ? SETUP_MODEL_BY_PROVIDER.openRouter
+      : null;
+  if (useOpenRouter && !routerModel) {
     return null;
   }
 
-  // OpenRouter is only a valid pick when `useOpenRouter` routing is on (handled
-  // above). A bare OpenRouter key with the flag off can't be used: the desktop
-  // launch passes only a model string to `handleExecute` and never flips the
-  // routing flag, so an OR model would run unrouted and fail at inference.
-  // `resolveSetupModelExcludingOpenRouter` already skips the `openRouter`
-  // entry, so it naturally refuses instead of picking a doomed model.
-  return resolveSetupModelExcludingOpenRouter(secrets);
+  return (
+    decideRunModel([
+      {
+        model: routerModel,
+        reason: 'router-config',
+      },
+      {
+        model: useOpenRouter
+          ? null
+          : await selectSetupCredentialModelExcludingOpenRouter(secrets),
+        reason: 'credential',
+      },
+    ])?.model ?? null
+  );
 }
 
 /**
@@ -119,7 +91,7 @@ export async function resolveDesktopSetupModel(): Promise<string | null> {
  * `handleExecute` path the renderer's execute button uses.
  */
 export async function buildDesktopSetupExecuteMessage(): Promise<MainViewExecuteMessage | null> {
-  const model = await resolveDesktopSetupModel();
+  const model = await selectDesktopSetupModel();
   if (!model) return null;
   return {
     agent: SETUP_AGENT_NAME,
