@@ -33,8 +33,6 @@ import {
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
 
-// Local imports - common state
-
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';
 

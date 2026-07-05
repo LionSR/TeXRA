@@ -17,8 +17,6 @@ import {
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 
-// Local imports - common
-
 // Local imports - model
 import { computeModelOptionsData } from '@model/computeModelOptions';
 

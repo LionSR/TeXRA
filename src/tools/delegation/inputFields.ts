@@ -5,8 +5,6 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - logger
-
 // Local imports - tools
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatBytes } from '@shared/utils/string';
