@@ -4,12 +4,12 @@
 
 import type { StreamTabId } from '@shared/schemas';
 
-import { ACTIVE_STREAM_ID } from './focusSlice';
-import { PARENT_STREAM } from './parentStreamSlice';
-import { scrubChildStreamReferences, STREAMS } from './streamsSlice';
+import { activeStreamId } from './focusSlice';
+import { parentStream } from './parentStreamSlice';
+import { scrubChildStreamReferences, streams } from './streamsSlice';
 
 export function removeStream(streamId: StreamTabId): void {
-  const current = STREAMS.get();
+  const current = streams.get();
   const out = new Map(current);
   let changed = out.delete(streamId);
   for (const [id, slice] of out) {
@@ -18,18 +18,18 @@ export function removeStream(streamId: StreamTabId): void {
     out.set(id, next);
     changed = true;
   }
-  if (changed) STREAMS.set(out);
-  if (ACTIVE_STREAM_ID.get() === streamId) {
-    ACTIVE_STREAM_ID.set(undefined);
+  if (changed) streams.set(out);
+  if (activeStreamId.get() === streamId) {
+    activeStreamId.set(undefined);
   }
   // Drop any parent-map edges that touched this stream so the focus cycle
   // never lands on a stale id.
-  const parents = PARENT_STREAM.get();
+  const parents = parentStream.get();
   let nextParents: Map<StreamTabId, StreamTabId> | undefined;
   for (const [child, parent] of parents) {
     if (child !== streamId && parent !== streamId) continue;
     if (!nextParents) nextParents = new Map(parents);
     nextParents.delete(child);
   }
-  if (nextParents) PARENT_STREAM.set(nextParents);
+  if (nextParents) parentStream.set(nextParents);
 }

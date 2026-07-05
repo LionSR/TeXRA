@@ -15,7 +15,7 @@ import {
   isRenderableTranscriptEntry,
 } from './transcriptEntries';
 import { toolUseDisplayLines } from './toolRenderers';
-import type { ConversationEntry } from '../state/cliState';
+import type { ConversationEntry } from '../state/cliState/types';
 
 const FAILED_ENTRY_ESTIMATE_ROWS = 1;
 

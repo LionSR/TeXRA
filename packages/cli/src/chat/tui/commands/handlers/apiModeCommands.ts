@@ -12,7 +12,10 @@ import {
   selectCliRunnableModel,
 } from '@cli/runtime/modelAccess';
 
-import { cliState, patchSessionMeta } from '@cli/chat/tui/state/cliState';
+import {
+  patchSessionMeta,
+  sessionMeta,
+} from '@cli/chat/tui/state/cliState/sessionSlice';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -29,7 +32,7 @@ async function reconcileRootModelAfterApiModeChange(
 ): Promise<string | undefined> {
   if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
 
-  const { model: currentModel, modelSource } = cliState.sessionMeta.get();
+  const { model: currentModel, modelSource } = sessionMeta.get();
   const selection = await selectCliRunnableModel(currentModel, {
     fallbackReason: modelSource,
     apiMode,
@@ -59,7 +62,7 @@ export async function applyCliApiModeSelection(
 
   if (!normalized || normalized === 'status') {
     const lines = await loadCliApiStatusLines({
-      apiMode: cliState.sessionMeta.get().apiMode,
+      apiMode: sessionMeta.get().apiMode,
     });
     appendLocalAssistantTranscript([...lines, API_MODE_USAGE].join('\n'));
     return;
@@ -92,7 +95,7 @@ export async function applyCliApiModeSelection(
 
 export async function showCliAuthStatus(): Promise<void> {
   const lines = await loadCliApiStatusLines({
-    apiMode: cliState.sessionMeta.get().apiMode,
+    apiMode: sessionMeta.get().apiMode,
   });
   appendLocalAssistantTranscript(lines.join('\n'));
 }

@@ -16,7 +16,10 @@ const EMPTY_SESSION_META: SessionMeta = {
   version: '',
 };
 
-export const SESSION_META = signal<SessionMeta>(EMPTY_SESSION_META);
+const SESSION_META = signal<SessionMeta>(EMPTY_SESSION_META);
+
+/** Agent/model/cwd/approval snapshot for the current CLI session. */
+export const sessionMeta = SESSION_META;
 
 export function patchSessionMeta(patch: Partial<SessionMeta>): void {
   SESSION_META.set({ ...SESSION_META.get(), ...patch });

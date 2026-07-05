@@ -28,11 +28,12 @@ import { ModelListForm } from '../forms/ModelListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
+import { activeForm } from '../state/cliState/foregroundOverlaySlice';
 import {
-  cliState,
   patchSessionMeta,
+  sessionMeta,
   setCliSessionModelOverride,
-} from '../state/cliState';
+} from '../state/cliState/sessionSlice';
 import { loginFromChat } from './handlers/loginCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
@@ -129,7 +130,7 @@ export function registerBuiltinSlashCommands(options?: {
   // before the first message, so advance straight from the agent picker into
   // the model picker instead of closing — the user chooses both in one flow.
   function openModelSelectionForm(): void {
-    cliState.activeForm.set({
+    activeForm.set({
       commandName: 'model',
       render: (close, availableRows) => (
         <ModelListFormAdapter
@@ -142,7 +143,7 @@ export function registerBuiltinSlashCommands(options?: {
   }
 
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = cliState.sessionMeta.get().agent;
+    const current = sessionMeta.get().agent;
     const selectable = canSelectAgent();
     return (
       <AgentListForm
@@ -167,7 +168,7 @@ export function registerBuiltinSlashCommands(options?: {
   }
 
   function ApiModeFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = cliState.sessionMeta.get().apiMode;
+    const current = sessionMeta.get().apiMode;
     return (
       <ApiModeForm
         currentMode={current}
@@ -223,12 +224,12 @@ export function registerBuiltinSlashCommands(options?: {
   }
 
   function ModelListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = cliState.sessionMeta.get().model;
+    const current = sessionMeta.get().model;
     const selectable = canSelectModel();
     return (
       <ModelListForm
         currentModel={current}
-        apiMode={cliState.sessionMeta.get().apiMode}
+        apiMode={sessionMeta.get().apiMode}
         agentCategory={AgentCategory.ToolUse}
         availableRows={props.availableRows}
         selectable={selectable}
