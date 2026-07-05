@@ -177,6 +177,7 @@ Paths:
 - /executions/{id}/conversation - Full message history (subagents)
 - /executions/{id}/todos - Task list (tool-use subagents)
 - /executions/{id}/report - Result report (persists after context compaction)
+- /executions/{id}/result - Structured result manifest (JSON: outputs, diffs, outcome) for chaining
 - /executions/{id}/children - Child executions
 - /executions/{id}/output - stdout/stderr (background processes only)
 - /executions/{id}/files - Generated files (workflows only)
@@ -248,6 +249,8 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         return this.showTodos(executionId);
       case 'report':
         return this.showReport(executionId);
+      case 'result':
+        return this.showResultMeta(executionId);
       case 'children':
         return this.showChildren(executionId);
       case 'output':
@@ -281,7 +284,8 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         `Valid paths:\n` +
         `- /executions/{id}              - Summary (status, agent, model)\n` +
         `- /executions/{id}/config       - Agent configuration\n` +
-        `- /executions/{id}/report       - Result report\n` +
+        `- /executions/{id}/report       - Result report (prose)\n` +
+        `- /executions/{id}/result       - Structured result manifest (JSON: outputs, diffs, outcome)\n` +
         `- /executions/{id}/conversation - Message history (subagents)\n` +
         `- /executions/{id}/todos        - Task list (tool-use subagents)\n` +
         `- /executions/{id}/children     - Child executions\n` +
@@ -687,6 +691,22 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       };
     }
     return { status: 'executed', output: report };
+  }
+
+  /**
+   * Structured result manifest — machine-readable outputs/diffs/outcome for
+   * chaining a completed execution into a later stage without parsing the
+   * prose report.
+   */
+  private async showResultMeta(executionId: ExecutionId): Promise<ToolResult> {
+    const resultMeta = await getExecutionStore(executionId).readResultMeta();
+    if (!resultMeta) {
+      return {
+        status: 'executed',
+        output: `No structured result recorded for ${executionId} yet. It is written when the execution completes.`,
+      };
+    }
+    return { status: 'executed', output: JSON.stringify(resultMeta, null, 2) };
   }
 
   private async showChildren(executionId: ExecutionId): Promise<ToolResult> {

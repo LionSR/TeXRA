@@ -1,6 +1,7 @@
 // Third-party imports
 import { glob } from 'glob';
 import { z } from 'zod';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
 // Local imports - tools
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
@@ -41,6 +42,7 @@ interface GlobMatchInfo {
 
 export class GlobTool extends defineTool({
   name: 'glob',
+  parallelSafe: true,
   description:
     'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
   schema: GlobInputSchema,
@@ -50,6 +52,7 @@ export class GlobTool extends defineTool({
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
 
+    const cancelSignal = getCurrentToolCallContext()?.signal;
     let matches: string[];
     try {
       matches = await glob(input.pattern, {
@@ -57,6 +60,8 @@ export class GlobTool extends defineTool({
         dot: true,
         nodir: false,
         absolute: false,
+        // Large-tree walks stop promptly when the batch is aborted.
+        signal: cancelSignal,
         follow: false,
       });
     } catch (err) {
@@ -64,6 +69,13 @@ export class GlobTool extends defineTool({
         `Glob pattern error: ${toErrorMessage(err)}. ` +
           `Check syntax: use ** for recursive, * for single level. Example: "**/*.tex"`,
       );
+    }
+
+    // The walk is done, but stat-ing every match on a large tree is itself
+    // slow — bail before it so a cancelled batch doesn't wait out the
+    // post-walk stat/sort phase across several concurrent glob calls.
+    if (cancelSignal?.aborted) {
+      throw new ToolError('Cancelled before stat-ing glob matches.');
     }
 
     // Process matches in parallel for better performance

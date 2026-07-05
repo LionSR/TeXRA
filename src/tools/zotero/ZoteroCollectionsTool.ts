@@ -149,6 +149,7 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
 
 export class ZoteroCollectionsTool extends defineTool({
   name: 'zotero_collections',
+  parallelSafe: true,
   description:
     'List Zotero collections (folders) with their keys. ' +
     'Use this to discover collection keys before adding items with zotero_add. ' +
