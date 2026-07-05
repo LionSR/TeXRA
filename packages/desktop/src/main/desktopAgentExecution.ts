@@ -808,7 +808,39 @@ export class DesktopProgressBridge {
         }
       }
       this.progressEvents.hydrateRestoredStreams();
-      this.refreshActiveExecutionIds();
+      const { activeExecutionIds, allExecutionIds } =
+        this.refreshActiveExecutionIds();
+      // The in-memory scan above only catches streams whose CURRENT status
+      // already happens to be WAITING. It misses a stream that was RUNNING
+      // at crash time but has a valid persisted flow record -- ground truth
+      // that only detectWaitingStreams() (KV-store backed) can see. Without
+      // this, resetRestartRepairStreamStatuses would wrongly demote such a
+      // stream to FAILED instead of restoring it to WAITING (#6938).
+      try {
+        const executionIdMap = new Map(
+          [...allExecutionIds].filter(
+            ([, executionId]) => !activeExecutionIds.has(executionId),
+          ),
+        );
+        const persistedWaitingStreams =
+          await detectWaitingStreams(executionIdMap);
+        for (const streamId of persistedWaitingStreams) {
+          waitingStreams.add(streamId);
+        }
+      } catch (detectError) {
+        // Keep going with whatever the in-memory scan already found -- a
+        // failure here must not block the rest of this already-degraded
+        // fallback path.
+        this.logger.warn(
+          'Failed to consult persisted flow records during desktop restart-repair fallback',
+          {
+            data:
+              detectError instanceof Error
+                ? detectError
+                : { error: detectError },
+          },
+        );
+      }
       const affectedStreams = this.resetRestartRepairStreamStatuses(
         new Set(this.progressEvents.restoredStreams.keys()),
         waitingStreams,
