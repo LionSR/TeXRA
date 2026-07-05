@@ -334,9 +334,9 @@ describe('executeCliRequest', () => {
     const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
     mocks.runAgent.mockRejectedValueOnce(new Error('boom'));
 
-    await expect(
-      executeCliRequest(request, cliContext()),
-    ).rejects.toThrow('boom');
+    await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
+      'boom',
+    );
 
     expect(loadSpy).toHaveBeenCalledTimes(1);
     expect(flushSpy).toHaveBeenCalledTimes(1);
