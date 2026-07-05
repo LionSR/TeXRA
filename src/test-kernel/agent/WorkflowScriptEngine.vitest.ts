@@ -557,8 +557,9 @@ return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
   });
 
   it('blocks caller-chain escapes from sloppy-mode thunks (strict scripts)', async () => {
-    // parallel() invokes thunks from host code; without forced strict mode
-    // a sloppy thunk could walk arguments.callee.caller to a host function.
+    // Thunks run realm-side and sandbox bodies are forced into strict mode,
+    // so arguments.callee.caller is unavailable even without this guard —
+    // this covers non-strict callables a script might still construct.
     const run = await runWorkflowScript({
       script: `${META}
 return await parallel([function () {
