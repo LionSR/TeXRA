@@ -834,7 +834,7 @@ export class SettingsApp extends SettingsAppBase {
               .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
               .initialSubTab=${agentSubTab.get()}
               .userTier=${tier.get()}
-              .desktopHost=${desktopHost}
+              .unsupportedCommands=${unsupportedCommands.get()}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
               @agent-all-enabled-set=${this.handleSetAllAgentsEnabled}
@@ -934,7 +934,7 @@ export class SettingsApp extends SettingsAppBase {
               .authorName=${gitAuthorName.get()}
               .authorEmail=${gitAuthorEmail.get()}
               .toggleDisabled=${!gitSettingsLoaded.get()}
-              .desktopHost=${desktopHost}
+              .unsupportedCommands=${unsupportedCommands.get()}
               @git-mark-commits-toggle=${this.handleGitMarkCommitsToggle}
               @git-author-name-change=${this.handleGitAuthorNameChange}
               @git-author-email-change=${this.handleGitAuthorEmailChange}
@@ -958,6 +958,10 @@ export class SettingsApp extends SettingsAppBase {
               .configLoaded=${latexConfigValuesLoaded.get()}
               .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
               .desktopHost=${desktopHost}
+              .inlineCriticismSupported=${!isKnownUnsupported(
+                unsupportedCommands.get(),
+                SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
+              )}
               @latex-apply-settings=${this.handleApplyLatexSettings}
               @latex-install-workshop=${this.handleInstallLatexWorkshop}
               @latex-run-install-command=${this.handleRunInstallCommand}
