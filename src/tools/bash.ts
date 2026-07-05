@@ -397,7 +397,11 @@ export class BashTool extends defineTool({
 
         // Only surface the head when the tail actually dropped earlier
         // content — otherwise the tail already holds the full stream and a
-        // separate head block would just repeat it.
+        // separate head block would just repeat it. When it did, also
+        // report how many characters sit in the gap between head and tail,
+        // mirroring the foreground `checkToolResultTextLimit` elision note.
+        const stdoutTruncated = stdoutTotalChars > stdoutTail.length;
+        const stderrTruncated = stderrTotalChars > stderrTail.length;
         const msg = formatBashDelivery(
           executionId,
           command,
@@ -405,8 +409,20 @@ export class BashTool extends defineTool({
           result,
           stdoutTail,
           stderrTail,
-          stdoutTotalChars > stdoutTail.length ? stdoutHead : '',
-          stderrTotalChars > stderrTail.length ? stderrHead : '',
+          stdoutTruncated ? stdoutHead : '',
+          stderrTruncated ? stderrHead : '',
+          stdoutTruncated
+            ? Math.max(
+                0,
+                stdoutTotalChars - stdoutHead.length - stdoutTail.length,
+              )
+            : 0,
+          stderrTruncated
+            ? Math.max(
+                0,
+                stderrTotalChars - stderrHead.length - stderrTail.length,
+              )
+            : 0,
         );
 
         try {
