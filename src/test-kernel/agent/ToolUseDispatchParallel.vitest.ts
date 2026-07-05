@@ -269,6 +269,33 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     }
   });
 
+  it('allows an identical mutation again after a different mutation', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const { node, dispose } = dispatchHarness({
+      tools: {
+        write_file: probeTool(probe, 'write_file', 5),
+        edit_file: probeTool(probe, 'edit_file', 5),
+      },
+    });
+    try {
+      const results = (await runDispatch(node, [
+        makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
+        makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
+        makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
+      ])) as ExecResult[];
+
+      // The edit changed state, so re-issuing the identical write is a
+      // plausible restore — it must execute, not be rejected as a glitch.
+      const writeStarts = probe.events.filter((e) =>
+        e.startsWith('start write_file'),
+      ).length;
+      assert.equal(writeStarts, 2, 'post-mutation identical write must run');
+      assert.equal(results[2]?.result.status, 'executed');
+    } finally {
+      dispose();
+    }
+  });
+
   it('rejects duplicates of side-effect tools instead of sharing the result', async () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
     const { node, dispose } = dispatchHarness({

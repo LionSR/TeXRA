@@ -35,10 +35,12 @@ export interface DuplicateCallPartition {
  * in between may change what a repeated read would return, so it acts as a
  * barrier that invalidates earlier shareable signatures.
  *
- * Side-effect duplicates are rejected globally with a synthetic error
- * (sharing a success would misreport an effect that never ran; running it
- * silently twice is equally wrong) — a false positive only costs the model
- * one explicit sequential re-issue.
+ * Side-effect duplicates are rejected with a synthetic error (sharing a
+ * success would misreport an effect that never ran; running it silently
+ * twice is equally wrong) — a false positive only costs the model one
+ * explicit sequential re-issue. The rejection window resets when a
+ * different side-effect call runs in between, since changed state makes an
+ * identical repeat plausibly intentional.
  */
 export function partitionDuplicateCalls(
   toolCalls: SdkToolCall[],
@@ -63,6 +65,12 @@ export function partitionDuplicateCalls(
       if (unsafeSeen.has(key)) {
         rejected.add(call.callId);
       } else {
+        // A different mutation changes workspace state, which makes an
+        // identical repeat of an earlier mutation plausibly intentional
+        // again (e.g. write x; edit x; write x as a restore) — reset the
+        // tracking window. Parallel-safe calls do not reset it: with state
+        // unchanged, an identical mutation repeat stays redundant.
+        unsafeSeen.clear();
         unsafeSeen.add(key);
       }
     }
