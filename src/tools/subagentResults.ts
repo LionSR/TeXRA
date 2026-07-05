@@ -310,8 +310,23 @@ const OUTPUT_PREVIEW_LINES = 20;
  * Format a completed background bash result as a delivery message.
  * Injected into the orchestrator's FollowUpQueue.
  *
- * `outputTail` and `stderrTail` are read from ephemeral temp files before
- * cleanup, since `buffer: false` means `result.stdout` is always empty.
+ * `outputTail` and `stderrTail` are accumulated from `onStdout`/`onStderr`
+ * chunks as the process runs, since `buffer: false` means `result.stdout` is
+ * always empty.
+ *
+ * `outputHead`/`stderrHead` are optional and should only be passed
+ * (non-empty) when the corresponding stream was actually truncated — the
+ * caller (bash.ts) preserves a small head budget alongside the tail so a
+ * long run's first fatal error survives even once total output exceeds the
+ * tail budget. Unlike the tail preview (`lastNLines`), the head is emitted
+ * as-is and may end mid-line — it's a best-effort char-capped excerpt, not a
+ * line-bounded preview, and a truncated trailing line is fine for an LLM
+ * consumer to recover the error from.
+ *
+ * `outputElidedChars`/`stderrElidedChars` report the gap between the head and
+ * tail (mirroring the foreground `checkToolResultTextLimit`'s
+ * "[... N characters elided ...]" note) so the model doesn't mistake the
+ * head+tail excerpt for the complete stream.
  */
 export function formatBashDelivery(
   executionId: string,
@@ -320,6 +335,10 @@ export function formatBashDelivery(
   result: ExecResult,
   outputTail: string,
   stderrTail: string,
+  outputHead = '',
+  stderrHead = '',
+  outputElidedChars = 0,
+  stderrElidedChars = 0,
 ): string {
   const stdoutPreview = lastNLines(outputTail, OUTPUT_PREVIEW_LINES);
   const stderrPreview = lastNLines(stderrTail, OUTPUT_PREVIEW_LINES);
@@ -328,8 +347,24 @@ export function formatBashDelivery(
     `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
+  if (outputHead) {
+    lines.push(`<output-head>${escapeText(outputHead)}</output-head>`);
+    if (outputElidedChars > 0) {
+      lines.push(
+        `<output-elided>${outputElidedChars.toLocaleString()} characters elided</output-elided>`,
+      );
+    }
+  }
   if (stdoutPreview) {
     lines.push(`<output-preview>${escapeText(stdoutPreview)}</output-preview>`);
+  }
+  if (stderrHead) {
+    lines.push(`<stderr-head>${escapeText(stderrHead)}</stderr-head>`);
+    if (stderrElidedChars > 0) {
+      lines.push(
+        `<stderr-elided>${stderrElidedChars.toLocaleString()} characters elided</stderr-elided>`,
+      );
+    }
   }
   if (stderrPreview) {
     lines.push(`<stderr-preview>${escapeText(stderrPreview)}</stderr-preview>`);

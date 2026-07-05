@@ -19,7 +19,10 @@ import type {
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import {
+  AgentWorkspaceState,
+  FileInteractionState,
+} from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
 import {
   createToolUseRoundFlow,
@@ -29,6 +32,8 @@ import {
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
+import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
+import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -45,7 +50,10 @@ import type { ExecResult } from '@shared/schemas/opResults';
 import { BashTool } from '@tools/bash';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
-import { withTestRunContext } from '../agent/progressTestUtils';
+import {
+  createRecordingHost,
+  withTestRunContext,
+} from '../agent/progressTestUtils';
 
 // Type imports
 import type OpenAI from 'openai';
@@ -376,6 +384,87 @@ describe('BashTool', () => {
     assert.ok(text.includes('ENGINE_HEADER'));
     assert.ok(text.includes('TAIL_ERROR_DETAIL'));
     assert.ok(!text.includes('x'.repeat(1000)));
+  });
+
+  it('preserves the first fatal error and the latest output for an oversized background run', async () => {
+    // Simulates a multi-minute build whose first line is the fatal compiler
+    // error and whose output keeps streaming well past the tail budget
+    // (12,000 chars) before finishing — mirroring the scenario in #7145
+    // where a long background run's early error was silently dropped once
+    // the tail-only buffer rolled past it.
+    const headMarker = 'FATAL: undefined reference to `compute` at build.c:12';
+    const tailMarker = 'FATAL: link step failed, aborting build';
+    const filler = 'x'.repeat(2000);
+    const chunks = [
+      `${headMarker}\n`,
+      ...Array.from({ length: 8 }, () => filler),
+      `${tailMarker}\n`,
+    ];
+
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        for (const chunk of chunks) {
+          options.onStdout?.(chunk);
+        }
+        return {
+          success: false,
+          stdout: null,
+          stderr: null,
+          timedOut: false,
+          exitCode: 1,
+        };
+      },
+    );
+
+    const sendFollowUpSpy = vi
+      .spyOn(toolUseFollowUp, 'sendFollowUp')
+      .mockResolvedValue({ status: 'sent' });
+
+    const parentStreamId = 'bash-tool-bg-parent' as StreamTabId;
+    const { host } = createRecordingHost();
+    const bashTool = new BashTool();
+
+    const launchResult = await withToolEnvironment(
+      {
+        run: { runtimeHost: host, streamId: parentStreamId },
+        call: { tracker: new FileInteractionState() },
+      },
+      () =>
+        bashTool.call({
+          command: 'make build',
+          run_in_background: true,
+        }),
+    );
+    assert.equal(launchResult.status, 'executed');
+
+    // The background run delivers its result asynchronously as a follow-up
+    // once the (mocked) process settles.
+    await vi.waitFor(() => {
+      assert.ok(
+        sendFollowUpSpy.mock.calls.length > 0,
+        'Background bash should deliver a follow-up once the run completes',
+      );
+    });
+
+    // sendFollowUp is overloaded (string | FollowUpQueueInput); bash.ts always
+    // calls the object form, but Parameters<> on an overloaded function type
+    // resolves to the last signature, so assert the concrete shape here.
+    const followUpArg = sendFollowUpSpy.mock.calls[0]?.[1] as unknown as
+      { text: string } | undefined;
+    const deliveredText = followUpArg?.text;
+    assert.ok(
+      typeof deliveredText === 'string' && deliveredText.includes(headMarker),
+      'Delivered follow-up should retain the first fatal error (head)',
+    );
+    assert.ok(
+      typeof deliveredText === 'string' && deliveredText.includes(tailMarker),
+      'Delivered follow-up should retain the most recent output (tail)',
+    );
+    assert.match(
+      deliveredText ?? '',
+      /<output-elided>[\d,]+ characters elided<\/output-elided>/,
+      'Delivered follow-up should note how many characters sit between head and tail',
+    );
   });
 
   it('accepts optional command descriptions without passing them to the shell', async () => {
