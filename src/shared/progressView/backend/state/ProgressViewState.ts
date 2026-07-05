@@ -37,6 +37,7 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { SessionStores } from './SessionStores';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = StreamTabInfoSchema.pick({
@@ -125,6 +126,8 @@ export class ProgressViewState {
   /** Single owner of all per-stream sidecar state (output files, usage, todos,
    * plan, taskState/executionId/parent/description + meta queries). */
   readonly snapshots: StreamSnapshotStore;
+  /** Atomic lifecycle owner across streamLogs, streamData, and executions. */
+  readonly stores: SessionStores;
 
   // -- Preferences ------------------------------------------------------------
   private _prefs!: PersistedState<ProgressViewPrefs>;
@@ -155,6 +158,10 @@ export class ProgressViewState {
     this.streamLogs = session.transcripts;
     this.followUps = session.followUps;
     this.snapshots = snapshots;
+    this.stores = new SessionStores({
+      streamLogs: this.streamLogs,
+      snapshots: this.snapshots,
+    });
   }
 
   /** Drop interruptible handles whose stream sidecar was removed. */
@@ -326,12 +333,7 @@ export class ProgressViewState {
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
-    // Delete from disk: stream log file + stream data directory (the snapshot
-    // store owns streamData/ — it evicts its own memory + removes the dir).
-    await Promise.all([
-      this.streamLogs.delete(stream),
-      this.snapshots.deleteStream(stream),
-    ]);
+    await this.stores.deleteStream(stream);
 
     // Update active stream *after* deletion so keys() no longer includes it.
     if (this._prefs.get('activeStream') === stream) {
@@ -353,8 +355,7 @@ export class ProgressViewState {
     this._streamStates.clear();
     this._prefs.reset();
 
-    // Delete from disk (snapshot store owns streamData/, evicts its own memory)
-    await Promise.all([this.streamLogs.clear(), this.snapshots.deleteAll()]);
+    await this.stores.deleteAll();
 
     this.pruneInterruptHandles();
   }
@@ -367,6 +368,14 @@ export class ProgressViewState {
 
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
+
+    const sweep = await this.stores.sweepOrphanedStreams(new Set(streamIds));
+    if (sweep.streams.length > 0) {
+      this.logger.info(
+        `[Persistence] Removed ${sweep.streams.length} orphaned stream sidecar(s) and ${sweep.executionIds.length} execution dir(s)`,
+        { data: sweep },
+      );
+    }
 
     await this.snapshots.load(streamIds);
 
