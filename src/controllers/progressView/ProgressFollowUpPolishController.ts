@@ -6,8 +6,6 @@ import {
   type FileContext,
 } from '@agent/runtime/textEnhancement';
 
-// Local imports - common
-
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
