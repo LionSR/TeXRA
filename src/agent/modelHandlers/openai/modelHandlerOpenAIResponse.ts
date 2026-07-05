@@ -268,7 +268,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseUsage,
   OpenAIResponseToolCall,
   OpenAI,
-  Response
+  Response,
+  ResponseInputContent
 > {
   protected getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
     return null;
@@ -1100,9 +1101,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (mediaFiles && mediaFiles.length > 0 && supportsMedia) {
       try {
-        const mediaContent = (await this.createMediaMessage(
-          mediaFiles,
-        )) as ResponseInputMessageContentList;
+        const mediaContent = await this.createMediaMessage(mediaFiles);
         userContent.push(...mediaContent);
       } catch (err) {
         logSdkError(
@@ -1153,9 +1152,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.capabilities.supportsNativeAudio)
     ) {
       try {
-        const formattedMediaContent = (await this.createMediaMessage(
-          mediaFiles,
-        )) as ResponseInputMessageContentList;
+        const formattedMediaContent =
+          await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
       } catch (err) {
         logSdkError(
@@ -2838,9 +2836,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
 
     try {
-      const formattedMedia = (await this.createMediaMessage(
-        mediaFiles,
-      )) as ResponseInputMessageContentList;
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
       lastUserMsg.content.unshift(...formattedMedia);
     } catch (err) {
       logSdkError(
