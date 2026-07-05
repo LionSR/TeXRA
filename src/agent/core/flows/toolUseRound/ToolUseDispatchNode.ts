@@ -53,14 +53,16 @@ const STREAMABLE_TOOLS = new Set(['bash']);
 const STREAM_BUFFER_MAX = 50_000;
 
 /**
- * Error message for a tool_result synthesized in place of a tool_use whose
- * call never executed (interrupted before dispatch, or aborted mid-flight).
- * Every persisted tool_use must have a paired tool_result — providers with
- * strict tool-call pairing requirements (e.g. Anthropic, and OpenAI's
- * response-chaining mode) reject follow-up requests otherwise.
+ * Error message for a tool_result synthesized in place of a tool_use with no
+ * recorded result: the call may have never started (interrupted before
+ * dispatch), or started and been aborted mid-flight (interrupted after the
+ * tool ran but before its result was accepted). Every persisted tool_use must
+ * have a paired tool_result — providers with strict tool-call pairing
+ * requirements (e.g. Anthropic, and OpenAI's response-chaining mode) reject
+ * follow-up requests otherwise.
  */
 const CANCELLED_CALL_ERROR =
-  'Tool call cancelled — the run was interrupted before this tool executed.';
+  'Tool call cancelled — the run was interrupted and no result was recorded for this call.';
 
 /**
  * Result of executing a single tool call, capturing everything needed
@@ -458,10 +460,19 @@ export class ToolUseDispatchNode<C> extends BatchNode<
   /** Process tool execution results and create follow-up messages. */
   async post(
     shared: ToolUseRoundShared,
-    toolCalls: SdkToolCall[],
+    dispatchedCalls: SdkToolCall[],
     execResults: (ToolExecutionResult | null)[],
   ): Promise<string | undefined> {
     const { workspace } = this.services;
+
+    // prep() returns [] when interruption is detected before any call is
+    // dispatched (or when there was nothing to dispatch this round). Fall
+    // back to shared.toolCalls — the full set the model requested — so an
+    // interruption caught this early still gets synthesized cancelled
+    // results instead of leaving those tool_use blocks unpaired in history.
+    const toolCalls = dispatchedCalls.length
+      ? dispatchedCalls
+      : (shared.toolCalls ?? []);
 
     if (!toolCalls.length) {
       return FlowTransition.COMPLETE;
