@@ -33,7 +33,7 @@ Tournament / best-of-N / judge / debate mechanisms are run _by the orchestrator 
 
 ### 3. General methods, not problem-specific strategies
 
-No curated problem-attack heuristics anywhere in the system — not in harness code, not in goal templates, not in agent YAMLs. "Try special cases first," "enumerate these proof techniques," "ladder up from n=2" are the modern equivalents of hand-coded chess features: they help the current model on the problems the author imagined and cap every stronger model on everything else. The tournament's seeding reflected this — strategy-prescribing candidates (Ladder Plans, approach-commitment forcing) ranked near the bottom. Templates state _structural_ expectations that are domain-general (keep a notebook, back claims with evidence, spend the budget deliberately) and leave strategy — what to try, in what order, when to diversify, when to abandon — entirely to the agent's judgment on the problem in front of it. Search and learning, not our encoded taste.
+No curated problem-attack heuristics anywhere in the system — not in harness code, not in goal templates, not in agent YAMLs. "Try special cases first," "enumerate these proof techniques," "ladder up from n=2" are the modern equivalents of hand-coded chess features: they help the current model on the problems the author imagined and cap every stronger model on everything else. This invariant is not yet true of the shipped prompts — `prover.yaml` today enumerates a "standard arsenal" (induction, probabilistic method, generating functions, …) and instructs "attack restricted versions first" — so Track 1 includes an explicit prompt-cleanup task. The tournament's seeding reflected this — strategy-prescribing candidates (Ladder Plans, approach-commitment forcing) ranked near the bottom. Templates state _structural_ expectations that are domain-general (keep a notebook, back claims with evidence, spend the budget deliberately) and leave strategy — what to try, in what order, when to diversify, when to abandon — entirely to the agent's judgment on the problem in front of it. Search and learning, not our encoded taste.
 
 ---
 
@@ -41,23 +41,24 @@ No curated problem-attack heuristics anywhere in the system — not in harness c
 
 These are the purest wins: each deletes harness code that overrides model judgment, and each is independent.
 
-- **Delete the delegation depth gate; budget is the only bound (C6, seed #2).** `maxDepth` (default 1 in `src/tools/delegation/subagentExecution.ts`) forbids exactly the decomposition open problems want — an orchestrator spawning provers that spawn lemma-verifiers. Cost roll-up already propagates through the whole tree, so unbounded-depth-under-bounded-cost is the lighter _and_ safer invariant. Also delete hardcoded team-preset rosters: generate `<available_agents>` in the `delegate_agent` description from the live catalog and let the orchestrator compose its own team per problem.
+- **Delete the delegation depth gate; budget is the only bound (C6, seed #2).** The depth gate (`NESTED_DELEGATION_DEPTH_RANGE`, default 1, defined in `src/shared/constants/delegationPolicy.ts` and enforced through `evaluateCurrentDelegationGate` in `src/tools/delegation/subagentExecution.ts`) forbids exactly the decomposition open problems want — an orchestrator spawning provers that spawn lemma-verifiers. Cost roll-up already propagates through the whole tree, so unbounded-depth-under-bounded-cost is the lighter _and_ safer invariant. Also delete hardcoded team-preset rosters: generate `<available_agents>` in the `delegate_agent` description from the live catalog and let the orchestrator compose its own team per problem.
 - **Delete the silent replacement engine (C2, seed #10).** Every provider handler pipes model output through a 3,276-line regex rewrite engine — blind substitution over LaTeX that can corrupt math and hides what the model actually wrote from the trace. Fold the genuinely stylistic rules into the existing `{{LATEX_STYLE_RULES}}` prompt injection; keep rule tables at most as a post-run lint _the model_ fixes. Silently mutating a proof is both a correctness risk and a transparency violation.
 - **Retire the reflection flow — One Loop (C1, seed #9).** Fixed `rounds: 2`, whole-document XML re-emission, a 496-line output parser, and prefill truncation-repair are all hedges against models that couldn't use tools. Run workflow agents (correct/polish/merge/ocr) on the tooluse loop with read/edit/compile tools: the model edits `.tex` files surgically and decides itself whether another pass is needed. ~1,300+ lines deleted; `latexdiff` computed once post-run from base-vs-edited files.
 - **Delete the client-side compaction summarizer (C4, seed #4).** On the OpenAI-compat path the harness compresses the model's own history with a hardcoded 2,000-token summarizer prompt — deciding on the model's behalf which parts of a half-finished derivation matter. Replace with structural truncation at the same 75% threshold: elide old _tool results_ to one-line stubs, preserve all assistant reasoning and user turns verbatim, tell the model once that its files/notes/memory are intact and re-readable, and let it recover what it needs. Deletes summarizer retries, mid-compaction interruption state, and cross-provider summary drift.
+- **Strip strategy heuristics from shipped prompts (principle 3).** `prover.yaml`'s enumerated proof-technique arsenal and "attack restricted versions first" directive — and any similar guidance in other agent YAMLs and goal templates — get cut down to domain-general structural expectations (notebook, evidence, budget). What to try is the model's call.
 - **Shrink the Goal continuation nag to telemetry (part of C3).** The ~25-line "keep pursuing the objective, don't cheat" template is motivation for a model that doesn't need it. Replace with a thin status line — `<goal_status elapsed="2h13m" cost="$4.10/$25"/>` — and state the objective once. Strong models hold an objective for hundreds of turns; what they can actually _use_ is budget telemetry to self-pace and plan an endgame.
 
 ## Track 2 — Survival and resources: what "run longer" actually needs
 
 ### Goal budgets: one envelope, then freedom (C3 — top seed, 8.7)
 
-The autonomous Goal loop is literally unbounded today: no cost, token, wall-clock, or cycle cap exists (flagged in `docs/proposals/error-pipeline-and-ownership.md`) — so researchers babysit, which is the real ceiling on run length. Add optional budget fields to `GoalSchema`; enforcement is a comparison at the existing choke point (`maybeBuildGoalContinuation`), since `RunUsageAccumulator` already tracks total cost _including subagent roll-up_. Semantics are pause-not-kill: at 80%, a soft note in the status line; at 100%, a wind-down turn ("bank state into your notebook, pause") through the existing `GoalStore.setStatus('paused')` path with `pausedReason: 'budget_exhausted'` and one-click extend-and-resume.
+The autonomous Goal loop is literally unbounded today: `GoalSchema` has no budget fields, no choke point checks cost or wall-clock, and `docs/proposals/error-pipeline-and-ownership.md` explicitly defers budget/turn exhaustion as a first-class terminal kind ("❌ folds into `'unexpected'`") — so researchers babysit, which is the real ceiling on run length. Add optional budget fields to `GoalSchema`; enforcement is a comparison at the existing choke point (`maybeBuildGoalContinuation`), since `RunUsageAccumulator` already tracks total cost _including subagent roll-up_. Semantics are pause-not-kill: at 80%, a soft note in the status line; at 100%, a wind-down turn ("bank state into your notebook, pause") through the existing `GoalStore.setStatus('paused')` path, extended with a new `pausedReason: 'budget_exhausted'` field on the goal record (neither `GoalSchema` nor `setStatus(streamId, nextStatus)` carries a reason today), plus one-click extend-and-resume.
 
 The freedom framing matters: the budget is not a leash, it's what _replaces_ the leash. One approved envelope up front (cost + workspace scope), then yolo-grade autonomy inside it — no per-tool permission prompts, no depth caps, no cycle caps. The agent sees its remaining budget in every continuation and allocates it across subagents, models, and verification however it judges best. People let agents run overnight when spend is capped; agents spend budget well when they can see it.
 
 ### Goal Daemon: nothing short of "stop" kills the run (C9 — semifinalist)
 
-Multi-day runs die today because the _process_ dies — rate-limit storms, laptop sleep, extension-host reloads — not because the model gets lost. `PersistedFlow` already makes mid-run resume correct; the missing piece is who presses resume at 3am. Classify pauses (`pausedReason: provider_error | budget_exhausted | user | handoff`) with backoff timestamps; add `texra goals list|resume` on the existing `resumeExecution.ts` path; `texra goals daemon --interval 5m` (or a two-line systemd unit) polls and resumes eligible goals headlessly. A resumed goal needing a human answer files an async `inquiry` and re-pauses instead of blocking a context for hours.
+Multi-day runs die today because the _process_ dies — rate-limit storms, laptop sleep, extension-host reloads — not because the model gets lost. `PersistedFlow` already makes mid-run resume correct; the missing piece is who presses resume at 3am. Classify pauses (the same new `pausedReason` field from C3, extended to `provider_error | budget_exhausted | user | handoff`) with backoff timestamps; add `texra goals list|resume`; `texra goals daemon --interval 5m` (or a two-line systemd unit) polls and resumes eligible goals headlessly. One precondition is new work, not reuse: the existing CLI resume path (`runResumeExecution` in `packages/cli/src/runtime/resumeExecution.ts`) is interactive by contract — it rejects non-interactive callers because a resumed session returns to WAITING for the user's next message — so the daemon needs a headless resume entry point that re-enters the Goal continuation instead of waiting for input. A resumed goal needing a human answer files an async `inquiry` and re-pauses instead of blocking a context for hours.
 
 ### Context Rebirth: the agent ends its own context (C8 — quarterfinalist)
 
@@ -71,7 +72,7 @@ Already mostly present — treat as policy, not new machinery: the agent can wri
 
 The tournament champion, re-cast freedom-first. The original formulation had the harness enforce a Zod schema, gate `plan(complete)` on lemma statuses, and inject rut-detector interventions — supervision. What survives the freedom filter is better and smaller:
 
-**The agent owns a notebook; the harness only provisions and reads.** One durable state-of-the-problem file per goal under the existing memory root (`/memories/goals/<goalId>/`), maintained by the agent in whatever structure it finds useful — lemma DAG, attempts and dead ends with the exact obstruction, verified ranges, open subproblems. The goal template _teaches_ the discipline `prover.yaml` already mandates in prose; no harness code parses or validates the prose.
+**The agent owns a notebook; the harness only provisions and reads.** One durable state-of-the-problem note per goal in the existing memory store — today memory notes are flat Markdown files at `/memories/<name>.md` (see `docs/guide/memory.md`), so this is either one note per goal by naming convention or a new hierarchical `/memories/goals/<goalId>/` layout, a deliberate extension to the memory filesystem — maintained by the agent in whatever structure it finds useful — lemma DAG, attempts and dead ends with the exact obstruction, verified ranges, open subproblems. The goal template _teaches_ the discipline `prover.yaml` already mandates in prose; no harness code parses or validates the prose.
 
 **The continuation injects the notebook, not conversation archaeology.** `maybeBuildGoalContinuation` gains a `{{notebook}}` variable — the file (or the agent's own digest of it) verbatim. The loop becomes self-healing after total context loss: objective + notebook + budget telemetry is a complete restart state. Compaction pressure drops to near zero (complements the Track 1 summarizer deletion); the context window becomes a cache, the notebook is the state.
 
@@ -123,30 +124,30 @@ These live in agent YAMLs (`orchestrator`, a hardened `skeptic`, a `referee`) an
 
 **Seeding (3-judge mean, criteria: research impact / bitter-lesson fit / engineering leverage):**
 
-| #   | ID  | Score | Candidate                                           |
-| --- | --- | ----- | --------------------------------------------------- |
-| 1   | C3  | 8.7   | Goal budgets with pause-not-kill semantics          |
-| 2   | C6  | 8.0   | Recursive delegation under one budget               |
-| 3   | C17 | 8.0   | VerifierReport ground-truth harness                 |
-| 4   | C4  | 7.7   | Delete client-side compaction summarizer            |
-| 5   | C7  | 7.7   | Research Ledger with typed claims                   |
-| 6   | C8  | 7.7   | Context Rebirth (`plan(handoff)`)                   |
-| 7   | C9  | 7.7   | Goal Daemon auto-resume                             |
-| 8   | C12 | 7.7   | Lean Lemma Escrow                                   |
-| 9   | C1  | 7.3   | One Loop (retire reflection flow)                   |
-| 10  | C2  | 7.3   | Delete the silent replacement engine                |
-| 11  | C11 | 7.3   | Completion Gate + rut detector                      |
-| 12  | C10 | 7.0   | Detached deep-think legs (provider background mode) |
-| 13  | C23 | 6.7   | Night Auditor scheduled adversarial sweep           |
-| 14  | C13 | 6.3   | Falsification Engine (counterexample search)        |
-| 15  | C20 | 6.3   | Morning Brief research log                          |
-| 16  | C21 | 6.3   | Ballot checkpoints via inquiry                      |
-| 17  | C5  | 6.0   | Task cards, not agent zoo                           |
-| 18  | C16 | 6.0   | Prover–Skeptic adversarial flow                     |
-| 19  | C14 | 5.7   | Ladder Plans (special-case laddering)               |
-| 20  | C22 | 5.7   | Problem Campaigns attack tree                       |
-| 21  | C15 | 5.3   | TournamentFlow (hardcoded best-of-N flow)           |
-| 22  | C19 | 4.3   | Approach-commitment diversity forcing               |
-| 23  | C18 | 3.7   | Evolutionary refinement w/ successive halving       |
+| #   | ID  | Score | Candidate                                                                                             |
+| --- | --- | ----- | ----------------------------------------------------------------------------------------------------- |
+| 1   | C3  | 8.7   | Goal budgets with pause-not-kill semantics                                                            |
+| 2   | C6  | 8.0   | Recursive delegation under one budget                                                                 |
+| 3   | C17 | 8.0   | VerifierReport ground-truth harness                                                                   |
+| 4   | C4  | 7.7   | Delete client-side compaction summarizer                                                              |
+| 5   | C7  | 7.7   | Research Ledger with typed claims                                                                     |
+| 6   | C8  | 7.7   | Context Rebirth (`plan(handoff)`)                                                                     |
+| 7   | C9  | 7.7   | Goal Daemon auto-resume                                                                               |
+| 8   | C12 | 7.7   | Lean Lemma Escrow                                                                                     |
+| 9   | C1  | 7.3   | One Loop (retire reflection flow)                                                                     |
+| 10  | C2  | 7.3   | Delete the silent replacement engine                                                                  |
+| 11  | C11 | 7.3   | Completion Gate + rut detector (as originally proposed; survives as the opt-in referee — see v2 note) |
+| 12  | C10 | 7.0   | Detached deep-think legs (provider background mode)                                                   |
+| 13  | C23 | 6.7   | Night Auditor scheduled adversarial sweep                                                             |
+| 14  | C13 | 6.3   | Falsification Engine (counterexample search)                                                          |
+| 15  | C20 | 6.3   | Morning Brief research log                                                                            |
+| 16  | C21 | 6.3   | Ballot checkpoints via inquiry                                                                        |
+| 17  | C5  | 6.0   | Task cards, not agent zoo                                                                             |
+| 18  | C16 | 6.0   | Prover–Skeptic adversarial flow                                                                       |
+| 19  | C14 | 5.7   | Ladder Plans (special-case laddering)                                                                 |
+| 20  | C22 | 5.7   | Problem Campaigns attack tree                                                                         |
+| 21  | C15 | 5.3   | TournamentFlow (hardcoded best-of-N flow)                                                             |
+| 22  | C19 | 4.3   | Approach-commitment diversity forcing                                                                 |
+| 23  | C18 | 3.7   | Evolutionary refinement w/ successive halving                                                         |
 
-**v2 revision note.** After the bracket, the winners were re-filtered through governing principle 1 (provision, don't supervise). Concretely demoted from harness code to conventions/opt-in tools: the champion's Zod-enforced ledger schema (→ agent-owned notebook + one-line pointer convention), the `plan(complete)` GAP-gate (→ goal-template discipline + opt-in referee), and the rut detector (→ dropped; the notebook's Attempts table serves the purpose without harness intervention). Low-seeded candidates were not all discarded either: C16 (skeptic), C11 (referee), and C15's blind-judging/verifier-dominance rules survive as prompt patterns in Track 5; their proposed harness machinery does not.
+**v2 revision note.** After the bracket, the winners were re-filtered through governing principle 1 (provision, don't supervise). Concretely demoted from harness code to conventions/opt-in tools: the champion's Zod-enforced ledger schema (→ agent-owned notebook + one-line pointer convention), the `plan(complete)` GAP-gate (→ goal-template discipline + opt-in referee), and the rut detector (→ dropped; the notebook's Attempts table serves the purpose without harness intervention). Low-seeded candidates were not all discarded either: C16 (skeptic), C11 (its harness-enforced completion gate reframed as the opt-in fresh-context referee of Track 5, its rut detector dropped — the seeding table keeps the original candidate name), and C15's blind-judging/verifier-dominance rules survive as prompt patterns in Track 5; their proposed harness machinery does not.
