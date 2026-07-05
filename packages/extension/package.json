@@ -2023,6 +2023,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@texra/trace-viewer": "workspace:*",
     "@eslint/js": "^10.0.1",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/diff-match-patch": "^1.0.36",

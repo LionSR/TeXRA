@@ -9,6 +9,7 @@ import '@shared/wa';
 // create a <progress-app> element — the same pattern packages/desktop/src/
 // renderer/main.ts already uses to run these components outside VS Code.
 import '@progressView/frontend';
+import type { ArchivableElement } from '@progressView/frontend/contexts/streamContexts';
 import {
   createHostEventHandlerContext,
   createHostMessageHandlerContext,
@@ -24,9 +25,7 @@ if (root == null) throw new Error('Trace viewer root (#app) not found.');
 
 const conversationView = document.createElement(
   'stream-conversation',
-) as HTMLElement & {
-  archived: boolean;
-};
+) as ArchivableElement;
 conversationView.archived = true;
 root.append(conversationView);
 

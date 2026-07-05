@@ -133,3 +133,13 @@ export const streamByIdContext = createContext<StreamByIdMap>(
  * `readonly` modifier keyword at call sites.
  */
 export const archivedContext = createContext<boolean>('progress-archived');
+
+/**
+ * The settable shape of `<stream-conversation>`'s `archived` property, for
+ * hosts (like the trace-viewer) that set it on a freshly created element
+ * before providing it via `archivedContext`. Naming this explicitly makes the
+ * coupling grep-able instead of an inline structural cast.
+ */
+export interface ArchivableElement extends HTMLElement {
+  archived: boolean;
+}
