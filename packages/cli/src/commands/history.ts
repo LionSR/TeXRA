@@ -3,7 +3,10 @@ import * as path from 'node:path';
 import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
-import { formatChatAsHtml } from '@agent/export/htmlExport/htmlFormatter';
+import {
+  DEFAULT_HTML_EXPORT_ASSETS_HREF,
+  formatChatAsHtml,
+} from '@agent/export/htmlExport/htmlFormatter';
 import { type ExecutionId } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -139,7 +142,10 @@ async function runHistoryExport(
   if (format === 'html' && !isRemoteCliHistoryExportAssetsHref(assetsHref)) {
     const staged = await stageCliHistoryExportAssets({
       resourcesPath: context.resourcesPath,
-      destDir: path.resolve(context.cwd, assetsHref ?? './assets'),
+      destDir: path.resolve(
+        context.cwd,
+        assetsHref ?? DEFAULT_HTML_EXPORT_ASSETS_HREF,
+      ),
     });
     if (staged === 'missing') {
       writeTextStderr(
