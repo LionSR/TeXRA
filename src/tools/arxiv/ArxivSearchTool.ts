@@ -10,13 +10,11 @@ import {
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { warn } from '@logger/logUtils';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import { abandonOnAbort } from '@tools/cancellation';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
-import { waitForRateLimit } from '@tools/citation/rateLimiter';
+import { rateLimitedRequest } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
 import {
   type ArxivSearchResult,
@@ -133,16 +131,16 @@ export class ArxivSearchTool extends defineTool({
       client = client.sortOrder(input.sortOrder);
     }
 
-    const entries = await wrapApiCall(async () => {
-      await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
-      // The arXiv client has no AbortSignal hook, so a cancelled batch
-      // abandons the in-flight search instead of waiting it out.
-      return abandonOnAbort(
-        client.execute(),
-        getCurrentToolCallContext()?.signal,
-        'arXiv search',
-      );
-    }, 'Failed to query arXiv API');
+    const entries = await wrapApiCall(
+      () =>
+        rateLimitedRequest(
+          'arxiv',
+          ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
+          'arXiv search',
+          () => client.execute(),
+        ),
+      'Failed to query arXiv API',
+    );
 
     const results: ArxivSearchResult[] = entries.map((entry) => {
       const base = extractBasePaperMetadata(entry);
