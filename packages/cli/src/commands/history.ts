@@ -161,16 +161,15 @@ export async function runHistoryExport(
       resourcesPath: context.resourcesPath,
       destDir,
     });
+    writeRawStdout(JSON.stringify(trace));
     if (staged === 'missing') {
       writeTextStderr(
         'Note: the bundled trace-viewer assets were not found in this CLI ' +
           'install, so nothing was staged into --assets-dir. Rebuild the ' +
           'CLI (`npm run texra-local:build`) so packages/trace-viewer builds.',
       );
-      writeRawStdout(JSON.stringify(trace));
       return CliExitCode.Usage;
     }
-    writeRawStdout(JSON.stringify(trace));
     writeTextStderr(
       `Wrote trace JSON for ${id} to stdout. Save the output to a file, ` +
         `then open ${destDir}/index.html?trace=<your-filename>.`,
