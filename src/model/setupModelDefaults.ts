@@ -66,7 +66,11 @@ function isUsableSetupModel(
   return true;
 }
 
-/** Newest still-usable model for `setupProvider`, preferring a non-deprecated one. */
+/**
+ * A still-usable model for `setupProvider`, preferring a non-deprecated one.
+ * `MODEL_CONFIGS` iteration order is llm-zoo's own (not a recency contract),
+ * so this is "some live model," not necessarily the newest release.
+ */
 function fallbackSetupModel(setupProvider: string): string | undefined {
   const modelProvider = FALLBACK_MODEL_PROVIDER[setupProvider];
   if (!modelProvider) return undefined;
@@ -81,12 +85,17 @@ function fallbackSetupModel(setupProvider: string): string | undefined {
 }
 
 /**
- * Resolve the model the setup assistant should probe for `setupProvider`:
- * the curated preference above when it is still live, otherwise the newest
- * usable model this provider currently has in the registry.
+ * Resolve `setupProvider`'s `preferred` pick if it is still live, otherwise a
+ * usable fallback model this provider currently has in the registry. Takes
+ * `preferred` as a parameter (rather than looking it up) so callers that
+ * already know it holds a real value — like {@link SETUP_MODEL_BY_PROVIDER}
+ * below, iterating its own preference table — get back a plain `string`
+ * with no unresolved-provider case to handle.
  */
-export function resolveSetupModel(setupProvider: string): string {
-  const preferred = PREFERRED_SETUP_MODEL_BY_PROVIDER[setupProvider];
+function resolveWithPreferred(
+  setupProvider: string,
+  preferred: string,
+): string {
   if (isUsableSetupModel(MODEL_CONFIGS[preferred], setupProvider)) {
     return preferred;
   }
@@ -94,19 +103,36 @@ export function resolveSetupModel(setupProvider: string): string {
 }
 
 /**
+ * Resolve the model the setup assistant should probe for `setupProvider`:
+ * the curated preference above when it is still live, otherwise a usable
+ * model this provider currently has in the registry. Returns `undefined`
+ * for a `setupProvider` outside {@link PREFERRED_SETUP_MODEL_BY_PROVIDER} —
+ * callers that already hold a known provider key get a plain `string` from
+ * {@link SETUP_MODEL_BY_PROVIDER} instead.
+ */
+export function resolveSetupModel(setupProvider: string): string | undefined {
+  const preferred = PREFERRED_SETUP_MODEL_BY_PROVIDER[setupProvider];
+  return preferred === undefined
+    ? undefined
+    : resolveWithPreferred(setupProvider, preferred);
+}
+
+/**
  * Provider-specific models the setup assistant can use when that provider is
  * the only known usable credential. Kept with model metadata so hosts do not
  * each define their own setup routing truth. Resolved once at module load —
- * `MODEL_CONFIGS` is static per process — via {@link resolveSetupModel}, so a
- * provider's curated pick going stale (retired or OpenRouter-only) degrades
+ * `MODEL_CONFIGS` is static per process — via {@link resolveWithPreferred}, so
+ * a provider's curated pick going stale (retired or OpenRouter-only) degrades
  * to a live fallback instead of hard-failing the setup probe.
  */
 export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> =
   Object.fromEntries(
-    Object.keys(PREFERRED_SETUP_MODEL_BY_PROVIDER).map((provider) => [
-      provider,
-      resolveSetupModel(provider),
-    ]),
+    Object.entries(PREFERRED_SETUP_MODEL_BY_PROVIDER).map(
+      ([provider, preferred]) => [
+        provider,
+        resolveWithPreferred(provider, preferred),
+      ],
+    ),
   );
 
 /** Codex-eligible setup model used to prove ChatGPT subscription access. */

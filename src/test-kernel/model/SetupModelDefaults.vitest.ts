@@ -7,7 +7,10 @@ import {
   resolveSetupModel,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
-import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
+import {
+  codexBackendModelId,
+  isCodexSubscriptionEligible,
+} from '@model/providerCapabilities';
 import { API_PROVIDERS } from '@model/apiProviders';
 
 /**
@@ -53,6 +56,7 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     // a mock.
     assert.equal(MODEL_CONFIGS.grok4?.retired, true);
     const resolved = resolveSetupModel('xai');
+    assert.ok(resolved, 'xai has a known preference, so this always resolves');
     assert.notEqual(resolved, 'grok4');
     assert.equal(MODEL_CONFIGS[resolved]?.retired ?? false, false);
     assert.equal(MODEL_CONFIGS[resolved]?.provider, 'xai');
@@ -74,6 +78,9 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
     const config = MODEL_CONFIGS[CHATGPT_SETUP_MODEL];
     assert.ok(config);
-    assert.ok(isCodexSubscriptionEligible(config.shortName || config.fullName));
+    // Mirrors isUsableSetupModel's production check exactly (including
+    // codexBackendModelId's date-pin stripping), so this can't pass on a
+    // model id the real setup path would reject.
+    assert.ok(isCodexSubscriptionEligible(codexBackendModelId(config)));
   });
 });
