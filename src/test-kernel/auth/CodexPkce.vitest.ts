@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  ModelProvider,
+  ReasoningEffort,
+  type ModelConfig,
+} from 'llm-zoo';
 
 import {
   computeCodeChallenge,
@@ -9,6 +15,24 @@ import {
   generatePkcePair,
 } from '@auth/codex';
 import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
+
+/** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
+function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {
+  return {
+    name: 'test-model',
+    label: 'Test Model',
+    fullName: 'gpt-test',
+    shortName: 'gpt-test',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 128_000,
+    inputPrice: 1,
+    outputPrice: 1,
+    contextWindow: 400_000,
+    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+    openRouterOnly: false,
+    ...overrides,
+  };
+}
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 
@@ -47,22 +71,93 @@ describe('codex PKCE', () => {
 });
 
 describe('codex model eligibility', () => {
-  it('accepts the curated subscription models', () => {
-    expect(isCodexSubscriptionEligible('gpt-5.5')).toBe(true);
-    expect(isCodexSubscriptionEligible('gpt-5.4-mini')).toBe(true);
+  it('accepts current top-reasoning-effort OpenAI models', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.5-2026-04-23',
+          shortName: 'gpt-5.5',
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('accepts date-pinned variants of curated models', () => {
-    expect(isCodexSubscriptionEligible('gpt-5.5-2026-04-23')).toBe(true);
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.5-2026-04-23',
+          shortName: '',
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 
-  it('accepts any codex-named model (future-proof)', () => {
-    expect(isCodexSubscriptionEligible('gpt-5.9-codex')).toBe(true);
-    expect(isCodexSubscriptionEligible('gpt-6-codex-mini')).toBe(true);
+  it('accepts any codex-named model regardless of reasoning effort (future-proof)', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({ fullName: 'gpt-5.9-codex', shortName: 'gpt-5.9-codex' }),
+      ),
+    ).toBe(true);
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-6-codex-mini',
+          shortName: 'gpt-6-codex-mini',
+        }),
+      ),
+    ).toBe(true);
   });
 
-  it('rejects unrelated models', () => {
-    expect(isCodexSubscriptionEligible('gpt-4.1')).toBe(false);
-    expect(isCodexSubscriptionEligible('claude-opus-4-8')).toBe(false);
+  it('rejects models that are not top reasoning-effort tier', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({ fullName: 'gpt-4.1', shortName: 'gpt-4.1' }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a top-reasoning-effort model that has been retired', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.2-2025-12-11',
+          shortName: 'gpt-5.2',
+          retired: true,
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  // #7192: the eligibility check must not depend on a hand-maintained
+  // fullName allowlist. `gpt-5.6` never existed in that old list and doesn't
+  // match the `/codex/i` naming convention either, so this can only pass if
+  // eligibility is genuinely derived from registry capability data (top
+  // reasoning-effort tier, live, not deprecated) rather than enumeration.
+  it('accepts a future top-reasoning-effort model absent from any hardcoded list', () => {
+    expect(
+      isCodexSubscriptionEligible(
+        openAIModel({
+          fullName: 'gpt-5.6-2026-08-01',
+          shortName: 'gpt-5.6',
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 });
