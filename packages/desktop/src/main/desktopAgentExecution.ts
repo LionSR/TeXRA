@@ -815,7 +815,7 @@ export class DesktopProgressBridge {
       // at crash time but has a valid persisted flow record -- ground truth
       // that only detectWaitingStreams() (KV-store backed) can see. Without
       // this, resetRestartRepairStreamStatuses would wrongly demote such a
-      // stream to FAILED instead of restoring it to WAITING (#6938).
+      // stream to FAILED instead of restoring it to WAITING.
       try {
         const executionIdMap = new Map(
           [...allExecutionIds].filter(
@@ -824,6 +824,19 @@ export class DesktopProgressBridge {
         );
         const persistedWaitingStreams =
           await detectWaitingStreams(executionIdMap);
+        // Mirror the try path: a stream may have resumed and gone active
+        // while the KV read above was in flight, so re-fetch active
+        // execution ids and drop any stream that is active now before
+        // folding the persisted-record result into waitingStreams.
+        const {
+          activeExecutionIds: postDetectActiveExecutionIds,
+          allExecutionIds: postDetectAllExecutionIds,
+        } = this.refreshActiveExecutionIds();
+        for (const [streamId, executionId] of postDetectAllExecutionIds) {
+          if (postDetectActiveExecutionIds.has(executionId)) {
+            persistedWaitingStreams.delete(streamId);
+          }
+        }
         for (const streamId of persistedWaitingStreams) {
           waitingStreams.add(streamId);
         }
