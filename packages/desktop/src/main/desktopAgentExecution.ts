@@ -52,6 +52,7 @@ import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   STREAM_PHASE,
+  type EndGroupStatus,
   type AgentProposalPermission,
   type AgentCategoryFilter,
   type MainViewPersistedState,
@@ -68,6 +69,10 @@ import {
   createProgressBackendUiConfig,
   type ApprovalRequestHandlerSet,
 } from '@shared/progressView/backend/progressBackendUiConfig';
+import {
+  repairRestartedStreams,
+  RESTART_REPAIR_PHASES,
+} from '@shared/progressView/backend/restartRepair';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
@@ -111,11 +116,6 @@ const DESKTOP_UNAVAILABLE_TOOLS: readonly DesktopUnavailableTool[] = [
   'inline_comment',
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
 ];
-const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
-  STREAM_PHASE.RUNNING,
-  STREAM_PHASE.WAITING,
-]);
-
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
   opener?: Pick<ExternalOpener, 'openPath'> & {
@@ -749,73 +749,19 @@ export class DesktopProgressBridge {
     return { waitingStreams, activeExecutionIds, allExecutionIds };
   }
 
-  private resetRestartRepairStreamStatuses(
-    repairStreams: ReadonlySet<StreamTabId>,
-    waitingStreams: ReadonlySet<StreamTabId>,
-  ): StreamTabId[] {
-    const affectedStreams: StreamTabId[] = [];
-    const statusEmitOptions = {
-      runtimeHost: this.runtimeHost,
-      trace: this.logger,
-    };
-    for (const streamId of repairStreams) {
-      const currentStatus = this.session.status.get(streamId);
-      if (!currentStatus || !RESTART_REPAIR_PHASES.has(currentStatus)) {
-        continue;
-      }
-      if (waitingStreams.has(streamId)) {
-        this.session.status.transition(
-          streamId,
-          STREAM_PHASE.WAITING,
-          'restart-repair',
-          statusEmitOptions,
-        );
-        this.logger.debug(
-          `Stream ${streamId} restored to WAITING after reload`,
-        );
-        continue;
-      }
-      let markedFailed = this.session.status.transition(
-        streamId,
-        STREAM_PHASE.FAILED,
-        'restart-repair',
-        statusEmitOptions,
-      );
-      if (!markedFailed && currentStatus === STREAM_PHASE.WAITING) {
-        markedFailed =
-          this.session.status.transition(
-            streamId,
-            STREAM_PHASE.RUNNING,
-            'resume',
-            statusEmitOptions,
-          ) &&
-          this.session.status.transition(
-            streamId,
-            STREAM_PHASE.FAILED,
-            'lifecycle',
-            statusEmitOptions,
-          );
-      }
-      if (markedFailed) {
-        affectedStreams.push(streamId);
-        this.logger.debug(
-          `Stream ${streamId} set to FAILED during desktop restart recovery`,
-        );
-      } else {
-        this.logger.warn(
-          `Failed to repair stream ${streamId} during desktop restart recovery`,
-        );
-      }
-    }
-    return affectedStreams;
-  }
-
   private getRestartRepairStreamSet(
     executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
     allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>,
     activeExecutionIds: ReadonlySet<string>,
+    waitingStreams: ReadonlySet<StreamTabId>,
   ): Set<StreamTabId> {
-    const repairStreams = new Set(executionIdMap.keys());
+    const repairStreams = new Set(waitingStreams);
+    for (const streamId of executionIdMap.keys()) {
+      const currentStatus = this.session.status.get(streamId);
+      if (currentStatus != null && RESTART_REPAIR_PHASES.has(currentStatus)) {
+        repairStreams.add(streamId);
+      }
+    }
     for (const [streamId, snapshot] of this.progressEvents.restoredStreams) {
       const executionId = snapshot.executionId ?? allExecutionIds.get(streamId);
       if (executionId && activeExecutionIds.has(executionId)) {
@@ -834,11 +780,14 @@ export class DesktopProgressBridge {
 
   private async closeRunningTaskGroupsForStreams(
     streamIds: readonly StreamTabId[],
+    status: EndGroupStatus,
+    now: number = Date.now(),
   ): Promise<StreamTabId[]> {
     if (streamIds.length === 0) return [];
     const closedGroups = await this.state.streamLogs.endRunningGroupsForStreams(
       streamIds,
-      Date.now(),
+      now,
+      status,
     );
     if (closedGroups.length > 0) {
       await this.state.streamLogs.save();
@@ -871,22 +820,26 @@ export class DesktopProgressBridge {
         repairExecutionIdMap,
         repairAllExecutionIds,
         repairActiveExecutionIds,
-      );
-      const affectedStreams = this.resetRestartRepairStreamStatuses(
-        repairStreams,
         waitingStreams,
       );
-      const closeGroupStreams = new Set([
-        ...affectedStreams,
-        ...waitingStreams,
-      ]);
-      const closedGroups = await this.closeRunningTaskGroupsForStreams([
-        ...closeGroupStreams,
-      ]);
+      const repairResult = await repairRestartedStreams({
+        streamStatus: this.session.status,
+        waitingStreams,
+        executionIds: repairAllExecutionIds,
+        repairStreams,
+        closeRunningGroups: (streamIds, status, now) =>
+          this.closeRunningTaskGroupsForStreams(streamIds, status, now),
+        statusEmitOptions: {
+          runtimeHost: this.runtimeHost,
+          trace: this.logger,
+        },
+        logger: this.logger,
+      });
       if (
-        waitingStreams.size > 0 ||
-        affectedStreams.length > 0 ||
-        closedGroups.length > 0 ||
+        repairResult.waitingStreams.length > 0 ||
+        repairResult.failedStreams.length > 0 ||
+        repairResult.closedWaitingGroups.length > 0 ||
+        repairResult.closedFailedGroups.length > 0 ||
         this.progressEvents.restoredStreams.size > 0
       ) {
         this.syncFullView();
@@ -901,11 +854,12 @@ export class DesktopProgressBridge {
       this.progressEvents.hydrateRestoredStreams();
       const { activeExecutionIds, allExecutionIds } =
         this.refreshActiveExecutionIds();
+      let repairExecutionIds = allExecutionIds;
       // The in-memory scan above only catches streams whose CURRENT status
       // already happens to be WAITING. It misses a stream that was RUNNING
       // at crash time but has a valid persisted flow record -- ground truth
       // that only detectWaitingStreams() (KV-store backed) can see. Without
-      // this, resetRestartRepairStreamStatuses would wrongly demote such a
+      // this, restart repair would wrongly demote such a
       // stream to FAILED instead of restoring it to WAITING.
       try {
         const executionIdMap = new Map(
@@ -921,6 +875,7 @@ export class DesktopProgressBridge {
         for (const streamId of persistedWaitingStreams) {
           waitingStreams.add(streamId);
         }
+        repairExecutionIds = postDetectAllExecutionIds;
         // The helper only race-guards its own (persisted-record) result.
         // waitingStreams also carries the pre-existing in-memory-scan
         // entries from above, which predate the KV read and so never got
@@ -961,37 +916,50 @@ export class DesktopProgressBridge {
           activeExecutionIds: postDetectErrorActiveExecutionIds,
           allExecutionIds: postDetectErrorAllExecutionIds,
         } = this.refreshActiveExecutionIds();
+        repairExecutionIds = postDetectErrorAllExecutionIds;
         for (const [streamId, executionId] of postDetectErrorAllExecutionIds) {
           if (postDetectErrorActiveExecutionIds.has(executionId)) {
             waitingStreams.delete(streamId);
           }
         }
       }
-      const affectedStreams = this.resetRestartRepairStreamStatuses(
-        new Set(this.progressEvents.restoredStreams.keys()),
-        waitingStreams,
-      );
-      const closeGroupStreams = new Set([
-        ...affectedStreams,
-        ...waitingStreams,
-      ]);
-      if (closeGroupStreams.size > 0) {
-        try {
-          await this.closeRunningTaskGroupsForStreams([...closeGroupStreams]);
-        } catch (groupError) {
-          this.logger.warn(
-            'Failed to close desktop stream groups after repair failure',
-            {
-              data:
-                groupError instanceof Error
-                  ? groupError
-                  : { error: groupError },
-            },
-          );
+      try {
+        const fallbackRepairStreams = new Set([
+          ...this.progressEvents.restoredStreams.keys(),
+          ...waitingStreams,
+        ]);
+        const repairResult = await repairRestartedStreams({
+          streamStatus: this.session.status,
+          waitingStreams,
+          executionIds: repairExecutionIds,
+          repairStreams: fallbackRepairStreams,
+          retryFailedStreams: true,
+          closeRunningGroups: (streamIds, status, now) =>
+            this.closeRunningTaskGroupsForStreams(streamIds, status, now),
+          statusEmitOptions: {
+            runtimeHost: this.runtimeHost,
+            trace: this.logger,
+          },
+          logger: this.logger,
+        });
+        if (
+          repairResult.waitingStreams.length > 0 ||
+          repairResult.failedStreams.length > 0 ||
+          repairResult.closedWaitingGroups.length > 0 ||
+          repairResult.closedFailedGroups.length > 0
+        ) {
+          this.syncFullView();
         }
-      }
-      if (affectedStreams.length > 0 || waitingStreams.size > 0) {
-        this.syncFullView();
+      } catch (repairError) {
+        this.logger.warn(
+          'Failed to apply desktop stream repair fallback writes',
+          {
+            data:
+              repairError instanceof Error
+                ? repairError
+                : { error: repairError },
+          },
+        );
       }
       this.logger.warn('Failed to repair desktop streams after restart', {
         data: error instanceof Error ? error : { error },
