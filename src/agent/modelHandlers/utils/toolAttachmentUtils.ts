@@ -217,6 +217,14 @@ function takeHead(text: string, maxChars: number): string {
 }
 
 /**
+ * Fixed textual overhead of the message template below (labels, punctuation,
+ * the elision marker, and the character-count numbers themselves) reserved
+ * out of `maxLength` so head+tail content plus framing never balloons past
+ * the caller's requested limit.
+ */
+const TRUNCATION_FRAME_OVERHEAD_CHARS = 300;
+
+/**
  * Check if tool result text exceeds the maximum allowed length. Returns a
  * head+tail replacement (with an explicit elision marker) if exceeded,
  * otherwise returns null so the caller keeps the original text.
@@ -225,6 +233,12 @@ function takeHead(text: string, maxChars: number): string {
  * because LaTeX/build errors cluster at the end of long logs — dropping the
  * entire result (the prior behavior) left repair agents with no error text
  * on exactly the runs that most needed it.
+ *
+ * The returned string is always bounded by `maxLength`: the default head/tail
+ * budgets (`TOOL_RESULT_TRUNCATION_HEAD_CHARS`/`_TAIL_CHARS`) are scaled down
+ * whenever a smaller custom `maxLength` can't fit them, and a defensive
+ * hard-trim guarantees the invariant even for `maxLength` values too small to
+ * fit the message template itself.
  *
  * @param text - The text to check
  * @param maxLength - Maximum allowed length (default: MAX_TOOL_RESULT_TEXT_LENGTH)
@@ -238,21 +252,37 @@ export function checkToolResultTextLimit(
     return null;
   }
 
-  const headLen = Math.min(TOOL_RESULT_TRUNCATION_HEAD_CHARS, text.length);
-  const tailLen = Math.min(
-    TOOL_RESULT_TRUNCATION_TAIL_CHARS,
-    text.length - headLen,
+  // `text.length > maxLength` here, so `contentBudget < maxLength < text.length`
+  // — this keeps headLen/tailLen strictly below text.length below, which in
+  // turn keeps elidedChars > 0 (no more "0 characters elided" on near-boundary
+  // sizes where the head budget alone would otherwise cover the whole text).
+  const contentBudget = Math.max(
+    0,
+    maxLength - TRUNCATION_FRAME_OVERHEAD_CHARS,
   );
+  const headBudget = Math.min(TOOL_RESULT_TRUNCATION_HEAD_CHARS, contentBudget);
+  const tailBudget = Math.min(
+    TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+    contentBudget - headBudget,
+  );
+
+  const headLen = Math.min(headBudget, text.length);
+  const tailLen = Math.min(tailBudget, text.length - headLen);
   const head = takeHead(text, headLen);
   const tail = tailLen > 0 ? appendTail('', text, tailLen) : '';
   const elidedChars = text.length - head.length - tail.length;
 
-  return (
+  const message =
     `Tool result too large: ${text.length.toLocaleString()} characters ` +
     `(limit: ${maxLength.toLocaleString()}). Showing the first ${head.length.toLocaleString()} ` +
     `and last ${tail.length.toLocaleString()} characters.\n\n` +
-    `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided ...]\n\n${tail}`
-  );
+    `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided ...]\n\n${tail}`;
+
+  // Defensive backstop: TRUNCATION_FRAME_OVERHEAD_CHARS is an estimate, not an
+  // exact accounting of the template above, so hard-trim as a last resort to
+  // guarantee the maxLength invariant for every input — including maxLength
+  // values too small to fit the template text at all.
+  return message.length > maxLength ? takeHead(message, maxLength) : message;
 }
 
 /**
