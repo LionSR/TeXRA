@@ -3,8 +3,6 @@ import { cp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { stageHtmlExportAssets } from '../../../scripts/copy-html-export-assets.mjs';
-
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const packageDir = path.resolve(scriptDir, '..');
 const source = path.resolve(packageDir, '../extension/resources');
@@ -26,11 +24,13 @@ const runtimeResourceEntries = [
   'tool_use_agents',
 ];
 
-// Built (not checked-in) assets: only present once the extension's own
-// prepare:*-assets step has run. Missing is expected when the CLI is built
-// standalone without building the extension first — skip with a warning
-// rather than failing the whole resource copy over an optional entry.
-const optionalRuntimeResourceEntries = ['traceViewer'];
+// Built (not checked-in) assets: only present once packages/trace-viewer's
+// own build has run (normally guaranteed by this package's own `build`
+// script — see package.json — before this copy step). Kept optional here
+// too as a defensive fallback for anyone invoking copy-resources.mjs in
+// isolation, so a missing prerequisite build warns instead of failing the
+// whole resource copy.
+const optionalRuntimeResourceEntries = ['traceViewer', 'traceViewerStandalone'];
 
 async function copyEntry(entry, { optional = false } = {}) {
   try {
@@ -57,10 +57,4 @@ await Promise.all([
   cp(path.join(repoRoot, 'skills'), path.join(target, 'skills'), {
     recursive: true,
   }),
-  // Sourced directly from root node_modules (katex, highlight.js,
-  // markdown-it-texmath) rather than copied from the extension package's own
-  // `resources/htmlExport/`, so `texra history show --export html` has real
-  // KaTeX/highlight.js CSS assets to stage regardless of whether the
-  // extension package has been built in this checkout.
-  stageHtmlExportAssets(path.join(target, 'htmlExport')),
 ]);

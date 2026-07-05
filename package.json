@@ -55,7 +55,7 @@
     "check:cli-architecture": "corepack pnpm --filter @texra-ai/cli check:architecture",
     "check:cli-orchestration-manifest": "node scripts/check-cli-orchestration-manifest.mjs",
     "check:dead-code": "knip --no-progress --include files,exports,types,duplicates",
-    "texra-local:build": "corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
+    "texra-local:build": "corepack pnpm --filter @texra-ai/cli run prepare:trace-viewer-assets && corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
     "texra-local:link": "node scripts/link-texra-local.mjs",
     "check:desktop-installers": "node scripts/verify-desktop-installer-artifacts.mjs",
     "sync:remote-agents": "node scripts/sync-remote-agents.mjs -o docs/supabase/SYNC_REFERENCE_AGENTS.sql",

@@ -2,11 +2,8 @@ import * as path from 'node:path';
 
 import { defineCommand } from 'citty';
 
+import { assembleTrace, injectStandaloneTrace } from '@transcript';
 import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
-import {
-  DEFAULT_HTML_EXPORT_ASSETS_HREF,
-  formatChatAsHtml,
-} from '@agent/export/htmlExport/htmlFormatter';
 import { type ExecutionId } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -17,14 +14,13 @@ import {
   formatCliHistoryNotFoundText,
   formatCliHistoryText,
   formatInvalidExportFormatText,
-  isRemoteCliHistoryExportAssetsHref,
   listCliHistoryEntries,
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
   readCliHistoryExportInput,
-  resolveCliHistoryExportAssetsHref,
-  stageCliHistoryExportAssets,
+  readCliHistoryStandaloneTemplate,
+  stageCliHistoryTraceViewerAssets,
   type CliHistoryDeleteResult,
 } from '../runtime/history';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
@@ -100,69 +96,99 @@ async function runHistoryShow(
 /**
  * Export a stored conversation to stdout as a standalone document.
  *
- * Mirrors the extension's ChatExportController.buildExportInput so the CLI
- * and the extension render the same conversation identically; the HTML path
- * reuses the Lit-SSR chat export renderer (same HTML output as the
- * extension's chat export — not the separate Progress View trace export).
+ * `md` mirrors the extension's ChatExportController.buildExportInput so the
+ * CLI and the extension render the same conversation identically.
  *
- * For any local (non-URL) `--assets` href — the unset default `./assets` or
- * an explicit local path, including one that spells out the default — also
- * stages the bundled KaTeX/highlight.js/texmath assets into that path
- * (resolved against `--cwd`) as a side effect. The common
- * `texra history show <id> --export html > out.html` redirect writes
- * `out.html` into the same directory, so the exported document's asset href
- * resolves for real instead of pointing at a folder that was never created.
- * A genuinely remote href (e.g. a CDN URL) is left untouched: the caller
- * manages that location themselves.
+ * `html` assembles the execution's trace (`assembleTrace`, shared with the
+ * extension's "Export as HTML" button) and embeds it into the trace-viewer —
+ * the same faithful Progress View replay, not a separate hand-written
+ * exporter. Default mode writes one self-contained page to stdout (JS/CSS/
+ * fonts all inlined, so it opens correctly via `file://` with no server —
+ * `> out.html` works exactly like before). `--assets-dir <dir>` switches to
+ * the shared-assets mode for a site publishing many traces: stages the
+ * trace-viewer's multi-file bundle into `<dir>` (safe to repeat across many
+ * exports pointed at the same directory) and writes just the trace data to
+ * stdout, to be redirected next to (or referenced by) that shared bundle's
+ * `index.html?trace=<path>`.
  */
 async function runHistoryExport(
   context: CliContext,
   id: ExecutionId,
   format: 'html' | 'md',
-  options: { assetsHref?: string } = {},
+  options: { assetsDir?: string } = {},
 ): Promise<number> {
   await initLocalCliPlatform(context);
-  const exportResult = await readCliHistoryExportInput(id);
-  if (exportResult.status === 'not_found') {
-    writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-    return CliExitCode.Usage;
-  }
-  if (exportResult.status === 'incomplete') {
-    writeTextStderr(
-      `Execution ${id} exists but has nothing to export yet (no stored ` +
-        'config and/or conversation). Run `texra history show ' +
-        id +
-        '` to see what is available.',
-    );
-    return CliExitCode.Usage;
-  }
-  const { exportInput } = exportResult;
 
-  const assetsHref = resolveCliHistoryExportAssetsHref(options.assetsHref);
-  if (format === 'html' && !isRemoteCliHistoryExportAssetsHref(assetsHref)) {
-    const staged = await stageCliHistoryExportAssets({
+  if (format === 'md') {
+    const exportResult = await readCliHistoryExportInput(id);
+    if (exportResult.status === 'not_found') {
+      writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+      return CliExitCode.Usage;
+    }
+    if (exportResult.status === 'incomplete') {
+      writeTextStderr(
+        `Execution ${id} exists but has nothing to export yet (no stored ` +
+          'config and/or conversation). Run `texra history show ' +
+          id +
+          '` to see what is available.',
+      );
+      return CliExitCode.Usage;
+    }
+    writeRawStdout(formatChatAsMarkdown(exportResult.exportInput));
+    return CliExitCode.Success;
+  }
+
+  const traceResult = await assembleTrace(id);
+  if (traceResult.status !== 'ok') {
+    if (traceResult.status === 'config_missing') {
+      writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+    } else {
+      writeTextStderr(
+        `Execution ${id} exists but has no stored transcript to export (it ` +
+          'may predate transcript persistence, or the run never produced ' +
+          'any output). Run `texra history show ' +
+          id +
+          '` to see what is available.',
+      );
+    }
+    return CliExitCode.Usage;
+  }
+  const { trace } = traceResult;
+
+  if (options.assetsDir) {
+    const destDir = path.resolve(context.cwd, options.assetsDir);
+    const staged = await stageCliHistoryTraceViewerAssets({
       resourcesPath: context.resourcesPath,
-      destDir: path.resolve(
-        context.cwd,
-        assetsHref ?? DEFAULT_HTML_EXPORT_ASSETS_HREF,
-      ),
+      destDir,
     });
     if (staged === 'missing') {
       writeTextStderr(
-        'Note: bundled HTML export assets (KaTeX/highlight.js CSS) were not ' +
-          'found in this CLI install, so math and code blocks may render ' +
-          'unstyled. Rebuild the CLI (`npm run texra-local:build`) or pass ' +
-          '--assets to point at a folder containing katex.min.css, ' +
-          'texmath.css, hljs-light.css, and hljs-dark.css.',
+        'Note: the bundled trace-viewer assets were not found in this CLI ' +
+          'install, so nothing was staged into --assets-dir. Rebuild the ' +
+          'CLI (`npm run texra-local:build`) so packages/trace-viewer builds.',
       );
     }
+    writeRawStdout(JSON.stringify(trace));
+    writeTextStderr(
+      `Wrote trace data for ${id}. View it via <redirected-path> next to ` +
+        `${destDir}, e.g. ${destDir}/index.html?trace=<relative-path-to-the-redirected-file>.`,
+    );
+    return CliExitCode.Success;
   }
 
-  const content =
-    format === 'html'
-      ? formatChatAsHtml(exportInput, { assetsHref })
-      : formatChatAsMarkdown(exportInput);
-  writeRawStdout(content);
+  const template = await readCliHistoryStandaloneTemplate(
+    context.resourcesPath,
+  );
+  if (template === null) {
+    writeTextStderr(
+      'The bundled trace-viewer standalone template was not found in this ' +
+        'CLI install. Rebuild the CLI (`npm run texra-local:build`) so ' +
+        'packages/trace-viewer builds, or pass --assets-dir to use the ' +
+        'shared-assets export mode instead.',
+    );
+    return CliExitCode.Usage;
+  }
+  writeRawStdout(injectStandaloneTrace(template, trace));
   return CliExitCode.Success;
 }
 
@@ -268,13 +294,13 @@ const historyShowCommand = defineCliCommand({
       type: 'string',
       valueHint: 'html|md',
       description:
-        'Export the stored conversation to stdout as a standalone html or md document',
+        'Export the execution to stdout: html is a faithful trace-viewer replay (self-contained by default), md is the conversation as Markdown',
     },
-    assets: {
+    'assets-dir': {
       type: 'string',
-      valueHint: 'href',
+      valueHint: 'directory',
       description:
-        'Assets href for --export html (defaults to ./assets, staged automatically)',
+        'Shared trace-viewer bundle location for --export html (for a site publishing many traces); omit for a single self-contained page',
     },
   },
   run: (context, ctx) => {
@@ -290,7 +316,7 @@ const historyShowCommand = defineCliCommand({
         return Promise.resolve(CliExitCode.Usage);
       }
       return runHistoryExport(context, id, exportFormat, {
-        assetsHref: optString(ctx.args.assets),
+        assetsDir: optString(ctx.args['assets-dir']),
       });
     }
     return runHistoryShow(context, id, { full: ctx.args.full === true });

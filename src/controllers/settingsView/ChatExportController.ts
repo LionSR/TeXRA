@@ -12,6 +12,13 @@
  * constructor instead of the controller importing `@resources`.
  */
 
+// Local imports - transcript / trace-viewer
+import {
+  assembleTrace,
+  injectStandaloneTrace,
+  type AssembleTraceResult,
+} from '@transcript';
+
 // Local imports - agent
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 
@@ -20,7 +27,6 @@ import {
   formatChatAsMarkdown,
   formatChatAsLatex,
   generateExportFilename,
-  generateExportFolderName,
   type ChatExportInput,
 } from '@agent/export/chatExportFormatter';
 
@@ -59,10 +65,12 @@ export interface LatexExportResult extends ChatExportResult {
   readonly pdfPath?: string;
 }
 
-export interface HtmlExportResult extends ChatExportResult {
-  /** Folder name relative to the execution storage. */
-  readonly folderName: string;
-}
+/** `assembleTrace`'s failure statuses, re-surfaced for the HTML export path. */
+type HtmlExportStatus = Exclude<AssembleTraceResult['status'], 'ok'>;
+
+export type HtmlExportOutcome =
+  | { readonly status: 'ok'; readonly result: ChatExportResult }
+  | { readonly status: HtmlExportStatus };
 
 // ============================================================
 // Controller
@@ -147,45 +155,50 @@ export class ChatExportController {
   }
 
   /**
-   * Format and write a self-contained HTML export.
-   *
-   * Stages third-party assets (KaTeX CSS, highlight.js themes) from
-   * `assetsSrc` next to the generated `index.html` so the exported page
-   * is fully self-contained and opens correctly in any browser.
+   * Assemble the execution's trace and embed it into the trace-viewer's
+   * single-file standalone bundle — the same faithful Progress View replay
+   * the CLI's `--export html` produces, not the retired hand-written
+   * chat-bubble exporter. Single file, no separate `assets/` folder: it
+   * opens correctly straight from disk (`file://`) with no server, which
+   * matters here because `vscode.env.openExternal` hands the result to the
+   * OS's default handler for the file, not a served URL.
    */
   async exportAsHtml(
     historyId: string,
-    exportInput: ChatExportInput,
-    assetsSrc: string,
-  ): Promise<HtmlExportResult> {
-    const { formatChatAsHtml } =
-      await import('@agent/export/htmlExport/htmlFormatter');
+    standaloneTemplatePath: string,
+  ): Promise<HtmlExportOutcome> {
+    const traceResult = await assembleTrace(historyId as ExecutionId);
+    if (traceResult.status !== 'ok') {
+      return { status: traceResult.status };
+    }
+    const { trace } = traceResult;
+
     const fsExtra = (await import('fs-extra')).default;
-
-    const folderName = generateExportFolderName(exportInput);
-    const folderPath = `executions/${historyId}/${folderName}`;
-    const assetsPath = `${folderPath}/assets`;
-
-    if (!(await fsExtra.pathExists(assetsSrc))) {
+    if (!(await fsExtra.pathExists(standaloneTemplatePath))) {
       throw new Error(
-        `HTML export assets missing at ${assetsSrc} — rebuild the extension ` +
-          `(npm run package:fast) so scripts/copy-html-export-assets.mjs runs.`,
+        `Trace-viewer standalone bundle missing at ${standaloneTemplatePath} — ` +
+          'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
       );
     }
+    const template = await fsExtra.readFile(standaloneTemplatePath, 'utf8');
+    const html = injectStandaloneTrace(template, trace);
 
-    await StorageFS.ensureDir(folderPath);
-    await fsExtra.copy(assetsSrc, StorageFS.fullPath(assetsPath), {
-      overwrite: true,
-    });
-
-    const html = formatChatAsHtml(exportInput);
-    const indexPath = `${folderPath}/index.html`;
-    await StorageFS.write(indexPath, html);
+    const filename = generateExportFilename(
+      {
+        timestamp: trace.meta?.timestamp ?? new Date().toISOString(),
+        config: trace.config,
+      },
+      'html',
+    );
+    const storagePath = `executions/${historyId}/${filename}`;
+    await StorageFS.write(storagePath, html);
 
     return {
-      storagePath: indexPath,
-      absolutePath: StorageFS.fullPath(indexPath),
-      folderName,
+      status: 'ok',
+      result: {
+        storagePath,
+        absolutePath: StorageFS.fullPath(storagePath),
+      },
     };
   }
 }

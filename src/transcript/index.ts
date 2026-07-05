@@ -31,3 +31,4 @@ export {
   type AssembleTraceResult,
   type TraceDocument,
 } from './traceAssembler';
+export { injectStandaloneTrace } from './standaloneTraceHtml';
