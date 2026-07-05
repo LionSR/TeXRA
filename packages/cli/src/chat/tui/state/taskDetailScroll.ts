@@ -277,6 +277,32 @@ function taskDetailScrollOffsetFollowsTail(
   return offset === Math.min(followOffset, maxOffset);
 }
 
+function taskDetailScrollStateAtOffset(
+  state: TaskDetailScrollState,
+  maxOffset: number,
+  nextOffset: number,
+  followOffset = maxOffset,
+  context?: TaskDetailScrollContext,
+): TaskDetailScrollState {
+  const clampedOffset = clamp(nextOffset, 0, maxOffset);
+  const followsTail = taskDetailScrollOffsetFollowsTail(
+    clampedOffset,
+    maxOffset,
+    followOffset,
+  );
+  const anchor = followsTail
+    ? undefined
+    : context
+      ? taskDetailScrollAnchorFromOffset(context, clampedOffset)
+      : state.anchor;
+  return {
+    executionId: state.executionId,
+    followsTail,
+    offset: clampedOffset,
+    ...(anchor ? { anchor } : {}),
+  };
+}
+
 export function moveTaskDetailScrollState(
   state: TaskDetailScrollState,
   maxOffset: number,
@@ -290,24 +316,57 @@ export function moveTaskDetailScrollState(
     followOffset,
     context,
   );
-  const nextOffset =
-    direction === 'up'
-      ? Math.max(0, offset - 1)
-      : Math.min(maxOffset, offset + 1);
-  const followsTail = taskDetailScrollOffsetFollowsTail(
+  const nextOffset = direction === 'up' ? offset - 1 : offset + 1;
+  return taskDetailScrollStateAtOffset(
+    state,
+    maxOffset,
     nextOffset,
+    followOffset,
+    context,
+  );
+}
+
+/** PgUp/PgDn: move by a page (the visible row budget) instead of a single
+ *  row. Mirrors `moveTaskDetailScrollState`, just with a configurable step. */
+export function pageTaskDetailScrollState(
+  state: TaskDetailScrollState,
+  maxOffset: number,
+  direction: 'down' | 'up',
+  pageSize: number,
+  followOffset = maxOffset,
+  context?: TaskDetailScrollContext,
+): TaskDetailScrollState {
+  const offset = taskDetailVisibleScrollOffset(
+    state,
     maxOffset,
     followOffset,
+    context,
   );
-  const anchor = followsTail
-    ? undefined
-    : context
-      ? taskDetailScrollAnchorFromOffset(context, nextOffset)
-      : state.anchor;
-  return {
-    executionId: state.executionId,
-    followsTail,
-    offset: nextOffset,
-    ...(anchor ? { anchor } : {}),
-  };
+  const step = Math.max(1, pageSize);
+  const nextOffset = direction === 'up' ? offset - step : offset + step;
+  return taskDetailScrollStateAtOffset(
+    state,
+    maxOffset,
+    nextOffset,
+    followOffset,
+    context,
+  );
+}
+
+/** g/G: jump straight to the top or back to the tail. */
+export function jumpTaskDetailScrollState(
+  state: TaskDetailScrollState,
+  maxOffset: number,
+  target: 'bottom' | 'top',
+  followOffset = maxOffset,
+  context?: TaskDetailScrollContext,
+): TaskDetailScrollState {
+  const nextOffset = target === 'top' ? 0 : followOffset;
+  return taskDetailScrollStateAtOffset(
+    state,
+    maxOffset,
+    nextOffset,
+    followOffset,
+    context,
+  );
 }
