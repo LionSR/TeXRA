@@ -166,32 +166,6 @@ const ExecutionsToolInputSchema = z.strictObject({
 
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 
-const normalizeWaitTimeout = (timeout: number | null | undefined): number =>
-  clamp(
-    timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
-    EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-    EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
-  );
-
-const normalizeExecutionsToolInput = (input: unknown): unknown => {
-  if (input == null || typeof input !== 'object' || Array.isArray(input)) {
-    return input;
-  }
-
-  const record = input as Record<string, unknown>;
-  const { timeout } = record;
-  const outOfRange =
-    typeof timeout === 'number' &&
-    Number.isFinite(timeout) &&
-    (timeout < EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS ||
-      timeout > EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS);
-  if (!outOfRange) {
-    return input;
-  }
-
-  return { ...record, timeout: normalizeWaitTimeout(timeout) };
-};
-
 export class ExecutionsTool extends defineTool({
   name: 'executions',
   description: `View execution history and manage running executions.
