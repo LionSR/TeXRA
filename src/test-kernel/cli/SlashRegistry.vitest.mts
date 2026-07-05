@@ -19,11 +19,10 @@ import {
   openRegisteredCliSlashForm,
 } from '@cli/chat/tui/commands/slashForms';
 import { LOGIN_FORM_ITEMS } from '@cli/chat/tui/forms/LoginForm';
-import {
-  cliState,
-  resetCliState,
-  type SessionMeta,
-} from '@cli/chat/tui/state/cliState';
+import { activeForm } from '@cli/chat/tui/state/cliState/foregroundOverlaySlice';
+import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
+import { sessionMeta } from '@cli/chat/tui/state/cliState/sessionSlice';
+import type { SessionMeta } from '@cli/chat/tui/state/cliState/types';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -79,7 +78,7 @@ describe('slashRegistry', () => {
   } {
     let closed = false;
     const node = renderFormAdapter<TProps>(
-      cliState.activeForm.get()?.render(() => {
+      activeForm.get()?.render(() => {
         closed = true;
       }, 20),
     );
@@ -181,17 +180,17 @@ describe('slashRegistry', () => {
     if (!tools) throw new Error('Expected /tools to be registered');
 
     expect(openRegisteredCliSlashForm(tools, '')).toBe(true);
-    expect(cliState.activeForm.get()?.commandName).toBe('tools');
+    expect(activeForm.get()?.commandName).toBe('tools');
   });
 
   it('opens structured forms by registered command name or alias', () => {
     registerBuiltinSlashCommands();
 
     expect(openCliSlashCommandForm('TOOLS', '')).toBe(true);
-    expect(cliState.activeForm.get()?.commandName).toBe('tools');
+    expect(activeForm.get()?.commandName).toBe('tools');
 
     expect(openCliSlashCommandForm('skill', '')).toBe(true);
-    expect(cliState.activeForm.get()?.commandName).toBe('skills');
+    expect(activeForm.get()?.commandName).toBe('skills');
   });
 
   it('chains selectable agent picks into the API-mode-aware model picker', async () => {
@@ -205,17 +204,17 @@ describe('slashRegistry', () => {
 
     const agentNode = renderFormAdapter<{
       onSelect?: (value: string) => void;
-    }>(cliState.activeForm.get()?.render(() => {}, 20));
+    }>(activeForm.get()?.render(() => {}, 20));
     agentNode.props?.onSelect?.('review');
     await settleFormSelection();
 
-    expect(cliState.sessionMeta.get().agent).toBe('review');
-    expect(cliState.activeForm.get()?.commandName).toBe('model');
+    expect(sessionMeta.get().agent).toBe('review');
+    expect(activeForm.get()?.commandName).toBe('model');
 
     const modelNode = renderFormAdapter<{
       apiMode?: string;
       selectable?: boolean;
-    }>(cliState.activeForm.get()?.render(() => {}, 20));
+    }>(activeForm.get()?.render(() => {}, 20));
     expect(modelNode.props).toMatchObject({
       apiMode: 'included',
       selectable: true,
@@ -239,9 +238,9 @@ describe('slashRegistry', () => {
     agentNode.props?.onSelect?.('review');
     await settleFormSelection();
 
-    expect(cliState.sessionMeta.get().agent).toBe('review');
+    expect(sessionMeta.get().agent).toBe('review');
     expect(agentNode.isClosed()).toBe(true);
-    expect(cliState.activeForm.get()?.commandName).toBe('agent');
+    expect(activeForm.get()?.commandName).toBe('agent');
   });
 
   it('marks the agent picker read-only when root selection is closed', () => {
@@ -258,10 +257,10 @@ describe('slashRegistry', () => {
 
     const agentNode = renderFormAdapter<{
       selectable?: boolean;
-    }>(cliState.activeForm.get()?.render(() => {}, 20));
+    }>(activeForm.get()?.render(() => {}, 20));
 
     expect(agentNode.props).toMatchObject({ selectable: false });
-    expect(cliState.activeForm.get()?.commandName).toBe('agent');
+    expect(activeForm.get()?.commandName).toBe('agent');
   });
 
   it('keeps the model picker selectable after root agent selection is closed', () => {
@@ -279,11 +278,11 @@ describe('slashRegistry', () => {
     const modelNode = renderFormAdapter<{
       onSelect?: (value: string) => void;
       selectable?: boolean;
-    }>(cliState.activeForm.get()?.render(() => {}, 20));
+    }>(activeForm.get()?.render(() => {}, 20));
     modelNode.props?.onSelect?.('gpt55');
 
     expect(modelNode.props).toMatchObject({ selectable: true });
-    expect(cliState.sessionMeta.get()).toMatchObject({
+    expect(sessionMeta.get()).toMatchObject({
       model: 'gpt55',
       modelSource: 'explicit-override',
     });
@@ -315,7 +314,7 @@ describe('slashRegistry', () => {
 
     const modelNode = renderFormAdapter<{
       getModelSwitchDisabledReason?: (model: string) => string | undefined;
-    }>(cliState.activeForm.get()?.render(() => {}, 20));
+    }>(activeForm.get()?.render(() => {}, 20));
 
     expect(modelNode.props?.getModelSwitchDisabledReason?.('sonnet46T')).toBe(
       'different conversation format; start new chat',
@@ -448,7 +447,7 @@ describe('slashRegistry', () => {
     const loginNode = renderFormAdapter<{
       onSelect?: (value: string) => void;
     }>(
-      cliState.activeForm.get()?.render(() => {
+      activeForm.get()?.render(() => {
         closed = true;
       }, 20),
     );
@@ -477,7 +476,7 @@ describe('slashRegistry', () => {
     const approvalNode = renderFormAdapter<{
       onSelect?: (value: CliApprovalPolicy) => void;
     }>(
-      cliState.activeForm.get()?.render(() => {
+      activeForm.get()?.render(() => {
         closed = true;
       }, 20),
     );
@@ -505,7 +504,7 @@ describe('slashRegistry', () => {
     const resumeNode = renderFormAdapter<{
       onSelect?: (id: string) => void;
     }>(
-      cliState.activeForm.get()?.render(() => {
+      activeForm.get()?.render(() => {
         closed = true;
       }, 20),
     );
@@ -538,7 +537,7 @@ describe('slashRegistry', () => {
         readonly activationPrompt: string;
       }) => void;
     }>(
-      cliState.activeForm.get()?.render(() => {
+      activeForm.get()?.render(() => {
         closed = true;
       }, 20),
     );

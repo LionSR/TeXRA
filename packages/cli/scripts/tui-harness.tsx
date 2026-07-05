@@ -56,13 +56,24 @@ import {
   openRegisteredCliSlashForm,
 } from '../src/chat/tui/commands/slashForms';
 import {
-  cliState,
-  patchStream,
-  resetCliState,
-  setCliSessionModelOverride,
+  activeStreamId as activeStreamIdSignal,
+  rootRunStartAvailable,
+  rootStreamId,
+} from '../src/chat/tui/state/cliState/focusSlice';
+import {
+  parentStream,
   setParentStream,
-  type ConversationEntry,
-} from '../src/chat/tui/state/cliState';
+} from '../src/chat/tui/state/cliState/parentStreamSlice';
+import { resetCliState } from '../src/chat/tui/state/cliState/reset';
+import {
+  sessionMeta,
+  setCliSessionModelOverride,
+} from '../src/chat/tui/state/cliState/sessionSlice';
+import {
+  patchStream,
+  streams,
+} from '../src/chat/tui/state/cliState/streamsSlice';
+import type { ConversationEntry } from '../src/chat/tui/state/cliState/types';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage,
@@ -901,8 +912,8 @@ function appendHarnessExternalInquiryDecision(
 
 function appendHarnessRetryDecision(decision: ApprovalDecision): void {
   if (decision.accepted && decision.apiMode) {
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
+    sessionMeta.set({
+      ...sessionMeta.get(),
       apiMode: decision.apiMode,
     });
     appendHarnessAssistantTranscript(`RETRY-API-MODE ${decision.apiMode}`);
@@ -953,7 +964,7 @@ function harnessInitialEntries(): ConversationEntry[] {
   return makeEntries(ENTRY_COUNT);
 }
 
-cliState.sessionMeta.set({
+sessionMeta.set({
   agent: 'chat',
   model: 'harness-model',
   cwd: HARNESS_CWD,
@@ -963,7 +974,7 @@ cliState.sessionMeta.set({
   teamName: TEAM_NAME,
   version: '0.0.0-harness',
 });
-cliState.activeStreamId.set(STREAM_ID);
+activeStreamIdSignal.set(STREAM_ID);
 patchStream(STREAM_ID, (slice) => ({
   ...slice,
   status: harnessInitialStreamStatus(slice.status),
@@ -1197,7 +1208,7 @@ if (SHOW_BASH_APPROVAL) {
     let pollCount = 0;
     const timer = setInterval(() => {
       pollCount += 1;
-      const activeStreamId = cliState.activeStreamId.get();
+      const activeStreamId = activeStreamIdSignal.get();
       if (activeStreamId === undefined || activeStreamId === STREAM_ID) {
         if (pollCount >= 200) clearInterval(timer);
         return;
@@ -1272,7 +1283,7 @@ if (SHOW_AGENT_PROPOSAL) {
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
-  const parentSlice = cliState.streams.get().get(STREAM_ID);
+  const parentSlice = streams.get().get(STREAM_ID);
   const childStreamIds = new Set(
     [
       ...(parentSlice?.activeSubagents ?? []),
@@ -1318,7 +1329,7 @@ function appendHarnessChildSubmitAck(
   text: string,
   streamId: StreamTabId,
 ): void {
-  const status = cliState.streams.get().get(streamId)?.status;
+  const status = streams.get().get(streamId)?.status;
   const isLive =
     status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
   appendHarnessTranscript('assistant', text, streamId, { finalized: !isLive });
@@ -1351,10 +1362,10 @@ function appendHarnessTranscript(
 
 function defaultHarnessTranscriptStreamId(): StreamTabId {
   return resolveLocalTranscriptStreamId({
-    activeStreamId: cliState.activeStreamId.get(),
+    activeStreamId: activeStreamIdSignal.get(),
     fallbackStreamId: STREAM_ID,
-    parentStream: cliState.parentStream.get(),
-    rootStreamId: cliState.rootStreamId.get(),
+    parentStream: parentStream.get(),
+    rootStreamId: rootStreamId.get(),
   });
 }
 
@@ -1366,8 +1377,8 @@ function formatHarnessSlashHelp(): string {
 
 function setHarnessApprovalPolicy(policy: CliApprovalPolicy): void {
   harnessApprovalPolicy = policy;
-  cliState.sessionMeta.set({
-    ...cliState.sessionMeta.get(),
+  sessionMeta.set({
+    ...sessionMeta.get(),
     approvalPolicy: policy,
   });
   appendHarnessAssistantTranscript(
@@ -1406,7 +1417,7 @@ function applyHarnessApprovalPolicySelection(
 }
 
 function markHarnessExecutionStopped(executionId: string): void {
-  const parentSlice = cliState.streams.get().get(STREAM_ID);
+  const parentSlice = streams.get().get(STREAM_ID);
   if (!parentSlice) return;
 
   const executionRows = [
@@ -1458,16 +1469,16 @@ function markHarnessExecutionStopped(executionId: string): void {
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
   const focusedChildRoute = focusedChildFollowUpRoute({
-    activeStreamId: cliState.activeStreamId.get(),
-    parentStream: cliState.parentStream.get(),
-    streams: cliState.streams.get(),
+    activeStreamId: activeStreamIdSignal.get(),
+    parentStream: parentStream.get(),
+    streams: streams.get(),
   });
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
       stoppedFocusedChildFollowUpMessage({
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         streamId: focusedChildRoute.streamId,
-        streams: cliState.streams.get(),
+        streams: streams.get(),
       }),
       focusedChildRoute.streamId,
     );
@@ -1484,9 +1495,9 @@ function handleHarnessSubmit(line: string): void {
 }
 
 function appendHarnessStatus(): void {
-  const meta = cliState.sessionMeta.get();
-  const streamId = cliState.activeStreamId.get() ?? STREAM_ID;
-  const slice = cliState.streams.get().get(streamId);
+  const meta = sessionMeta.get();
+  const streamId = activeStreamIdSignal.get() ?? STREAM_ID;
+  const slice = streams.get().get(streamId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
       agent: meta.agent,
@@ -1503,12 +1514,12 @@ function appendHarnessStatus(): void {
 }
 
 function resetHarnessForClear(): void {
-  const meta = cliState.sessionMeta.get();
+  const meta = sessionMeta.get();
   clearApprovals();
   ToolUseFollowUpQueue.drain(STREAM_ID);
   void GoalStore.forget(STREAM_ID);
   const store = getDefaultStreamLogStore();
-  for (const streamId of cliState.streams.get().keys()) {
+  for (const streamId of streams.get().keys()) {
     store.delete(streamId).catch(() => {
       // The harness reset is best-effort; visible cliState is reset below.
     });
@@ -1517,7 +1528,7 @@ function resetHarnessForClear(): void {
     ...meta,
     approvalPolicy: harnessApprovalPolicy,
   });
-  cliState.activeStreamId.set(STREAM_ID);
+  activeStreamIdSignal.set(STREAM_ID);
   inkRef.current?.repaint({
     clearScrollback: true,
     preserveStatic: false,
@@ -1584,7 +1595,7 @@ registerBuiltinSlashCommands({
     );
   },
   onApiModeSelect: (apiMode) => {
-    cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), apiMode });
+    sessionMeta.set({ ...sessionMeta.get(), apiMode });
     appendHarnessAssistantTranscript(`API mode set to ${apiMode}.`);
   },
   onMemorySelect: (storagePath) => {
@@ -1607,7 +1618,7 @@ registerBuiltinSlashCommands({
     );
   },
 });
-cliState.rootRunStartAvailable.set(CAN_SELECT_AGENT);
+rootRunStartAvailable.set(CAN_SELECT_AGENT);
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const viewportController = createTuiViewportController(inkRef);

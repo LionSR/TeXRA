@@ -10,10 +10,10 @@ import {
 } from '@cli/runtime/modelAccess';
 
 import {
-  cliState,
   patchSessionMeta,
+  sessionMeta,
   setCliSessionModelOverride,
-} from '@cli/chat/tui/state/cliState';
+} from '@cli/chat/tui/state/cliState/sessionSlice';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
@@ -78,7 +78,7 @@ export async function applyCliModelSelection(
   const nextModel = model.trim();
   if (chatTuiCanStartRootRun(context.session)) {
     try {
-      const { apiMode } = cliState.sessionMeta.get();
+      const { apiMode } = sessionMeta.get();
       const selection = await selectCliRunnableModel(nextModel, {
         fallbackReason: 'explicit-override',
         apiMode,

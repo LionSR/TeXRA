@@ -15,12 +15,20 @@ import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUti
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
-  cliState,
-  patchStream,
-  removeStream,
-  resetCliState,
+  activeStreamId,
+  rootRunStartAvailable,
+  rootStreamId,
+} from '@cli/chat/tui/state/cliState/focusSlice';
+import {
+  parentStream,
   setParentStream,
-} from '@cli/chat/tui/state/cliState';
+} from '@cli/chat/tui/state/cliState/parentStreamSlice';
+import { removeStream } from '@cli/chat/tui/state/cliState/removeStream';
+import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
+import {
+  patchStream,
+  streams,
+} from '@cli/chat/tui/state/cliState/streamsSlice';
 import {
   allocateMiddleRows,
   allocateSidePanelRows,
@@ -115,7 +123,7 @@ afterEach(() => {
 describe('cliState Phase 4 fields', () => {
   it('initialises every new slice with empty subagent/process/todo/plan/bypass defaults', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
-    const slice = cliState.streams.get().get(root);
+    const slice = streams.get().get(root);
     expect(slice).toBeDefined();
     expect(slice?.activeSubagents).toEqual([]);
     expect(slice?.activeProcesses).toEqual([]);
@@ -132,23 +140,23 @@ describe('cliState Phase 4 fields', () => {
   it('prunes parent edges when a stream is removed', () => {
     setParentStream(child1, root);
     setParentStream(child2, root);
-    expect(cliState.parentStream.get().get(child1)).toBe(root);
-    expect(cliState.parentStream.get().get(child2)).toBe(root);
+    expect(parentStream.get().get(child1)).toBe(root);
+    expect(parentStream.get().get(child2)).toBe(root);
 
     // Removing a child drops its own edge but leaves siblings intact.
     patchStream(child1, (s) => ({ ...s, status: 'running' }));
     removeStream(child1);
-    expect(cliState.parentStream.get().has(child1)).toBe(false);
-    expect(cliState.parentStream.get().get(child2)).toBe(root);
+    expect(parentStream.get().has(child1)).toBe(false);
+    expect(parentStream.get().get(child2)).toBe(root);
 
     // Removing the parent prunes every edge that pointed at it.
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     removeStream(root);
-    expect(cliState.parentStream.get().has(child2)).toBe(false);
+    expect(parentStream.get().has(child2)).toBe(false);
   });
 
   it('removes stale child rows when a stream is removed', () => {
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
     setParentStream(child1, root);
     patchStream(root, (s) => ({
       ...s,
@@ -179,17 +187,15 @@ describe('cliState Phase 4 fields', () => {
     }));
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
 
-    expect(
-      hasChildControlItems(cliState.streams.get().get(root), 'tasks'),
-    ).toBe(true);
-    expect(
-      hasChildControlItems(cliState.streams.get().get(root), 'subagents'),
-    ).toBe(true);
+    expect(hasChildControlItems(streams.get().get(root), 'tasks')).toBe(true);
+    expect(hasChildControlItems(streams.get().get(root), 'subagents')).toBe(
+      true,
+    );
     expect(nextFocusForward()).toBe(child1);
 
     removeStream(child1);
 
-    const parent = cliState.streams.get().get(root);
+    const parent = streams.get().get(root);
     expect(parent).toBeDefined();
     if (!parent) throw new Error('missing parent stream');
     expect(parent.childStreams).toEqual([]);
@@ -238,7 +244,7 @@ describe('cliState Phase 4 fields', () => {
         },
       );
 
-      const parent = cliState.streams.get().get(root);
+      const parent = streams.get().get(root);
       expect(parent?.activeSubagents).toEqual([]);
       expect(parent?.childStreams[0]?.status).toBe(STREAM_PHASE.FAILED);
       expect(visibleSubagentRows(parent!)).toMatchObject([
@@ -255,11 +261,11 @@ describe('cliState Phase 4 fields', () => {
 
   it('treats a null-parent update as child promotion to top-level', () => {
     setParentStream(child1, root);
-    expect(cliState.parentStream.get().get(child1)).toBe(root);
+    expect(parentStream.get().get(child1)).toBe(root);
 
     setParentStream(child1, null);
 
-    expect(cliState.parentStream.get().has(child1)).toBe(false);
+    expect(parentStream.get().has(child1)).toBe(false);
   });
 
   it('registers subagent parent edges when active child rows arrive', () => {
@@ -268,7 +274,7 @@ describe('cliState Phase 4 fields', () => {
       close: async () => {},
     } as unknown as CliRuntimeHost);
 
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
     patchStream(child1, (s) => ({
       ...s,
       status: STREAM_STATUS.RUNNING,
@@ -286,18 +292,18 @@ describe('cliState Phase 4 fields', () => {
       ],
     });
 
-    expect(cliState.parentStream.get().get(child1)).toBe(root);
+    expect(parentStream.get().get(child1)).toBe(root);
     expect(nextFocusForward()).toBe(child1);
     expect(
       transcriptViewportKey({
         activeStreamId: child1,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
       }),
     ).toBe(`scoped:${child1}`);
     expect(
       transcriptViewportKey({
         activeStreamId: root,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         transcriptViewerStreamId: child1,
       }),
     ).toBe(`viewer:${child1}`);
@@ -1174,7 +1180,7 @@ describe('CLI TUI row allocation', () => {
     expect(session.runCompleted).toBe(false);
     expect(session.stopRequested).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
-    expect(cliState.rootRunStartAvailable.get()).toBe(false);
+    expect(rootRunStartAvailable.get()).toBe(false);
   });
 
   it('restores root run availability when clearing session run state', () => {
@@ -1192,7 +1198,7 @@ describe('CLI TUI row allocation', () => {
     clearTuiSessionRunState(session);
 
     expect(chatTuiCanStartRootRun(session)).toBe(true);
-    expect(cliState.rootRunStartAvailable.get()).toBe(true);
+    expect(rootRunStartAvailable.get()).toBe(true);
   });
 
   it('allows model selection before start or while a tool-use chat is waiting', () => {
@@ -1409,10 +1415,10 @@ describe('CLI TUI row allocation', () => {
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     setParentStream(child1, root);
 
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
     expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
 
-    cliState.activeStreamId.set(child1);
+    activeStreamId.set(child1);
     expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
       kind: 'accept',
       streamId: child1,
@@ -1435,7 +1441,7 @@ describe('CLI TUI row allocation', () => {
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
     setParentStream(child1, root);
 
-    cliState.activeStreamId.set(child1);
+    activeStreamId.set(child1);
     expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
       kind: 'accept',
       streamId: child1,
@@ -1458,7 +1464,7 @@ describe('CLI TUI row allocation', () => {
     patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.CANCELLED }));
     setParentStream(child1, root);
 
-    cliState.activeStreamId.set(child1);
+    activeStreamId.set(child1);
     expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
       kind: 'reject',
       streamId: child1,
@@ -1471,7 +1477,7 @@ describe('CLI TUI row allocation', () => {
     expect(
       focusedChildInputDisabledMessage({
         activeStreamId: root,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         status: STREAM_PHASE.COMPLETED,
       }),
     ).toBeUndefined();
@@ -1479,7 +1485,7 @@ describe('CLI TUI row allocation', () => {
     expect(
       focusedChildInputDisabledMessage({
         activeStreamId: child1,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         status: undefined,
       }),
     ).toBeUndefined();
@@ -1487,7 +1493,7 @@ describe('CLI TUI row allocation', () => {
     expect(
       focusedChildInputDisabledMessage({
         activeStreamId: child1,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         status: STREAM_STATUS.RUNNING,
       }),
     ).toBeUndefined();
@@ -1495,7 +1501,7 @@ describe('CLI TUI row allocation', () => {
     expect(
       focusedChildInputDisabledMessage({
         activeStreamId: child1,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         shortcutModifierLabel: 'Esc',
         status: STREAM_PHASE.COMPLETED,
       }),
@@ -1506,7 +1512,7 @@ describe('CLI TUI row allocation', () => {
     expect(
       focusedChildInputDisabledMessage({
         activeStreamId: child1,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         shortcutModifierLabel: 'Alt',
         status: STREAM_PHASE.COMPLETED,
       }),
@@ -1517,7 +1523,7 @@ describe('CLI TUI row allocation', () => {
     expect(
       focusedChildInputDisabledMessage({
         activeStreamId: child1,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         shortcutModifierLabel: 'Esc',
         status: STREAM_PHASE.COMPLETED,
         subagentControlsAvailable: false,
@@ -1529,7 +1535,7 @@ describe('CLI TUI row allocation', () => {
     expect(
       focusedChildInputDisabledMessage({
         activeStreamId: child1,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         shortcutModifierLabel: 'Esc',
         status: STREAM_PHASE.COMPLETED,
         subagentControlsAvailable: false,
@@ -1542,7 +1548,7 @@ describe('CLI TUI row allocation', () => {
     expect(
       focusedChildInputDisabledMessage({
         activeStreamId: child1,
-        parentStream: cliState.parentStream.get(),
+        parentStream: parentStream.get(),
         shortcutModifierLabel: 'Esc',
         status: STREAM_PHASE.COMPLETED,
         taskControlsAvailable: true,
@@ -1583,11 +1589,9 @@ describe('CLI TUI row allocation', () => {
         },
       );
 
-      cliState.activeStreamId.set(child1);
-      expect(cliState.streams.get().get(child1)?.status).toBe(
-        STREAM_STATUS.RUNNING,
-      );
-      expect(cliState.streams.get().get(root)?.childStreams[0]?.status).toBe(
+      activeStreamId.set(child1);
+      expect(streams.get().get(child1)?.status).toBe(STREAM_STATUS.RUNNING);
+      expect(streams.get().get(root)?.childStreams[0]?.status).toBe(
         STREAM_STATUS.RUNNING,
       );
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
@@ -1630,11 +1634,9 @@ describe('CLI TUI row allocation', () => {
         },
       );
 
-      cliState.activeStreamId.set(child1);
-      expect(cliState.streams.get().get(child1)?.status).toBe(
-        STREAM_PHASE.CANCELLED,
-      );
-      expect(cliState.streams.get().get(root)?.childStreams[0]?.status).toBe(
+      activeStreamId.set(child1);
+      expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.CANCELLED);
+      expect(streams.get().get(root)?.childStreams[0]?.status).toBe(
         STREAM_PHASE.CANCELLED,
       );
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
@@ -1790,7 +1792,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       'Please solve the problem.',
       '✓ review completed',
@@ -1812,7 +1814,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       [
         'Waiting for the child.',
@@ -1832,7 +1834,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       '### Verification Report\n\nThe proof is **fully verified**.',
     ]);
@@ -1860,7 +1862,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries).toHaveLength(1);
     expect(entries[0]?.text).toContain('✓ prover completed · 2m');
     expect(entries[0]?.text).toContain('proof line 12');
@@ -1879,7 +1881,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'error',
@@ -1896,7 +1898,7 @@ describe('CLI transcript state', () => {
     // gpt-5 without summaries) may never produce a text delta.
     syncStreamLog(root);
 
-    let slice = cliState.streams.get().get(root);
+    let slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(true);
     expect(slice?.entries).toEqual([]);
 
@@ -1904,14 +1906,14 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    slice = cliState.streams.get().get(root);
+    slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(true);
     expect(slice?.entries).toEqual([]);
 
     thinking.finalize();
     syncStreamLog(root);
 
-    slice = cliState.streams.get().get(root);
+    slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(false);
     expect(slice?.entries).toEqual([]);
 
@@ -1920,7 +1922,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    slice = cliState.streams.get().get(root);
+    slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(false);
     expect(slice?.entries.map((entry) => entry.text)).toEqual([
       'Visible answer.',
@@ -1933,7 +1935,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    let slice = cliState.streams.get().get(root);
+    let slice = streams.get().get(root);
     expect(slice?.entries ?? []).toEqual([]);
 
     logger.info('Visible answer.', {
@@ -1942,7 +1944,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    slice = cliState.streams.get().get(root);
+    slice = streams.get().get(root);
     expect(slice?.entries.map((entry) => entry.text)).toEqual([
       'Visible answer.',
     ]);
@@ -1957,7 +1959,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       'Why?',
       '  The answer starts here.',
@@ -1988,7 +1990,7 @@ describe('CLI transcript state', () => {
     // A second sync after finalize must not regress the flag.
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'assistant',
@@ -2000,7 +2002,7 @@ describe('CLI transcript state', () => {
     appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
     appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'assistant',
@@ -2013,7 +2015,7 @@ describe('CLI transcript state', () => {
     appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'waiting:1');
     appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final:1');
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.id)).toEqual(['waiting:1:root']);
     expect(entries[0]).toMatchObject({
       role: 'assistant',
@@ -2027,7 +2029,7 @@ describe('CLI transcript state', () => {
     appendAssistantTranscriptIfMissing(root, 'Done \\checkmark', 'waiting:1');
     appendAssistantTranscriptIfMissing(root, 'Done ✓', 'final:1');
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual(['Done \\checkmark']);
   });
 
@@ -2043,7 +2045,7 @@ describe('CLI transcript state', () => {
       'second',
     );
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       'The condition is x < y.',
       'The condition is x > y.',
@@ -2065,7 +2067,7 @@ describe('CLI transcript state', () => {
     logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       'first prompt',
       'Done.',
@@ -2081,7 +2083,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
     appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual(['Done.']);
     expect(entries[0]?.synthetic).toBeUndefined();
   });
@@ -2098,7 +2100,7 @@ describe('CLI transcript state', () => {
       'final:first',
     );
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
     ]);
@@ -2126,7 +2128,7 @@ describe('CLI transcript state', () => {
       'final:first',
     );
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.role)).toEqual([
       'assistant',
       'tool',
@@ -2165,7 +2167,7 @@ describe('CLI transcript state', () => {
       'final:actual',
     );
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       'Intermediate result ✓',
       '',
@@ -2183,7 +2185,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
     appendAssistantTranscriptIfMissing(root, 'Done \\checkmark', 'final:2');
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       'first prompt',
       'Done ✓',
@@ -2208,19 +2210,19 @@ describe('CLI transcript state', () => {
       finalize: true,
     });
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual(['What is 1 + 1?', '2']);
     expect(entries.map((entry) => entry.finalized)).toEqual([true, true]);
     expect(entries.some((entry) => entry.id === 'final:turn:root')).toBe(false);
   });
 
   it('keeps repeated local slash-command responses visible', () => {
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
 
     appendLocalAssistantTranscript('Available commands: /help');
     appendLocalAssistantTranscript('Available commands: /help');
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       'Available commands: /help',
       'Available commands: /help',
@@ -2228,24 +2230,24 @@ describe('CLI transcript state', () => {
   });
 
   it('preserves literal checkmark commands in local user transcript text', () => {
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
 
     appendLocalUserTranscript('literal \\checkmark');
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => [entry.role, entry.text])).toEqual([
       ['user', 'literal \\checkmark'],
     ]);
   });
 
   it('can append local assistant output to an explicit stream', () => {
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
 
     appendLocalAssistantTranscript('Child stream note.', child1);
 
-    expect(cliState.streams.get().get(root)?.entries ?? []).toEqual([]);
+    expect(streams.get().get(root)?.entries ?? []).toEqual([]);
     expect(
-      cliState.streams
+      streams
         .get()
         .get(child1)
         ?.entries.map((entry) => entry.text),
@@ -2253,15 +2255,15 @@ describe('CLI transcript state', () => {
   });
 
   it('keeps root local notices out of a focused child stream', () => {
-    cliState.rootStreamId.set(root);
+    rootStreamId.set(root);
     setParentStream(child1, root);
-    cliState.activeStreamId.set(child1);
+    activeStreamId.set(child1);
 
     appendLocalAssistantTranscript('Available commands: /help');
     appendLocalErrorTranscript('Model claude-opus-4-7 not found');
 
     expect(
-      cliState.streams
+      streams
         .get()
         .get(root)
         ?.entries.map((entry) => [entry.role, entry.text]),
@@ -2269,24 +2271,24 @@ describe('CLI transcript state', () => {
       ['assistant', 'Available commands: /help'],
       ['error', 'Model claude-opus-4-7 not found'],
     ]);
-    expect(cliState.streams.get().get(child1)?.entries ?? []).toEqual([]);
-    expect(cliState.activeStreamId.get()).toBe(child1);
+    expect(streams.get().get(child1)?.entries ?? []).toEqual([]);
+    expect(activeStreamId.get()).toBe(child1);
   });
 
   it('uses the focused child parent for local notices before root id is set', () => {
     setParentStream(child1, root);
-    cliState.activeStreamId.set(child1);
+    activeStreamId.set(child1);
 
     appendLocalAssistantTranscript('Slash command output.');
 
     expect(
-      cliState.streams
+      streams
         .get()
         .get(root)
         ?.entries.map((entry) => entry.text),
     ).toEqual(['Slash command output.']);
-    expect(cliState.streams.get().get(child1)?.entries ?? []).toEqual([]);
-    expect(cliState.activeStreamId.get()).toBe(child1);
+    expect(streams.get().get(child1)?.entries ?? []).toEqual([]);
+    expect(activeStreamId.get()).toBe(child1);
   });
 
   it('resolves root-owned local transcript targets before active children', () => {
@@ -2319,11 +2321,11 @@ describe('CLI transcript state', () => {
   });
 
   it('adds local runtime errors to the transcript', () => {
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
 
     appendLocalErrorTranscript('Model claude-opus-4-7 not found');
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'error',
@@ -2341,7 +2343,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       'A short final answer.',
     ]);
@@ -2359,7 +2361,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'assistant',
@@ -2375,7 +2377,7 @@ describe('CLI transcript state', () => {
     const logger = createRunTrace(root).trace;
     logger.info('prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
 
     appendLocalAssistantTranscript('Available commands: /help');
     logger.info('partial response', {
@@ -2386,7 +2388,7 @@ describe('CLI transcript state', () => {
     appendLocalAssistantTranscript('Available commands: /help');
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(
       entries
         .filter((entry) => entry.syntheticKind === 'local')
@@ -2511,16 +2513,14 @@ describe('CLI transcript state', () => {
   it('moves pre-session local slash-command output onto the resolved stream', () => {
     appendLocalAssistantTranscript('Available commands: /help');
 
-    expect(
-      cliState.streams.get().get(CLI_LOCAL_STREAM_ID)?.entries,
-    ).toHaveLength(1);
+    expect(streams.get().get(CLI_LOCAL_STREAM_ID)?.entries).toHaveLength(1);
 
     moveLocalTranscriptToStream(root);
 
-    expect(cliState.streams.get().has(CLI_LOCAL_STREAM_ID)).toBe(false);
-    expect(cliState.activeStreamId.get()).toBe(root);
+    expect(streams.get().has(CLI_LOCAL_STREAM_ID)).toBe(false);
+    expect(activeStreamId.get()).toBe(root);
     expect(
-      cliState.streams
+      streams
         .get()
         .get(root)
         ?.entries.map((entry) => entry.text),
@@ -2530,15 +2530,13 @@ describe('CLI transcript state', () => {
   it('can discard pre-resume local slash-command output', () => {
     appendLocalAssistantTranscript('/resume exec-1');
 
-    expect(cliState.activeStreamId.get()).toBe(CLI_LOCAL_STREAM_ID);
-    expect(
-      cliState.streams.get().get(CLI_LOCAL_STREAM_ID)?.entries,
-    ).toHaveLength(1);
+    expect(activeStreamId.get()).toBe(CLI_LOCAL_STREAM_ID);
+    expect(streams.get().get(CLI_LOCAL_STREAM_ID)?.entries).toHaveLength(1);
 
     clearLocalTranscript();
 
-    expect(cliState.streams.get().has(CLI_LOCAL_STREAM_ID)).toBe(false);
-    expect(cliState.activeStreamId.get()).toBeUndefined();
+    expect(streams.get().has(CLI_LOCAL_STREAM_ID)).toBe(false);
+    expect(activeStreamId.get()).toBeUndefined();
   });
 
   it('preserves synthetic final responses across later log syncs', () => {
@@ -2550,7 +2548,7 @@ describe('CLI transcript state', () => {
     logger.info('next prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       '1+1',
       'The answer is 2.',
@@ -2573,7 +2571,7 @@ describe('CLI transcript state', () => {
     logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
 
-    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
       'first prompt',
       'first answer',
@@ -2607,15 +2605,15 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
 
   it('registers suppressed child streams without switching away from the parent page', () => {
     const wrapped = wrapRuntimeHost(makeHost());
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
 
     wrapped.emit('setActiveStream', {
       streamId: child1,
       suppressViewSwitch: true,
     });
 
-    expect(cliState.activeStreamId.get()).toBe(root);
-    expect(cliState.streams.get().has(child1)).toBe(true);
+    expect(activeStreamId.get()).toBe(root);
+    expect(streams.get().has(child1)).toBe(true);
   });
 
   it('captures per-stream model identity from task state', () => {
@@ -2643,7 +2641,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       },
     });
 
-    expect(cliState.streams.get().get(child1)).toMatchObject({
+    expect(streams.get().get(child1)).toMatchObject({
       model: 'kimi26T',
       category: AgentCategory.ToolUse,
     });
@@ -2658,7 +2656,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       queue.enqueue({ text: 'Keep the proof under one page.' });
       wrapped.emit('followUpSent', { streamId: root });
 
-      let slice = cliState.streams.get().get(root);
+      let slice = streams.get().get(root);
       expect(slice?.queuedFollowUps).toBe(1);
       expect(slice?.queuedFollowUpMessages).toEqual([
         'Keep the proof under one page.',
@@ -2667,7 +2665,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       queue.drain();
       wrapped.emit('updateQueuedFollowUps', { streamId: root });
 
-      slice = cliState.streams.get().get(root);
+      slice = streams.get().get(root);
       expect(slice?.queuedFollowUps).toBe(0);
       expect(slice?.queuedFollowUpMessages).toEqual([]);
     } finally {
@@ -2701,14 +2699,14 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       },
     });
 
-    expect(cliState.streams.get().get(root)?.usage).toEqual({
+    expect(streams.get().get(root)?.usage).toEqual({
       inputTokens: 40,
       outputTokens: 10,
       cost: 2,
       cacheReadInputTokens: 5,
       cacheCreationInputTokens: 7,
     });
-    expect(cliState.streams.get().get(root)?.cumulativeUsage).toEqual({
+    expect(streams.get().get(root)?.cumulativeUsage).toEqual({
       inputTokens: 140,
       outputTokens: 30,
       cost: 3,
@@ -2751,7 +2749,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       stdout: 'B',
       stderr: '',
     });
-    expect(cliState.streams.get().get(root)?.processOutput.size).toBe(2);
+    expect(streams.get().get(root)?.processOutput.size).toBe(2);
 
     // exec-a finishes: its output buffer must be dropped on the next
     // active-processes update, after a durable transcript entry is added.
@@ -2759,8 +2757,8 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       parentStreamId: root,
       processes: [{ executionId: 'exec-b', agentName: 'bash' }],
     });
-    const slice = cliState.streams.get().get(root);
-    const out = cliState.streams.get().get(root)?.processOutput;
+    const slice = streams.get().get(root);
+    const out = streams.get().get(root)?.processOutput;
     expect(out?.size).toBe(1);
     expect(out?.has('exec-a')).toBe(false);
     expect(out?.has('exec-b')).toBe(true);
@@ -2845,7 +2843,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
 
 describe('focusCycle', () => {
   it('Ctrl-A cycles through siblings then wraps back to the parent', () => {
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
     setParentStream(child1, root);
     setParentStream(child2, root);
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
@@ -2862,15 +2860,15 @@ describe('focusCycle', () => {
     // root → first descendant.
     expect(nextFocusForward()).toBe(child1);
     // child1 → next sibling resolved through the parent's descendant list.
-    cliState.activeStreamId.set(child1);
+    activeStreamId.set(child1);
     expect(nextFocusForward()).toBe(child2);
     // child2 (last sibling) → wrap back to parent.
-    cliState.activeStreamId.set(child2);
+    activeStreamId.set(child2);
     expect(nextFocusForward()).toBe(root);
   });
 
   it('Ctrl-A can still focus an inactive child stream with retained history', () => {
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
     setParentStream(child1, root);
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
@@ -2880,9 +2878,9 @@ describe('focusCycle', () => {
 
   it('Ctrl-B returns to the parent and bottoms out at root', () => {
     setParentStream(child1, root);
-    cliState.activeStreamId.set(child1);
+    activeStreamId.set(child1);
     expect(nextFocusBack()).toBe(root);
-    cliState.activeStreamId.set(root);
+    activeStreamId.set(root);
     expect(nextFocusBack()).toBeUndefined();
   });
 });
