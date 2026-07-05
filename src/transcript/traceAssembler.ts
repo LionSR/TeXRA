@@ -50,26 +50,35 @@ export async function assembleTrace(
   executionId: ExecutionId,
 ): Promise<AssembleTraceResult> {
   const executionStore = getExecutionStore(executionId);
-  const [config, meta] = await Promise.all([
-    executionStore.readConfig(),
-    executionStore.readMeta(),
-  ]);
-  if (!config) return { status: 'config_missing' };
-
-  // `streamId` is a composite of agent/model/executionId, not the executionId
-  // itself — see @agent/runtime/streamTab.getStreamTabId.
-  const streamId = getStreamTabId(config.agent, config.model, {
-    executionId,
-  });
-
   // A fresh instance, not the shared getDefaultStreamLogStore() singleton:
   // .load() clears all of a store's in-memory state, which would wipe out a
   // live host's in-flight session if this ran against the shared instance.
   // Reads the same on-disk files regardless — StreamSnapshotStore below
   // already follows this same call-scoped-instance pattern.
   const streamLogStore = new StreamLogStore();
+  const [config, meta] = await Promise.all([
+    executionStore.readConfig(),
+    executionStore.readMeta(),
+    streamLogStore.load(),
+  ]);
+  if (!config) return { status: 'config_missing' };
+
+  // Resolve the persisted streamId by executionId suffix rather than
+  // deriving it: a top-level run uses `agent@model#executionId`
+  // (getStreamTabId), but a background child stream (bash/codex/claude
+  // subagent, see @tools/childStream.createChildStream) uses a
+  // tool-specific `${streamPrefix}#executionId` instead. Every streamId
+  // ends in `#executionId` regardless of prefix scheme, and executionId is
+  // unique, so searching by suffix resolves both without this module having
+  // to know every child-stream prefix convention. Falls back to the derived
+  // top-level id if load() found nothing at all under this executionId.
+  const suffix = `#${executionId}`;
+  const streamId =
+    streamLogStore.keys().find((id) => id.endsWith(suffix)) ??
+    getStreamTabId(config.agent, config.model, { executionId });
+
   const [, snapshot] = await Promise.all([
-    streamLogStore.load().then(() => streamLogStore.ensureLoaded(streamId)),
+    streamLogStore.ensureLoaded(streamId),
     new StreamSnapshotStore().read(streamId),
   ]);
   const log = streamLogStore.get(streamId);
