@@ -24,7 +24,7 @@ Every mechanism in this design passes two tests:
 1. **Necessity** — the core claim fails without it.
 2. **Non-duplication** — nothing that already exists provides it: not Harbor (running agentic tasks at scale, RL rollouts), not TeXRA's existing headless path and trace, not a lab's own statistics tooling.
 
-Applied honestly, this cuts the v2 design roughly in half (Appendix A). What survives is one task contract, one runner, one verifier library, one validation gate, one task-generation pipeline, and one interop surface. Nothing in the MVP requires any change to `src/agent/` core.
+Applied honestly, this cuts the v2 design roughly in half (Appendix A). What survives is one task contract, one runner, one grader contract (with a standard grader pack as data, not harness code), one validation gate, one task-generation pipeline, and one interop surface. Nothing in the MVP requires any change to `src/agent/` core.
 
 The same razor is the Bitter Lesson applied to benchmark content: verify **outcomes**, not adherence to human solution paths; keep the harness a thin general contract; scale task supply with compute (generation) rather than reviewer-hours (curation); let verification asymmetry keep difficulty unbounded — checking stays cheap even when producing outgrows the task's author.
 
@@ -65,14 +65,11 @@ inputs: [problem.tex]
 context: [macros.tex, conventions.tex]
 timeoutMs: 1800000
 graders:
-  - type: compile
-    required: true # gate: fail => 0, nothing else runs
-  - type: cas-equal # final \benchresult{...} CAS-equivalent to gold
-    engine: wolfram # or sympy for the license-free subset
-    gold: refs/result.wls
+  - command: [std/compile-check] # gate: fail => 0, nothing else runs
+    required: true
+  - command: [std/cas-equal, refs/check-result.wls] # fixed script, no LLM in the loop
     weight: 0.8
-  - type: judge # optional bounded residual, reported separately
-    agent: bench/grade_simple
+  - agent: bench/grade_simple # LLM judgment: bounded residual, reported separately
     weight: 0.2
 refs: # grader-only namespace, never mounted for solvers
   solution: refs/gold-solution.tex # must score 1.0 under `bench validate`
@@ -89,17 +86,27 @@ The suite file adds `name`, `version` (semver: MAJOR = tasks changed, scores inc
 
 **Verdicts are three-valued** (`pass | fail | unverifiable`): a CAS timeout or toolchain mismatch escalates as a grader error — never silently scored 0.
 
-## 5. Verifier library
+## 5. Graders: one contract, two executors
 
-This is the reason to exist — checks no generic harness has:
+A grader is anything that runs in the grader sandbox over `(solver artifacts + refs/)` and writes `verdict.json` — `{verdict: pass|fail|unverifiable, value?, evidence?}` (deliberately shaped like Harbor's reward file, which makes the §9 export a shell wrapper). The harness implements exactly **two executor shapes and no grader taxonomy** — there is no `cas-assert` or `lean-check` arm in the schema:
 
-- **`compile`** — hard gate via `compileCheck.ts`.
-- **`cas-equal`** — the final claimed result (`\benchresult{...}` or `<answer>` block) verified CAS-equivalent to gold via `executeWolframCode` or SymPy, targeting robustness to renotation (how far that can be pushed is open — §15). Outcome-level only: no credit for matching a human derivation path.
-- **`lean-check`** — `runLakeCommand` against a pinned mathlib toolchain; binary per lemma. Lean LSP/Loogle tools are available _to the solver_ — this measures interactive theorem proving. Proof tasks need only a statement, no gold solution: difficulty can outgrow the task's author.
-- **`diff-align`** — math-aware latexdiff between the model's fix and gold: edits inside injected spans must match; edits outside are penalized.
-- **`issue-match`** — reported `ReviewIssue`s (`src/agent/review/reviewIssues.ts`) matched to gold defects within a line window → precision/recall.
-- **`numeric` / `struct-match`** — tolerance and exact/set matching on parsed answer blocks.
-- **`judge`** — a grading agent (pinned model, simple grade-against-gold prompt, versioned as agent YAML, cached by `(cellDigest, judgeDigest)`). Weight ≤ 0.2, always reported separately from verifier score, expected to trend to 0 as verifier coverage grows. No calibration bureaucracy unless judged scores ever become load-bearing (Appendix A).
+- **`command`** — a pinned script/binary run with no LLM in the loop: deterministic, replayable at zero cost, and immune to prompt injection hiding in solver-produced artifacts. This is the **headline-score class**.
+- **`agent`** — any TeXRA agent YAML, run through the same headless path as solvers and forced through a `report_verdict` structured tool (the proven `report_review_issue` pattern), verdicts cached by `(cellDigest, graderDigest)`. Agent graders read untrusted solver output and are nondeterministic — so their weight is bounded (≤ 0.2), always reported separately, and expected to trend to 0. No calibration bureaucracy unless agent-graded scores ever become load-bearing (Appendix A).
+
+The verifier library is therefore **data, not harness code**: a standard grader pack (`std/`) ships as versioned, digested scripts that wrap machinery TeXRA already has —
+
+| `std/` grader (command) | Wraps                                                                                                                                                                                                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `std/compile-check`     | `compileCheck.ts` / `latexToolchain.ts` — the hard gate                                                                                                                                                                                                         |
+| `std/cas-equal`         | `wolframscript` (or SymPy) executing a **fixed** `refs/` assertion script against the extracted `\benchresult{...}` — outcome-level, targeting renotation-robustness (how far that can be pushed is open — §15), no credit for matching a human derivation path |
+| `std/lean-build`        | `lake build` against a pinned mathlib toolchain; binary per lemma. Proof tasks need only a statement — difficulty can outgrow the task's author                                                                                                                 |
+| `std/diff-align`        | the math-aware latexdiff service — edits inside injected spans must match gold; edits outside are penalized                                                                                                                                                     |
+| `std/issue-match`       | `ReviewIssue` matching against gold defects within a line window → precision/recall                                                                                                                                                                             |
+| `std/answer-match`      | numeric-tolerance / exact / set matching on parsed answer blocks                                                                                                                                                                                                |
+
+A new verifier is a new script (or agent YAML) in the suite — **zero harness changes**. Lean/Loogle LSP tools remain available _to the solver_ in tool-use mode: proving is interactive and intelligent; checking is `lake build`.
+
+**Why not "everything is an agent":** the determinism of the headline metric is the product. An agent deciding at grade time what Wolfram code to run puts an LLM back inside ground truth, breaks free regrades (agent behavior drifts), and feeds untrusted solver artifacts into a grader's prompt. The division of labor: **agents grade where judgment is required; commands verify where truth is executable.** The powerful middle ground is the proposer–verifier split: an agent grader may _search_ for an equivalence argument but must emit a **certificate** — e.g. a Wolfram script — that a command grader then executes as the verdict of record. Intelligence proposes, execution decides: the search scales with model capability (Bitter Lesson) while the headline number stays deterministic.
 
 ## 6. Validation gate
 
@@ -205,9 +212,9 @@ And rather than competing with Harbor, we export into it (§9).
 
 ## 13. Staged rollout
 
-**Stage 1 — usable (4–6 weeks):** `src/bench/` schemas + subprocess runner + `run|grade|report|validate`; graders `compile`, `cas-equal` (Wolfram), `numeric`/`struct-match`, `diff-align`; `refs/` isolation + gold/sabotage gates in CI; seed suite of ~25 tasks; container image; simple report stats.
+**Stage 1 — usable (4–6 weeks):** `src/bench/` schemas + subprocess runner + `run|grade|report|validate`; the two grader executors (`command`, `agent`) plus std pack scripts `compile-check`, `cas-equal` (Wolfram), `answer-match`, `diff-align`; `refs/` isolation + gold/sabotage gates in CI; seed suite of ~25 tasks; container image; simple report stats.
 
-**Stage 2 — adoptable (next quarter):** `bench inject` productionized (rolling post-cutoff suites); `lean-check` and `issue-match` graders; SymPy engine for the license-free subset; `bench export --format harbor-task` with a CI conformance check; public **TeXRA-Sci** release (versioned, licensed, per-task provenance). Success criterion: one external lab running the suite — under Harbor, through its own gateway — without talking to us.
+**Stage 2 — adoptable (next quarter):** `bench inject` productionized (rolling post-cutoff suites); `std/lean-build` and `std/issue-match` graders; SymPy engine for the license-free subset; certificate-emitting agent graders (propose with intelligence, verify with execution); `bench export --format harbor-task` with a CI conformance check; public **TeXRA-Sci** release (versioned, licensed, per-task provenance). Success criterion: one external lab running the suite — under Harbor, through its own gateway — without talking to us.
 
 ## 14. Non-goals
 
