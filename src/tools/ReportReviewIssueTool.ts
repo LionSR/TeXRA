@@ -89,12 +89,13 @@ export class ReportReviewIssueTool extends defineTool({
       });
       if (!result.accepted) {
         return {
+          status: 'executed',
           summary: 'Review issue not accepted',
           output: result.reason ?? 'The review issue was not accepted.',
         };
       }
       const summary = `Reported review issue ${input.file}:${input.startLine} [${input.severity}] ${input.title}`;
-      return { summary, output: summary };
+      return { status: 'executed', summary, output: summary };
     } catch (error) {
       const detail = toErrorMessage(error);
       logger.error(CHANNEL, `Failed to report review issue: ${detail}`);

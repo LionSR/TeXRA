@@ -7,24 +7,28 @@ import type { StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
 
-function attachTraceToHub(
-  trace: TraceEmitter,
-  hub: SessionEventHub,
-  streamId: StreamTabId,
-): () => void {
-  return trace.subscribe((event) =>
+function setupHub(streamId: StreamTabId) {
+  const trace = new TraceEmitter();
+  const hub = new SessionEventHub();
+  const { events, host } = createRecordingHost();
+  const detachTrace = trace.subscribe((event) =>
     hub.emit({ scope: 'run', streamId, event }),
   );
+  const detach = attachConversationProgressHub(hub, host, streamId);
+  return {
+    trace,
+    events,
+    detachAll: () => {
+      detach();
+      detachTrace();
+    },
+  };
 }
 
 describe('attachConversationProgressHub (F-1b)', () => {
   it('derives updateConversationProgress from a conversationProgress domain event', () => {
-    const trace = new TraceEmitter();
-    const hub = new SessionEventHub();
-    const { events, host } = createRecordingHost();
     const streamId = 'stream:hub-test' as StreamTabId;
-    const detachTrace = attachTraceToHub(trace, hub, streamId);
-    const detach = attachConversationProgressHub(hub, host, streamId);
+    const { trace, events, detachAll } = setupHub(streamId);
 
     try {
       logConversationProgress(trace, {
@@ -41,35 +45,25 @@ describe('attachConversationProgressHub (F-1b)', () => {
         },
       });
     } finally {
-      detach();
-      detachTrace();
+      detachAll();
     }
   });
 
   it('ignores unrelated domain events and stops forwarding after detach', () => {
-    const trace = new TraceEmitter();
-    const hub = new SessionEventHub();
-    const { events, host } = createRecordingHost();
     const streamId = 'stream:hub-test-2' as StreamTabId;
-    const detachTrace = attachTraceToHub(trace, hub, streamId);
-    const detach = attachConversationProgressHub(hub, host, streamId);
+    const { trace, events, detachAll } = setupHub(streamId);
 
     trace.domain({ key: 'webSearch', data: { query: 'irrelevant' } });
     expect(events).toHaveLength(0);
 
-    detach();
+    detachAll();
     logConversationProgress(trace, { conversationTurns: 1, toolCallCount: 0 });
     expect(events).toHaveLength(0);
-    detachTrace();
   });
 
   it('drops a conversationProgress event with missing or malformed data instead of forwarding it', () => {
-    const trace = new TraceEmitter();
-    const hub = new SessionEventHub();
-    const { events, host } = createRecordingHost();
     const streamId = 'stream:hub-test-3' as StreamTabId;
-    const detachTrace = attachTraceToHub(trace, hub, streamId);
-    const detach = attachConversationProgressHub(hub, host, streamId);
+    const { trace, events, detachAll } = setupHub(streamId);
 
     try {
       trace.domain({ key: 'conversationProgress', data: undefined });
@@ -81,8 +75,7 @@ describe('attachConversationProgressHub (F-1b)', () => {
 
       expect(events).toHaveLength(0);
     } finally {
-      detach();
-      detachTrace();
+      detachAll();
     }
   });
 });

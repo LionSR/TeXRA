@@ -7,9 +7,9 @@ import {
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 
 /**
- * `resolveSetupModelExcludingOpenRouter` is the credential-priority core
- * shared by the VS Code extension (`resolveLaunchModel`) and desktop
- * (`resolveDesktopSetupModel`) setup-launch paths. Exercising it directly
+ * `selectSetupCredentialModelExcludingOpenRouter` is the credential-priority core
+ * shared by the VS Code extension (`selectLaunchModel`) and desktop
+ * (`selectDesktopSetupModel`) setup-launch paths. Exercising it directly
  * guards the priority order (ChatGPT subscription > server-side default >
  * server-side per-provider > direct provider key) against silently
  * drifting between hosts again.
@@ -52,10 +52,12 @@ vi.mock('@utils/config/providerConfig', () => ({
   getUseOpenRouter: mocks.getUseOpenRouter,
 }));
 
-const { resolveSetupModelExcludingOpenRouter, resolveDesktopSetupModel } =
-  await import('@controllers/onboarding/setupLaunch');
+const {
+  selectSetupCredentialModelExcludingOpenRouter,
+  selectDesktopSetupModel,
+} = await import('@controllers/onboarding/setupLaunch');
 
-describe('resolveSetupModelExcludingOpenRouter', () => {
+describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   beforeEach(() => {
     mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
     mocks.canUseServerSideKeys.mockReset().mockResolvedValue(false);
@@ -71,7 +73,7 @@ describe('resolveSetupModelExcludingOpenRouter', () => {
     mocks.lookupApiKey.mockResolvedValue('sk-test');
 
     await expect(
-      resolveSetupModelExcludingOpenRouter({} as never),
+      selectSetupCredentialModelExcludingOpenRouter({} as never),
     ).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 
@@ -79,7 +81,7 @@ describe('resolveSetupModelExcludingOpenRouter', () => {
     mocks.canUseServerSideKeysForModel.mockResolvedValue(true);
 
     await expect(
-      resolveSetupModelExcludingOpenRouter({} as never),
+      selectSetupCredentialModelExcludingOpenRouter({} as never),
     ).resolves.toBe(DEFAULT_AGENT_MODEL);
     expect(mocks.canUseServerSideKeysForModel).toHaveBeenCalledWith(
       DEFAULT_AGENT_MODEL,
@@ -94,7 +96,7 @@ describe('resolveSetupModelExcludingOpenRouter', () => {
     );
 
     await expect(
-      resolveSetupModelExcludingOpenRouter({} as never),
+      selectSetupCredentialModelExcludingOpenRouter({} as never),
     ).resolves.toBe(SETUP_MODEL_BY_PROVIDER.google);
   });
 
@@ -107,7 +109,7 @@ describe('resolveSetupModelExcludingOpenRouter', () => {
     );
 
     await expect(
-      resolveSetupModelExcludingOpenRouter({} as never),
+      selectSetupCredentialModelExcludingOpenRouter({} as never),
     ).resolves.toBeNull();
   });
 
@@ -117,7 +119,7 @@ describe('resolveSetupModelExcludingOpenRouter', () => {
     );
 
     await expect(
-      resolveSetupModelExcludingOpenRouter({} as never),
+      selectSetupCredentialModelExcludingOpenRouter({} as never),
     ).resolves.toBe(SETUP_MODEL_BY_PROVIDER.anthropic);
     expect(mocks.lookupApiKey).not.toHaveBeenCalledWith(
       expect.anything(),
@@ -127,12 +129,12 @@ describe('resolveSetupModelExcludingOpenRouter', () => {
 
   it('returns null when no credential resolves to a runnable model', async () => {
     await expect(
-      resolveSetupModelExcludingOpenRouter({} as never),
+      selectSetupCredentialModelExcludingOpenRouter({} as never),
     ).resolves.toBeNull();
   });
 });
 
-describe('resolveDesktopSetupModel', () => {
+describe('selectDesktopSetupModel', () => {
   beforeEach(() => {
     mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
     mocks.canUseServerSideKeys.mockReset().mockResolvedValue(false);
@@ -148,7 +150,7 @@ describe('resolveDesktopSetupModel', () => {
       provider === 'openRouter' ? 'or-test' : undefined,
     );
 
-    await expect(resolveDesktopSetupModel()).resolves.toBe(
+    await expect(selectDesktopSetupModel()).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.openRouter,
     );
   });
@@ -157,13 +159,13 @@ describe('resolveDesktopSetupModel', () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
 
-    await expect(resolveDesktopSetupModel()).resolves.toBeNull();
+    await expect(selectDesktopSetupModel()).resolves.toBeNull();
     expect(mocks.isCodexSubscriptionActive).not.toHaveBeenCalled();
   });
 
   it('delegates to the shared credential scan when the flag is off', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
 
-    await expect(resolveDesktopSetupModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
+    await expect(selectDesktopSetupModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 });

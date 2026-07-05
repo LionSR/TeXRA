@@ -147,6 +147,7 @@ Best practices:
         'plan called without workPlanState in context — plan will not persist or display in UI',
       );
       return {
+        status: 'executed',
         summary: 'Created plan (no active session)',
         output: this.formatPlan(plan),
         diagnostics: {
@@ -182,6 +183,7 @@ Best practices:
     const goal = GoalStore.getForStream(streamId);
     if (!goal) {
       return {
+        status: 'executed',
         summary: 'No autonomous goal to pause.',
         output:
           'No autonomous goal is currently running on this stream, so there is nothing to pause. ' +
@@ -190,6 +192,7 @@ Best practices:
     }
     if (goal.status !== 'active') {
       return {
+        status: 'executed',
         summary: `Goal already ${goal.status} — pause is a no-op.`,
         output: `Goal is ${goal.status}; pause is a no-op.\n\n${formatGoalView(goal)}`,
       };
@@ -197,6 +200,7 @@ Best practices:
     const updated = (await GoalStore.setStatus(streamId, 'paused')) ?? goal;
     await this.setBashAutoApproval(streamId, false);
     return {
+      status: 'executed',
       summary: 'Goal paused.',
       output: `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
     };
@@ -224,6 +228,7 @@ Best practices:
     const goal = GoalStore.getForStream(streamId);
     if (!goal) {
       return {
+        status: 'executed',
         summary: 'Plan-only work complete — summarize the result.',
         output:
           'No autonomous goal is currently running on this stream, so there is nothing to mark complete. ' +
@@ -236,6 +241,7 @@ Best practices:
     await GoalStore.forget(streamId);
     await this.setBashAutoApproval(streamId, false);
     return {
+      status: 'executed',
       summary: 'Goal complete.',
       output:
         `Goal ${goal.goalId} marked complete.\n\n` +
@@ -281,10 +287,10 @@ Best practices:
     if (result.action === 'timeout') {
       logger.warn('Plan approval timed out');
       return {
+        status: 'error',
         summary: 'Plan approval timed out',
-        output:
+        error:
           'The plan approval request timed out before the user responded. Please try again or proceed without a plan.',
-        isError: true,
       };
     }
 
@@ -300,9 +306,9 @@ Best practices:
     }
 
     return {
+      status: 'error',
       summary: 'Plan rejected — revise approach',
-      output: `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
-      isError: true,
+      error: `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
       ...(feedback ? { userInstruction: feedback } : {}),
     };
   }
@@ -323,6 +329,7 @@ Best practices:
           'continuing without an autonomous goal.',
       );
       return {
+        status: 'executed',
         summary: 'Plan approved — autonomous run unavailable',
         output:
           `The user selected Approve & Run, but the goal feature flag is ` +
@@ -348,6 +355,7 @@ Best practices:
             : retargeted;
         await this.setBashAutoApproval(streamId, true);
         return {
+          status: 'executed',
           summary: `Plan approved — goal ${active.goalId} retargeted`,
           output:
             `The user approved a new plan while goal ${active.goalId} ` +
@@ -368,15 +376,15 @@ Best practices:
           { data: err },
         );
         return {
+          status: 'error',
           summary:
             'Plan approved — goal could not be retargeted, proceeding without it',
-          output:
+          error:
             `The user approved this plan and requested autonomous execution, ` +
             `but the in-flight goal could not be retargeted: ${reason}\n\n` +
             `Work toward the new objective turn-by-turn. The pre-existing ` +
             `goal is still active and will keep injecting continuations ` +
             `against its previous objective until the user pauses or abandons it.`,
-          isError: true,
         };
       }
     }
@@ -385,6 +393,7 @@ Best practices:
       const goal = await GoalStore.start(streamId, objective);
       await this.setBashAutoApproval(streamId, true);
       return {
+        status: 'executed',
         summary: `Plan approved — goal ${goal.goalId} started`,
         output:
           `The user approved this plan and started an autonomous goal ` +
@@ -403,6 +412,7 @@ Best practices:
         { data: err },
       );
       return {
+        status: 'executed',
         summary:
           'Plan approved — goal could not be started, proceeding without it',
         output:
@@ -423,6 +433,7 @@ Best practices:
       ? 'Plan auto-approved via delegated-task auto-approval (user did not review).'
       : 'Plan approved by the user.';
     return {
+      status: 'executed',
       summary: autoApproved
         ? 'Plan auto-approved — proceed with implementation'
         : 'Plan approved — proceed with implementation',

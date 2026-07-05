@@ -52,6 +52,7 @@ export class InstallVscodeExtensionTool extends defineTool({
 
     if (platform.extensions.isInstalled(id)) {
       return {
+        status: 'executed',
         summary: `Extension ${id} already installed`,
         output: `The "${id}" extension is already installed. No action taken.`,
       };
@@ -64,6 +65,7 @@ export class InstallVscodeExtensionTool extends defineTool({
     const installed = platform.extensions.isInstalled(id);
 
     return {
+      status: 'executed',
       summary: installed
         ? `Installed extension ${id}`
         : `Install issued for ${id} (verify manually)`,

@@ -197,10 +197,9 @@ export async function rejectOversizedBibAttachments(
 
     const message = `${bibFile} is ${stats.size} bytes (${formatBytes(stats.size)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
     return {
+      status: 'error',
       summary: `Rejected oversized BibTeX attachment`,
       error: message,
-      output: message,
-      isError: true,
       diagnostics: {
         type: 'oversized_bib_attachment',
         path: bibFile,

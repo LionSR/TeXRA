@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { z } from 'zod';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
 import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from '@auth/constants';
@@ -155,8 +156,9 @@ async function signInWithEmail(): Promise<void> {
     placeHolder: 'you@example.com',
     validateInput: (value) => {
       if (!value) return 'Email is required';
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(value)) return 'Please enter a valid email address';
+      if (!z.email().safeParse(value).success) {
+        return 'Please enter a valid email address';
+      }
       return undefined;
     },
   });

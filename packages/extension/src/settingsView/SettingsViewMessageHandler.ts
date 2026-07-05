@@ -20,6 +20,7 @@ import {
   buildToolDashboardTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
 import { platform } from '@platform/platform';
+import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import {
   buildModelSelectionMessage,
@@ -79,8 +80,6 @@ import {
   refreshToolAvailability,
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
-import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
-import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 import {
@@ -780,8 +779,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async handleOpenMemoryFolder(): Promise<void> {
     try {
-      await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
-      const absolutePath = StorageFS.fullPath(MEMORY_STORAGE_ROOT);
+      await StorageFS.ensureDir(resolveMemoryStoragePath());
+      const absolutePath = StorageFS.fullPath(resolveMemoryStoragePath());
       await safeExecuteCommand(
         'revealFileInOS',
         [vscode.Uri.file(absolutePath)],

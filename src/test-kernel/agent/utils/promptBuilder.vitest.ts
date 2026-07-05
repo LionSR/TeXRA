@@ -2,33 +2,11 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-// Standard library imports
-
-// Local imports - prompt utilities
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 // Type imports
-import type {
-  AgentPrompt,
-  AgentWorkflowSetting,
-} from '@agent/core/definition/AgentDataclass';
+import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import { PromptBuilder } from '@utils/prompt';
 
 describe('PromptBuilder', () => {
-  const baseSetting: AgentWorkflowSetting = {
-    agentCategory: AgentCategory.Workflow,
-    documentTag: 'documents',
-    endTag: '</documents>',
-    temperature: 1,
-    isRewrite: true,
-    rounds: 2,
-    prefills: [],
-    defaultOutputFiles: [],
-    requiredFiles: {},
-    requiredFilesInternal: {},
-    filePatternsContain: [],
-    tools: [],
-  };
-
   it('uses array-based userRequest entries for reflections', async () => {
     const prompt: AgentPrompt = {
       systemPrompt: 'system',
@@ -36,7 +14,7 @@ describe('PromptBuilder', () => {
       userRequest: ['initial {{ value }}', 'reflect {{ value }}'],
     } as AgentPrompt;
 
-    const builder = new PromptBuilder(prompt, baseSetting, { value: 'test' });
+    const builder = new PromptBuilder(prompt, { value: 'test' });
     const initial = await builder.buildInitialPrompts();
     assert.equal(initial.userRequest, 'initial test');
 
@@ -54,7 +32,7 @@ describe('PromptBuilder', () => {
       userRequest: 'initial only',
     } as AgentPrompt;
 
-    const builder = new PromptBuilder(prompt, baseSetting, {});
+    const builder = new PromptBuilder(prompt, {});
     const initial = await builder.buildInitialPrompts();
     assert.equal(initial.userRequest, 'initial only');
 

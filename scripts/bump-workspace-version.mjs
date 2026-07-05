@@ -5,7 +5,6 @@ import process from 'node:process';
 
 const MANIFEST_PATHS = [
   'package.json',
-  'packages/core/package.json',
   'packages/cli/package.json',
   'packages/desktop/package.json',
   'packages/extension/package.json',

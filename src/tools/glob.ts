@@ -101,6 +101,7 @@ export class GlobTool extends defineTool({
     const count = lines.length;
     const header = `Found ${count} ${pluralize(count, 'file')} matching "${input.pattern}" under ${display}`;
     return {
+      status: 'executed',
       summary: `Found ${count} ${pluralize(count, 'file')} for "${input.pattern}" in ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),
     };

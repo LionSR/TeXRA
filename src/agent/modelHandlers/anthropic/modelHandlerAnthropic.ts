@@ -34,7 +34,10 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type {
+  ToolFileAttachment,
+  ToolResult,
+} from '@shared/schemas/toolResult';
 
 // Local imports - utils
 import { getConfig } from '@utils/config/configUtils';
@@ -67,7 +70,6 @@ import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
   formatToolResultAsText,
-  type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { tagAnthropicSdkError } from './anthropicSdkError';
 import {
@@ -1315,7 +1317,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async createToolUseFollowUpMessages(
     client: Anthropic | undefined,
     call: AnthropicToolCall,
-    result: ToolResultPayload,
+    result: ToolResult,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1373,7 +1375,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Result is already sanitized by source - use the passed attachments
     // Create mutable copy with explicit type to avoid type assertions later
-    const sanitizedResult: ToolResultPayload = { ...result };
+    const sanitizedResult: ToolResult = { ...result };
     const canUploadFiles = this.supportsToolResultFileUpload;
 
     let uploadedAttachments: UploadedAnthropicAttachment[] = [];

@@ -51,13 +51,12 @@ describe('DelegationTools', () => {
       contextFiles: ['references.bib'],
     });
 
-    assert.strictEqual(result?.isError, true);
+    assert.strictEqual(result?.status, 'error');
     assert.strictEqual(result?.summary, 'Rejected oversized BibTeX attachment');
     assert.strictEqual(
       result?.error,
       'references.bib is 102401 bytes (100 KiB), over the 102400 byte (100 KiB) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.',
     );
-    assert.strictEqual(result?.output, result?.error);
     assert.deepStrictEqual(result?.diagnostics, {
       type: 'oversized_bib_attachment',
       path: 'references.bib',
@@ -74,7 +73,7 @@ describe('DelegationTools', () => {
       contextFiles: ['paper.tex', 'bibliography/main.bib'],
     });
 
-    assert.strictEqual(result?.isError, true);
+    assert.strictEqual(result?.status, 'error');
     assert.deepStrictEqual(result?.diagnostics, {
       type: 'oversized_bib_attachment',
       path: 'bibliography/main.bib',

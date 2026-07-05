@@ -4,8 +4,10 @@ import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { assertCliAgentLaunch } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
-import { formatCliNoAvailableModelsRecovery } from '@cli/runtime/modelAccess';
-import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
+import {
+  formatCliNoAvailableModelsRecovery,
+  selectCliRunnableModel,
+} from '@cli/runtime/modelAccess';
 
 import {
   cliState,
@@ -77,17 +79,16 @@ export async function applyCliModelSelection(
   if (chatTuiCanStartRootRun(context.session)) {
     try {
       const { apiMode } = cliState.sessionMeta.get();
-      const selection = await selectCliRootModel({
-        model: nextModel,
-        modelSource: 'override',
+      const selection = await selectCliRunnableModel(nextModel, {
+        fallbackReason: 'explicit-override',
         apiMode,
         noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
           apiMode,
           CHAT_API_MODE_MODEL_RECOVERY,
         ),
         agentCategory: AgentCategory.ToolUse,
-        persistAsHelperModel: true,
       });
+      await setCliHelperModel(selection.model);
       setCliSessionModelOverride(selection.model);
       appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
     } catch (error: unknown) {

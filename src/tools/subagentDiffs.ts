@@ -1,11 +1,15 @@
 import path from 'node:path';
 
-import { diff_match_patch } from 'diff-match-patch';
-
 import type { ExecutionId } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { AbsoluteFS } from '@utils/files';
 import { getRunDir, ensureRunDir } from '@utils/files/taskRunStorage';
+import {
+  diffTextByLine,
+  DIFF_DELETE,
+  DIFF_EQUAL,
+  DIFF_INSERT,
+} from '@utils/text/diff';
 import { countLines } from '@utils/text/stringUtils';
 
 /** Maximum lines of diff to include per file in deliveries. */
@@ -31,21 +35,18 @@ function computeReadableDiff(
   original: string,
   modified: string,
 ): string | null {
-  const dmp = new diff_match_patch();
-
-  // Convert to line-mode: each line becomes a single "character" so
-  // diff_main operates on whole lines, not individual characters.
-  const { chars1, chars2, lineArray } = dmp.diff_linesToChars_(
-    original,
-    modified,
-  );
-  const diffs = dmp.diff_main(chars1, chars2, false);
-  dmp.diff_charsToLines_(diffs, lineArray);
+  const diffs = diffTextByLine(original, modified, {
+    cleanupSemantic: false,
+  });
 
   // Check if there are any actual changes.
-  if (diffs.every(([op]) => op === 0)) return null;
+  if (diffs.every(([op]) => op === DIFF_EQUAL)) return null;
 
-  const PREFIX: Record<number, string> = { 1: '+', [-1]: '-', 0: ' ' };
+  const PREFIX: Record<number, string> = {
+    [DIFF_INSERT]: '+',
+    [DIFF_DELETE]: '-',
+    [DIFF_EQUAL]: ' ',
+  };
   const lines: string[] = [];
   for (const [op, text] of diffs) {
     const prefix = PREFIX[op] ?? ' ';

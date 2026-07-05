@@ -44,7 +44,6 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
     .prefault(AgentCategory.Workflow),
   isRewrite: z.boolean().prefault(true),
   rounds: z.int().positive().prefault(2),
-  prefills: z.array(z.string()).prefault([]),
 });
 
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
@@ -58,7 +57,11 @@ function stripLegacySettingFields(input: unknown): unknown {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return input;
   }
-  const { outputExt: _outputExt, ...rest } = input as Record<string, unknown>;
+  const {
+    outputExt: _outputExt,
+    prefills: _prefills,
+    ...rest
+  } = input as Record<string, unknown>;
   return rest;
 }
 
@@ -136,7 +139,6 @@ const RawAgentSettingInputSchema = z.strictObject({
   internal: z.boolean().optional(),
   isRewrite: z.boolean().optional(),
   rounds: z.int().positive().optional(),
-  prefills: z.array(z.string()).optional(),
 });
 
 /**

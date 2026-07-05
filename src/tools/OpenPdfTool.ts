@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'node:path';
-
 // Third-party imports
 import { z } from 'zod';
 
@@ -9,20 +6,19 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 
 // Type imports
 import type { FileLocation } from '@shared/schemas';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local imports - tools
 import {
   currentToolRoot,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local imports - utilities
 import {
   AbsoluteFS,
-  createRunStorageLocation,
-  getRunDir,
   pathToLocation,
+  runStorageLocationFromAbsolutePath,
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 
@@ -62,7 +58,7 @@ export class OpenPdfTool extends defineTool({
   protected async execute(input: OpenPdfInput): Promise<ToolResult> {
     if (!openPdfOpener) {
       return {
-        isError: true,
+        status: 'error',
         error:
           'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
       };
@@ -84,6 +80,7 @@ export class OpenPdfTool extends defineTool({
     });
 
     return {
+      status: 'executed',
       summary: `Opened PDF: ${displayPath}`,
       output: `Opened PDF: ${displayPath}`,
     };
@@ -96,7 +93,10 @@ function resolvePdfLocation(rawPath: string): FileLocation {
     throw new ToolError('path is required.');
   }
 
-  const runStorageLocation = resolveRunStorageLocation(trimmed);
+  const executionId = tryUseRunContext()?.executionId;
+  const runStorageLocation = executionId
+    ? runStorageLocationFromAbsolutePath(trimmed, executionId)
+    : undefined;
   if (runStorageLocation) {
     return runStorageLocation;
   }
@@ -104,27 +104,6 @@ function resolvePdfLocation(rawPath: string): FileLocation {
   const root = currentToolRoot();
   const resolved = resolveWorkspaceRelativePath(trimmed, root);
   return pathToLocation(resolved.absolute);
-}
-
-function resolveRunStorageLocation(rawPath: string): FileLocation | undefined {
-  if (!path.isAbsolute(rawPath)) return undefined;
-
-  const executionId = tryUseRunContext()?.executionId;
-  if (!executionId) return undefined;
-
-  const runDirectory = getRunDir(executionId);
-  const relativePath = path
-    .relative(runDirectory, rawPath)
-    .replaceAll('\\', '/');
-  if (
-    relativePath.startsWith('..') ||
-    path.isAbsolute(relativePath) ||
-    relativePath === ''
-  ) {
-    return undefined;
-  }
-
-  return createRunStorageLocation(rawPath, relativePath, executionId);
 }
 
 function displayPdfLocation(location: FileLocation): string {

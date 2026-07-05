@@ -17,6 +17,7 @@ import {
   ensureParentDir,
   ensureRunDir,
   getRunDir,
+  getOriginalSnapshotPath,
   getRunStorageAbsolutePath,
   shouldSkipRelocation,
   snapshotExists,
@@ -39,10 +40,9 @@ export {
   ensureRunDir,
   getOriginalSnapshotPath,
   getRunDir,
-  LEGACY_RUNS_DIR,
-  resolveRunDir,
-  resolveStoragePath,
-  TASK_RUNS_DIR,
+  findRunDir,
+  findExistingRunStoragePath,
+  runStorageLocationFromAbsolutePath,
 } from './runStorageFs';
 
 logger.initialize(CHANNEL);
@@ -164,10 +164,9 @@ export class TaskRunFileService {
       const stats = await fs.stat(target.absolutePath);
       if (!stats.isFile()) return;
 
-      const snapshotRelative = path.join('original', target.relativePath);
-      const snapshotAbsolute = getRunStorageAbsolutePath(
+      const snapshotAbsolute = getOriginalSnapshotPath(
         executionId,
-        snapshotRelative,
+        target.relativePath,
       );
 
       if (await snapshotExists(snapshotAbsolute)) return;
@@ -183,20 +182,7 @@ export class TaskRunFileService {
     }
   }
 
-  /**
-   * Create a FileLocation for a workflow output file. Routes to run storage
-   * when an executionId is available (the normal case); falls back to the
-   * workspace only when no execution context exists (e.g., ad-hoc utility
-   * calls made before any run is registered).
-   *
-   * Accepts both absolute and workspace-relative paths. Absolute paths
-   * within the workspace are converted to relative paths internally. Paths
-   * outside the workspace are returned as external locations. Path
-   * normalization is handled internally.
-   *
-   * @param inputPath - Absolute or workspace-relative path
-   * @returns FileLocation (runStorage, workspace, or external)
-   */
+  /** Create a FileLocation for a workflow output file. */
   public createLocation(inputPath: string): FileLocation {
     const resolved = WorkspaceFS.locatePath(inputPath);
 
@@ -206,8 +192,8 @@ export class TaskRunFileService {
 
     const executionId = this.metadata.executionId;
     if (executionId) {
-      const runAbsolute = path.join(
-        getRunDir(executionId),
+      const runAbsolute = getRunStorageAbsolutePath(
+        executionId,
         resolved.relativePath,
       );
       return createRunStorageLocation(
@@ -312,8 +298,6 @@ export class TaskRunFileService {
       return;
     }
 
-    const runDir = getRunDir(executionId);
-
     await Promise.all(
       [...this.mirroredDependencies].map(async (relativePath) => {
         // A dep whose path ends at `output.{ext}` (no subdirectory within the
@@ -341,8 +325,14 @@ export class TaskRunFileService {
         // (cls/sty/bib/figures) have no snapshot and fall through to the
         // workspace mirror at `runDir/<rel>`, which is correct — those
         // are never written to.
-        const snapshotAbsolute = path.join(runDir, 'original', relativePath);
-        const workspaceMirrorAbsolute = path.join(runDir, relativePath);
+        const snapshotAbsolute = getOriginalSnapshotPath(
+          executionId,
+          relativePath,
+        );
+        const workspaceMirrorAbsolute = getRunStorageAbsolutePath(
+          executionId,
+          relativePath,
+        );
         let sourceAbsolute = workspaceMirrorAbsolute;
         try {
           await fs.stat(snapshotAbsolute);
@@ -355,10 +345,9 @@ export class TaskRunFileService {
             );
           }
         }
-        const destinationAbsolute = path.join(
-          runDir,
-          relativeDirectory,
-          relativePath,
+        const destinationAbsolute = getRunStorageAbsolutePath(
+          executionId,
+          path.join(relativeDirectory, relativePath),
         );
 
         // Guard against clobbering a real file already written to the round

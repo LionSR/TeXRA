@@ -101,7 +101,7 @@ describe('PlanTool — update (plan approval)', () => {
     );
 
     const result = await resultPromise;
-    expect(result.isError).toBeFalsy();
+    expect(result.status).toBe('executed');
     expect(result.output).toContain('todo tool');
     expect(workPlanState.plan).toEqual(plan);
     expect(workPlanState.planSummary).toBe(planSummaryLine(plan.objective));
@@ -119,7 +119,7 @@ describe('PlanTool — update (plan approval)', () => {
     );
 
     const result = await resultPromise;
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(workPlanState.plan).toBeNull();
     expect(workPlanState.planSummary).toBeNull();
   });
@@ -144,7 +144,7 @@ describe('PlanTool — update (plan approval)', () => {
       );
 
       const result = await resultPromise;
-      expect(result.isError).not.toBe(true);
+      expect(result.status).toBe('executed');
 
       const goal = GoalStore.getForStream(streamId);
       expect(goal).not.toBeNull();
@@ -177,7 +177,7 @@ describe('PlanTool — update (plan approval)', () => {
       );
 
       const result = await resultPromise;
-      expect(result.isError).not.toBe(true);
+      expect(result.status).toBe('executed');
       expect(result.summary).toMatch(/retargeted/i);
 
       const goal = GoalStore.getForStream(streamId);
@@ -216,7 +216,7 @@ describe('PlanTool — update (plan approval)', () => {
       );
 
       const result = await resultPromise;
-      expect(result.isError).not.toBe(true);
+      expect(result.status).toBe('executed');
       expect(result.summary).toMatch(/autonomous run unavailable/i);
       expect(result.output).toContain('feature flag is currently disabled');
       expect(GoalStore.getForStream(streamId)).toBeNull();
@@ -237,7 +237,7 @@ describe('PlanTool — update (plan approval)', () => {
     );
 
     const result = await resultPromise;
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(workPlanState.plan).toBeNull();
     expect(workPlanState.planSummary).toBeNull();
   });
@@ -272,7 +272,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
       command: 'pause',
       reason: 'Need API credentials from the user.',
     });
-    expect(result.isError).toBeFalsy();
+    expect(result.status).toBe('executed');
     expect(GoalStore.getForStream(STREAM_ID)?.status).toBe('paused');
   });
 
@@ -282,7 +282,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
       command: 'complete',
       reason: 'Ran pnpm test; all 142 tests pass.',
     });
-    expect(result.isError).toBeFalsy();
+    expect(result.status).toBe('executed');
     expect(result.output).toContain('all 142 tests pass');
     // Completing is `forget()` — a finished goal is not archived, so no
     // record remains and the wait-node loop has nothing to continue.
@@ -294,7 +294,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
       command: 'complete',
       reason: 'I think I am done.',
     });
-    expect(result.isError).toBeFalsy();
+    expect(result.status).toBe('executed');
     expect(result.summary).toBe(
       'Plan-only work complete — summarize the result.',
     );
@@ -308,7 +308,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
       command: 'pause',
       reason: 'Need user input.',
     });
-    expect(result.isError).toBeFalsy();
+    expect(result.status).toBe('executed');
     expect(result.summary).toBe('No autonomous goal to pause.');
     expect(result.output).toContain('ask the user directly');
   });
@@ -316,7 +316,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   it('rejects whitespace-only reason on pause', async () => {
     await GoalStore.start(STREAM_ID, 'objective');
     const result = await callTool({ command: 'pause', reason: '   ' });
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toMatch(/empty/i);
   });
 });

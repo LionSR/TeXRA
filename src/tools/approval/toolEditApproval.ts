@@ -1,10 +1,3 @@
-import {
-  diff_match_patch,
-  DIFF_DELETE,
-  DIFF_EQUAL,
-  DIFF_INSERT,
-} from 'diff-match-patch';
-
 import { platform } from '@platform/platform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
@@ -15,6 +8,15 @@ import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
+import {
+  applyPatchToText,
+  diffTextByChar,
+  DIFF_DELETE,
+  DIFF_EQUAL,
+  DIFF_INSERT,
+  makePatchText,
+  type TextDiff,
+} from '@utils/text/diff';
 import { countLines } from '@utils/text/stringUtils';
 
 import { bashApprovalController } from './bashApproval';
@@ -128,14 +130,11 @@ export function emitToolEditApprovalPrompt(
 // Pure diff helpers (exported for use by native handler in @frontend/)
 // ============================================================================
 
-function createSemanticDiffs(
-  original: string,
-  proposed: string,
-): ReturnType<InstanceType<typeof diff_match_patch>['diff_main']> {
-  const dmp = new diff_match_patch();
-  const diffs = dmp.diff_main(original, proposed);
-  dmp.diff_cleanupSemantic(diffs);
-  return diffs;
+function createSemanticDiffs(original: string, proposed: string): TextDiff[] {
+  return diffTextByChar(original, proposed, {
+    checkLines: true,
+    cleanupSemantic: true,
+  });
 }
 
 export function computeLineChangeSummary(
@@ -200,14 +199,7 @@ export function computeUserPatch(
     return undefined;
   }
 
-  const dmp = new diff_match_patch();
-  const patches = dmp.patch_make(suggestedContent, appliedContent);
-
-  if (patches.length === 0) {
-    return undefined;
-  }
-
-  return dmp.patch_toText(patches);
+  return makePatchText(suggestedContent, appliedContent);
 }
 
 // ============================================================================
@@ -325,9 +317,11 @@ export async function writeApprovedContent(
     return { appliedContent: finalContent, baseContent: currentContent };
   }
 
-  const dmp = new diff_match_patch();
-  const patches = dmp.patch_make(originalContent, finalContent);
-  const [patchedContent, results] = dmp.patch_apply(patches, currentContent);
+  const { content: patchedContent, results } = applyPatchToText(
+    originalContent,
+    finalContent,
+    currentContent,
+  );
 
   if (results.every(Boolean)) {
     await WorkspaceFS.write(path, patchedContent);
@@ -346,10 +340,9 @@ export function buildApprovalRejectedResult(
   const baseMessage = `User rejected ${sourceTool} for ${path}.`;
   const feedback = userMessage?.trim();
   const result: ToolResult = {
-    output: baseMessage,
+    status: 'error',
     summary: baseMessage,
     error: baseMessage,
-    isError: true,
   };
   if (feedback) {
     result.userInstruction = feedback;

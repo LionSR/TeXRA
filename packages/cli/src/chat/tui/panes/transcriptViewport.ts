@@ -40,14 +40,14 @@ export function estimateTranscriptEntryRows(
   entry: ConversationEntry,
   width = 80,
 ): number {
-  if (entry.role === 'tool' && entry.toolUse) {
+  if (entry.role === 'tool') {
     const toolUse = entry.toolUse;
     return estimateEntryRows(() => {
       const lines = toolUseDisplayLines(toolUse);
       return lines.length + (lines.length > 1 ? 1 : 0);
     });
   }
-  if (entry.role === 'process' && entry.process) {
+  if (entry.role === 'process') {
     const process = entry.process;
     return estimateEntryRows(() => {
       return (

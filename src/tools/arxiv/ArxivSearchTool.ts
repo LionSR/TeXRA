@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 // Local imports
 import { warn } from '@logger/logUtils';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
@@ -67,7 +68,7 @@ export class ArxivSearchTool extends defineTool({
     'Search arXiv for papers and return basic metadata for each hit. Use field="author" for author name searches.',
   schema: ArxivSearchInputSchema,
 }) {
-  protected async execute(input: ArxivSearchInput) {
+  protected async execute(input: ArxivSearchInput): Promise<ToolResult> {
     const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
 
     // Select the query function based on the field parameter
@@ -156,6 +157,7 @@ export class ArxivSearchTool extends defineTool({
 
     const fieldLabel = input.field !== 'all' ? ` (${input.field})` : '';
     return {
+      status: 'executed',
       summary: `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"${fieldLabel}`,
       output: JSON.stringify(payload, null, 2),
     };

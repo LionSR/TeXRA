@@ -9,9 +9,9 @@ import * as path from 'node:path';
 
 import pMap from 'p-map';
 
+import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
 import {
-  MEMORY_STORAGE_ROOT,
   MAX_PREVIEW_LINES,
   MAX_PREVIEW_CHARS,
   shouldSkipEntry,
@@ -114,7 +114,7 @@ export async function loadMemoryPreview(
 /**
  * Walks the memory directory and collects all memory items.
  * @param storagePath - Current directory path to walk
- * @param relativeRoot - Path relative to MEMORY_STORAGE_ROOT for display
+ * @param relativeRoot - Path relative to MEMORY_STORAGE_DIR for display
  * @returns Array of memory items found in the directory
  */
 export async function walkMemoryDirectory(
@@ -146,7 +146,7 @@ export async function walkMemoryDirectory(
         const nextRelative = directory.relativeRoot
           ? path.join(directory.relativeRoot, name)
           : name;
-        const nextStoragePath = path.join(MEMORY_STORAGE_ROOT, nextRelative);
+        const nextStoragePath = path.join(MEMORY_STORAGE_DIR, nextRelative);
 
         if (isDirectory(type)) {
           return {
@@ -193,12 +193,12 @@ export async function walkMemoryDirectory(
  * @returns Array of memory items, newest first
  */
 export async function loadMemoryItems(): Promise<MemoryViewItem[]> {
-  const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);
+  const exists = await StorageFS.exists(MEMORY_STORAGE_DIR);
   if (!exists) {
     return [];
   }
 
-  const items = await walkMemoryDirectory(MEMORY_STORAGE_ROOT);
+  const items = await walkMemoryDirectory(MEMORY_STORAGE_DIR);
   return items.toSorted(
     (a, b) =>
       (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.mtime.localeCompare(a.mtime),

@@ -40,7 +40,7 @@ import { isNonEmptyString } from '@utils/text/stringUtils';
 import {
   proposeAndExecute,
   requireVisibleAgent,
-  resolveAvailableDelegationModel,
+  selectAvailableDelegationModel,
 } from './delegation/proposalFlow';
 import { depthGateError } from './delegation/subagentExecution';
 import {
@@ -85,7 +85,7 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
     const agentName = agent.name;
     const { streamId, context } = requireRunStream('delegate_workflow');
 
-    const model = await resolveAvailableDelegationModel({
+    const model = await selectAvailableDelegationModel({
       requestedModel: input.model,
       parentModel: context.model,
       agentCategory: AgentCategory.Workflow,
@@ -226,7 +226,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
 
     const { streamId, context } = requireRunStream('delegate_agent');
 
-    const model = await resolveAvailableDelegationModel({
+    const model = await selectAvailableDelegationModel({
       requestedModel: input.model,
       parentModel: context.model,
       agentCategory: AgentCategory.ToolUse,
@@ -299,6 +299,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       case 'sent':
         deliveryState.markPending();
         return {
+          status: 'executed',
           summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
             `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
@@ -308,6 +309,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       case 'queued':
         deliveryState.markPending();
         return {
+          status: 'executed',
           summary: `Follow-up queued for '${handle.agentName}'`,
           output: [
             `Follow-up instruction queued for '${handle.agentName}' (${result.reason}). The subagent will process it and deliver a new result automatically.`,

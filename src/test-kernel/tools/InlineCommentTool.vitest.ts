@@ -69,12 +69,12 @@ describe('InlineCommentTool.call', () => {
     setInlineCommentProvider(fakeProvider({ available: () => false }));
     const result = await tool.call({ command: 'list' });
     expect(result.summary).toBe('Inline comments unavailable');
-    expect(result.isError).toBeUndefined();
+    expect(result.status).toBe('executed');
   });
 
   it('validates required fields for add', async () => {
     const result = await tool.call({ command: 'add', path: 'p.tex', line: 3 });
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe('error');
     expect(result.error).toContain('requires path, line, and body');
   });
 
