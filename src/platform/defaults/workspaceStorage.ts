@@ -15,8 +15,6 @@ const STORAGE_LAYOUT = {
   original: 'original',
 } as const;
 
-export const GLOBAL_STORAGE_DIR = STORAGE_LAYOUT.global;
-export const WORKSPACE_STORAGE_DIR = STORAGE_LAYOUT.workspace;
 export const MEMORY_STORAGE_DIR = STORAGE_LAYOUT.memory;
 export const RUNS_STORAGE_DIR = STORAGE_LAYOUT.runs;
 export const LEGACY_RUNS_STORAGE_DIR = STORAGE_LAYOUT.legacyRuns;
@@ -51,7 +49,7 @@ export function workspaceStorageId(workspacePath: string | undefined): string {
 }
 
 export function resolveGlobalStoragePath(storageRoot: string): string {
-  return join(storageRoot, GLOBAL_STORAGE_DIR);
+  return join(storageRoot, STORAGE_LAYOUT.global);
 }
 
 export function resolveWorkspaceStoragePath(
@@ -60,7 +58,7 @@ export function resolveWorkspaceStoragePath(
 ): string {
   return join(
     storageRoot,
-    WORKSPACE_STORAGE_DIR,
+    STORAGE_LAYOUT.workspace,
     workspaceStorageId(workspacePath),
   );
 }
@@ -131,7 +129,7 @@ function resolveLegacyWorkspaceStoragePath(
 ): string {
   return join(
     storageRoot,
-    WORKSPACE_STORAGE_DIR,
+    STORAGE_LAYOUT.workspace,
     legacyWorkspaceStorageId(workspacePath),
   );
 }

@@ -53,14 +53,14 @@ function closeQuietly(connection: ResponsesWS): void {
 }
 
 /** Collaborators the transport borrows from the owning handler. */
-export interface OpenAIResponseWebSocketTransportDeps {
+interface OpenAIResponseWebSocketTransportDeps {
   logger: AgentTrace;
   /** Create a fresh stream processor for a request's streaming events. */
   createStreamProcessor(): ResponseStreamProcessor;
 }
 
 /** Result of {@link OpenAIResponseWebSocketTransport.execute}: the API response plus its stream processor for deferred finalization. */
-export interface WebSocketExecutionResult {
+interface WebSocketExecutionResult {
   response: Response;
   processor: ResponseStreamProcessor;
   /**

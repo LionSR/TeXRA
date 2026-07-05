@@ -13,7 +13,7 @@ export const OPENAI_CHAT_FINISH = {
   CONTENT_FILTER: 'content_filter',
   FUNCTION_CALL: 'function_call',
 } as const satisfies Record<string, NonNullable<OpenAIChatFinishReason>>;
-export type OpenAIChatFinishReason = ChatCompletion.Choice['finish_reason'];
+type OpenAIChatFinishReason = ChatCompletion.Choice['finish_reason'];
 
 /**
  * Finish reasons for the legacy OpenAI text completion API.
@@ -24,7 +24,7 @@ export const OPENAI_COMPLETION_FINISH = {
   LENGTH: 'length',
   CONTENT_FILTER: 'content_filter',
 } as const satisfies Record<string, NonNullable<OpenAICompletionFinishReason>>;
-export type OpenAICompletionFinishReason = CompletionChoice['finish_reason'];
+type OpenAICompletionFinishReason = CompletionChoice['finish_reason'];
 
 /** Stop reasons defined in the Model Context Protocol SDK. */
 export const MCP_STOP = {
@@ -32,7 +32,7 @@ export const MCP_STOP = {
   STOP_SEQUENCE: 'stopSequence',
   MAX_TOKENS: 'maxTokens',
 } as const;
-export type MCPStopReason = (typeof MCP_STOP)[keyof typeof MCP_STOP];
+type MCPStopReason = (typeof MCP_STOP)[keyof typeof MCP_STOP];
 
 /**
  * Stop reasons for Anthropic models.
@@ -55,8 +55,7 @@ export const GOOGLE_FINISH = {
   STOP: 'STOP',
   MAX_TOKENS: 'MAX_TOKENS',
 } as const;
-export type GoogleFinishReason =
-  (typeof GOOGLE_FINISH)[keyof typeof GOOGLE_FINISH];
+type GoogleFinishReason = (typeof GOOGLE_FINISH)[keyof typeof GOOGLE_FINISH];
 
 /**
  * Union type covering all known provider stop reasons.

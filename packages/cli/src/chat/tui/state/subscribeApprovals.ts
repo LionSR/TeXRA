@@ -51,7 +51,7 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 
 import { assertNever } from '@utils/core';
 import { notify } from '../notifications/terminalNotifier';
-import { cliState } from './cliState';
+import { patchSessionMeta } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
@@ -444,10 +444,7 @@ async function applyRetryDecision(
   if (decision.apiMode) {
     await setCliApiMode(decision.apiMode);
     if (!isCurrent()) return;
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
-      apiMode: decision.apiMode,
-    });
+    patchSessionMeta({ apiMode: decision.apiMode });
   }
   if (decision.disableChatGptSubscription) {
     await setCliCodexSubscription(false);

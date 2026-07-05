@@ -1,4 +1,5 @@
 // Local imports - replacement
+import { generateReferenceSpacing } from '@replacement/helpers';
 import { ReplacementCategory } from '@replacement/types';
 
 export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
@@ -34,14 +35,16 @@ export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
 
     // ===== Reference formatting =====
     // Add non-breaking spaces for references (chktex compatibility)
-    'Appendix \\ref{': 'Appendix~\\ref{',
-    'Section \\ref{': 'Section~\\ref{',
-    'Figure \\ref{': 'Figure~\\ref{',
-    'Table \\ref{': 'Table~\\ref{',
-    'Equation \\ref{': 'Equation~\\ref{',
-    'Theorem \\ref{': 'Theorem~\\ref{',
-    'Lemma \\ref{': 'Lemma~\\ref{',
-    'Corollary \\ref{': 'Corollary~\\ref{',
+    ...generateReferenceSpacing([
+      'Appendix',
+      'Section',
+      'Figure',
+      'Table',
+      'Equation',
+      'Theorem',
+      'Lemma',
+      'Corollary',
+    ]),
 
     // ===== Math operator standardization =====
     // Preferred operator command forms
