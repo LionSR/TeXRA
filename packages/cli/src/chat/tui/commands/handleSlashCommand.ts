@@ -1,6 +1,6 @@
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { formatCliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
@@ -177,7 +177,7 @@ export async function handleTuiSlashCommand(
           queuedFollowUpMessages:
             activeStreamId === undefined
               ? []
-              : ToolUseFollowUpQueue.getAll(activeStreamId),
+              : defaultSession().followUps.getAll(activeStreamId),
         }),
       );
       return true;

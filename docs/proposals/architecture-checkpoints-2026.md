@@ -133,9 +133,10 @@ barrels, and a stated count delta for any touched meter.
 
 ### Remaining Order
 
-1. Stage 3a (#6964): session facts, child/process arms, session-owned
-   transcripts/follow-ups. Use the corrected child-stream and follow-up citations
-   above; do not re-litigate #6993's ordering fix.
+1. Stage 3a (#6964): completed by the Stage 3a PR. It lands session facts,
+   child/process arms, and session-owned transcripts/follow-ups. The corrected
+   child-stream and follow-up citations above were the implementation evidence;
+   do not re-litigate #6993's ordering fix.
 2. Stage 3b (#6965): `RunDescriptor`, config persistence, and typed round
    stages. Treat the metadata-patch O(N) claim as stale; the side effect is now a
    per-stream patch.

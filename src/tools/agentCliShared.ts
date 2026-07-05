@@ -6,8 +6,8 @@ import { type AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { RunContext } from '@agent/runtime/RunContext';
 import { isAbortError } from '@common/errors';
 import type {
@@ -192,7 +192,9 @@ export function resumeAgentCliSession(
     );
   }
 
-  ToolUseFollowUpQueue.acquire(stored.childStreamId).enqueue({ text: prompt });
+  currentSession().followUps.acquire(stored.childStreamId).enqueue({
+    text: prompt,
+  });
 
   const preview = truncateWithEllipsis(prompt, 60);
   return {
