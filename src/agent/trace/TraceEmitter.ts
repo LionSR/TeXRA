@@ -241,10 +241,9 @@ export class TraceEmitter implements AgentTrace {
     // Open inside the explicit stage scope so the start event carries the
     // right stageId without forcing the caller to await.
     if (options.stageId && options.stageId !== this.activeStageId()) {
-      const nextStack = [...this.currentStageStack(), options.stageId];
-      this.stageScope.run(nextStack, () => {
-        this.emit({ type: 'stream.start', id, kind });
-      });
+      void this.withStage(options.stageId, () =>
+        this.emit({ type: 'stream.start', id, kind }),
+      );
       return new StreamHandleImpl(this, id, phaseOnly, null);
     }
 

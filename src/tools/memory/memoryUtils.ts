@@ -1,8 +1,9 @@
 import * as path from 'node:path';
 
+import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { normalizeFilePath } from '@shared/utils/path';
 
-import { MEMORY_DISPLAY_ROOT, MEMORY_STORAGE_ROOT } from './constants';
+import { MEMORY_DISPLAY_ROOT } from './constants';
 
 export function relativeToDisplayPath(relativePath: string): string {
   if (!relativePath) {
@@ -12,7 +13,7 @@ export function relativeToDisplayPath(relativePath: string): string {
 }
 
 export function toDisplayPath(storagePath: string): string {
-  const relative = path.relative(MEMORY_STORAGE_ROOT, storagePath);
+  const relative = path.relative(MEMORY_STORAGE_DIR, storagePath);
   return relativeToDisplayPath(relative);
 }
 
@@ -44,13 +45,13 @@ export function displayToStoragePath(displayPath: string): string {
     displayPath === MEMORY_DISPLAY_ROOT
       ? ''
       : displayPath.slice(`${MEMORY_DISPLAY_ROOT}/`.length);
-  const resolved = path.resolve(MEMORY_STORAGE_ROOT, suffix);
-  const base = path.resolve(MEMORY_STORAGE_ROOT);
+  const resolved = path.resolve(MEMORY_STORAGE_DIR, suffix);
+  const base = path.resolve(MEMORY_STORAGE_DIR);
   const relative = path.relative(base, resolved);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error(`Invalid memory path: ${displayPath}`);
   }
   return relative
-    ? path.join(MEMORY_STORAGE_ROOT, relative)
-    : MEMORY_STORAGE_ROOT;
+    ? path.join(MEMORY_STORAGE_DIR, relative)
+    : MEMORY_STORAGE_DIR;
 }

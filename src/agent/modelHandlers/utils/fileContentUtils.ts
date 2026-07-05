@@ -20,7 +20,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 /**
  * Result of preparing file content for a model handler.
  */
-export interface PreparedFileContent {
+interface PreparedFileContent {
   /** The cleaned file content */
   fileContent: string;
   /** Whether a scratchpad was found and logged */
