@@ -62,12 +62,13 @@ import {
   formatCliHistoryDetailsText,
   formatCliHistoryNotFoundText,
   formatCliHistoryText,
+  formatInvalidExportFormatText,
+  isRemoteCliHistoryExportAssetsHref,
   listCliHistoryEntries,
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
   readCliHistoryConfig,
   readCliHistoryDetails,
-  isRemoteCliHistoryExportAssetsHref,
   readCliHistoryExportInput,
   resolveCliHistoryExportAssetsHref,
   stageCliHistoryExportAssets,
@@ -1006,6 +1007,17 @@ describe('CLI history runtime', () => {
   });
 
   describe('history export (--export / --assets)', () => {
+    it('quotes the value in an invalid --export message, including an empty string', () => {
+      expect(formatInvalidExportFormatText('csv')).toBe(
+        'Invalid export format: "csv" (use html or md)',
+      );
+      // Must not collapse into "Invalid export format:  (use html or md)"
+      // with a confusing double space.
+      expect(formatInvalidExportFormatText('')).toBe(
+        'Invalid export format: "" (use html or md)',
+      );
+    });
+
     it('resolves a blank --assets value to the documented ./assets default', () => {
       // `--assets ''` must behave identically to omitting the flag, not
       // produce a broken empty href passed straight to the formatter.
