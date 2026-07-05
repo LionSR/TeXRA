@@ -1,5 +1,5 @@
-import { toErrorMessage } from '@common/errors';
 import { isNonEmptyString } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createSemaphore } from '@utils/core/semaphore';
 
 import { journalKey } from './journal';
@@ -126,14 +126,21 @@ export async function runWorkflowScript(
 
     emit({ type: 'agent:start', index, label, phase: callOptions.phase });
     try {
-      const result = await semaphore.run(() =>
-        runAgent({
+      const result = await semaphore.run(() => {
+        // Re-check after waiting for a slot: a timeout/cap abort while this
+        // call was queued must not launch fresh model work.
+        if (runAbort.signal.aborted) {
+          throw new WorkflowRunAbortError(
+            'Workflow run aborted while this agent() call was queued.',
+          );
+        }
+        return runAgent({
           index,
           prompt,
           options: callOptions,
           signal: runAbort.signal,
-        }),
-      );
+        });
+      });
       journal.set(index, { index, key, result });
       emit({ type: 'agent:end', index, label, cached: false });
       return result;

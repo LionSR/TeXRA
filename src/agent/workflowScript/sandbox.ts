@@ -1,6 +1,6 @@
 import * as vm from 'node:vm';
 
-import { toErrorMessage } from '@common/errors';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { WorkflowScriptParseError } from './parseScript';
 

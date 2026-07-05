@@ -2,7 +2,7 @@ import * as vm from 'node:vm';
 
 import { z } from 'zod';
 
-import { toErrorMessage } from '@common/errors';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { WorkflowScriptMetaSchema, type WorkflowScriptMeta } from './types';
 

@@ -358,8 +358,11 @@ export async function executeSubagent(
         output: msg,
       };
     } catch (err) {
-      settleSubagentCost(getAgentFlowErrorResult(err));
-      return failureResult(err);
+      // AgentFlowError carries the failed run's result — keep its category,
+      // partial outputs, and cost in the failure manifest for chaining.
+      const errorResult = getAgentFlowErrorResult(err);
+      settleSubagentCost(errorResult);
+      return failureResult(err, errorResult);
     }
   }
 

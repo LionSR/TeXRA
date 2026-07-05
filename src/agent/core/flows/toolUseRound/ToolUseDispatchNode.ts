@@ -206,6 +206,9 @@ export class ToolUseDispatchNode<C> extends BatchNode<
         await Promise.all(
           run.map((index) =>
             semaphore.run(async () => {
+              // Re-check after waiting for a slot: an interrupt while this
+              // call was queued must not start new work.
+              if (batchController.signal.aborted) return;
               results[index] = await this.execCall(
                 calls[index],
                 batchController.signal,
