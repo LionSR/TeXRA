@@ -3,21 +3,40 @@ import * as vscode from 'vscode';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
 
 const CHANNEL = 'ExecutionHandlers';
 logger.initialize(CHANNEL);
 
-/** Message shape for command-based operations without a validated payload
- * schema (housekeeping/pack/clean commands). */
-export interface CommandMessage {
-  command: string;
-  agent?: string;
-  model?: string;
-  inputFile?: string;
+/** Housekeeping commands take no payload beyond the command itself. */
+export interface HousekeepingMessage {
+  command:
+    | typeof MAIN_VIEW_COMMANDS.CLEAN_OUTPUT
+    | typeof MAIN_VIEW_COMMANDS.CLEAN_BUILD
+    | typeof MAIN_VIEW_COMMANDS.INDENT_TEX;
+}
+
+/** Single-file pack/clean commands: the file plus the agent/model to run it with. */
+export interface SingleOperationMessage {
+  command:
+    | typeof MAIN_VIEW_COMMANDS.PACK_SINGLE
+    | typeof MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
+  inputFile: string;
+  agent: string;
+  model: string;
+}
+
+/** Multi-file pack/clean commands: same as single-file, plus the extra file batch. */
+export interface MultipleOperationMessage {
+  command:
+    | typeof MAIN_VIEW_COMMANDS.PACK_MULTIPLE
+    | typeof MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE;
+  inputFile: string;
+  agent: string;
+  model: string;
   inputFiles?: string[];
-  outputFiles?: string[];
 }
 
 export async function handleExecute(
@@ -60,11 +79,11 @@ export function handleFileOperation(message: FileOperationMessage): void {
   );
 }
 
-export function handleHousekeeping(message: CommandMessage): void {
+export function handleHousekeeping(message: HousekeepingMessage): void {
   void vscode.commands.executeCommand(`texra.${message.command}`);
 }
 
-export function handleSingleOperation(message: CommandMessage): void {
+export function handleSingleOperation(message: SingleOperationMessage): void {
   void vscode.commands.executeCommand(
     `texra.${message.command}`,
     message.inputFile,
@@ -73,7 +92,9 @@ export function handleSingleOperation(message: CommandMessage): void {
   );
 }
 
-export function handleMultipleOperation(message: CommandMessage): void {
+export function handleMultipleOperation(
+  message: MultipleOperationMessage,
+): void {
   const inputFiles = message.inputFiles ?? [];
   const label = message.command.startsWith('pack') ? 'Packing' : 'Cleaning';
   logger.info(
