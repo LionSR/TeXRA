@@ -99,10 +99,10 @@ The verifier library is therefore **data, not harness code**: a standard grader 
 
 | `std/` grader (command) | Wraps                                                                                                                                                                                                                                                           |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `std/compile-check`     | `compileCheck.ts` / `latexToolchain.ts` invoked directly, independent of the interactive `WORKFLOW_AUTO_COMPILE` setting — a required gate can't depend on a user preference — the hard gate |
+| `std/compile-check`     | `compileCheck.ts` / `latexToolchain.ts` invoked directly, independent of the interactive `WORKFLOW_AUTO_COMPILE` setting — a required gate can't depend on a user preference — the hard gate                                                                    |
 | `std/cas-equal`         | `wolframscript` (or SymPy) executing a **fixed** `refs/` assertion script against the extracted `\benchresult{...}` — outcome-level, targeting renotation-robustness (how far that can be pushed is open — §15), no credit for matching a human derivation path |
 | `std/lean-build`        | `lake build` against a pinned mathlib toolchain; binary per lemma. Proof tasks need only a statement — difficulty can outgrow the task's author (§6 validate exempts this stack from the gold-`refs/solution` check, since it has no reference answer to score) |
-| `std/diff-align`        | the math-aware latexdiff service — **error-injection tasks only**: edits inside injected spans must match gold, edits outside are penalized; not applicable to derivation/proof tasks, which have no injected spans |
+| `std/diff-align`        | the math-aware latexdiff service — **error-injection tasks only**: edits inside injected spans must match gold, edits outside are penalized; not applicable to derivation/proof tasks, which have no injected spans                                             |
 | `std/issue-match`       | `ReviewIssue` matching against gold defects within a line window → precision/recall                                                                                                                                                                             |
 | `std/answer-match`      | numeric-tolerance / exact / set matching on parsed answer blocks                                                                                                                                                                                                |
 
@@ -138,7 +138,7 @@ bench-results/<suite@version>/<runId>/<model>/<task>/trial-<n>/
                     # to that machinery, not built yet)
 ```
 
-- **Comparability rule:** two scores are comparable iff their *task*, *grader-pack*, and *environment* digests match; the subject dimension (model id and/or agent digest) is exactly what `--compare` varies, so it's excluded from the match. `bench report` refuses comparisons that differ on any of the fixed digests.
+- **Comparability rule:** two scores are comparable iff their _task_, _grader-pack_, and _environment_ digests match; the subject dimension (model id and/or agent digest) is exactly what `--compare` varies, so it's excluded from the match. `bench report` refuses comparisons that differ on any of the fixed digests.
 - **Regrade, don't rerun:** graders never mutate these directories, only read them; `bench grade --regrade --diff-against <old>` (a suite version, e.g. `1.1`, resolved under `--results-dir` to that version's evidence directory) recomputes history at zero model cost and attributes every delta to the grader diff.
 - **Hermetic execution:** a published container image pins TeX Live / Lean / wolframscript; `env.json` records the fingerprint; network off by default at the container level (not just tool-level filtering — a solver with shell access could otherwise reach the network via `curl`/package managers even with web tools disabled), with web tools additionally disabled in-agent via the existing `runtimeUnavailableTools` mechanism (`src/agent/runtime/RunContext.ts`) as defense in depth. No new sandbox layer beyond the container's own network policy.
 - **Determinism honesty:** providers offer no usable seeds; replicate variance is measured and reported, never pretended away.
@@ -192,18 +192,18 @@ Six subcommands. Exit codes reuse `packages/cli/src/runtime/exitCodes.ts`; score
 
 ## 11. Existing machinery it rides on
 
-| Bench component                   | Existing code                                                                                                                         |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Bench component                   | Existing code                                                                                                                                                                                                                       |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Cell execution                    | `packages/cli/src/runtime/runExecution.ts`; tool-use path via `packages/cli/src/commands/agentsRun.ts` (today stops after one model/tool cycle — `stopAfterCycle: true` — bench needs a multi-cycle variant, tracked as an MVP gap) |
-| Compile gate / diff / structure   | `src/agent/output/compileCheck.ts`, `src/latex/latexdiff/`, `src/latex/latexToolchain.ts`, `src/latex/labelSearch.ts`, `src/latex/extractBibliography.ts` |
-| CAS / Lean verifiers              | `src/tools/wolfram/wolframScriptUtils.ts`, `src/tools/lean/direct/lakeCommands.ts`, `src/tools/lean/LspTools.ts`, `src/tools/lean/LoogleTool.ts`          |
-| Issue localization                | `src/agent/review/reviewIssues.ts`; solver pattern from `packages/extension/resources/tool_use_agents/changeReviewer.yaml`            |
-| Fresh-task supply                 | `src/latex/arxivProcessor.ts`                                                                                                         |
-| Trace archive                     | `AgentTrace` subscriber (`src/agent/trace/AgentTrace.ts`, pattern: `src/transcript/TexraTranscriptRecorder.ts`); `AgentEvent` union    |
-| Usage / cost / abort              | `src/agent/core/usage/RunUsageAccumulator.ts` (`totalCost` drives `--max-cost-usd`, checked between dispatches — a soft budget guard under concurrency, not a per-cell reservation) |
-| Providers incl. internal gateways | `src/agent/modelHandlers/` (four stacks; `customBaseUrl` already threaded)                                                            |
-| Solver/judge agents               | ordinary agent YAML under `packages/extension/resources/agents/bench/`, run via `runAgent` (`src/agent/runtime/runAgent.ts`)          |
-| Env fingerprint                   | `texra doctor` machinery (`packages/cli/src/commands/doctor.ts`) — today probes Node/workspace/auth/LaTeX/config; Wolfram/lake/image-digest probes are new additions, not built yet |
+| Compile gate / diff / structure   | `src/agent/output/compileCheck.ts`, `src/latex/latexdiff/`, `src/latex/latexToolchain.ts`, `src/latex/labelSearch.ts`, `src/latex/extractBibliography.ts`                                                                           |
+| CAS / Lean verifiers              | `src/tools/wolfram/wolframScriptUtils.ts`, `src/tools/lean/direct/lakeCommands.ts`, `src/tools/lean/LspTools.ts`, `src/tools/lean/LoogleTool.ts`                                                                                    |
+| Issue localization                | `src/agent/review/reviewIssues.ts`; solver pattern from `packages/extension/resources/tool_use_agents/changeReviewer.yaml`                                                                                                          |
+| Fresh-task supply                 | `src/latex/arxivProcessor.ts`                                                                                                                                                                                                       |
+| Trace archive                     | `AgentTrace` subscriber (`src/agent/trace/AgentTrace.ts`, pattern: `src/transcript/TexraTranscriptRecorder.ts`); `AgentEvent` union                                                                                                 |
+| Usage / cost / abort              | `src/agent/core/usage/RunUsageAccumulator.ts` (`totalCost` drives `--max-cost-usd`, checked between dispatches — a soft budget guard under concurrency, not a per-cell reservation)                                                 |
+| Providers incl. internal gateways | `src/agent/modelHandlers/` (four stacks; `customBaseUrl` already threaded)                                                                                                                                                          |
+| Solver/judge agents               | ordinary agent YAML under `packages/extension/resources/agents/bench/`, run via `runAgent` (`src/agent/runtime/runAgent.ts`)                                                                                                        |
+| Env fingerprint                   | `texra doctor` machinery (`packages/cli/src/commands/doctor.ts`) — today probes Node/workspace/auth/LaTeX/config; Wolfram/lake/image-digest probes are new additions, not built yet                                                 |
 
 All additive: new code lives in `src/bench/` (VS Code-free zone, host services via `platform()`) and `packages/cli/`. **The MVP requires zero changes to `src/agent/` core.**
 
