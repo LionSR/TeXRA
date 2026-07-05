@@ -17,7 +17,7 @@ import { logProgressStatus, logSdkError } from '@agent/trace';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
-import { parseToolArgumentsAsObject } from '@agent/modelHandlers/utils/parseArguments';
+import { parseToolInputAsObject } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
@@ -1882,8 +1882,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
           case 'step.stop': {
             const slot = pending.get(event.index);
             if (slot && slot.type === 'function_call' && slot.argsBuffer) {
-              slot.args = parseToolArgumentsAsObject(
+              slot.args = parseToolInputAsObject(
                 slot.argsBuffer,
+                slot.callId ?? 'unknown',
                 this.logger,
               );
             }
@@ -2032,7 +2033,11 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
           name: slot.callName ?? '',
           arguments:
             slot.args ??
-            parseToolArgumentsAsObject(slot.argsBuffer, this.logger),
+            parseToolInputAsObject(
+              slot.argsBuffer,
+              slot.callId ?? 'unknown',
+              this.logger,
+            ),
         } satisfies FunctionCallStep);
       } else if (slot.text) {
         steps.push({

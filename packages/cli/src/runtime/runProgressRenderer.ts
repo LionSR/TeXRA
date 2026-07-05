@@ -352,6 +352,10 @@ function isMultiRound(rounds: number | undefined): rounds is number {
   return rounds != null && rounds > 1;
 }
 
+// Deliberately stays in minute-second form past 60 minutes (`100m 00s`, not
+// `1h 40m`) — unlike `formatCompactDuration`, which rounds to a compact
+// two-unit display. A long-running task should keep showing precise elapsed
+// minutes rather than snapping to hour granularity.
 function formatElapsed(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(seconds / 60);

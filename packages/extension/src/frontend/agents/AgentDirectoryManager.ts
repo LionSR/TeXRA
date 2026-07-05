@@ -15,6 +15,7 @@ import {
 import type { AgentDirectoryEntry, AgentSource } from '@agent/index';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
+import { selectFolder } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import { AGENT_SOURCE } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';
@@ -111,18 +112,11 @@ export class AgentDirectoryManager {
   }
 
   async promptCustom(): Promise<string | undefined> {
-    const folder = await vscode.window.showOpenDialog({
-      canSelectFiles: false,
-      canSelectFolders: true,
-      canSelectMany: false,
-      openLabel: 'Select Folder',
-    });
-
-    if (!folder || folder.length === 0) {
+    const selectedPath = await selectFolder({ openLabel: 'Select Folder' });
+    if (!selectedPath) {
       return undefined;
     }
 
-    const selectedPath = folder[0].fsPath;
     await AbsoluteFS.ensureDir(selectedPath);
 
     await globalSM.update(GlobalStateKey.CUSTOM_AGENT_DIR, selectedPath);
