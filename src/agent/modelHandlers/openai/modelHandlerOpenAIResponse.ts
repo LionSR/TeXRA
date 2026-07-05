@@ -10,6 +10,7 @@ import {
   logProgressStatus,
   logSdkError,
 } from '@agent/trace';
+import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -67,7 +68,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../utils/toolAttachmentUtils';
-import { parseToolArguments } from '../utils/parseArguments';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAIResponseTools } from '../toolConversion';
 import { ModelHandler } from '../ModelHandler';
@@ -268,7 +268,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseUsage,
   OpenAIResponseToolCall,
   OpenAI,
-  Response
+  Response,
+  ResponseInputContent
 > {
   protected getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
     return null;
@@ -1100,9 +1101,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (mediaFiles && mediaFiles.length > 0 && supportsMedia) {
       try {
-        const mediaContent = (await this.createMediaMessage(
-          mediaFiles,
-        )) as ResponseInputMessageContentList;
+        const mediaContent = await this.createMediaMessage(mediaFiles);
         userContent.push(...mediaContent);
       } catch (err) {
         logSdkError(
@@ -1153,9 +1152,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.capabilities.supportsNativeAudio)
     ) {
       try {
-        const formattedMediaContent = (await this.createMediaMessage(
-          mediaFiles,
-        )) as ResponseInputMessageContentList;
+        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
       } catch (err) {
         logSdkError(
@@ -2498,7 +2495,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       provider: 'openai-response',
       callId: call.call_id,
       name: call.name,
-      input: parseToolArguments(call.arguments, this.logger),
+      input: parseToolInput(call.arguments, call.call_id, this.logger),
       raw: call,
     }));
   }
@@ -2838,9 +2835,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
 
     try {
-      const formattedMedia = (await this.createMediaMessage(
-        mediaFiles,
-      )) as ResponseInputMessageContentList;
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
       lastUserMsg.content.unshift(...formattedMedia);
     } catch (err) {
       logSdkError(

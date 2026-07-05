@@ -1,6 +1,6 @@
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 
-import { toErrorMessage } from './errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDiskFullError } from './errorPredicates';
 import { isUserAbort } from './sdkErrorUtils';
 

@@ -1,6 +1,12 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - transcript
+import {
+  STREAM_LOGS_DIR,
+  type StreamSnapshotStore as ProgressSnapshotStore,
+} from '@transcript';
+
 // Local imports - agent state
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
@@ -27,7 +33,6 @@ import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCap
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-import type { StreamSnapshotStore as ProgressSnapshotStore } from '@transcript';
 
 type Bridge = {
   openFileCompile(filePath: string): Promise<void>;
@@ -74,6 +79,15 @@ type BridgeWithSession = TestableBridge & {
       cleanupAllRequests(): void;
     };
     status: StreamStatusMachine;
+    followUps: {
+      enqueue(
+        streamId: StreamTabId,
+        followUp: { text: string },
+        options?: { force?: boolean },
+      ): boolean;
+      getAll(streamId: StreamTabId): string[];
+      release(streamId: StreamTabId): void;
+    };
   };
 };
 
@@ -81,6 +95,12 @@ function bridgeStatus(
   bridge: TestableBridge,
 ): BridgeWithSession['session']['status'] {
   return (bridge as BridgeWithSession).session.status;
+}
+
+function bridgeFollowUps(
+  bridge: TestableBridge,
+): BridgeWithSession['session']['followUps'] {
+  return (bridge as BridgeWithSession).session.followUps;
 }
 
 type DesktopExecution = {
@@ -133,6 +153,8 @@ interface DesktopAgentExecutionModule {
 type CreateBridgeOptions = {
   kvStoreBacking?: Map<string, unknown>;
   kvRead?: (key: string) => Promise<unknown> | unknown;
+  /** Forces `state.streamLogs.load()` to reject, to exercise the restart-repair fallback (catch) path. */
+  streamLogsLoadError?: Error;
   retrieveSessionResumeData?: ReturnType<typeof vi.fn>;
   resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
   runAgent?: RunExecutionRequest;
@@ -255,6 +277,9 @@ async function createBridge(
       }
 
       async listKeys(): Promise<string[]> {
+        if (options.streamLogsLoadError && this.dir === STREAM_LOGS_DIR) {
+          throw options.streamLogsLoadError;
+        }
         if (!options.kvStoreBacking) return [];
         const prefix = `${this.dir}/`;
         return [...options.kvStoreBacking.keys()]
@@ -790,6 +815,11 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('marks restored running streams as errored when startup repair fails', async () => {
+    // The catch-fallback path also consults detectWaitingStreams() (see the
+    // regression test below), so when the persisted-record lookup itself is
+    // completely unavailable, it is invoked once from the primary try path
+    // and once again from the fallback -- both fail here, so there really is
+    // no way to know the stream is resumable and it correctly lands in FAILED.
     const detectWaitingStreams = vi.fn(async () => {
       throw new Error('flow store unavailable');
     });
@@ -806,13 +836,53 @@ describe('DesktopProgressBridge', () => {
 
     try {
       await vi.waitFor(() => {
-        expect(detectWaitingStreams).toHaveBeenCalledOnce();
+        expect(detectWaitingStreams).toHaveBeenCalledTimes(2);
         expect(bridgeStatus(bridge).get('broken-stream')).toBe(
           STREAM_PHASE.FAILED,
         );
       });
     } finally {
       bridgeStatus(bridge).clearStream('broken-stream');
+      bridge.dispose();
+    }
+  });
+
+  it('restores a RUNNING stream with a persisted flow record to WAITING when streamLogs.load() throws', async () => {
+    // Regression test: the catch-fallback path used to only
+    // consider streams whose CURRENT in-memory status was already WAITING,
+    // missing a stream that was RUNNING at crash time but still has a valid
+    // persisted flow record -- wrongly demoting it to FAILED instead of
+    // WAITING. The fallback must now consult detectWaitingStreams() (ground
+    // truth from the persisted KV record) just like the primary try path.
+    const detectWaitingStreams = vi.fn(
+      async (executionIds: ReadonlyMap<StreamTabId, string>) =>
+        new Set<StreamTabId>(
+          [...executionIds.keys()].filter(
+            (streamId) => streamId === 'resumable-stream',
+          ),
+        ),
+    );
+    const bridge = await createBridge([], {
+      detectWaitingStreams,
+      streamLogsLoadError: new Error('stream log store unavailable'),
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'resumable-stream',
+          executionId: 'abc123',
+          lastKnownStatus: STREAM_STATUS.RUNNING,
+        }),
+      ]),
+    });
+
+    try {
+      await vi.waitFor(() => {
+        expect(detectWaitingStreams).toHaveBeenCalledOnce();
+        expect(bridgeStatus(bridge).get('resumable-stream')).toBe(
+          STREAM_STATUS.WAITING,
+        );
+      });
+    } finally {
+      bridgeStatus(bridge).clearStream('resumable-stream');
       bridge.dispose();
     }
   });
@@ -2125,8 +2195,6 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromSnapshot,
     });
-    const { ToolUseFollowUpQueue } =
-      await import('@agent/followUp/ToolUseFollowUpQueueManager');
     const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
 
     try {
@@ -2135,7 +2203,7 @@ describe('DesktopProgressBridge', () => {
         executionId: 'exec-1',
         taskState,
       });
-      ToolUseFollowUpQueue.enqueue(
+      bridgeFollowUps(bridge).enqueue(
         'stream-1',
         { text: 'queued follow-up' },
         { force: true },
@@ -2177,7 +2245,7 @@ describe('DesktopProgressBridge', () => {
         origin: 'user',
       });
     } finally {
-      ToolUseFollowUpQueue.release('stream-1');
+      bridgeFollowUps(bridge).release('stream-1');
       bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }
@@ -2199,8 +2267,6 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromSnapshot,
     });
-    const { ToolUseFollowUpQueue } =
-      await import('@agent/followUp/ToolUseFollowUpQueueManager');
 
     try {
       bridge.handleProgressEvent('setTaskState', {
@@ -2208,19 +2274,19 @@ describe('DesktopProgressBridge', () => {
         executionId: 'exec-1',
         taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
-      ToolUseFollowUpQueue.enqueue(
+      bridgeFollowUps(bridge).enqueue(
         'stream-1',
         { text: 'queued follow-up' },
         { force: true },
       );
 
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
-      expect(ToolUseFollowUpQueue.getAll('stream-1')).toEqual([
+      expect(bridgeFollowUps(bridge).getAll('stream-1')).toEqual([
         'queued follow-up',
       ]);
       expect(bridgeStatus(bridge).get('stream-1')).toBe(STREAM_STATUS.WAITING);
     } finally {
-      ToolUseFollowUpQueue.release('stream-1');
+      bridgeFollowUps(bridge).release('stream-1');
       bridgeStatus(bridge).clearStream('stream-1');
       bridge.dispose();
     }

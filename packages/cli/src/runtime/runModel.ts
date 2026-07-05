@@ -1,6 +1,6 @@
-import { toErrorMessage } from '@common/errors/errorMessage';
 import type { RunModelCandidate } from '@model/runModelDecision';
 import { AgentCategory } from '@shared/schemas/agent';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   CLI_BUILTIN_DEFAULT_MODEL,

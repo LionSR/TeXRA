@@ -7,6 +7,7 @@ import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/pa
 
 // Local imports - agent components
 import { logSdkError } from '@agent/trace';
+import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -40,7 +41,12 @@ import { tagOpenAISdkError } from './openAISdkError';
 // Local file imports
 import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
-import { normalizeOpenAIMessageContent } from './openAIMessageUtils';
+import {
+  checkBatchedToolCalls,
+  insertMediaIntoChatUserMessage,
+  normalizeOpenAIMessageContent,
+  prependTextToChatUserMessage,
+} from './openAIMessageUtils';
 import {
   extractOpenAIPartialTail,
   extractReasoningDelta as extractReasoningDeltaFromChunk,
@@ -50,7 +56,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../utils/toolAttachmentUtils';
-import { parseToolArguments } from '../utils/parseArguments';
 import { ModelHandler } from '../ModelHandler';
 import {
   BaseReasoningStreamAggregator,
@@ -108,7 +113,8 @@ export class ModelHandlerOpenAI<
   ExtendedCompletionUsage | null,
   TCall,
   OpenAI,
-  ChatCompletion
+  ChatCompletion,
+  ChatCompletionContentPart
 > {
   // ── Client-side compaction state ──────────────────────────────────────
   /** Tracks prompt_tokens from the last API response for compaction threshold checks. */
@@ -1160,8 +1166,8 @@ export class ModelHandlerOpenAI<
     return this.config.provider;
   }
 
-  protected parseArguments(raw: unknown): unknown {
-    return parseToolArguments(raw, this.logger);
+  protected parseArguments(raw: unknown, callId: string): unknown {
+    return parseToolInput(raw, callId, this.logger);
   }
 
   extractToolUse(responseObject: ChatCompletion): TCall[] {
@@ -1183,7 +1189,7 @@ export class ModelHandlerOpenAI<
       provider: this.toolCallProvider,
       callId: call.id,
       name: call.function.name,
-      input: this.parseArguments(call.function.arguments),
+      input: this.parseArguments(call.function.arguments, call.id),
       raw: call,
     })) as TCall[];
   }
@@ -1312,13 +1318,7 @@ export class ModelHandlerOpenAI<
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    if (calls.length !== results.length) {
-      throw new Error(
-        `Batched tool calls mismatch: ${calls.length} calls vs ${results.length} results`,
-      );
-    }
-
-    if (calls.length === 0) {
+    if (!checkBatchedToolCalls(calls.length, results.length)) {
       return [];
     }
 
@@ -1349,21 +1349,7 @@ export class ModelHandlerOpenAI<
     messages: ChatCompletionMessageParam[],
     text: string,
   ): void {
-    if (!text.trim()) return;
-
-    const lastUserMsg = messages.findLast((m) => m.role === 'user');
-    if (!lastUserMsg || !('content' in lastUserMsg)) return;
-
-    if (typeof lastUserMsg.content === 'string') {
-      lastUserMsg.content = text + lastUserMsg.content;
-    } else if (Array.isArray(lastUserMsg.content)) {
-      const firstTextPart = lastUserMsg.content.find((p) => p.type === 'text');
-      if (firstTextPart && 'text' in firstTextPart) {
-        firstTextPart.text = text + firstTextPart.text;
-      } else {
-        lastUserMsg.content.unshift({ type: 'text', text });
-      }
-    }
+    prependTextToChatUserMessage(messages, text);
   }
 
   /**
@@ -1380,17 +1366,7 @@ export class ModelHandlerOpenAI<
 
     try {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
-      if (typeof lastUserMsg.content === 'string') {
-        lastUserMsg.content = [
-          ...formattedMedia,
-          {
-            type: 'text',
-            text: lastUserMsg.content,
-          } as ChatCompletionContentPart,
-        ];
-      } else if (Array.isArray(lastUserMsg.content)) {
-        lastUserMsg.content.unshift(...formattedMedia);
-      }
+      insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
     } catch (err) {
       logSdkError(
         this.logger,

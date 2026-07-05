@@ -399,9 +399,6 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
-      '@texra/core':
-        specifier: workspace:*
-        version: link:../core
       '@types/markdown-it':
         specifier: ^14.1.2
         version: 14.1.2
@@ -469,12 +466,6 @@ importers:
         specifier: ^10.0.0
         version: 10.0.0
 
-  packages/core:
-    devDependencies:
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/desktop:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
@@ -496,9 +487,6 @@ importers:
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
-      '@texra/core':
-        specifier: workspace:*
-        version: link:../core
       electron:
         specifier: ^43.0.0
         version: 43.0.0

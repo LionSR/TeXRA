@@ -1,7 +1,6 @@
 import path from 'node:path';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // Local imports - shared
@@ -9,6 +8,7 @@ import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - utilities
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Agent + model for the run that produced a file, used to build the
  *  legacy `<base>_<agent>_r<round>_<model>` postfix when accepting a copy. */

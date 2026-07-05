@@ -31,7 +31,6 @@ import {
   RUN_OUTCOME,
   toProviderErrorFromRetry,
   type AgentFileLocation,
-  type EndGroupStatus,
   type RoundOutput,
   type RunOutcome,
   type StorageKey,
@@ -132,7 +131,6 @@ export async function runReflectionFlow<C = unknown>(
 
   const promptBuilder = new PromptBuilder(
     prompt,
-    setting,
     userVarChannels.transient,
     logger,
   );

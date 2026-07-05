@@ -9,10 +9,10 @@ import { gfm } from 'turndown-plugin-gfm';
 import { execa } from 'execa';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
-import * as logger from '@logger/logUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
 

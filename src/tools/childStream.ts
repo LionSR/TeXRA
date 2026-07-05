@@ -13,7 +13,7 @@ import {
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
-import { classifyAgentError, toErrorMessage } from '@common/errors';
+import { classifyAgentError } from '@common/errors';
 
 // Local imports - constants
 import { deriveRunOutcome } from '@common/constants/streamStatus';
@@ -24,6 +24,7 @@ import { RUN_OUTCOME, STREAM_PHASE, STREAM_STATUS } from '@shared/schemas';
 
 // Local imports - utils
 import { formatDuration } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 interface CreateChildStreamOptions {
@@ -80,7 +81,11 @@ export function createChildStream(
   // Capture the run's session at creation (inside the parent run's ALS); the
   // status-update and finalize closures below fire later, possibly outside it.
   const session = currentSession();
-  const runTrace = createRunTrace(childStreamId, undefined, session.flushers);
+  const runTrace = createRunTrace(
+    childStreamId,
+    session.transcripts,
+    session.flushers,
+  );
   const detachSessionTrace = session.attachRunTrace(
     runTrace.trace,
     childStreamId,

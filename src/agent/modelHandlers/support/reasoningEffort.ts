@@ -14,7 +14,7 @@ export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
 };
 
 /** The reasoning-effort values this clamp can emit for the OpenAI APIs. */
-export type OpenAIReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+type OpenAIReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 
 /**
  * Clamp the internal reasoning-effort enum to a value the OpenAI Chat and

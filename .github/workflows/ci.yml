@@ -84,9 +84,6 @@ jobs:
       - name: Type check
         run: pnpm run typecheck
 
-      - name: Type check core package
-        run: pnpm --filter @texra/core typecheck
-
       - name: Lint
         run: pnpm run lint
 

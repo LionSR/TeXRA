@@ -16,7 +16,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
-  StreamStatusRegistry,
+  StreamStatusMachine,
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
@@ -72,7 +72,7 @@ function createLifecycleContext({
 }: {
   executionId: ExecutionId;
   streamId: StreamTabId;
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
   agent?: string;
 }): {
   ctx: AgentLaunchContext;
@@ -155,13 +155,13 @@ function lifecycleFixture(
 ): {
   executionId: ExecutionId;
   streamId: StreamTabId;
-  streamStatus: StreamStatusRegistry;
+  streamStatus: StreamStatusMachine;
   ctx: AgentLaunchContext;
   explicit: ReturnType<typeof createRecordingHost>;
 } {
   const executionId = `execution-${slug}` as ExecutionId;
   const streamId = `stream-${slug}` as StreamTabId;
-  const streamStatus = new StreamStatusRegistry();
+  const streamStatus = new StreamStatusMachine();
   const { ctx, explicit } = createLifecycleContext({
     executionId,
     streamId,

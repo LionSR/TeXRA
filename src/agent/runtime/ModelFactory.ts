@@ -8,7 +8,10 @@ import {
   internalValidationModelHandlerEnvName,
   shouldUseInternalValidationModelHandler,
 } from '@agent/runtime/internalValidationOverride';
-import { isCodexSignedIn, shouldUseCodexSubscription } from '@auth/codex';
+import {
+  isCodexSignedIn,
+  resolveCodexSubscriptionCapabilities,
+} from '@auth/codex';
 import * as logger from '@logger/logUtils';
 import { isGpt5ModelName } from '@model/modelNames';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
@@ -16,12 +19,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
-
-export {
-  MODEL_HANDLER_COMPATIBILITY_KEYS,
-  ModelHandlerCompatibilityKeySchema,
-} from './modelHandlerCompatibilityKey';
-export type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
@@ -435,7 +432,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
   if (
     options.allowCodexSubscriptionOverride &&
     compatibilityKey !== 'ModelHandlerValidation' &&
-    shouldUseCodexSubscription(config, useOpenRouter) &&
+    resolveCodexSubscriptionCapabilities(config, useOpenRouter) &&
     (await isCodexSignedIn())
   ) {
     logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');

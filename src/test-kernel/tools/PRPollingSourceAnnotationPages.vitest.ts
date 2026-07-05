@@ -19,6 +19,10 @@ interface AnnotationFetchSource {
   ): Promise<GhCheckAnnotation[]>;
 }
 
+interface CurrentShaState {
+  pendingAnnotationRuns: GhCheckRun[];
+}
+
 interface AnnotationDrainState {
   pr: { owner: string; repo: string; pullNumber: number };
   slug: string;
@@ -28,7 +32,7 @@ interface AnnotationDrainState {
     typeof noopAgentRuntimeHost
   >;
   annotationLevelByListener: Map<(text: string) => void, 'failure'>;
-  pendingAnnotationRuns: GhCheckRun[];
+  currentShaState: CurrentShaState | undefined;
   lastSuccessAt: number;
   consecutiveFailures: number;
   skipPollUntilMs: number;
@@ -98,7 +102,7 @@ function drainState(runs: GhCheckRun[]): AnnotationDrainState {
     listeners: new Set(),
     runtimeHostByListener: new Map(),
     annotationLevelByListener: new Map(),
-    pendingAnnotationRuns: runs,
+    currentShaState: { pendingAnnotationRuns: runs },
     lastSuccessAt: Date.now(),
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
@@ -174,6 +178,6 @@ describe('PRPollingSource annotation pagination', () => {
     await source.drainAnnotationQueues([['owner/repo#7', state]]);
 
     expect(ghGet).not.toHaveBeenCalled();
-    expect(state.pendingAnnotationRuns).toEqual(runs);
+    expect(state.currentShaState?.pendingAnnotationRuns).toEqual(runs);
   });
 });

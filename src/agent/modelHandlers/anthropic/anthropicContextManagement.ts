@@ -68,7 +68,7 @@ const isCompactionCacheControlBlock = (
 };
 
 /** Options for setting up context management configuration. */
-export interface ContextManagementSetupOptions {
+interface ContextManagementSetupOptions {
   options: MessageCreateParams;
   contextWindow: number;
   thresholdPercent: number;

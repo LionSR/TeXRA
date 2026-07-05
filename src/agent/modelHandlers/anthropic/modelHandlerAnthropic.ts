@@ -185,7 +185,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   BetaUsage,
   AnthropicToolCall,
   Anthropic,
-  BetaMessage
+  BetaMessage,
+  ContentBlockParam
 > {
   /** Tracks PDF page counts for files uploaded to the Anthropic Files API. */
   private uploadedPdfPageCounts = new Map<string, number>();
@@ -776,9 +777,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add media if provided (images and native PDFs)
     if (mediaFiles?.length && this.capabilities.supportsVision) {
-      const formattedMediaContent = (await this.createMediaMessage(
-        mediaFiles,
-      )) as ContentBlockParam[];
+      const formattedMediaContent = await this.createMediaMessage(mediaFiles);
       userMessageContent.push(...formattedMediaContent);
     }
 
@@ -812,9 +811,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Add media if provided (images and native PDFs)
     if (mediaFiles?.length && this.capabilities.supportsVision) {
       try {
-        const formattedMediaContent = (await this.createMediaMessage(
-          mediaFiles,
-        )) as ContentBlockParam[];
+        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
       } catch (err) {
         logSdkError(
@@ -1550,9 +1547,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (!lastUserMsg) return;
 
     try {
-      const formattedMedia = (await this.createMediaMessage(
-        mediaFiles,
-      )) as ContentBlockParam[];
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (typeof lastUserMsg.content === 'string') {
         lastUserMsg.content = [
           ...formattedMedia,
