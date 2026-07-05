@@ -629,9 +629,9 @@ describe('StreamSnapshotStore', () => {
     expect(snap.description).toBe('Prior session');
   });
 
-  // Archived pre-#3061 per-run instruction reader (formerly StreamTabStore.ts,
-  // deleted in #7100 and restored here after review found no supported
-  // retention window had expired — see `readLegacyInstruction`).
+  // `readLegacyInstruction` reads a pre-#3061 tab's original prompt from its
+  // archival runInstructions.json/legacyInstructions.json file; still needed
+  // until the persisted-run retention window guarding those tabs expires.
   describe('readLegacyInstruction', () => {
     it('returns null when no archival file exists', async () => {
       const legacy = await new StreamSnapshotStore().readLegacyInstruction(

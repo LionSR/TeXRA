@@ -716,13 +716,12 @@ describe('ProgressBackend', () => {
     }
   });
 
-  // Regression coverage for a reviewer-flagged possible regression on the
-  // #7100 StreamTabStore.ts deletion: workflow tabs created before the
-  // one-run-per-tab refactor (#3061, 2026-04-19) may only have their initial
-  // user message recorded in the archived `legacyInstructions.json` /
-  // `runInstructions.json` sidecar, not in the stream log itself. There is no
-  // retention policy or GC for `streamData/`, so those tabs are still
-  // supported today and must still hydrate that message at load().
+  // Workflow tabs created before the one-run-per-tab refactor (#3061,
+  // 2026-04-19) may only have their initial user message recorded in the
+  // archived `legacyInstructions.json` / `runInstructions.json` sidecar, not
+  // in the stream log itself. There is no retention policy or GC for
+  // `streamData/`, so those tabs are still supported today and must still
+  // hydrate that message at load().
   describe('legacy per-run instruction backfill (pre-#3061 tabs)', () => {
     async function seedPersistedLogWithoutUserMessage(
       backend: ReturnType<typeof createIsolatedRecordingBackend>['backend'],
