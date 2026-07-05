@@ -1,5 +1,14 @@
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import type {
+  ProgressEvent,
+  ProgressEventBusLike,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import {
   WebviewBridge,
   type ProgressViewMessageSender,
@@ -37,6 +46,45 @@ export interface ProgressBackendOptions {
   session?: SessionHandle;
 }
 
+class LocalProgressEventBus implements ProgressEventBusLike {
+  private readonly listeners = new Map<
+    ProgressEvent,
+    Set<(payload: ProgressEventPayloads[ProgressEvent]) => void>
+  >();
+
+  on<K extends ProgressEvent>(
+    event: K,
+    listener: (payload: ProgressEventPayloads[K]) => void,
+    options?: { signal?: AbortSignal },
+  ): () => void {
+    if (options?.signal?.aborted) return () => {};
+    let listeners = this.listeners.get(event);
+    if (!listeners) {
+      listeners = new Set();
+      this.listeners.set(event, listeners);
+    }
+    listeners.add(
+      listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
+    );
+    const cleanup = (): void => {
+      listeners?.delete(
+        listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
+      );
+    };
+    options?.signal?.addEventListener('abort', cleanup, { once: true });
+    return cleanup;
+  }
+
+  emit<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void {
+    for (const listener of this.listeners.get(event) ?? []) {
+      listener(payload);
+    }
+  }
+}
+
 /**
  * Host-neutral progress-view backend composition.
  *
@@ -49,12 +97,15 @@ export class ProgressBackend {
   readonly webviewUpdater: WebviewUpdater;
   readonly webviewBridge: WebviewBridge;
   readonly eventHandler: ProgressEventHandler;
+  private readonly session: SessionHandle;
+  private readonly localEvents = new LocalProgressEventBus();
 
   constructor(options: ProgressBackendOptions) {
+    this.session = options.session ?? defaultSession();
     this.state = new ProgressViewState(
       options.storage,
       options.snapshots,
-      options.session,
+      this.session,
     );
     this.webviewUpdater = new WebviewUpdater((message) => {
       // View refreshes are best-effort; a closed transport must not take down
@@ -88,8 +139,32 @@ export class ProgressBackend {
     await this.state.load();
   }
 
-  setupEventListeners(bus: ProgressEventBusLike): ProgressEventSubscription {
-    return this.eventHandler.setupEventListeners(bus);
+  setupEventListeners(
+    bus: ProgressEventBusLike,
+    sessionProjectionTarget: AgentRuntimeHost = bus,
+  ): ProgressEventSubscription {
+    const busSubscription = this.eventHandler.setupEventListeners(bus);
+    const localSubscription = this.eventHandler.setupEventListeners(
+      this.localEvents,
+    );
+    const detachProjection = attachLegacyProgressEventProjection(
+      this.session.events,
+      sessionProjectionTarget,
+    );
+    return {
+      dispose: () => {
+        detachProjection();
+        localSubscription.dispose();
+        busSubscription.dispose();
+      },
+    };
+  }
+
+  handleProgressEvent<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void {
+    this.localEvents.emit(event, payload);
   }
 
   dispose(): void {

@@ -9,22 +9,24 @@ import {
   emptyPickerText,
   isUltraCompactPickerRows,
   isUltraCompactTaskDetailRows,
-  moveTaskDetailScrollState,
   pickerKeyHints,
   pickerKeyHintsForColumns,
   pickerTitle,
-  syncTaskDetailScrollState,
   TASK_DETAIL_LABEL_WIDTH,
   taskDetailCommandLabel,
+  taskDetailKeyHintsForColumns,
+} from '@cli/chat/tui/modals/ChildControlPicker';
+import {
+  moveTaskDetailScrollState,
+  syncTaskDetailScrollState,
   taskDetailFollowTailScrollOffsetForColumns,
   taskDetailInitialScrollOffset,
-  taskDetailKeyHintsForColumns,
   taskDetailScrollableOutputRowCountForColumns,
   taskDetailVisibleLineCountFromOffsetForColumns,
   taskDetailVisibleOutputRowsFromOffsetForColumns,
   taskDetailVisibleScrollOffset,
   taskDetailWrappedRowCount,
-} from '@cli/chat/tui/modals/ChildControlPicker';
+} from '@cli/chat/tui/state/taskDetailScroll';
 import {
   buildChildControlItems,
   childElapsed,

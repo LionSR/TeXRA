@@ -225,14 +225,23 @@ function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
     lines.push(`Turn ${turn.turnIndex} · ${turn.timestamp}`);
     if (turn.context) lines.push(`Context: ${turn.context}`);
     lines.push('', 'Q:', turn.question);
-    if (turn.answer) {
-      lines.push('', `A: (answered ${turn.answeredAt ?? '—'})`, turn.answer);
-      if (turn.sessionLinks?.length) {
-        lines.push('', 'Session links:');
-        for (const link of turn.sessionLinks) lines.push(`  - ${link}`);
-      }
-    } else {
-      lines.push('', '(awaiting user answer)');
+    switch (turn.kind) {
+      case 'answered':
+        lines.push('', `A: (answered ${turn.answeredAt})`, turn.answer);
+        if (turn.sessionLinks?.length) {
+          lines.push('', 'Session links:');
+          for (const link of turn.sessionLinks) lines.push(`  - ${link}`);
+        }
+        break;
+      case 'open':
+        lines.push('', '(awaiting user answer)');
+        break;
+      case 'answeredUnhydrated':
+        lines.push(
+          '',
+          '(answer recorded but not yet loaded — reload the thread)',
+        );
+        break;
     }
   }
 
@@ -318,7 +327,13 @@ export class ExternalInquiryTool extends defineTool({
     switch (input.command) {
       case 'ask': {
         const runtimeHost = requireRuntimeHost('inquiry', context);
-        return this.executeAsk({ input, streamId, runtimeHost, executionId });
+        return this.executeAsk({
+          input,
+          streamId,
+          runtimeHost,
+          executionId,
+          session: context?.session,
+        });
       }
       case 'read':
         return this.executeRead({ input, executionId });
@@ -332,8 +347,9 @@ export class ExternalInquiryTool extends defineTool({
     streamId: StreamTabId | undefined;
     runtimeHost: ReturnType<typeof requireRuntimeHost>;
     executionId?: string;
+    session?: SessionHandle;
   }): Promise<ToolResult> {
-    const { input, streamId, runtimeHost, executionId } = args;
+    const { input, streamId, runtimeHost, executionId, session } = args;
     if (!streamId) {
       throw new ToolError(
         'inquiry { command: "ask" } requires an active stream context.',
@@ -404,7 +420,7 @@ export class ExternalInquiryTool extends defineTool({
     // Background Tasks panel: announce the open thread.
     const summary = await getThreadSummary(persisted.threadId);
     if (summary) {
-      runtimeHost.emit('inquiryThreadUpdated', summary);
+      emitRuntimeEvent('inquiryThreadUpdated', summary, session);
     }
 
     const message =

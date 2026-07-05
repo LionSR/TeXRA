@@ -388,7 +388,7 @@ export class ProgressViewProvider
         if (!manifest || manifest.status !== 'open') continue;
         if (!manifest.parentStreamId) continue;
         const lastTurn = manifest.turns.at(-1);
-        if (!lastTurn || lastTurn.answer) continue;
+        if (!lastTurn || lastTurn.kind !== 'open') continue;
         const isFollowUp = manifest.turns.length > 1;
         const sessionLinks = collectKnownSessionLinks(manifest);
         const draft = getOpenTurnDraft(manifest);

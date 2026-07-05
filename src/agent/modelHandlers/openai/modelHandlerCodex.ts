@@ -41,13 +41,13 @@ import {
   isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
 } from '@auth/codex';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
   codexBackendModelId,
   resolveProviderCapabilities,
   type ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
@@ -214,9 +214,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     if (isCodexSubscriptionToolUseOnly() && !this.isToolUseMode()) return null;
     return resolveProviderCapabilities({
       model: this.config,
-      authMode: 'chatgpt-subscription',
       useOpenRouter: false,
-      agentCategory: this.getAgentCategory(),
     });
   }
 

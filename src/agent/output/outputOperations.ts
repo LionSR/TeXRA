@@ -1,6 +1,6 @@
 import type { AgentTrace } from '@agent/trace';
-import { toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES, type MessageType } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Trace levels that the output managers use for recoverable failures. */
 type OutputLogLevel = 'error' | 'warn' | 'debug';

@@ -16,11 +16,11 @@
 import { LRUCache } from 'lru-cache';
 
 import { z } from 'zod';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   SpendingStatusSchema,
   type SpendingStatus,
 } from '@shared/schemas/spendingStatus';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../sharedConfig';
 import {

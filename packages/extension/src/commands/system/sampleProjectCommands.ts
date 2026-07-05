@@ -10,6 +10,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { selectFolder } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
@@ -31,19 +32,15 @@ export async function createSampleProjectWithoutWorkspace(
   extensionPath: string,
 ): Promise<void> {
   try {
-    const picked = await vscode.window.showOpenDialog({
-      canSelectFiles: false,
-      canSelectFolders: true,
-      canSelectMany: false,
+    const parentPath = await selectFolder({
       openLabel: 'Create sample project here',
       title: 'Choose where to create the TeXRA sample project',
     });
-    const parent = picked?.[0];
-    if (!parent) {
+    if (!parentPath) {
       return;
     }
 
-    const dest = path.join(parent.fsPath, 'texra-sample');
+    const dest = path.join(parentPath, 'texra-sample');
     if (await fsExtra.pathExists(dest)) {
       void vscode.window.showInformationMessage(
         'A texra-sample folder already exists there — opening it.',

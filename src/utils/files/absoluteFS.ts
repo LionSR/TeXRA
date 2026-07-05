@@ -8,10 +8,6 @@ import { BaseFS } from './baseFS';
  * Filesystem helper for absolute paths.
  */
 export class AbsoluteFS extends BaseFS {
-  protected static override resolvePath(target: string): string {
-    return target;
-  }
-
   protected static override validateResolvedPath(
     resolvedPath: string,
     original: string,

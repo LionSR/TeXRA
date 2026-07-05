@@ -12,28 +12,43 @@ export interface CommandCatalogEntry {
   icon?: string;
   enablement?: string;
   keybinding?: CommandKeybinding;
+  /**
+   * Set on entries whose VS Code extension registration goes through the
+   * shared `dispatchCommandFromRegistry` handler map (see
+   * `packages/extension/src/commands/extensionCommandHandlers.ts`) rather
+   * than a bespoke `vscode.commands.registerCommand` call elsewhere.
+   * Untagged entries are still valid commands — they're registered
+   * directly by other command modules — this flag only marks membership
+   * in the shared-registry surface so it can be derived instead of hand-
+   * mirrored.
+   */
+  extensionRegistry?: true;
 }
 
 export const commandCatalog = [
   {
     id: 'texra.createSampleProject',
+    extensionRegistry: true,
     title: 'Create Sample Project',
     category: 'TeXRA',
   },
   {
     id: 'texra.runSetupAssistant',
+    extensionRegistry: true,
     title: 'Run Setup Assistant Agent (Setup Wizard)',
     category: 'TeXRA',
     icon: '$(rocket)',
   },
   {
     id: 'texra.openGettingStarted',
+    extensionRegistry: true,
     title: 'Open Getting Started Walkthrough',
     category: 'TeXRA',
     icon: '$(mortar-board)',
   },
   {
     id: 'texra.cleanOutput',
+    extensionRegistry: true,
     title: 'Clean All LLM Output Files (Workspace-wide)',
     shortTitle: 'Clean LLM Outputs',
     category: 'TeXRA',
@@ -46,6 +61,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.cleanBuild',
+    extensionRegistry: true,
     title: 'Clean All Build Files (Workspace-wide)',
     shortTitle: 'Clean Build Files',
     category: 'TeXRA',
@@ -58,6 +74,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.indentTeX',
+    extensionRegistry: true,
     title: 'Indent All LaTeX Files',
     category: 'TeXRA',
     icon: '$(indent)',
@@ -69,6 +86,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.cloneOverleafProject',
+    extensionRegistry: true,
     title: 'Clone Overleaf/ShareLaTeX Project',
     category: 'TeXRA',
     icon: '$(repo-clone)',
@@ -80,6 +98,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.indentCurrentTeX',
+    extensionRegistry: true,
     title: 'Indent Current TeX',
     category: 'TeXRA',
     icon: '$(indent)',
@@ -92,6 +111,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.applyReplacements',
+    extensionRegistry: true,
     title: 'Apply LaTeX Replacements to Current File',
     category: 'TeXRA',
     icon: '$(symbol-text)',
@@ -99,6 +119,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.fixCompilation',
+    extensionRegistry: true,
     title: 'Fix LaTeX Compilation Errors',
     category: 'TeXRA',
     icon: '$(wrench)',
@@ -106,6 +127,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.getTeXCount',
+    extensionRegistry: true,
     title: 'Count Words in Current TeX File',
     category: 'TeXRA',
     icon: '$(symbol-number)',
@@ -113,82 +135,98 @@ export const commandCatalog = [
   },
   {
     id: 'texra.countPdfPages',
+    extensionRegistry: true,
     title: 'Count PDF Pages',
     category: 'TeXRA',
   },
   {
     id: 'texra.encodeImageToBase64',
+    extensionRegistry: true,
     title: 'Encode Image to Base64',
     category: 'TeXRA',
   },
   {
     id: 'texra.convertPdfToImages',
+    extensionRegistry: true,
     title: 'Convert PDF to Images',
     category: 'TeXRA',
   },
   {
     id: 'texra.extractFigurePaths',
+    extensionRegistry: true,
     title: 'Extract Figure Paths from LaTeX',
     category: 'TeXRA',
   },
   {
     id: 'texra.extractTikzFigures',
+    extensionRegistry: true,
     title: 'Extract TikZ Figures from Current File',
     category: 'TeXRA',
   },
   {
     id: 'texra.compileTikzFigures',
+    extensionRegistry: true,
     title: 'Compile TikZ Figures from Current File',
     category: 'TeXRA',
   },
   {
     id: 'texra.testConnection',
+    extensionRegistry: true,
     title: 'Test API Connection',
     category: 'TeXRA',
   },
   {
     id: 'texra.testAgentLoading',
+    extensionRegistry: true,
     title: 'Test Agent Loading',
     category: 'TeXRA',
   },
   {
     id: 'texra.loadSpecificAgent',
+    extensionRegistry: true,
     title: 'Load Specific Agent',
     category: 'TeXRA',
   },
   {
     id: 'texra.downloadArXivSource',
+    extensionRegistry: true,
     title: 'Download arXiv Source',
     category: 'TeXRA',
   },
   {
     id: 'texra.showImportOptions',
+    extensionRegistry: true,
     title: 'Import or Create LaTeX Project',
     category: 'TeXRA',
     icon: '$(cloud-download)',
   },
   {
     id: 'texra.parseXml',
+    extensionRegistry: true,
     title: 'Parse XML Structure',
     category: 'TeXRA',
   },
   {
     id: 'texra.parseYaml',
+    extensionRegistry: true,
     title: 'Parse YAML Structure',
     category: 'TeXRA',
   },
   {
     id: 'texra.stopAgent',
+    extensionRegistry: true,
     title: 'Stop Agent',
     category: 'TeXRA',
   },
   {
     id: 'texra.compactResponse',
+    extensionRegistry: true,
     title: 'Compact Response',
     category: 'TeXRA',
   },
   {
     id: 'texra.execute',
+    extensionRegistry: true,
     title: 'Execute Agent',
     category: 'TeXRA',
     keybinding: {
@@ -213,67 +251,79 @@ export const commandCatalog = [
   },
   {
     id: 'texra.createAgentWithAI',
+    extensionRegistry: true,
     title: 'Create AI Agent',
     category: 'TeXRA',
     icon: '$(sparkle)',
   },
   {
     id: 'texra.setApiKey',
+    extensionRegistry: true,
     title: 'Set API Key',
     category: 'TeXRA',
   },
   {
     id: 'texra.removeApiKey',
+    extensionRegistry: true,
     title: 'Remove API Key',
     category: 'TeXRA',
   },
   {
     id: 'texra.auth.signIn',
+    extensionRegistry: true,
     title: 'Sign In',
     category: 'TeXRA',
     icon: '$(sign-in)',
   },
   {
     id: 'texra.auth.chatgpt.signIn',
+    extensionRegistry: true,
     title: 'Sign In with ChatGPT Subscription',
     category: 'TeXRA',
     icon: '$(comment-discussion)',
   },
   {
     id: 'texra.auth.signOut',
+    extensionRegistry: true,
     title: 'Sign Out',
     category: 'TeXRA',
     icon: '$(sign-out)',
   },
   {
     id: 'texra.auth.viewProfile',
+    extensionRegistry: true,
     title: 'View Profile',
     category: 'TeXRA',
     icon: '$(account)',
   },
   {
     id: 'texra.testTextEditor',
+    extensionRegistry: true,
     title: 'Test Text Editor Tool',
     category: 'TeXRA',
     icon: '$(edit)',
   },
   {
     id: 'texra.showLinterMessages',
+    extensionRegistry: true,
     title: 'Show Linter Messages',
     category: 'TeXRA',
   },
   {
     id: 'texra.countLinterMessages',
+    extensionRegistry: true,
     title: 'Count Linter Messages',
     category: 'TeXRA',
   },
   {
     id: 'texra.openDoc',
+    extensionRegistry: true,
     title: 'Open TeXRA Documentation',
     category: 'TeXRA',
   },
   {
     id: 'texra.mainView.reset',
+    extensionRegistry: true,
     title: 'New Session',
     shortTitle: 'New',
     category: 'TeXRA',
@@ -281,48 +331,56 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showAgentHistory',
+    extensionRegistry: true,
     title: 'Show Agent Execution History',
     category: 'TeXRA',
     icon: '$(history)',
   },
   {
     id: 'texra.showMemory',
+    extensionRegistry: true,
     title: 'Show Memory',
     category: 'TeXRA',
     icon: '$(database)',
   },
   {
     id: 'texra.showModels',
+    extensionRegistry: true,
     title: 'Show Models',
     category: 'TeXRA',
     icon: '$(hubot)',
   },
   {
     id: 'texra.showAgents',
+    extensionRegistry: true,
     title: 'Show Agents',
     category: 'TeXRA',
     icon: '$(symbol-method)',
   },
   {
     id: 'texra.showTools',
+    extensionRegistry: true,
     title: 'Show Tool Dashboard',
     category: 'TeXRA',
     icon: '$(tools)',
   },
   {
     id: 'texra.showMultiAgent',
+    extensionRegistry: true,
     title: 'Show Multi-Agent Settings',
     category: 'TeXRA',
     icon: '$(organization)',
   },
   {
     id: 'texra.showGitSettings',
+    extensionRegistry: true,
     title: 'Show Git Settings',
     category: 'TeXRA',
     icon: '$(git-branch)',
   },
   {
     id: 'texra.openSettings',
+    extensionRegistry: true,
     title: 'Open TeXRA Settings',
     category: 'TeXRA',
     icon: '$(settings-gear)',
@@ -340,6 +398,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showProgressView',
+    extensionRegistry: true,
     title: 'Show Progress',
     category: 'TeXRA',
     icon: '$(eye)',
@@ -351,6 +410,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.toggleView',
+    extensionRegistry: true,
     title: 'Toggle Launcher/Progress View',
     category: 'TeXRA',
     icon: '$(split-horizontal)',
@@ -362,6 +422,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.openProgressViewInTab',
+    extensionRegistry: true,
     title: 'Open Progress in Editor Tab',
     shortTitle: 'Open in Tab',
     category: 'TeXRA',
@@ -369,6 +430,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showDashboard',
+    extensionRegistry: true,
     title: 'Show Settings Dashboard',
     shortTitle: 'Settings',
     category: 'TeXRA',

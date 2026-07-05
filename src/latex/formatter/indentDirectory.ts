@@ -1,11 +1,11 @@
 import * as path from 'node:path';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { EXCLUDED_DIRS } from '@shared/constants/workspaceDirs';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';

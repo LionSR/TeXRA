@@ -139,6 +139,13 @@ export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
   return z.record(z.string(), z.array(valueSchema)).prefault({});
 }
 
+/**
+ * Map keyed by round number to arrays of `T`, e.g. `{ 1: T[], 2: T[], … }`.
+ * Used to batch round-scoped data (output files, missing-output paths,
+ * compile failures) for a subset of rounds without touching the others.
+ */
+export type RoundIndexed<T> = { [round: number]: T[] };
+
 export const RoundOutputSchema = z.strictObject({
   round: z.number(),
   rawOutput: FileLocationSchema.nullable(),
@@ -147,3 +154,56 @@ export const RoundOutputSchema = z.strictObject({
   xmlSummary: OutputXmlSummarySchema,
 });
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;
+
+function displayPath(location: FileLocation): string {
+  return location.kind === 'external'
+    ? location.absolutePath
+    : location.relativePath;
+}
+
+export const OutputFileSummaryFromInfoSchema = OutputFileInfoSchema.transform(
+  (output) => ({
+    round: output.round,
+    relativePath: displayPath(output.location),
+    absolutePath: output.location.absolutePath,
+    location: output.location.kind,
+    originalPath:
+      output.lineage?.diffBase?.absolutePath ??
+      output.lineage?.original?.absolutePath ??
+      null,
+    added: output.diff?.added ?? null,
+    removed: output.diff?.removed ?? null,
+  }),
+).pipe(OutputFileSummarySchema);
+
+export const CompileFailureSummaryFromFailureSchema =
+  CompileFailureSchema.transform((failure) => ({
+    round: failure.round,
+    displayName: failure.displayName,
+    outputPath: displayPath(failure.output),
+    logPath: failure.logRelativePath,
+    logAbsolutePath: failure.log.absolutePath,
+  })).pipe(CompileFailureSummarySchema);
+
+export function roundOutputsToOutputSummaries(
+  roundOutputs: RoundOutput[],
+): OutputFileSummary[] {
+  return roundOutputs.flatMap((roundOutput) =>
+    roundOutput.outputs.map((output) =>
+      OutputFileSummaryFromInfoSchema.parse({
+        ...output,
+        round: roundOutput.round,
+      }),
+    ),
+  );
+}
+
+export function roundOutputsToCompileFailureSummaries(
+  roundOutputs: RoundOutput[],
+): CompileFailureSummary[] {
+  return roundOutputs.flatMap((roundOutput) =>
+    roundOutput.compileFailures.map((failure) =>
+      CompileFailureSummaryFromFailureSchema.parse(failure),
+    ),
+  );
+}
