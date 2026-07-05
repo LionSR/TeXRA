@@ -13,6 +13,7 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import type {
@@ -185,6 +186,10 @@ export async function executeCliRequest(
     defaultSession(),
     runtimeHost,
   );
+  const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
+    defaultSession().events,
+    runtimeHost,
+  );
   const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
     beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
   });
@@ -244,6 +249,7 @@ export async function executeCliRequest(
       await writeTerminalStatus(ownedExecutionId, EXECUTION_STATUS.INTERRUPTED);
     }
     detachResultToast();
+    detachLegacyProgressProjection();
     uninstallApprovalHandlers();
     try {
       flushPendingRunTraces();

@@ -425,14 +425,13 @@ Two independent delivery systems, meeting only at two bridges:
 
 ### Execution cluster as it actually runs
 
-- **Ownership map:** `SessionHandle` (289 lines) composes per-session
-  `InterruptRegistry`, `ExecutionRegistry`, `RunCoordinatorBridge`,
-  `ExecutionSubscriptionBinder` in forced dependency order
-  (`SessionHandle.ts:86-118`); `defaultSession()` aliases the process
-  singletons so unmigrated call sites stay byte-identical. Deliberately NOT
-  session-owned: `StreamStatusService` (shared instance injected into every
-  session), static `ToolUseFollowUpQueue`, `subagentDeliveryRegistry`
-  (explicit rationale comment), `toolInjectionRegistry`.
+- **Ownership map:** `SessionHandle` composes per-session `InterruptRegistry`,
+  `ExecutionRegistry`, `RunCoordinatorBridge`, `ExecutionSubscriptionBinder`,
+  event hub, transcript store, and follow-up queue in forced dependency order;
+  `defaultSession()` aliases the process singletons/default store/default queue
+  so unmigrated call sites stay byte-identical. Deliberately NOT session-owned:
+  `subagentDeliveryRegistry` (explicit rationale comment),
+  `toolInjectionRegistry`.
 - **Lifecycle single-writer (landed):** `runFlowWithLifecycle` is the sole
   owner of RUNNING and of the terminal transition; `RunOutcome` is projected
   through the declarative `RUN_OUTCOME_PROJECTION` table to

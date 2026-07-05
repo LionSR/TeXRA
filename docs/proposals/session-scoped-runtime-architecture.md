@@ -1,7 +1,7 @@
 # Session-scoped runtime architecture: facts, interactions, and status ownership
 
-> **Status:** Partially landed proposal (Stages 0-2 plus Checkpoint A; status
-> refreshed 2026-07-05). Companion to the diagnosis in
+> **Status:** Partially landed proposal (Stages 0-3a plus Checkpoint A; status
+> refreshed by #6964 on 2026-07-05). Companion to the diagnosis in
 > `tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this document is the
 > target design. It covers the event/logger chain, the
 > approval/interaction RPC machinery, stream status, and the execution registries
@@ -18,10 +18,12 @@ The evidence, condensed (file:line references in the audit appendix):
 
 **Genuine cross-session leaks (live bugs in multi-window desktop):**
 
-- L1. `getDefaultStreamLogStore()` is process-global and last-writer-wins
+- L1. Pre-Stage 3a evidence: `getDefaultStreamLogStore()` was process-global and last-writer-wins
   (`ProgressViewState.ts:153` calls `setDefaultStreamLogStore(this.streamLogs)`
-  per window; `runTrace.ts:34` defaults to it). A run's transcript appends to
-  whichever window's store was constructed last.
+  per window; `runTrace.ts:34` defaults to it). A run's transcript appended to
+  whichever window's store was constructed last. Stage 3a (#6964) moves run
+  traces and progress backends onto `session.transcripts`; the default getter
+  remains only as the single-session compatibility path.
 - L2. Desktop re-emits every progress event onto the shared process `bus`
   (`desktopAgentExecution.ts:811`) and every window's backend subscribes to
   that same bus (`:295`). Window A's run events mutate window B's
@@ -51,16 +53,19 @@ The evidence, condensed (file:line references in the audit appendix):
 - The bus's 1000-event pre-subscription buffer exists only because the sink
   subscribes lazily to a process-global emitter; it is a symptom, not a
   feature.
-- Session invariants enforced by comments, not types: the per-session
-  subscription binder reads the process-static streamId-keyed
+- Pre-Stage 3a session invariants were enforced by comments, not types: the
+  per-session subscription binder read the process-static streamId-keyed
   `ToolUseFollowUpQueue` (`SessionHandle.ts:99-104`); `handles`
-  (executionId-keyed) and `InterruptRegistry` (streamTabId-keyed) must be
-  populated in tandem or a stream is discoverable but uninterruptible.
+  (executionId-keyed) and `InterruptRegistry` (streamTabId-keyed) had to be
+  populated in tandem or a stream was discoverable but uninterruptible. Stage 3a
+  moves the binder and tool-use flows onto `session.followUps`; interrupt
+  ownership remains a later stage concern.
 
 **What is already right (build on it, don't replace it):**
 
 - `SessionHandle` is a real composition root (owns per-session
-  interrupts/executions/coordinators/subscriptions) with the
+  interrupts/executions/coordinators/subscriptions plus the Stage 3a
+  events/transcripts/follow-up owners) with the
   `defaultSession()` aliasing strategy proven by the 7d migration.
 - The 12-variant `AgentEvent` trace is a clean one-way fact stream with
   per-run subscribers; `conversationProgressHub` proves the trace→bus
@@ -289,7 +294,9 @@ stop/kill. Changes:
   comment. Same move for `session.transcripts` (per-session `StreamLogStore`;
   the `StreamSnapshotStore` sidecars stay a separate format per audit A6 and
   get the same session scoping): `createRunTrace` takes the store from the
-  launching session, deleting `getDefaultStreamLogStore` and fixing L1.
+  launching session, removing the last-writer-wins path and fixing L1. The
+  default store/queue accessors remain as scheduled single-session
+  compatibility shims until D1.
 - The two read-only methods (`requestManualCompaction`,
   follow-up-target queries where still needed externally) are exposed via
   narrow `Pick<>` interfaces, the pattern the repo already uses twice.
@@ -821,15 +828,16 @@ deleted.
    `restart-repair`/`clear` causes; add the `status` trace arm and make
    `updateStreamStatus` a projection. RunTable stop path switches from
    writing to requesting `cancelled`.
-3. **Session facts + registry facts + run structure.** `SessionFact` channel
-   for the non-run emitters; `child.activity`/`process.output` arms;
-   `session.transcripts` and `session.followUps` instances (fixes L1;
-   deletes the static queue and the binder invariant comment). Also here:
-   the `run.start` `RunDescriptor` arm (retiring `setTaskState` and moving
-   its run-start piggy-backs onto the `→ running` transition from stage 2)
-   and typed round stages (`kind`/`index`/`total`), deleting the
-   `ExecutionProgress` round counters and the round half of
-   `conversationProgress`. The persistence facade lands here too:
+3. **Session facts + registry facts + run structure.** Stage 3a (#6964) lands
+   the `SessionFact` channel for the non-run emitters,
+   `child.activity`/`process.output` arms, and `session.transcripts` /
+   `session.followUps` instances (fixes L1 and deletes the binder invariant
+   comment). Remaining Stage 3 work keeps the same track: the `run.start`
+   `RunDescriptor` arm (retiring `setTaskState` and moving its run-start
+   piggy-backs onto the `→ running` transition from stage 2) and typed round
+   stages (`kind`/`index`/`total`), deleting the `ExecutionProgress` round
+   counters and the round half of `conversationProgress`. The persistence
+   facade lands here too:
    `session.stores` atomic delete + orphan sweep, the single
    `deriveResumability` and shared `repairAfterRestart` primitives (repair
    uses stage 2's `restart-repair` cause), and deletion of the

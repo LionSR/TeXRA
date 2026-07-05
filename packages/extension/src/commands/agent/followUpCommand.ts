@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResumeDetection';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
@@ -71,15 +72,13 @@ async function handleFollowUpResult(
 ): Promise<void> {
   switch (result.status) {
     case 'sent':
-      extensionAgentRuntimeHost.emit('updateQueuedFollowUps', { streamId });
+      emitRuntimeEvent('updateQueuedFollowUps', { streamId });
       break;
     case 'queued':
-      extensionAgentRuntimeHost.emit('updateQueuedFollowUps', { streamId });
+      emitRuntimeEvent('updateQueuedFollowUps', { streamId });
       switch ((await wakeQueuedFollowUpStream(streamId, result)).kind) {
         case 'dropped':
-          extensionAgentRuntimeHost.emit('updateQueuedFollowUps', {
-            streamId,
-          });
+          emitRuntimeEvent('updateQueuedFollowUps', { streamId });
           await vscode.window.showWarningMessage(
             'Message dropped — no session available to receive it. Start a new agent task to continue.',
           );

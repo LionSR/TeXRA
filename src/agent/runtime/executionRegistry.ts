@@ -37,6 +37,7 @@ import {
   isChildExecution,
 } from './ExecutionHandle';
 import { ProcessOutputPoller } from './ProcessOutputPoller';
+import type { SessionEventHub } from './SessionEventHub';
 
 export type { ExecutionHandle } from './ExecutionHandle';
 export {
@@ -140,6 +141,7 @@ export class ExecutionRegistry {
   private readonly processOutput: ProcessOutputPoller;
   private readonly streamStatus: StreamStatusMachine;
   private readonly interrupts: InterruptRegistry;
+  private events: SessionEventHub | undefined;
   // Persistent listeners stay attached across notifications (unlike one-shot
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
   private readonly persistentListeners = new Map<
@@ -151,14 +153,17 @@ export class ExecutionRegistry {
     interrupts = interruptRegistry,
     processOutput = new ProcessOutputPoller(),
     streamStatus = StreamStatusService,
+    events,
   }: {
     readonly interrupts?: InterruptRegistry;
     readonly processOutput?: ProcessOutputPoller;
     readonly streamStatus?: StreamStatusMachine;
+    readonly events?: SessionEventHub;
   } = {}) {
     this.interrupts = interrupts;
     this.processOutput = processOutput;
     this.streamStatus = streamStatus;
+    if (events) this.attachSessionEvents(events);
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). Without this, waitForChange only resolves
     // on progress/kill/untrack, and the background-tasks panel shows stale badges.
@@ -183,6 +188,23 @@ export class ExecutionRegistry {
     );
   }
 
+  attachSessionEvents(events: SessionEventHub): void {
+    this.events = events;
+    this.processOutput.setOutputEmitter((payload) => {
+      events.emit({
+        scope: 'run',
+        streamId: payload.parentStreamId,
+        event: {
+          type: 'process.output',
+          parentStreamId: payload.parentStreamId,
+          executionId: payload.executionId,
+          stdout: payload.stdout,
+          stderr: payload.stderr,
+        },
+      });
+    });
+  }
+
   dispose(): void {
     this.disposeStatusListener();
     const executionIds = [...this.handles.keys()];
@@ -203,7 +225,8 @@ export class ExecutionRegistry {
     if (handle instanceof AgentExecutionHandle) {
       if (handle.isChildExecution) {
         this.emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
-        runtimeHost.emit('setParentStream', {
+        this.emitParentStreamUpdate(runtimeHost, {
+          parentScopeStreamId: handle.parentStreamId,
           childStreamId: handle.childStreamId,
           parentStreamId: handle.parentStreamId,
         });
@@ -570,7 +593,8 @@ export class ExecutionRegistry {
       if (!isChildExecution(handle, parentStreamId)) continue;
       if (handle instanceof AgentExecutionHandle) {
         handle.detach();
-        runtimeHost.emit('setParentStream', {
+        this.emitParentStreamUpdate(runtimeHost, {
+          parentScopeStreamId: parentStreamId,
           childStreamId: handle.childStreamId,
           parentStreamId: null,
         });
@@ -679,9 +703,26 @@ export class ExecutionRegistry {
     parentStreamId: StreamTabId,
     runtimeHost: AgentRuntimeHost,
   ): void {
+    const children = this.collectChildSummary(
+      parentStreamId,
+      AgentExecutionHandle,
+    );
+    if (this.events) {
+      this.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'child.activity',
+          kind: 'subagents',
+          parentStreamId,
+          children,
+        },
+      });
+      return;
+    }
     runtimeHost.emit('updateActiveSubagents', {
       parentStreamId,
-      children: this.collectChildSummary(parentStreamId, AgentExecutionHandle),
+      children,
     });
   }
 
@@ -689,12 +730,53 @@ export class ExecutionRegistry {
     parentStreamId: StreamTabId,
     runtimeHost: AgentRuntimeHost,
   ): void {
+    const processes = this.collectChildSummary(
+      parentStreamId,
+      ProcessExecutionHandle,
+    );
+    if (this.events) {
+      this.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'child.activity',
+          kind: 'processes',
+          parentStreamId,
+          processes,
+        },
+      });
+      return;
+    }
     runtimeHost.emit('updateActiveProcesses', {
       parentStreamId,
-      processes: this.collectChildSummary(
-        parentStreamId,
-        ProcessExecutionHandle,
-      ),
+      processes,
+    });
+  }
+
+  private emitParentStreamUpdate(
+    runtimeHost: AgentRuntimeHost,
+    payload: {
+      readonly parentScopeStreamId: StreamTabId;
+      readonly childStreamId: StreamTabId;
+      readonly parentStreamId: StreamTabId | null;
+    },
+  ): void {
+    if (this.events) {
+      this.events.emit({
+        scope: 'run',
+        streamId: payload.parentScopeStreamId,
+        event: {
+          type: 'child.activity',
+          kind: 'parent',
+          childStreamId: payload.childStreamId,
+          parentStreamId: payload.parentStreamId,
+        },
+      });
+      return;
+    }
+    runtimeHost.emit('setParentStream', {
+      childStreamId: payload.childStreamId,
+      parentStreamId: payload.parentStreamId,
     });
   }
 
