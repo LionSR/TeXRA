@@ -97,7 +97,6 @@ describe('ModelHandlerOpenRouterNative retry ownership', () => {
   it('matches the OpenRouter SDK retry boundary', () => {
     const handler = new ModelHandlerOpenRouterNative(buildConfig());
 
-    assert.equal(handler.usesProviderManagedAutoRetry, true);
     assert.equal(handler.isAutoRetryManagedByProvider(statusError(500)), true);
     assert.equal(handler.isAutoRetryManagedByProvider(statusError(529)), true);
     assert.equal(handler.isAutoRetryManagedByProvider(statusError(429)), false);

@@ -212,7 +212,7 @@ export class ModelHandlerOpenAI<
     return this.createOpenAIClient();
   }
 
-  override get usesProviderManagedAutoRetry(): boolean {
+  override isAutoRetryManagedByProvider(_error: Error): boolean {
     return true;
   }
 
