@@ -7,12 +7,12 @@ import { customElement } from 'lit/decorators.js';
 // Local imports - progress view
 import { hasOutputFiles } from '../stateUtils';
 import { BaseStreamContent } from './BaseStreamContent';
+import { renderStreamHeader } from './streamHeaderView';
 import type { WorkflowStreamState } from '../store';
 
 // Local imports - components
 
 // Side-effect imports - sibling components
-import './StreamHeader';
 import './TaskGroupList';
 import './LogList';
 import './UsagePanel';
@@ -39,15 +39,11 @@ export class WorkflowStreamContent extends BaseStreamContent {
     }
 
     return html`
-      <stream-header
-        .stream=${streamInfo}
-        .status=${state.status}
-        .substate=${state.substate}
-        .progress=${state.conversationProgress}
-        .roundStage=${state.roundStage}
-        .yoloActive=${false}
-        .unsupportedCommands=${this.streamContext.unsupportedCommands}
-      ></stream-header>
+      ${renderStreamHeader(
+        streamInfo,
+        state,
+        this.streamContext.unsupportedCommands,
+      )}
 
       <workflow-hint-banner></workflow-hint-banner>
 
