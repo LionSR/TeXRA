@@ -83,7 +83,6 @@ import {
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
-import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
@@ -476,8 +475,8 @@ export function createDesktopSettingsIpc(
   }
 
   async function openMemoryFolder(): Promise<void> {
-    await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
-    await options.openPath?.(StorageFS.fullPath(MEMORY_STORAGE_ROOT));
+    await StorageFS.ensureDir(resolveMemoryStoragePath());
+    await options.openPath?.(StorageFS.fullPath(resolveMemoryStoragePath()));
   }
 
   async function postHistoryData(): Promise<void> {

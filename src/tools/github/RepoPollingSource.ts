@@ -48,9 +48,11 @@ import {
   formatRepoReviewComment,
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
-import { getNewestTimestamp, trimSet } from './formatUtils';
+import { getNewestTimestamp } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
+  DedupedResource,
+  DEFAULT_POLLING_BACKOFF_CONFIG,
   PollingSourceBase,
   type BasePollSubscriptionState,
 } from './PollingSourceBase';
@@ -83,7 +85,7 @@ const SEED_WINDOW_MS = 60_000;
 // least-recently-used PR on overflow; `.get()`/`.set()` both refresh recency,
 // so closed-and-forgotten PRs roll off before actively-touched ones.
 const MAX_PR_STATE_ENTRIES = 500;
-// Cap on the per-comment seen-id sets, mirroring PRPollingSource. Events
+// Cap on the per-comment dedup resources, mirroring PRPollingSource. Events
 // older than this fall out of the dedup window — but the `since` cursor
 // will normally have advanced past them by then anyway.
 const MAX_SEEN_IDS = 1000;
@@ -122,24 +124,15 @@ interface SubscriptionState extends BasePollSubscriptionState {
    */
   subscribedAt: string;
   /**
-   * ISO timestamps for `since=` filtering on the comments endpoints. Advanced
-   * to the newest seen item after each successful tick so we don't replay
-   * history. The pulls endpoint does NOT support `since` (only `state`,
-   * `head`, `base`, `sort`, `direction`, `per_page`, `page`), so we don't
-   * track a cursor for it.
+   * Per-comment-id dedup plus ISO `since=` cursors for the comments endpoints.
+   * The comments endpoints use `since` with `>=` semantics, so the newest item
+   * per batch reappears every tick; edited comments also resurface with a new
+   * `updated_at`. Without ID tracking the same comment fires "New comment"
+   * repeatedly. The pulls endpoint does NOT support `since`, so PR transitions
+   * are tracked by the per-PR maps below instead.
    */
-  since: {
-    issueComments: string;
-    reviewComments: string;
-  };
-  /**
-   * Per-comment-id dedup. The comments endpoints use `since` with `>=`
-   * semantics, so the newest item per batch reappears every tick; edited
-   * comments also resurface with a new `updated_at`. Without ID-tracking
-   * the same comment fires "New comment" repeatedly. Trimmed to MAX_SEEN_IDS.
-   */
-  seenIssueCommentIds: Set<number>;
-  seenReviewCommentIds: Set<number>;
+  issueComments: DedupedResource<GhIssueComment>;
+  reviewComments: DedupedResource<GhReviewComment>;
   /**
    * Per-PR last-known state, indexed by PR number. Lets us emit a single
    * "opened" / "closed" / "merged" event per transition rather than every
@@ -167,9 +160,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       name: 'RepoPollingSource',
       pollIntervalMs: 30_000,
       maxConcurrent: 3,
-      backoffBaseMs: 60_000,
-      backoffMaxMs: 3_600_000,
-      maxFailureDurationMs: 24 * 3_600_000,
+      ...DEFAULT_POLLING_BACKOFF_CONFIG,
     });
   }
 
@@ -212,8 +203,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     state: SubscriptionState,
   ): Promise<void> {
     const { owner, repo } = state;
-    const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.since.issueComments)}&sort=updated&direction=asc`;
-    const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.since.reviewComments)}&sort=updated&direction=asc`;
+    const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.issueComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
+    const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.reviewComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
     // The /pulls list endpoint does NOT support `since`; we get the top
     // 100 most-recently-updated PRs every tick. The `prStateByNumber`
     // transition tracker is what makes that safe.
@@ -229,41 +220,34 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     // this tick), NEVER throw: pollEntry() resets lastSuccessAt on a normal
     // return, but a throw routes to handleFailure, and a generic failure that
     // persists past maxFailureDurationMs (24 h) DETACHES the live subscription.
-    // Skipping is safe because nothing is mutated yet — the `since` cursors and
-    // prStateByNumber/prUpdatedAtByNumber maps are untouched, comment dedup is
-    // by seen-id Sets, and PR transitions compare prev-vs-next — so the same
-    // window is re-evaluated idempotently next tick.
+    // Skipping is safe because no parsed response has been committed yet: the
+    // DedupedResource instances and PR transition/probe maps are untouched, so
+    // the same window is re-evaluated idempotently next tick.
     if (issueRes.status === 200) {
-      const parsed = GhIssueCommentArraySchema.safeParse(issueRes.data);
-      if (!parsed.success) {
-        this.logger.warn(
-          `Skipping ${owner}/${repo} tick: issue-comments payload failed validation`,
-          { data: parsed.error },
-        );
-        return;
-      }
+      const parsed = this.validateOrSkip(
+        issueRes,
+        GhIssueCommentArraySchema,
+        `Skipping ${owner}/${repo} tick: issue-comments payload failed validation`,
+      );
+      if (!parsed) return;
       issueRes.data = parsed.data;
     }
     if (reviewRes.status === 200) {
-      const parsed = GhReviewCommentArraySchema.safeParse(reviewRes.data);
-      if (!parsed.success) {
-        this.logger.warn(
-          `Skipping ${owner}/${repo} tick: review-comments payload failed validation`,
-          { data: parsed.error },
-        );
-        return;
-      }
+      const parsed = this.validateOrSkip(
+        reviewRes,
+        GhReviewCommentArraySchema,
+        `Skipping ${owner}/${repo} tick: review-comments payload failed validation`,
+      );
+      if (!parsed) return;
       reviewRes.data = parsed.data;
     }
     if (pullsRes.status === 200) {
-      const parsed = GhPullsListEntryArraySchema.safeParse(pullsRes.data);
-      if (!parsed.success) {
-        this.logger.warn(
-          `Skipping ${owner}/${repo} tick: pulls-list payload failed validation`,
-          { data: parsed.error },
-        );
-        return;
-      }
+      const parsed = this.validateOrSkip(
+        pullsRes,
+        GhPullsListEntryArraySchema,
+        `Skipping ${owner}/${repo} tick: pulls-list payload failed validation`,
+      );
+      if (!parsed) return;
       pullsRes.data = parsed.data;
     }
 
@@ -281,14 +265,10 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
         }
       }
       if (issueRes.status === 200) {
-        for (const c of issueRes.data) state.seenIssueCommentIds.add(c.id);
-        const newest = getNewestTimestamp(issueRes.data);
-        if (newest) state.since.issueComments = newest;
+        state.issueComments.seed(issueRes.data);
       }
       if (reviewRes.status === 200) {
-        for (const c of reviewRes.data) state.seenReviewCommentIds.add(c.id);
-        const newest = getNewestTimestamp(reviewRes.data);
-        if (newest) state.since.reviewComments = newest;
+        state.reviewComments.seed(reviewRes.data);
       }
       state.initialized = true;
       return;
@@ -324,31 +304,21 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     }
 
     if (issueRes.status === 200) {
-      for (const c of issueRes.data) {
-        if (state.seenIssueCommentIds.has(c.id)) continue;
-        state.seenIssueCommentIds.add(c.id);
+      state.issueComments.diff(issueRes.data, (c) => {
         const number = parseTargetNumberFromIssueUrl(c);
-        if (number === undefined) continue;
-        if (shouldDropBotEvent(c.user)) continue;
+        if (number === undefined) return;
+        if (shouldDropBotEvent(c.user)) return;
         this.emit(state, formatRepoIssueComment(state.slug, number, c));
-      }
-      trimSet(state.seenIssueCommentIds, MAX_SEEN_IDS);
-      const newest = getNewestTimestamp(issueRes.data);
-      if (newest) state.since.issueComments = newest;
+      });
     }
 
     if (reviewRes.status === 200) {
-      for (const c of reviewRes.data) {
-        if (state.seenReviewCommentIds.has(c.id)) continue;
-        state.seenReviewCommentIds.add(c.id);
+      state.reviewComments.diff(reviewRes.data, (c) => {
         const prNumber = parsePRNumberFromReviewCommentUrl(c.html_url);
-        if (prNumber === undefined) continue;
-        if (shouldDropBotEvent(c.user)) continue;
+        if (prNumber === undefined) return;
+        if (shouldDropBotEvent(c.user)) return;
         this.emit(state, formatRepoReviewComment(state.slug, prNumber, c));
-      }
-      trimSet(state.seenReviewCommentIds, MAX_SEEN_IDS);
-      const newest = getNewestTimestamp(reviewRes.data);
-      if (newest) state.since.reviewComments = newest;
+      });
     }
     // Bare APPROVED/DISMISSED reviews without comments aren't surfaced — they
     // live only on /pulls/{n}/reviews, which is per-PR. An orchestrator that
@@ -491,12 +461,18 @@ function createInitialState(owner: string, repo: string): SubscriptionState {
     runtimeHostByListener: new Map(),
     initialized: false,
     subscribedAt: new Date(now).toISOString(),
-    since: {
-      issueComments: seed,
-      reviewComments: seed,
-    },
-    seenIssueCommentIds: new Set(),
-    seenReviewCommentIds: new Set(),
+    issueComments: new DedupedResource<GhIssueComment>({
+      getId: (comment: GhIssueComment) => comment.id,
+      getCursor: getNewestTimestamp,
+      maxSeenIds: MAX_SEEN_IDS,
+      sinceCursor: seed,
+    }),
+    reviewComments: new DedupedResource<GhReviewComment>({
+      getId: (comment: GhReviewComment) => comment.id,
+      getCursor: getNewestTimestamp,
+      maxSeenIds: MAX_SEEN_IDS,
+      sinceCursor: seed,
+    }),
     prStateByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
     prUpdatedAtByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
     prMergeableByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),

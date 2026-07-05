@@ -20,12 +20,6 @@ import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
-export {
-  MODEL_HANDLER_COMPATIBILITY_KEYS,
-  ModelHandlerCompatibilityKeySchema,
-} from './modelHandlerCompatibilityKey';
-export type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
-
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
 
