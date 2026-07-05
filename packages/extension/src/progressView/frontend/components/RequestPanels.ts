@@ -27,7 +27,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import {
   commonViewStyles,
   designTokens,
-  requestPanelStyles,
+  requestPanelSharedStyles,
 } from '@shared/styles';
 
 // Local imports - progress view helpers
@@ -123,7 +123,11 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
 
 @customElement('request-panels')
 export class RequestPanels extends LitElement {
-  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    requestPanelSharedStyles,
+  ];
 
   @property({ attribute: false }) permissions: PermissionState[] = [];
 

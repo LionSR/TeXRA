@@ -15,7 +15,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import {
   commonViewStyles,
   designTokens,
-  requestPanelStyles,
+  requestPanelSharedStyles,
 } from '@shared/styles';
 
 // Local imports - shared schemas
@@ -30,9 +30,17 @@ import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 // Local imports - helpers
 import { monacoLanguageForPath } from './monacoLanguage';
 
+// Local imports - styles
+import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
+
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseFeedbackPanel<'toolEdit'> {
-  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    requestPanelSharedStyles,
+    toolEditRequestPanelStyles,
+  ];
 
   @state() private inlineDiffOpen = false;
 
