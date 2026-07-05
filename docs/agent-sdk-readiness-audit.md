@@ -1,5 +1,9 @@
 # Agent SDK Readiness Audit
 
+> **Packaging note (2026-07-05):** #7099 later demotes/deletes the unused
+> `@texra/core` package. Mentions below are historical audit observations, not
+> current workspace layout.
+
 _Audit date: 2026-05-28 · Re-verified through 2026-07-04 (§26) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, `src/platform/**`, `packages/core/src/**`, plus extension/CLI entrypoints._
 
 This is a **review + refactoring plan**, not an applied refactor. It identifies the
