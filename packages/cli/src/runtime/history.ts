@@ -255,6 +255,19 @@ export function resolveCliHistoryExportAssetsHref(
   return trimmed ? trimmed : undefined;
 }
 
+/**
+ * True when `href` names a remote location (has a URL scheme, e.g.
+ * `https://cdn/assets`) rather than a filesystem path. There is nothing to
+ * stage for a remote href — the caller manages that location themselves.
+ * A bare relative/absolute filesystem path (`./assets`, `assets`,
+ * `/abs/path`) is never mistaken for one: it has no `scheme://` prefix.
+ */
+export function isRemoteCliHistoryExportAssetsHref(
+  href: string | undefined,
+): boolean {
+  return href !== undefined && /^[a-z][a-z\d+.-]*:\/\//i.test(href);
+}
+
 const HTML_EXPORT_ASSET_DIR_NAME = 'htmlExport';
 
 /**
@@ -264,9 +277,13 @@ const HTML_EXPORT_ASSET_DIR_NAME = 'htmlExport';
  * document's `./assets` href for real, instead of linking to a folder that
  * was never created.
  *
- * Only called for the *default* assets href: an explicit `--assets <href>`
- * means the caller is pointing at a location (local folder or CDN URL) they
- * manage themselves, so nothing is staged for them.
+ * Called for the default href *and* any explicit local `--assets <href>`
+ * (including one that happens to spell out the documented default, e.g.
+ * `--assets ./assets`) — `fs.cp`'s recursive copy merges into an existing
+ * `destDir` rather than nesting under it, so staging is safe to repeat and
+ * safe against a `destDir` that already has unrelated content. Only a
+ * genuinely remote href (see {@link isRemoteCliHistoryExportAssetsHref})
+ * skips staging, since the caller manages that location themselves.
  *
  * Returns `'missing'` (without throwing) when the CLI install doesn't have
  * the bundled assets — e.g. a dev checkout where `copy:resources` hasn't run
