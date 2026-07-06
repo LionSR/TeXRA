@@ -1360,8 +1360,9 @@ describe('CLI history runtime', () => {
                   '<relative-path-to-the-redirected-file>',
                 );
                 expect(stderr).toContain(
-                  `Wrote trace JSON for a1 to stdout. Save the output to a ` +
-                    `file, then open ${destDir}/index.html?trace=<your-filename>.`,
+                  `Wrote trace JSON for a1 to stdout. Save the output to ` +
+                    `${path.join(destDir, 'trace.json')}, then open ` +
+                    `${destDir}/index.html?trace=trace.json.`,
                 );
               },
             );
