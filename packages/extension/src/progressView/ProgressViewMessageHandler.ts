@@ -16,6 +16,7 @@ import { ProgressWorkflowActionsController } from '@controllers/progressView/Pro
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   validateExecutionRequest,
@@ -101,6 +102,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     context: vscode.ExtensionContext,
     private readonly host: PromptHost,
     private readonly coordinators: ProgressViewCoordinatorBridge,
+    private readonly interactions: HostInteractions,
   ) {
     super('ProgressView', { trackActiveView: true });
 
@@ -263,11 +265,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             return true;
           },
           handleBashApprovalAction: (message) =>
-            handleProgressViewBashApprovalAction(message),
+            this.handleBashApprovalAction(message),
           handlePlanApprovalAction: (message) =>
             this.handlePlanApprovalAction(message),
           handleUserQuestionAction: (message) =>
-            handleUserQuestionAction(message),
+            this.handleUserQuestionAction(message),
           handleAgentProposalAction: (message) =>
             this.agentProposalController.handleAction(message),
         },
@@ -294,7 +296,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
         this.handleRetryStreamRequest(data),
       [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) => {
-        this.coordinators.cancelRetry(data.stream);
+        this.handleCancelRetryRequest(data);
       },
       [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: (data) =>
         this.handleUseOwnApiKey(data),
@@ -588,7 +590,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         );
       },
       resolveProposal: (proposalId, result) => {
-        this.coordinators.resolveProposal(proposalId, result);
+        const resolved = this.interactions.resolve(proposalId, {
+          kind: 'proposal',
+          action: result.action,
+          value: result,
+        });
+        if (!resolved) {
+          this.coordinators.resolveProposal(proposalId, result);
+        }
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -685,12 +694,66 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRetryStreamRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
   ): Promise<void> {
+    if (
+      this.interactions.resolve(data.stream, {
+        kind: 'retry',
+        action: 'retry',
+        feedback: data.feedback,
+      })
+    ) {
+      return;
+    }
     const success = this.coordinators.triggerRetry(data.stream, data.feedback);
     if (!success) {
       await this.host.info(
         'No retryable request is available for this stream yet.',
       );
     }
+  }
+
+  private handleCancelRetryRequest(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST>,
+  ): void {
+    if (
+      this.interactions.resolve(data.stream, {
+        kind: 'retry',
+        action: 'cancel',
+      })
+    ) {
+      return;
+    }
+    this.coordinators.cancelRetry(data.stream);
+  }
+
+  private handleBashApprovalAction(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION>,
+  ): Promise<void> | void {
+    if (
+      this.interactions.resolve(data.requestId, {
+        kind: 'bash',
+        action: data.action,
+        feedback: data.feedback,
+      })
+    ) {
+      return;
+    }
+    return handleProgressViewBashApprovalAction(data);
+  }
+
+  private handleUserQuestionAction(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION>,
+  ): Promise<void> | void {
+    if (
+      this.interactions.resolve(data.requestId, {
+        kind: 'userQuestion',
+        action: data.action,
+        value: data.answers,
+        feedback: data.feedback,
+      })
+    ) {
+      return;
+    }
+    return handleUserQuestionAction(data);
   }
 
   private async handleUseOwnApiKey(
@@ -792,6 +855,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION>,
   ): void {
     const { approvalId, action } = data;
+    if (
+      this.interactions.resolve(approvalId, {
+        kind: 'plan',
+        action,
+        feedback: data.feedback,
+      })
+    ) {
+      return;
+    }
     switch (action) {
       case 'approve':
         this.coordinators.resolvePlanApproval(approvalId, {
