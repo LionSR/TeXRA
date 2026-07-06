@@ -15,7 +15,10 @@ import { z } from 'zod';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  sendFollowUp,
+  wakeQueuedFollowUpStream,
+} from '@agent/followUp/ToolUseFollowUp';
 
 // Local imports - tools
 import {
@@ -51,6 +54,7 @@ import {
   WorkflowAgentInputSchema,
   type WorkflowAgentInput,
 } from './delegation/inputFields';
+import { getNativeSubagentStrategy } from './delegation/nativeSubagentStrategy';
 
 export { rejectOversizedBibAttachments } from './delegation/inputFields';
 export type { WorkflowAgentInput };
@@ -256,7 +260,8 @@ Git worktree support: resolved from the active workspace at runtime.`,
     const gated = depthGateError(parentDelegationDepth);
     if (gated) return gated;
 
-    const handle = currentSession().executions.getHandle(executionId);
+    const session = currentSession();
+    const handle = session.executions.getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
       throw new Error(
         `Execution '${executionId}' not found or not an agent execution. Use the executions tool to check status.`,
@@ -294,10 +299,28 @@ Git worktree support: resolved from the active workspace at runtime.`,
 
     const framedInstruction = formatFollowUpInstruction(instruction);
     const result = await sendFollowUp(handle.childStreamId, framedInstruction);
+    if (result.status !== 'no_session') {
+      deliveryState.markPending();
+    }
+
+    const nativeStrategy = getNativeSubagentStrategy(executionId);
+    if (nativeStrategy) {
+      await nativeStrategy.wakeQueuedFollowUp(result, {
+        approvalPromptsUnavailable: parentContext?.approvalPromptsUnavailable,
+        runtimeUnavailableTools: parentContext?.runtimeUnavailableTools,
+        toolEditApprovalHandler: parentContext?.toolEditApprovalHandler,
+      });
+    } else {
+      await wakeQueuedFollowUpStream(
+        handle.childStreamId,
+        result,
+        undefined,
+        session,
+      );
+    }
 
     switch (result.status) {
       case 'sent':
-        deliveryState.markPending();
         return {
           status: 'executed',
           summary: `Follow-up sent to '${handle.agentName}'`,
@@ -307,7 +330,6 @@ Git worktree support: resolved from the active workspace at runtime.`,
           ].join('\n'),
         };
       case 'queued':
-        deliveryState.markPending();
         return {
           status: 'executed',
           summary: `Follow-up queued for '${handle.agentName}'`,
