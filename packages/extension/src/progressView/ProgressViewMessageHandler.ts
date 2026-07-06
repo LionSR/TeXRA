@@ -17,6 +17,7 @@ import { ProgressWorkflowFileActionsController } from '@controllers/progressView
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   validateExecutionRequest,
@@ -45,7 +46,7 @@ import {
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
-import { GoalStore } from '@tools/goal';
+import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import {
   createExternalLocation,
   flexibleFS,
@@ -130,14 +131,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
     context.subscriptions.push({ dispose: unsubscribeRemoveStream });
 
-    const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
-      const goal = GoalStore.getForStream(streamId);
-      this.provider.webviewUpdater.updateGoalActive(
-        streamId,
-        isGoalInFlight(goal),
-        { status: goal?.status, objective: goal?.objective },
-      );
-    });
+    const unsubscribeGoal = subscribeGoalStateChanges(
+      defaultSession(),
+      ({ streamId }) => {
+        const goal = GoalStore.getForStream(streamId);
+        this.provider.webviewUpdater.updateGoalActive(
+          streamId,
+          isGoalInFlight(goal),
+          { status: goal?.status, objective: goal?.objective },
+        );
+      },
+    );
     context.subscriptions.push({ dispose: unsubscribeGoal });
   }
 
