@@ -101,6 +101,7 @@ export class ProgressEventHandler {
     this.state.clearStreamHints(streamId);
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetFinishedChildCounters(streamId);
+    this.pendingProgressUpdates.delete(streamId);
     this.state.pruneInterruptHandles();
 
     if (this.state.activeStream === streamId) {
