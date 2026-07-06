@@ -184,13 +184,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     });
   }
 
-  /**
-   * Whether this handler supports native token counting.
-   * Uses Google's countTokens endpoint for exact pre-flight counts.
-   */
-  override get supportsTokenCounting(): boolean {
-    return this.capabilities.supportsTokenCounting;
-  }
+  // supportsTokenCounting (Google's countTokens endpoint for exact
+  // pre-flight counts) is now the base class's default: it reads the
+  // llm-zoo `supportsTokenCounting` capability flag directly, so this
+  // handler no longer needs to re-forward it (#7101).
 
   /**
    * Gemini carries thought signatures across parallel function calls, which must
