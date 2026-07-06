@@ -96,6 +96,7 @@ import {
   createDesktopToolEditApprovalController,
   type DesktopToolEditApprovalController,
 } from './desktopToolEditApproval.js';
+import { createDesktopHostInteractions } from './desktopHostInteractions.js';
 import {
   DesktopProgressFileActions,
   type DesktopLatexdiffRunContext,
@@ -228,6 +229,8 @@ export class DesktopProgressBridge {
    * execution running anywhere" checks use `getAllActiveExecutionIds()`.
    */
   private readonly session: SessionHandle;
+  /** Detaches this window's concrete host interaction implementation. */
+  private readonly detachHostInteractions: () => void;
   /** Detaches the session→toast consumer; called on dispose. */
   private detachResultToast: (() => void) | undefined;
 
@@ -235,10 +238,21 @@ export class DesktopProgressBridge {
     private readonly postToRenderer: (message: unknown) => boolean | void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
-    this.runtimeHost = {
+    const hostChannel: AgentRuntimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
     };
-    this.session = new SessionHandle({ hostChannel: this.runtimeHost });
+    this.session = new SessionHandle({ hostChannel });
+    this.runtimeHost = {
+      ...hostChannel,
+      interactions: this.session.interactions,
+    };
+    this.detachHostInteractions = this.session.useHostInteractions(
+      createDesktopHostInteractions({
+        runtimeHost: this.runtimeHost,
+        getApprovalHandlers: () => this.approvalHandlers,
+        getToolEditApprovals: () => this.toolEditApprovals,
+      }),
+    );
     setProgressViewBridge({ isViewVisible: () => true });
     this.backend = new ProgressBackend({
       session: this.session,
@@ -454,7 +468,14 @@ export class DesktopProgressBridge {
         return true;
       },
       resolveProposal: (proposalId, result) => {
-        this.session.coordinators.resolveProposal(proposalId, result);
+        const resolved = this.session.interactions.resolve(proposalId, {
+          kind: 'proposal',
+          action: result.action,
+          value: result,
+        });
+        if (!resolved) {
+          this.session.coordinators.resolveProposal(proposalId, result);
+        }
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -537,17 +558,46 @@ export class DesktopProgressBridge {
           });
         },
         handleBashApprovalAction: (message) =>
-          handleProgressViewBashApprovalAction(message),
-        handlePlanApprovalAction: (message) => {
-          this.session.coordinators.resolvePlanApproval(message.approvalId, {
+          this.session.interactions.resolve(message.requestId, {
+            kind: 'bash',
             action: message.action,
-            ...(message.action === 'reject' && {
-              feedback: message.feedback,
-            }),
-          });
+            feedback: message.feedback,
+          }) || handleProgressViewBashApprovalAction(message),
+        handlePlanApprovalAction: (message) => {
+          const resolved = this.session.interactions.resolve(
+            message.approvalId,
+            {
+              kind: 'plan',
+              action: message.action,
+              ...(message.action === 'reject' && {
+                feedback: message.feedback,
+              }),
+            },
+          );
+          if (!resolved) {
+            this.session.coordinators.resolvePlanApproval(message.approvalId, {
+              action: message.action,
+              ...(message.action === 'reject' && {
+                feedback: message.feedback,
+              }),
+            });
+          }
         },
-        handleUserQuestionAction: (message) =>
-          handleUserQuestionAction(message),
+        handleUserQuestionAction: (message) => {
+          const resolved = this.session.interactions.resolve(
+            message.requestId,
+            {
+              kind: 'userQuestion',
+              action: message.action,
+              value: message.answers,
+              feedback: message.feedback,
+            },
+          );
+          if (!resolved) {
+            return handleUserQuestionAction(message);
+          }
+          return undefined;
+        },
         handleAgentProposalAction: (message) =>
           this.agentProposalController.handleAction(message),
       },
@@ -653,6 +703,7 @@ export class DesktopProgressBridge {
 
   dispose(): void {
     this.detachResultToast?.();
+    this.detachHostInteractions();
     this.toolEditApprovals.dispose();
     this.unsubscribe();
     this.backend.dispose();
