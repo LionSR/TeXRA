@@ -1100,7 +1100,7 @@ export class DesktopProgressBridge {
     // empty streamId) — the per-stream loop skips them because they do not
     // equal any StreamTabId. Scope this to THIS window's runtime host so a
     // sibling window's streamless approval is not rejected.
-    cleanupUnscopedApprovals(this.runtimeHost);
+    cleanupUnscopedApprovals(this.runtimeHost, this.session);
     // Child/subagent coordinator requests may be session-owned without a local
     // desktop stream entry, so clear the owning window's coordinator bridge
     // after the visible per-stream sweep. This is session-scoped and does not

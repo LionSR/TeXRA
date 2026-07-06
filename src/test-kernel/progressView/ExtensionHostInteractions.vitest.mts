@@ -151,6 +151,32 @@ describe('createExtensionHostInteractions', () => {
     expect(interactions.pending()).toEqual([]);
   });
 
+  it('cancels streamless user questions during unscoped cleanup', async () => {
+    const handlers = createHandlers();
+    const interactions = createExtensionHostInteractions({
+      runtimeHost: createRuntimeHost(),
+      getApprovalHandlers: () => handlers,
+    });
+
+    const resultPromise = interactions.askUserQuestion?.({
+      requestId: 'question-a',
+      questions: [
+        {
+          question: 'Which normalization should be used?',
+          options: [{ label: 'Unit volume' }, { label: 'Unit mass' }],
+        },
+      ],
+      allowBypass: false,
+      streamId: '',
+    });
+
+    interactions.cancelUnscoped?.('No stream owns this question.');
+
+    await expect(resultPromise).resolves.toEqual({ submitted: false });
+    expect(handlers.userQuestion.resolve).toHaveBeenCalledWith('question-a');
+    expect(interactions.pending()).toEqual([]);
+  });
+
   it('delegates tool edit approval to the native VS Code port', async () => {
     const nativeResult = { accepted: true };
     mocks.nativeRequestApproval.mockResolvedValue(nativeResult);
