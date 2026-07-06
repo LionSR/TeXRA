@@ -204,7 +204,7 @@ describe('formatChatAsMarkdown', () => {
 
     assert.ok(
       markdown.includes(
-        '- [safe result](https://example.com/a%29%20%5Bpwn%5D%28javascript:alert%281%29%29)',
+        '- [safe result](https://example.com/a%29%20[pwn]%28javascript:alert%281%29%29)',
       ),
     );
     assert.ok(
@@ -213,6 +213,30 @@ describe('formatChatAsMarkdown', () => {
       ),
     );
     assert.doesNotMatch(markdown, /\]\(javascript:/);
+  });
+
+  it('preserves IPv6 host brackets in Markdown link destinations', () => {
+    const url = 'http://[::1]:8080/path';
+    const markdown = formatChatAsMarkdown({
+      timestamp: '2026-01-01T00:00:00.000Z',
+      config: {},
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'web_search_tool_result',
+              content: [{ type: 'web_search_result', title: 'ipv6', url }],
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.ok(
+      markdown.includes('- [ipv6](http://[::1]:8080/path)'),
+      `expected IPv6 brackets preserved, got: ${markdown}`,
+    );
   });
 
   it('sanitizes web tool URLs before rendering LaTeX links', () => {

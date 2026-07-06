@@ -61,7 +61,13 @@ const ATTACHMENT_LABELS: Record<string, string> = {
 };
 
 const MARKDOWN_TEXT_ESCAPE_RE = /[\\[\]()<>!]/g;
-const MARKDOWN_URL_DESTINATION_ESCAPE_RE = /[\\[\]()<> \t\r\n]/g;
+// No `[`/`]` here (unlike MARKDOWN_TEXT_ESCAPE_RE above): CommonMark's
+// bare-form link destination grammar restricts only unescaped/unbalanced
+// parentheses, ASCII space, and control characters — square brackets have
+// no special meaning inside `(...)`. Percent-encoding them anyway breaks
+// legitimate IPv6 literal hosts like `http://[::1]/`, whose brackets are
+// required syntax, not markdown syntax.
+const MARKDOWN_URL_DESTINATION_ESCAPE_RE = /[\\()<> \t\r\n]/g;
 
 function escapeMarkdownText(text: string): string {
   return text.replaceAll(MARKDOWN_TEXT_ESCAPE_RE, (ch) => `\\${ch}`);
