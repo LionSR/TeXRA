@@ -5,15 +5,23 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import {
+  RUN_DESCRIPTOR_SCHEMA_VERSION,
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+  type TodoItem,
+} from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
+import { StorageFS } from '@utils/files';
 
 import { createRecordingHost } from '../agent/progressTestUtils';
 
@@ -69,6 +77,40 @@ async function withTempWorkspace(
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
+}
+
+/** Installs a real filesystem-backed storage root for sidecar persistence tests. */
+async function withTempStorage(run: () => Promise<void>): Promise<void> {
+  const root = await mkdtemp(path.join(tmpdir(), 'texra-exec-storage-'));
+  try {
+    await installPlatform(
+      {
+        workspacePath: path.join(root, 'workspace'),
+        storagePath: path.join(root, 'storage'),
+      },
+      { fs: nodeFilesystem },
+    );
+    await run();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function writeSidecarTodos(
+  streamId: StreamTabId,
+  executionId: ExecutionId,
+  todos: TodoItem[],
+): Promise<void> {
+  const snapshots = new StreamSnapshotStore();
+  snapshots.setTodos(streamId, todos);
+  await snapshots.flush();
+  await StorageFS.write(
+    path.join(streamDataDir(streamId), 'meta.json'),
+    JSON.stringify({
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId,
+    }),
+  );
 }
 
 describe('ExecutionsTool', () => {
@@ -223,6 +265,56 @@ describe('ExecutionsTool', () => {
     expect(reportResult.output).toBe(
       '<subagent-result>full report</subagent-result>',
     );
+  });
+
+  it('reads completed summary todos from stream sidecars before legacy KV todos', async () => {
+    await withTempStorage(async () => {
+      const executionId = 'abc123' as ExecutionId;
+      const streamId = `codex#${executionId}` as StreamTabId;
+      await writeSidecarTodos(streamId, executionId, [
+        {
+          content: 'Read the sidecar work plan',
+          status: 'in_progress',
+          activeForm: 'Reading the sidecar work plan',
+        },
+      ]);
+      mocks.readMeta.mockResolvedValue({
+        timestamp: '2026-06-15T09:36:02.345Z',
+        category: 'toolUse',
+      });
+      mocks.readConfig.mockResolvedValue(config);
+      mocks.readTodos.mockResolvedValue([
+        { content: 'Read the old KV todo', status: 'pending' },
+      ]);
+
+      const result = await new ExecutionsTool().call({
+        path: `/executions/${executionId}`,
+      });
+
+      expect(result.output).toContain('Read the sidecar work plan');
+      expect(result.output).not.toContain('Read the old KV todo');
+      expect(mocks.readTodos).not.toHaveBeenCalled();
+    });
+  });
+
+  it('falls back to legacy KV todos when completed summary sidecars are absent', async () => {
+    await withTempStorage(async () => {
+      mocks.readMeta.mockResolvedValue({
+        timestamp: '2026-06-15T09:36:02.345Z',
+        category: 'toolUse',
+      });
+      mocks.readConfig.mockResolvedValue(config);
+      mocks.readTodos.mockResolvedValue([
+        { content: 'Read the old KV todo', status: 'pending' },
+      ]);
+
+      const result = await new ExecutionsTool().call({
+        path: '/executions/abc123',
+      });
+
+      expect(result.output).toContain('Read the old KV todo');
+      expect(mocks.readTodos).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('lists and reads persisted workspace files for tool-use executions', async () => {
