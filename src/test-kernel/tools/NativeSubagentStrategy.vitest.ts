@@ -37,12 +37,18 @@ vi.mock('@tools/childRunDelivery', () => ({
 }));
 
 import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
-import { NativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
+import {
+  getNativeSubagentStrategy,
+  NativeSubagentStrategy,
+} from '@tools/delegation/nativeSubagentStrategy';
 
 describe('NativeSubagentStrategy', () => {
   const executionId = 'exec-1' as ExecutionId;
   const parentStreamId = 'parent-stream' as StreamTabId;
-  const ownerSession = { tag: 'owner-session' } as never;
+  const ownerSession = {
+    tag: 'owner-session',
+    executions: { addListener: vi.fn(() => vi.fn()) },
+  } as never;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -252,5 +258,100 @@ describe('NativeSubagentStrategy', () => {
         onRunError: expect.any(Function),
       }),
     );
+  });
+
+  it('cleans up registry entries when the underlying execution is untracked while abandoned in WAITING', () => {
+    let abandonListener: ((handle: unknown) => void) | undefined;
+    const addListener = vi.fn((_id: string, cb: (handle: unknown) => void) => {
+      abandonListener = cb;
+      return vi.fn();
+    });
+    const abandonableSession = {
+      tag: 'abandonable-session',
+      executions: { addListener },
+    } as never;
+
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: abandonableSession,
+      runtimeHost: { emit: vi.fn() },
+      startedAt: 0,
+      settleSubagentCost: vi.fn(),
+    });
+
+    expect(addListener).toHaveBeenCalledWith(executionId, expect.any(Function));
+    expect(getNativeSubagentStrategy(executionId)).toBe(strategy);
+    expect(subagentDeliveryRegistry.getActive(executionId)).toBeDefined();
+
+    // A native subagent that suspends into WAITING and is never resumed and
+    // never errors has no other terminal event to drive `finish()`. Simulate
+    // the execution registry's abandonment signal (session teardown, or the
+    // handle otherwise being untracked) firing instead.
+    abandonListener?.(undefined);
+
+    expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
+    expect(subagentDeliveryRegistry.getActive(executionId)).toBeUndefined();
+  });
+
+  it('cleans up registry entries even when a resumed completion hook throws', async () => {
+    const childStream = 'child-stream' as StreamTabId;
+    const config = { agentCategory: 'toolUse' };
+    const snapshot = {
+      agentConfig: config,
+      executionId,
+      messages: [],
+      streamId: childStream,
+    };
+    mocks.readConfig.mockResolvedValue(config);
+    mocks.retrieveSessionResumeData.mockResolvedValue({
+      type: 'toolUse',
+      snapshot,
+    });
+    let capturedOnCompleted: ((result: unknown) => Promise<void>) | undefined;
+    mocks.resumeQueuedToolUseSnapshot.mockImplementation(
+      async (
+        _streamId: unknown,
+        _snapshot: unknown,
+        _host: unknown,
+        options: { onCompleted: (result: unknown) => Promise<void> },
+      ) => {
+        capturedOnCompleted = options.onCompleted;
+        return true;
+      },
+    );
+
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
+      startedAt: 0,
+      // Throwing here simulates a completion hook (formatting/delivery)
+      // failing mid-flight — the exact scenario `runFlowWithLifecycle` only
+      // logs and swallows rather than propagating back to this strategy.
+      settleSubagentCost: () => {
+        throw new Error('settle boom');
+      },
+    });
+    strategy.setChildStreamId(childStream);
+
+    await strategy.wakeQueuedFollowUp(
+      { status: 'queued', reason: 'waiting' },
+      {},
+    );
+    expect(capturedOnCompleted).toBeDefined();
+
+    await expect(
+      capturedOnCompleted?.({ category: 'toolUse', outcome: 'completed' }),
+    ).rejects.toThrow('settle boom');
+
+    // Despite the throw, `finish()` must still run (moved into `finally`) so
+    // a later `delegate_agent` call doesn't find stale delivery state for a
+    // run that has already exited its lifecycle.
+    expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
+    expect(subagentDeliveryRegistry.getActive(executionId)).toBeUndefined();
   });
 });
