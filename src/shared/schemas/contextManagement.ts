@@ -28,12 +28,7 @@ const MaxTokensReducedDataSchema = ContextManagementDataBaseSchema.extend({
 });
 
 const TokensFreedDataSchema = ContextManagementDataBaseSchema.extend({
-  action: z.enum([
-    'compaction',
-    'clear_tool_uses',
-    'clear_thinking',
-    'truncation',
-  ]),
+  action: ContextManagementAction.exclude(['max_tokens_reduced']),
   tokensAfter: TokenCountSchema,
   utilizationAfter: z.number().nonnegative(),
 });
