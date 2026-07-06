@@ -271,7 +271,11 @@ export async function runReflectionFlow<C = unknown>(
             parent: parent ?? undefined,
             kind: 'round',
             index: roundIndex,
-            total: shared.totalRounds,
+            // Widen the stage's total for a granted compile-repair round
+            // (#7077): that round opens with roundIndex === totalRounds
+            // (one past the configured last round), so without this the
+            // progress badge would render an over-total "Round 3 of 2".
+            total: Math.max(shared.totalRounds, roundIndex + 1),
           }),
         resetForNextRound: (s) => {
           s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
