@@ -1,4 +1,5 @@
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { HostInteractions } from './HostInteractions';
 
 /**
  * The single progress sink the agent core emits through during a run. Hosts
@@ -26,6 +27,8 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
  * by tests and non-interactive paths.
  */
 export interface AgentRuntimeHost {
+  readonly interactions?: HostInteractions;
+
   emit<K extends keyof ProgressEventPayloads>(
     event: K,
     payload: ProgressEventPayloads[K],

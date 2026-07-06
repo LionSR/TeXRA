@@ -94,11 +94,12 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({ secrets: mocks.secrets }),
 }));
 
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import {
   clearApprovals,
   currentApproval,
 } from '@cli/chat/tui/state/approvalQueue';
-import { installTuiApprovals } from '@cli/chat/tui/state/subscribeApprovals';
+import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -121,6 +122,20 @@ function host(): CliRuntimeHost {
     emit: vi.fn(),
     close: vi.fn(async () => undefined),
   } as unknown as CliRuntimeHost;
+}
+
+function tui(): {
+  readonly runtimeHost: CliRuntimeHost;
+  readonly interactions: HostInteractions;
+  readonly dispose: () => void;
+} {
+  const runtimeHost = host();
+  const interactions = createTuiHostInteractions(runtimeHost, context());
+  return {
+    runtimeHost,
+    interactions,
+    dispose: () => interactions.dispose?.(),
+  };
 }
 
 function relayRetry(params: {
@@ -167,6 +182,17 @@ afterEach(() => {
 });
 
 describe('TUI retry approvals', () => {
+  it('does not mutate the runtime host emitter', () => {
+    const runtimeHost = host();
+    const originalEmit = runtimeHost.emit;
+    const interactions = createTuiHostInteractions(runtimeHost, context());
+    try {
+      expect(runtimeHost.emit).toBe(originalEmit);
+    } finally {
+      interactions.dispose?.();
+    }
+  });
+
   it('auto-switches provider-less relay retries when any personal key exists', async () => {
     const fallbackProvider =
       API_PROVIDERS.find((provider) => provider !== 'openai') ??
@@ -176,32 +202,35 @@ describe('TUI retry approvals', () => {
         provider === fallbackProvider ? 'sk-test' : undefined,
     );
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
-      runtimeHost.emit('showRetryRequest', relayRetry({ streamId: 's1' }));
+      const result = interactions.requestRetry?.(
+        relayRetry({ streamId: 's1' }),
+      );
 
       await vi.waitFor(() => {
         expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-        expect(mocks.triggerRetry).toHaveBeenCalledWith('s1', undefined);
+      });
+      await expect(result).resolves.toEqual({
+        action: 'retry',
+        feedback: undefined,
       });
       expect(currentApproval.get()).toBeUndefined();
       expect(mocks.lookupApiKey.mock.calls.map((call) => call[1])).toContain(
         fallbackProvider,
       );
     } finally {
-      unbind();
+      dispose();
     }
   });
 
   it('falls back to the retry modal when API key lookup fails', async () => {
     mocks.lookupApiKey.mockRejectedValue(new Error('keychain unavailable'));
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
       const retry = relayRetry({ streamId: 's2', provider: 'openai' });
-      runtimeHost.emit('showRetryRequest', retry);
+      void interactions.requestRetry?.(retry);
 
       await vi.waitFor(() => {
         expect(currentApproval.get()?.payload).toMatchObject({
@@ -211,21 +240,20 @@ describe('TUI retry approvals', () => {
       });
       expect(mocks.triggerRetry).not.toHaveBeenCalled();
     } finally {
-      unbind();
+      dispose();
     }
   });
 
   it('does not auto-switch when a retry provider is not an API provider', async () => {
     mocks.lookupApiKey.mockResolvedValue('sk-test');
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
       const retry = relayRetry({
         streamId: 'unknown-provider',
         provider: 'custom-provider',
       });
-      runtimeHost.emit('showRetryRequest', retry);
+      void interactions.requestRetry?.(retry);
 
       await vi.waitFor(() => {
         expect(currentApproval.get()?.payload).toMatchObject({
@@ -236,7 +264,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.lookupApiKey).not.toHaveBeenCalled();
       expect(mocks.triggerRetry).not.toHaveBeenCalled();
     } finally {
-      unbind();
+      dispose();
     }
   });
 
@@ -246,10 +274,9 @@ describe('TUI retry approvals', () => {
         provider === 'openai' ? 'sk-openai' : undefined,
     );
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
-      runtimeHost.emit('showRetryRequest', {
+      const result = interactions.requestRetry?.({
         streamId: 'message-fallback',
         operation: 'model request',
         errorMessage: 'Monthly spending limit reached.',
@@ -263,14 +290,14 @@ describe('TUI retry approvals', () => {
 
       await vi.waitFor(() => {
         expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-        expect(mocks.triggerRetry).toHaveBeenCalledWith(
-          'message-fallback',
-          undefined,
-        );
+      });
+      await expect(result).resolves.toEqual({
+        action: 'retry',
+        feedback: undefined,
       });
       expect(currentApproval.get()).toBeUndefined();
     } finally {
-      unbind();
+      dispose();
     }
   });
 
@@ -280,22 +307,26 @@ describe('TUI retry approvals', () => {
         provider === 'openai' ? 'sk-openai' : undefined,
     );
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
-      runtimeHost.emit('showRetryRequest', chatGptSubscriptionRetry('s3'));
+      const result = interactions.requestRetry?.(
+        chatGptSubscriptionRetry('s3'),
+      );
 
       await vi.waitFor(() => {
         expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
         expect(mocks.setCliCodexSubscription).toHaveBeenCalledWith(false);
-        expect(mocks.triggerRetry).toHaveBeenCalledWith('s3', undefined);
+      });
+      await expect(result).resolves.toEqual({
+        action: 'retry',
+        feedback: undefined,
       });
       expect(currentApproval.get()).toBeUndefined();
       expect(mocks.lookupApiKey.mock.calls.map((call) => call[1])).toEqual([
         'openai',
       ]);
     } finally {
-      unbind();
+      dispose();
     }
   });
 
@@ -308,15 +339,13 @@ describe('TUI retry approvals', () => {
         }),
     );
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
-      runtimeHost.emit(
-        'showRetryRequest',
+      const result = interactions.requestRetry?.(
         relayRetry({ streamId: 'interrupted', provider: 'openai' }),
       );
       clearApprovals();
-      expect(mocks.cancelRetry).toHaveBeenCalledWith('interrupted');
+      await expect(result).resolves.toEqual({ action: 'cancel' });
 
       resolveLookup?.('sk-after-interrupt');
       await Promise.resolve();
@@ -324,10 +353,10 @@ describe('TUI retry approvals', () => {
 
       expect(mocks.setCliApiMode).not.toHaveBeenCalled();
       expect(mocks.triggerRetry).not.toHaveBeenCalled();
-      expect(mocks.cancelRetry).toHaveBeenCalledTimes(1);
+      expect(mocks.cancelRetry).not.toHaveBeenCalled();
       expect(currentApproval.get()).toBeUndefined();
     } finally {
-      unbind();
+      dispose();
     }
   });
 
@@ -340,13 +369,12 @@ describe('TUI retry approvals', () => {
         }),
     );
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
-    runtimeHost.emit(
-      'showRetryRequest',
+    const { interactions, dispose } = tui();
+    const result = interactions.requestRetry?.(
       relayRetry({ streamId: 'unbound', provider: 'openai' }),
     );
-    unbind();
+    dispose();
+    await expect(result).resolves.toEqual({ action: 'cancel' });
 
     resolveLookup?.('sk-after-unbind');
     await Promise.resolve();
@@ -361,11 +389,9 @@ describe('TUI retry approvals', () => {
   it('cancels an active retry modal when approvals are cleared', async () => {
     mocks.lookupApiKey.mockResolvedValue(undefined);
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
-      runtimeHost.emit(
-        'showRetryRequest',
+      const result = interactions.requestRetry?.(
         relayRetry({ streamId: 'modal-interrupt', provider: 'openai' }),
       );
 
@@ -377,10 +403,10 @@ describe('TUI retry approvals', () => {
       });
 
       clearApprovals();
-      expect(mocks.cancelRetry).toHaveBeenCalledWith('modal-interrupt');
+      await expect(result).resolves.toEqual({ action: 'cancel' });
       expect(currentApproval.get()).toBeUndefined();
     } finally {
-      unbind();
+      dispose();
     }
   });
 
@@ -395,19 +421,16 @@ describe('TUI retry approvals', () => {
       )
       .mockResolvedValueOnce(undefined);
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
-      runtimeHost.emit(
-        'showRetryRequest',
+      void interactions.requestRetry?.(
         relayRetry({
           streamId: 'same-stream',
           provider: 'openai',
           message: 'first retry',
         }),
       );
-      runtimeHost.emit(
-        'showRetryRequest',
+      void interactions.requestRetry?.(
         relayRetry({
           streamId: 'same-stream',
           provider: 'openai',
@@ -429,7 +452,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.setCliApiMode).not.toHaveBeenCalled();
       expect(mocks.triggerRetry).not.toHaveBeenCalled();
     } finally {
-      unbind();
+      dispose();
     }
   });
 
@@ -438,11 +461,9 @@ describe('TUI retry approvals', () => {
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce('sk-new');
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
-      runtimeHost.emit(
-        'showRetryRequest',
+      void interactions.requestRetry?.(
         relayRetry({
           streamId: 'same-stream',
           provider: 'openai',
@@ -456,8 +477,7 @@ describe('TUI retry approvals', () => {
         });
       });
 
-      runtimeHost.emit(
-        'showRetryRequest',
+      const second = interactions.requestRetry?.(
         relayRetry({
           streamId: 'same-stream',
           provider: 'openai',
@@ -466,25 +486,23 @@ describe('TUI retry approvals', () => {
       );
 
       await vi.waitFor(() => {
-        expect(mocks.triggerRetry).toHaveBeenCalledWith(
-          'same-stream',
-          undefined,
-        );
         expect(currentApproval.get()).toBeUndefined();
       });
+      await expect(second).resolves.toEqual({
+        action: 'retry',
+        feedback: undefined,
+      });
     } finally {
-      unbind();
+      dispose();
     }
   });
 
   it('replaces an older retry modal when a newer retry also needs input', async () => {
     mocks.lookupApiKey.mockResolvedValue(undefined);
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
-      runtimeHost.emit(
-        'showRetryRequest',
+      void interactions.requestRetry?.(
         relayRetry({
           streamId: 'same-stream',
           provider: 'openai',
@@ -498,8 +516,7 @@ describe('TUI retry approvals', () => {
         });
       });
 
-      runtimeHost.emit(
-        'showRetryRequest',
+      void interactions.requestRetry?.(
         relayRetry({
           streamId: 'same-stream',
           provider: 'openai',
@@ -516,7 +533,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.cancelRetry).not.toHaveBeenCalled();
       expect(mocks.triggerRetry).not.toHaveBeenCalled();
     } finally {
-      unbind();
+      dispose();
     }
   });
 
@@ -532,11 +549,9 @@ describe('TUI retry approvals', () => {
       )
       .mockResolvedValueOnce(undefined);
 
-    const runtimeHost = host();
-    const unbind = installTuiApprovals(runtimeHost, context());
+    const { interactions, dispose } = tui();
     try {
-      runtimeHost.emit(
-        'showRetryRequest',
+      void interactions.requestRetry?.(
         relayRetry({
           streamId: 'same-stream',
           provider: 'openai',
@@ -547,8 +562,7 @@ describe('TUI retry approvals', () => {
         expect(mocks.setCliApiMode).toHaveBeenCalledTimes(1);
       });
 
-      runtimeHost.emit(
-        'showRetryRequest',
+      const second = interactions.requestRetry?.(
         relayRetry({
           streamId: 'same-stream',
           provider: 'openai',
@@ -556,10 +570,11 @@ describe('TUI retry approvals', () => {
         }),
       );
       await vi.waitFor(() => {
-        expect(mocks.triggerRetry).toHaveBeenCalledWith(
-          'same-stream',
-          undefined,
-        );
+        expect(mocks.setCliApiMode).toHaveBeenCalledTimes(2);
+      });
+      await expect(second).resolves.toEqual({
+        action: 'retry',
+        feedback: undefined,
       });
 
       rejectFirstModeSwitch?.(new Error('stale mode switch failed'));
@@ -568,7 +583,7 @@ describe('TUI retry approvals', () => {
 
       expect(mocks.cancelRetry).not.toHaveBeenCalled();
     } finally {
-      unbind();
+      dispose();
     }
   });
 });

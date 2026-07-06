@@ -142,13 +142,26 @@ The tool returns a JSON object whose keys are the original question texts and wh
       data: input.questions[0]?.question.slice(0, 100) ?? '',
     });
 
+    const permission = {
+      requestId,
+      questions: input.questions,
+      context: input.context ?? undefined,
+      allowBypass: false,
+      streamId: streamId ?? '',
+    };
+    let usedInteraction = false;
     try {
-      const result = await awaitUserQuestionResponse({
-        requestId,
-        input,
-        runtimeHost,
-        streamId,
-      });
+      const interaction =
+        runtimeHost.interactions?.askUserQuestion?.(permission);
+      usedInteraction = interaction != null;
+      const result = interaction
+        ? await interaction
+        : await awaitUserQuestionResponse({
+            requestId,
+            input,
+            runtimeHost,
+            streamId,
+          });
 
       if (!result.submitted) {
         return {
@@ -174,7 +187,9 @@ The tool returns a JSON object whose keys are the original question texts and wh
       };
     } finally {
       pendingQuestions.delete(requestId);
-      runtimeHost.emit('resolveUserQuestion', { requestId });
+      if (!usedInteraction) {
+        runtimeHost.emit('resolveUserQuestion', { requestId });
+      }
     }
   }
 }
