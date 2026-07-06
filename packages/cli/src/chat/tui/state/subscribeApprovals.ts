@@ -65,6 +65,7 @@ import { patchSessionMeta } from './cliState/sessionSlice';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
+  clearApprovalsForStream,
   clearRetryApprovalsForStream,
   enqueueApproval,
   onApprovalsCleared,
@@ -196,7 +197,7 @@ export function createTuiHostInteractions(
     resolve: () => false,
     cancelForStream(streamId) {
       cancelRetryRoute(retryRoutes, streamId);
-      clearRetryApprovalsForStream(streamId);
+      clearApprovalsForStream(streamId);
     },
     dispose() {
       invalidateRetryRoutes(retryRoutes, { cancel: true });

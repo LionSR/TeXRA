@@ -10,6 +10,7 @@ import {
   approvalPayloadStreamId,
   approvalQueueStatus,
   clearApprovals,
+  clearApprovalsForStream,
   currentApproval,
   enqueueApproval,
   type ApprovalPayload,
@@ -27,6 +28,18 @@ function bashPayload(streamId: string): ApprovalPayload {
       command: 'echo ok',
     },
   };
+}
+
+function planPayload(streamId: string): ApprovalPayload {
+  return {
+    kind: 'plan',
+    payload: {
+      approvalId: `plan-${streamId}`,
+      plan: { objective: 'Do the thing.' },
+      streamId,
+      goalEnabled: false,
+    },
+  } as ApprovalPayload;
 }
 
 function externalInquiryPayload(streamId: string): ApprovalPayload {
@@ -159,6 +172,38 @@ describe('CLI approval queue', () => {
 
     currentApproval.get()?.decide({ accepted: true });
     await expect(nextResult).resolves.toEqual({ accepted: true });
+  });
+
+  it('cancels every pending kind for one stream without touching other streams', async () => {
+    const targetBash = bashPayload('stream-a');
+    const targetPlan = planPayload('stream-a');
+    const otherBash = bashPayload('stream-b');
+
+    const targetBashResult = enqueueApproval(targetBash);
+    const targetPlanResult = enqueueApproval(targetPlan);
+    const otherBashResult = enqueueApproval(otherBash);
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(targetBash);
+    });
+    expect(approvalQueueStatus.get()).toEqual({ depth: 3, kind: 'approval' });
+
+    clearApprovalsForStream('stream-a');
+
+    const interrupted = {
+      accepted: false,
+      userMessage: 'Session interrupted.',
+    };
+    await expect(targetBashResult).resolves.toEqual(interrupted);
+    await expect(targetPlanResult).resolves.toEqual(interrupted);
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(otherBash);
+    });
+    expect(approvalQueueStatus.get()).toEqual({ depth: 1, kind: 'approval' });
+
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(otherBashResult).resolves.toEqual({ accepted: true });
   });
 
   it('notifies only when a TUI approval becomes the foreground modal', async () => {

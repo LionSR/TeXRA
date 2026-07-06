@@ -247,6 +247,30 @@ export function clearApprovals(): void {
   }
 }
 
+/**
+ * Cancel every pending approval/human-input prompt whose payload belongs to
+ * `streamId`, regardless of kind. Used when a single stream is stopped —
+ * unlike {@link clearApprovals}, other streams' pending prompts are left
+ * untouched.
+ */
+export function clearApprovalsForStream(streamId: string): void {
+  let changed = false;
+  for (const item of [...pendingItems]) {
+    if (approvalPayloadStreamId(item.payload) !== streamId) continue;
+    if (!pendingItems.delete(item)) continue;
+    changed = true;
+    const advance = item.advance;
+    item.advance = undefined;
+    item.resolve(INTERRUPT);
+    if (currentItem === item) {
+      currentItem = undefined;
+      CURRENT.set(undefined);
+      advance?.();
+    }
+  }
+  if (changed) syncApprovalStatus();
+}
+
 export function clearRetryApprovalsForStream(streamId: string): void {
   let changed = false;
   for (const item of [...pendingItems]) {
