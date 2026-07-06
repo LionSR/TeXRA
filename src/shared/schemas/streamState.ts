@@ -81,7 +81,11 @@ const BackendOwnedFieldsSchema = z.object({
   finishedProcessCount: z.number().prefault(DEFAULT_FINISHED_CHILD_COUNT),
 });
 
-export const StreamMetadataSchema = BackendOwnedFieldsSchema.extend({
+const BackendOwnedMetadataFieldsSchema = BackendOwnedFieldsSchema.extend({
+  roundStage: RoundStageSchema.nullable().optional(),
+});
+
+export const StreamMetadataSchema = BackendOwnedMetadataFieldsSchema.extend({
   kind: AgentCategorySchema,
 });
 
