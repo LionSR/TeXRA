@@ -75,7 +75,7 @@ export function extensionManifestSnapshot(packageJson, manifestKeys) {
 // and from the built-VSIX manifest comparison (verify-vsix-contents.mjs); the
 // remaining non-catalog contributes (menus, views, walkthroughs, …) and
 // manifest keys stay guarded.
-const CATALOG_DERIVED_CONTRIBUTES = [
+export const CATALOG_DERIVED_CONTRIBUTES = [
   'configuration',
   'commands',
   'keybindings',
