@@ -1,9 +1,12 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import {
+  type ProjectedProgressEvent,
+  projectRunFactToProgressEvent,
+  projectSessionFactToProgressEvent,
+} from '@agent/runtime/sessionProgressEventProjection';
 import type {
   ProgressEvent,
   ProgressEventBusLike,
@@ -51,7 +54,17 @@ export interface ProgressBackendOptions {
    * projection of the registry.
    */
   getUnsupportedCommands?: () => readonly string[];
+  /** Host-local side effects for session-originated progress events. */
+  onSessionProgressEvent?<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void;
 }
+
+type SessionProgressEventObserver = <K extends ProgressEvent>(
+  event: K,
+  payload: ProgressEventPayloads[K],
+) => void;
 
 class LocalProgressEventBus implements ProgressEventBusLike {
   private readonly listeners = new Map<
@@ -106,9 +119,11 @@ export class ProgressBackend {
   readonly eventHandler: ProgressEventHandler;
   private readonly session: SessionHandle;
   private readonly localEvents = new LocalProgressEventBus();
+  private readonly onSessionProgressEvent?: SessionProgressEventObserver;
 
   constructor(options: ProgressBackendOptions) {
     this.session = options.session ?? defaultSession();
+    this.onSessionProgressEvent = options.onSessionProgressEvent;
     this.state = new ProgressViewState(
       options.storage,
       options.snapshots,
@@ -152,25 +167,49 @@ export class ProgressBackend {
     await this.state.load();
   }
 
-  setupEventListeners(
-    bus: ProgressEventBusLike,
-    sessionProjectionTarget: AgentRuntimeHost = bus,
-  ): ProgressEventSubscription {
+  setupEventListeners(bus: ProgressEventBusLike): ProgressEventSubscription {
     const busSubscription = this.eventHandler.setupEventListeners(bus);
     const localSubscription = this.eventHandler.setupEventListeners(
       this.localEvents,
     );
-    const detachProjection = attachLegacyProgressEventProjection(
-      this.session.events,
-      sessionProjectionTarget,
+    const detachSessionFacts = this.session.events.subscribe(
+      (sessionEvent) => {
+        if (sessionEvent.scope !== 'session') return;
+        this.handleProjectedProgressEvent(
+          projectSessionFactToProgressEvent(sessionEvent.event),
+        );
+      },
+      { scope: 'session' },
+    );
+    const detachRunFacts = this.session.events.subscribe(
+      (sessionEvent) => {
+        if (sessionEvent.scope !== 'run') return;
+        const projected = projectRunFactToProgressEvent(
+          sessionEvent.streamId,
+          sessionEvent.event,
+        );
+        if (projected) this.handleProjectedProgressEvent(projected);
+      },
+      {
+        scope: 'run',
+        types: ['stage.start', 'child.activity', 'process.output'],
+      },
     );
     return {
       dispose: () => {
-        detachProjection();
+        detachRunFacts();
+        detachSessionFacts();
         localSubscription.dispose();
         busSubscription.dispose();
       },
     };
+  }
+
+  private handleProjectedProgressEvent(
+    projected: ProjectedProgressEvent,
+  ): void {
+    this.handleProgressEvent(projected.event, projected.payload);
+    this.onSessionProgressEvent?.(projected.event, projected.payload);
   }
 
   handleProgressEvent<K extends ProgressEvent>(
