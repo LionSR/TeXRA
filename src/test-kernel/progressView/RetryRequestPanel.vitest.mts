@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest';
 // Local imports - progress view component types
 import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
 
+// Local imports - shared schemas
+import type { ProviderErrorPartial } from '@shared/schemas';
+
 // Local imports - shared constants
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
@@ -54,5 +57,26 @@ describe('retry-request-panel', () => {
     expect(buttons.map((button) => button.getAttribute('data-action'))).toEqual(
       ['useOwnApiKey', 'retry', 'cancel'],
     );
+  });
+
+  it('shows exactly the claimed number of tail characters for truncated partial output', async () => {
+    const element = await mountPanel();
+    // `formatRetryDetails` is private; TS-private is not runtime-enforced, and
+    // this pure-string-formatting logic doesn't need a full render to verify.
+    const formatRetryDetails: (details: ProviderErrorPartial) => string | null =
+      (element as unknown as Record<string, unknown>)[
+        'formatRetryDetails'
+      ] as never;
+
+    const text = formatRetryDetails.call(element, {
+      isRelayError: false,
+      userRetryable: true,
+      partialText: 'x'.repeat(2000),
+    });
+
+    expect(text).toContain('--- Partial Output (last 1024 of 2000 chars) ---');
+    const tail = (text ?? '').split('\n').at(-1) ?? '';
+    // "…" plus exactly 1024 content characters, not 1023.
+    expect(tail.replace(/^…/, '')).toHaveLength(1024);
   });
 });
