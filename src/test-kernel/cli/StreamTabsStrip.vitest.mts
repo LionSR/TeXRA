@@ -36,6 +36,7 @@ function child(init: {
   readonly status?: string;
 }): ActiveChildInfo {
   return {
+    kind: 'subagent',
     executionId: init.executionId,
     agentName: init.agentName ?? '',
     childStreamId: init.childStreamId,

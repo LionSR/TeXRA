@@ -18,6 +18,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { getEffectiveDiffBase } from '@shared/schemas';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
@@ -443,10 +444,7 @@ export class FileList extends LitElement {
       this.getCompactDisplayPath(location);
     const { dir, basename } = parsePath(displayPath);
     const tooltipPath = this.getDisplayPath(location);
-    const effectiveBase =
-      file.lineage?.diffBase?.absolutePath ??
-      file.lineage?.original?.absolutePath ??
-      '';
+    const effectiveBase = getEffectiveDiffBase(file.lineage)?.absolutePath ?? '';
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
     const filePath = location.absolutePath;

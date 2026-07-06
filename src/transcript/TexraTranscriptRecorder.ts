@@ -22,6 +22,7 @@ import type {
   AgentTraceSubscriber,
   LogEvent,
 } from '@agent/trace';
+import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import {
   END_GROUP_STATUS,
@@ -289,8 +290,10 @@ export function attachTranscriptRecorder(
         return;
 
       case 'context.state': {
-        const utilizationPercent =
-          (event.inputTokens / event.contextWindow) * 100;
+        const utilizationPercent = computeUtilizationPercent(
+          event.inputTokens,
+          event.contextWindow,
+        );
         appendLog({
           groupId: event.stageId,
           messageType: MESSAGE_TYPES.CONTEXT_STATE,

@@ -70,6 +70,7 @@ function createProcessState(streamId: StreamTabId): ProgressState {
     createStreamState(AgentCategory.Workflow, {
       activeProcesses: [
         {
+          kind: 'process',
           executionId: 'active-process',
           agentName: 'bash',
           status: STREAM_STATUS.RUNNING,
@@ -102,6 +103,7 @@ function registerWorkflowStream(
   streamId: StreamTabId,
 ): void {
   state.streamById.set(streamId, {
+    kind: 'agent',
     name: streamId,
     label: 'stream-a',
     agentCategory: AgentCategory.Workflow,
@@ -117,6 +119,7 @@ describe('process output frontend state', () => {
     state.activeStreamId = streamId;
     state.streamFilter = 'workflow';
     state.streamById.set(siblingId, {
+      kind: 'agent',
       name: siblingId,
       label: 'old sibling',
       agentCategory: AgentCategory.ToolUse,
@@ -130,6 +133,8 @@ describe('process output frontend state', () => {
         status: STREAM_PHASE.RUNNING,
         activeSubagents: [
           {
+            kind: 'subagent',
+            childStreamId: 'old-child-stream',
             executionId: 'old-child',
             agentName: 'old child',
           },
@@ -143,6 +148,7 @@ describe('process output frontend state', () => {
       {
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
         streamInfo: {
+          kind: 'agent',
           name: siblingId,
           label: 'search',
           agent: 'search',
@@ -162,6 +168,7 @@ describe('process output frontend state', () => {
           finishedSubagentCount: 1,
           activeProcesses: [
             {
+              kind: 'process',
               executionId: 'process-a',
               agentName: 'bash',
             },
@@ -189,6 +196,7 @@ describe('process output frontend state', () => {
       finishedSubagentCount: 1,
       activeProcesses: [
         {
+          kind: 'process',
           executionId: 'process-a',
           agentName: 'bash',
         },
@@ -239,6 +247,7 @@ describe('process output frontend state', () => {
         finishedSubagentCount: 0,
         activeProcesses: [
           {
+            kind: 'process',
             executionId: 'active-process',
             agentName: 'bash',
             status: STREAM_STATUS.RUNNING,
@@ -317,6 +326,7 @@ describe('process output frontend state', () => {
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
         streams: [
           {
+            kind: 'agent',
             name: streamId,
             label: 'stream-a',
             agentCategory: AgentCategory.Workflow,
@@ -383,12 +393,14 @@ describe('process output frontend state', () => {
     const child = 'stream-child' as StreamTabId;
     const state = createInitialState();
     state.streamById.set(parent, {
+      kind: 'agent',
       name: parent,
       label: 'parent',
       agentCategory: AgentCategory.Workflow,
       creationTimestamp: 1,
     });
     state.streamById.set(child, {
+      kind: 'agent',
       name: child,
       label: 'child',
       agentCategory: AgentCategory.ToolUse,

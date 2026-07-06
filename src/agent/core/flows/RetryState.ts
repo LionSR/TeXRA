@@ -10,6 +10,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import {
+  isCredentialExhausted,
   STREAM_PHASE,
   toRetryErrorInfo,
   type RetryErrorInfo,
@@ -200,7 +201,7 @@ export abstract class RetryableInvocationNode<
     if (isUserAbort(error)) return false;
 
     const formatted = normalizeProviderError(error);
-    if (formatted.isCredentialExhausted) return false;
+    if (isCredentialExhausted(formatted)) return false;
     if (!formatted.userRetryable) return false;
     const code = formatted.statusCode;
     return code !== StatusCodes.UNAUTHORIZED && code !== StatusCodes.FORBIDDEN;
