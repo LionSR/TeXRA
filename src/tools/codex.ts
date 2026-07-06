@@ -40,6 +40,7 @@ import type {
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -492,12 +493,13 @@ export class CodexTool extends defineTool({
         }
         // Fall through when the thread's in-memory loop is gone (extension
         // reload, crash): createCodexThread resumes via the SDK from disk.
+        const { streamId, runtimeHost } = requireRunStream('codex', runContext);
         return launchCodexSession(
           input,
-          runContext?.streamId,
+          streamId,
           runContext?.executionId,
           runContext?.workingDirectory,
-          runContext?.runtimeHost,
+          runtimeHost,
         );
       },
     );
@@ -506,17 +508,11 @@ export class CodexTool extends defineTool({
 
 async function launchCodexSession(
   input: CodexInput,
-  parentStreamId: StreamTabId | undefined,
+  parentStreamId: StreamTabId,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
-  runtimeHost: AgentRuntimeHost | undefined,
+  runtimeHost: AgentRuntimeHost,
 ): Promise<ToolResult> {
-  if (!parentStreamId || !runtimeHost) {
-    throw new ToolError(
-      'Codex requires a parent stream runtime context — it must be called from an active tool-use agent.',
-    );
-  }
-
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const thread = await createCodexThread(input, workingDir);
   const config = (await getCodexConfig()).buildCodexConfig(input.prompt);

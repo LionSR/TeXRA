@@ -60,7 +60,11 @@ function updateChildStatusReferences(
 ): readonly ActiveChildInfo[] {
   let out: ActiveChildInfo[] | undefined;
   children.forEach((child, index) => {
-    if (child.childStreamId !== childStreamId || child.status === status) {
+    if (
+      child.kind !== 'subagent' ||
+      child.childStreamId !== childStreamId ||
+      child.status === status
+    ) {
       return;
     }
     out ??= [...children];
@@ -147,7 +151,9 @@ function removeChildStreamReference(
   children: readonly ActiveChildInfo[],
   streamId: StreamTabId,
 ): readonly ActiveChildInfo[] {
-  const next = children.filter((child) => child.childStreamId !== streamId);
+  const next = children.filter(
+    (child) => child.kind !== 'subagent' || child.childStreamId !== streamId,
+  );
   return next.length === children.length ? children : next;
 }
 

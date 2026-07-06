@@ -31,7 +31,7 @@ import {
 
 // Local imports - formatter helpers
 import { stringifyWithLanguage } from '../parseUtils';
-import { formatTimestamp } from '../timestampUtils';
+import { formatDisplayTimestamp } from '../timestampUtils';
 import { ICON_BY_LEVEL } from '../constants';
 import { registerCopyContent } from '../copyContentStore';
 
@@ -49,9 +49,8 @@ export function formatProgressStatusTemplate(
   message: LogMessageData,
 ): FormatResult {
   const { level = 'info', id, groupId, timestamp, text, data } = message;
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
-    new Date(timestamp),
-  );
+  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+    formatDisplayTimestamp(new Date(timestamp));
 
   const summaryText = (text ?? '').trim() || 'Status update';
   const detailText = stringifyWithLanguage(data).text;
@@ -93,9 +92,8 @@ const ERROR_DETAIL_FIELDS = [
 /** Format error message as TemplateResult. */
 export function formatErrorTemplate(message: LogMessageData): FormatResult {
   const { id, groupId, timestamp, text, data } = message;
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
-    new Date(timestamp),
-  );
+  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+    formatDisplayTimestamp(new Date(timestamp));
 
   // Parse error data with schema - use empty object if invalid
   const parseResult = ErrorLogDataSchema.safeParse(data);
@@ -162,9 +160,8 @@ export function formatDefaultLogMessageTemplate(
     className: `log-level-icon log-level-icon--${level}`,
     label: level === 'error' || level === 'warn' ? level : undefined,
   });
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
-    new Date(timestamp),
-  );
+  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+    formatDisplayTimestamp(new Date(timestamp));
 
   const timestampContent = verbose
     ? html`${levelIcon} [${timeDisplay}]`

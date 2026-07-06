@@ -1,7 +1,11 @@
 import {
   type ErrorContext,
   type ErrorLogData,
+  type ExhaustionReason,
   type ProviderError,
+  type RetryErrorInfo,
+  normalizeLegacyProviderErrorFields,
+  toRetryErrorInfo,
 } from '@shared/schemas';
 import {
   extractErrorMessage,
@@ -166,11 +170,18 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const chatgptSubscriptionMessage = chatgptSubscriptionLimit
     ? describeChatGptSubscriptionLimit(chatgptSubscriptionLimit)
     : undefined;
-  const isCredentialExhausted =
-    isRelayMonthlyLimitBody(rawErrorBody) ||
-    isRelayMonthlyLimitByMessage ||
-    isUpstreamCreditDepleted ||
-    isChatGptSubscriptionLimited;
+  // Priority mirrors the pre-refactor OR order: ChatGPT-subscription and
+  // upstream-credit are independently detected first; relay monthly limit
+  // (by body or message) is the remaining exhaustion condition.
+  const exhaustionReason: ExhaustionReason | undefined =
+    isChatGptSubscriptionLimited
+      ? 'chatgpt-subscription'
+      : isUpstreamCreditDepleted
+        ? 'upstream-credit'
+        : isRelayMonthlyLimitBody(rawErrorBody) || isRelayMonthlyLimitByMessage
+          ? 'relay-limit'
+          : undefined;
+  const isCredentialExhausted = exhaustionReason !== undefined;
 
   // Terminal failures (user abort, local disk-full): never retryable and never
   // a relay/credential affordance. Carries diagnostics but deliberately opts
@@ -204,9 +215,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // for these fields so adding a future flag touches one place, not two.
   const classification = {
     isRelayError: isRelay,
-    isCredentialExhausted: isCredentialExhausted || undefined,
-    isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
-    isChatGptSubscriptionLimited: isChatGptSubscriptionLimited || undefined,
+    exhaustionReason,
     rawErrorBody,
     streamDiagnostics,
     partialText,
@@ -271,10 +280,18 @@ function detectCachedProviderError(err: unknown): ProviderError | undefined {
 export function normalizeProviderError(err: unknown): ProviderError {
   const cached = detectCachedProviderError(err);
   if (cached) {
-    // Migrate an explicitly-attached ProviderError from a deeper cause onto the
-    // wrapper so later reads skip the chain walk.
-    providerErrorMetadata.attach(err, cached);
-    return cached;
+    // A cached error may have been attached before the legacy retryable/
+    // exhaustion-flag migration ran (e.g. a resumed flow's raw persisted
+    // `lastError`, which bypasses the schema-level migration on the resume
+    // path) — run the same migration fresh errors get so callers never read
+    // legacy field names off a cached value.
+    const normalized = normalizeLegacyProviderErrorFields(
+      cached,
+    ) as ProviderError;
+    // Migrate the normalized error from a deeper cause onto the wrapper so
+    // later reads skip both the chain walk and this normalization.
+    providerErrorMetadata.attach(err, normalized);
+    return normalized;
   }
 
   // Compute fresh but DO NOT cache the result: a caller may format an error for
@@ -288,6 +305,19 @@ export function normalizeProviderError(err: unknown): ProviderError {
 
 export function getSdkErrorMessage(err: unknown): string {
   return normalizeProviderError(err).message;
+}
+
+/** Normalize an error into the `{ userRetryable, lastError }` pair every
+ *  `execFallback`/failed-outcome branch attaches to its result. */
+export function buildFailedRetryInfo(err: unknown): {
+  userRetryable: boolean;
+  lastError: RetryErrorInfo;
+} {
+  const formatted = normalizeProviderError(err);
+  return {
+    userRetryable: formatted.userRetryable,
+    lastError: toRetryErrorInfo(formatted),
+  };
 }
 
 /** Builds consistent error data for logging with MESSAGE_TYPES.ERROR. */

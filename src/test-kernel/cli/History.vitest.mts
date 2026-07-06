@@ -1260,15 +1260,19 @@ describe('CLI history runtime', () => {
       let stdoutSpy: ReturnType<typeof vi.spyOn>;
       let stderrSpy: ReturnType<typeof vi.spyOn>;
 
-      const trace = {
-        executionId: 'a1',
-        streamId: 'a1',
-        config,
-        meta: null,
-        entries: [],
-        snapshot: { todos: [], plan: null, usage: null },
-        terminalStatus: null,
-      } as unknown as TraceDocument;
+      function makeTrace(executionId: string): TraceDocument {
+        return {
+          executionId,
+          streamId: executionId,
+          config,
+          meta: null,
+          entries: [],
+          snapshot: { todos: [], plan: null, usage: null },
+          terminalStatus: null,
+        } as unknown as TraceDocument;
+      }
+
+      const trace = makeTrace('a1');
 
       function makeContext(resourcesPath: string): CliContext {
         return {
@@ -1361,9 +1365,63 @@ describe('CLI history runtime', () => {
                 );
                 expect(stderr).toContain(
                   `Wrote trace JSON for a1 to stdout. Save the output to ` +
-                    `${path.join(destDir, 'trace.json')}, then open ` +
-                    `${destDir}/index.html?trace=trace.json.`,
+                    `${path.join(destDir, 'a1.json')}, then open ` +
+                    `${destDir}/index.html?trace=a1.json.`,
                 );
+              },
+            );
+          },
+        );
+      });
+
+      it('uses execution-specific trace filenames for repeat exports into the same assets directory', async () => {
+        await withTempDir(
+          'texra-history-export-repeat-src-',
+          async (resourcesPath) => {
+            const traceViewerDir = path.join(resourcesPath, 'traceViewer');
+            await mkdir(traceViewerDir, { recursive: true });
+            await writeFile(
+              path.join(traceViewerDir, 'index.html'),
+              '<html></html>',
+            );
+
+            await withTempDir(
+              'texra-history-export-repeat-dest-',
+              async (cwd) => {
+                const destDir = path.join(cwd, 'shared-assets');
+                const firstTrace = makeTrace('abc123');
+                const secondTrace = makeTrace('def456');
+                mocks.assembleTrace
+                  .mockResolvedValueOnce({ status: 'ok', trace: firstTrace })
+                  .mockResolvedValueOnce({ status: 'ok', trace: secondTrace });
+
+                const firstExit = await runHistoryExport(
+                  makeContext(resourcesPath),
+                  'abc123' as ExecutionId,
+                  'html',
+                  { assetsDir: destDir },
+                );
+                const secondExit = await runHistoryExport(
+                  makeContext(resourcesPath),
+                  'def456' as ExecutionId,
+                  'html',
+                  { assetsDir: destDir },
+                );
+
+                expect(firstExit).toBe(CliExitCode.Success);
+                expect(secondExit).toBe(CliExitCode.Success);
+                expect(stdout).toBe(
+                  JSON.stringify(firstTrace) + JSON.stringify(secondTrace),
+                );
+                expect(stderr).toContain(
+                  `${path.join(destDir, 'abc123.json')}, then open ` +
+                    `${destDir}/index.html?trace=abc123.json.`,
+                );
+                expect(stderr).toContain(
+                  `${path.join(destDir, 'def456.json')}, then open ` +
+                    `${destDir}/index.html?trace=def456.json.`,
+                );
+                expect(stderr).not.toContain('trace=trace.json');
               },
             );
           },

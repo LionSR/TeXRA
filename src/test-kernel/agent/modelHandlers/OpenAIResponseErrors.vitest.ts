@@ -32,8 +32,7 @@ describe('OpenAI Responses error normalization', () => {
     const providerError = normalizeOpenAIResponseError(error, 'openai');
 
     expect(providerError.provider).toBe('openai');
-    expect(providerError.isCredentialExhausted).toBe(true);
-    expect(providerError.isUpstreamCreditDepleted).toBe(true);
+    expect(providerError.exhaustionReason).toBe('upstream-credit');
     expect(providerError.userRetryable).toBe(true);
   });
 

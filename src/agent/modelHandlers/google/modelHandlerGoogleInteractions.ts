@@ -1146,24 +1146,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * batched path, re-expressed as Interactions `Step[]` (spec §6.1).
    */
   async createBatchedToolUseFollowUpMessages(
-    calls: GoogleToolCall[],
-    results: ToolResult[],
-    attachmentsPerCall: ToolFileAttachment[][],
+    entries: Array<{
+      call: GoogleToolCall;
+      result: ToolResult;
+      attachments: ToolFileAttachment[];
+    }>,
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Step[]> {
-    if (calls.length === 0) return [];
-    if (calls.length !== results.length) {
-      throw new Error(
-        `Mismatched calls and results: ${calls.length} calls, ${results.length} results`,
-      );
-    }
-    if (calls.length !== attachmentsPerCall.length) {
-      throw new Error(
-        `Mismatched calls and attachments: ${calls.length} calls, ${attachmentsPerCall.length} attachment arrays`,
-      );
-    }
-    for (const [index, call] of calls.entries()) {
+    if (entries.length === 0) return [];
+    for (const [index, { call }] of entries.entries()) {
       if (!call.callId) {
         throw new Error(
           `Function call at index ${index} (${call.name ?? 'unknown'}) is missing callId`,
@@ -1172,13 +1164,13 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
 
     const assistantSteps = this.buildAssistantTurnSteps(
-      calls,
+      entries.map((e) => e.call),
       workspaceState,
       text,
     );
     const resultSteps = await Promise.all(
-      calls.map((call, i) =>
-        this.buildFunctionResultStep(call, results[i], attachmentsPerCall[i]),
+      entries.map(({ call, result, attachments }) =>
+        this.buildFunctionResultStep(call, result, attachments),
       ),
     );
 

@@ -786,19 +786,18 @@ export class ExecutionRegistry {
       const { status, elapsed } = this.getStatus(handle);
       const summaryStatus =
         status === STREAM_PHASE.CANCELLED ? STREAM_STATUS.STOPPED : status;
-      const info: ActiveChildInfo = {
+      const base = {
         executionId: handle.executionId,
         agentName: handle.agentName,
         status: summaryStatus,
         startedAt: handle.startedAt,
         elapsed: elapsed ?? null,
+        ...(handle.toolName ? { toolName: handle.toolName } : {}),
       };
-      if (handle instanceof AgentExecutionHandle) {
-        info.childStreamId = handle.childStreamId;
-        if (handle.toolName) info.toolName = handle.toolName;
-      } else if (handle instanceof ProcessExecutionHandle && handle.toolName) {
-        info.toolName = handle.toolName;
-      }
+      const info: ActiveChildInfo =
+        handle instanceof AgentExecutionHandle
+          ? { ...base, kind: 'subagent', childStreamId: handle.childStreamId }
+          : { ...base, kind: 'process' };
       result.push(info);
     }
     return result;

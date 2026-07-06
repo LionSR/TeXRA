@@ -16,6 +16,7 @@ import {
   AgentCategory,
   type ActiveChildInfo,
   type StreamTabId,
+  type SubagentChildInfo,
 } from '@shared/schemas';
 
 function makeSlice(
@@ -46,9 +47,12 @@ function makeSlice(
 }
 
 function child(
-  over: Partial<ActiveChildInfo> & { executionId: string },
+  over: Partial<SubagentChildInfo> & {
+    executionId: string;
+    childStreamId: StreamTabId;
+  },
 ): ActiveChildInfo {
-  return { agentName: 'agent', ...over };
+  return { kind: 'subagent', agentName: 'agent', ...over };
 }
 
 function streamsOf(
