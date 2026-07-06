@@ -39,7 +39,6 @@ import { tagOpenRouterSdkError } from './openRouterSdkError';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAITools } from '../toolConversion';
 import {
-  checkBatchedToolCalls,
   insertMediaIntoChatUserMessage,
   prependTextToChatUserMessage,
 } from '../openai/openAIMessageUtils';
@@ -688,26 +687,28 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   async createBatchedToolUseFollowUpMessages(
-    calls: OpenRouterToolCall[],
-    results: ToolResult[],
-    _attachmentsPerCall: ToolFileAttachment[][],
+    entries: Array<{
+      call: OpenRouterToolCall;
+      result: ToolResult;
+      attachments: ToolFileAttachment[];
+    }>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatMessages[]> {
-    if (!checkBatchedToolCalls(calls.length, results.length)) return [];
+    if (entries.length === 0) return [];
 
     const callMsg: ChatMessages = {
       role: 'assistant',
-      toolCalls: calls.map((c) => c.raw),
+      toolCalls: entries.map(({ call }) => call.raw),
       ...(text ? { content: text } : {}),
     } as ChatMessages;
 
-    const resultMsgs: ChatMessages[] = calls.map(
-      (call, i) =>
+    const resultMsgs: ChatMessages[] = entries.map(
+      ({ call, result }) =>
         ({
           role: 'tool',
           toolCallId: call.callId,
-          content: formatToolResultAsText(results[i]),
+          content: formatToolResultAsText(result),
         }) as ChatMessages,
     );
 

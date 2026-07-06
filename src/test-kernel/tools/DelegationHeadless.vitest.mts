@@ -174,6 +174,7 @@ describe('headless delegation', () => {
       expect.objectContaining({
         isSubagent: true,
         parentStreamId: 'parent-stream',
+        session: expect.any(Object),
         stopAfterCycle: true,
       }),
     );
@@ -388,10 +389,15 @@ describe('headless delegation', () => {
     expect(result.output).toContain(
       "Subagent 'review' launched. Result will be delivered automatically",
     );
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.any(String),
-      expect.not.objectContaining({ stopAfterCycle: true }),
+    const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
+    expect(executeOptions).toEqual(
+      expect.objectContaining({
+        onRun: expect.any(Function),
+        session: expect.any(Object),
+      }),
+    );
+    expect(executeOptions).not.toEqual(
+      expect.objectContaining({ stopAfterCycle: true }),
     );
   });
 

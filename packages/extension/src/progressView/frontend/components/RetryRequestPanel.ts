@@ -18,9 +18,13 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
-import type { ProviderErrorPartial } from '@shared/schemas';
+import {
+  isCredentialExhausted,
+  type ProviderErrorPartial,
+} from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
+import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -45,7 +49,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
         this.emitAction('retry');
         return true;
       case 'k':
-        if (data.errorDetails?.isCredentialExhausted) {
+        if (isCredentialExhausted(data.errorDetails)) {
           this.emitAction('useOwnApiKey');
           return true;
         }
@@ -61,8 +65,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   override render(): TemplateResult {
     const data = this.permission.data;
     const isRelay = data.errorDetails?.isRelayError === true;
-    const isCredentialExhausted =
-      data.errorDetails?.isCredentialExhausted === true;
+    const credentialExhausted = isCredentialExhausted(data.errorDetails);
     const userRetryable = data.errorDetails?.userRetryable !== false;
     const metaParts: MetaPart[] = [
       ...(data.model ? [`Model: ${data.model}`] : []),
@@ -109,7 +112,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
           }
         </div>
         <div class="retry-request__actions">
-          ${when(isCredentialExhausted, () =>
+          ${when(credentialExhausted, () =>
             renderLabeledActionButton({
               icon: 'key',
               text: 'Use your own API key',
@@ -174,13 +177,20 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const partialText = details.partialText;
     if (partialText) {
       const maxTailChars = 1024;
-      const isTruncated = partialText.length > maxTailChars;
-      const tail = isTruncated
-        ? '…' + partialText.slice(-maxTailChars)
-        : partialText;
+      // tailWithEllipsis's budget covers its own leading "…", so pass one
+      // more than the content characters we actually want displayed.
+      const tail = tailWithEllipsis(partialText, maxTailChars + 1);
+      // Derive truncation from what tailWithEllipsis actually did (it
+      // returns the input unchanged when nothing needs cutting) rather than
+      // a separately-computed length comparison — two independent
+      // decisions about the same cutoff disagreed by one grapheme exactly
+      // at the boundary (partialText.length === maxTailChars + 1), where
+      // this said "truncated" but tailWithEllipsis returned the text whole.
+      const isTruncated = tail !== partialText;
+      const totalChars = toGraphemes(partialText).length;
       const header = isTruncated
-        ? `--- Partial Output (last ${maxTailChars} of ${partialText.length} chars) ---`
-        : `--- Partial Output (${partialText.length} chars) ---`;
+        ? `--- Partial Output (last ${maxTailChars} of ${totalChars} chars) ---`
+        : `--- Partial Output (${totalChars} chars) ---`;
       lines.push(header, tail);
     }
 

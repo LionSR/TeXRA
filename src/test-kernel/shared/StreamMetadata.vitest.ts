@@ -16,6 +16,7 @@ describe('buildStreamMetadata', () => {
       kind: AgentCategory.Workflow,
       status: STREAM_STATUS.READY,
       conversationProgress: { toolCallCount: 0 },
+      roundStage: null,
       activeSubagents: [],
       finishedSubagentCount: 0,
       activeProcesses: [],
@@ -27,6 +28,7 @@ describe('buildStreamMetadata', () => {
 
   it('preserves supplied status, progress, child badges, and timestamps', () => {
     const child: ActiveChildInfo = {
+      kind: 'process',
       executionId: 'agent-1',
       agentName: 'review',
       status: STREAM_STATUS.RUNNING,

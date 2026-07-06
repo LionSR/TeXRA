@@ -30,6 +30,7 @@ import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
+import { requireRunStream } from '@tools/contextHelpers';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -162,12 +163,16 @@ export class BashTool extends defineTool({
     const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
 
     if (input.run_in_background) {
+      const { streamId, runtimeHost } = requireRunStream(
+        'bash run_in_background',
+        runContext,
+      );
       return this.executeBackground(
         input.command,
         timeoutMs,
-        runContext?.streamId,
+        streamId,
         runContext?.executionId,
-        runContext?.runtimeHost,
+        runtimeHost,
         cwd,
       );
     }
@@ -226,17 +231,11 @@ export class BashTool extends defineTool({
   private async executeBackground(
     command: string,
     timeoutMs: number,
-    parentStreamId: StreamTabId | undefined,
+    parentStreamId: StreamTabId,
     parentExecutionId: ExecutionId | undefined,
-    runtimeHost: AgentRuntimeHost | undefined,
+    runtimeHost: AgentRuntimeHost,
     cwd?: string,
   ): Promise<ToolResult> {
-    if (!parentStreamId || !runtimeHost) {
-      throw new ToolError(
-        'Background execution requires a parent stream runtime context.',
-      );
-    }
-
     const executionId = generateExecutionId();
 
     await ensureRunDir(executionId);

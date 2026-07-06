@@ -1,8 +1,21 @@
 import { create } from 'mutative';
 
-import { createStreamState, type StreamMetadata } from '@shared/schemas';
+import {
+  createStreamState,
+  type StreamMetadata,
+  type StreamState,
+} from '@shared/schemas';
 
-import type { StreamState } from '../store';
+export function metadataToStreamStatePartial(
+  metadata: StreamMetadata,
+): Partial<StreamState> {
+  return {
+    ...metadata,
+    ...(Object.hasOwn(metadata, 'roundStage') && {
+      roundStage: metadata.roundStage ?? undefined,
+    }),
+  } as Partial<StreamState>;
+}
 
 export function mergeBackendOwnedState(
   existing: StreamState,
@@ -12,7 +25,7 @@ export function mergeBackendOwnedState(
     // Kind changed: create fresh state with new-kind defaults, overlay metadata,
     // and preserve frontend-owned taskGroups.
     return createStreamState(metadata.kind, {
-      ...metadata,
+      ...metadataToStreamStatePartial(metadata),
       taskGroups: existing.taskGroups,
     });
   }
@@ -22,7 +35,7 @@ export function mergeBackendOwnedState(
   // above already ensures matches `existing.kind`) so a new field added to
   // that schema is picked up here without also updating this call site.
   return create(existing, (draft) => {
-    Object.assign(draft, metadata);
+    Object.assign(draft, metadataToStreamStatePartial(metadata));
     if (!Object.hasOwn(metadata, 'substate')) {
       delete draft.substate;
     }

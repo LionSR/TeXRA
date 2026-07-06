@@ -34,7 +34,8 @@ import {
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { type ToolResult } from '@shared/schemas/toolResult';
+import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -509,15 +510,19 @@ export class ClaudeAgentTool extends defineTool({
             },
           });
         }
+        const { streamId, runtimeHost } = requireRunStream(
+          CLAUDE_AGENT_NAME,
+          runContext,
+        );
         return launchClaudeAgentSession(
           input,
           permissionMode,
           model,
           effort,
-          runContext?.streamId,
+          streamId,
           runContext?.executionId,
           runContext?.workingDirectory,
-          runContext?.runtimeHost,
+          runtimeHost,
         );
       },
     );
@@ -529,17 +534,11 @@ async function launchClaudeAgentSession(
   permissionMode: ClaudeAgentPermissionMode,
   model: string,
   effort: ClaudeAgentEffort,
-  parentStreamId: StreamTabId | undefined,
+  parentStreamId: StreamTabId,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
-  runtimeHost: AgentRuntimeHost | undefined,
+  runtimeHost: AgentRuntimeHost,
 ): Promise<ToolResult> {
-  if (!parentStreamId || !runtimeHost) {
-    throw new ToolError(
-      'Claude Code CLI requires a parent stream runtime context — it must be called from an active tool-use agent.',
-    );
-  }
-
   const config = await getClaudeAgentConfig();
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const workspace = config.buildClaudeAgentWorkspaceOptions(workingDir);
