@@ -444,7 +444,8 @@ export class FileList extends LitElement {
       this.getCompactDisplayPath(location);
     const { dir, basename } = parsePath(displayPath);
     const tooltipPath = this.getDisplayPath(location);
-    const effectiveBase = getEffectiveDiffBase(file.lineage)?.absolutePath ?? '';
+    const effectiveBase =
+      getEffectiveDiffBase(file.lineage)?.absolutePath ?? '';
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
     const filePath = location.absolutePath;
