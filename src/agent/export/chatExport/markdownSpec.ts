@@ -60,9 +60,16 @@ const ATTACHMENT_LABELS: Record<string, string> = {
   document: 'Document attachment',
 };
 
+const MARKDOWN_TITLE_ESCAPE_RE = /[\\[\]()<>!]/g;
+
+function escapeMarkdownTitle(text: string): string {
+  return text.replaceAll(MARKDOWN_TITLE_ESCAPE_RE, (ch) => `\\${ch}`);
+}
+
 function markdownLinkOrText(url: string, title: string): string {
   const safeUrl = sanitizeLiveLinkUrl(url);
-  return safeUrl ? `[${title}](${safeUrl})` : title;
+  const safeTitle = escapeMarkdownTitle(title);
+  return safeUrl ? `[${safeTitle}](${safeUrl})` : safeTitle;
 }
 
 const MD_NODES: NodeRenderers = {
@@ -96,7 +103,7 @@ const MD_NODES: NodeRenderers = {
       '#### Web Fetch',
       '',
       safeUrl ? `**URL:** ${safeUrl}` : undefined,
-      title ? `**Title:** ${title}` : undefined,
+      title ? `**Title:** ${escapeMarkdownTitle(title)}` : undefined,
       content ? `\n${fencedBlock(content)}` : undefined,
       '',
     ]
