@@ -31,9 +31,14 @@ function normalizeProviderErrorRetryFlag(value: unknown): unknown {
   if ('userRetryable' in data || typeof data.retryable !== 'boolean') {
     return value;
   }
+  // Drop the legacy key rather than merely adding `userRetryable` alongside
+  // it: callers that use this migration directly (not just as a
+  // z.preprocess step ahead of an object schema that would otherwise strip
+  // it) must not see a stale `retryable` field on the result.
+  const { retryable, ...rest } = data;
   return {
-    ...data,
-    userRetryable: data.retryable,
+    ...rest,
+    userRetryable: retryable,
   };
 }
 
@@ -96,7 +101,16 @@ function normalizeLegacyExhaustionFlags(value: unknown): unknown {
   return exhaustionReason === undefined ? rest : { ...rest, exhaustionReason };
 }
 
-function normalizeLegacyProviderErrorFields(value: unknown): unknown {
+/**
+ * Migrates the legacy `retryable`/exhaustion-boolean fields on a raw provider
+ * error value into the canonical `userRetryable`/`exhaustionReason` shape.
+ * Used both as the `z.preprocess` step for schemas below and directly by
+ * `normalizeProviderError` (`@common/errors/sdkError/providerErrorFormat`) so
+ * a cached `ProviderError` — attached before this migration ran, e.g. from a
+ * resumed flow's raw persisted state — is normalized the same way a freshly
+ * formatted error is, instead of being returned with legacy fields intact.
+ */
+export function normalizeLegacyProviderErrorFields(value: unknown): unknown {
   return normalizeLegacyExhaustionFlags(normalizeProviderErrorRetryFlag(value));
 }
 
