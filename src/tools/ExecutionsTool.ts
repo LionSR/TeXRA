@@ -9,6 +9,7 @@
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
+import { readCompletedRunTodos } from '@transcript';
 
 // Local imports - agent
 import {
@@ -440,11 +441,13 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
 
     // Completed execution: full KV fetch
     const store = getExecutionStore(executionId);
-    const [meta, config, children, todos, report] = await Promise.all([
+    const [meta, config, children, todosResult, report] = await Promise.all([
       store.readMeta(),
       store.readConfig(),
       store.readChildren(),
-      store.readTodos(),
+      readCompletedRunTodos(executionId, {
+        legacyFallback: () => store.readTodos(),
+      }),
       store.readReport(),
     ]);
 
@@ -477,7 +480,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       executionId,
       category,
       children,
-      todos,
+      todosResult.todos,
       report,
       {
         suppressReport: false,
