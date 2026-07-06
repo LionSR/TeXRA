@@ -135,9 +135,8 @@ async function openAndBuildLatex(
     if (!compiled.ok) {
       logger.warn(
         CHANNEL,
-        `Internal LaTeX compilation failed for ${uri.fsPath}${
-          compiled.logTail ? `\n${compiled.logTail}` : ''
-        }`,
+        `Internal LaTeX compilation failed for ${uri.fsPath}`,
+        { data: { sourceFile: uri.fsPath, logTail: compiled.logTail } },
       );
     }
   }

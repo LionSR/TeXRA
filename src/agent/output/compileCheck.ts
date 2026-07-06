@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
 import { hasLatexCompiler } from '@latex/latexToolchain';
-import { compileLatex2Pdf } from '@latex/texTools';
+import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import type {
   CompileFailure,
   CompileResult,
@@ -281,7 +281,7 @@ async function compileOne(
       flexibleFS.delete(legacyLogDest).catch(() => undefined),
     ]);
 
-  let compileResult: { ok: boolean; logTail?: string };
+  let compileResult: CompileLatex2PdfResult;
   try {
     const content = await flexibleFS.read(outputFile.location);
     if (!/\\documentclass/.test(content)) {
@@ -353,8 +353,7 @@ async function compileOne(
     return { failure: null, failureLogExcerpt: '', artifact };
   }
 
-  const tail = compileResult.logTail ?? '(no compile log tail available)';
-  const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${tail}`;
+  const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${compileResult.logTail}`;
   ctx.logger.warn(`Compile check: ${displayName} failed`, {
     data: path.relative(opts.runDirectory, logDest.absolutePath),
   });
