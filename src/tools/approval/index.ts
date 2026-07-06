@@ -13,11 +13,6 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
-import {
-  _rejectAllPendingUserQuestions,
-  _rejectPendingUserQuestionsForStream,
-  _rejectUnscopedUserQuestions,
-} from '@tools/userQuestion';
 
 import { bashApprovalController } from './bashApproval';
 import { proposalApprovalState } from './proposalApproval';
@@ -37,10 +32,10 @@ export function cleanupApprovalsForStream(
 ): void {
   toolEditApprovalController.rejectPendingForStream(streamId);
   bashApprovalController.rejectPendingForStream(streamId);
-  _rejectPendingUserQuestionsForStream(streamId);
   toolEditApprovalController.bypass.clearForStream(streamId);
   bashApprovalController.bypass.clearForStream(streamId);
   proposalApprovalState.clearForStream(streamId);
+  session.interactions.cancelForStream(streamId, 'Stream resources released.');
   session.coordinators.cleanupRequestsForStream(streamId);
 }
 
@@ -79,7 +74,6 @@ export function releaseStreamResources(
 export function cleanupUnscopedApprovals(runtimeHost?: AgentRuntimeHost): void {
   toolEditApprovalController.rejectUnscopedPending(runtimeHost);
   bashApprovalController.rejectUnscopedPending(runtimeHost);
-  _rejectUnscopedUserQuestions(runtimeHost);
 }
 
 /**
@@ -99,7 +93,6 @@ export function cleanupAllApprovals(
 ): void {
   toolEditApprovalController.rejectAllPending();
   bashApprovalController.rejectAllPending();
-  _rejectAllPendingUserQuestions();
   toolEditApprovalController.bypass.clearAll();
   bashApprovalController.bypass.clearAll();
   proposalApprovalState.clearAll();
@@ -111,7 +104,6 @@ export { enableYoloOnChildStream, inheritBashBypassOnChildStream };
 // Re-export commonly used functions from individual modules
 export {
   // Bash approval
-  handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
   isBashApprovalBypassedForStream,

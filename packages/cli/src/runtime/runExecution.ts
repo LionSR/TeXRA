@@ -24,7 +24,10 @@ import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
-import { installCliApprovalHandlers } from './approvalAdapter';
+import {
+  createHeadlessCliHostInteractions,
+  installCliApprovalHandlers,
+} from './approvalAdapter';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -179,16 +182,25 @@ export async function executeCliRequest(
   const baseRuntimeHost = createCliRuntimeHost(runContext);
   const snapshotStore = new StreamSnapshotStore();
   const runtimeHost = persistCliProgressEvents(baseRuntimeHost, snapshotStore);
+  const detachHostInteractions = defaultSession().useHostInteractions(
+    createHeadlessCliHostInteractions(runContext, {
+      beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
+    }),
+  );
+  const interactionHost: CliRuntimeHost = {
+    ...runtimeHost,
+    interactions: defaultSession().interactions,
+  };
   // Present terminal-error toasts from the run's `result` event through the same
   // runtimeHost path the lifecycle used before (so ndjson / logger output is
   // unchanged); the lifecycle no longer emits them directly.
   const detachResultToast = attachTerminalResultToast(
     defaultSession(),
-    runtimeHost,
+    interactionHost,
   );
   const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
     defaultSession().events,
-    runtimeHost,
+    interactionHost,
   );
   const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
     beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
@@ -208,7 +220,7 @@ export async function executeCliRequest(
     : undefined;
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
-      runtimeHost,
+      runtimeHost: interactionHost,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
       stopAfterCycle: options.stopAfterCycle,
@@ -250,12 +262,13 @@ export async function executeCliRequest(
     }
     detachResultToast();
     detachLegacyProgressProjection();
+    detachHostInteractions();
     uninstallApprovalHandlers();
     try {
       flushPendingRunTraces();
       await Promise.all([streamLogStore.flush(), snapshotStore.flush()]);
     } finally {
-      await runtimeHost.close();
+      await interactionHost.close();
     }
   }
 

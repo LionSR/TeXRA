@@ -1,11 +1,9 @@
-import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
-import type { BashApprovalAction } from '@shared/schemas/prompts';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireRuntimeHost } from '@tools/contextHelpers';
 import { getConfig } from '@utils/config/configUtils';
@@ -94,65 +92,15 @@ async function showApprovalPrompt(
     return { accepted: true };
   }
 
-  const requestId = `bash-${nanoid()}`;
-
   const interaction = runtimeHost.interactions?.requestBashApproval?.({
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
     streamId,
   });
-  if (interaction) return interaction;
-
-  try {
-    return await new Promise<BashApprovalResult>((resolve) => {
-      let settled = false;
-      const settle = (result: BashApprovalResult) => {
-        if (settled) return;
-        settled = true;
-        resolve(result);
-      };
-
-      bashApprovalController.registerPending(requestId, {
-        streamId,
-        runtimeHost,
-        settle,
-        isSettled: () => settled,
-      });
-
-      runtimeHost.emit('requestEnsureProgressView', {});
-
-      // Activate the stream that needs approval so user sees the prompt immediately
-      if (streamId) {
-        runtimeHost.emit('setActiveStream', { streamId });
-      }
-
-      runtimeHost.emit('showBashPermission', {
-        requestId,
-        command: request.command,
-        ...(request.cwd ? { cwd: request.cwd } : {}),
-        allowBypass: true,
-        streamId: streamId ?? '',
-      });
-    });
-  } finally {
-    bashApprovalController.unregisterPending(requestId);
-    runtimeHost.emit('resolveBashPermission', { requestId });
+  if (!interaction) {
+    throw new Error('HostInteractions.requestBashApproval is required');
   }
-}
-
-export async function handleProgressViewBashApprovalAction(payload: {
-  requestId: string;
-  action: BashApprovalAction;
-  feedback?: string;
-}): Promise<void> {
-  const entry = bashApprovalController.getPending(payload.requestId);
-  if (!entry || entry.isSettled()) return;
-
-  entry.settle({
-    accepted: payload.action === 'approve',
-    userMessage:
-      payload.action === 'reject' ? payload.feedback?.trim() : undefined,
-  });
+  return interaction;
 }
 
 export function buildBashApprovalRejectedResult(
