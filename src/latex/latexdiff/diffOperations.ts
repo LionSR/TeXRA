@@ -15,7 +15,7 @@ import {
 } from '@agent/output/workflowOutputLayout';
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
-import { RoundKeySchema } from '@shared/schemas';
+import { getEffectiveDiffBase, RoundKeySchema } from '@shared/schemas';
 import type { OutputFileInfo } from '@shared/schemas';
 import {
   WorkspaceFS,
@@ -116,10 +116,7 @@ export async function runLatexdiffFromMetadata(params: {
 
   for (const [round, infos] of rounds.entries()) {
     for (const info of infos) {
-      // Prefer the immutable pre-run snapshot (diffBase): lineage.original now
-      // points at the live workspace file, which for in-place rewrites is the
-      // post-run file itself, so latexdiff would compare it against itself.
-      const base = info.lineage?.diffBase ?? info.lineage?.original ?? null;
+      const base = getEffectiveDiffBase(info.lineage);
       const description = `${getFileLabel(info)} (r${round})`;
 
       if (!base) {

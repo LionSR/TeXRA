@@ -23,7 +23,7 @@ function createRetryPermission(): RetryRequestPanel['permission'] {
       model: 'test-model',
       errorMessage: 'Relay quota exhausted',
       errorDetails: {
-        isCredentialExhausted: true,
+        exhaustionReason: 'relay-limit',
         isRelayError: true,
         userRetryable: true,
       },

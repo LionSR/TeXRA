@@ -89,6 +89,7 @@ describe('reduceStreamMeta', () => {
 
   describe('activeProcesses', () => {
     const active: ActiveChildInfo = {
+      kind: 'process',
       executionId: 'active',
       agentName: 'bash',
     };
