@@ -37,7 +37,7 @@ refactoring is warranted.** The four fresh readers independently reached the
 standing conclusion:
 
 - The **core/runtime** reader found **no** `Node.exec → wrapper → coreFunction →
-  createFlow → flow.run` ladders — `ResponseCycleNode.exec()` and
+createFlow → flow.run` ladders — `ResponseCycleNode.exec()` and
   `ToolUseCycleNode.exec()` call `createXFlow()` → `setServices(...)` → `run(...)`
   directly with no intermediate hop — **no** trivial identity factories, and
   **no** two-layer `buildX`-only-from-`createX` factories in the flow/node layer.
@@ -149,34 +149,34 @@ each already recorded and adjudicated in a prior readiness doc. Listed so the
 re-derivation is on the record and the mapping is explicit; **rulings held, no new
 action**.
 
-| Re-derived this pass (reader) | Already tracked at | Standing disposition |
-| --- | --- | --- |
-| Extract auth/relay/tier (`getApiKey`, `shouldUseServerSideKeys`, `getBaseUrl`, `fetchApiKeyOrThrow`) out of `ModelHandler` into an injected `ApiCredentialResolver` (modelHandlers reader #1) | audit §`:2546-2547`, §`:2928` (`ApiCredentialResolver`); checkpoints `-06-26`, `-06-30` | **Reviewed-train** — signature/placement change, not blind-safe. |
-| Narrow `IModelHandler` + drop provider-identity getters / `*WithPrefill` split (modelHandlers reader #2) | `-07-05` #3; `-07-03` #4 (role-split) | **Reviewed-train** — port + caller refactor. |
-| `OpenRouterNative` couples to concrete `isDeepSeek`/`isKimi`/`isMiniMax` getters (modelHandlers reader #4) | audit `:413`; `-07-03` `:200` (placement, 07-02 candidate #7) | **Reviewed-train** — the getters are live, the angle is placement. |
-| Two full Google handlers (GenAI + Interactions) for one provider (modelHandlers reader #5) | `-07-05` #5 (strategic); `google-interactions-api.md` | **Strategic** — product decision, remove once Interactions is blessed; no blind change. |
-| `resumeToolUseFromSnapshot` duplicates `runToolUseAgent` → extract `runToolUseFlowForHandle(ctx, handle, setting, {resumeSnapshot?, setupSession?})` (core reader #2) | audit §23 N2, `:3006`, `:3182-3188` | **Reviewed-train** — callback-shape care needed. |
-| Inline `runReflectionAgent` into `executeAgent`'s category switch (core reader #3) | `-07-03` `:206`; `-06-30` `:192` | **Adjudicated KEEP** — owns category-specific follow-up wiring; inlining bloats `executeAgent`. |
-| Group platform tool-UI ports (`linter`, `addCriticismSink`, `toolMissingHandler`, `toolNotificationHandler`) behind a `toolHostUi` sub-port (surface reader #1) | `-07-03` `:54` | **Reviewed-train** — surface-shaping, opportunistic. |
-| `@logger` barrel is a partial 1-of-N entry (surface reader #4) | `-07-05` #7 (refines P25-4) | **Reviewed-train / opportunistic** — importer count already corrected. |
-| `output/workflowOutputLayout.ts:26-32` re-export hop for pass-through-only importers (surface reader #5) | audit `:2374` | **Reviewed-train** — file retained (owns legacy helpers); repoint the 3 pass-through importers only. |
+| Re-derived this pass (reader)                                                                                                                                                                 | Already tracked at                                                                      | Standing disposition                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Extract auth/relay/tier (`getApiKey`, `shouldUseServerSideKeys`, `getBaseUrl`, `fetchApiKeyOrThrow`) out of `ModelHandler` into an injected `ApiCredentialResolver` (modelHandlers reader #1) | audit §`:2546-2547`, §`:2928` (`ApiCredentialResolver`); checkpoints `-06-26`, `-06-30` | **Reviewed-train** — signature/placement change, not blind-safe.                                     |
+| Narrow `IModelHandler` + drop provider-identity getters / `*WithPrefill` split (modelHandlers reader #2)                                                                                      | `-07-05` #3; `-07-03` #4 (role-split)                                                   | **Reviewed-train** — port + caller refactor.                                                         |
+| `OpenRouterNative` couples to concrete `isDeepSeek`/`isKimi`/`isMiniMax` getters (modelHandlers reader #4)                                                                                    | audit `:413`; `-07-03` `:200` (placement, 07-02 candidate #7)                           | **Reviewed-train** — the getters are live, the angle is placement.                                   |
+| Two full Google handlers (GenAI + Interactions) for one provider (modelHandlers reader #5)                                                                                                    | `-07-05` #5 (strategic); `google-interactions-api.md`                                   | **Strategic** — product decision, remove once Interactions is blessed; no blind change.              |
+| `resumeToolUseFromSnapshot` duplicates `runToolUseAgent` → extract `runToolUseFlowForHandle(ctx, handle, setting, {resumeSnapshot?, setupSession?})` (core reader #2)                         | audit §23 N2, `:3006`, `:3182-3188`                                                     | **Reviewed-train** — callback-shape care needed.                                                     |
+| Inline `runReflectionAgent` into `executeAgent`'s category switch (core reader #3)                                                                                                            | `-07-03` `:206`; `-06-30` `:192`                                                        | **Adjudicated KEEP** — owns category-specific follow-up wiring; inlining bloats `executeAgent`.      |
+| Group platform tool-UI ports (`linter`, `addCriticismSink`, `toolMissingHandler`, `toolNotificationHandler`) behind a `toolHostUi` sub-port (surface reader #1)                               | `-07-03` `:54`                                                                          | **Reviewed-train** — surface-shaping, opportunistic.                                                 |
+| `@logger` barrel is a partial 1-of-N entry (surface reader #4)                                                                                                                                | `-07-05` #7 (refines P25-4)                                                             | **Reviewed-train / opportunistic** — importer count already corrected.                               |
+| `output/workflowOutputLayout.ts:26-32` re-export hop for pass-through-only importers (surface reader #5)                                                                                      | audit `:2374`                                                                           | **Reviewed-train** — file retained (owns legacy helpers); repoint the 3 pass-through importers only. |
 
 ## Adjudicated traps the fan-out re-surfaced — rulings held
 
 The uninformed audit raised, and the standing rulings correctly filter, all of
 the following. No change.
 
-| Re-surfaced candidate | Ruling |
-| --- | --- |
-| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table | **Trap** — each carries real per-provider override points; only DashScope/XAI are genuinely thin. The `modelHandlers` reader rejected this itself. |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler` | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing keep it load-bearing (the split angle is the distinct reviewed-train item). |
-| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger` | **Keep** — each hook has a distinct real overrider. |
-| `runReflectionAgent` / `runToolUseAgent` are single-caller wrappers | **Keep** — each owns genuinely category-specific wiring; inlining bloats `executeAgent`. |
-| `runAgent` / `executeAgent` dual entry is redundant | **Keep** — `runAgent` owns executionId assignment + `registerExecution` + `openWorkflowOutput`; `executeAgent` owns the run. Two documented responsibilities. |
-| `ModelFactory` two-layer / trivial-identity factories | **No violation** — `createModelHandler` + `createModelHandlerForCompatibilityKey` are two real entries sharing a routing switch with compile-time exhaustiveness. |
-| `withModelClient` is a trivial identity spread | **Keep** — deliberately defines `client` as a getter + `refreshClient` to preserve relay-401 live rebinding; spreading breaks liveness. |
-| `AgentTrace` over-layered / `platform()` single-call-site ports are over-abstraction | **Keep** — trace is one `emit()` SSoT (SDK-shaped); thin ports each have three divergent host impls. |
-| The `LegacyProgressEventProjection` / `SessionRunFactProjector` / `conversationProgressHub` projection trio is dead weight | **Keep (transitional)** — self-labeled "temporary Stage 3a bridge"; retire once host consumers read the `SessionEventHub` plane directly. Roadmap item, not a sweep. |
+| Re-surfaced candidate                                                                                                      | Ruling                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table                                        | **Trap** — each carries real per-provider override points; only DashScope/XAI are genuinely thin. The `modelHandlers` reader rejected this itself.                    |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                                                                  | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing keep it load-bearing (the split angle is the distinct reviewed-train item). |
+| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger`                                                         | **Keep** — each hook has a distinct real overrider.                                                                                                                   |
+| `runReflectionAgent` / `runToolUseAgent` are single-caller wrappers                                                        | **Keep** — each owns genuinely category-specific wiring; inlining bloats `executeAgent`.                                                                              |
+| `runAgent` / `executeAgent` dual entry is redundant                                                                        | **Keep** — `runAgent` owns executionId assignment + `registerExecution` + `openWorkflowOutput`; `executeAgent` owns the run. Two documented responsibilities.         |
+| `ModelFactory` two-layer / trivial-identity factories                                                                      | **No violation** — `createModelHandler` + `createModelHandlerForCompatibilityKey` are two real entries sharing a routing switch with compile-time exhaustiveness.     |
+| `withModelClient` is a trivial identity spread                                                                             | **Keep** — deliberately defines `client` as a getter + `refreshClient` to preserve relay-401 live rebinding; spreading breaks liveness.                               |
+| `AgentTrace` over-layered / `platform()` single-call-site ports are over-abstraction                                       | **Keep** — trace is one `emit()` SSoT (SDK-shaped); thin ports each have three divergent host impls.                                                                  |
+| The `LegacyProgressEventProjection` / `SessionRunFactProjector` / `conversationProgressHub` projection trio is dead weight | **Keep (transitional)** — self-labeled "temporary Stage 3a bridge"; retire once host consumers read the `SessionEventHub` plane directly. Roadmap item, not a sweep.  |
 
 ## Structural divergence from the Agent SDK loop — re-stated (no new action)
 
@@ -254,16 +254,17 @@ reviewed-train items unattended.
   Absent from all prior readiness docs (0 grep hits).
 - Change verified green: `npm run typecheck` **exit 0** (all four projects);
   `eslint` on the changed file clean; `vitest run
-  src/test-kernel/agent/output/extraction/` — **2 passed**.
+src/test-kernel/agent/output/extraction/` — **2 passed**.
 - New candidate verified in-tree: `SessionFact` union
   (`SessionEventHub.ts:10-30`) re-listed by hand at `emitRuntimeEvent.ts:28-46`,
   `LegacyProgressEventProjection.ts:7-28` (byte-identical switch), and
   `emitRuntimeEvent.ts:66-112` (third enumeration) — no exhaustiveness guard.
   0 grep hits across all prior readiness docs.
 - Reviewed-train mapping verified: each re-derived candidate's tracking anchor
-  confirmed present in the cited doc/line (credential-resolver `:2546/:2928`,
-  `resumeToolUseFromSnapshot` §23-N2 `:3006/:3182`, OpenRouter coupling `:413`,
-  `runReflectionAgent` KEEP `-07-03:206`, `toolHostUi` `-07-03:54`,
-  `workflowOutputLayout` `:2374`).
+confirmed present in the cited doc/line (credential-resolver `:2546/:2928`,
+`resumeToolUseFromSnapshot` §23-N2 `:3006/:3182`, OpenRouter coupling `:413`,
+`runReflectionAgent` KEEP `-07-03:206`, `toolHostUi` `-07-03:54`,
+`workflowOutputLayout` `:2374`).
 </content>
+
 </invoke>
