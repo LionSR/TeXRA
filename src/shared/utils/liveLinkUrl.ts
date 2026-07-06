@@ -17,6 +17,13 @@ const SAFE_LIVE_LINK_URL_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
  * standalone HTML export opens via `file://` with no origin, where a
  * tool-controlled `/etc/passwd` would resolve against the filesystem root
  * (issue #7230 follow-up).
+ *
+ * This function only guarantees the URL *scheme* is safe — it returns the
+ * raw, unescaped input, not a value normalized for any particular embedding
+ * syntax. Callers that interpolate the result into a format with its own
+ * special characters (Markdown `[]()`, LaTeX `\href{}{}`) must escape it for
+ * that syntax themselves; see `markdownSpec.ts`/`latexSpec.ts` for the
+ * concrete escaping this repo already applies at those embedding sites.
  */
 export function sanitizeLiveLinkUrl(raw: string): string | undefined {
   const trimmed = raw.trim();
