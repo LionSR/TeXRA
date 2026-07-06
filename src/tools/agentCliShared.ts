@@ -29,6 +29,7 @@ import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createChildStream, type ChildStream } from './childStream';
+import { formatDeliveryEnvelope } from './deliveryEnvelope';
 
 /** Maximum prompt length echoed back in a delivery/error XML element. */
 const DELIVERY_PROMPT_MAX = 200;
@@ -62,11 +63,7 @@ export function formatAgentCliDelivery(params: AgentCliDeliveryParams): string {
   const { tag, executionId, prompt, wallTimeMs, usage, extraLines } = params;
   const durationSec = (wallTimeMs / 1000).toFixed(1);
   const response = params.response || '(no response)';
-  const idAttr = params.idAttr?.value
-    ? ` ${params.idAttr.name}="${escapeAttr(params.idAttr.value)}"`
-    : '';
   const lines = [
-    `<${tag} id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, DELIVERY_PROMPT_MAX))}"${idAttr}>`,
     `<wall-time>${durationSec}s</wall-time>`,
     `<response>${escapeText(response)}</response>`,
   ];
@@ -74,8 +71,18 @@ export function formatAgentCliDelivery(params: AgentCliDeliveryParams): string {
     lines.push(`<usage input="${usage.input}" output="${usage.output}" />`);
   }
   if (extraLines) lines.push(...extraLines);
-  lines.push(`</${tag}>`);
-  return lines.join('\n');
+  return formatDeliveryEnvelope({
+    tag,
+    attributes: [
+      { name: 'id', value: executionId },
+      { name: 'prompt', value: prompt.slice(0, DELIVERY_PROMPT_MAX) },
+      {
+        name: params.idAttr?.name ?? '',
+        value: params.idAttr?.value || null,
+      },
+    ].filter((attr) => attr.name !== ''),
+    bodyLines: lines,
+  });
 }
 
 /**
@@ -88,11 +95,14 @@ export function formatAgentCliError(
   prompt: string,
   err: unknown,
 ): string {
-  return [
-    `<${tag} id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, DELIVERY_PROMPT_MAX))}">`,
-    `<message>${escapeText(toErrorMessage(err))}</message>`,
-    `</${tag}>`,
-  ].join('\n');
+  return formatDeliveryEnvelope({
+    tag,
+    attributes: [
+      { name: 'id', value: executionId },
+      { name: 'prompt', value: prompt.slice(0, DELIVERY_PROMPT_MAX) },
+    ],
+    bodyLines: [`<message>${escapeText(toErrorMessage(err))}</message>`],
+  });
 }
 
 /**

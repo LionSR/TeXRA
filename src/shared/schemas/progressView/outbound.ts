@@ -303,7 +303,7 @@ export const SyncStreamContentMessageSchema = z.object({
   agentCategory: z.string().optional(),
   // Tab-switch state (R2: replaces separate syncActiveStreamState messages)
   conversationProgress: ConversationProgressSchema.optional(),
-  roundStage: RoundStageSchema.optional(),
+  roundStage: RoundStageSchema.nullable().optional(),
   badges: z
     .object({
       activeSubagents: z.array(ActiveChildInfoSchema),
