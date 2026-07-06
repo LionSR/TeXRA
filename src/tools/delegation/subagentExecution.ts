@@ -215,6 +215,7 @@ export async function executeSubagent(
       let subagentError: unknown;
       const result = await executeAgent(configPayload, executionId, {
         runtimeHost,
+        session: parentSession,
         isSubagent: true,
         enforceCategory: true,
         parentStreamId: orchestratorStreamId,
@@ -274,6 +275,7 @@ export async function executeSubagent(
 
   const promise = executeAgent(configPayload, executionId, {
     runtimeHost,
+    session: parentSession,
     isSubagent: true,
     enforceCategory: true,
     parentStreamId: orchestratorStreamId,
@@ -291,6 +293,7 @@ export async function executeSubagent(
       nativeStrategy.onBeforeWaiting(lastResponse, touchedFiles, memoryMisses),
     onCompleted: (result) => nativeStrategy.onCompleted(result),
     onError: (err, result) => nativeStrategy.onError(err, result),
+    onRun: (handle) => nativeStrategy.setRunHandle(handle),
   });
   nativeStrategy.attachPromise(promise);
   const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
