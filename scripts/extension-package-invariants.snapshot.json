@@ -1753,7 +1753,7 @@
         ]
       },
       "viewsContainers": {
-        "activitybar": [
+        "secondarySidebar": [
           {
             "icon": "resources/logo-128x128.svg",
             "id": "texra",
