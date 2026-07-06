@@ -14,7 +14,6 @@
 import type { AgentTrace } from '@agent/trace';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import {
   currentSession,
@@ -34,16 +33,8 @@ export interface SubscriptionBinding<K extends string> {
 
 interface PollingSourceLike<K extends string, Input> {
   has(key: K): boolean;
-  subscribe(
-    input: Input,
-    onEvent: (text: string) => void,
-    runtimeHost: AgentRuntimeHost,
-  ): Disposable;
-  updateSubscription?(
-    input: Input,
-    onEvent: (text: string) => void,
-    runtimeHost: AgentRuntimeHost,
-  ): void;
+  subscribe(input: Input, onEvent: (text: string) => void): Disposable;
+  updateSubscription?(input: Input, onEvent: (text: string) => void): void;
   activeKeys(): readonly K[];
   onKeysChanged(listener: (keys: readonly K[]) => void): Disposable;
 }
@@ -94,11 +85,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   }
 
   /** Returns true if a new subscription was created, false if it already existed. */
-  bind(
-    streamId: StreamTabId,
-    input: Input,
-    runtimeHost: AgentRuntimeHost,
-  ): boolean {
+  bind(streamId: StreamTabId, input: Input): boolean {
     const key = this.opts.keyOf(input);
     // Capture the session HERE: bind() runs inside the run's AsyncLocalStorage
     // (the github tool's execute()), but onEvent fires later from a detached
@@ -113,11 +100,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const existing = bound.get(key);
     if (existing) {
       existing.session = session;
-      this.opts.source.updateSubscription?.(
-        input,
-        existing.onEvent,
-        runtimeHost,
-      );
+      this.opts.source.updateSubscription?.(input, existing.onEvent);
       return false;
     }
     // Set a sentinel before subscribe() so list() returns correct owner
@@ -158,11 +141,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const keyIsNew = !this.opts.source.has(key);
     let disposable: Disposable;
     try {
-      disposable = this.opts.source.subscribe(
-        input,
-        subscription.onEvent,
-        runtimeHost,
-      );
+      disposable = this.opts.source.subscribe(input, subscription.onEvent);
     } catch (err) {
       this.removeBoundKey(streamId, bound, key);
       throw err;
@@ -174,11 +153,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   }
 
   /** Returns true if a subscription existed and was removed. */
-  unbind(
-    streamId: StreamTabId,
-    input: Input,
-    _runtimeHost: AgentRuntimeHost,
-  ): boolean {
+  unbind(streamId: StreamTabId, input: Input): boolean {
     const key = this.opts.keyOf(input);
     const bound = this.perStream.get(streamId);
     const binding = bound?.get(key);
@@ -194,7 +169,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
    * bindings removed. Lets the settings UI cancel a subscription globally
    * without needing to know which stream owns it.
    */
-  unbindAll(key: string, _runtimeHost: AgentRuntimeHost): number {
+  unbindAll(key: string): number {
     const removedBindings: BoundSubscription[] = [];
     for (const [streamId, bound] of [...this.perStream]) {
       const binding = bound.get(key as K);
