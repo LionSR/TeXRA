@@ -414,6 +414,44 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
+  it('keeps native subagent WAITING results registered and nonterminal', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-subagent-waiting',
+    );
+    const onCompleted = vi.fn();
+    const onError = vi.fn();
+    storageMocks.writeTerminalStatus.mockClear();
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => {
+          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+          expect(
+            streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait'),
+          ).toBe(true);
+          return {
+            category: 'toolUse',
+            outcome: STREAM_PHASE.WAITING,
+            executionId,
+            streamId,
+          };
+        },
+        { isSubagent: true, onCompleted, onError },
+      );
+
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      expect(storageMocks.writeTerminalStatus).not.toHaveBeenCalled();
+      expect(onCompleted).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
+      expect(executionRegistry.getHandle(executionId)).toBeDefined();
+    } finally {
+      executionRegistry.untrack(executionId);
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
   // The canonical outcome is decided once and projected three ways. This
   // matrix pins the projections for every terminal path — in particular that
   // a user stop (the no-throw `cancelled` exit, the dominant stop path)

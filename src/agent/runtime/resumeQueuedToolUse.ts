@@ -1,8 +1,12 @@
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
+  type SubagentProgressUpdate,
   type StreamTabId,
 } from '@shared/schemas';
 import { resumeToolUseFromSnapshot } from './executeAgent';
@@ -17,8 +21,23 @@ export interface ResumeQueuedToolUseOptions {
   readonly session?: SessionHandle;
   /** Tools hidden because the current host/runtime cannot support them. */
   readonly runtimeUnavailableTools?: readonly string[];
+  /** Hide tools whose approval prompts cannot be answered in this host mode. */
+  readonly approvalPromptsUnavailable?: boolean;
   /** Per-run override for the host's tool-edit approval UI — see `ExecuteAgentOptions.toolEditApprovalHandler`. */
   readonly toolEditApprovalHandler?: ToolEditApprovalPort;
+  /** Parent stream used when a native subagent resumes under its orchestrator. */
+  readonly parentStreamId?: StreamTabId;
+  /** Allow native subagent resume to halt at WAITING instead of terminalizing. */
+  readonly allowWaitingResult?: boolean;
+  readonly onBeforeWaiting?: ToolUseBeforeWaitingCallback;
+  readonly onFollowUpConsumed?: () => void;
+  readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  readonly onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
+  readonly onRunError?: (
+    error: unknown,
+    result: AgentFlowResult,
+  ) => void | Promise<void>;
+  readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
   /**
    * Follow-ups to replay ahead of any items already queued for the stream
    * (e.g. an explicit follow-up typed alongside a manual resume). Seeded before
@@ -73,8 +92,17 @@ export async function resumeQueuedToolUseSnapshot(
 
     await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
       session: options.session,
+      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       toolEditApprovalHandler: options.toolEditApprovalHandler,
+      parentStreamId: options.parentStreamId,
+      allowWaitingResult: options.allowWaitingResult,
+      onBeforeWaiting: options.onBeforeWaiting,
+      onFollowUpConsumed: options.onFollowUpConsumed,
+      onProgress: options.onProgress,
+      onCompleted: options.onCompleted,
+      onError: options.onRunError,
+      onRun: options.onRun,
       setupSession: (session) => {
         for (const item of followUps) {
           session.appendFollowUp(item);
