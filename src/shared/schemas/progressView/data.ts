@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 
-import { tryParseUrl } from '@utils/core';
+import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 
 import { AgentCategorySchema } from '../agent';
 import { StreamTabIdSchema } from '../identifiers';
@@ -87,49 +87,8 @@ export type NormalizedToolUse = z.infer<typeof NormalizedToolUseSchema>;
 // URL Sanitization
 // ============================================================
 
-/**
- * Schemes a tool-controlled URL may use when rendered as a live `href`.
- * Mirrors the retired `SAFE_URL_SCHEMES` from the hand-written HTML chat
- * exporter's `safeUrl()` helper (deleted with `formatChatAsHtml` in #7137;
- * see git history) — `web_search`/`web_fetch` results carry LLM/tool
- * output verbatim, so a `javascript:`/`data:`/`vbscript:`/`file:` URL must
- * never reach an anchor's `href`, where it becomes a live, script-executing
- * link. Sanitizing here (schema level) covers both the live Progress View
- * webview and exported standalone HTML — the export has no CSP and is
- * opened with full privileges via `file://` or `vscode.env.openExternal` —
- * since both render through this shared schema.
- */
-const SAFE_URL_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
-
-/**
- * Returns `raw` unchanged if it's safe to render as an `href`, or
- * `undefined` if it isn't, so callers can omit the link (or fall back to
- * plain text) instead of rendering a live anchor. Behavior matches the
- * retired `safeUrl()` exactly:
- * - trims surrounding whitespace
- * - empty string → unsafe (nothing to link to)
- * - anchor-only (`#foo`) → safe as-is, no scheme to abuse
- * - root-relative (`/foo`, but NOT protocol-relative `//foo`) → safe as-is
- * - everything else must parse as an absolute URL (via the `URL` global,
- *   so protocol-relative `//foo` fails here too) with an allow-listed
- *   scheme
- */
-function sanitizeUrl(raw: string): string | undefined {
-  const trimmed = raw.trim();
-  if (trimmed === '') return undefined;
-  if (trimmed.startsWith('#')) return trimmed;
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
-  const url = tryParseUrl(trimmed);
-  if (!url) return undefined;
-  return SAFE_URL_SCHEMES.has(url.protocol) ? trimmed : undefined;
-}
-
-/**
- * A URL field that sanitizes on parse. An unsafe scheme collapses to
- * `undefined` rather than failing the parse, so one malicious field in an
- * otherwise-valid tool payload doesn't reject the whole message.
- */
-const SafeUrlSchema = z.string().transform(sanitizeUrl);
+/** URL field for tool payloads that will be rendered as live links. */
+const SafeUrlSchema = z.string().transform(sanitizeLiveLinkUrl);
 
 export const WebSearchResultItemSchema = z.object({
   url: SafeUrlSchema.optional(),
