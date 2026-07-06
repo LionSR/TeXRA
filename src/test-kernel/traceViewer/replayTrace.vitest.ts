@@ -1,15 +1,31 @@
-import { create } from 'mutative';
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
+import { create } from 'mutative';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { assembleTrace, StreamLogStore } from '@transcript';
+import { getExecutionStore } from '@agent/storage';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import {
   createInitialState,
   type ProgressState,
 } from '@progressView/frontend/store';
+import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import {
   AgentCategory,
+  LOG_LEVELS,
+  MESSAGE_TYPES,
   STREAM_STATUS,
+  STREAM_LOG_ENTRY_TYPES,
   StreamSnapshotSchema,
   type ExecutionId,
   type StreamTabId,
@@ -19,7 +35,27 @@ import {
 // the real replay pipeline (`@progressView/frontend`'s dispatcher + slices),
 // so a plain relative import is the simplest way to reach it.
 import { replayTrace } from '../../../packages/trace-viewer/src/replayTrace';
+import type { Platform } from '@platform/platform';
 import type { TraceDocument } from '@transcript';
+
+const tempDirs: string[] = [];
+
+async function buildStoragePlatform(): Promise<Platform> {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-replay-trace-'));
+  tempDirs.push(tempDir);
+  const workspaceDir = path.join(tempDir, 'workspace');
+  const storageRoot = path.join(tempDir, 'storage');
+  return createFakePlatform(
+    { workspacePath: workspaceDir },
+    {
+      fs: nodeFilesystem,
+      workspace: createNodeWorkspace(() => workspaceDir),
+      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+      globalState: new MemoryStateStore(),
+      workspaceState: new MemoryStateStore(),
+    },
+  );
+}
 
 function createContext(initialState: ProgressState): {
   ctx: MessageHandlerContext;
@@ -49,6 +85,14 @@ function createContext(initialState: ProgressState): {
   return { ctx, getState: () => state };
 }
 
+setupPlatform(buildStoragePlatform);
+
+afterEach(async () => {
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
+});
+
 function legacyTrace(
   snapshotStatus: 'error' | 'stopped' | undefined,
 ): TraceDocument {
@@ -76,6 +120,51 @@ function legacyTrace(
 }
 
 describe('replayTrace legacy-status fallback (issue #7188)', () => {
+  it('derives failed status from a real exported legacy trace without snapshot.status', async () => {
+    const executionId = 'abc124' as ExecutionId;
+    const config = AgentConfigSchema.parse({
+      agent: 'correct',
+      model: 'gemini35f',
+      agentCategory: AgentCategory.Workflow,
+    });
+    await getExecutionStore(executionId).writeConfig(config);
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-06T00:00:00.000Z',
+    });
+
+    const streamId = getStreamTabId(config.agent, config.model, {
+      executionId,
+    });
+    const store = new StreamLogStore();
+    await store.load();
+    store.append(streamId, {
+      id: 'terminal-stage',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'Legacy run',
+      data: { status: 'running' },
+    });
+    store.update(streamId, 'terminal-stage', {
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { status: 'error', endTime: 200 },
+    });
+    await store.flush();
+
+    const result = await assembleTrace(executionId);
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.trace.terminalStatus).toBeNull();
+    expect(result.trace.snapshot.status).toBeUndefined();
+
+    const { ctx, getState } = createContext(createInitialState());
+    replayTrace(result.trace, ctx);
+
+    const replayed = getState().streamStates.get(result.trace.streamId);
+    expect(replayed?.status).toBe('failed');
+  });
+
   it('derives "failed" from snapshot.status "error" instead of defaulting to ready', () => {
     const { ctx, getState } = createContext(createInitialState());
     const trace = legacyTrace('error');
