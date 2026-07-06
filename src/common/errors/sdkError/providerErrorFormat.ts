@@ -3,7 +3,9 @@ import {
   type ErrorLogData,
   type ExhaustionReason,
   type ProviderError,
+  type RetryErrorInfo,
   normalizeLegacyProviderErrorFields,
+  toRetryErrorInfo,
 } from '@shared/schemas';
 import {
   extractErrorMessage,
@@ -303,6 +305,19 @@ export function normalizeProviderError(err: unknown): ProviderError {
 
 export function getSdkErrorMessage(err: unknown): string {
   return normalizeProviderError(err).message;
+}
+
+/** Normalize an error into the `{ userRetryable, lastError }` pair every
+ *  `execFallback`/failed-outcome branch attaches to its result. */
+export function buildFailedRetryInfo(err: unknown): {
+  userRetryable: boolean;
+  lastError: RetryErrorInfo;
+} {
+  const formatted = normalizeProviderError(err);
+  return {
+    userRetryable: formatted.userRetryable,
+    lastError: toRetryErrorInfo(formatted),
+  };
 }
 
 /** Builds consistent error data for logging with MESSAGE_TYPES.ERROR. */

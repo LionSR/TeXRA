@@ -1,6 +1,5 @@
 // Third-party imports
 import ky, { HTTPError } from 'ky';
-import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Internal imports
@@ -8,11 +7,12 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import {
   isTimeoutError,
-  isTransientHttpError,
+  joinAbortSignal,
+  retryTransientFetch,
   unwrapAbortError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
 const DDG_RETRIES = 2;
@@ -66,37 +66,22 @@ export class WebSearchTool extends defineTool({
 
     let data: DuckDuckGoResponse;
     try {
-      data = await pRetry(
+      data = await retryTransientFetch(
         async () => {
-          try {
-            const timeoutSignal = AbortSignal.timeout(DDG_TIMEOUT_MS);
-            const response = await ky.get('https://api.duckduckgo.com/', {
-              searchParams: {
-                q: query,
-                format: 'json',
-                no_redirect: 1,
-                no_html: 1,
-              },
-              timeout: false,
-              signal: cancelSignal
-                ? AbortSignal.any([cancelSignal, timeoutSignal])
-                : timeoutSignal,
-              retry: 0,
-            });
-            return (await response.json()) as DuckDuckGoResponse;
-          } catch (error: unknown) {
-            if (isTransientHttpError(error)) throw error;
-            throw new AbortError(ensureError(error));
-          }
+          const response = await ky.get('https://api.duckduckgo.com/', {
+            searchParams: {
+              q: query,
+              format: 'json',
+              no_redirect: 1,
+              no_html: 1,
+            },
+            timeout: false,
+            signal: joinAbortSignal(DDG_TIMEOUT_MS, cancelSignal),
+            retry: 0,
+          });
+          return (await response.json()) as DuckDuckGoResponse;
         },
-        {
-          retries: DDG_RETRIES,
-          minTimeout: 500,
-          randomize: true,
-          // Stop retrying (and skip inter-retry delays) once the run is
-          // cancelled.
-          signal: cancelSignal,
-        },
+        { retries: DDG_RETRIES, minTimeout: 500, cancelSignal },
       );
     } catch (error) {
       // Defensive: ensure the specific type checks below see the real error
