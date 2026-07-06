@@ -139,15 +139,9 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     this.hydrateRestoredStreams();
 
     // These events can be emitted on the process bus without an active desktop
-    // runtime host. Keep them subscribed here so all desktop windows see goal
-    // badge, progress-routing, and root-error updates.
-    const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
-      const goal = GoalStore.getForStream(streamId);
-      opts.onGoalStateChanged(streamId, isGoalInFlight(goal), {
-        status: goal?.status,
-        objective: goal?.objective,
-      });
-    });
+    // runtime host. Keep them subscribed here so all desktop windows see
+    // progress-routing and root-error updates. Goal state is session-scoped and
+    // reaches this bridge through `onProgressEvent`.
     const unsubscribeEnsureProgress = bus.on(
       'requestEnsureProgressView',
       () => {
@@ -158,7 +152,6 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       opts.onShowError(message);
     });
     this.unsubscribe = () => {
-      unsubscribeGoal();
       unsubscribeEnsureProgress();
       unsubscribeShowError();
     };

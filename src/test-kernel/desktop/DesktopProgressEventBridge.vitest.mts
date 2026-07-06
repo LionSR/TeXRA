@@ -4,9 +4,9 @@
  * Covers ghost-stream hydration, snapshot persistence, restored-display
  * sending, progress-event handling, and stream-lifecycle callbacks.
  *
- * Event-bus wiring (goalStateChanged, requestEnsureProgressView,
- * requestShowError) is tested indirectly through the bridge's public
- * API and the callbacks it invokes.
+ * Event-bus wiring (requestEnsureProgressView, requestShowError) and
+ * session-progress handling are tested indirectly through the bridge's
+ * public API and the callbacks it invokes.
  */
 
 // Third-party imports
@@ -499,12 +499,30 @@ describe('DesktopProgressEventBridge', () => {
         bridge.dispose();
       }
     });
+
+    it('updates goal badge state from the session progress path', () => {
+      const onGoalStateChanged = vi.fn();
+      const bridge = createBridge({ onGoalStateChanged });
+
+      try {
+        bridge.onProgressEvent('goalStateChanged', {
+          streamId: 'goal-stream',
+        });
+
+        expect(onGoalStateChanged).toHaveBeenCalledWith('goal-stream', false, {
+          status: undefined,
+          objective: undefined,
+        });
+      } finally {
+        bridge.dispose();
+      }
+    });
   });
 
   // ── Process-bus events ──────────────────────────────────────────────────
 
   describe('process-bus events', () => {
-    it('subscribes to desktop-wide goal, routing, and root-error events', () => {
+    it('subscribes to desktop-wide routing and root-error events only', () => {
       const routeToProgress = vi.fn();
       const onGoalStateChanged = vi.fn();
       const onShowError = vi.fn();
@@ -515,23 +533,17 @@ describe('DesktopProgressEventBridge', () => {
       });
 
       try {
-        mockBusHandlers.get('goalStateChanged')?.({
-          streamId: 'goal-stream',
-        });
         mockBusHandlers.get('requestEnsureProgressView')?.({});
         mockBusHandlers.get('requestShowError')?.({
           message: 'Root run failed',
         });
 
-        expect(onGoalStateChanged).toHaveBeenCalledWith('goal-stream', false, {
-          status: undefined,
-          objective: undefined,
-        });
+        expect(mockBusHandlers.has('goalStateChanged')).toBe(false);
+        expect(onGoalStateChanged).not.toHaveBeenCalled();
         expect(routeToProgress).toHaveBeenCalledTimes(1);
         expect(onShowError).toHaveBeenCalledWith('Root run failed');
 
         bridge.dispose();
-        expect(mockBusHandlers.has('goalStateChanged')).toBe(false);
         expect(mockBusHandlers.has('requestEnsureProgressView')).toBe(false);
         expect(mockBusHandlers.has('requestShowError')).toBe(false);
       } finally {
