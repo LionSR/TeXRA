@@ -49,6 +49,9 @@ import { runFlowWithLifecycle } from './AgentRunLifecycle';
 import {
   AgentFlowError,
   buildOptionalFlowResultFields,
+  isWaitingFlowResult,
+  type AgentRuntimeFlowResult,
+  type WaitingToolUseFlowResult,
   type AgentFlowResult,
 } from './AgentFlowResult';
 import { createInterruptCallbacks } from './InterruptManager';
@@ -87,7 +90,7 @@ function buildToolUseFlowResult(
   executionId: ExecutionId,
   streamId: StreamTabId,
   memoryMisses: AgentFlowResult['memoryMisses'],
-): AgentFlowResult {
+): AgentRuntimeFlowResult {
   return {
     category: 'toolUse',
     outcome: result.outcome,
@@ -124,7 +127,7 @@ async function runToolUseAgent(
     ExecuteAgentOptions,
     'isSubagent' | 'onBeforeWaiting' | 'onFollowUpConsumed' | 'onProgress'
   >,
-): Promise<AgentFlowResult> {
+): Promise<AgentRuntimeFlowResult> {
   const { streamId } = ctx;
   const onRoundFinalized = createUsageRecordingCallback(ctx);
   try {
@@ -175,16 +178,14 @@ async function runToolUseAgent(
   } catch (err) {
     const failedResult = getToolUseFlowErrorResult(err);
     if (!failedResult) throw err;
-    throw new AgentFlowError(
-      getSdkErrorMessage(err),
-      buildToolUseFlowResult(
-        failedResult,
-        ctx.executionId,
-        streamId,
-        ctx.attachedMemoryMisses,
-      ),
-      { cause: err },
+    const result = buildToolUseFlowResult(
+      failedResult,
+      ctx.executionId,
+      streamId,
+      ctx.attachedMemoryMisses,
     );
+    if (isWaitingFlowResult(result)) throw err;
+    throw new AgentFlowError(getSdkErrorMessage(err), result, { cause: err });
   }
 }
 
@@ -270,6 +271,12 @@ export interface ExecuteAgentOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
+  /**
+   * Allow the promise to resolve with the non-terminal WAITING result. This is
+   * reserved for native subagent drivers that keep the execution handle and
+   * delivery state alive across conversational turns.
+   */
+  allowWaitingResult?: boolean;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   approvalPromptsUnavailable?: boolean;
   /** Hide tools unavailable because the current host/runtime cannot support them. */
@@ -293,6 +300,17 @@ export interface ExecuteAgentOptions {
   onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
+export function executeAgent(
+  configPayload: AgentConfigPayload,
+  executionId: ExecutionId | undefined,
+  options: ExecuteAgentOptions & { allowWaitingResult: true },
+): Promise<AgentFlowResult | WaitingToolUseFlowResult>;
+export function executeAgent(
+  configPayload: AgentConfigPayload,
+  executionId: ExecutionId | undefined,
+  options: ExecuteAgentOptions & { allowWaitingResult?: false | undefined },
+): Promise<AgentFlowResult>;
+
 /**
  * Low-level execution runner for an already-registered execution. Fresh
  * launches should use `runAgent()` or call `registerExecution()` first so the
@@ -303,7 +321,7 @@ export async function executeAgent(
   configPayload: AgentConfigPayload,
   executionId: ExecutionId | undefined,
   options: ExecuteAgentOptions,
-): Promise<AgentFlowResult> {
+): Promise<AgentRuntimeFlowResult> {
   if (options == null || options.runtimeHost == null) {
     throw new Error('executeAgent requires an explicit runtimeHost');
   }
@@ -340,7 +358,7 @@ export async function executeAgent(
       config,
       ctx.runtimeHost,
     ).catch(() => {});
-    return runFlowWithLifecycle(
+    const result = await runFlowWithLifecycle(
       ctx,
       async (handle) => {
         // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
@@ -375,6 +393,12 @@ export async function executeAgent(
         onRun: options.onRun,
       },
     );
+    if (isWaitingFlowResult(result) && options.allowWaitingResult !== true) {
+      throw new Error(
+        'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
+      );
+    }
+    return result;
   });
 }
 
@@ -388,6 +412,16 @@ export interface ResumeToolUseFromSnapshotOptions {
   /** Per-run override for the host's tool-edit approval UI — see `ExecuteAgentOptions.toolEditApprovalHandler`. */
   readonly toolEditApprovalHandler?: ToolEditApprovalPort;
   readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+  readonly onBeforeWaiting?: ToolUseBeforeWaitingCallback;
+  readonly onFollowUpConsumed?: () => void;
+  readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  readonly onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
+  readonly onError?: (
+    error: unknown,
+    result: AgentFlowResult,
+  ) => void | Promise<void>;
+  readonly parentStreamId?: StreamTabId;
+  readonly allowWaitingResult?: boolean;
   readonly setupSession?: (session: IToolUseSession) => void;
 }
 
@@ -395,7 +429,7 @@ export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   runtimeHost: AgentRuntimeHost,
   options: ResumeToolUseFromSnapshotOptions = {},
-): Promise<void> {
+): Promise<AgentRuntimeFlowResult> {
   const modelHandlerCompatibilityKey =
     snapshot.modelHandlerCompatibilityKey ??
     inferPersistedModelHandlerCompatibilityKey(
@@ -426,7 +460,7 @@ export async function resumeToolUseFromSnapshot(
   ctx.toolEditApprovalHandler = options.toolEditApprovalHandler;
   const { setting, streamId } = ctx;
 
-  await withExecutionRunContext(ctx, async () => {
+  return withExecutionRunContext(ctx, async () => {
     if (setting.agentCategory !== AgentCategory.ToolUse) {
       throw new AgentError(
         'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
@@ -434,7 +468,7 @@ export async function resumeToolUseFromSnapshot(
     }
 
     const isSubagent = (ctx.delegation?.delegationDepth ?? 0) > 0;
-    await runFlowWithLifecycle(
+    const result = await runFlowWithLifecycle(
       ctx,
       async (handle) => {
         const result = await runToolUseFlow(
@@ -449,10 +483,14 @@ export async function resumeToolUseFromSnapshot(
             // would drop subagent-specific instructions (e.g. the shared
             // /memories protocol) that the fresh run had included.
             isSubagent,
-            onFollowUpConsumed: () =>
+            onBeforeWaiting: options.onBeforeWaiting,
+            onProgress: options.onProgress,
+            onFollowUpConsumed: () => {
               emitRuntimeEvent('updateQueuedFollowUps', {
                 streamId: ctx.streamId,
-              }),
+              });
+              options.onFollowUpConsumed?.();
+            },
           },
           undefined,
           (flowContext) => {
@@ -468,7 +506,19 @@ export async function resumeToolUseFromSnapshot(
           ctx.attachedMemoryMisses,
         );
       },
-      { isSubagent, onRun: options.onRun },
+      {
+        isSubagent,
+        parentStreamId: options.parentStreamId,
+        onCompleted: options.onCompleted,
+        onError: options.onError,
+        onRun: options.onRun,
+      },
     );
+    if (isWaitingFlowResult(result) && options.allowWaitingResult !== true) {
+      throw new Error(
+        'resumeToolUseFromSnapshot received a non-terminal WAITING result without allowWaitingResult.',
+      );
+    }
+    return result;
   });
 }

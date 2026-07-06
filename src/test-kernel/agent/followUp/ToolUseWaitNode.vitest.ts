@@ -33,7 +33,7 @@ import { GoalStore } from '@tools/goal';
 import { withTestRunContext } from '../progressTestUtils';
 
 describe('ToolUseWaitNode', () => {
-  it('marks a delivered subagent cycle before stopping on interruption', async () => {
+  it('marks a delivered native subagent cycle before suspending at WAITING', async () => {
     const shared: ToolUseRunShared = {
       messages: [],
       shouldSkipCycle: false,
@@ -79,7 +79,7 @@ describe('ToolUseWaitNode', () => {
 
     expect(onBeforeWaiting).toHaveBeenCalledOnce();
     expect(onBeforeWaiting).toHaveBeenCalledWith(undefined, [], memoryMisses);
-    expect(transition).toBe(FlowTransition.COMPLETE);
+    expect(transition).toBe(FlowTransition.WAITING);
     expect(shared.deliveredToOrchestrator).toBe(true);
   });
 
@@ -149,9 +149,58 @@ describe('ToolUseWaitNode', () => {
       },
     );
 
-    expect(onBeforeWaiting).toHaveBeenCalledTimes(2);
-    expect(secondTransition).toBe(FlowTransition.COMPLETE);
+    expect(onBeforeWaiting).toHaveBeenCalledOnce();
+    expect(secondTransition).toBe(FlowTransition.WAITING);
     expect(shared.deliveredToOrchestrator).toBe(true);
+  });
+
+  it('does not redeliver an already delivered wait when replay consumes follow-up', async () => {
+    const shared: ToolUseRunShared = {
+      deliveredToOrchestrator: true,
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const onBeforeWaiting = vi.fn(async () => true);
+    const onFollowUpConsumed = vi.fn();
+    const runtimeHost = { emit: vi.fn() };
+
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: true,
+      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
+      modelHandler: {
+        createUserFollowUpMessages: vi.fn(async () => []),
+        extractAssistantText: () => undefined,
+      },
+      onBeforeWaiting,
+      onFollowUpConsumed,
+      runtimeHost,
+      session: {
+        hasQueuedFollowUp: () => true,
+        waitForFollowUp: async () => ({
+          items: [{ text: 'continue the proof', origin: 'user' }],
+        }),
+      },
+      streamStatus: new StreamStatusMachine(),
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+
+    const node = new ToolUseWaitNode().setServices(services);
+    const prep = await node.prep(shared);
+    const transition = await withTestRunContext(
+      runtimeHost,
+      'test-stream',
+      async () => {
+        const exec = await node.exec(prep);
+        return node.post(shared, prep, exec);
+      },
+    );
+
+    expect(onBeforeWaiting).not.toHaveBeenCalled();
+    expect(onFollowUpConsumed).toHaveBeenCalledOnce();
+    expect(transition).toBe(FlowTransition.CONTINUE);
+    expect(shared.deliveredToOrchestrator).toBeUndefined();
   });
 
   it('preserves delivered state when interruption is already set before waiting', async () => {
