@@ -270,6 +270,8 @@ const options: Options = { ... };
 - Create class instances or complex objects
 - Need to capture closures with initialization context
 
+At review time this extends into the **Abstraction-cost guardrails** (code-review checklist § 13): grep the caller count before approving any new shared helper (single-caller extractions are banned), and hold new ports/facades/template-methods to build-implies-delete-in-the-same-PR with net-LOC accounting.
+
 ### Render-Time Workarounds (Anti-pattern)
 
 Never compensate for data model problems at render time. Renderers should only transform and display.
