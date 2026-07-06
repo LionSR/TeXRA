@@ -1,6 +1,7 @@
 /** Markdown format spec for chat export. */
 
 import type { DocumentMeta } from '@agent/export/schemas';
+import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 import { filterNotNullish } from '@utils/core';
 
 import {
@@ -59,6 +60,35 @@ const ATTACHMENT_LABELS: Record<string, string> = {
   document: 'Document attachment',
 };
 
+const MARKDOWN_TEXT_ESCAPE_RE = /[\\[\]()<>!]/g;
+// No `[`/`]` here (unlike MARKDOWN_TEXT_ESCAPE_RE above): CommonMark's
+// bare-form link destination grammar restricts only unescaped/unbalanced
+// parentheses, ASCII space, and control characters — square brackets have
+// no special meaning inside `(...)`. Percent-encoding them anyway breaks
+// legitimate IPv6 literal hosts like `http://[::1]/`, whose brackets are
+// required syntax, not markdown syntax.
+const MARKDOWN_URL_DESTINATION_ESCAPE_RE = /[\\()<> \t\r\n]/g;
+
+function escapeMarkdownText(text: string): string {
+  return text.replaceAll(MARKDOWN_TEXT_ESCAPE_RE, (ch) => `\\${ch}`);
+}
+
+function percentEncodeAscii(ch: string): string {
+  return `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`;
+}
+
+function escapeMarkdownUrlDestination(url: string): string {
+  return url.replaceAll(MARKDOWN_URL_DESTINATION_ESCAPE_RE, percentEncodeAscii);
+}
+
+function markdownLinkOrText(url: string, title: string): string {
+  const safeUrl = sanitizeLiveLinkUrl(url);
+  const safeTitle = escapeMarkdownText(title);
+  return safeUrl
+    ? `[${safeTitle}](${escapeMarkdownUrlDestination(safeUrl)})`
+    : safeTitle;
+}
+
 const MD_NODES: NodeRenderers = {
   'user-message': ({ parts }) => {
     const body = parts
@@ -81,19 +111,22 @@ const MD_NODES: NodeRenderers = {
   'web-search': ({ query }) => `#### Web Search\n\n**Query:** ${query}\n`,
 
   'web-search-results': ({ results }) =>
-    results.map((r) => `- [${r.title}](${r.url})`).join('\n') + '\n',
+    results.map((r) => `- ${markdownLinkOrText(r.url, r.title)}`).join('\n') +
+    '\n',
 
-  'web-fetch': ({ url, title, content }) =>
-    [
+  'web-fetch': ({ url, title, content }) => {
+    const safeUrl = url ? sanitizeLiveLinkUrl(url) : undefined;
+    return [
       '#### Web Fetch',
       '',
-      url ? `**URL:** ${url}` : undefined,
-      title ? `**Title:** ${title}` : undefined,
+      safeUrl ? `**URL:** ${escapeMarkdownText(safeUrl)}` : undefined,
+      title ? `**Title:** ${escapeMarkdownText(title)}` : undefined,
       content ? `\n${fencedBlock(content)}` : undefined,
       '',
     ]
       .filter(filterNotNullish)
-      .join('\n'),
+      .join('\n');
+  },
 };
 
 export const markdownSpec: FormatSpec = {

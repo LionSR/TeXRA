@@ -31,4 +31,14 @@ export {
   type AssembleTraceResult,
   type TraceDocument,
 } from './traceAssembler';
+export {
+  readCompletedRunTodos,
+  type CompletedRunTodosReadResult,
+  type CompletedRunTodosSource,
+} from './completedRunArchive';
+export {
+  resolvePersistedStreamIdForExecution,
+  type PersistedStreamIdResolution,
+  type PersistedStreamIdResolutionSource,
+} from './executionStreamResolver';
 export { injectStandaloneTrace } from './standaloneTraceHtml';
