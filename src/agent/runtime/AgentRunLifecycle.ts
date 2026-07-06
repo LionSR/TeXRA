@@ -34,6 +34,8 @@ import { AgentExecutionHandle, type AgentRunHandle } from './executionRegistry';
 import {
   getAgentFlowErrorResult,
   buildTerminalFlowResult,
+  isWaitingFlowResult,
+  type AgentRuntimeFlowResult,
   type AgentFlowResult,
 } from './AgentFlowResult';
 import type { AgentLaunchContext } from './AgentLaunchContext';
@@ -169,9 +171,9 @@ function emitRunStart(ctx: AgentLaunchContext): void {
  */
 export async function runFlowWithLifecycle(
   ctx: AgentLaunchContext,
-  runner: (handle: AgentExecutionHandle) => Promise<AgentFlowResult>,
+  runner: (handle: AgentExecutionHandle) => Promise<AgentRuntimeFlowResult>,
   options?: RunFlowLifecycleOptions,
-): Promise<AgentFlowResult> {
+): Promise<AgentRuntimeFlowResult> {
   const { streamId, session } = ctx;
   const agentIdentifier = ctx.config.agent;
   const category =
@@ -220,6 +222,10 @@ export async function runFlowWithLifecycle(
     // set stream status themselves.
     transitionRunStart(ctx);
     const result = await runner(handle);
+    if (isWaitingFlowResult(result)) {
+      logger.debug(`Task suspended with outcome: ${result.outcome}`);
+      return result;
+    }
     // The flow's outcome is the canonical terminal fact; everything below is
     // one row of the projection table. No other layer may re-derive these.
     const projection = projectRunOutcome(result.outcome);
