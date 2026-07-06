@@ -109,6 +109,40 @@ describe('promise coordinators', () => {
     );
   });
 
+  it('uses host interactions before the legacy show/resolve event pair', async () => {
+    const events: RecordedEvent[] = [];
+    const seenPlans: string[] = [];
+    const plan: Plan = { objective: 'Approve through HostInteractions' };
+    const host: AgentRuntimeHost = {
+      interactions: {
+        requestPlanApproval: async (request) => {
+          seenPlans.push(request.approvalId);
+          return { action: 'approve' };
+        },
+        handleProgressEvent: () => false,
+        pending: () => [],
+        resolve: () => false,
+        cancelForStream: () => {},
+      },
+      emit: (event, payload) => events.push({ event, payload }),
+    };
+    const coordinator = new PlanApprovalCoordinator(host);
+
+    assert.deepEqual(
+      await coordinator.waitForApproval('stream:interactions', {
+        approvalId: 'approval:interactions',
+        plan,
+      }),
+      { action: 'approve' },
+    );
+
+    assert.deepEqual(seenPlans, ['approval:interactions']);
+    assert.deepEqual(
+      events.map((entry) => entry.event),
+      ['requestEnsureProgressView', 'setActiveStream'],
+    );
+  });
+
   it('dismisses a replaced request through the coordinator host', async () => {
     const { events, host } = createRecordingHost();
     const coordinator = new PlanApprovalCoordinator(host);

@@ -50,6 +50,10 @@ import {
   StreamStatusMachine,
   StreamStatusService,
 } from './StreamStatusService';
+import {
+  SessionHostInteractions,
+  type HostInteractions,
+} from './HostInteractions';
 import { SessionEventHub } from './SessionEventHub';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -68,6 +72,7 @@ export type SessionHandleInit = Partial<
     | 'transcripts'
     | 'followUps'
     | 'flushers'
+    | 'interactions'
     | 'hostChannel'
   >
 >;
@@ -99,6 +104,8 @@ export class SessionHandle {
   readonly followUps: ToolUseFollowUpQueue;
   /** This session's trace-flush callbacks (drained on dispose / shutdown). */
   readonly flushers: Set<() => void>;
+  /** Session-scoped host interaction owner. */
+  readonly interactions: SessionHostInteractions;
   /**
    * Optional session-scoped emit surface for the non-run-scoped host-path
    * emissions (SDK Step 7d follow-on F-1). Unset ⇒ those stay on the bus.
@@ -135,11 +142,16 @@ export class SessionHandle {
     this.status = status;
     this.transcripts = transcripts;
     this.followUps = followUps;
+    this.interactions = init.interactions ?? new SessionHostInteractions();
     // A fresh session owns its own flusher set; the default session aliases the
     // process-module set so `createRunTrace`'s default writes still drain.
     this.flushers = init.flushers ?? new Set<() => void>();
     this.hostChannel = init.hostChannel;
     liveSessions.add(this);
+  }
+
+  useHostInteractions(interactions: HostInteractions): () => void {
+    return this.interactions.use(interactions);
   }
 
   /** Drain pending trace writes for this session's streams only. */
@@ -244,6 +256,7 @@ export class SessionHandle {
     this.subscriptions.dispose();
     this.executions.dispose();
     this.interrupts.retainOnly(new Set());
+    this.interactions.dispose();
     this.resultListeners.clear();
   }
 

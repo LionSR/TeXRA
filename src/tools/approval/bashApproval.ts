@@ -96,6 +96,13 @@ async function showApprovalPrompt(
 
   const requestId = `bash-${nanoid()}`;
 
+  const interaction = runtimeHost.interactions?.requestBashApproval?.({
+    command: request.command,
+    ...(request.cwd ? { cwd: request.cwd } : {}),
+    streamId,
+  });
+  if (interaction) return interaction;
+
   try {
     return await new Promise<BashApprovalResult>((resolve) => {
       let settled = false;

@@ -9,12 +9,22 @@
 // `never` auto-rejects with `denyMessage(...)`. Only `ask` (or interactive
 // non-print) reaches the queue.
 //
-// Tool-edit goes through the Platform approval port (installed per active CLI
-// session) because it returns a typed Promise<ToolEditApprovalResult>, not a
-// fire-and-forget event.
+// Tool-edit is part of this port because it returns a typed
+// Promise<ToolEditApprovalResult>, not a fire-and-forget event.
+
+import { nanoid } from 'nanoid';
 
 import { platform } from '@platform/platform';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import type {
+  HostBashApprovalRequest,
+  HostBashApprovalResult,
+  HostInteractions,
+  HostRetryRequest,
+} from '@agent/runtime/HostInteractions';
+import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
+import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
+import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   approvalPromptAllowed,
@@ -31,7 +41,6 @@ import {
   isCliApprovalEvent,
   type CliApprovalEvent,
 } from '@cli/runtime/approvalEvents';
-import { setActiveCliToolEditApprovalHandler } from '@cli/runtime/initPlatform';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -122,59 +131,77 @@ async function maybeAutoSwitchRetry(
 }
 
 /**
- * Install the typed approval pipeline. Returns an `unbind` callback that
- * restores the original emit + clears the tool-edit handler.
+ * Create the typed approval pipeline for the active TUI session.
  */
-export function installTuiApprovals(
+export function createTuiHostInteractions(
   host: CliRuntimeHost,
   context: CliContext,
-): () => void {
-  const originalEmit = host.emit;
+): HostInteractions {
+  const retryRoutes = createRetryRouteState();
   const disposeApprovalClearListener = onApprovalsCleared(() => {
-    invalidateRetryRoutes({ cancel: true });
+    invalidateRetryRoutes(retryRoutes, { cancel: true });
   });
-  host.emit = ((event, payload) => {
-    // Approval events are intentionally NOT forwarded to originalEmit.
-    // The underlying `createCliRuntimeHost.emit` chains through
-    // `handleCliApprovalEvent`, which would re-handle the same approval
-    // via the legacy stderr prompt — racing the TUI modal for the same
-    // resolver. Non-approval events (status, usage, log) keep flowing
-    // through the original chain.
-    if (isCliApprovalEvent(event)) {
+
+  return {
+    async requestToolEditApproval(request) {
+      let decision: ApprovalDecision | undefined = immediateDecision(context);
+      if (!decision) {
+        decision = await enqueueTuiApproval(
+          { kind: 'toolEdit', request },
+          host,
+        );
+        markIfRejected(context, decision);
+      }
+      if (
+        decision.accepted &&
+        decision.bypass === 'toolEdit' &&
+        request.streamId
+      ) {
+        setToolEditApprovalSessionBypass(request.streamId, true, host);
+      }
+      return decision.accepted
+        ? { accepted: true, appliedContent: request.proposedContent }
+        : { accepted: false, userMessage: decision.userMessage };
+    },
+    requestBashApproval(request) {
+      return requestBashInteraction(request, context, host);
+    },
+    requestPlanApproval(request) {
+      return requestPlanInteraction(request, context, host);
+    },
+    requestAgentProposal(request) {
+      return requestProposalInteraction(request, context, host);
+    },
+    requestRetry(request) {
+      return requestRetryInteraction(request, context, host, retryRoutes);
+    },
+    askUserQuestion(request) {
+      return requestUserQuestionInteraction(request, context, host);
+    },
+    openExternalInquiry(request) {
+      return openExternalInquiryInteraction(request, context, host);
+    },
+    handleProgressEvent(event, payload) {
+      if (!isCliApprovalEvent(event)) return false;
       routeApproval(
         event,
         payload as ProgressEventPayloads[CliApprovalEvent],
         context,
         host,
+        retryRoutes,
       );
-      return;
-    }
-    originalEmit(event, payload);
-  }) as CliRuntimeHost['emit'];
-
-  setActiveCliToolEditApprovalHandler(async (request) => {
-    let decision: ApprovalDecision | undefined = immediateDecision(context);
-    if (!decision) {
-      decision = await enqueueTuiApproval({ kind: 'toolEdit', request }, host);
-      markIfRejected(context, decision);
-    }
-    if (
-      decision.accepted &&
-      decision.bypass === 'toolEdit' &&
-      request.streamId
-    ) {
-      setToolEditApprovalSessionBypass(request.streamId, true, host);
-    }
-    return decision.accepted
-      ? { accepted: true, appliedContent: request.proposedContent }
-      : { accepted: false, userMessage: decision.userMessage };
-  });
-
-  return () => {
-    invalidateRetryRoutes({ cancel: false });
-    disposeApprovalClearListener();
-    host.emit = originalEmit;
-    setActiveCliToolEditApprovalHandler(undefined);
+      return true;
+    },
+    pending: () => [],
+    resolve: () => false,
+    cancelForStream(streamId) {
+      cancelRetryRoute(retryRoutes, streamId);
+      clearRetryApprovalsForStream(streamId);
+    },
+    dispose() {
+      invalidateRetryRoutes(retryRoutes, { cancel: true });
+      disposeApprovalClearListener();
+    },
   };
 }
 
@@ -183,6 +210,7 @@ function routeApproval(
   payload: ProgressEventPayloads[CliApprovalEvent],
   context: CliContext,
   host: CliRuntimeHost,
+  retryRoutes: RetryRouteState,
 ): void {
   switch (event) {
     case 'showBashPermission':
@@ -226,6 +254,7 @@ function routeApproval(
         context,
         host,
         payload as ProgressEventPayloads['showRetryRequest'],
+        retryRoutes,
       );
       return;
     case 'showExternalInquiry':
@@ -254,14 +283,45 @@ function routeApproval(
  * Track the latest route per stream so a stale lookup cannot switch API mode
  * or trigger an older retry after a newer retry request replaced it.
  */
-const activeRetryRoutes = new Map<string, symbol>();
+interface ActiveRetryRoute {
+  readonly routeId: symbol;
+  readonly settle?: (result: RetryResult) => void;
+}
 
-function invalidateRetryRoutes(options: { cancel: boolean }): void {
-  const streamIds = [...activeRetryRoutes.keys()];
-  activeRetryRoutes.clear();
-  if (!options.cancel) return;
+interface RetryRouteState {
+  readonly activeRetryRoutes: Map<string, ActiveRetryRoute>;
+}
+
+function createRetryRouteState(): RetryRouteState {
+  return { activeRetryRoutes: new Map() };
+}
+
+function isActiveRetryRoute(
+  state: RetryRouteState,
+  streamId: string,
+  routeId: symbol,
+): boolean {
+  return state.activeRetryRoutes.get(streamId)?.routeId === routeId;
+}
+
+function cancelRetryRoute(state: RetryRouteState, streamId: string): void {
+  const route = state.activeRetryRoutes.get(streamId);
+  if (!route) return;
+  state.activeRetryRoutes.delete(streamId);
+  route.settle?.({ action: 'cancel' });
+}
+
+function invalidateRetryRoutes(
+  state: RetryRouteState,
+  options: { cancel: boolean },
+): void {
+  const streamIds = [...state.activeRetryRoutes.keys()];
   for (const streamId of streamIds) {
-    runCoordinatorBridge.cancelRetry(streamId);
+    if (options.cancel) {
+      cancelRetryRoute(state, streamId);
+    } else {
+      state.activeRetryRoutes.delete(streamId);
+    }
   }
 }
 
@@ -269,13 +329,15 @@ function routeRetry(
   context: CliContext,
   host: CliRuntimeHost,
   payload: ProgressEventPayloads['showRetryRequest'],
+  retryRoutes: RetryRouteState,
 ): void {
   const routeId = Symbol(payload.streamId);
-  activeRetryRoutes.set(payload.streamId, routeId);
+  retryRoutes.activeRetryRoutes.set(payload.streamId, { routeId });
   clearRetryApprovalsForStream(payload.streamId);
-  const isCurrent = () => activeRetryRoutes.get(payload.streamId) === routeId;
+  const isCurrent = () =>
+    isActiveRetryRoute(retryRoutes, payload.streamId, routeId);
   const finish = () => {
-    if (isCurrent()) activeRetryRoutes.delete(payload.streamId);
+    if (isCurrent()) retryRoutes.activeRetryRoutes.delete(payload.streamId);
   };
 
   routeWithPolicy(
@@ -364,6 +426,198 @@ function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
   })();
 }
 
+async function decideWithPolicy<
+  K extends 'bash' | 'plan' | 'proposal' | 'retry',
+  P,
+>(
+  context: CliContext,
+  host: CliRuntimeHost,
+  kind: K,
+  payload: P,
+  options: RouteWithPolicyOptions<P> = {},
+): Promise<ApprovalDecision> {
+  const policy =
+    kind === 'retry'
+      ? immediateDecisionForApproval(
+          'showRetryRequest',
+          payload as ProgressEventPayloads['showRetryRequest'],
+          context,
+        )
+      : immediateDecision(context);
+  if (policy) return policy;
+
+  let autoDecision: ApprovalDecision | undefined;
+  if (options.beforeQueue) {
+    try {
+      autoDecision = await options.beforeQueue(payload);
+    } catch {
+      autoDecision = undefined;
+    }
+    if (options.isCurrent && !options.isCurrent()) {
+      return { accepted: false, userMessage: 'Approval request was replaced.' };
+    }
+    if (autoDecision) return autoDecision;
+  }
+
+  try {
+    const queuePayload = { kind, payload } as Extract<
+      ApprovalPayload,
+      { kind: K }
+    >;
+    const decision = await enqueueTuiApproval(queuePayload, host);
+    if (options.isCurrent && !options.isCurrent()) {
+      return { accepted: false, userMessage: 'Approval request was replaced.' };
+    }
+    markIfRejected(context, decision);
+    return decision;
+  } catch {
+    const decision: ApprovalDecision = {
+      accepted: false,
+      userMessage: 'CLI approval prompt failed.',
+    };
+    markIfRejected(context, decision);
+    return decision;
+  }
+}
+
+async function requestBashInteraction(
+  request: HostBashApprovalRequest,
+  context: CliContext,
+  host: CliRuntimeHost,
+): Promise<HostBashApprovalResult> {
+  const payload: ProgressEventPayloads['showBashPermission'] = {
+    requestId: `bash-${nanoid()}`,
+    command: request.command,
+    ...(request.cwd ? { cwd: request.cwd } : {}),
+    allowBypass: true,
+    streamId: request.streamId ?? '',
+  };
+  const decision = await decideWithPolicy(context, host, 'bash', payload);
+  if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
+    setBashApprovalSessionBypass(request.streamId, true, host);
+  }
+  return {
+    accepted: decision.accepted,
+    userMessage: feedbackOnReject(decision),
+  };
+}
+
+async function requestPlanInteraction(
+  request: ProgressEventPayloads['showPlanApproval'],
+  context: CliContext,
+  host: CliRuntimeHost,
+): Promise<PlanApprovalResult> {
+  const decision = await decideWithPolicy(context, host, 'plan', request);
+  const feedback = feedbackOnReject(decision);
+  return decision.accepted
+    ? { action: decision.planAction ?? 'approve' }
+    : { action: 'reject', ...(feedback ? { feedback } : {}) };
+}
+
+async function requestProposalInteraction(
+  request: ProgressEventPayloads['showAgentProposal'],
+  context: CliContext,
+  host: CliRuntimeHost,
+): Promise<ProposalResult> {
+  const decision = await decideWithPolicy(context, host, 'proposal', request);
+  const feedback = feedbackOnReject(decision);
+  return decision.accepted
+    ? { action: 'approve' }
+    : { action: 'reject', ...(feedback ? { feedback } : {}) };
+}
+
+async function requestRetryInteraction(
+  request: HostRetryRequest,
+  context: CliContext,
+  host: CliRuntimeHost,
+  retryRoutes: RetryRouteState,
+): Promise<RetryResult> {
+  cancelRetryRoute(retryRoutes, request.streamId);
+  const routeId = Symbol(request.streamId);
+  clearRetryApprovalsForStream(request.streamId);
+
+  return await new Promise<RetryResult>((resolve) => {
+    retryRoutes.activeRetryRoutes.set(request.streamId, {
+      routeId,
+      settle: resolve,
+    });
+    const isCurrent = () =>
+      isActiveRetryRoute(retryRoutes, request.streamId, routeId);
+    const finish = () => {
+      if (isCurrent()) retryRoutes.activeRetryRoutes.delete(request.streamId);
+    };
+
+    void (async () => {
+      const decision = await decideWithPolicy(context, host, 'retry', request, {
+        beforeQueue: maybeAutoSwitchRetry,
+        isCurrent,
+      });
+      if (!isCurrent()) return;
+      if (
+        decision.accepted &&
+        (decision.apiMode || decision.disableChatGptSubscription)
+      ) {
+        clearRetryApprovalsForStream(request.streamId);
+      }
+      if (!decision.accepted) {
+        resolve({ action: 'cancel' });
+        finish();
+        return;
+      }
+      try {
+        await applyRetrySideEffects(request, decision, { isCurrent });
+        if (!isCurrent()) return;
+        resolve({ action: 'retry', feedback: decision.userMessage });
+      } catch {
+        if (isCurrent()) resolve({ action: 'cancel' });
+      } finally {
+        finish();
+      }
+    })();
+  });
+}
+
+async function requestUserQuestionInteraction(
+  payload: ProgressEventPayloads['showUserQuestion'],
+  context: CliContext,
+  host: CliRuntimeHost,
+): Promise<{
+  submitted: boolean;
+  answers?: ApprovalDecision['userQuestionAnswers'];
+  feedback?: string;
+}> {
+  if (!approvalPromptAllowed(context)) {
+    return {
+      submitted: false,
+      feedback: humanInputDenialFeedback(
+        context,
+        'User question requires human input; yolo mode cannot synthesize an answer.',
+      ),
+    };
+  }
+
+  const decision = await enqueueTuiApproval(
+    { kind: 'userQuestion', payload },
+    host,
+  );
+  markIfRejected(context, decision);
+  return decision.accepted && decision.userQuestionAnswers
+    ? { submitted: true, answers: decision.userQuestionAnswers }
+    : {
+        submitted: false,
+        feedback: decision.userMessage || 'User question skipped by user.',
+      };
+}
+
+async function openExternalInquiryInteraction(
+  payload: ProgressEventPayloads['showExternalInquiry'],
+  context: CliContext,
+  host: CliRuntimeHost,
+): Promise<{ threadId: string }> {
+  handleExternalInquiry(payload, context, host);
+  return { threadId: payload.threadId };
+}
+
 export function enqueueTuiApproval(
   payload: ApprovalPayload,
   host: CliRuntimeHost,
@@ -440,6 +694,16 @@ async function applyRetryDecision(
   decision: ApprovalDecision,
   options: { isCurrent?: () => boolean } = {},
 ): Promise<void> {
+  await applyRetrySideEffects(payload, decision, options);
+  if (options.isCurrent?.() === false) return;
+  runCoordinatorBridge.triggerRetry(payload.streamId, decision.userMessage);
+}
+
+async function applyRetrySideEffects(
+  payload: Pick<ProgressEventPayloads['showRetryRequest'], 'streamId'>,
+  decision: ApprovalDecision,
+  options: { isCurrent?: () => boolean } = {},
+): Promise<void> {
   const isCurrent = () => options.isCurrent?.() ?? true;
   if (!isCurrent()) return;
   if (decision.apiMode) {
@@ -451,8 +715,6 @@ async function applyRetryDecision(
     await setCliCodexSubscription(false);
     if (!isCurrent()) return;
   }
-  if (!isCurrent()) return;
-  runCoordinatorBridge.triggerRetry(payload.streamId, decision.userMessage);
 }
 
 function handleExternalInquiry(
