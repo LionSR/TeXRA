@@ -29,6 +29,19 @@ type SyncStreamContentMessage = Extract<
 >;
 
 /**
+ * Stage kinds nested under the root "Run:" stage (see `StageOptions.kind` in
+ * `@agent/trace`). A tool-use round (and any other non-root stage of these
+ * kinds) is opened without an ambient parent — `runFlowWithLifecycle` never
+ * wraps flow execution in the root stage's `within(...)` — so its `GROUP_END`
+ * row gets `groupId === undefined` just like the root run stage's own. Only
+ * the root stage's row is tagged `kind: 'run'` (or has no `kind` at all, for
+ * traces recorded before stage kinds existed); anything tagged with one of
+ * these kinds is a nested stage that happens to share the root's "no parent"
+ * shape and must be excluded from the reverse scan below.
+ */
+const NESTED_STAGE_KINDS = new Set(['round', 'phase', 'session']);
+
+/**
  * Maps the persisted-history `ExecutionStatus` onto the `StreamLifecycleStatus`
  * vocabulary `StreamMetadataSchema.status` renders. `executionStatusToRunOutcome`
  * is the sanctioned inverse of `runOutcomeToExecutionStatus` — its `RunOutcome`
@@ -51,6 +64,12 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
     if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) continue;
     if (entry.groupId !== undefined) continue;
     if (!isObject(entry.data)) continue;
+    if (
+      typeof entry.data.kind === 'string' &&
+      NESTED_STAGE_KINDS.has(entry.data.kind)
+    ) {
+      continue;
+    }
     const status = StreamStatusSchema.safeParse(entry.data.status);
     if (status.success) return streamStatusToLifecycleStatus(status.data);
   }
