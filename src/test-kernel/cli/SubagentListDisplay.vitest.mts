@@ -32,12 +32,32 @@ describe('CLI SubagentList display model', () => {
 
   it('uses a compact child row budget instead of clipping nested sections', () => {
     const subagents: ActiveChildInfo[] = [
-      { executionId: 'strategy', agentName: 'strategy' },
-      { executionId: 'lean', agentName: 'leanSolver' },
-      { executionId: 'review', agentName: 'reviewer' },
+      {
+        kind: 'subagent',
+        executionId: 'strategy',
+        agentName: 'strategy',
+        childStreamId: 'strategy-stream',
+      },
+      {
+        kind: 'subagent',
+        executionId: 'lean',
+        agentName: 'leanSolver',
+        childStreamId: 'lean-stream',
+      },
+      {
+        kind: 'subagent',
+        executionId: 'review',
+        agentName: 'reviewer',
+        childStreamId: 'review-stream',
+      },
     ];
     const activeProcesses: ActiveChildInfo[] = [
-      { executionId: 'latexmk', agentName: 'latex build', toolName: 'bash' },
+      {
+        kind: 'process',
+        executionId: 'latexmk',
+        agentName: 'latex build',
+        toolName: 'bash',
+      },
     ];
 
     const display = compactRows({
@@ -55,11 +75,23 @@ describe('CLI SubagentList display model', () => {
 
   it('reserves a single overflowing row for the overflow summary', () => {
     const display = compactRows({
-      activeProcesses: [{ executionId: 'latexmk', agentName: 'latex build' }],
+      activeProcesses: [
+        { kind: 'process', executionId: 'latexmk', agentName: 'latex build' },
+      ],
       maxRows: 1,
       subagents: [
-        { executionId: 'strategy', agentName: 'strategy' },
-        { executionId: 'lean', agentName: 'leanSolver' },
+        {
+          kind: 'subagent',
+          executionId: 'strategy',
+          agentName: 'strategy',
+          childStreamId: 'strategy-stream',
+        },
+        {
+          kind: 'subagent',
+          executionId: 'lean',
+          agentName: 'leanSolver',
+          childStreamId: 'lean-stream',
+        },
       ],
     });
 
@@ -69,11 +101,21 @@ describe('CLI SubagentList display model', () => {
 
   it('keeps exact-fit compact rows without adding an overflow summary', () => {
     const subagents: ActiveChildInfo[] = [
-      { executionId: 'strategy', agentName: 'strategy' },
-      { executionId: 'lean', agentName: 'leanSolver' },
+      {
+        kind: 'subagent',
+        executionId: 'strategy',
+        agentName: 'strategy',
+        childStreamId: 'strategy-stream',
+      },
+      {
+        kind: 'subagent',
+        executionId: 'lean',
+        agentName: 'leanSolver',
+        childStreamId: 'lean-stream',
+      },
     ];
     const activeProcesses: ActiveChildInfo[] = [
-      { executionId: 'latexmk', agentName: 'latex build' },
+      { kind: 'process', executionId: 'latexmk', agentName: 'latex build' },
     ];
 
     const display = compactRows({
@@ -94,6 +136,7 @@ describe('CLI SubagentList display model', () => {
     expect(
       compactChildRowText({
         child: {
+          kind: 'process',
           executionId: 'latexmk',
           agentName: 'latex build',
           status: 'running',
@@ -115,6 +158,7 @@ describe('CLI SubagentList display model', () => {
     expect(
       compactChildRowText({
         child: {
+          kind: 'process',
           executionId: 'review',
           agentName: 'review',
           status: STREAM_STATUS.WAITING,

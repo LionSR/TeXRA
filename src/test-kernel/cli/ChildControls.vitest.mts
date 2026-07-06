@@ -113,22 +113,27 @@ function slice(
 describe('CLI child execution controls', () => {
   it('maps Alt-number focus jumps to visible descendant streams', () => {
     const root = slice({
+      // Only subagents own a stream tab, so both live-only ("agent-1", still in
+      // activeSubagents but not yet retained in childStreams) and
+      // retained ("agent-2") subagent rows are valid focus-jump targets —
+      // background processes never are.
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
         },
-      ],
-      activeProcesses: [
         {
-          executionId: 'proc-1',
+          kind: 'subagent',
+          executionId: 'agent-3',
           agentName: 'bash',
           childStreamId: 'child-b',
         },
       ],
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'critic',
           childStreamId: 'child-c',
@@ -171,6 +176,7 @@ describe('CLI child execution controls', () => {
     const root = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
@@ -178,6 +184,7 @@ describe('CLI child execution controls', () => {
       ],
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'reviewer',
           childStreamId: 'child-b',
@@ -219,6 +226,7 @@ describe('CLI child execution controls', () => {
     const state = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
@@ -228,6 +236,7 @@ describe('CLI child execution controls', () => {
       ],
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'reviewer',
           childStreamId: 'child-b',
@@ -237,6 +246,7 @@ describe('CLI child execution controls', () => {
       ],
       activeProcesses: [
         {
+          kind: 'process',
           executionId: 'proc-1',
           agentName: 'latexmk',
           status: 'running',
@@ -302,6 +312,7 @@ describe('CLI child execution controls', () => {
     const state = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
@@ -312,6 +323,7 @@ describe('CLI child execution controls', () => {
       ],
       activeProcesses: [
         {
+          kind: 'process',
           executionId: 'proc-1',
           agentName: 'latexmk',
           status: 'waiting',
@@ -343,6 +355,7 @@ describe('CLI child execution controls', () => {
     const state = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'review',
           childStreamId: 'child-a',
@@ -352,6 +365,7 @@ describe('CLI child execution controls', () => {
       ],
       activeProcesses: [
         {
+          kind: 'process',
           executionId: 'proc-1',
           agentName: 'bash',
           status: STREAM_STATUS.WAITING,
@@ -388,12 +402,16 @@ describe('CLI child execution controls', () => {
     const state = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
+          childStreamId: 'agent-2-stream',
           executionId: 'agent-2',
           agentName: 'critic',
           status: 'running',
           startedAt: 2_000,
         },
         {
+          kind: 'subagent',
+          childStreamId: 'agent-1-stream',
           executionId: 'agent-1',
           agentName: 'reviewer',
           status: 'initializing',
@@ -402,6 +420,7 @@ describe('CLI child execution controls', () => {
       ],
       activeProcesses: [
         {
+          kind: 'process',
           executionId: 'proc-1',
           agentName: 'latexmk',
           status: 'waiting',
@@ -419,6 +438,8 @@ describe('CLI child execution controls', () => {
         slice({
           activeSubagents: [
             {
+              kind: 'subagent',
+              childStreamId: 'agent-1-stream',
               executionId: 'agent-1',
               agentName: 'critic',
               status: 'completed',
@@ -435,6 +456,7 @@ describe('CLI child execution controls', () => {
     const state = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'bash',
           childStreamId: 'child-a',
@@ -473,6 +495,7 @@ describe('CLI child execution controls', () => {
     const state = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'bash',
           childStreamId: 'child-a',
@@ -535,6 +558,7 @@ describe('CLI child execution controls', () => {
     const state = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'polisher',
           childStreamId: 'child-b',
@@ -543,12 +567,14 @@ describe('CLI child execution controls', () => {
       ],
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
           status: 'completed',
         },
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'polisher',
           childStreamId: 'child-b',
@@ -581,6 +607,7 @@ describe('CLI child execution controls', () => {
     const state = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'polisher',
           childStreamId: 'child-b',
@@ -589,12 +616,14 @@ describe('CLI child execution controls', () => {
       ],
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
           status: 'completed',
         },
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'polisher',
           childStreamId: 'child-b',
@@ -605,11 +634,13 @@ describe('CLI child execution controls', () => {
 
     expect(visibleSubagentRows(state)).toMatchObject([
       {
+        kind: 'subagent',
         executionId: 'agent-1',
         childStreamId: 'child-a',
         status: 'completed',
       },
       {
+        kind: 'subagent',
         executionId: 'agent-2',
         childStreamId: 'child-b',
         status: 'running',
@@ -622,6 +653,7 @@ describe('CLI child execution controls', () => {
     const state = slice({
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'polisher',
           childStreamId: 'child-b',
@@ -630,12 +662,14 @@ describe('CLI child execution controls', () => {
       ],
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
           status: 'stopped',
         },
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'polisher',
           childStreamId: 'child-b',
@@ -646,6 +680,7 @@ describe('CLI child execution controls', () => {
 
     expect(buildChildControlItems(state, 'tasks')).toMatchObject([
       {
+        kind: 'subagent',
         executionId: 'agent-1',
         childStreamId: 'child-a',
         label: 'critic',
@@ -653,6 +688,7 @@ describe('CLI child execution controls', () => {
         killable: false,
       },
       {
+        kind: 'subagent',
         executionId: 'agent-2',
         childStreamId: 'child-b',
         label: 'polisher',
@@ -666,6 +702,7 @@ describe('CLI child execution controls', () => {
     const state = slice({
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
@@ -682,6 +719,7 @@ describe('CLI child execution controls', () => {
       streamId: 'main',
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'review',
           childStreamId: 'review-stream',
@@ -718,6 +756,7 @@ describe('CLI child execution controls', () => {
       streamId: 'main',
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'review',
           childStreamId: 'review-stream',
@@ -753,6 +792,7 @@ describe('CLI child execution controls', () => {
       streamId: 'main',
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'review',
           childStreamId: 'review-stream',
@@ -792,6 +832,7 @@ describe('CLI child execution controls', () => {
       streamId: 'review-stream',
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'detail-review',
           childStreamId: 'detail-stream',
@@ -840,6 +881,7 @@ describe('CLI child execution controls', () => {
       streamId: 'main',
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'review',
           childStreamId: 'review-stream',
@@ -889,6 +931,7 @@ describe('CLI child execution controls', () => {
             streamId: 'main',
             activeSubagents: [
               {
+                kind: 'subagent',
                 executionId: 'agent-1',
                 agentName: 'review',
                 childStreamId: 'review-stream',
@@ -927,6 +970,7 @@ describe('CLI child execution controls', () => {
             streamId: 'main',
             childStreams: [
               {
+                kind: 'subagent',
                 executionId: 'agent-1',
                 agentName: 'review',
                 childStreamId: 'review-stream',
@@ -959,6 +1003,7 @@ describe('CLI child execution controls', () => {
       streamId: 'review-stream',
       activeProcesses: [
         {
+          kind: 'process',
           executionId: 'proc-1',
           agentName: 'latexmk',
           status: 'running',
@@ -976,6 +1021,7 @@ describe('CLI child execution controls', () => {
             streamId: 'main',
             activeSubagents: [
               {
+                kind: 'subagent',
                 executionId: 'agent-1',
                 agentName: 'review',
                 childStreamId: 'review-stream',

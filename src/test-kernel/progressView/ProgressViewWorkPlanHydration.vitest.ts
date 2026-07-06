@@ -54,6 +54,7 @@ const stream = 'stream:shared-snapshot' as StreamTabId;
 const parentStream = 'stream:parent' as StreamTabId;
 const runId = 'run-1' as StorageKey;
 const activeSubagent: ActiveChildInfo = {
+  kind: 'subagent',
   executionId: 'child-1',
   agentName: 'search',
   childStreamId: 'stream:child',
