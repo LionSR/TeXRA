@@ -8,7 +8,7 @@ const graphemeSegmenter = new Intl.Segmenter(undefined, {
 });
 
 /** Split a string into its grapheme clusters for length-accurate slicing. */
-function toGraphemes(text: string): string[] {
+export function toGraphemes(text: string): string[] {
   return [...graphemeSegmenter.segment(text)].map((s) => s.segment);
 }
 

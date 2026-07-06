@@ -10,8 +10,8 @@ import {
 import { withModelClient } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import { normalizeProviderError } from '@common/errors';
-import { MESSAGE_TYPES, toRetryErrorInfo } from '@shared/schemas';
+import { buildFailedRetryInfo } from '@common/errors';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import type { RetryErrorInfo } from '@shared/schemas';
 
 import {
@@ -146,12 +146,10 @@ export class ToolUseCycleNode<C> extends Node<
     _prepRes: CyclePrepResult,
     error: Error,
   ): Promise<ToolUseCycleOutcome> {
-    const formatted = normalizeProviderError(error);
     return {
       outcome: 'failed',
       message: error.message,
-      userRetryable: formatted.userRetryable,
-      lastError: toRetryErrorInfo(formatted),
+      ...buildFailedRetryInfo(error),
     };
   }
 

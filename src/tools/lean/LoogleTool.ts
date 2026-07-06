@@ -5,7 +5,7 @@
  */
 
 import ky from 'ky';
-import pRetry, { AbortError } from 'p-retry';
+import { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -13,12 +13,13 @@ import * as logger from '@logger/logUtils';
 import { ToolResult } from '@shared/schemas/toolResult';
 import {
   isTimeoutError,
-  isTransientHttpError,
+  joinAbortSignal,
+  retryTransientFetch,
   unwrapAbortError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';
@@ -147,26 +148,17 @@ Useful for finding the right lemma when you know roughly what type it should hav
     // Cancellation for the owning agent run — parallel batches must be able
     // to abort in-flight Loogle requests and their retry backoff.
     const cancelSignal = getCurrentToolCallContext()?.signal;
-    return pRetry(
+    return retryTransientFetch(
       async () => {
-        let raw: unknown;
-        try {
-          const timeoutSignal = AbortSignal.timeout(LOOGLE_TIMEOUT_MS);
-          raw = await ky
-            .get(LOOGLE_API_URL, {
-              searchParams: { q: query },
-              headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
-              timeout: false,
-              signal: cancelSignal
-                ? AbortSignal.any([cancelSignal, timeoutSignal])
-                : timeoutSignal,
-              retry: 0,
-            })
-            .json<unknown>();
-        } catch (error: unknown) {
-          if (isTransientHttpError(error)) throw error;
-          throw new AbortError(ensureError(error));
-        }
+        const raw = await ky
+          .get(LOOGLE_API_URL, {
+            searchParams: { q: query },
+            headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
+            timeout: false,
+            signal: joinAbortSignal(LOOGLE_TIMEOUT_MS, cancelSignal),
+            retry: 0,
+          })
+          .json<unknown>();
         // Validate the body at the boundary. A malformed shape is not transient,
         // so abort retries and let executeSingle surface it as a tool error.
         const parsed = LoogleResponseSchema.safeParse(raw);
@@ -182,9 +174,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
       {
         retries: LOOGLE_RETRIES,
         minTimeout: 1000,
-        signal: cancelSignal,
-        // Jitter the backoff so batched queries don't retry in lockstep.
-        randomize: true,
+        cancelSignal,
         onFailedAttempt: ({ error, retriesLeft }) => {
           logger.debug(
             LOOGLE_CHANNEL,
