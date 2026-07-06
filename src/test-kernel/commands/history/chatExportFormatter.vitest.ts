@@ -5,7 +5,10 @@ import { describe, it } from 'vitest';
 // Standard library imports
 
 // Local imports - host-neutral chat-export formatters
-import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
+import {
+  formatChatAsLatex,
+  formatChatAsMarkdown,
+} from '@agent/export/chatExportFormatter';
 
 describe('formatChatAsMarkdown', () => {
   it('preserves function tool calls in mixed tool_calls arrays', () => {
@@ -83,5 +86,96 @@ describe('formatChatAsMarkdown', () => {
       markdown,
       /```\nfirst line\n\n\[image attachment]\n\[file attachment]\n```/,
     );
+  });
+
+  it('sanitizes web tool URLs before rendering Markdown links', () => {
+    const markdown = formatChatAsMarkdown({
+      timestamp: '2026-01-01T00:00:00.000Z',
+      config: {},
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'web_search_tool_result',
+              content: [
+                {
+                  type: 'web_search_result',
+                  title: 'unsafe result',
+                  url: 'javascript:alert(1)',
+                },
+                {
+                  type: 'web_search_result',
+                  title: 'safe result',
+                  url: '  https://example.com/search?q=texra  ',
+                },
+              ],
+            },
+            {
+              type: 'web_fetch_tool_result',
+              url: 'data:text/html,<script>alert(1)</script>',
+              title: 'unsafe fetch',
+              page_content: 'body',
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.match(markdown, /- unsafe result/);
+    assert.match(
+      markdown,
+      /- \[safe result]\(https:\/\/example\.com\/search\?q=texra\)/,
+    );
+    assert.match(markdown, /\*\*Title:\*\* unsafe fetch/);
+    assert.doesNotMatch(markdown, /javascript:alert/);
+    assert.doesNotMatch(markdown, /data:text\/html/);
+  });
+
+  it('sanitizes web tool URLs before rendering LaTeX links', () => {
+    const latex = formatChatAsLatex(
+      {
+        timestamp: '2026-01-01T00:00:00.000Z',
+        config: {},
+        messages: [
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'web_search_tool_result',
+                content: [
+                  {
+                    type: 'web_search_result',
+                    title: 'unsafe result',
+                    url: 'vbscript:msgbox(1)',
+                  },
+                  {
+                    type: 'web_search_result',
+                    title: 'safe result',
+                    url: 'https://example.com/path#frag',
+                  },
+                ],
+              },
+              {
+                type: 'web_fetch_tool_result',
+                url: 'file:///etc/passwd',
+                title: 'unsafe fetch',
+                page_content: 'body',
+              },
+            ],
+          },
+        ],
+      },
+      '',
+    );
+
+    assert.match(latex, /\\item unsafe result/);
+    assert.match(
+      latex,
+      /\\item \\href\{https:\/\/example\.com\/path\\#frag\}\{safe result\}/,
+    );
+    assert.match(latex, /\\textbf\{Title:\} unsafe fetch/);
+    assert.doesNotMatch(latex, /vbscript:msgbox/);
+    assert.doesNotMatch(latex, /file:\/\/\/etc\/passwd/);
   });
 });
