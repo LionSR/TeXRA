@@ -14,7 +14,6 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
-  consumeStreamChunks,
   detectStatusCode,
   handleStreamingFailure,
   takeTail,
@@ -248,12 +247,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         const thinkingStream = thinking;
         const outputStream = output;
 
-        await consumeStreamChunks(stream, (chunk) => {
+        for await (const chunk of stream) {
           const { contentDelta, reasoningDelta } =
             aggregator.consumeChunk(chunk);
           if (reasoningDelta) thinkingStream.append(reasoningDelta);
           if (contentDelta) outputStream.append(contentDelta);
-        });
+        }
 
         const response = aggregator.buildResponse();
         const finalReasoning = this.processThinkingBlock(response);
