@@ -31,7 +31,7 @@ import {
 } from '@utils/files';
 
 const mocks = vi.hoisted(() => ({
-  compileLatex2Pdf: vi.fn(async () => true),
+  compileLatex2Pdf: vi.fn(async () => ({ ok: true })),
   hasLatexCompiler: vi.fn(async () => true),
 }));
 
