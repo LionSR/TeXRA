@@ -40,6 +40,7 @@ import {
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import {
   getFileListConfig,
   loadFileListSettings,
@@ -58,8 +59,6 @@ import {
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
-  type StreamPhase,
-  type StreamSubstate,
   type StreamTabId,
 } from '@shared/schemas';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
@@ -990,20 +989,14 @@ export class DesktopProgressBridge {
     this.progressEvents.onProgressEvent(event, payload);
   }
 
-  private streamStatusSnapshot(): Map<StreamTabId, StreamPhase> {
-    return this.session.status.getAll();
-  }
-
-  private streamSubstateSnapshot(): Map<StreamTabId, StreamSubstate> {
-    return this.session.status.getAllSubstates();
+  private streamStateSnapshot(): Map<StreamTabId, StreamPhaseState> {
+    return this.session.status.getAllStreamStates();
   }
 
   private updateStreamMetadata(): StreamTabId | '' {
     return this.backend.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.streamStatusSnapshot(),
-      undefined,
-      this.streamSubstateSnapshot(),
+      this.streamStateSnapshot(),
     );
   }
 

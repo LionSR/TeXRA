@@ -41,6 +41,7 @@ import {
   isApiProvider,
   type ApiProvider,
 } from '@model/apiProviders';
+import { isUpstreamCreditDepletedError } from '@shared/schemas';
 import {
   handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
@@ -90,7 +91,7 @@ async function maybeAutoSwitchRetry(
   // Upstream credit depletion means the stored direct key IS the broken
   // credential — the user must provide a changed key, so we cannot
   // auto-switch to the stored value.
-  if (details?.isUpstreamCreditDepleted) return undefined;
+  if (isUpstreamCreditDepletedError(details)) return undefined;
 
   // ChatGPT-subscription exhaustion -> the user needs an OpenAI key.
   // Relay exhaustion -> use the provider from error details when known;

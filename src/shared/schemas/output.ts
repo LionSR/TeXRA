@@ -52,6 +52,18 @@ export const FileLineageSchema = z.strictObject({
   diffBase: FileLocationSchema.nullable(),
   diffFile: FileLocationSchema.nullable(),
 });
+export type FileLineage = z.infer<typeof FileLineageSchema>;
+
+/**
+ * The file location a diff should render against: the explicit `diffBase`
+ * when the file was rewritten in place (so a diff against the current path
+ * would show no change), falling back to `original`.
+ */
+export function getEffectiveDiffBase(
+  lineage: FileLineage | null | undefined,
+): FileLocation | null {
+  return lineage?.diffBase ?? lineage?.original ?? null;
+}
 
 export const OutputFileInfoSchema = OutputFileSchema.extend({
   round: z.number().prefault(() => 0),
@@ -167,10 +179,7 @@ export const OutputFileSummaryFromInfoSchema = OutputFileInfoSchema.transform(
     relativePath: displayPath(output.location),
     absolutePath: output.location.absolutePath,
     location: output.location.kind,
-    originalPath:
-      output.lineage?.diffBase?.absolutePath ??
-      output.lineage?.original?.absolutePath ??
-      null,
+    originalPath: getEffectiveDiffBase(output.lineage)?.absolutePath ?? null,
     added: output.diff?.added ?? null,
     removed: output.diff?.removed ?? null,
   }),
