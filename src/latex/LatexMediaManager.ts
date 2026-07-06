@@ -124,7 +124,15 @@ export class LatexMediaManager {
           const compiled = await compileLatex2Pdf(file, {
             outputDirectory: buildDir,
           });
-          if (!compiled) return undefined;
+          if (!compiled.ok) {
+            this.logger.warn('Failed to compile LaTeX to PDF', {
+              data: {
+                sourceFile: file.absolutePath,
+                logTail: compiled.logTail,
+              },
+            });
+            return undefined;
+          }
 
           const pdfFile = path.join(
             buildDir,
