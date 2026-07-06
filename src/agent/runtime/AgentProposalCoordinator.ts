@@ -1,16 +1,9 @@
 /**
- * Promise-based coordinator for workflow and tool-use agent proposals.
- *
- * 1. Tool calls `waitForProposal()` → returns Promise, emits 'showAgentProposal'.
- * 2. User approves/rejects/sets up → resolves Promise with the corresponding action.
- * 3. On resolution → emits 'resolveAgentProposal' to dismiss UI.
+ * Session-scoped coordinator for workflow and tool-use agent proposals.
  */
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { AgentProposal } from '@shared/schemas';
-import {
-  BasePromiseCoordinator,
-  type CoordinatorConfig,
-} from './BasePromiseCoordinator';
 
 export type ProposalResult =
   | { action: 'approve'; model?: string; agent?: string }
@@ -25,23 +18,25 @@ export interface ProposalRequestOptions {
   timeoutMs?: number;
 }
 
-interface ProposalShowPayload extends Record<string, unknown> {
-  proposalId: string;
-  streamId: string;
+type RuntimeHostProvider = () => AgentRuntimeHost;
+type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
+
+function toRuntimeHostProvider(
+  runtimeHost: CoordinatorRuntimeHost,
+): RuntimeHostProvider {
+  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
 }
 
-export class AgentProposalCoordinator extends BasePromiseCoordinator<
-  ProposalResult,
-  ProposalShowPayload
-> {
-  protected readonly config: CoordinatorConfig = {
-    showEventName: 'showAgentProposal',
-    resolveEventName: 'resolveAgentProposal',
-    idFieldName: 'proposalId',
-  };
+export class AgentProposalCoordinator {
+  private readonly getRuntimeHost: RuntimeHostProvider;
+  private readonly proposalStreamMap = new Map<string, string>();
 
-  protected getDefaultCancelResult(): ProposalResult {
-    return { action: 'reject' };
+  constructor(runtimeHost: CoordinatorRuntimeHost) {
+    this.getRuntimeHost = toRuntimeHostProvider(runtimeHost);
+  }
+
+  private get runtimeHost(): AgentRuntimeHost {
+    return this.getRuntimeHost();
   }
 
   waitForProposal(
@@ -49,6 +44,10 @@ export class AgentProposalCoordinator extends BasePromiseCoordinator<
     options: ProposalRequestOptions,
   ): Promise<ProposalResult> {
     const { proposalId, proposal, timeoutMs } = options;
+    if (this.proposalStreamMap.has(proposalId)) {
+      this.clearRequest(proposalId);
+    }
+    this.proposalStreamMap.set(proposalId, streamId);
 
     this.runtimeHost.emit('requestEnsureProgressView', {});
     this.runtimeHost.emit('setActiveStream', { streamId });
@@ -57,12 +56,36 @@ export class AgentProposalCoordinator extends BasePromiseCoordinator<
       { proposalId, streamId, ...proposal },
       { timeoutMs },
     );
-    if (interaction) return interaction;
+    if (!interaction) {
+      this.proposalStreamMap.delete(proposalId);
+      throw new Error('HostInteractions.requestAgentProposal is required');
+    }
 
-    return this.waitForUserAction(
-      proposalId,
-      { proposalId, streamId, ...proposal },
-      { timeoutMs },
-    );
+    return interaction.finally(() => this.proposalStreamMap.delete(proposalId));
+  }
+
+  clearRequest(proposalId: string): void {
+    const streamId = this.proposalStreamMap.get(proposalId);
+    this.proposalStreamMap.delete(proposalId);
+    if (streamId) {
+      const resolved =
+        this.runtimeHost.interactions?.resolve(proposalId, {
+          kind: 'proposal',
+          action: 'reject',
+        }) ?? false;
+      if (!resolved) {
+        this.runtimeHost.interactions?.cancelForStream(
+          streamId,
+          'Agent proposal cleared.',
+        );
+      }
+    }
+  }
+
+  clearAll(): void {
+    const proposalIds = [...this.proposalStreamMap.keys()];
+    for (const proposalId of proposalIds) {
+      this.clearRequest(proposalId);
+    }
   }
 }

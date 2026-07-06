@@ -1,5 +1,13 @@
 // Local imports
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type {
+  HostBashApprovalResult,
+  HostInteractions,
+  HostUserQuestionResult,
+} from '@agent/runtime/HostInteractions';
+import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
+import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
+import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import {
   createRunContext,
   withRunContext,
@@ -19,9 +27,263 @@ export function createRecordingHost(): {
   host: AgentRuntimeHost;
 } {
   const events: RecordedProgressEvent[] = [];
+  const pendingPlans = new Map<
+    string,
+    { streamId: string; settle: (result: PlanApprovalResult) => void }
+  >();
+  const pendingProposals = new Map<
+    string,
+    { streamId: string; settle: (result: ProposalResult) => void }
+  >();
+  const pendingRetries = new Map<
+    string,
+    { streamId: string; settle: (result: RetryResult) => void }
+  >();
+  const pendingBashes = new Map<
+    string,
+    { streamId?: string; settle: (result: HostBashApprovalResult) => void }
+  >();
+  const pendingUserQuestions = new Map<
+    string,
+    { streamId?: string; settle: (result: HostUserQuestionResult) => void }
+  >();
+  const activateStream = (streamId?: string | null) => {
+    events.push({ event: 'requestEnsureProgressView', payload: {} });
+    if (streamId) {
+      events.push({ event: 'setActiveStream', payload: { streamId } });
+    }
+  };
+  const interactions: HostInteractions = {
+    requestBashApproval: (request) => {
+      const requestId = `bash-${pendingBashes.size + 1}`;
+      const streamId = request.streamId ?? '';
+      activateStream(request.streamId);
+      events.push({
+        event: 'showBashPermission',
+        payload: {
+          requestId,
+          command: request.command,
+          ...(request.cwd ? { cwd: request.cwd } : {}),
+          allowBypass: true,
+          streamId,
+        },
+      });
+      return new Promise((resolve) => {
+        pendingBashes.set(requestId, {
+          streamId: request.streamId ?? undefined,
+          settle: resolve,
+        });
+      });
+    },
+    requestPlanApproval: (request) => {
+      events.push({
+        event: 'showPlanApproval',
+        payload: request,
+      });
+      return new Promise((resolve) => {
+        pendingPlans.set(request.approvalId, {
+          streamId: request.streamId,
+          settle: resolve,
+        });
+      });
+    },
+    requestAgentProposal: (request) => {
+      events.push({
+        event: 'showAgentProposal',
+        payload: request,
+      });
+      return new Promise((resolve) => {
+        pendingProposals.set(request.proposalId, {
+          streamId: request.streamId,
+          settle: resolve,
+        });
+      });
+    },
+    requestRetry: (request) => {
+      events.push({
+        event: 'showRetryRequest',
+        payload: request,
+      });
+      return new Promise((resolve) => {
+        pendingRetries.set(request.streamId, {
+          streamId: request.streamId,
+          settle: resolve,
+        });
+      });
+    },
+    askUserQuestion: (request) => {
+      activateStream(request.streamId || undefined);
+      events.push({
+        event: 'showUserQuestion',
+        payload: request,
+      });
+      return new Promise((resolve) => {
+        pendingUserQuestions.set(request.requestId, {
+          streamId: request.streamId || undefined,
+          settle: resolve,
+        });
+      });
+    },
+    handleProgressEvent: () => false,
+    pending: () => [
+      ...[...pendingBashes].map(([id, entry]) => ({
+        id,
+        kind: 'bash',
+        streamId: entry.streamId,
+      })),
+      ...[...pendingPlans].map(([id, entry]) => ({
+        id,
+        kind: 'plan',
+        streamId: entry.streamId,
+      })),
+      ...[...pendingProposals].map(([id, entry]) => ({
+        id,
+        kind: 'proposal',
+        streamId: entry.streamId,
+      })),
+      ...[...pendingRetries].map(([id, entry]) => ({
+        id,
+        kind: 'retry',
+        streamId: entry.streamId,
+      })),
+      ...[...pendingUserQuestions].map(([id, entry]) => ({
+        id,
+        kind: 'userQuestion',
+        streamId: entry.streamId,
+      })),
+    ],
+    resolve: (requestId, result) => {
+      if (result.kind === 'bash') {
+        const pending = pendingBashes.get(requestId);
+        if (!pending) return false;
+        pendingBashes.delete(requestId);
+        events.push({
+          event: 'resolveBashPermission',
+          payload: { requestId },
+        });
+        pending.settle({
+          accepted: result.action === 'approve',
+          userMessage:
+            result.action === 'reject' ? result.feedback?.trim() : undefined,
+        });
+        return true;
+      }
+      if (result.kind === 'plan') {
+        const pending = pendingPlans.get(requestId);
+        if (!pending) return false;
+        pendingPlans.delete(requestId);
+        events.push({
+          event: 'resolvePlanApproval',
+          payload: { approvalId: requestId },
+        });
+        pending.settle({
+          action: result.action as PlanApprovalResult['action'],
+          ...(result.feedback ? { feedback: result.feedback } : {}),
+        } as PlanApprovalResult);
+        return true;
+      }
+      if (result.kind === 'proposal') {
+        const pending = pendingProposals.get(requestId);
+        if (!pending) return false;
+        pendingProposals.delete(requestId);
+        events.push({
+          event: 'resolveAgentProposal',
+          payload: { proposalId: requestId },
+        });
+        pending.settle(
+          (result.value ?? {
+            action: result.action,
+            ...(result.feedback ? { feedback: result.feedback } : {}),
+          }) as ProposalResult,
+        );
+        return true;
+      }
+      if (result.kind === 'retry') {
+        const pending = pendingRetries.get(requestId);
+        if (!pending) return false;
+        pendingRetries.delete(requestId);
+        events.push({
+          event: 'resolveRetryRequest',
+          payload: { streamId: requestId },
+        });
+        pending.settle({
+          action: result.action as RetryResult['action'],
+          ...(result.feedback ? { feedback: result.feedback } : {}),
+        } as RetryResult);
+        return true;
+      }
+      if (result.kind === 'userQuestion') {
+        const pending = pendingUserQuestions.get(requestId);
+        if (!pending) return false;
+        pendingUserQuestions.delete(requestId);
+        events.push({
+          event: 'resolveUserQuestion',
+          payload: { requestId },
+        });
+        pending.settle({
+          submitted: result.action === 'submit',
+          answers:
+            result.action === 'submit'
+              ? (result.value as HostUserQuestionResult['answers'])
+              : undefined,
+          feedback: result.action === 'submit' ? undefined : result.feedback,
+        });
+        return true;
+      }
+      return false;
+    },
+    cancelForStream: (streamId) => {
+      for (const [requestId, pending] of pendingBashes) {
+        if (pending.streamId !== streamId) continue;
+        pendingBashes.delete(requestId);
+        events.push({
+          event: 'resolveBashPermission',
+          payload: { requestId },
+        });
+        pending.settle({ accepted: false });
+      }
+      for (const [approvalId, pending] of pendingPlans) {
+        if (pending.streamId !== streamId) continue;
+        pendingPlans.delete(approvalId);
+        events.push({
+          event: 'resolvePlanApproval',
+          payload: { approvalId },
+        });
+        pending.settle({ action: 'reject' });
+      }
+      for (const [proposalId, pending] of pendingProposals) {
+        if (pending.streamId !== streamId) continue;
+        pendingProposals.delete(proposalId);
+        events.push({
+          event: 'resolveAgentProposal',
+          payload: { proposalId },
+        });
+        pending.settle({ action: 'reject' });
+      }
+      const pendingRetry = pendingRetries.get(streamId);
+      if (pendingRetry) {
+        pendingRetries.delete(streamId);
+        events.push({
+          event: 'resolveRetryRequest',
+          payload: { streamId },
+        });
+        pendingRetry.settle({ action: 'cancel' });
+      }
+      for (const [requestId, pending] of pendingUserQuestions) {
+        if (pending.streamId !== streamId) continue;
+        pendingUserQuestions.delete(requestId);
+        events.push({
+          event: 'resolveUserQuestion',
+          payload: { requestId },
+        });
+        pending.settle({ submitted: false });
+      }
+    },
+  };
   return {
     events,
     host: {
+      interactions,
       emit: (event, payload) => events.push({ event, payload }),
     },
   };
