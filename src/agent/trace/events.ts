@@ -294,7 +294,10 @@ export interface ResultEvent extends StageStamp {
         readonly kind: Extract<AgentErrorKind, 'abort' | 'disk-full'>;
       })
     | (ResultEventProviderError & {
-        readonly kind: Extract<AgentErrorKind, 'missing-api-key' | 'unexpected'>;
+        readonly kind: Extract<
+          AgentErrorKind,
+          'missing-api-key' | 'unexpected'
+        >;
       });
   readonly usage?: RunUsageTotals;
 }
