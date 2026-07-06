@@ -1,18 +1,16 @@
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - agent
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+
 // Local imports - shared
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
-  currentSession: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
   persistChildRunReport: vi.fn(),
   writeResultMeta: vi.fn(),
-}));
-
-vi.mock('@agent/runtime/SessionHandle', () => ({
-  currentSession: mocks.currentSession,
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -24,7 +22,6 @@ vi.mock('@tools/childRunDelivery', () => ({
   persistChildRunReport: mocks.persistChildRunReport,
 }));
 
-// Local imports - tools
 import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
 import { NativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
 
@@ -35,9 +32,6 @@ describe('NativeSubagentStrategy', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.currentSession.mockReturnValue({
-      executions: { getHandle: vi.fn(() => undefined) },
-    });
   });
 
   afterEach(() => {
@@ -84,6 +78,76 @@ describe('NativeSubagentStrategy', () => {
       session: ownerSession,
       wake: true,
     });
+  });
+
+  it('uses the captured run handle delivery target', async () => {
+    const handleParent = 'handle-parent' as StreamTabId;
+    const childStream = 'child-stream' as StreamTabId;
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      startedAt: 0,
+      settleSubagentCost: vi.fn(),
+    });
+    strategy.setRunHandle(
+      new AgentExecutionHandle(
+        executionId,
+        handleParent,
+        childStream,
+        'review',
+        'toolUse',
+        {} as never,
+      ),
+    );
+
+    await expect(strategy.persistAndDeliverTerminal('payload')).resolves.toBe(
+      true,
+    );
+
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith({
+      targetStreamId: handleParent,
+      followUp: { text: 'payload', origin: 'subagent_result' },
+      session: ownerSession,
+      wake: true,
+    });
+  });
+
+  it('suppresses delivery after the captured run handle is detached', async () => {
+    const handleParent = 'handle-parent' as StreamTabId;
+    const childStream = 'child-stream' as StreamTabId;
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      startedAt: 0,
+      settleSubagentCost: vi.fn(),
+    });
+    const handle = new AgentExecutionHandle(
+      executionId,
+      handleParent,
+      childStream,
+      'review',
+      'toolUse',
+      {} as never,
+    );
+    strategy.setRunHandle(handle);
+    handle.detach();
+
+    await expect(strategy.persistAndDeliverTerminal('payload')).resolves.toBe(
+      false,
+    );
+
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+    expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
+      executionId,
+      'payload',
+    );
   });
 
   it('resets the in-flight delivery gate when terminal delivery drops', async () => {

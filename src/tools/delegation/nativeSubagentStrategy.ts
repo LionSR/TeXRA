@@ -11,11 +11,8 @@
 // Local imports - agent
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 
@@ -145,6 +142,7 @@ export async function writeSubagentResultMeta(
 export class NativeSubagentStrategy {
   private readonly deliveryState;
   private childStreamId: StreamTabId | undefined;
+  private runHandle: AgentRunHandle | undefined;
 
   constructor(private readonly params: NativeSubagentStrategyParams) {
     this.deliveryState = subagentDeliveryRegistry.start(params.executionId);
@@ -154,16 +152,19 @@ export class NativeSubagentStrategy {
     this.childStreamId = streamId;
   }
 
+  setRunHandle(handle: AgentRunHandle): void {
+    this.runHandle = handle;
+    this.childStreamId = handle.childStreamId;
+  }
+
   async deliverFollowUp(
     followUp: FollowUpQueueInput,
     options?: { wake?: boolean },
   ): Promise<boolean> {
     const { executionId, orchestratorStreamId, parentSession } = this.params;
-    const handle = currentSession().executions.getHandle(executionId);
-    const targetStreamId =
-      handle instanceof AgentExecutionHandle
-        ? handle.deliveryTargetStreamId
-        : orchestratorStreamId;
+    const targetStreamId = this.runHandle
+      ? this.runHandle.deliveryTargetStreamId
+      : orchestratorStreamId;
     if (!targetStreamId) return false;
 
     const result = await deliverChildRunFollowUp({
