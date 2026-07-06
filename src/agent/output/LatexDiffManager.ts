@@ -427,13 +427,19 @@ export class LatexDiffManager {
     });
 
     if (!compiled.ok) {
-      this.logger.warn('Failed to compile latexdiff PDF', {
-        data: {
-          diffFile: diffLocation.absolutePath,
-          logTail: compiled.logTail,
+      // No MESSAGE_TYPES.INTERNAL here (unlike the diagnostic logs above) —
+      // this is a real failure (the diff PDF silently doesn't appear), so it
+      // must reach the standard channel subscriber, and the tail belongs in
+      // the visible message itself since `data` is only shown in debug mode.
+      this.logger.warn(
+        `Failed to compile latexdiff PDF:\n${compiled.logTail}`,
+        {
+          data: {
+            diffFile: diffLocation.absolutePath,
+            logTail: compiled.logTail,
+          },
         },
-        messageType: MESSAGE_TYPES.INTERNAL,
-      });
+      );
       return { diffLocation, artifact: null };
     }
 

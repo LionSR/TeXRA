@@ -11,6 +11,7 @@ import { runCompileCheck } from '@agent/output/compileCheck';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 
 // Local imports - shared
+import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type {
   ExecutionId,
   FileLocation,
@@ -30,17 +31,12 @@ interface FakeCompileOptions {
   outputDirectory?: string;
 }
 
-interface FakeCompileResult {
-  ok: boolean;
-  logTail?: string;
-}
-
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(
     async (
       _location: FileLocation,
       _options?: FakeCompileOptions,
-    ): Promise<FakeCompileResult> => ({ ok: true }),
+    ): Promise<CompileLatex2PdfResult> => ({ ok: true }),
   ),
   hasLatexCompiler: vi.fn(async () => true),
 }));
@@ -280,7 +276,10 @@ describe('runCompileCheck', () => {
       [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
     });
 
-    mocks.compileLatex2Pdf.mockResolvedValueOnce({ ok: false });
+    mocks.compileLatex2Pdf.mockResolvedValueOnce({
+      ok: false,
+      logTail: 'stale failure log',
+    });
 
     const outputState = createOutputState();
     ensureRoundData(outputState, 0).outputs = [

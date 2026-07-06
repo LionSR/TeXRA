@@ -189,7 +189,7 @@ class TikzPictureManager {
         if (!compiled.ok) {
           logger.warn(
             this.channel,
-            `Failed to compile TikZ picture ${texLocation.absolutePath}`,
+            `Failed to compile TikZ picture ${texLocation.absolutePath}:\n${compiled.logTail}`,
             {
               data: {
                 texFile: texLocation.absolutePath,

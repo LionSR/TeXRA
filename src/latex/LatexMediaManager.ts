@@ -125,12 +125,15 @@ export class LatexMediaManager {
             outputDirectory: buildDir,
           });
           if (!compiled.ok) {
-            this.logger.warn('Failed to compile LaTeX to PDF', {
-              data: {
-                sourceFile: file.absolutePath,
-                logTail: compiled.logTail,
+            this.logger.warn(
+              `Failed to compile LaTeX to PDF:\n${compiled.logTail}`,
+              {
+                data: {
+                  sourceFile: file.absolutePath,
+                  logTail: compiled.logTail,
+                },
               },
-            });
+            );
             return undefined;
           }
 
