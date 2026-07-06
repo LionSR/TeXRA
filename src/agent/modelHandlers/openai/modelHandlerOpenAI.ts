@@ -18,7 +18,7 @@ import {
   buildErrorLogData,
   getSdkErrorMessage,
   isMissingFinishReasonError,
-  annotateStreamFailure,
+  handleStreamingFailure,
   trackStreamConnect,
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
@@ -432,39 +432,43 @@ export class ModelHandlerOpenAI<
       this.finalizeStreams(thinking, output, finalResponse);
       return finalResponse;
     } catch (streamError) {
-      // Finalize the progress streams on error so the progress view does not
-      // hang in a loading state (parity with the OpenRouter streaming path).
-      // No explicit final text so any chunks already streamed are preserved
-      // (passing `''` would overwrite the visible partial output). `finalize`
-      // is idempotent, so this is safe even if a partial finalize already ran.
-      thinking.finalize(undefined);
-      output.finalize();
-      // Tag at the boundary so abort identity survives wrapping and
-      // minification (mirrors the Anthropic stream catch).
-      tagOpenAISdkError(streamError, this.config.provider);
-      // On mid-stream failure, lift the partial content the SDK already
-      // accumulated (currentChatCompletionSnapshot) onto the error so the
-      // retry UI can show it and future continuation logic can reference
-      // the tail. Aborts are control flow; log at debug, skip warn.
-      const partialText = extractOpenAIPartialTail(
-        stream.currentChatCompletionSnapshot,
-        PARTIAL_TEXT_TAIL_MAX,
-      );
-      annotateStreamFailure(
-        streamError,
-        partialText,
-        connect.isConnected() || partialText.length > 0,
-      );
-      const isAbort = isUserAbort(streamError);
-      if (!isAbort) {
-        this.logger.warn('Stream failed', {
-          data: {
-            ...buildErrorLogData(streamError, { model: this.config.fullName }),
-            partialTextLength: partialText.length,
-          },
-        });
-      }
-      throw streamError;
+      return handleStreamingFailure(streamError, {
+        // Finalize the progress streams on error so the progress view does
+        // not hang in a loading state (parity with the OpenRouter streaming
+        // path). No explicit final text so any chunks already streamed are
+        // preserved (passing `''` would overwrite the visible partial
+        // output). `finalize` is idempotent, so this is safe even if a
+        // partial finalize already ran.
+        finalizeOnError: () => {
+          thinking.finalize(undefined);
+          output.finalize();
+        },
+        // On mid-stream failure, lift the partial content the SDK already
+        // accumulated (currentChatCompletionSnapshot) onto the error so the
+        // retry UI can show it and future continuation logic can reference
+        // the tail.
+        partialTail: () =>
+          extractOpenAIPartialTail(
+            stream.currentChatCompletionSnapshot,
+            PARTIAL_TEXT_TAIL_MAX,
+          ),
+        retryEligible: (tail) => connect.isConnected() || tail.length > 0,
+        decorateError: (err, tail) => {
+          // Tag at the boundary so abort identity survives wrapping and
+          // minification (mirrors the Anthropic stream catch).
+          tagOpenAISdkError(err, this.config.provider);
+          // Aborts are control flow; log at debug, skip warn.
+          if (!isUserAbort(err)) {
+            this.logger.warn('Stream failed', {
+              data: {
+                ...buildErrorLogData(err, { model: this.config.fullName }),
+                partialTextLength: tail.length,
+              },
+            });
+          }
+          return err;
+        },
+      });
     } finally {
       cleanup();
     }
