@@ -1,62 +1,13 @@
-import type { AgentEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { StreamTabId } from '@shared/schemas';
 
+import {
+  emitProjectedProgressEvent,
+  projectRunFactToProgressEvent,
+} from './sessionProgressEventProjection';
 import {
   emitLegacySessionFactOnHost,
   type SessionEventHub,
 } from './SessionEventHub';
-
-function emitLegacyRunEvent(
-  runtimeHost: AgentRuntimeHost,
-  streamId: StreamTabId,
-  event: AgentEvent,
-): void {
-  if (event.type === 'stage.start') {
-    if (event.kind !== 'round') return;
-    runtimeHost.emit('updateRoundStage', {
-      streamId,
-      roundStage: {
-        index: event.index ?? 0,
-        ...(event.total !== undefined && event.total > 0
-          ? { total: event.total }
-          : {}),
-      },
-    });
-    return;
-  }
-
-  if (event.type === 'child.activity') {
-    if (event.kind === 'subagents') {
-      runtimeHost.emit('updateActiveSubagents', {
-        parentStreamId: event.parentStreamId,
-        children: [...event.children],
-      });
-      return;
-    }
-    if (event.kind === 'processes') {
-      runtimeHost.emit('updateActiveProcesses', {
-        parentStreamId: event.parentStreamId,
-        processes: [...event.processes],
-      });
-      return;
-    }
-    runtimeHost.emit('setParentStream', {
-      childStreamId: event.childStreamId,
-      parentStreamId: event.parentStreamId,
-    });
-    return;
-  }
-
-  if (event.type === 'process.output') {
-    runtimeHost.emit('updateProcessOutput', {
-      parentStreamId: event.parentStreamId,
-      executionId: event.executionId,
-      stdout: event.stdout,
-      stderr: event.stderr,
-    });
-  }
-}
 
 /**
  * Temporary Stage 3a bridge from the new session-owned fact plane to the old
@@ -80,11 +31,12 @@ export function attachLegacyProgressEventProjection(
   const detachRunFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
-      emitLegacyRunEvent(
-        runtimeHost,
+      const projected = projectRunFactToProgressEvent(
         sessionEvent.streamId,
         sessionEvent.event,
       );
+      if (!projected) return;
+      emitProjectedProgressEvent(runtimeHost, projected);
     },
     {
       scope: 'run',
