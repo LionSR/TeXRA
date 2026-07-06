@@ -31,10 +31,6 @@ export function isLatexMarkdownFence(fence: MarkdownFence): boolean {
   return fence.info === '' || /^(?:latex|tex)$/i.test(fence.info);
 }
 
-function isMarkdownFenceDelimiter(line: string): boolean {
-  return parseMarkdownFenceDelimiter(line) !== null;
-}
-
 export function isClosingMarkdownFence(
   line: string,
   openingFence: MarkdownFence,
@@ -60,7 +56,6 @@ export function stripSurroundingMarkdownFence(
   if (
     firstContentIndex < lastContentIndex &&
     openingFence &&
-    isMarkdownFenceDelimiter(lines[lastContentIndex]) &&
     isClosingMarkdownFence(lines[lastContentIndex], openingFence) &&
     !lines
       .slice(firstContentIndex + 1, lastContentIndex)
