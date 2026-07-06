@@ -59,7 +59,7 @@ const credentialExhaustedRetry: ProgressEventPayloads['showRetryRequest'] = {
   operation: 'Tool-use call',
   errorMessage: 'HTTP 429 Too Many Requests',
   errorDetails: {
-    isCredentialExhausted: true,
+    exhaustionReason: 'relay-limit',
     isRelayError: true,
     statusCode: 429,
   },
@@ -526,7 +526,7 @@ describe('formatRetryRequestMessage', () => {
       errorMessage:
         'HTTP 429 Too Many Requests – 429 Monthly spending limit reached ($300).',
       errorDetails: {
-        isCredentialExhausted: true,
+        exhaustionReason: 'relay-limit',
         isRelayError: false,
         statusCode: 429,
       },

@@ -1,5 +1,6 @@
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
   ProgressEventBusLike,
@@ -101,6 +102,7 @@ export class ProgressEventHandler {
     this.state.clearStreamHints(streamId);
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetFinishedChildCounters(streamId);
+    this.pendingProgressUpdates.delete(streamId);
     this.state.pruneInterruptHandles();
 
     if (this.state.activeStream === streamId) {
@@ -366,8 +368,7 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateStreamMetadata(
         this.state,
         streamId,
-        this.state.streamStatus.getAll(),
-        this.state.streamStatus.getAllSubstates(),
+        this.state.streamStatus.getAllStreamStates(),
         {
           activeStream: shouldSwitch ? this.state.activeStream : undefined,
           agentFilter: filterChanged
@@ -408,8 +409,7 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateStreamMetadata(
         this.state,
         streamId,
-        this.state.streamStatus.getAll(),
-        this.state.streamStatus.getAllSubstates(),
+        this.state.streamStatus.getAllStreamStates(),
         {
           agentFilter: isActiveStream
             ? this.state.agentCategoryFilter
@@ -690,19 +690,10 @@ export class ProgressEventHandler {
         }
         activeStream = nextActiveStream;
       }
-      const statusesForRefresh = this.state.streamStatus.getAll();
-      statusesForRefresh.set(streamId, status);
-      const substatesForRefresh = this.state.streamStatus.getAllSubstates();
-      if (substate) {
-        substatesForRefresh.set(streamId, substate);
-      } else {
-        substatesForRefresh.delete(streamId);
-      }
       this.webviewUpdater.updateStreamMetadata(
         this.state,
         streamId,
-        statusesForRefresh,
-        substatesForRefresh,
+        this.buildStreamStatesForRefresh(streamId, status, substate),
         {
           activeStream,
           agentFilter: this.state.agentCategoryFilter,
@@ -712,19 +703,10 @@ export class ProgressEventHandler {
         await this.syncFilterDrivenActiveStreamContent(activeStreamToSync);
       }
     } else if (isNewRunningTransition) {
-      const statusesForRefresh = this.state.streamStatus.getAll();
-      statusesForRefresh.set(streamId, status);
-      const substatesForRefresh = this.state.streamStatus.getAllSubstates();
-      if (substate) {
-        substatesForRefresh.set(streamId, substate);
-      } else {
-        substatesForRefresh.delete(streamId);
-      }
       this.webviewUpdater.updateStreamMetadata(
         this.state,
         streamId,
-        statusesForRefresh,
-        substatesForRefresh,
+        this.buildStreamStatesForRefresh(streamId, status, substate),
       );
     } else {
       const lastTimestamp = this.state.streamLogs.getLastTimestamp(streamId);
@@ -762,11 +744,26 @@ export class ProgressEventHandler {
     );
   }
 
-  getAllStreamStatuses(): Map<StreamTabId, StreamPhase> {
-    return this.state.streamStatus.getAll();
+  getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {
+    return this.state.streamStatus.getAllStreamStates();
   }
 
-  getAllStreamSubstates(): Map<StreamTabId, StreamSubstate> {
-    return this.state.streamStatus.getAllSubstates();
+  /**
+   * Snapshot the status machine and splice in `streamId`'s about-to-be-applied
+   * status/substate, which hasn't been written to the machine yet when this
+   * is called during `setStreamStatus`. Combined into one map so the phase
+   * and substate views can't diverge on which streams they cover.
+   */
+  private buildStreamStatesForRefresh(
+    streamId: StreamTabId,
+    status: StreamPhase,
+    substate?: StreamSubstate,
+  ): Map<StreamTabId, StreamPhaseState> {
+    const statesForRefresh = this.state.streamStatus.getAllStreamStates();
+    statesForRefresh.set(
+      streamId,
+      substate ? { phase: status, substate } : { phase: status },
+    );
+    return statesForRefresh;
   }
 }

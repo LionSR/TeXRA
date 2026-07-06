@@ -188,30 +188,6 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
 type ChatContentPart = { type: string };
 
 /**
- * Check a batched tool-use follow-up before building provider messages.
- *
- * Shared by the chat-shaped handlers (OpenAI, OpenRouter), whose batched
- * follow-up requires exactly one result per call. Throws on a count mismatch
- * (a programmer error that would otherwise produce a malformed request) and
- * returns `false` when there is nothing to send so the caller can early-return.
- * Named `check*` rather than `assert*` because it also encodes the empty-guard
- * result rather than only throwing.
- *
- * @returns `true` when there is at least one call to process, `false` when empty.
- */
-export function checkBatchedToolCalls(
-  callCount: number,
-  resultCount: number,
-): boolean {
-  if (callCount !== resultCount) {
-    throw new Error(
-      `Batched tool calls mismatch: ${callCount} calls vs ${resultCount} results`,
-    );
-  }
-  return callCount > 0;
-}
-
-/**
  * Prepend `text` to the last user message in a chat-shaped conversation.
  *
  * Chat providers (OpenAI, OpenRouter) model user content as either a plain

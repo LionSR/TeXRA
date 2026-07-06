@@ -13,18 +13,56 @@ export type ContextManagementAction = z.infer<typeof ContextManagementAction>;
 
 const PositiveTokenCountSchema = z.int().positive();
 
-export const ContextManagementDataSchema = z.object({
-  action: ContextManagementAction,
+const ContextManagementDataBaseSchema = z.object({
   tokensBefore: TokenCountSchema,
-  tokensAfter: TokenCountSchema.optional(),
   contextWindow: PositiveTokenCountSchema,
   utilizationBefore: z.number().nonnegative(),
-  utilizationAfter: z.number().nonnegative().optional(),
   details: z.string().optional(),
   summary: z.string().optional(),
-  originalMaxTokens: PositiveTokenCountSchema.optional(),
-  reducedMaxTokens: PositiveTokenCountSchema.optional(),
 });
+
+const MaxTokensReducedDataSchema = ContextManagementDataBaseSchema.extend({
+  action: z.literal('max_tokens_reduced'),
+  originalMaxTokens: PositiveTokenCountSchema,
+  reducedMaxTokens: PositiveTokenCountSchema,
+});
+
+const TokensFreedDataSchema = ContextManagementDataBaseSchema.extend({
+  action: ContextManagementAction.exclude(['max_tokens_reduced']),
+  tokensAfter: TokenCountSchema,
+  utilizationAfter: z.number().nonnegative(),
+});
+
+/**
+ * Persisted stream-log entries predate this discriminated union, when
+ * `tokensAfter`/`utilizationAfter` were merely `.optional()` on every action.
+ * Default them from the before-values on read so an older log entry that
+ * omitted them still parses (reporting no measured change) instead of
+ * silently vanishing from the progress view.
+ */
+function fillLegacyTokensFreedFields(raw: unknown): unknown {
+  if (
+    typeof raw !== 'object' ||
+    raw === null ||
+    (raw as { action?: unknown }).action === 'max_tokens_reduced'
+  ) {
+    return raw;
+  }
+  const data = raw as Record<string, unknown>;
+  return {
+    ...data,
+    tokensAfter: data.tokensAfter ?? data.tokensBefore,
+    utilizationAfter: data.utilizationAfter ?? data.utilizationBefore,
+  };
+}
+
+export const ContextManagementDataSchema = z.preprocess(
+  fillLegacyTokensFreedFields,
+  z.discriminatedUnion('action', [
+    MaxTokensReducedDataSchema,
+    TokensFreedDataSchema,
+  ]),
+);
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
 

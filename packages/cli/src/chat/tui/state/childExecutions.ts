@@ -1,15 +1,15 @@
 // Local imports - shared schemas
 import type { ActiveChildInfo } from '@shared/schemas';
 
-export function childExecutionKey(
-  child: Pick<ActiveChildInfo, 'childStreamId' | 'executionId'>,
-): string {
-  return child.childStreamId ?? child.executionId;
+export function childExecutionKey(child: ActiveChildInfo): string {
+  return child.kind === 'subagent' ? child.childStreamId : child.executionId;
 }
 
-export function childExecutionLabel(
-  child: Pick<ActiveChildInfo, 'agentName' | 'toolName' | 'executionId'>,
-): string {
+export function childExecutionLabel(child: ActiveChildInfo): string {
+  // The agent name is always set by the runtime (for both kinds), so it's the
+  // label; toolName/executionId are just defensive fallbacks for a malformed
+  // entry. `kind` isn't needed here — it's `childExecutionKey` that actually
+  // discriminates (only subagents have a stream tab to key by).
   return child.agentName || child.toolName || child.executionId;
 }
 

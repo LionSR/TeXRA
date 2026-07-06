@@ -38,8 +38,12 @@ export function terminalResultToast(
   event: ResultEvent,
 ): TerminalResultToast | null {
   if (event.isSubagent || !event.error) return null;
+  // Bind to a local so the switch below narrows this value's per-kind shape
+  // (ResultEvent.error is now a union keyed on `kind`) rather than the
+  // `event.error` property-access chain, which narrows less reliably.
+  const error = event.error;
 
-  switch (event.error.kind) {
+  switch (error.kind) {
     case 'missing-api-key':
       return {
         type: 'instruction',
@@ -56,22 +60,25 @@ export function terminalResultToast(
     case 'disk-full':
       return {
         type: 'error',
-        payload: { message: event.error.message ?? 'Disk full.' },
+        payload: { message: error.message ?? 'Disk full.' },
       };
     case 'unexpected':
       return {
         type: 'error',
         payload: {
-          message: event.error.message ?? 'Unexpected error executing agent.',
+          message: error.message ?? 'Unexpected error executing agent.',
         },
       };
     case 'abort':
       // User-initiated cancellation: no toast (matches the prior lifecycle).
       return null;
     default: {
-      // Exhaustiveness guard: a new AgentErrorKind must take an explicit stance
-      // here rather than silently falling through to no-toast.
-      const _exhaustive: never = event.error.kind;
+      // Exhaustiveness guard: a new AgentErrorKind must take an explicit
+      // stance here rather than silently falling through to no-toast.
+      // Assert on the whole narrowed union (not `error.kind`) — now that
+      // `error` itself is a discriminated union, property access on an
+      // already-`never`-narrowed object does not type-check.
+      const _exhaustive: never = error;
       void _exhaustive;
       return null;
     }

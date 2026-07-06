@@ -909,6 +909,7 @@ describe('CLI conversation transcript splitting', () => {
           model: 'deepseekT',
           activeSubagents: [
             {
+              kind: 'subagent',
               executionId: 'ei_search',
               agentName: 'search',
               childStreamId: CHILD,
