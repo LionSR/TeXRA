@@ -282,6 +282,22 @@ export function createExtensionHostInteractions(
       }
     },
 
+    cancelUnscoped(cause?: string): void {
+      void cause;
+      for (const pending of [...pendingRequests.values()]) {
+        if (!pending.streamId) {
+          releasePending(pending);
+        }
+      }
+    },
+
+    cancelAll(cause?: string): void {
+      void cause;
+      for (const pending of [...pendingRequests.values()]) {
+        releasePending(pending);
+      }
+    },
+
     dispose(): void {
       for (const pending of [...pendingRequests.values()]) {
         releasePending(pending);
