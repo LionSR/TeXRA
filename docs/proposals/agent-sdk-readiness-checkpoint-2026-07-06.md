@@ -261,10 +261,7 @@ src/test-kernel/agent/output/extraction/` — **2 passed**.
   `emitRuntimeEvent.ts:66-112` (third enumeration) — no exhaustiveness guard.
   0 grep hits across all prior readiness docs.
 - Reviewed-train mapping verified: each re-derived candidate's tracking anchor
-confirmed present in the cited doc/line (credential-resolver `:2546/:2928`,
-`resumeToolUseFromSnapshot` §23-N2 `:3006/:3182`, OpenRouter coupling `:413`,
-`runReflectionAgent` KEEP `-07-03:206`, `toolHostUi` `-07-03:54`,
-`workflowOutputLayout` `:2374`).
-</content>
-
-</invoke>
+  confirmed present in the cited doc/line (credential-resolver `:2546/:2928`,
+  `resumeToolUseFromSnapshot` §23-N2 `:3006/:3182`, OpenRouter coupling `:413`,
+  `runReflectionAgent` KEEP `-07-03:206`, `toolHostUi` `-07-03:54`,
+  `workflowOutputLayout` `:2374`).
