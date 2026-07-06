@@ -172,6 +172,49 @@ describe('formatChatAsMarkdown', () => {
     assert.doesNotMatch(markdown, /\]\(javascript:/);
   });
 
+  it('escapes allowed-scheme URLs before rendering Markdown URL containers', () => {
+    const url = 'https://example.com/a) [pwn](javascript:alert(1))';
+    const markdown = formatChatAsMarkdown({
+      timestamp: '2026-01-01T00:00:00.000Z',
+      config: {},
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'web_search_tool_result',
+              content: [
+                {
+                  type: 'web_search_result',
+                  title: 'safe result',
+                  url,
+                },
+              ],
+            },
+            {
+              type: 'web_fetch_tool_result',
+              url,
+              title: 'safe fetch',
+              page_content: 'body',
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.ok(
+      markdown.includes(
+        '- [safe result](https://example.com/a%29%20%5Bpwn%5D%28javascript:alert%281%29%29)',
+      ),
+    );
+    assert.ok(
+      markdown.includes(
+        '**URL:** https://example.com/a\\) \\[pwn\\]\\(javascript:alert\\(1\\)\\)',
+      ),
+    );
+    assert.doesNotMatch(markdown, /\]\(javascript:/);
+  });
+
   it('sanitizes web tool URLs before rendering LaTeX links', () => {
     const latex = formatChatAsLatex(
       {
@@ -217,5 +260,49 @@ describe('formatChatAsMarkdown', () => {
     assert.match(latex, /\\textbf\{Title:\} unsafe fetch/);
     assert.doesNotMatch(latex, /vbscript:msgbox/);
     assert.doesNotMatch(latex, /file:\/\/\/etc\/passwd/);
+  });
+
+  it('escapes allowed-scheme URLs before rendering LaTeX URL commands', () => {
+    const url = String.raw`https://e.test/}\input{/etc/passwd`;
+    const latex = formatChatAsLatex(
+      {
+        timestamp: '2026-01-01T00:00:00.000Z',
+        config: {},
+        messages: [
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'web_search_tool_result',
+                content: [
+                  {
+                    type: 'web_search_result',
+                    title: 'safe result',
+                    url,
+                  },
+                ],
+              },
+              {
+                type: 'web_fetch_tool_result',
+                url,
+                title: 'safe fetch',
+                page_content: 'body',
+              },
+            ],
+          },
+        ],
+      },
+      '',
+    );
+
+    assert.match(
+      latex,
+      /\\item \\href\{https:\/\/e\.test\/\\%7D\\%5Cinput\\%7B\/etc\/passwd\}\{safe result\}/,
+    );
+    assert.match(
+      latex,
+      /\\textbf\{URL:\} \\url\{https:\/\/e\.test\/\\%7D\\%5Cinput\\%7B\/etc\/passwd\}/,
+    );
+    assert.doesNotMatch(latex, /\\input/);
   });
 });

@@ -60,16 +60,27 @@ const ATTACHMENT_LABELS: Record<string, string> = {
   document: 'Document attachment',
 };
 
-const MARKDOWN_TITLE_ESCAPE_RE = /[\\[\]()<>!]/g;
+const MARKDOWN_TEXT_ESCAPE_RE = /[\\[\]()<>!]/g;
+const MARKDOWN_URL_DESTINATION_ESCAPE_RE = /[\\[\]()<> \t\r\n]/g;
 
-function escapeMarkdownTitle(text: string): string {
-  return text.replaceAll(MARKDOWN_TITLE_ESCAPE_RE, (ch) => `\\${ch}`);
+function escapeMarkdownText(text: string): string {
+  return text.replaceAll(MARKDOWN_TEXT_ESCAPE_RE, (ch) => `\\${ch}`);
+}
+
+function percentEncodeAscii(ch: string): string {
+  return `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`;
+}
+
+function escapeMarkdownUrlDestination(url: string): string {
+  return url.replaceAll(MARKDOWN_URL_DESTINATION_ESCAPE_RE, percentEncodeAscii);
 }
 
 function markdownLinkOrText(url: string, title: string): string {
   const safeUrl = sanitizeLiveLinkUrl(url);
-  const safeTitle = escapeMarkdownTitle(title);
-  return safeUrl ? `[${safeTitle}](${safeUrl})` : safeTitle;
+  const safeTitle = escapeMarkdownText(title);
+  return safeUrl
+    ? `[${safeTitle}](${escapeMarkdownUrlDestination(safeUrl)})`
+    : safeTitle;
 }
 
 const MD_NODES: NodeRenderers = {
@@ -102,8 +113,8 @@ const MD_NODES: NodeRenderers = {
     return [
       '#### Web Fetch',
       '',
-      safeUrl ? `**URL:** ${safeUrl}` : undefined,
-      title ? `**Title:** ${escapeMarkdownTitle(title)}` : undefined,
+      safeUrl ? `**URL:** ${escapeMarkdownText(safeUrl)}` : undefined,
+      title ? `**Title:** ${escapeMarkdownText(title)}` : undefined,
       content ? `\n${fencedBlock(content)}` : undefined,
       '',
     ]
