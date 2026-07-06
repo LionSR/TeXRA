@@ -299,25 +299,28 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     const messages = await handler.createBatchedToolUseFollowUpMessages(
       [
         {
-          raw: {
-            id: 'call_1',
-            type: 'function',
-            function: { name: 'first_tool', arguments: '{}' },
+          call: {
+            raw: {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'first_tool', arguments: '{}' },
+            },
           },
+          result: { status: 'executed', output: 'first result' },
+          attachments: [],
         },
         {
-          raw: {
-            id: 'call_2',
-            type: 'function',
-            function: { name: 'second_tool', arguments: '{}' },
+          call: {
+            raw: {
+              id: 'call_2',
+              type: 'function',
+              function: { name: 'second_tool', arguments: '{}' },
+            },
           },
+          result: { status: 'executed', output: 'second result' },
+          attachments: [],
         },
       ] as any,
-      [
-        { status: 'executed', output: 'first result' },
-        { status: 'executed', output: 'second result' },
-      ],
-      [[], []],
       workspace as any,
       '',
     );
@@ -357,15 +360,17 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     const messages = await handler.createBatchedToolUseFollowUpMessages(
       [
         {
-          raw: {
-            id: 'call_1',
-            type: 'function',
-            function: { name: 'some_tool', arguments: '{}' },
+          call: {
+            raw: {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'some_tool', arguments: '{}' },
+            },
           },
+          result: { status: 'executed', output: 'result' },
+          attachments: [],
         },
       ] as any,
-      [{ status: 'executed', output: 'result' }],
-      [[]],
       workspace as any,
       '',
     );

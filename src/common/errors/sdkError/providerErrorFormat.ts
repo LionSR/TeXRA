@@ -1,6 +1,7 @@
 import {
   type ErrorContext,
   type ErrorLogData,
+  type ExhaustionReason,
   type ProviderError,
 } from '@shared/schemas';
 import {
@@ -166,11 +167,18 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const chatgptSubscriptionMessage = chatgptSubscriptionLimit
     ? describeChatGptSubscriptionLimit(chatgptSubscriptionLimit)
     : undefined;
-  const isCredentialExhausted =
-    isRelayMonthlyLimitBody(rawErrorBody) ||
-    isRelayMonthlyLimitByMessage ||
-    isUpstreamCreditDepleted ||
-    isChatGptSubscriptionLimited;
+  // Priority mirrors the pre-refactor OR order: ChatGPT-subscription and
+  // upstream-credit are independently detected first; relay monthly limit
+  // (by body or message) is the remaining exhaustion condition.
+  const exhaustionReason: ExhaustionReason | undefined =
+    isChatGptSubscriptionLimited
+      ? 'chatgpt-subscription'
+      : isUpstreamCreditDepleted
+        ? 'upstream-credit'
+        : isRelayMonthlyLimitBody(rawErrorBody) || isRelayMonthlyLimitByMessage
+          ? 'relay-limit'
+          : undefined;
+  const isCredentialExhausted = exhaustionReason !== undefined;
 
   // Terminal failures (user abort, local disk-full): never retryable and never
   // a relay/credential affordance. Carries diagnostics but deliberately opts
@@ -204,9 +212,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // for these fields so adding a future flag touches one place, not two.
   const classification = {
     isRelayError: isRelay,
-    isCredentialExhausted: isCredentialExhausted || undefined,
-    isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
-    isChatGptSubscriptionLimited: isChatGptSubscriptionLimited || undefined,
+    exhaustionReason,
     rawErrorBody,
     streamDiagnostics,
     partialText,

@@ -10,6 +10,7 @@ import { compareByNewestCreationTime } from '@shared/progressView/backend/stream
 
 function streamInfo(name: string, creationTimestamp: number): StreamTabInfo {
   return {
+    kind: 'agent',
     name,
     label: name,
     agentCategory: 'workflow',

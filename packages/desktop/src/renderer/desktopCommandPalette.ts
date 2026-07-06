@@ -76,7 +76,11 @@ function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
   return {
     id: buildSwitchStreamCommandId(stream.name),
     label: `Switch to ${stream.label || stream.name}`,
-    meta: stream.description || stream.agent || stream.modelLabel || 'Stream',
+    meta:
+      stream.description ||
+      stream.agent ||
+      (stream.kind === 'agent' ? stream.modelLabel : undefined) ||
+      'Stream',
     category: 'Streams',
     enabled: true,
   };

@@ -52,7 +52,6 @@ export interface ProgressWorkflowFileActionsControllerDeps {
 
 type ModelOutputBackup = {
   content: string;
-  streamId: StreamTabId;
 };
 
 export class ProgressWorkflowFileActionsController {
@@ -164,7 +163,7 @@ export class ProgressWorkflowFileActionsController {
     ) {
       const fileName = path.basename(file);
       await this.deps.sendFollowUp(
-        backup.streamId,
+        activeStream,
         `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
       );
     }

@@ -38,14 +38,13 @@ vi.mock('@cli/runtime/approvalAdapter', () => {
   interface RetryPayloadForMock {
     errorMessage?: string;
     errorDetails?: {
-      isCredentialExhausted?: boolean;
+      exhaustionReason?: 'relay-limit' | 'upstream-credit' | 'chatgpt-subscription';
       isRelayError?: boolean;
-      isChatGptSubscriptionLimited?: boolean;
     };
   }
 
   const isChatGptSubscriptionRetry = (payload: RetryPayloadForMock) =>
-    payload.errorDetails?.isChatGptSubscriptionLimited === true;
+    payload.errorDetails?.exhaustionReason === 'chatgpt-subscription';
   const isRelayMonthlyLimitMessage = (message?: string) =>
     message?.toLowerCase().includes('monthly spending limit') === true;
 
@@ -74,7 +73,7 @@ vi.mock('@cli/runtime/approvalAdapter', () => {
     },
     isCliApiSwitchableRetry: (payload: RetryPayloadForMock) =>
       isChatGptSubscriptionRetry(payload) ||
-      (payload.errorDetails?.isCredentialExhausted === true &&
+      (payload.errorDetails?.exhaustionReason !== undefined &&
         (payload.errorDetails?.isRelayError === true ||
           isRelayMonthlyLimitMessage(payload.errorMessage))),
     isCliChatGptSubscriptionRetry: isChatGptSubscriptionRetry,
@@ -134,7 +133,7 @@ function relayRetry(params: {
     errorMessage: params.message ?? 'Relay monthly limit reached.',
     errorDetails: {
       message: params.message ?? 'Relay monthly limit reached.',
-      isCredentialExhausted: true,
+      exhaustionReason: 'relay-limit',
       isRelayError: true,
       ...(params.provider ? { provider: params.provider } : {}),
     },
@@ -150,8 +149,7 @@ function chatGptSubscriptionRetry(
     errorMessage: 'ChatGPT subscription usage limit reached.',
     errorDetails: {
       message: 'ChatGPT subscription usage limit reached.',
-      isCredentialExhausted: true,
-      isChatGptSubscriptionLimited: true,
+      exhaustionReason: 'chatgpt-subscription',
       provider: 'openai',
     },
   } as ProgressEventPayloads['showRetryRequest'];
@@ -256,7 +254,7 @@ describe('TUI retry approvals', () => {
         errorMessage: 'Monthly spending limit reached.',
         errorDetails: {
           message: 'Monthly spending limit reached.',
-          isCredentialExhausted: true,
+          exhaustionReason: 'relay-limit',
           isRelayError: false,
           provider: 'openai',
         },

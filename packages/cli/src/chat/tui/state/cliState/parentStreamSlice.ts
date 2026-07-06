@@ -59,7 +59,8 @@ export function registerChildStreams(
 ): void {
   commitParentStreamEdges(
     children.map((child) => ({
-      childStreamId: child.childStreamId,
+      childStreamId:
+        child.kind === 'subagent' ? child.childStreamId : undefined,
       parentStreamId,
     })),
   );

@@ -233,17 +233,53 @@ export interface DomainEvent extends StageStamp {
 }
 
 /**
+ * Fields `formatProviderHttpError`'s `terminalError()` branch actually sets
+ * for `abort` / `disk-full` (see `src/common/errors/sdkError/
+ * providerErrorFormat.ts`): it deliberately opts out of provider/relay/
+ * credential classification, so `statusCode`/`provider`/`requestId`/
+ * `exhaustionReason` are never populated for these kinds.
+ */
+type ResultEventLocalError = Readonly<{
+  message?: string;
+  userRetryable?: RetryErrorInfo['userRetryable'];
+  isRelayError?: RetryErrorInfo['isRelayError'];
+  streamDiagnostics?: RetryErrorInfo['streamDiagnostics'];
+  partialText?: RetryErrorInfo['partialText'];
+}>;
+
+/**
+ * Fields available for `missing-api-key` / `unexpected`, which fall through
+ * `formatProviderHttpError` to the general SDK/provider-error classification
+ * path and so may populate the full `RetryErrorInfo` shape (minus `message`,
+ * carried separately, and `rawErrorBody`, stripped as bulky by
+ * `toRetryErrorInfo` at the emission boundary).
+ */
+type ResultEventProviderError = ResultEventLocalError &
+  Readonly<
+    Partial<
+      Omit<
+        RetryErrorInfo,
+        | 'message'
+        | 'userRetryable'
+        | 'isRelayError'
+        | 'streamDiagnostics'
+        | 'partialText'
+      >
+    >
+  >;
+
+/**
  * Terminal run outcome as data — emitted exactly once at the run-lifecycle
  * boundary (`runFlowWithLifecycle`), never from flows or the bus. `cancelled`
  * is a sibling of `failed` (a user interrupt is not a failure). `error.kind` is
- * the classified terminal-error discriminant; the rest of `error` is the
- * `RetryErrorInfo` normalized at the same boundary (statusCode, provider,
- * isCredentialExhausted, partialText, …). `normalizeProviderError` always
- * returns a structured shape, so baseline fields like `userRetryable`/
- * `isRelayError` are present for every kind, including `missing-api-key` and
- * `disk-full` — only genuine SDK/provider failures also populate `statusCode`/
- * `provider`/`requestId`/`partialText`. `usage` is the run totals (present
- * once at least one round recorded usage, including on failures).
+ * the classified terminal-error discriminant, and it also selects which
+ * `RetryErrorInfo` fields are ever populated: `abort`/`disk-full` are always
+ * local, non-provider failures (`ResultEventLocalError`), while
+ * `missing-api-key`/`unexpected` go through the general provider/SDK
+ * classification and may carry the fuller shape (`ResultEventProviderError`) —
+ * see `formatProviderHttpError` in `src/common/errors/sdkError/
+ * providerErrorFormat.ts`. `usage` is the run totals (present once at least
+ * one round recorded usage, including on failures).
  */
 export interface ResultEvent extends StageStamp {
   readonly type: 'result';
@@ -253,10 +289,13 @@ export interface ResultEvent extends StageStamp {
   readonly agentName: string;
   readonly category: 'toolUse' | 'workflow';
   readonly isSubagent: boolean;
-  readonly error?: Readonly<Partial<Omit<RetryErrorInfo, 'message'>>> & {
-    readonly kind: AgentErrorKind;
-    readonly message?: string;
-  };
+  readonly error?:
+    | (ResultEventLocalError & {
+        readonly kind: Extract<AgentErrorKind, 'abort' | 'disk-full'>;
+      })
+    | (ResultEventProviderError & {
+        readonly kind: Extract<AgentErrorKind, 'missing-api-key' | 'unexpected'>;
+      });
   readonly usage?: RunUsageTotals;
 }
 

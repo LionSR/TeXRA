@@ -35,7 +35,7 @@ type WaitingTransitionCause = Extract<
   'wait' | 'restart-repair'
 >;
 
-interface StreamPhaseState {
+export interface StreamPhaseState {
   readonly phase: StreamPhase;
   readonly substate?: StreamSubstate;
 }
@@ -219,26 +219,39 @@ export class StreamStatusMachine {
     return this.getAll().entries();
   }
 
-  getAll(): Map<StreamTabId, StreamPhase> {
-    const values = new Map<StreamTabId, StreamPhase>();
+  /**
+   * Combined per-stream phase + substate, merging in in-flight reservations
+   * exactly once. `getAll()` and `getAllSubstates()` are thin projections of
+   * this so the two views can never diverge on which streams they cover.
+   */
+  getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {
+    const values = new Map<StreamTabId, StreamPhaseState>();
     for (const [stream, state] of this.phases) {
-      values.set(stream, state.phase);
+      values.set(stream, state);
     }
     for (const stream of this.reservations) {
-      values.set(stream, STREAM_PHASE.RUNNING);
+      values.set(stream, {
+        phase: STREAM_PHASE.RUNNING,
+        substate: STREAM_SUBSTATE.STARTING,
+      });
+    }
+    return values;
+  }
+
+  getAll(): Map<StreamTabId, StreamPhase> {
+    const values = new Map<StreamTabId, StreamPhase>();
+    for (const [stream, state] of this.getAllStreamStates()) {
+      values.set(stream, state.phase);
     }
     return values;
   }
 
   getAllSubstates(): Map<StreamTabId, StreamSubstate> {
     const values = new Map<StreamTabId, StreamSubstate>();
-    for (const [stream, state] of this.phases) {
+    for (const [stream, state] of this.getAllStreamStates()) {
       if (state.substate) {
         values.set(stream, state.substate);
       }
-    }
-    for (const stream of this.reservations) {
-      values.set(stream, STREAM_SUBSTATE.STARTING);
     }
     return values;
   }
