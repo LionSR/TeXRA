@@ -51,6 +51,13 @@ export const ReflectionFlowStateSchema = z.object({
 
   /** One-shot repair context injected into the next round's user request. */
   compileFailureContext: z.string().optional(),
+
+  /**
+   * Set once a compile-repair round has been granted, so a compile failure
+   * on that repair round (or a resumed run) can't grant a second one.
+   * Bounds the repair round to exactly one per run.
+   */
+  compileRepairRoundGranted: z.boolean().optional(),
 });
 
 export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
