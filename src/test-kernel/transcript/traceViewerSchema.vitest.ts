@@ -151,6 +151,30 @@ describe('trace-viewer TraceDataSchema', () => {
     );
   });
 
+  it('rejects a trace snapshot stamped with an incompatible schema version', () => {
+    const incompatible = {
+      executionId: 'abcdef',
+      streamId: 'stream-1',
+      config: config(),
+      meta: null,
+      entries: [],
+      snapshot: {
+        schemaVersion: 999,
+        streamId: 'stream-1',
+        outputFilesByRound: {},
+        missingOutputsByRound: {},
+        compileFailuresByRound: {},
+      },
+      terminalStatus: null,
+    };
+
+    const result = TraceDataSchema.safeParse(incompatible);
+    expect(result.success).toBe(false);
+    expect(() => parseTraceData(incompatible)).toThrowError(
+      /incompatible TeXRA version/,
+    );
+  });
+
   it('rejects a trace whose entries are not an array of StreamLogEntry', () => {
     const malformed = {
       executionId: 'abcdef',
