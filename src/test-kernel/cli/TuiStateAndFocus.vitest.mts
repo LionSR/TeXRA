@@ -162,6 +162,7 @@ describe('cliState Phase 4 fields', () => {
       ...s,
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'history-1',
           agentName: 'critic',
           childStreamId: child1,
@@ -170,17 +171,20 @@ describe('cliState Phase 4 fields', () => {
       ],
       activeSubagents: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: child1,
           status: STREAM_STATUS.RUNNING,
         },
       ],
+      // Processes never own a stream tab, so an unrelated background process
+      // must be untouched by removing child1's stream below.
       activeProcesses: [
         {
+          kind: 'process',
           executionId: 'process-1',
           agentName: 'bash',
-          childStreamId: child1,
           status: STREAM_STATUS.RUNNING,
         },
       ],
@@ -200,9 +204,13 @@ describe('cliState Phase 4 fields', () => {
     if (!parent) throw new Error('missing parent stream');
     expect(parent.childStreams).toEqual([]);
     expect(parent.activeSubagents).toEqual([]);
-    expect(parent.activeProcesses).toEqual([]);
+    // Unaffected: process-1 never referenced child1's stream.
+    expect(parent.activeProcesses).toMatchObject([
+      { executionId: 'process-1' },
+    ]);
     expect(visibleSubagentRows(parent)).toEqual([]);
-    expect(hasChildControlItems(parent, 'tasks')).toBe(false);
+    // Still true: the untouched process-1 counts as a task-mode item.
+    expect(hasChildControlItems(parent, 'tasks')).toBe(true);
     expect(hasChildControlItems(parent, 'subagents')).toBe(false);
     expect(nextFocusForward()).toBeUndefined();
   });
@@ -218,6 +226,7 @@ describe('cliState Phase 4 fields', () => {
         ...s,
         activeSubagents: [
           {
+            kind: 'subagent',
             executionId: 'agent-1',
             agentName: 'codex',
             childStreamId: child1,
@@ -226,6 +235,7 @@ describe('cliState Phase 4 fields', () => {
         ],
         childStreams: [
           {
+            kind: 'subagent',
             executionId: 'agent-1',
             agentName: 'codex',
             childStreamId: child1,
@@ -249,6 +259,7 @@ describe('cliState Phase 4 fields', () => {
       expect(parent?.childStreams[0]?.status).toBe(STREAM_PHASE.FAILED);
       expect(visibleSubagentRows(parent!)).toMatchObject([
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           childStreamId: child1,
           status: STREAM_PHASE.FAILED,
@@ -284,6 +295,7 @@ describe('cliState Phase 4 fields', () => {
       parentStreamId: root,
       children: [
         {
+          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: child1,
@@ -1431,6 +1443,7 @@ describe('CLI TUI row allocation', () => {
       ...s,
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'child-exec-1',
           agentName: 'critic',
           childStreamId: child1,
@@ -1454,6 +1467,7 @@ describe('CLI TUI row allocation', () => {
       ...s,
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'child-exec-1',
           agentName: 'critic',
           childStreamId: child1,
@@ -1569,6 +1583,7 @@ describe('CLI TUI row allocation', () => {
       ...s,
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'child-exec-1',
           agentName: 'critic',
           childStreamId: child1,
@@ -1614,6 +1629,7 @@ describe('CLI TUI row allocation', () => {
       ...s,
       childStreams: [
         {
+          kind: 'subagent',
           executionId: 'child-exec-1',
           agentName: 'critic',
           childStreamId: child1,
@@ -2728,13 +2744,14 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       parentStreamId: root,
       processes: [
         {
+          kind: 'process',
           executionId: 'exec-a',
           agentName: 'latexmk',
           toolName: 'bash',
           status: 'exit 1',
           elapsed: '2s',
         },
-        { executionId: 'exec-b', agentName: 'bash' },
+        { kind: 'process', executionId: 'exec-b', agentName: 'bash' },
       ],
     });
     wrapped.emit('updateProcessOutput', {
@@ -2755,7 +2772,9 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     // active-processes update, after a durable transcript entry is added.
     wrapped.emit('updateActiveProcesses', {
       parentStreamId: root,
-      processes: [{ executionId: 'exec-b', agentName: 'bash' }],
+      processes: [
+        { kind: 'process', executionId: 'exec-b', agentName: 'bash' },
+      ],
     });
     const slice = streams.get().get(root);
     const out = streams.get().get(root)?.processOutput;
@@ -2796,6 +2815,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
   it('formats completed-process transcript rows for terminal rendering', () => {
     const process = buildCompletedProcessTranscript(
       {
+        kind: 'process',
         executionId: 'exec-a',
         agentName: 'latexmk',
         status: 'exit 2',
@@ -2829,6 +2849,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
   it('does not keep a stale running status after a process leaves the active list', () => {
     const process = buildCompletedProcessTranscript(
       {
+        kind: 'process',
         executionId: 'exec-a',
         agentName: 'bash',
         status: 'running',
@@ -2850,11 +2871,21 @@ describe('focusCycle', () => {
     patchStream(child2, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
     patchStream(root, (s) => ({
       ...s,
+      // Only subagents own a stream tab, so both live siblings are modeled as
+      // subagents here — a background process is never itself a focus target.
       activeSubagents: [
-        { executionId: 'e1', agentName: 'a', childStreamId: child1 },
-      ],
-      activeProcesses: [
-        { executionId: 'e2', agentName: 'b', childStreamId: child2 },
+        {
+          kind: 'subagent',
+          executionId: 'e1',
+          agentName: 'a',
+          childStreamId: child1,
+        },
+        {
+          kind: 'subagent',
+          executionId: 'e2',
+          agentName: 'b',
+          childStreamId: child2,
+        },
       ],
     }));
     // root → first descendant.

@@ -330,9 +330,11 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     ];
 
     const followUp = await handler.createBatchedToolUseFollowUpMessages!(
-      calls,
-      results,
-      [[], []],
+      calls.map((call, index) => ({
+        call,
+        result: results[index],
+        attachments: [],
+      })),
       workspace,
       'thinking done',
     );

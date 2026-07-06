@@ -28,16 +28,34 @@ export function requireRuntimeHost(
 }
 
 /**
+ * Return the active stream id, throwing a ToolError if none is active. Use
+ * from tools that address a stream (e.g. a goal keyed by stream id) but,
+ * unlike {@link requireRunStream}, don't need the runtime host to do so.
+ */
+export function requireStreamId(
+  toolName: string,
+  context: RunContext | undefined = tryUseRunContext(),
+): StreamTabId {
+  const streamId = context?.streamId;
+  if (!streamId) {
+    throw new ToolError(`${toolName} requires an active stream context.`);
+  }
+  return streamId;
+}
+
+/**
  * Return the active stream id and runtime host together, throwing a
  * ToolError if either is missing. Use from tools that need both a stream
  * to address (e.g. subscribe/approval) and a host to emit on.
  */
-export function requireRunStream(toolName: string): {
+export function requireRunStream(
+  toolName: string,
+  context: RunContext | undefined = tryUseRunContext(),
+): {
   streamId: StreamTabId;
   runtimeHost: AgentRuntimeHost;
   context: RunContext;
 } {
-  const context = tryUseRunContext();
   if (!context?.streamId || !context.runtimeHost) {
     throw new ToolError(
       `${toolName} must be called from within an agent stream.`,

@@ -52,7 +52,6 @@ export interface ProgressWorkflowFileActionsControllerDeps {
 
 type ModelOutputBackup = {
   content: string;
-  streamId: StreamTabId;
 };
 
 export class ProgressWorkflowFileActionsController {
@@ -164,7 +163,7 @@ export class ProgressWorkflowFileActionsController {
     ) {
       const fileName = path.basename(file);
       await this.deps.sendFollowUp(
-        backup.streamId,
+        activeStream,
         `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
       );
     }
@@ -235,7 +234,7 @@ export class ProgressWorkflowFileActionsController {
     try {
       const content = await this.deps.host.readFile(file);
       const streamBackups = this.modelOutputBackups.get(streamId) ?? new Map();
-      streamBackups.set(file, { content, streamId });
+      streamBackups.set(file, { content });
       this.modelOutputBackups.set(streamId, streamBackups);
     } catch {
       // Best-effort: backup only informs the accepted-edit follow-up.

@@ -298,9 +298,8 @@ export class ProgressViewProvider
 
     const activeStream = this.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.eventHandler.getAllStreamStatuses(),
+      this.eventHandler.getAllStreamStates(),
       theme,
-      this.eventHandler.getAllStreamSubstates(),
     );
 
     // Skip content sync when streams exist but filter excludes all of them
