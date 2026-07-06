@@ -718,10 +718,16 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Append the agent's end tag to a natural-stop response when the model did
-   * not already emit it. Shared by the provider handlers that use an
-   * `includes` presence check; each caller supplies its own "natural stop"
-   * predicate because provider stop-reason vocabularies differ.
+   * Restore the agent's end tag when the provider's API stripped it.
+   *
+   * Providers that accept the end tag as an API-level stop sequence
+   * (Anthropic `stop_sequences`, OpenAI/OpenRouter `stop`) omit the matched
+   * stop text from the returned completion by contract — this puts it back
+   * so downstream continuation/extraction logic sees the tag it was told to
+   * watch for. Only call this from a caller whose "natural stop" predicate is
+   * backed by that same configured stop sequence; each caller supplies its
+   * own predicate because provider stop-reason vocabularies differ. Logs
+   * when it actually fires, so there's data on how often it's needed.
    */
   protected appendEndTagIfNeeded(
     text: string,
@@ -729,6 +735,10 @@ export abstract class ModelHandler<
     isNaturalStop: boolean,
   ): string {
     if (isNaturalStop && endTag && !text.includes(endTag)) {
+      this.logger.debug(
+        'appendEndTagIfNeeded: restoring end tag stripped by provider stop sequence',
+        { data: { endTag } },
+      );
       return `${text}\n${endTag}`;
     }
     return text;

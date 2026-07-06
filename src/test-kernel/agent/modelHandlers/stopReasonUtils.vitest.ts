@@ -21,15 +21,17 @@ describe('isTokenLimitStopReason', () => {
     assert.equal(isTokenLimitStopReason(GOOGLE_FINISH.MAX_TOKENS), true);
   });
 
-  it('detects keyword-based token limit strings', () => {
-    assert.equal(isTokenLimitStopReason('max_tokens'), true);
-    assert.equal(isTokenLimitStopReason('Token limit reached'), true);
-    assert.equal(isTokenLimitStopReason('length'), true);
-  });
-
   it('ignores unrelated stop reasons', () => {
     assert.equal(isTokenLimitStopReason(undefined), false);
     assert.equal(isTokenLimitStopReason('stop'), false);
     assert.equal(isTokenLimitStopReason('function_call'), false);
+  });
+
+  it('no longer matches near-miss strings via substring fallback', () => {
+    // These used to match the deleted keyword-based fallback ladder; only
+    // exact enum values should match now.
+    assert.equal(isTokenLimitStopReason('max-token'), false);
+    assert.equal(isTokenLimitStopReason('Token limit reached'), false);
+    assert.equal(isTokenLimitStopReason('token_limit'), false);
   });
 });
