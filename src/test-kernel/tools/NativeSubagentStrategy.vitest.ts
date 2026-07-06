@@ -10,11 +10,25 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 const mocks = vi.hoisted(() => ({
   deliverChildRunFollowUp: vi.fn(),
   persistChildRunReport: vi.fn(),
+  readConfig: vi.fn(),
+  resumeQueuedToolUseSnapshot: vi.fn(),
+  retrieveSessionResumeData: vi.fn(),
   writeResultMeta: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
-  getExecutionStore: vi.fn(() => ({ writeResultMeta: mocks.writeResultMeta })),
+  getExecutionStore: vi.fn(() => ({
+    readConfig: mocks.readConfig,
+    writeResultMeta: mocks.writeResultMeta,
+  })),
+}));
+
+vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
+  retrieveSessionResumeData: mocks.retrieveSessionResumeData,
+}));
+
+vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
+  resumeQueuedToolUseSnapshot: mocks.resumeQueuedToolUseSnapshot,
 }));
 
 vi.mock('@tools/childRunDelivery', () => ({
@@ -56,6 +70,7 @@ describe('NativeSubagentStrategy', () => {
       agentName: 'review',
       orchestratorStreamId: parentStreamId,
       parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
       startedAt: 0,
       settleSubagentCost: vi.fn(),
     });
@@ -90,6 +105,7 @@ describe('NativeSubagentStrategy', () => {
       agentName: 'review',
       orchestratorStreamId: parentStreamId,
       parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
       startedAt: 0,
       settleSubagentCost: vi.fn(),
     });
@@ -125,6 +141,7 @@ describe('NativeSubagentStrategy', () => {
       agentName: 'review',
       orchestratorStreamId: parentStreamId,
       parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
       startedAt: 0,
       settleSubagentCost: vi.fn(),
     });
@@ -161,6 +178,7 @@ describe('NativeSubagentStrategy', () => {
       agentName: 'review',
       orchestratorStreamId: parentStreamId,
       parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
       startedAt: 0,
       settleSubagentCost: vi.fn(),
     });
@@ -170,6 +188,69 @@ describe('NativeSubagentStrategy', () => {
     );
     await expect(strategy.persistAndDeliverTerminal('second')).resolves.toBe(
       true,
+    );
+  });
+
+  it('resumes queued follow-ups with native delivery callbacks', async () => {
+    const childStream = 'child-stream' as StreamTabId;
+    const runtimeHost = { emit: vi.fn() };
+    const config = { agentCategory: 'toolUse' };
+    const snapshot = {
+      agentConfig: config,
+      executionId,
+      messages: [],
+      streamId: childStream,
+    };
+    mocks.readConfig.mockResolvedValue(config);
+    mocks.retrieveSessionResumeData.mockResolvedValue({
+      type: 'toolUse',
+      snapshot,
+    });
+    mocks.resumeQueuedToolUseSnapshot.mockResolvedValue(true);
+
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      runtimeHost,
+      startedAt: 0,
+      settleSubagentCost: vi.fn(),
+    });
+    strategy.setChildStreamId(childStream);
+
+    await expect(
+      strategy.wakeQueuedFollowUp(
+        { status: 'queued', reason: 'waiting' },
+        {
+          approvalPromptsUnavailable: true,
+          runtimeUnavailableTools: ['edit_file'],
+        },
+      ),
+    ).resolves.toEqual({ kind: 'resumed' });
+
+    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledWith(
+      childStream,
+      executionId,
+      config,
+    );
+    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+      childStream,
+      snapshot,
+      runtimeHost,
+      expect.objectContaining({
+        allowWaitingResult: true,
+        approvalPromptsUnavailable: true,
+        parentStreamId,
+        runtimeUnavailableTools: ['edit_file'],
+        session: ownerSession,
+        onBeforeWaiting: expect.any(Function),
+        onCompleted: expect.any(Function),
+        onFollowUpConsumed: expect.any(Function),
+        onProgress: expect.any(Function),
+        onRun: expect.any(Function),
+        onRunError: expect.any(Function),
+      }),
     );
   });
 });
