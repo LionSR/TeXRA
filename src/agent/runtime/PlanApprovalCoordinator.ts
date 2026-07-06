@@ -64,6 +64,12 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
     this.runtimeHost.emit('requestEnsureProgressView', {});
     this.runtimeHost.emit('setActiveStream', { streamId });
 
+    const interaction = this.runtimeHost.interactions?.requestPlanApproval?.(
+      { approvalId, streamId, plan, goalEnabled },
+      { timeoutMs },
+    );
+    if (interaction) return interaction;
+
     return this.waitForUserAction(
       approvalId,
       { approvalId, streamId, plan, goalEnabled },

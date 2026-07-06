@@ -415,7 +415,13 @@ export class ExternalInquiryTool extends defineTool({
           draft: null,
           transcript: null,
         };
-    runtimeHost.emit('showExternalInquiry', permission);
+    const interaction =
+      runtimeHost.interactions?.openExternalInquiry?.(permission);
+    if (interaction) {
+      void interaction;
+    } else {
+      runtimeHost.emit('showExternalInquiry', permission);
+    }
 
     // Background Tasks panel: announce the open thread.
     const summary = await getThreadSummary(persisted.threadId);
