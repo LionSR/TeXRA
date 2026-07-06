@@ -24,7 +24,7 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 // Local imports - common
 import {
   attachStreamDiagnostics,
-  annotateStreamFailure,
+  handleStreamingFailure,
   trackStreamConnect,
   takeTail,
   isUserAbort,
@@ -664,69 +664,77 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } catch (streamError) {
-        tagAnthropicSdkError(streamError, this.config.provider);
+        return handleStreamingFailure(streamError, {
+          // No finalizeOnError hook: Anthropic finalizes the stream handler
+          // unconditionally in the `finally` block below (it also needs to
+          // run on the success path), not as a catch-only step.
+          partialTail: () =>
+            extractPartialTextTail(
+              stream.currentMessage,
+              PARTIAL_TEXT_TAIL_MAX,
+            ),
+          retryEligible: (tail) => connect.isConnected() || tail.length > 0,
+          decorateError: (err, partialText) => {
+            tagAnthropicSdkError(err, this.config.provider);
 
-        const diagnostics = streamHandler.getDiagnostics();
-        const partialText = extractPartialTextTail(
-          stream.currentMessage,
-          PARTIAL_TEXT_TAIL_MAX,
-        );
-        const requestId = stream.request_id;
+            const diagnostics = streamHandler.getDiagnostics();
+            const requestId = stream.request_id;
 
-        // Wrap only non-APIError, non-abort stream failures that happened
-        // before message_start. APIError subclasses carry status/headers/
-        // requestID/type needed for retry classification; aborts are
-        // identified through the metadata tag attached above (isUserAbort),
-        // which wrapping would hide. Gate on diagnostics.messageStartReceived
-        // (tracked from the actual message_start SSE event) rather than
-        // stream.currentMessage, which the SDK does not keep populated once
-        // finalMessage() has settled — using it here previously mislabeled
-        // post-message_start failures (e.g. the message_stop guard above) as
-        // "closed before message_start", clobbering the more accurate error.
-        const isAbort = isUserAbort(streamError);
-        let enrichedError: unknown = streamError;
-        if (
-          !diagnostics.messageStartReceived &&
-          streamError instanceof Error &&
-          !(streamError instanceof AnthropicAPIError) &&
-          !isAbort
-        ) {
-          enrichedError = new Error(
-            `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
-              `(${diagnostics.eventsProcessed} events). ` +
-              `Likely connection dropped before the API responded.`,
-            { cause: streamError },
-          );
-        }
+            // Wrap only non-APIError, non-abort stream failures that
+            // happened before message_start. APIError subclasses carry
+            // status/headers/requestID/type needed for retry classification;
+            // aborts are identified through the metadata tag attached above
+            // (isUserAbort), which wrapping would hide. Gate on
+            // diagnostics.messageStartReceived (tracked from the actual
+            // message_start SSE event) rather than stream.currentMessage,
+            // which the SDK does not keep populated once finalMessage() has
+            // settled — using it here previously mislabeled post-
+            // message_start failures (e.g. the message_stop guard above) as
+            // "closed before message_start", clobbering the more accurate
+            // error.
+            const isAbort = isUserAbort(err);
+            let enrichedError: unknown = err;
+            if (
+              !diagnostics.messageStartReceived &&
+              err instanceof Error &&
+              !(err instanceof AnthropicAPIError) &&
+              !isAbort
+            ) {
+              enrichedError = new Error(
+                `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
+                  `(${diagnostics.eventsProcessed} events). ` +
+                  `Likely connection dropped before the API responded.`,
+                { cause: err },
+              );
+            }
 
-        // detectRequestId() reads .request_id off the thrown error, so set it
-        // on whichever object we're throwing (the wrapper or the original).
-        if (requestId && enrichedError instanceof Error) {
-          (enrichedError as ErrorWithRequestId).request_id = requestId;
-        }
+            // detectRequestId() reads .request_id off the thrown error, so
+            // set it on whichever object we're throwing (the wrapper or the
+            // original).
+            if (requestId && enrichedError instanceof Error) {
+              (enrichedError as ErrorWithRequestId).request_id = requestId;
+            }
 
-        const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}`;
-        const logData = {
-          data: {
-            isUsingRelay: this.shouldUseServerSideKeys(),
-            baseUrl: this.getBaseUrl() ?? 'default',
-            model: this.config.fullName,
-            streamDiagnostics: diagnostics,
-            partialTextLength: partialText.length,
-            error: enrichedError,
+            const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}`;
+            const logData = {
+              data: {
+                isUsingRelay: this.shouldUseServerSideKeys(),
+                baseUrl: this.getBaseUrl() ?? 'default',
+                model: this.config.fullName,
+                streamDiagnostics: diagnostics,
+                partialTextLength: partialText.length,
+                error: enrichedError,
+              },
+            };
+            // The retry node owns user-facing failure reporting. Keep stream
+            // diagnostics available without showing a second visible failure
+            // row.
+            this.logger.debug(logMessage, logData);
+
+            attachStreamDiagnostics(enrichedError, diagnostics);
+            return enrichedError;
           },
-        };
-        // The retry node owns user-facing failure reporting. Keep stream
-        // diagnostics available without showing a second visible failure row.
-        this.logger.debug(logMessage, logData);
-
-        attachStreamDiagnostics(enrichedError, diagnostics);
-        annotateStreamFailure(
-          enrichedError,
-          partialText,
-          connect.isConnected() || partialText.length > 0,
-        );
-        throw enrichedError;
+        });
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
         streamHandler.finalize();

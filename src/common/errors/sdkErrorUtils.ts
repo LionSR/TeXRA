@@ -25,7 +25,10 @@ export {
 export {
   type ConnectTrackableStream,
   type StreamConnectTracker,
+  type StreamingFailureHooks,
   annotateStreamFailure,
+  consumeStreamChunks,
+  handleStreamingFailure,
   trackStreamConnect,
 } from './sdkError/streamFailure';
 
