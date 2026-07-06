@@ -15,7 +15,7 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 
 // Local imports - core
 import { ToolError } from '@shared/schemas/toolResult';
-import { isTimeoutError } from '@tools/timeouts';
+import { isTimeoutError, joinAbortSignal } from '@tools/timeouts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -207,16 +207,13 @@ export async function callBetterBibTeX<T>(
   // Cancellation for the owning agent run — a cancelled parallel batch must
   // abort a hung Zotero request instead of waiting out its timeout.
   const cancelSignal = getCurrentToolCallContext()?.signal;
-  const timeoutSignal = AbortSignal.timeout(timeout);
   let raw: unknown;
   try {
     raw = await ky
       .post(url, {
         json: { jsonrpc: '2.0', method, params, id: 1 },
         timeout: false,
-        signal: cancelSignal
-          ? AbortSignal.any([cancelSignal, timeoutSignal])
-          : timeoutSignal,
+        signal: joinAbortSignal(timeout, cancelSignal),
         retry: 0,
       })
       .json<unknown>();
