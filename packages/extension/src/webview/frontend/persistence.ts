@@ -23,6 +23,7 @@ import {
 } from '@shared/schemas';
 import type { MultiFiles } from '@shared/schemas';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
+import { createFlushableDebounce } from '@utils/core';
 
 // Local imports - main view
 import { MULTIPLE_DOCUMENT_FILE_TYPES, SESSION_TYPES } from './constants';
@@ -60,7 +61,6 @@ const stateManager = new PersistedState(
  * exactly one storage write per backend restore.
  */
 let saveBlockCount = 0;
-let instructionSaveTimer: number | null = null;
 
 function blockSave(): void {
   saveBlockCount += 1;
@@ -254,24 +254,22 @@ function clearForNewSession(): void {
   saveState();
 }
 
+const INSTRUCTION_SAVE_DEBOUNCE_MS = 300;
+
+/** Debounces `saveState()` calls triggered by instruction keystrokes. */
+const instructionSaveDebounce = createFlushableDebounce(
+  saveState,
+  INSTRUCTION_SAVE_DEBOUNCE_MS,
+);
+
 /** Debounce instruction keystrokes so each one doesn't hit storage. */
 export function scheduleInstructionSave(): void {
-  if (instructionSaveTimer) {
-    window.clearTimeout(instructionSaveTimer);
-  }
-  instructionSaveTimer = window.setTimeout(() => {
-    saveState();
-    instructionSaveTimer = null;
-  }, 300);
+  instructionSaveDebounce.schedule();
 }
 
 /** Flush a pending debounced instruction save (on disconnect). */
 export function flushPendingInstructionSave(): void {
-  if (instructionSaveTimer) {
-    window.clearTimeout(instructionSaveTimer);
-    instructionSaveTimer = null;
-    saveState();
-  }
+  instructionSaveDebounce.flush();
 }
 
 /**
@@ -282,9 +280,6 @@ export function flushPendingInstructionSave(): void {
  */
 export function resetPersistenceRuntime(): void {
   saveBlockCount = 0;
-  if (instructionSaveTimer) {
-    window.clearTimeout(instructionSaveTimer);
-    instructionSaveTimer = null;
-  }
+  instructionSaveDebounce.cancel();
   stateManager.reload();
 }
