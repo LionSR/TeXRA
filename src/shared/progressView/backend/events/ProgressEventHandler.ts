@@ -580,7 +580,7 @@ export class ProgressEventHandler {
       queuedFollowUps,
       agentCategory,
       conversationProgress,
-      roundStage,
+      roundStage: includeActiveState ? (roundStage ?? null) : undefined,
       badges,
       parentStreamId,
       ...streamControls,

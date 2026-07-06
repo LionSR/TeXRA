@@ -19,7 +19,10 @@ import { firstStreamId, type ProgressState, type StreamState } from '../store';
 import { unsupportedProgressCommands$ } from '../progressState';
 import { clearResolvedProposalIds } from './permissionSlice';
 import { pendingDescriptions, takePendingDescription } from './streamMetaSlice';
-import { mergeBackendOwnedState } from './streamStateMerge';
+import {
+  mergeBackendOwnedState,
+  metadataToStreamStatePartial,
+} from './streamStateMerge';
 import { clearCopyContentStore } from '../formatters/copyContentStore';
 import { clearProposalInputStore } from '../formatters/proposalInputStore';
 import {
@@ -51,7 +54,10 @@ function updateStreamInfo(
         stream.name,
         existing
           ? mergeBackendOwnedState(existing, metadata)
-          : createStreamState(stream.agentCategory, metadata),
+          : createStreamState(
+              stream.agentCategory,
+              metadataToStreamStatePartial(metadata),
+            ),
       );
     } else if (!existing) {
       mergedStates.set(stream.name, createStreamState(stream.agentCategory));
