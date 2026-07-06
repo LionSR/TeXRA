@@ -79,13 +79,11 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   cleanupUnscopedApprovals,
-  handleProgressViewBashApprovalAction,
   releaseStreamResources,
 } from '@tools/approval';
 import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { GoalStore } from '@tools/goal';
-import { handleUserQuestionAction } from '@tools/userQuestion';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -467,14 +465,16 @@ export class DesktopProgressBridge {
         });
         return true;
       },
-      resolveProposal: (proposalId, result) => {
+      settleProposal: (proposalId, result) => {
         const resolved = this.session.interactions.resolve(proposalId, {
           kind: 'proposal',
           action: result.action,
           value: result,
         });
         if (!resolved) {
-          this.session.coordinators.resolveProposal(proposalId, result);
+          this.logger.warn(
+            `No pending desktop host interaction found for proposal: ${proposalId}`,
+          );
         }
       },
       onMissingProposal: (proposalId) => {
@@ -558,44 +558,27 @@ export class DesktopProgressBridge {
           });
         },
         handleBashApprovalAction: (message) =>
-          this.session.interactions.resolve(message.requestId, {
+          void this.session.interactions.resolve(message.requestId, {
             kind: 'bash',
             action: message.action,
             feedback: message.feedback,
-          }) || handleProgressViewBashApprovalAction(message),
+          }),
         handlePlanApprovalAction: (message) => {
-          const resolved = this.session.interactions.resolve(
-            message.approvalId,
-            {
-              kind: 'plan',
-              action: message.action,
-              ...(message.action === 'reject' && {
-                feedback: message.feedback,
-              }),
-            },
-          );
-          if (!resolved) {
-            this.session.coordinators.resolvePlanApproval(message.approvalId, {
-              action: message.action,
-              ...(message.action === 'reject' && {
-                feedback: message.feedback,
-              }),
-            });
-          }
+          this.session.interactions.resolve(message.approvalId, {
+            kind: 'plan',
+            action: message.action,
+            ...(message.action === 'reject' && {
+              feedback: message.feedback,
+            }),
+          });
         },
         handleUserQuestionAction: (message) => {
-          const resolved = this.session.interactions.resolve(
-            message.requestId,
-            {
-              kind: 'userQuestion',
-              action: message.action,
-              value: message.answers,
-              feedback: message.feedback,
-            },
-          );
-          if (!resolved) {
-            return handleUserQuestionAction(message);
-          }
+          this.session.interactions.resolve(message.requestId, {
+            kind: 'userQuestion',
+            action: message.action,
+            value: message.answers,
+            feedback: message.feedback,
+          });
           return undefined;
         },
         handleAgentProposalAction: (message) =>

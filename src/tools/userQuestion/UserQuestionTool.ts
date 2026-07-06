@@ -1,14 +1,12 @@
 import { nanoid } from 'nanoid';
-import pDefer, { type DeferredPromise } from 'p-defer';
 import { z } from 'zod';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createChannelTrace } from '@logger';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
-  type StreamTabId,
   type UserQuestionAnswers,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
@@ -39,88 +37,18 @@ interface UserQuestionResult {
   feedback?: string;
 }
 
-type PendingQuestion = {
-  streamId?: StreamTabId;
-  runtimeHost?: AgentRuntimeHost;
-  deferred: DeferredPromise<UserQuestionResult>;
-};
-
-const pendingQuestions = new Map<string, PendingQuestion>();
-
-/** Resolve (as declined) every pending question matching `predicate`. */
-function rejectPendingQuestions(
-  predicate: (entry: PendingQuestion) => boolean,
-): void {
-  for (const entry of pendingQuestions.values()) {
-    if (predicate(entry)) entry.deferred.resolve({ submitted: false });
-  }
-}
-
-async function awaitUserQuestionResponse(params: {
-  requestId: string;
-  input: AskUserQuestionInput;
-  runtimeHost: AgentRuntimeHost;
-  streamId?: StreamTabId;
-}): Promise<UserQuestionResult> {
-  const deferred = pDefer<UserQuestionResult>();
-  pendingQuestions.set(params.requestId, {
-    streamId: params.streamId,
-    runtimeHost: params.runtimeHost,
-    deferred,
-  });
-
-  params.runtimeHost.emit('requestEnsureProgressView', {});
-  if (params.streamId) {
-    params.runtimeHost.emit('setActiveStream', { streamId: params.streamId });
-  }
-  params.runtimeHost.emit('showUserQuestion', {
-    requestId: params.requestId,
-    questions: params.input.questions,
-    context: params.input.context ?? undefined,
-    allowBypass: false,
-    streamId: params.streamId ?? '',
-  });
-
-  return deferred.promise;
-}
-
 export async function handleUserQuestionAction(payload: {
   requestId: string;
   action: 'submit' | 'reject' | 'skip';
   answers?: UserQuestionAnswers;
   feedback?: string;
 }): Promise<void> {
-  const entry = pendingQuestions.get(payload.requestId);
-  if (!entry) return;
-
-  entry.deferred.resolve({
-    submitted: payload.action === 'submit',
-    answers: payload.action === 'submit' ? payload.answers : undefined,
-    feedback: payload.action === 'submit' ? undefined : payload.feedback,
+  defaultSession().interactions.resolve(payload.requestId, {
+    kind: 'userQuestion',
+    action: payload.action,
+    value: payload.answers,
+    feedback: payload.feedback,
   });
-}
-
-/** @internal Called by unified cleanup. */
-export function _rejectPendingUserQuestionsForStream(
-  streamId: StreamTabId,
-): void {
-  rejectPendingQuestions((entry) => entry.streamId === streamId);
-}
-
-/** @internal Called by unified cleanup. */
-export function _rejectAllPendingUserQuestions(): void {
-  rejectPendingQuestions(() => true);
-}
-
-/** @internal Called by unified cleanup for questions with no concrete stream. */
-export function _rejectUnscopedUserQuestions(
-  runtimeHost?: AgentRuntimeHost,
-): void {
-  rejectPendingQuestions(
-    (entry) =>
-      !entry.streamId &&
-      (runtimeHost === undefined || entry.runtimeHost === runtimeHost),
-  );
 }
 
 export class AskUserQuestionTool extends defineTool({
@@ -149,47 +77,33 @@ The tool returns a JSON object whose keys are the original question texts and wh
       allowBypass: false,
       streamId: streamId ?? '',
     };
-    let usedInteraction = false;
-    try {
-      const interaction =
-        runtimeHost.interactions?.askUserQuestion?.(permission);
-      usedInteraction = interaction != null;
-      const result = interaction
-        ? await interaction
-        : await awaitUserQuestionResponse({
-            requestId,
-            input,
-            runtimeHost,
-            streamId,
-          });
+    const interaction = runtimeHost.interactions?.askUserQuestion?.(permission);
+    if (!interaction) {
+      throw new Error('HostInteractions.askUserQuestion is required');
+    }
+    const result = await interaction;
 
-      if (!result.submitted) {
-        return {
-          status: 'executed',
-          output: result.feedback
-            ? `The user declined to answer: ${result.feedback}`
-            : 'The user declined to answer.',
-        };
-      }
-
-      const answers = UserQuestionAnswersSchema.parse(result.answers ?? {});
-      if (Object.keys(answers).length === 0) {
-        return {
-          status: 'executed',
-          output: 'The user submitted no answers.',
-        };
-      }
-
+    if (!result.submitted) {
       return {
         status: 'executed',
-        output: JSON.stringify({ answers }, null, 2),
-        summary: `Answered ${Object.keys(answers).length} user question(s).`,
+        output: result.feedback
+          ? `The user declined to answer: ${result.feedback}`
+          : 'The user declined to answer.',
       };
-    } finally {
-      pendingQuestions.delete(requestId);
-      if (!usedInteraction) {
-        runtimeHost.emit('resolveUserQuestion', { requestId });
-      }
     }
+
+    const answers = UserQuestionAnswersSchema.parse(result.answers ?? {});
+    if (Object.keys(answers).length === 0) {
+      return {
+        status: 'executed',
+        output: 'The user submitted no answers.',
+      };
+    }
+
+    return {
+      status: 'executed',
+      output: JSON.stringify({ answers }, null, 2),
+      summary: `Answered ${Object.keys(answers).length} user question(s).`,
+    };
   }
 }
