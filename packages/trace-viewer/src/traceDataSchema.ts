@@ -93,13 +93,46 @@ export type TraceData = z.infer<typeof TraceDataSchema>;
  * `assembleTrace` produces — kept in sync with `TraceDocument` rather than a
  * hand-maintained duplicate, so a field added/renamed there surfaces here as
  * a type error instead of a silent validation gap.
+ *
+ * Uses the higher-order-function comparison form (as used by type-fest's
+ * `IsEqual`) rather than mutual `extends`: for object types, a plain mutual-
+ * `extends` check (`[A] extends [B] ? [B] extends [A] ? true : false : false`)
+ * treats `{a: string}` and `{a: string; b?: number}` as equal, because a
+ * value missing optional property `b` still satisfies both sides. Comparing
+ * the types as `G extends A` / `G extends B` conditional-type constructors
+ * instead is sensitive to that difference, so an added/removed optional
+ * field on either side of the mirror fails this check.
+ *
+ * Both sides are run through `_Simplify` first, recursively, for two reasons
+ * that are false-positive noise rather than real schema drift:
+ *  - `AgentConfig` and `ExecutionMeta` are derived via `.superRefine()` /
+ *    `.transform()` and end up as intersection types (e.g.
+ *    `Base & { outcome?: RunOutcome }`) rather than plain object types. The
+ *    HOF comparison treats an intersection and its structurally-identical
+ *    flattened object type as *different* conditional-type constructors.
+ *  - `TraceDocument` (an authored `interface`) declares its fields
+ *    `readonly`, while the corresponding zod-inferred types are mutable. The
+ *    HOF comparison is sensitive to that modifier even though it doesn't
+ *    reflect an actual shape difference for our purposes, so `_Simplify`
+ *    also strips `readonly` (`-readonly`) while preserving each key's
+ *    optional/required modifier — the thing we actually want it to catch.
+ * Arrays are passed through unsimplified (rather than mapped element-wise):
+ * recursing into their element type isn't needed for these three mirrors and
+ * empirically trips up the HOF check on unrelated, larger union element
+ * types (e.g. `StreamLogEntry`) without adding any real coverage here.
  */
 type _AssertTrue<T extends true> = T;
-type _IsExact<Source, Target> = [Source] extends [Target]
-  ? [Target] extends [Source]
+type _Simplify<T> = T extends readonly unknown[]
+  ? T
+  : T extends object
+    ? { -readonly [K in keyof T]: _Simplify<T[K]> }
+    : T;
+type _IsExact<A, B> =
+  (<G>() => G extends _Simplify<A> ? 1 : 2) extends <
+    G,
+  >() => G extends _Simplify<B> ? 1 : 2
     ? true
-    : false
-  : false;
+    : false;
 
 type _AssertTraceDataAcceptsTraceDocument = _AssertTrue<
   _IsExact<TraceDocument, TraceData>
@@ -109,6 +142,26 @@ type _AssertTraceAgentConfigAcceptsAgentConfig = _AssertTrue<
 >;
 type _AssertTraceExecutionMetaAcceptsExecutionMeta = _AssertTrue<
   _IsExact<ExecutionMeta, z.infer<typeof TraceExecutionMetaSchema>>
+>;
+
+/**
+ * Regression coverage for #7265: `_IsExact`'s previous mutual-`extends` form
+ * (`[A] extends [B] ? [B] extends [A] ? true : false : false`) considered
+ * `{a: string}` and `{a: string; b?: number}` equal in both directions — a
+ * value missing an optional property still structurally satisfies both
+ * sides — so it silently missed an added/removed optional field on either
+ * mirror. This checks the HOF form actually rejects both directions, and
+ * still accepts identical shapes (no false positive from the fix itself).
+ */
+type _AssertFalse<T extends false> = T;
+type _AssertCatchesAddedOptionalField = _AssertFalse<
+  _IsExact<{ a: string }, { a: string; b?: number }>
+>;
+type _AssertCatchesRemovedOptionalField = _AssertFalse<
+  _IsExact<{ a: string; b?: number }, { a: string }>
+>;
+type _AssertStillMatchesIdenticalOptionalShape = _AssertTrue<
+  _IsExact<{ a: string; b?: number }, { a: string; b?: number }>
 >;
 
 /**
