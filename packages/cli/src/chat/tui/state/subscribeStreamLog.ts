@@ -20,6 +20,7 @@ import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
+import { createFlushableDebounce } from '@utils/core';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 import {
   isRenderableTranscriptEntry,
@@ -337,26 +338,32 @@ function sortTranscriptCandidatesIfNeeded(
 export function subscribeStreamLog(): () => void {
   const store = getDefaultStreamLogStore();
   const pendingStreams = new Set<StreamTabId>();
-  let timer: ReturnType<typeof setTimeout> | undefined;
 
   // One trailing timer shared by every stream: during a multi-subagent burst
   // the root and each child emit within the same window, and per-stream
   // timers would fire staggered — one sync→render pass per stream. A shared
-  // flush coalesces them into a single pass; syncStreamLog reads the full
-  // log at flush time, so batching loses nothing.
+  // batch window coalesces them into a single pass; syncStreamLog reads the
+  // full log when it fires, so batching loses nothing.
+  const syncDebounce = createFlushableDebounce(() => {
+    const streamIds = [...pendingStreams];
+    pendingStreams.clear();
+    for (const id of streamIds) syncStreamLog(id);
+  }, STREAM_SYNC_THROTTLE_MS);
+
   const dispose = store.onChange((streamId) => {
     pendingStreams.add(streamId);
-    timer ??= setTimeout(() => {
-      timer = undefined;
-      const streamIds = [...pendingStreams];
-      pendingStreams.clear();
-      for (const id of streamIds) syncStreamLog(id);
-    }, STREAM_SYNC_THROTTLE_MS);
+    // Only start the window on its first tick — later ticks in the same
+    // window join the batch without resetting the countdown (`pending`
+    // guard), unlike a classic debounce that would restart on every call.
+    if (!syncDebounce.pending) syncDebounce.schedule();
   });
 
   return () => {
     dispose();
-    if (timer !== undefined) clearTimeout(timer);
+    // Cancel, not flush: the caller is tearing down (process exit or
+    // unmount), so a final render of whatever was still pending isn't
+    // needed and would race an already-torn-down UI.
+    syncDebounce.cancel();
     pendingStreams.clear();
   };
 }
