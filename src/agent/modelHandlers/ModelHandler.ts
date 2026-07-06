@@ -191,7 +191,7 @@ export abstract class ModelHandler<
     this.logger = createChannelTrace('Agent');
     this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
       getCapabilities: () => this.capabilities,
-      isOpenAIProvider: () => this.isOpenai,
+      isOpenAIProvider: () => this.config.provider === ModelProvider.OPENAI,
     });
   }
 
@@ -488,42 +488,19 @@ export abstract class ModelHandler<
     });
   }
 
-  /** Checks if the model is from Anthropic provider. */
-  get isAnthropic(): boolean {
-    return this.config.provider === ModelProvider.ANTHROPIC;
-  }
-
-  /** Checks if the model is from OpenAI provider. */
-  get isOpenai(): boolean {
-    return this.config.provider === ModelProvider.OPENAI;
-  }
-
-  /** Checks if the model is from Google provider. */
-  get isGoogle(): boolean {
-    return this.config.provider === ModelProvider.GOOGLE;
-  }
-
-  // The DeepSeek/Kimi/MiniMax provider checks below are intentionally
-  // `protected`: their only reader is `ModelHandlerOpenRouterNative` (a
-  // subclass), which maps them to capability getters for the providers it
-  // proxies. Keeping them off the public `IModelHandler` port avoids leaking
-  // provider identity into the SDK surface (the behavioral gates were already
-  // converted to capability flags — see the SDK-readiness audit §7/§12).
-
-  /** Checks if the model is from DeepSeek provider. */
-  protected get isDeepSeek(): boolean {
-    return this.config.provider === ModelProvider.DEEPSEEK;
-  }
-
-  /** Checks if the model is from Moonshot/Kimi provider. */
-  protected get isKimi(): boolean {
-    return this.config.provider === ModelProvider.MOONSHOT;
-  }
-
-  /** Checks if the model is from MiniMax provider. */
-  protected get isMiniMax(): boolean {
-    return this.config.provider === ModelProvider.MINIMAX;
-  }
+  // Provider-identity getters (isAnthropic/isOpenai/isGoogle/isDeepSeek/
+  // isKimi/isMiniMax) were removed (#7101): each had exactly one or two call
+  // sites, all of which already had `this.config` (or, for the
+  // `ModelHandlerOpenRouterNative` combinators below, `this.config.provider`)
+  // in scope. `config.provider` — already part of the `IModelHandler` port —
+  // *is* the canonical profile read; a same-shaped getter wrapping it added
+  // no capability-profile value, just base-class surface. Callers now compare
+  // `config.provider` against `ModelProvider` directly. The remaining base
+  // predicates below fall into the other two buckets from the #7101 triage:
+  // runtime combinators over profile data (`shouldUseServerSideKeys`,
+  // `getEffectiveReasoningEffort`) and genuinely per-provider behavior that
+  // stays an overridable method/getter (`supportsManualCompaction`,
+  // `isAutoRetryManagedByProvider`, `isBackgroundModeActive`, etc.).
 
   /**
    * Whether parallel tool calls in a single turn must be batched into one
@@ -580,6 +557,10 @@ export abstract class ModelHandler<
     return getProviderStreaming(this.config.provider);
   }
 
+  /** Runtime combinator (provider identity × reasoning capability), read by
+   * multiple call sites in `openai/` — kept as a named getter rather than
+   * inlined at each one (#7101 triage: DRY combinator, not per-provider
+   * override). */
   get isOReasoningModel(): boolean {
     return (
       this.config.provider === ModelProvider.OPENAI &&
@@ -587,6 +568,8 @@ export abstract class ModelHandler<
     );
   }
 
+  /** Runtime combinator (provider identity × reasoning capability); see
+   * {@link isOReasoningModel}. */
   get isGrokReasoningModel(): boolean {
     return (
       this.config.provider === ModelProvider.XAI &&
