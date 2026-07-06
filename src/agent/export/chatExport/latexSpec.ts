@@ -8,6 +8,7 @@
  */
 
 import type { DocumentMeta } from '@agent/export/schemas';
+import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 import { filterNotNullish } from '@utils/core';
 
 import { escapeLatex, escapeLatexUrl, latexListing } from './escapeUtils';
@@ -63,6 +64,14 @@ const LATEX_ATTACHMENT_LABELS: Record<string, string> = {
   document: '\\textit{[Document attachment]}',
 };
 
+function latexLinkOrText(url: string, title: string): string {
+  const safeUrl = sanitizeLiveLinkUrl(url);
+  const safeTitle = escapeLatex(title);
+  return safeUrl
+    ? `\\href{${escapeLatexUrl(safeUrl)}}{${safeTitle}}`
+    : safeTitle;
+}
+
 const TEX_NODES: NodeRenderers = {
   'user-message': ({ parts }) => {
     const body = parts
@@ -89,27 +98,26 @@ const TEX_NODES: NodeRenderers = {
 
   'web-search-results': ({ results }) => {
     const items = results
-      .map(
-        (r) =>
-          `  \\item \\href{${escapeLatexUrl(r.url)}}{${escapeLatex(r.title)}}`,
-      )
+      .map((r) => `  \\item ${latexLinkOrText(r.url, r.title)}`)
       .join('\n');
     return `\\begin{websearchbox}\n\\begin{itemize}\n${items}\n\\end{itemize}\n\\end{websearchbox}\n`;
   },
 
-  'web-fetch': ({ url, title, content }) =>
-    [
+  'web-fetch': ({ url, title, content }) => {
+    const safeUrl = url ? sanitizeLiveLinkUrl(url) : undefined;
+    return [
       '\\begin{websearchbox}',
-      url ? `\\textbf{URL:} \\url{${escapeLatexUrl(url)}}` : undefined,
+      safeUrl ? `\\textbf{URL:} \\url{${escapeLatexUrl(safeUrl)}}` : undefined,
       title
-        ? `${url ? '\\\\' : ''}\\textbf{Title:} ${escapeLatex(title)}`
+        ? `${safeUrl ? '\\\\' : ''}\\textbf{Title:} ${escapeLatex(title)}`
         : undefined,
       content ? `\n${latexListing(content)}` : undefined,
       '\\end{websearchbox}',
       '',
     ]
       .filter(filterNotNullish)
-      .join('\n'),
+      .join('\n');
+  },
 };
 
 /**
