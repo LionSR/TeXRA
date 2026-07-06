@@ -89,7 +89,7 @@ export class ToolUseWaitNode<C> extends Node<
         await setGoalSessionBashAutoApproval(streamId, false, runtimeHost);
         emitRunFact(this.services.logger, 'goalPaused', { streamId });
       }
-    } else {
+    } else if (!prepRes.previouslyDeliveredToOrchestrator) {
       const delivered = await onBeforeWaiting?.(
         prepRes.lastResponse,
         prepRes.touchedFiles,
@@ -97,6 +97,21 @@ export class ToolUseWaitNode<C> extends Node<
       );
       prepRes.deliveredToOrchestrator =
         onBeforeWaiting !== undefined && delivered !== false;
+    } else {
+      prepRes.deliveredToOrchestrator = true;
+    }
+
+    const shouldSuspendNativeSubagent =
+      isSubagent === true &&
+      onBeforeWaiting !== undefined &&
+      prepRes.deliveredToOrchestrator === true &&
+      !this.services.stopAfterCycle;
+    if (shouldSuspendNativeSubagent && !session.hasQueuedFollowUp()) {
+      streamStatus.transitionToWaiting(streamId, 'wait', {
+        runtimeHost,
+        trace: this.services.logger,
+      });
+      return { kind: 'waiting' };
     }
 
     if (this.services.stopAfterCycle) {
@@ -153,6 +168,13 @@ export class ToolUseWaitNode<C> extends Node<
   ): Promise<string | undefined> {
     const { onFollowUpConsumed, logger, streamStatus } = this.services;
     const { streamId, runtimeHost } = useLaunchRunContext();
+
+    if (execRes.kind === 'waiting') {
+      if (prepRes.deliveredToOrchestrator) {
+        shared.deliveredToOrchestrator = true;
+      }
+      return FlowTransition.WAITING;
+    }
 
     if (execRes.kind === 'stop') {
       if (prepRes.deliveredToOrchestrator) {
