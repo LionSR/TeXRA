@@ -178,7 +178,9 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     if (partialText) {
       const maxTailChars = 1024;
       const isTruncated = partialText.length > maxTailChars;
-      const tail = tailWithEllipsis(partialText, maxTailChars);
+      // tailWithEllipsis's budget covers its own leading "…", so pass one
+      // more than the content characters we actually want displayed.
+      const tail = tailWithEllipsis(partialText, maxTailChars + 1);
       const header = isTruncated
         ? `--- Partial Output (last ${maxTailChars} of ${partialText.length} chars) ---`
         : `--- Partial Output (${partialText.length} chars) ---`;

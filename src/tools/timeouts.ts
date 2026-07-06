@@ -95,8 +95,10 @@ export function joinAbortSignal(
 /**
  * Run `fetchOnce` under p-retry, retrying only transient failures (timeout,
  * network error, 429, 5xx) with jittered backoff — the pattern every
- * network-boundary tool (web fetch/search, Loogle, Zotero) repeats: classify
- * the error, retry if transient, otherwise abort immediately.
+ * network-boundary tool (web fetch/search, Loogle) repeats: classify the
+ * error, retry if transient, otherwise abort immediately. Zotero's
+ * `bbtClient.ts` shares only this module's abort-signal join, not the retry
+ * classification — it has no retry loop of its own.
  *
  * `fetchOnce` may itself throw an {@link AbortError} (e.g. a response-shape
  * or size-limit check) to abort retries without going through the
