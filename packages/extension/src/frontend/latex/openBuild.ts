@@ -133,9 +133,13 @@ async function openAndBuildLatex(
       outputDirectory: outDir,
     });
     if (!compiled.ok) {
+      // Include the tail in the visible message itself, not just `data` —
+      // writeLine only shows `data` when texra.logger.debugMode is on
+      // (default off), and this failure's whole point is to be visible
+      // without needing to enable debug logging.
       logger.warn(
         CHANNEL,
-        `Internal LaTeX compilation failed for ${uri.fsPath}`,
+        `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
         { data: { sourceFile: uri.fsPath, logTail: compiled.logTail } },
       );
     }

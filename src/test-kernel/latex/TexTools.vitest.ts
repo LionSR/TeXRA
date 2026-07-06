@@ -83,6 +83,31 @@ describe('compileLatex2Pdf structured return', () => {
     expect(result.logTail).not.toContain('L0001');
   });
 
+  it.each(['.ltx', '.latex'])(
+    'finds the engine log for a %s source, not just .tex',
+    async (ext) => {
+      mocks.runToolWithCheck.mockResolvedValue(execResult(false));
+
+      const outputDirectory = path.join(workspacePath, `build${ext}`);
+      await flexibleFS.ensureDir(pathToLocation(outputDirectory));
+      // The engine always names the log after the source with ITS OWN
+      // extension stripped, regardless of which LaTeX extension was used.
+      await flexibleFS.write(
+        pathToLocation(path.join(outputDirectory, 'main.log')),
+        'engine log content',
+      );
+
+      const result = await compileLatex2Pdf(
+        pathToLocation(path.join(workspacePath, `main${ext}`)),
+        { outputDirectory },
+      );
+
+      if (result.ok) throw new Error('expected a failed compile');
+      expect(result.logTail).toContain('engine log content');
+      expect(result.logTail).not.toContain('no LaTeX log at');
+    },
+  );
+
   it('falls back to a discoverable placeholder when no engine log exists on disk', async () => {
     mocks.runToolWithCheck.mockResolvedValue(execResult(false));
 

@@ -34,11 +34,11 @@ async function readCompileLogTail(
   outDir: string,
   latexFile: string,
 ): Promise<string> {
-  const compiledBasename = path.basename(latexFile);
-  const logAbs = path.join(
-    outDir,
-    `${compiledBasename.replace(/\.tex$/i, '')}.log`,
-  );
+  // Strip whatever extension the source actually has (.tex/.ltx/.latex are
+  // all compilable, per isLatexFile) — the engine's .log file is always
+  // named after the source with its own extension removed, not just .tex.
+  const compiledBasename = path.basename(latexFile, path.extname(latexFile));
+  const logAbs = path.join(outDir, `${compiledBasename}.log`);
   try {
     const full = await flexibleFS.read(pathToLocation(logAbs));
     return splitContentLines(full).slice(-LOG_TAIL_LINES).join('\n');
