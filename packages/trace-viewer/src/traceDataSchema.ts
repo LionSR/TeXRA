@@ -94,13 +94,22 @@ export type TraceData = z.infer<typeof TraceDataSchema>;
  * hand-maintained duplicate, so a field added/renamed there surfaces here as
  * a type error instead of a silent validation gap.
  */
-type _AssertTraceDataAcceptsTraceDocument = TraceDocument extends TraceData
-  ? true
-  : never;
-type _AssertTraceAgentConfigAcceptsAgentConfig =
-  AgentConfig extends z.infer<typeof TraceAgentConfigSchema> ? true : never;
-type _AssertTraceExecutionMetaAcceptsExecutionMeta =
-  ExecutionMeta extends z.infer<typeof TraceExecutionMetaSchema> ? true : never;
+type _AssertTrue<T extends true> = T;
+type _IsExact<Source, Target> = [Source] extends [Target]
+  ? [Target] extends [Source]
+    ? true
+    : false
+  : false;
+
+type _AssertTraceDataAcceptsTraceDocument = _AssertTrue<
+  _IsExact<TraceDocument, TraceData>
+>;
+type _AssertTraceAgentConfigAcceptsAgentConfig = _AssertTrue<
+  _IsExact<AgentConfig, z.infer<typeof TraceAgentConfigSchema>>
+>;
+type _AssertTraceExecutionMetaAcceptsExecutionMeta = _AssertTrue<
+  _IsExact<ExecutionMeta, z.infer<typeof TraceExecutionMetaSchema>>
+>;
 
 /**
  * Parses raw trace data (from `fetch()` or `window.__TEXRA_TRACE__`) against
