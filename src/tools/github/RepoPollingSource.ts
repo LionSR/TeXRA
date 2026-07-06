@@ -67,7 +67,7 @@ import {
   type GhPullsListEntry,
   type GhReviewComment,
 } from './prTypes';
-import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 import type { Disposable } from '@platform/interfaces/disposable';
 
@@ -179,15 +179,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     );
   }
 
-  protected emitKeysChangedEvent(
-    keys: readonly RepoKey[],
-    runtimeHosts: readonly AgentRuntimeHost[],
-  ): void {
-    emitGitHubSubscriptionChangedToHosts(
-      runtimeHosts,
-      'repoSubscriptionsChanged',
-      { keys },
-    );
+  protected emitKeysChangedEvent(keys: readonly RepoKey[]): void {
+    emitGitHubSubscriptionChanged('repoSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(
@@ -458,7 +451,6 @@ function createInitialState(owner: string, repo: string): SubscriptionState {
     repo,
     slug: repoKeyOf(owner, repo),
     listeners: new Set(),
-    runtimeHostByListener: new Map(),
     initialized: false,
     subscribedAt: new Date(now).toISOString(),
     issueComments: new DedupedResource<GhIssueComment>({

@@ -14,14 +14,14 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 
+// Local imports - event bus
+import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';
+
 // Local imports - shared schemas
 import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - tools
-import {
-  emitGitHubSubscriptionChanged,
-  emitGitHubSubscriptionChangedToHosts,
-} from '@tools/github/subscriptionEventEmitter';
+import { emitGitHubSubscriptionChanged } from '@tools/github/subscriptionEventEmitter';
 import { GitHubAuthError } from '@tools/github/githubClient';
 import {
   PollingSourceBase,
@@ -31,6 +31,19 @@ import { StreamSubscriptionRegistry } from '@tools/github/StreamSubscriptionRegi
 
 // Local imports - test
 import { createRecordingHost } from '../progressTestUtils';
+
+function recordAppSignal<K extends keyof AppSignalPayloads>(
+  event: K,
+): {
+  readonly events: { event: K; payload: AppSignalPayloads[K] }[];
+  readonly dispose: () => void;
+} {
+  const events: { event: K; payload: AppSignalPayloads[K] }[] = [];
+  const dispose = appSignals.on(event, (payload) => {
+    events.push({ event, payload });
+  });
+  return { events, dispose };
+}
 
 class TestPollingSource extends PollingSourceBase<
   string,
@@ -116,57 +129,68 @@ class RegistryTestSource {
   }
 }
 
-describe('GitHub subscription progress events', () => {
+describe('GitHub subscription app signals and follow-ups', () => {
   beforeEach(() => {
     sendFollowUpMock.mockReset();
     sendFollowUpMock.mockResolvedValue({ status: 'sent' as const });
   });
 
-  it('publishes binding changes through the explicit runtime host', () => {
-    const host = createRecordingHost();
+  it('publishes binding changes through app signals', () => {
+    const signal = recordAppSignal('repoSubscriptionBindingsChanged');
 
-    emitGitHubSubscriptionChanged(
-      host.host,
-      'repoSubscriptionBindingsChanged',
-      undefined,
-    );
+    try {
+      emitGitHubSubscriptionChanged(
+        'repoSubscriptionBindingsChanged',
+        undefined,
+      );
 
-    expect(host.events).toEqual([
-      { event: 'repoSubscriptionBindingsChanged', payload: undefined },
-    ]);
+      expect(signal.events).toEqual([
+        { event: 'repoSubscriptionBindingsChanged', payload: undefined },
+      ]);
+    } finally {
+      signal.dispose();
+    }
   });
 
-  it('deduplicates multiple bindings that share a runtime host', () => {
-    const host = createRecordingHost();
+  it('publishes issue binding changes without a runtime host', () => {
+    const signal = recordAppSignal('issueSubscriptionBindingsChanged');
 
-    emitGitHubSubscriptionChangedToHosts(
-      [host.host, host.host],
-      'issueSubscriptionBindingsChanged',
-      undefined,
-    );
+    try {
+      emitGitHubSubscriptionChanged(
+        'issueSubscriptionBindingsChanged',
+        undefined,
+      );
 
-    expect(host.events).toEqual([
-      { event: 'issueSubscriptionBindingsChanged', payload: undefined },
-    ]);
+      expect(signal.events).toEqual([
+        { event: 'issueSubscriptionBindingsChanged', payload: undefined },
+      ]);
+    } finally {
+      signal.dispose();
+    }
   });
 
-  it('reports token invalid events through the subscription runtime host', () => {
+  it('reports token invalid events through app signals', () => {
     const host = createRecordingHost();
+    const signal = recordAppSignal('githubTokenInvalid');
     const listener = () => {};
     const state: BasePollSubscriptionState = {
       listeners: new Set([listener]),
-      runtimeHostByListener: new Map([[listener, host.host]]),
       lastSuccessAt: Date.now(),
       consecutiveFailures: 0,
       skipPollUntilMs: 0,
     };
 
-    new TestPollingSource().failWithAuthError(state);
+    try {
+      new TestPollingSource().failWithAuthError(state);
 
-    expect(host.events).toContainEqual({
-      event: 'githubTokenInvalid',
-      payload: { message: 'bad token' },
-    });
+      expect(signal.events).toContainEqual({
+        event: 'githubTokenInvalid',
+        payload: { message: 'bad token' },
+      });
+      expect(host.events).toEqual([]);
+    } finally {
+      signal.dispose();
+    }
   });
 
   it('tracks transient backoff independently per subscription', () => {
@@ -175,7 +199,6 @@ describe('GitHub subscription progress events', () => {
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const createState = (): BasePollSubscriptionState => ({
       listeners: new Set(),
-      runtimeHostByListener: new Map(),
       lastSuccessAt: now,
       consecutiveFailures: 0,
       skipPollUntilMs: 0,
@@ -199,6 +222,7 @@ describe('GitHub subscription progress events', () => {
 
   it('emits one binding change when unsubscribe disposes synchronously', () => {
     const host = createRecordingHost();
+    const signal = recordAppSignal('repoSubscriptionBindingsChanged');
     const source = new RegistryTestSource();
     const registry = new StreamSubscriptionRegistry<string, string>({
       name: 'test subscriptions',
@@ -207,16 +231,21 @@ describe('GitHub subscription progress events', () => {
       bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
     });
 
-    registry.bind('stream-a' as StreamTabId, 'owner/repo', host.host);
-    host.events.length = 0;
+    try {
+      registry.bind('stream-a' as StreamTabId, 'owner/repo', host.host);
+      host.events.length = 0;
 
-    expect(
-      registry.unbind('stream-a' as StreamTabId, 'owner/repo', host.host),
-    ).toBe(true);
+      expect(
+        registry.unbind('stream-a' as StreamTabId, 'owner/repo', host.host),
+      ).toBe(true);
 
-    expect(host.events).toEqual([
-      { event: 'repoSubscriptionBindingsChanged', payload: undefined },
-    ]);
+      expect(signal.events).toEqual([
+        { event: 'repoSubscriptionBindingsChanged', payload: undefined },
+      ]);
+      expect(host.events).toEqual([]);
+    } finally {
+      signal.dispose();
+    }
   });
 
   it('passes the bind-time session to detached subscription follow-ups', () => {
