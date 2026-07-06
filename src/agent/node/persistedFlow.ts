@@ -3,6 +3,7 @@
 
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -57,6 +58,8 @@ export function stampFlowRecordSchemaVersion<T extends FlowRecord>(flow: T): T {
 export interface StepResult<S> {
   /** Whether there are more nodes to execute */
   hasMore: boolean;
+  /** Whether this step persisted a non-terminal wait at the current node. */
+  waiting?: boolean;
   /** The action returned by the node (for routing) */
   action: string | undefined;
   /** The shared state after node execution (mutated in-place) */
@@ -150,10 +153,13 @@ export class PersistedFlow<
 
   async run(shared: S): Promise<Action | undefined> {
     await this.ensureRecord(shared);
-    while ((await this.stepWithResult()).hasMore) {
+    let step = await this.stepWithResult();
+    while (step.hasMore) {
       // step loop
+      step = await this.stepWithResult();
     }
-    return (this.cachedRecord?.cursor?.lastAction ??
+    return (step.action ??
+      this.cachedRecord?.cursor?.lastAction ??
       this.cachedRecord?.nodes.at(-1)?.action) as Action | undefined;
   }
 
@@ -197,7 +203,8 @@ export class PersistedFlow<
     cursor.setParams(params);
     cursor.setServices(this._services);
     const action = await cursor._run(shared);
-    const next = cursor.getNextNode(action);
+    const waiting = action === FlowTransition.WAITING;
+    const next = waiting ? cursor : cursor.getNextNode(action);
     const cursorId = this.idForNode(cursor);
     const nextNodeId = next ? this.idForNode(next) : null;
 
@@ -215,7 +222,8 @@ export class PersistedFlow<
     await this.fireProjection(shared);
 
     return {
-      hasMore: true,
+      hasMore: !waiting,
+      ...(waiting ? { waiting } : {}),
       action,
       shared,
     };

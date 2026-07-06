@@ -30,6 +30,7 @@ import { deriveRunOutcome } from '@common/constants/streamStatus';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import {
   RUN_OUTCOME,
+  STREAM_PHASE,
   toProviderErrorFromRetry,
   type RunOutcome,
 } from '@shared/schemas';
@@ -84,7 +85,7 @@ export interface RunToolUseFlowInput<
 }
 
 export interface RunToolUseFlowResult {
-  outcome: RunOutcome;
+  outcome: RunOutcome | typeof STREAM_PHASE.WAITING;
   lastResponse?: string;
   /** Workspace-relative paths of files edited by tool calls during this session. */
   touchedFiles?: string[];
@@ -303,7 +304,7 @@ export async function runToolUseFlow<C = unknown>(
     switchModel,
   };
 
-  let outcome: RunOutcome = RUN_OUTCOME.CANCELLED;
+  let outcome: RunToolUseFlowResult['outcome'] = RUN_OUTCOME.CANCELLED;
   let lastResponse: string | undefined;
   let touchedFiles: string[] | undefined;
   let totalCostUsd: number | undefined;
@@ -380,6 +381,7 @@ export async function runToolUseFlow<C = unknown>(
     prepareNode.next(cycleNode);
     cycleNode.next(waitNode);
     waitNode.on(FlowTransition.CONTINUE, cycleNode);
+    waitNode.on(FlowTransition.WAITING, waitNode);
     const pf: ToolUsePersistedFlow<C> = new PersistedFlow(prepareNode, kv);
     activePersistedFlow = pf;
     pf.setServices(services);
@@ -392,7 +394,7 @@ export async function runToolUseFlow<C = unknown>(
         await store.writeWorkspaceFiles(currentTouchedFiles);
       }
     });
-    await pf.run(shared);
+    const finalAction = await pf.run(shared);
     // Re-read shared from the flow record — PersistedFlow deep-clones the
     // initial shared via structuredClone, so nodes mutate the clone, not the
     // original object.  Without this, reads of lastError, messages, etc. below
@@ -412,15 +414,24 @@ export async function runToolUseFlow<C = unknown>(
       ? extractedTouchedFiles
       : undefined;
 
-    const isInterrupted = input.checkInterruption();
-    const interruptedAfterDeliveredSubagentResult =
-      input.isSubagent &&
-      shared.deliveredToOrchestrator === true &&
-      isInterrupted;
-    outcome = deriveRunOutcome({
-      failed: Boolean(shared.lastError),
-      cancelled: isInterrupted && !interruptedAfterDeliveredSubagentResult,
-    });
+    if (
+      finalAction === FlowTransition.WAITING &&
+      input.isSubagent === true &&
+      input.onBeforeWaiting !== undefined &&
+      shared.deliveredToOrchestrator === true
+    ) {
+      outcome = STREAM_PHASE.WAITING;
+    } else {
+      const isInterrupted = input.checkInterruption();
+      const interruptedAfterDeliveredSubagentResult =
+        input.isSubagent &&
+        shared.deliveredToOrchestrator === true &&
+        isInterrupted;
+      outcome = deriveRunOutcome({
+        failed: Boolean(shared.lastError),
+        cancelled: isInterrupted && !interruptedAfterDeliveredSubagentResult,
+      });
+    }
     if (shared.lastError) {
       // Re-throw so runFlowWithLifecycle logs the error and shows
       // the user notification, while preserving terminal run accounting.
@@ -440,7 +451,9 @@ export async function runToolUseFlow<C = unknown>(
     activePersistedFlow = undefined;
     teardownSetup?.();
     teardownSetup = undefined;
-    if (shared.userCancelledRetry) {
+    if (outcome === STREAM_PHASE.WAITING) {
+      logger.debug('Flow record preserved for native subagent WAITING');
+    } else if (shared.userCancelledRetry) {
       logger.debug('Flow record preserved for resume after retry cancellation');
     } else {
       try {
