@@ -105,6 +105,16 @@ Full pattern list with examples in `AGENTS.md` → "ES2023+ Patterns". Greps for
 - **`new Promise((resolve) => setTimeout(resolve, ms))`** in Node-only code → `setTimeout` from `node:timers/promises`.
 - **Don't flag** the legitimate index loops: token consumers that advance `i` by variable strides, queue/BFS loops that append mid-iteration, and `charCodeAt(i)` hash loops (code-point iteration would change persisted hash output).
 
+## 13. Abstraction-cost guardrails (2026-07 calibration)
+
+Standing rules from the 2026-07 tech-debt re-calibration, which found that a run of "reduction" PRs quietly re-accumulated abstraction cost: 22 PRs pitched as reductions netted **+5,046 production LoC**, with 18 of 22 net-positive — the "Refactor-LOC lesson" at scale. Evidence base: [`docs/proposals/tech-debt-audit-2026-07.md`](../../../../docs/proposals/tech-debt-audit-2026-07.md). Apply these whenever a PR adds a port/facade/projector/strategy/template-method, or is titled `refactor:` / `simplify:` / `consolidate` / `dedupe` / `extract`:
+
+- **Build implies delete in the same PR.** A new port/facade/projector/strategy/template-method merges only if it deletes the path it replaces in that same PR. Deferral is allowed only with a ledger row **and** a concrete removal-trigger issue that is a merge-blocker for the next stage.
+- **No leapfrogging a migration.** A staged migration may not merge stage N+1 scaffolding while stage N's deletion issue is still open.
+- **Net-positive-LOC "reductions" need a reason.** Reject a PR titled `refactor:`/`simplify:`/`consolidate`/`dedupe`/`extract` that grows LoC unless it (a) deletes an old path, (b) collapses to a genuine ≥2-caller helper, or (c) trades LoC for a `CLAUDE.md`-mandated type-safety win (e.g. a discriminated union with `assertNever`). The PR body must state the actual `git diff --stat origin/main` net LoC and justify any positive number.
+- **No trivial-identity or single-caller extractions.** Grep the caller count before approving any new shared helper — one caller is not DRY. Extends `CLAUDE.md` → "Discouraged Factory Patterns".
+- **Don't reward activity.** A program/migration that opens more follow-up issues than it retires pauses further building until its tail closes.
+
 ## Final pass
 
 - Cut findings not tied to a real `path:line` in the diff.
