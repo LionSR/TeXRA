@@ -63,10 +63,14 @@ function buildTooltip(
   lastTimestamp: number | undefined,
   statusLabel: string,
 ): string {
+  const modelDisplay =
+    info.kind === 'agent' && info.model
+      ? (info.modelLabel ?? info.model)
+      : undefined;
   const mainLine = [
     info.label,
     `Status: ${statusLabel}`,
-    info.model && `Model: ${info.modelLabel ?? info.model}`,
+    modelDisplay && `Model: ${modelDisplay}`,
     info.inputFile && `Input: ${info.inputFile}`,
   ]
     .filter(Boolean)
@@ -227,7 +231,11 @@ export class StreamTab extends LitElement {
                         : nothing
                     }
                     <span class="model"
-                      >${stream.modelLabel ?? stream.model ?? ''}</span
+                      >${
+                        stream.kind === 'agent'
+                          ? (stream.modelLabel ?? stream.model ?? '')
+                          : ''
+                      }</span
                     >
                     <wa-icon
                       library=${TEXRA_ICON_LIBRARY}

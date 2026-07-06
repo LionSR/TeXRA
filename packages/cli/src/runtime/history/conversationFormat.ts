@@ -1,3 +1,10 @@
+import {
+  formatConversationContent,
+  hasProviderReasoningBlock,
+  stringifyConversationValue,
+  HIDDEN_PROVIDER_REASONING_MARKER,
+  type ConversationFormatOptions,
+} from '@agent/storage/conversationFormat';
 import { isObject } from '@utils/core/typeGuards';
 
 import type {
@@ -7,11 +14,28 @@ import type {
 
 const CONVERSATION_PREVIEW_MESSAGE_LIMIT = 3;
 const CONVERSATION_PREVIEW_CONTENT_LIMIT = 4000;
-const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 
 interface ConversationMessageFormatOptions {
   readonly includeToolUseMarkers?: boolean;
   readonly contentLimit?: number;
+}
+
+/**
+ * The shared formatter never truncates tool_use/tool_result blocks or shows
+ * their input/args for the CLI (unlike the ExecutionsTool endpoint, which
+ * truncates both) — the CLI truncates once, at the whole-message level, in
+ * {@link toConversationPreviewMessage}. Provider-reasoning (`thinking`)
+ * blocks are always hidden here (surfaced instead via
+ * {@link HIDDEN_PROVIDER_REASONING_MARKER} when they're the only content).
+ */
+function toBlockFormatOptions(
+  options: ConversationMessageFormatOptions,
+): ConversationFormatOptions {
+  return {
+    includeToolUseMarkers: options.includeToolUseMarkers,
+    includeToolUseInput: false,
+    hideProviderReasoning: true,
+  };
 }
 
 export function createConversationPreview(
@@ -83,10 +107,11 @@ function formatConversationMessage(
   raw: Record<string, unknown>,
   options: ConversationMessageFormatOptions,
 ): string {
+  const blockOptions = toBlockFormatOptions(options);
   const role = typeof raw.role === 'string' ? raw.role : '';
   const parts = [
-    formatConversationMessageContent(raw.content, options),
-    formatConversationMessageContent(raw.parts, options),
+    formatConversationContent(raw.content, blockOptions),
+    formatConversationContent(raw.parts, blockOptions),
     ...(options.includeToolUseMarkers === true
       ? formatTopLevelToolCalls(raw.tool_calls)
       : []),
@@ -139,91 +164,14 @@ function formatConversationMessages(
   return lines.join('\n');
 }
 
-function formatConversationMessageContent(
-  content: unknown,
-  options: ConversationMessageFormatOptions,
-): string {
-  if (content == null) return '';
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((block) => formatConversationContentBlock(block, options))
-      .join('\n')
-      .trim();
-  }
-  return formatJsonish(content);
-}
-
-function formatConversationContentBlock(
-  block: unknown,
-  options: ConversationMessageFormatOptions,
-): string {
-  if (typeof block === 'string') return block;
-  if (!isObject(block)) return formatJsonish(block);
-  if (typeof block.text === 'string') return block.text;
-
-  if (isObject(block.functionCall)) {
-    if (options.includeToolUseMarkers !== true) return '';
-    const name =
-      typeof block.functionCall.name === 'string'
-        ? block.functionCall.name
-        : 'unknown';
-    return `[tool_use: ${name}]`;
-  }
-
-  if (isObject(block.functionResponse)) {
-    return `[tool_result: ${formatGoogleFunctionResponse(block.functionResponse, options)}]`;
-  }
-
-  switch (block.type) {
-    case 'thinking':
-    case 'redacted_thinking':
-      return '';
-    case 'tool_use':
-      if (options.includeToolUseMarkers !== true) return '';
-      return `[tool_use: ${String(block.name ?? 'unknown')}]`;
-    case 'tool_result':
-      return `[tool_result: ${formatConversationMessageContent(block.content, options)}]`;
-    default:
-      return formatJsonish(block);
-  }
-}
-
-function hasProviderReasoningBlock(content: unknown): boolean {
-  if (Array.isArray(content)) return content.some(isProviderReasoningBlock);
-  return isProviderReasoningBlock(content);
-}
-
-function isProviderReasoningBlock(block: unknown): boolean {
-  return (
-    isObject(block) &&
-    (block.type === 'thinking' || block.type === 'redacted_thinking')
-  );
-}
-
-function formatGoogleFunctionResponse(
-  functionResponse: Record<string, unknown>,
-  options: ConversationMessageFormatOptions,
-): string {
-  const response = isObject(functionResponse.response)
-    ? functionResponse.response
-    : undefined;
-  if (response && Object.hasOwn(response, 'result')) {
-    return formatConversationMessageContent(response.result, options);
-  }
-  if (response !== undefined) {
-    return formatConversationMessageContent(response, options);
-  }
-  return formatJsonish(functionResponse);
-}
-
 function formatTopLevelToolCalls(toolCalls: unknown): string[] {
   if (!Array.isArray(toolCalls)) return [];
   return toolCalls.map(formatTopLevelToolCall);
 }
 
 function formatTopLevelToolCall(toolCall: unknown): string {
-  if (!isObject(toolCall)) return `[tool_use: ${formatJsonish(toolCall)}]`;
+  if (!isObject(toolCall))
+    return `[tool_use: ${stringifyConversationValue(toolCall)}]`;
   const nestedFunction = isObject(toolCall.function)
     ? toolCall.function
     : undefined;
@@ -232,12 +180,4 @@ function formatTopLevelToolCall(toolCall: unknown): string {
       (value): value is string => typeof value === 'string',
     ) ?? 'unknown';
   return `[tool_use: ${name}]`;
-}
-
-function formatJsonish(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? '';
-  } catch {
-    return String(value);
-  }
 }

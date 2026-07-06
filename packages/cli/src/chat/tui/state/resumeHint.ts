@@ -136,7 +136,7 @@ export function collectResumeTargets({
 
   for (const slice of streams.values()) {
     for (const child of slice.childStreams) {
-      if (!child.childStreamId || seen.has(child.executionId)) continue;
+      if (child.kind !== 'subagent' || seen.has(child.executionId)) continue;
       const childSlice = streams.get(child.childStreamId);
       if (childSlice?.category !== AgentCategory.ToolUse) continue;
       seen.add(child.executionId);

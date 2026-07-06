@@ -30,7 +30,7 @@ function orderedDescendantsFromSlice(
     ...visibleSubagentRows(slice),
     ...slice.activeProcesses,
   ]) {
-    if (child.childStreamId) out.push(child.childStreamId);
+    if (child.kind === 'subagent') out.push(child.childStreamId);
   }
   return unique(out);
 }

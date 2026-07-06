@@ -24,7 +24,7 @@ import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { processMarkdownContent } from '../formatters/markdownRenderer';
-import { formatTimestamp } from '../formatters/timestampUtils';
+import { formatDisplayTimestamp } from '../formatters/timestampUtils';
 
 const STRUCTURED_DELIVERY_TAGS = [
   'background-result',
@@ -215,7 +215,7 @@ export class UserMessage extends LitElement {
   }
 
   override render(): TemplateResult {
-    const { timeDisplay, tooltipTimestamp } = formatTimestamp(
+    const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
       new Date(this.timestamp),
     );
     const copyState = this.copyController.state;

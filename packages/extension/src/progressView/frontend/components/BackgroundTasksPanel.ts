@@ -421,9 +421,11 @@ export class BackgroundTasksPanel extends LitElement {
   ): TemplateResult {
     const icon = getTaskIcon(child);
     const entry = this.processOutputs.get(child.executionId);
-    const isClickable = Boolean(child.childStreamId);
-    const description = child.childStreamId
-      ? this.streamById.get(child.childStreamId)?.description
+    const childStreamId =
+      child.kind === 'subagent' ? child.childStreamId : undefined;
+    const isClickable = childStreamId !== undefined;
+    const description = childStreamId
+      ? this.streamById.get(childStreamId)?.description
       : undefined;
     const waiting = isWaiting(child);
 
@@ -450,7 +452,7 @@ export class BackgroundTasksPanel extends LitElement {
             tabindex=${isClickable ? '0' : '-1'}
             @click=${
               isClickable
-                ? () => this.navigateToStream(child.childStreamId!)
+                ? () => this.navigateToStream(childStreamId!)
                 : nothing
             }
             @keydown=${
@@ -458,7 +460,7 @@ export class BackgroundTasksPanel extends LitElement {
                 ? (e: KeyboardEvent) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      this.navigateToStream(child.childStreamId!);
+                      this.navigateToStream(childStreamId!);
                     }
                   }
                 : nothing
@@ -528,8 +530,7 @@ export class BackgroundTasksPanel extends LitElement {
 function isAgentTool(child: ActiveChildInfo): boolean {
   // Explicit tool name match, or subagent with no tool name (delegation/workflow)
   return (
-    child.toolName === 'codex' ||
-    (!child.toolName && Boolean(child.childStreamId))
+    child.toolName === 'codex' || (!child.toolName && child.kind === 'subagent')
   );
 }
 
@@ -539,7 +540,7 @@ function getTaskIcon(child: ActiveChildInfo): string {
   if (isAgentTool(child)) return 'robot';
   // Subagents (delegation, workflow) default to server-process;
   // processes without a toolName fall back to terminal.
-  return child.childStreamId ? 'server-process' : 'terminal';
+  return child.kind === 'subagent' ? 'server-process' : 'terminal';
 }
 
 /** Check if a child is in a waiting/idle state rather than actively processing. */

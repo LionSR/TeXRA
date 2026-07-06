@@ -26,6 +26,7 @@ import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { splitContentLines } from '@utils/text/stringUtils';
+import { formatDeliveryEnvelope } from './deliveryEnvelope';
 import type { DiffFileInfo } from './subagentDiffs';
 
 // ============================================================================
@@ -155,7 +156,6 @@ export function formatSubagentDelivery(
   },
 ): string {
   const lines = [
-    `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(result.outcome)}">`,
     ...formatDeliveryPreamble({
       wallTimeMs: options?.wallTimeMs,
       workingDirectory: options?.workingDirectory,
@@ -194,8 +194,16 @@ export function formatSubagentDelivery(
     }
   }
 
-  lines.push('</subagent-result>');
-  return lines.join('\n');
+  return formatDeliveryEnvelope({
+    tag: 'subagent-result',
+    attributes: [
+      { name: 'id', value: result.executionId },
+      { name: 'agent', value: agentName },
+      { name: 'category', value: result.category },
+      { name: 'status', value: result.outcome },
+    ],
+    bodyLines: lines,
+  });
 }
 
 /**
@@ -213,18 +221,22 @@ export function formatSubagentError(
 ): string {
   const formatted = normalizeProviderError(err);
   const lines = [
-    `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}" retryable="${formatted.userRetryable ? 'true' : 'false'}">`,
     ...formatDeliveryPreamble({
       wallTimeMs: options?.wallTimeMs,
       workingDirectory: options?.workingDirectory,
       memoryMisses: options?.memoryMisses,
     }),
   ];
-  lines.push(
-    `<message>${escapeText(formatted.message)}</message>`,
-    '</subagent-error>',
-  );
-  return lines.join('\n');
+  lines.push(`<message>${escapeText(formatted.message)}</message>`);
+  return formatDeliveryEnvelope({
+    tag: 'subagent-error',
+    attributes: [
+      { name: 'id', value: executionId },
+      { name: 'agent', value: agentName },
+      { name: 'retryable', value: formatted.userRetryable },
+    ],
+    bodyLines: lines,
+  });
 }
 
 // ============================================================================

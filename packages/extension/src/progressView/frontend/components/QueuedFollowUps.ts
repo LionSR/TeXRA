@@ -10,6 +10,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -99,7 +100,7 @@ export class QueuedFollowUps extends LitElement {
       return { display: message, full: undefined };
     }
     return {
-      display: message.slice(0, MAX_MESSAGE_LENGTH) + '...',
+      display: truncateWithEllipsis(message, MAX_MESSAGE_LENGTH),
       full: message,
     };
   }

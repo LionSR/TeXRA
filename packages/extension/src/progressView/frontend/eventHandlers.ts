@@ -5,6 +5,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   isChatGptSubscriptionLimitError,
+  isUpstreamCreditDepletedError,
   type GettingStartedActionDetail,
   type StreamTabId,
 } from '@shared/schemas';
@@ -342,10 +343,11 @@ export function handlePermissionAction(
           provider: chatgptSubscription
             ? 'openai'
             : permission.data.errorDetails?.provider,
-          upstreamCreditDepleted:
-            permission.data.errorDetails?.isUpstreamCreditDepleted === true
-              ? true
-              : undefined,
+          upstreamCreditDepleted: isUpstreamCreditDepletedError(
+            permission.data.errorDetails,
+          )
+            ? true
+            : undefined,
           viaRelay:
             permission.data.errorDetails?.isRelayError === true
               ? true

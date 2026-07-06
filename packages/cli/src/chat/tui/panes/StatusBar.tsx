@@ -4,6 +4,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { useEffect, useState } from 'react';
 import stringWidth from 'string-width';
 
+import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
@@ -157,7 +158,10 @@ function formatUsage(
   }
 
   const ratio = used / contextWindow;
-  const percent = Math.max(1, Math.round(ratio * 100));
+  const percent = Math.max(
+    1,
+    Math.round(computeUtilizationPercent(used, contextWindow)),
+  );
   let color: StatusBarColor;
   if (ratio >= 0.9) color = 'red';
   else if (ratio >= 0.6) color = 'yellow';

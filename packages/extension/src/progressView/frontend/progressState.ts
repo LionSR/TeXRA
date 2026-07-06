@@ -24,7 +24,6 @@ import {
   type StreamTabInfo,
   type TaskGroup,
 } from '@shared/schemas';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import { toNewestFirstByTimestamp } from '@utils/core';
 
 import { setsEqual } from './utils';
@@ -315,7 +314,7 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
     streamStatus: activeStreamState$.get()?.status ?? null,
     // Process agents emit raw stdout/stderr; render them terminal-style
     // (monospace, no timestamps, tight spacing) rather than logger entries.
-    terminalMode: isProcessAgent(activeStreamInfo.agent),
+    terminalMode: activeStreamInfo.kind === 'process',
   };
 });
 
