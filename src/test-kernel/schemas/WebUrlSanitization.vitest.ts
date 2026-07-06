@@ -7,13 +7,15 @@
  * `src/shared/schemas/progressView/data.ts`) so both render paths, which
  * share the same formatters, are protected by one fix.
  *
- * Expected behavior mirrors the retired hand-written HTML exporter's
- * `safeUrl()` (deleted with `formatChatAsHtml` in #7137 — see
- * `git log -p -S SAFE_URL_SCHEMES`): only `http:`/`https:`/`mailto:` survive
- * scheme validation; anchor-only (`#foo`) and root-relative (`/foo`, not
- * `//foo`) URLs pass through unchecked since there's no scheme to abuse;
- * everything else (empty, unparseable, protocol-relative, dangerous scheme)
- * collapses to `undefined`.
+ * Only `http:`/`https:`/`mailto:` survive scheme validation; anchor-only
+ * (`#foo`) URLs pass through unchecked since there's no scheme to abuse;
+ * everything else (empty, unparseable, protocol-relative, root-relative,
+ * dangerous scheme) collapses to `undefined`. Root-relative (`/foo`) is
+ * rejected rather than passed through as safe-as-is (a follow-up to the
+ * original #7230 fix): the standalone HTML export opens via `file://` with
+ * no origin, so a tool-controlled `/etc/passwd` would resolve against the
+ * filesystem root instead of a web origin, becoming a live link to a local
+ * file.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -88,8 +90,24 @@ describe('web tool URL sanitization (issue #7230)', () => {
     expect(parseSearchUrl('#section-2')).toBe('#section-2');
   });
 
-  it('keeps root-relative paths as-is', () => {
-    expect(parseSearchUrl('/local/path')).toBe('/local/path');
+  describe('root-relative paths are rejected (issue #7230 follow-up)', () => {
+    // A standalone HTML export opens via `file://` with no origin, so a
+    // root-relative URL resolves against the filesystem root rather than a
+    // web origin — a tool-controlled `/etc/passwd` must not become a live
+    // link to a local file.
+    const rootRelative = [
+      '/etc/passwd',
+      '/Users/alice/.ssh/id_rsa',
+      '/local/path',
+    ];
+
+    it.each(rootRelative)('strips %s from web_search results', (url) => {
+      expect(parseSearchUrl(url)).toBeUndefined();
+    });
+
+    it.each(rootRelative)('strips %s from web_fetch payloads', (url) => {
+      expect(parseFetchUrl(url)).toBeUndefined();
+    });
   });
 
   it('sanitizes each item independently in a mixed results list', () => {
