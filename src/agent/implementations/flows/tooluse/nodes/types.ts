@@ -61,7 +61,8 @@ export type WaitExecResult =
        */
       synthetic?: boolean;
     }
-  | { kind: 'stop' };
+  | { kind: 'stop' }
+  | { kind: 'waiting' };
 
 /**
  * Prepared shared state needed to run one tool-use cycle: produced by
