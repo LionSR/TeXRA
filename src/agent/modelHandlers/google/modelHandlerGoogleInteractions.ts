@@ -258,8 +258,11 @@ interface PendingStep {
 /**
  * Handler for Google models using the @google/genai Interactions API.
  *
- * Additive sibling to {@link ModelHandlerGoogleGenAI} (chat / generateContent),
- * shipped behind the `texra.model.useGoogleInteractionsAPI` flag (default on).
+ * Default, actively developed handler, shipped behind the
+ * `texra.model.useGoogleInteractionsAPI` flag (default on).
+ * {@link ModelHandlerGoogleGenAI} (chat / generateContent) is the
+ * feature-frozen stateless fallback for when the flag is off — see
+ * modelHandlers/README.md for the division of labor.
  *
  * STATEFUL by default (`store: true`): server-side conversation state via
  * `previous_interaction_id` chaining — each round sends only the Steps appended
@@ -277,12 +280,12 @@ interface PendingStep {
  * model switch gets a fresh instance and safely full-resends, never reusing a
  * stale interaction id.
  *
- * Known limitation (parity with {@link ModelHandlerGoogleGenAI}): a TERMINAL
- * turn (model emits text with no tool call) is recorded via the base
- * `createAssistantMessageFromResponse`, which yields a text-only `model_output`
- * step — the trailing thought signature is not preserved. Gemini only requires
- * signatures within an in-flight function-calling sequence, so this is safe; a
- * fuller fix would need the base contract to return `Step[]` (out of scope).
+ * Known limitation: a TERMINAL turn (model emits text with no tool call) is
+ * recorded via the base `createAssistantMessageFromResponse`, which yields a
+ * text-only `model_output` step — the trailing thought signature is not
+ * preserved. Gemini only requires signatures within an in-flight
+ * function-calling sequence, so this is safe; a fuller fix would need the base
+ * contract to return `Step[]` (out of scope).
  */
 export class ModelHandlerGoogleInteractions extends ModelHandler<
   Step,
