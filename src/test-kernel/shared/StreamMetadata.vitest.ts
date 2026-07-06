@@ -27,6 +27,7 @@ describe('buildStreamMetadata', () => {
 
   it('preserves supplied status, progress, child badges, and timestamps', () => {
     const child: ActiveChildInfo = {
+      kind: 'process',
       executionId: 'agent-1',
       agentName: 'review',
       status: STREAM_STATUS.RUNNING,

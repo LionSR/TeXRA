@@ -217,9 +217,7 @@ describe('ProgressBackend', () => {
 
     backend.webviewUpdater.sendStreamMetadata(
       backend.state,
-      backend.eventHandler.getAllStreamStatuses(),
-      undefined,
-      backend.eventHandler.getAllStreamSubstates(),
+      backend.eventHandler.getAllStreamStates(),
     );
 
     expect(
@@ -329,9 +327,7 @@ describe('ProgressBackend', () => {
 
       backend.webviewUpdater.sendStreamMetadata(
         backend.state,
-        backend.eventHandler.getAllStreamStatuses(),
-        undefined,
-        backend.eventHandler.getAllStreamSubstates(),
+        backend.eventHandler.getAllStreamStates(),
       );
       const fullSync = messages.find(
         (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,

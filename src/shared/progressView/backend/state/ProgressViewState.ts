@@ -19,7 +19,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type EndGroupStatus,
-  StreamTabInfoSchema,
+  StreamTabInfoBaseSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
   type ConversationProgress,
@@ -42,7 +42,7 @@ import { SessionStores } from './SessionStores';
 const LEGACY_INSTRUCTION_BACKFILL_CONCURRENCY = 8;
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
-export const StreamHintsSchema = StreamTabInfoSchema.pick({
+export const StreamHintsSchema = StreamTabInfoBaseSchema.pick({
   agent: true,
   agentCategory: true,
   inputFile: true,

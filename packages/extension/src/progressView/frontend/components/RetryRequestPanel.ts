@@ -18,7 +18,10 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
-import type { ProviderErrorPartial } from '@shared/schemas';
+import {
+  isCredentialExhausted,
+  type ProviderErrorPartial,
+} from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 
@@ -45,7 +48,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
         this.emitAction('retry');
         return true;
       case 'k':
-        if (data.errorDetails?.isCredentialExhausted) {
+        if (isCredentialExhausted(data.errorDetails)) {
           this.emitAction('useOwnApiKey');
           return true;
         }
@@ -61,8 +64,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   override render(): TemplateResult {
     const data = this.permission.data;
     const isRelay = data.errorDetails?.isRelayError === true;
-    const isCredentialExhausted =
-      data.errorDetails?.isCredentialExhausted === true;
+    const credentialExhausted = isCredentialExhausted(data.errorDetails);
     const userRetryable = data.errorDetails?.userRetryable !== false;
     const metaParts: MetaPart[] = [
       ...(data.model ? [`Model: ${data.model}`] : []),
@@ -109,7 +111,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
           }
         </div>
         <div class="retry-request__actions">
-          ${when(isCredentialExhausted, () =>
+          ${when(credentialExhausted, () =>
             renderLabeledActionButton({
               icon: 'key',
               text: 'Use your own API key',

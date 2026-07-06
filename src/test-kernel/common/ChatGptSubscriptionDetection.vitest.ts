@@ -60,11 +60,9 @@ describe('formatProviderHttpError for ChatGPT subscription limits', () => {
 
     const providerError = formatProviderHttpError(error);
 
-    expect(providerError.isChatGptSubscriptionLimited).toBe(true);
-    expect(providerError.isCredentialExhausted).toBe(true);
+    expect(providerError.exhaustionReason).toBe('chatgpt-subscription');
     // The stored OpenAI key is NOT the broken credential, so no key change is
-    // forced (that flag is reserved for upstream credit depletion).
-    expect(providerError.isUpstreamCreditDepleted).toBeUndefined();
+    // forced (that reason is reserved for upstream credit depletion).
     expect(providerError.userRetryable).toBe(true);
     expect(providerError.message).toContain('ChatGPT subscription usage limit');
   });

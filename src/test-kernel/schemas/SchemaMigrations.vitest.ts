@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumulator';
-import { OutputXmlSummarySchema } from '@shared/schemas';
+import {
+  ActiveChildInfoSchema,
+  ContextManagementDataSchema,
+  OutputXmlSummarySchema,
+} from '@shared/schemas';
 
 // Minimal NormalizedUsage fixture: all required fields, no optionals.
 const usageFixture = {
@@ -115,5 +119,80 @@ describe('OutputXmlSummarySchema — tagContents legacy string coercion', () => 
     });
 
     expect(result.tagContents['broken']).toEqual([]);
+  });
+});
+
+describe('ContextManagementDataSchema — legacy missing tokensAfter/utilizationAfter', () => {
+  const legacyBase = {
+    tokensBefore: 1000,
+    contextWindow: 200_000,
+    utilizationBefore: 5,
+  };
+
+  it('defaults tokensAfter/utilizationAfter from the before-values on a pre-union entry', () => {
+    const result = ContextManagementDataSchema.parse({
+      ...legacyBase,
+      action: 'clear_tool_uses',
+    });
+
+    expect(result).toMatchObject({
+      action: 'clear_tool_uses',
+      tokensAfter: 1000,
+      utilizationAfter: 5,
+    });
+  });
+
+  it('passes an already-populated tokens-freed entry through unchanged', () => {
+    const result = ContextManagementDataSchema.parse({
+      ...legacyBase,
+      action: 'compaction',
+      tokensAfter: 400,
+      utilizationAfter: 2,
+    });
+
+    expect(result).toMatchObject({ tokensAfter: 400, utilizationAfter: 2 });
+  });
+
+  it('still requires originalMaxTokens/reducedMaxTokens for max_tokens_reduced', () => {
+    expect(() =>
+      ContextManagementDataSchema.parse({
+        ...legacyBase,
+        action: 'max_tokens_reduced',
+      }),
+    ).toThrow();
+  });
+});
+
+describe('ActiveChildInfoSchema — legacy missing kind discriminant', () => {
+  const legacyBase = {
+    executionId: 'exec-1',
+    agentName: 'review',
+  };
+
+  it('infers kind: subagent from a legacy entry that has childStreamId', () => {
+    const result = ActiveChildInfoSchema.parse({
+      ...legacyBase,
+      childStreamId: 'stream-1',
+    });
+
+    expect(result).toMatchObject({
+      kind: 'subagent',
+      childStreamId: 'stream-1',
+    });
+  });
+
+  it('infers kind: process from a legacy entry without childStreamId', () => {
+    const result = ActiveChildInfoSchema.parse({ ...legacyBase });
+
+    expect(result).toMatchObject({ kind: 'process' });
+  });
+
+  it('passes an already-migrated entry through unchanged', () => {
+    const result = ActiveChildInfoSchema.parse({
+      ...legacyBase,
+      kind: 'process',
+    });
+
+    expect(result).toMatchObject({ kind: 'process' });
   });
 });
