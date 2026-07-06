@@ -85,9 +85,8 @@ export function formatModelResponseTemplate(
   const trimmedContent = (text ?? '').trim();
   if (!trimmedContent) return null;
 
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
-    new Date(timestamp),
-  );
+  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+    formatDisplayTimestamp(new Date(timestamp));
   const markdownHtml = processMarkdownContent(trimmedContent);
   // Model response defaults to open (was hardcoded open before)
   const shouldOpen = options?.defaultOpen ?? true;
