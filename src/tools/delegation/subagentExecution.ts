@@ -25,10 +25,6 @@ import {
 } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import {
-  sendFollowUp,
-  wakeOrReleaseQueuedStream,
-} from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 
 // Local imports - logger
@@ -37,6 +33,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - tools
 import {
   AgentCategory,
+  type ExecutionId,
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -60,6 +57,10 @@ import {
   SUBAGENT_DELIVERY_DECISION,
   subagentDeliveryRegistry,
 } from '@tools/subagentDeliveryState';
+import {
+  deliverChildRunFollowUp,
+  persistChildRunReport,
+} from '@tools/childRunDelivery';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
@@ -136,14 +137,16 @@ async function writeSubagentReport(
   executionId: string,
   message: string,
 ): Promise<void> {
-  try {
-    await getExecutionStore(executionId).writeReport(message);
-  } catch (err) {
+  const result = await persistChildRunReport(
+    executionId as ExecutionId,
+    message,
+  );
+  if (result.kind === 'failed') {
     // Non-fatal, but the report is the only durable copy of the result when
     // delivery later fails — leave a trace instead of vanishing silently.
     logger.warn(
       'subagentDelivery',
-      `Failed to persist subagent report for ${executionId}: ${toErrorMessage(err)}`,
+      `Failed to persist subagent report for ${executionId}: ${toErrorMessage(result.err)}`,
     );
   }
 }
@@ -393,24 +396,20 @@ export async function executeSubagent(
         : orchestratorStreamId;
     if (!targetStreamId) return false;
 
-    const result = await sendFollowUp(
+    const result = await deliverChildRunFollowUp({
       targetStreamId,
       followUp,
-      undefined,
-      undefined,
-      parentSession,
-    );
-    if (result.status === 'no_session') {
+      session: parentSession,
+      wake: options?.wake,
+    });
+    if (result.kind === 'no_session') {
       logger.warn(
         'subagentDelivery',
         `Unable to deliver subagent result for ${executionId}: parent stream ${targetStreamId} has no active session (status: ${result.streamStatus ?? 'unknown'}).`,
       );
       return false;
     }
-    if (
-      options?.wake &&
-      !(await wakeOrReleaseQueuedStream(targetStreamId, result))
-    ) {
+    if (result.kind === 'dropped') {
       logger.warn(
         'subagentDelivery',
         `Dropped subagent result for ${executionId}: parent stream ${targetStreamId} is gone and could not be resumed. The result remains in the execution report.`,
