@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - node/flow primitives under test
+import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { BaseNode } from '@agent/node';
 import {
   RoundPersistedFlow,
@@ -20,40 +21,6 @@ import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
  * fake node and an in-memory KV store instead of standing up the full
  * reflection flow (model handler, prompt builder, LaTeX compile, etc).
  */
-
-/** Minimal in-memory stand-in for ExecutionKVStore; only read/write/getExecutionId are exercised by PersistedFlow. */
-function createFakeKv(): ExecutionKVStore {
-  const store = new Map<string, unknown>();
-  return {
-    read: async <T>(key: string) => store.get(key) as T | undefined,
-    write: async <T>(key: string, value: T) => {
-      store.set(key, value);
-    },
-    delete: async (key: string) => {
-      store.delete(key);
-    },
-    exists: async (key: string) => store.has(key),
-    listKeys: async () => [...store.keys()],
-    clear: async () => store.clear(),
-    getExecutionId: () => 'test-exec-0001',
-    readMeta: async () => null,
-    readConfig: async () => null,
-    readReport: async () => null,
-    readTodos: async () => [],
-    readConversation: async () => null,
-    readWorkspaceFiles: async () => [],
-    readChildren: async () => [],
-    readResultMeta: async () => null,
-    writeMeta: async () => {},
-    writeConfig: async () => {},
-    writeReport: async () => {},
-    writeTodos: async () => {},
-    writeConversation: async () => {},
-    writeWorkspaceFiles: async () => {},
-    writeChild: async () => {},
-    writeResultMeta: async () => {},
-  } as unknown as ExecutionKVStore;
-}
 
 interface FakeShared extends RoundAwareState {
   /** Round indices actually executed, in order. */
