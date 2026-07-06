@@ -56,6 +56,16 @@ jobs:
       - name: Type check
         run: pnpm run typecheck
 
+      # Fail the release before building/publishing if the code-generated
+      # `contributes.*` subtrees in package.json have drifted from the settings
+      # and command catalogs. `check:vsix-contents` (below) only asserts these
+      # subtrees are present and non-empty before trimming them from its
+      # manifest snapshot; it does not compare their contents. Without this
+      # gate a release cut from a commit whose catalog drift bypassed PR CI
+      # could publish a stale VS Code manifest.
+      - name: Check package contributes catalog
+        run: pnpm run check:package-contributes
+
       - name: Build extension VSIX
         run: pnpm --filter texra build:fast
 
