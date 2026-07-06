@@ -8,26 +8,12 @@ import { describe, it } from 'vitest';
 import { type AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { Plan } from '@shared/schemas';
 
-type RecordedEvent = {
-  event: keyof ProgressEventPayloads;
-  payload: ProgressEventPayloads[keyof ProgressEventPayloads];
-};
-
-function createRecordingHost(): {
-  events: RecordedEvent[];
-  host: AgentRuntimeHost;
-} {
-  const events: RecordedEvent[] = [];
-  return {
-    events,
-    host: {
-      emit: (event, payload) => events.push({ event, payload }),
-    },
-  };
-}
+import {
+  createRecordingHost,
+  type RecordedProgressEvent,
+} from '../progressTestUtils';
 
 describe('promise coordinators', () => {
   it('uses the configured runtime host for approval show and resolve events', async () => {
@@ -49,7 +35,13 @@ describe('promise coordinators', () => {
         }),
     );
 
-    coordinator.resolveRequest('approval:runtime', { action: 'approve' });
+    assert.equal(
+      host.interactions?.resolve('approval:runtime', {
+        kind: 'plan',
+        action: 'approve',
+      }),
+      true,
+    );
 
     assert.deepEqual(await resultPromise, { action: 'approve' });
     assert.deepEqual(ambientHost.events, []);
@@ -93,7 +85,13 @@ describe('promise coordinators', () => {
     );
 
     providerHost = replacementHost.host;
-    coordinator.resolveRequest('approval:default', { action: 'approve' });
+    assert.equal(
+      requestHost.host.interactions?.resolve('approval:default', {
+        kind: 'plan',
+        action: 'approve',
+      }),
+      true,
+    );
 
     assert.deepEqual(await resultPromise, { action: 'approve' });
     assert.deepEqual(ambientHost.events, []);
@@ -110,7 +108,7 @@ describe('promise coordinators', () => {
   });
 
   it('uses host interactions before the legacy show/resolve event pair', async () => {
-    const events: RecordedEvent[] = [];
+    const events: RecordedProgressEvent[] = [];
     const seenPlans: string[] = [];
     const plan: Plan = { objective: 'Approve through HostInteractions' };
     const host: AgentRuntimeHost = {
@@ -164,7 +162,13 @@ describe('promise coordinators', () => {
       'the replacement request should be the active prompt',
     );
 
-    coordinator.resolveRequest('approval:replace', { action: 'approve' });
+    assert.equal(
+      host.interactions?.resolve('approval:replace', {
+        kind: 'plan',
+        action: 'approve',
+      }),
+      true,
+    );
 
     assert.deepEqual(await secondResult, { action: 'approve' });
     assert.deepEqual(

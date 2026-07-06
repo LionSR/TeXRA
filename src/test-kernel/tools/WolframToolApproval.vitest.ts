@@ -7,7 +7,6 @@ import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - tools
 import { cleanupAllApprovals } from '@tools/approval';
-import { handleProgressViewBashApprovalAction } from '@tools/approval/bashApproval';
 import {
   WolframTool,
   wolframApprovalCommand,
@@ -28,7 +27,7 @@ async function dispatchWolfram(streamId: StreamTabId, code: string) {
     explicit.events,
     'showBashPermission',
   );
-  return { result, show };
+  return { explicit, result, show };
 }
 
 describe('WolframTool approval', () => {
@@ -49,17 +48,19 @@ describe('WolframTool approval', () => {
         exitCode: 0,
       });
 
-    const { result, show } = await dispatchWolfram(streamId, '1+1');
+    const { explicit, result, show } = await dispatchWolfram(streamId, '1+1');
     expect(show.payload).toMatchObject({
       command: wolframApprovalCommand('1+1'),
       allowBypass: true,
       streamId,
     });
 
-    await handleProgressViewBashApprovalAction({
-      requestId: show.payload.requestId,
-      action: 'approve',
-    });
+    expect(
+      explicit.host.interactions?.resolve(show.payload.requestId, {
+        kind: 'bash',
+        action: 'approve',
+      }),
+    ).toBe(true);
 
     await expect(result).resolves.toMatchObject({
       output: '2',
@@ -72,12 +73,14 @@ describe('WolframTool approval', () => {
     const streamId = 'stream:wolfram-rejected' as StreamTabId;
     const execute = vi.spyOn(wolframScriptUtils, 'executeWolframCode');
 
-    const { result, show } = await dispatchWolfram(streamId, '2+2');
-    await handleProgressViewBashApprovalAction({
-      requestId: show.payload.requestId,
-      action: 'reject',
-      feedback: 'Use the requested node check instead.',
-    });
+    const { explicit, result, show } = await dispatchWolfram(streamId, '2+2');
+    expect(
+      explicit.host.interactions?.resolve(show.payload.requestId, {
+        kind: 'bash',
+        action: 'reject',
+        feedback: 'Use the requested node check instead.',
+      }),
+    ).toBe(true);
 
     await expect(result).resolves.toMatchObject({
       status: 'error',
@@ -90,11 +93,16 @@ describe('WolframTool approval', () => {
     const streamId = 'stream:wolfram-rejected-default' as StreamTabId;
     const execute = vi.spyOn(wolframScriptUtils, 'executeWolframCode');
 
-    const { result, show } = await dispatchWolfram(streamId, 'Factor[n^7 - n]');
-    await handleProgressViewBashApprovalAction({
-      requestId: show.payload.requestId,
-      action: 'reject',
-    });
+    const { explicit, result, show } = await dispatchWolfram(
+      streamId,
+      'Factor[n^7 - n]',
+    );
+    expect(
+      explicit.host.interactions?.resolve(show.payload.requestId, {
+        kind: 'bash',
+        action: 'reject',
+      }),
+    ).toBe(true);
 
     await expect(result).resolves.toMatchObject({
       status: 'error',

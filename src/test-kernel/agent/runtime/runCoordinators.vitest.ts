@@ -105,7 +105,8 @@ describe('runCoordinators', () => {
       }),
     );
     expect(
-      bridge.resolvePlanApproval('approval:active-coordinator', {
+      active.host.interactions?.resolve('approval:active-coordinator', {
+        kind: 'plan',
         action: 'approve',
       }),
     ).toBe(true);
@@ -118,10 +119,14 @@ describe('runCoordinators', () => {
       }),
     );
     expect(
-      bridge.resolveProposal('proposal:active-coordinator', {
+      active.host.interactions?.resolve('proposal:active-coordinator', {
+        kind: 'proposal',
         action: 'approve',
-        agent: 'reviewer',
-        model: 'test-model',
+        value: {
+          action: 'approve',
+          agent: 'reviewer',
+          model: 'test-model',
+        },
       }),
     ).toBe(true);
     await expect(proposalResult).resolves.toEqual({
@@ -203,12 +208,14 @@ describe('runCoordinators', () => {
       await expect(retryResult).resolves.toEqual({ action: 'cancel' });
       expect(bridge.triggerRetry(streamId)).toBe(false);
       expect(
-        bridge.resolvePlanApproval('approval:cleanup-stream', {
+        active.host.interactions?.resolve('approval:cleanup-stream', {
+          kind: 'plan',
           action: 'approve',
         }),
       ).toBe(false);
       expect(
-        bridge.resolveProposal('proposal:cleanup-stream', {
+        active.host.interactions?.resolve('proposal:cleanup-stream', {
+          kind: 'proposal',
           action: 'approve',
         }),
       ).toBe(false);
@@ -243,7 +250,8 @@ describe('runCoordinators', () => {
 
       await expect(planResult).resolves.toEqual({ action: 'reject' });
       expect(
-        bridge.resolvePlanApproval('approval:direct-plan-clear', {
+        active.host.interactions?.resolve('approval:direct-plan-clear', {
+          kind: 'plan',
           action: 'approve',
         }),
       ).toBe(false);

@@ -8,10 +8,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { StreamTabId } from '@shared/schemas';
-import {
-  AskUserQuestionTool,
-  handleUserQuestionAction,
-} from '@tools/userQuestion';
+import { AskUserQuestionTool } from '@tools/userQuestion';
 import {
   cleanupAllApprovals,
   proposalApprovalState,
@@ -20,10 +17,7 @@ import {
   toggleBashApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
-import {
-  handleProgressViewBashApprovalAction,
-  requestBashApproval,
-} from '@tools/approval/bashApproval';
+import { requestBashApproval } from '@tools/approval/bashApproval';
 import {
   requestToolEditApproval,
   type ToolEditApprovalRequest,
@@ -88,10 +82,12 @@ describe('human prompt progress events', () => {
       explicit.events,
       'showBashPermission',
     );
-    await handleProgressViewBashApprovalAction({
-      requestId: show.payload.requestId,
-      action: 'approve',
-    });
+    expect(
+      explicit.host.interactions?.resolve(show.payload.requestId, {
+        kind: 'bash',
+        action: 'approve',
+      }),
+    ).toBe(true);
 
     await expect(approval).resolves.toMatchObject({ accepted: true });
 
@@ -137,13 +133,15 @@ describe('human prompt progress events', () => {
       explicit.events,
       'showUserQuestion',
     );
-    await handleUserQuestionAction({
-      requestId: show.payload.requestId,
-      action: 'submit',
-      answers: {
-        'Which path should the agent take?': 'Run the build',
-      },
-    });
+    expect(
+      explicit.host.interactions?.resolve(show.payload.requestId, {
+        kind: 'userQuestion',
+        action: 'submit',
+        value: {
+          'Which path should the agent take?': 'Run the build',
+        },
+      }),
+    ).toBe(true);
 
     await expect(result).resolves.toMatchObject({
       summary: 'Answered 1 user question(s).',
@@ -225,10 +223,12 @@ describe('human prompt progress events', () => {
         explicit.events,
         'showBashPermission',
       );
-      await handleProgressViewBashApprovalAction({
-        requestId: show.payload.requestId,
-        action: 'approve',
-      });
+      expect(
+        explicit.host.interactions?.resolve(show.payload.requestId, {
+          kind: 'bash',
+          action: 'approve',
+        }),
+      ).toBe(true);
       await expect(approval).resolves.toMatchObject({ accepted: true });
 
       expect(show.payload.command).toBe('echo still asks');

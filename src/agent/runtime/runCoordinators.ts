@@ -55,14 +55,6 @@ export class RunCoordinatorBridge {
     }
   }
 
-  resolvePlanApproval(approvalId: string, result: PlanApprovalResult): boolean {
-    return (
-      this.planApprovals
-        .get(approvalId)
-        ?.coordinators.plan.resolveRequest(approvalId, result) ?? false
-    );
-  }
-
   clearPlanApprovalForStream(streamId: string): void {
     const entries = matchingRequests(this.planApprovals, streamId);
     for (const [approvalId, entry] of entries) {
@@ -85,14 +77,6 @@ export class RunCoordinatorBridge {
     } finally {
       this.proposals.delete(options.proposalId);
     }
-  }
-
-  resolveProposal(proposalId: string, result: ProposalResult): boolean {
-    return (
-      this.proposals
-        .get(proposalId)
-        ?.coordinators.proposal.resolveRequest(proposalId, result) ?? false
-    );
   }
 
   async waitForRetry(
