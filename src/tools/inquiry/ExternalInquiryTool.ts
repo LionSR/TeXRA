@@ -18,7 +18,10 @@
 import { z } from 'zod';
 
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
 import {
@@ -149,6 +152,7 @@ export async function handleExternalInquiryAction(
   payload: InquiryActionMessage,
   options: { session?: SessionHandle } = {},
 ): Promise<void> {
+  const session = options.session ?? defaultSession();
   if (payload.action === 'submit') {
     const persisted = await recordAnswerForOpenTurn({
       threadId: payload.threadId,
@@ -159,7 +163,7 @@ export async function handleExternalInquiryAction(
     // this the request would replay on next webview load and the stream would
     // be reported as having pending permissions forever. Emit even for stale
     // submits so duplicate/delayed UI actions do not leave a leaked permission.
-    options.session?.interactions.resolve(payload.threadId, {
+    session.interactions.resolve(payload.threadId, {
       kind: 'externalInquiry',
       action: 'submit',
     });
@@ -188,7 +192,7 @@ export async function handleExternalInquiryAction(
     });
   }
   const droppedManifest = await markDropped({ threadId: payload.threadId });
-  options.session?.interactions.resolve(payload.threadId, {
+  session.interactions.resolve(payload.threadId, {
     kind: 'externalInquiry',
     action: 'drop',
     feedback: payload.feedback,
