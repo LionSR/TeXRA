@@ -268,6 +268,7 @@ export async function executeSubagent(
     agentName,
     orchestratorStreamId,
     parentSession,
+    runtimeHost,
     startedAt,
     workingDirectory,
     settleSubagentCost,
@@ -283,6 +284,7 @@ export async function executeSubagent(
     approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
     runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
     toolEditApprovalHandler: parentContext.toolEditApprovalHandler,
+    allowWaitingResult: true,
     onStreamResolved: (resolvedStreamId) => {
       nativeStrategy.setChildStreamId(resolvedStreamId);
       inheritChildStreamApprovals(resolvedStreamId);
