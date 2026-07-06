@@ -18,6 +18,7 @@ import { platform } from '@platform/platform';
 import type {
   HostBashApprovalRequest,
   HostBashApprovalResult,
+  HostInteractionOptions,
   HostInteractions,
   HostRetryRequest,
 } from '@agent/runtime/HostInteractions';
@@ -55,6 +56,7 @@ import { patchSessionMeta } from './cliState/sessionSlice';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
+  clearApprovalsWhere,
   clearRetryApprovalsForStream,
   enqueueApproval,
   onApprovalsCleared,
@@ -156,14 +158,46 @@ export function createTuiHostInteractions(
     requestBashApproval(request) {
       return requestBashInteraction(request, context, host);
     },
-    requestPlanApproval(request) {
-      return requestPlanInteraction(request, context, host);
+    requestPlanApproval(request, options) {
+      return withInteractionTimeout(
+        requestPlanInteraction(request, context, host),
+        options,
+        { action: 'timeout' },
+        () =>
+          clearApprovalsWhere(
+            (payload) =>
+              payload.kind === 'plan' &&
+              payload.payload.approvalId === request.approvalId,
+            NEUTRAL_TIMEOUT_DECISION,
+          ),
+      );
     },
-    requestAgentProposal(request) {
-      return requestProposalInteraction(request, context, host);
+    requestAgentProposal(request, options) {
+      return withInteractionTimeout(
+        requestProposalInteraction(request, context, host),
+        options,
+        { action: 'timeout' },
+        () =>
+          clearApprovalsWhere(
+            (payload) =>
+              payload.kind === 'proposal' &&
+              payload.payload.proposalId === request.proposalId,
+            NEUTRAL_TIMEOUT_DECISION,
+          ),
+      );
     },
-    requestRetry(request) {
-      return requestRetryInteraction(request, context, host, retryRoutes);
+    requestRetry(request, options) {
+      return withInteractionTimeout(
+        requestRetryInteraction(request, context, host, retryRoutes),
+        options,
+        { action: 'timeout' },
+        () => {
+          settleRetryRoute(retryRoutes, request.streamId, {
+            action: 'timeout',
+          });
+          clearRetryApprovalsForStream(request.streamId);
+        },
+      );
     },
     askUserQuestion(request) {
       return requestUserQuestionInteraction(request, context, host);
@@ -199,6 +233,53 @@ interface RetryRouteState {
   readonly activeRetryRoutes: Map<string, ActiveRetryRoute>;
 }
 
+const NEUTRAL_TIMEOUT_DECISION: ApprovalDecision = {
+  accepted: true,
+  userMessage: 'Approval request timed out.',
+};
+
+function validTimeoutMs(timeoutMs: number | undefined): number | undefined {
+  if (timeoutMs == null || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return undefined;
+  }
+  return Math.floor(timeoutMs);
+}
+
+function withInteractionTimeout<T>(
+  promise: Promise<T>,
+  options: HostInteractionOptions | undefined,
+  timeoutResult: T,
+  onTimeout: () => void,
+): Promise<T> {
+  const timeoutMs = validTimeoutMs(options?.timeoutMs);
+  if (timeoutMs == null) return promise;
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      onTimeout();
+      resolve(timeoutResult);
+    }, timeoutMs);
+
+    promise.then(
+      (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function createRetryRouteState(): RetryRouteState {
   return { activeRetryRoutes: new Map() };
 }
@@ -212,10 +293,18 @@ function isActiveRetryRoute(
 }
 
 function cancelRetryRoute(state: RetryRouteState, streamId: string): void {
+  settleRetryRoute(state, streamId, { action: 'cancel' });
+}
+
+function settleRetryRoute(
+  state: RetryRouteState,
+  streamId: string,
+  result: RetryResult,
+): void {
   const route = state.activeRetryRoutes.get(streamId);
   if (!route) return;
   state.activeRetryRoutes.delete(streamId);
-  route.settle?.({ action: 'cancel' });
+  route.settle?.(result);
 }
 
 function invalidateRetryRoutes(
