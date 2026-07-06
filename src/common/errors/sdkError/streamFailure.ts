@@ -83,3 +83,87 @@ export function annotateStreamFailure(
     attachFlowAutoRetryRequired(err);
   }
 }
+
+/**
+ * Drives an async-iterable provider stream, invoking `consume` once per chunk.
+ * A named extraction of the `for await (const chunk of stream) { ... }` loop
+ * every iterate-based streaming handler (OpenRouter, GoogleGenAI, and the
+ * event loop inside OpenAI Responses) previously hand-wrote inline. Handlers
+ * whose SDK drives consumption through its own event emitter instead of a
+ * plain async iterable (Anthropic's `attachToStream`, OpenAI chat completions'
+ * `stream.on('chunk', ...)`) do not use this — their "consume" hook is the
+ * listener they register directly with the SDK.
+ */
+export async function consumeStreamChunks<TChunk>(
+  stream: AsyncIterable<TChunk>,
+  consume: (chunk: TChunk) => void,
+): Promise<void> {
+  for await (const chunk of stream) {
+    consume(chunk);
+  }
+}
+
+/**
+ * Hooks for {@link handleStreamingFailure}, the shared tail of the mid-stream
+ * failure skeleton every provider handler's streaming catch block runs:
+ * finalize the in-flight progress streams, compute the partial-output tail,
+ * optionally enrich/tag/log the error, then annotate it and rethrow.
+ *
+ * Each hook is a thin accessor over state the handler already computed in its
+ * own catch block (stream diagnostics, aggregator buffers, connect trackers)
+ * — this function does not own stream consumption or recovery. Two carve-outs
+ * this deliberately does NOT try to unify (see callers for the exact
+ * preserved behavior):
+ *  - OpenAI Responses' `recover` path (polling fallback after an unhandled
+ *    SSE event) is attempted at two points *inside* the handler's own try
+ *    block, before this function's catch-tail ever runs; it only fires here
+ *    if recovery itself also failed.
+ *  - Each handler's `retryEligible` formula is preserved verbatim (they
+ *    differ three ways today: `connected||tail`, `connected||observed||tail`,
+ *    and GoogleGenAI's hardcoded `false`) — this function does not compute or
+ *    default the formula, only applies whatever the handler decided.
+ */
+export interface StreamingFailureHooks {
+  /**
+   * Finalizes in-flight progress streams so the progress view does not hang
+   * in a loading state (expected to be idempotent). Omit when the handler
+   * already finalizes unconditionally in a `finally` block (Anthropic).
+   */
+  finalizeOnError?: () => void;
+  /** Extracts the capped partial-output tail to attach to the error. */
+  partialTail: () => string;
+  /**
+   * Per-handler retry-eligibility formula, given the already-computed tail.
+   * Preserve each handler's exact current formula — do not unify.
+   */
+  retryEligible: (partialTail: string) => boolean;
+  /**
+   * Optional provider-specific error enrichment (tagging, wrapping, debug/warn
+   * logging) run after the tail is computed and before `annotateStreamFailure`.
+   * Returns the error to annotate and rethrow (the same reference if no
+   * wrapping is needed).
+   */
+  decorateError?: (err: unknown, partialTail: string) => unknown;
+}
+
+/**
+ * Runs the shared mid-stream failure skeleton: finalize → tail → decorate →
+ * annotate → rethrow. Call this as the last step of a provider handler's
+ * streaming catch block, in place of the previously hand-duplicated sequence.
+ */
+export function handleStreamingFailure(
+  err: unknown,
+  hooks: StreamingFailureHooks,
+): never {
+  hooks.finalizeOnError?.();
+  const partialTail = hooks.partialTail();
+  const decorated = hooks.decorateError
+    ? hooks.decorateError(err, partialTail)
+    : err;
+  annotateStreamFailure(
+    decorated,
+    partialTail,
+    hooks.retryEligible(partialTail),
+  );
+  throw decorated;
+}
