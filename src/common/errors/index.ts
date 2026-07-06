@@ -25,6 +25,10 @@ export {
 // across the codebase (model handlers, runtime, UI layers).
 // normalizeProviderError is the single public normalization entry; the
 // non-caching formatProviderHttpError stays internal to sdkErrorUtils.
-export { getSdkErrorMessage, normalizeProviderError } from './sdkErrorUtils';
+export {
+  getSdkErrorMessage,
+  normalizeProviderError,
+  buildFailedRetryInfo,
+} from './sdkErrorUtils';
 
 export { AgentError } from './agentErrors';

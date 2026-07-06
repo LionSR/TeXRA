@@ -3,7 +3,7 @@ import { isIP } from 'node:net';
 
 // Third-party imports
 import ky, { HTTPError } from 'ky';
-import pRetry, { AbortError } from 'p-retry';
+import { AbortError } from 'p-retry';
 import TurndownService from 'turndown';
 import { z } from 'zod';
 
@@ -12,11 +12,12 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import {
   isTimeoutError,
-  isTransientHttpError,
+  joinAbortSignal,
+  retryTransientFetch,
   unwrapAbortError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 const WEB_FETCH_RETRIES = 2;
@@ -140,25 +141,13 @@ export class WebFetchTool extends defineTool({
     let contentType: string;
 
     try {
-      ({ rawBody, contentType } = await pRetry(
+      ({ rawBody, contentType } = await retryTransientFetch(
         async (): Promise<{ rawBody: string; contentType: string }> => {
-          let response: Response;
-          try {
-            // AbortSignal.timeout covers both connection and body read;
-            // ky's own timeout only clears once headers arrive. The run's
-            // cancellation signal joins in so interrupts abort the fetch.
-            const timeoutSignal = AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS);
-            response = await ky.get(url, {
-              timeout: false,
-              signal: cancelSignal
-                ? AbortSignal.any([cancelSignal, timeoutSignal])
-                : timeoutSignal,
-              retry: 0,
-            });
-          } catch (error: unknown) {
-            if (isTransientHttpError(error)) throw error;
-            throw new AbortError(ensureError(error));
-          }
+          const response = await ky.get(url, {
+            timeout: false,
+            signal: joinAbortSignal(WEB_FETCH_TIMEOUT_MS, cancelSignal),
+            retry: 0,
+          });
 
           const lengthHeader = response.headers.get('content-length');
           if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
@@ -171,14 +160,7 @@ export class WebFetchTool extends defineTool({
           const text = await readBodyWithLimit(response, MAX_CONTENT_BYTES);
           return { rawBody: text, contentType: ct };
         },
-        {
-          retries: WEB_FETCH_RETRIES,
-          minTimeout: 500,
-          randomize: true,
-          // Stop retrying (and skip inter-retry delays) once the run is
-          // cancelled.
-          signal: cancelSignal,
-        },
+        { retries: WEB_FETCH_RETRIES, minTimeout: 500, cancelSignal },
       ));
     } catch (error) {
       // Defensive: ensure the specific type checks below see the real error
