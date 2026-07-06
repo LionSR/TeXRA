@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { getExecutionStore } from '@agent/storage';
 import { BaseNode } from '@agent/node';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
   flowKey,
@@ -24,6 +25,13 @@ class ContinueOnceNode extends BaseNode<{ count: number; continue: boolean }> {
   async post(shared: { count: number; continue: boolean }): Promise<string> {
     shared.count += 1;
     return shared.continue ? 'again' : 'complete';
+  }
+}
+
+class SuspendNode extends BaseNode<{ count: number }> {
+  async post(shared: { count: number }): Promise<string> {
+    shared.count += 1;
+    return FlowTransition.WAITING;
   }
 }
 
@@ -101,6 +109,38 @@ describe('PersistedFlow', () => {
         { action: 'again' },
         { action: 'complete', nodeId: 'start/again' },
       ],
+    });
+  });
+
+  it('persists WAITING without advancing the replay cursor', async () => {
+    const executionId = 'abc129' as ExecutionId;
+    const store = getExecutionStore(executionId);
+    const flow = new PersistedFlow(new SuspendNode(), store, executionId);
+
+    await expect(flow.run({ count: 0 })).resolves.toBe(FlowTransition.WAITING);
+
+    await expect(
+      store.read<FlowRecord>(flowKey(executionId)),
+    ).resolves.toMatchObject({
+      shared: { count: 1 },
+      cursor: {
+        nextNodeId: 'start',
+        lastAction: FlowTransition.WAITING,
+      },
+      nodes: [{ action: FlowTransition.WAITING, nodeId: 'start' }],
+    });
+
+    await expect(flow.run({ count: 999 })).resolves.toBe(
+      FlowTransition.WAITING,
+    );
+    await expect(
+      store.read<FlowRecord>(flowKey(executionId)),
+    ).resolves.toMatchObject({
+      shared: { count: 2 },
+      cursor: {
+        nextNodeId: 'start',
+        lastAction: FlowTransition.WAITING,
+      },
     });
   });
 });
