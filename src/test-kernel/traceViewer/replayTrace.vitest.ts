@@ -211,6 +211,55 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
+  it('ignores a cleanly-closed tool-use round when the root run stage never closed (issue #7267)', () => {
+    // Tool-use rounds (ToolUseCycleNode) are opened without an ambient
+    // parent stage — runFlowWithLifecycle never wraps flow execution in the
+    // root "Run:" stage's `within(...)` — so a round's GROUP_END row carries
+    // `groupId: undefined`, the same "no parent" shape as the root run
+    // stage's own GROUP_END. Only `data.kind` (preserved through the
+    // stage.end merge by TexraTranscriptRecorder) tells them apart.
+    const { ctx, getState } = createContext(createInitialState());
+    const trace: TraceDocument = {
+      ...legacyTrace(undefined),
+      config: AgentConfigSchema.parse({
+        agent: 'correct',
+        model: 'gemini35f',
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      entries: [
+        {
+          seqNo: 1,
+          id: 'root-run',
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+          level: LOG_LEVELS.INFO,
+          timestamp: 100,
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'Run: correct',
+          data: { status: 'running', kind: 'run' },
+          // No matching GROUP_END: the root run stage never closed (crash
+          // mid-run), so this entry stays a GROUP_START forever.
+        },
+        {
+          seqNo: 2,
+          id: 'r0',
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+          level: LOG_LEVELS.INFO,
+          timestamp: 120,
+          // No groupId — the bug: rounds have no ambient parent, so this is
+          // indistinguishable from a root stage by groupId alone.
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'r0',
+          data: { status: 'stopped', endTime: 120, kind: 'round' },
+        },
+      ],
+    };
+
+    replayTrace(trace, ctx);
+
+    const replayed = getState().streamStates.get(trace.streamId);
+    expect(replayed?.status).toBe(STREAM_STATUS.READY);
+  });
+
   it('derives "failed" from snapshot.status "error" instead of defaulting to ready', () => {
     const { ctx, getState } = createContext(createInitialState());
     const trace = legacyTrace('error');
