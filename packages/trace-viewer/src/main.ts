@@ -19,6 +19,7 @@ import {
 } from '@progressView/frontend/eventHandlers';
 
 import { replayTrace } from './replayTrace';
+import { parseTraceData } from './traceDataSchema';
 import type { TraceDocument } from '@transcript';
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -50,19 +51,21 @@ conversationView.addEventListener(
  * sidecar JSON — `fetch()` of a local file fails entirely under `file://`,
  * regardless of bundling), or a fetched `trace.json` next to the page (the
  * default when served over http/https, e.g. a static site hosting many
- * traces that shouldn't duplicate the bundle per page). Both paths feed the
- * exact same `replayTrace`.
+ * traces that shouldn't duplicate the bundle per page). Both paths are
+ * externally-authored (exported by whatever TeXRA version produced them), so
+ * both get validated through the same `parseTraceData` boundary before
+ * feeding the exact same `replayTrace` — a stale/malformed trace file throws
+ * a clear error here instead of failing deep inside `dispatchMessage`.
  */
 async function loadTrace(): Promise<TraceDocument> {
-  const inline = (window as { __TEXRA_TRACE__?: TraceDocument })
-    .__TEXRA_TRACE__;
-  if (inline) return inline;
+  const inline = (window as { __TEXRA_TRACE__?: unknown }).__TEXRA_TRACE__;
+  if (inline) return parseTraceData(inline);
 
   const params = new URLSearchParams(window.location.search);
   const file = params.get('trace') ?? 'trace.json';
   const res = await fetch(file);
   if (!res.ok) throw new Error(`Failed to fetch ${file}: ${res.status}`);
-  return res.json();
+  return parseTraceData(await res.json());
 }
 
 loadTrace()
