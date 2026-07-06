@@ -557,11 +557,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     });
   }
 
-  // supportsTokenCounting (Google's countTokens endpoint for exact
-  // pre-flight counts) is now the base class's default: it reads the
-  // llm-zoo `supportsTokenCounting` capability flag directly, so this
-  // handler no longer needs to re-forward it (#7101).
-
   /**
    * The handler implements client-side compaction (see `compactConversation`),
    * so manual (user-requested) compaction is supported. Always true: the

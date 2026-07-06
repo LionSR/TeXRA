@@ -184,11 +184,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     });
   }
 
-  // supportsTokenCounting (Google's countTokens endpoint for exact
-  // pre-flight counts) is now the base class's default: it reads the
-  // llm-zoo `supportsTokenCounting` capability flag directly, so this
-  // handler no longer needs to re-forward it (#7101).
-
   /**
    * Gemini carries thought signatures across parallel function calls, which must
    * be preserved by batching the results into a single follow-up message.
