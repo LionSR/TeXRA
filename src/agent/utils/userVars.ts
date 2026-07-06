@@ -11,6 +11,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type { FileListEntry } from '@shared/schemas';
+import { SETTING_KEY } from '@shared/config/settingKeys';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, isNonEmptyString, unique } from '@utils/core';
@@ -104,7 +105,7 @@ export async function buildUserVars(
     // work for workflow agents. The settings toggle gives users a hard off
     // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
     agentSetting.agentCategory === AgentCategory.ToolUse &&
-    getConfig<boolean>('texra.skills.enabled', true)
+    getConfig<boolean>(SETTING_KEY['skills.enabled'], true)
       ? loadRuntimeSkillCatalog(logger)
       : Promise.resolve(''),
   ]);
@@ -163,7 +164,7 @@ function getBasicVars(
   );
 
   // Get default bib path from settings (empty string if not configured)
-  const defaultBibPath = getConfig<string>('texra.bib.defaultPath', '');
+  const defaultBibPath = getConfig<string>(SETTING_KEY['bib.defaultPath'], '');
 
   return {
     MODEL: agentConfig.model,

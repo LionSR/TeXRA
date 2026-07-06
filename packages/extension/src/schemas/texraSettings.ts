@@ -4,10 +4,10 @@ import { z } from 'zod';
 // Local imports - shared core/runtime modules
 //
 // This file is also loaded after TypeScript emit by
-// scripts/sync-settings-configuration.mjs under plain Node. Keep these imports
+// scripts/sync-extension-manifest.mjs under plain Node. Keep these imports
 // relative so the compiled module does not require tsconfig path aliases.
 /* eslint-disable local/prefer-alias-for-deep-relative-imports -- This module
- * must remain require-able after tsc emit by the plain Node settings sync
+ * must remain require-able after tsc emit by the plain Node manifest sync
  * script, which does not install tsconfig alias hooks. */
 import { stripPrefix } from '../../../../src/shared/config/configKeys';
 import {

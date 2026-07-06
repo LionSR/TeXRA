@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   extensionManifestSnapshot,
   readJson,
+  withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 
 const rootDir = path.resolve(
@@ -135,7 +136,13 @@ function hasFiles(relativeDir) {
 function buildSnapshot() {
   const packageJson = readJson(packagePath);
   return {
-    manifest: extensionManifestSnapshot(packageJson, MANIFEST_KEYS),
+    // contributes.configuration/commands/keybindings are catalog-derived and
+    // covered separately by `npm run check:extension-manifest` (a real diff
+    // check, not a frozen copy) — see withoutCatalogDerivedContributes.
+    manifest: extensionManifestSnapshot(
+      withoutCatalogDerivedContributes(packageJson),
+      MANIFEST_KEYS,
+    ),
     manifestAssetReferences: manifestAssetReferences(packageJson),
     requiredPackagedPaths: REQUIRED_PACKAGED_PATHS,
     requiredVscodeIgnoreLines: REQUIRED_VSCODEIGNORE_LINES,

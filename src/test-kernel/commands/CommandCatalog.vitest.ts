@@ -6,7 +6,10 @@ import { createRequire } from 'node:module';
 import { describe, it } from 'vitest';
 
 // Local imports - commands
-import { commandCatalog, commandKeybindings } from '@shared/commands/catalog';
+import {
+  buildCommandManifestEntries,
+  commandKeybindings,
+} from '@shared/commands/catalog';
 
 interface PackageCommand {
   command: string;
@@ -51,16 +54,7 @@ function normalizeCommand(command: PackageCommand): PackageCommand {
 }
 
 function normalizeCatalogCommands(): PackageCommand[] {
-  return commandCatalog.map((entry) =>
-    normalizeCommand({
-      command: entry.id,
-      title: entry.title,
-      ...('shortTitle' in entry ? { shortTitle: entry.shortTitle } : {}),
-      category: entry.category,
-      ...('icon' in entry ? { icon: entry.icon } : {}),
-      ...('enablement' in entry ? { enablement: entry.enablement } : {}),
-    }),
-  );
+  return buildCommandManifestEntries().map(normalizeCommand);
 }
 
 describe('commandCatalog', () => {

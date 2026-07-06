@@ -7,6 +7,7 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
+import { SETTING_KEY } from '@shared/config/settingKeys';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
@@ -61,7 +62,7 @@ export class ExtractBibliographyTool extends defineTool({
 
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
-      bibPath || getConfig<string>('texra.bib.defaultPath', '');
+      bibPath || getConfig<string>(SETTING_KEY['bib.defaultPath'], '');
 
     if (effectiveBibPath) {
       const { path: resolved } = resolveAndFormat(effectiveBibPath);

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   extensionManifestSnapshot,
   readJson,
+  withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 
 const rootDir = path.resolve(
@@ -71,8 +72,12 @@ function assertEntryExists(entries, entryPath, failures) {
 function verifyManifest(vsixPath, snapshot, failures) {
   const manifestBytes = readVsixEntry(vsixPath, 'extension/package.json');
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
+  // The frozen snapshot no longer carries contributes.configuration/commands/
+  // keybindings (catalog-derived, checked separately) — strip the same keys
+  // from the packaged manifest before comparing so this isn't just diffing
+  // "does the packaged file have configuration/commands at all".
   const manifestSnapshot = extensionManifestSnapshot(
-    manifest,
+    withoutCatalogDerivedContributes(manifest),
     Object.keys(snapshot.manifest),
   );
 

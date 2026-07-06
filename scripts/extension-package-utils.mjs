@@ -50,6 +50,27 @@ export function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+// contributes.configuration/commands/keybindings are generated from
+// src/shared/schemas/coreSettings.ts and src/shared/commands/catalog.ts (see
+// scripts/sync-extension-manifest.mjs) and verified against package.json by
+// that script's --check mode plus the settingsConfiguration/CommandCatalog
+// Vitest suites. They don't need a second, frozen-snapshot copy here — that
+// copy is what previously made the invariants snapshot ~70 KB and turned a
+// catalog rename into a generic snapshot mismatch instead of a targeted diff.
+export const CATALOG_DERIVED_CONTRIBUTES_KEYS = [
+  'configuration',
+  'commands',
+  'keybindings',
+];
+
+export function withoutCatalogDerivedContributes(packageJson) {
+  const contributes = { ...packageJson.contributes };
+  for (const key of CATALOG_DERIVED_CONTRIBUTES_KEYS) {
+    delete contributes[key];
+  }
+  return { ...packageJson, contributes };
+}
+
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (!value || typeof value !== 'object') return value;

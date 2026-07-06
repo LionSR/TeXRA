@@ -12,7 +12,6 @@
     "paths": {
       "vscode-jsonrpc/node": ["node_modules/vscode-jsonrpc/lib/node/main"],
       "@/*": ["packages/extension/src/*", "src/*"],
-      "~/*": ["packages/extension/src/*", "src/*"],
       "@shared/*": ["src/shared/*"],
       "@common/state": ["packages/extension/src/common/state"],
       "@common/state/*": ["packages/extension/src/common/state/*"],

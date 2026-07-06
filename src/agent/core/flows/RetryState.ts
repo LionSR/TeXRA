@@ -15,6 +15,7 @@ import {
   toRetryErrorInfo,
   type RetryErrorInfo,
 } from '@shared/schemas';
+import { SETTING_KEY } from '@shared/config/settingKeys';
 import { ensureError } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -22,8 +23,14 @@ const BACKGROUND_MODE_MIN_RETRIES = 3;
 
 /** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
 function getNodeRetryConfig(): { maxRetries: number; wait: number } {
-  const maxAutoAttempts = getConfig<number>('texra.model.retry.maxAttempts', 1);
-  const backoffMs = getConfig<number>('texra.model.retry.backoffMs', 1000);
+  const maxAutoAttempts = getConfig<number>(
+    SETTING_KEY['model.retry.maxAttempts'],
+    1,
+  );
+  const backoffMs = getConfig<number>(
+    SETTING_KEY['model.retry.backoffMs'],
+    1000,
+  );
 
   return {
     maxRetries: 1 + Math.max(0, maxAutoAttempts),

@@ -33,6 +33,9 @@ describe('build alias configuration', () => {
     const viteConfig = readText('packages/desktop/vite.config.ts');
 
     expect(desktopTsconfig.extends).toBe('./tsconfig.paths.json');
+    // packages/desktop/tsconfig.paths.json is generated from tsconfig.json by
+    // scripts/sync-desktop-tsconfig-paths.mjs; run
+    // `npm run sync:desktop-tsconfig-paths` if this drifts.
     expect(desktopPaths).toEqual(rootPaths);
     expect(viteConfig).toContain("from '../../scripts/aliases.mjs'");
     expect(viteConfig).not.toContain('../extension/scripts/aliases.mjs');

@@ -527,3 +527,37 @@ export const commandKeybindings = commandKeybindingOrder.map((id) => ({
   command: id,
   ...keybindingForCommand(id),
 }));
+
+/**
+ * Shape of a `package.json` `contributes.commands` entry. Field order matches
+ * the VS Code manifest convention (`command`, `title`, `shortTitle?`,
+ * `category`, `icon?`, `enablement?`) so a freshly generated manifest is
+ * byte-identical to a hand-authored one that already follows this order.
+ */
+export interface CommandManifestEntry {
+  command: string;
+  title: string;
+  shortTitle?: string;
+  category: string;
+  icon?: string;
+  enablement?: string;
+}
+
+/**
+ * Derives `package.json` `contributes.commands` entries from
+ * {@link commandCatalog}. This is the single place that owns the
+ * catalog-entry-to-manifest-entry mapping — both
+ * `scripts/sync-extension-manifest.mjs` (the codegen path) and
+ * `CommandCatalog.vitest.ts` (the CI drift check) call it, instead of each
+ * re-implementing the same field projection.
+ */
+export function buildCommandManifestEntries(): CommandManifestEntry[] {
+  return commandCatalog.map((entry: CommandCatalogEntry) => ({
+    command: entry.id,
+    title: entry.title,
+    ...(entry.shortTitle !== undefined && { shortTitle: entry.shortTitle }),
+    category: entry.category,
+    ...(entry.icon !== undefined && { icon: entry.icon }),
+    ...(entry.enablement !== undefined && { enablement: entry.enablement }),
+  }));
+}

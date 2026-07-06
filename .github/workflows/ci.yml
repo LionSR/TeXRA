@@ -90,6 +90,9 @@ jobs:
       - name: Check extension package invariants
         run: pnpm run check:extension-package-invariants
 
+      - name: Check extension manifest is in sync with settings/command catalogs
+        run: pnpm run check:extension-manifest
+
       - name: Kernel tests
         run: pnpm run test
 

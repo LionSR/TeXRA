@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
 // Local imports - core
+import { SETTING_KEY } from '@shared/config/settingKeys';
 import { ToolError } from '@shared/schemas/toolResult';
 import { isTimeoutError, joinAbortSignal } from '@tools/timeouts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -26,7 +27,7 @@ const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
  * Used by both Connector API and Better BibTeX JSON-RPC (same port, different paths).
  */
 export function getZoteroPort(): number {
-  return getConfig<number>('texra.bib.zoteroPort', 23119);
+  return getConfig<number>(SETTING_KEY['bib.zoteroPort'], 23119);
 }
 
 // ============================================================================

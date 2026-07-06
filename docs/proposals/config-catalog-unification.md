@@ -8,7 +8,7 @@
 
 The user wants a `/config` panel in the `texra` CLI TUI to toggle settings, but flagged the deeper risk: a CLI-only settings surface would **overlap with and drift from** the VS Code extension's settings. Research confirms both the concern and an existing foundation to build on:
 
-- `src/shared/schemas/coreSettings.ts` is already a host-neutral SSOT for **config-tree settings** (Zod v4 `CoreSettingsShape` + `DEFAULT_CORE_SETTINGS` + `CORE_SETTING_PATHS`, all via `.prefault()`). It already generates the VS Code `contributes.configuration` block in `packages/extension/package.json` through `texraSettings.ts` + `scripts/sync-settings-configuration.mjs`, guarded by an idempotency test (`settingsConfiguration.vitest.ts:151`).
+- `src/shared/schemas/coreSettings.ts` is already a host-neutral SSOT for **config-tree settings** (Zod v4 `CoreSettingsShape` + `DEFAULT_CORE_SETTINGS` + `CORE_SETTING_PATHS`, all via `.prefault()`). It already generates the VS Code `contributes.configuration` block in `packages/extension/package.json` through `texraSettings.ts` + `scripts/sync-extension-manifest.mjs`, guarded by an idempotency test (`settingsConfiguration.vitest.ts:151`).
 - **Gap 1:** `description` / `enumDescriptions` / `scope` / `order` are hand-written in package.json only — no SSOT, so the CLI can't reuse them and they can drift from the schema.
 - **Gap 2:** ~74 **state-backed** settings (WorkspaceState/GlobalState keys: streaming, endpoints, codex/claude, agents, git, workflow, latexdiff…) live entirely outside the schema, in `src/shared/state/stateKeys.ts` + scattered getters + the `src/controllers/settingsView/*` controllers.
 
@@ -78,8 +78,8 @@ Promote only the fields with real cross-host SSOT value into `.describe()` / `.m
 - `texraSettings.ts:97` — extend `GENERATED_PACKAGE_SCHEMA_FIELDS` with `'description'`, `'enumDescriptions'` only. (`z.toJSONSchema()` already passes `.describe()` → `description` and merges `.meta()` keys; `pickPackageSchemaFields` is allowlist-driven so other meta stays out of package.json.)
 - `coreSettings.ts` + `vscodeSettings.ts` — add `.describe('…')` to every config leaf and `.meta({ enumDescriptions: [...] })` to enum leaves, **back-filled verbatim from the current package.json strings** so the first generator run is zero-diff.
 - `settingsConfiguration.vitest.ts` — **rewrite the `removes stale generated package schema fields` test (lines 157-180)**: it currently injects `description: 'Preserved description'` and asserts it survives. Once `description` is generated, that assertion is wrong — pivot it to a still-hand-kept field (`order` or `editPresentation`). Add an invariant: every enum leaf's `enumDescriptions.length === enum.length`.
-- Regenerate package.json via `npm run sync:settings-configuration`.
-- **Verify:** `sync:settings-configuration --check` is zero-diff; `npm test` (idempotency `assert.deepEqual(build(sections), sections)`) green; `npm run typecheck`.
+- Regenerate package.json via `npm run sync:extension-manifest`.
+- **Verify:** `sync:extension-manifest --check` is zero-diff; `npm test` (idempotency `assert.deepEqual(build(sections), sections)`) green; `npm run typecheck`.
 
 ### PR 2 — `stateSettings.ts` catalog + `settingsAccess.ts` accessor + knownKeys derivation
 
@@ -118,12 +118,12 @@ Promote only the fields with real cross-host SSOT value into `.describe()` / `.m
 - `packages/cli/src/schemas/knownKeys.ts` — derive from catalog, delete GIT\_\* lines 31-34 (PR2).
 - New `packages/cli/src/chat/tui/forms/ConfigForm.tsx`; `packages/cli/src/chat/tui/commands/{registerBuiltins.tsx,slashRegistry.ts}`; `packages/cli/src/chat/tui/runChatTui.tsx:516` (PR3).
 - Extension tabs: `packages/extension/src/settingsView/frontend/tabs/{AIAgentsTab.ts,LaTeXTab.ts,ModelsTab.ts}` + `components/profile/{ModelSelectionList.ts,ApiAccessSection.ts}` (PR4).
-- Reused untouched: `ui/Select.tsx`, `forms/_shared/{FormFrame,selectWindow}.ts`, `src/controllers/settingsView/*`, `scripts/sync-settings-configuration.mjs`, `src/utils/system/gitAuthorSettings.ts`.
+- Reused untouched: `ui/Select.tsx`, `forms/_shared/{FormFrame,selectWindow}.ts`, `src/controllers/settingsView/*`, `scripts/sync-extension-manifest.mjs`, `src/utils/system/gitAuthorSettings.ts`.
 
 ## Verification (every PR)
 
 - `npm run typecheck` and `npm test`.
-- PR1: `npm run sync:settings-configuration --check` zero-diff (proves `.describe()`/`.meta()`+`.prefault()` compose through `z.toJSONSchema()`); enum-length invariant green.
+- PR1: `npm run sync:extension-manifest --check` zero-diff (proves `.describe()`/`.meta()`+`.prefault()` compose through `z.toJSONSchema()`); enum-length invariant green.
 - PR2: guardrail suite (consumer-exists, knownKeys-derivation, store/scope coherence, Class-D exclusion, default round-trip).
 - PR3: PTY harness round-trip — boolean + enum flip persists to `.texra/config.json`; `Esc` closes; headless `--print`/`run` path byte-identical (CLAUDE.md "headless parity is sacred").
 - PR4: identical webview labels; no port/schema diff.

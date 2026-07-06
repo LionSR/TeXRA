@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { AgentTrace } from '@agent/trace';
 import type { ExecutionId } from '@shared/schemas';
+import { SETTING_KEY } from '@shared/config/settingKeys';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
@@ -42,7 +43,10 @@ export async function maybeSaveDebugObject({
   context,
   fileOptions = {},
 }: SaveDebugParams): Promise<void> {
-  const shouldSave = getConfig<boolean>('texra.debug.saveDebugObjects', false);
+  const shouldSave = getConfig<boolean>(
+    SETTING_KEY['debug.saveDebugObjects'],
+    false,
+  );
   if (!shouldSave || context.isRemote) return;
 
   const { logger, modelName, executionId } = context;
