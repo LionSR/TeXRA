@@ -1,6 +1,7 @@
 /** Markdown format spec for chat export. */
 
 import type { DocumentMeta } from '@agent/export/schemas';
+import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 import { filterNotNullish } from '@utils/core';
 
 import {
@@ -59,6 +60,11 @@ const ATTACHMENT_LABELS: Record<string, string> = {
   document: 'Document attachment',
 };
 
+function markdownLinkOrText(url: string, title: string): string {
+  const safeUrl = sanitizeLiveLinkUrl(url);
+  return safeUrl ? `[${title}](${safeUrl})` : title;
+}
+
 const MD_NODES: NodeRenderers = {
   'user-message': ({ parts }) => {
     const body = parts
@@ -81,19 +87,22 @@ const MD_NODES: NodeRenderers = {
   'web-search': ({ query }) => `#### Web Search\n\n**Query:** ${query}\n`,
 
   'web-search-results': ({ results }) =>
-    results.map((r) => `- [${r.title}](${r.url})`).join('\n') + '\n',
+    results.map((r) => `- ${markdownLinkOrText(r.url, r.title)}`).join('\n') +
+    '\n',
 
-  'web-fetch': ({ url, title, content }) =>
-    [
+  'web-fetch': ({ url, title, content }) => {
+    const safeUrl = url ? sanitizeLiveLinkUrl(url) : undefined;
+    return [
       '#### Web Fetch',
       '',
-      url ? `**URL:** ${url}` : undefined,
+      safeUrl ? `**URL:** ${safeUrl}` : undefined,
       title ? `**Title:** ${title}` : undefined,
       content ? `\n${fencedBlock(content)}` : undefined,
       '',
     ]
       .filter(filterNotNullish)
-      .join('\n'),
+      .join('\n');
+  },
 };
 
 export const markdownSpec: FormatSpec = {
