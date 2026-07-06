@@ -454,6 +454,66 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('drops buffered conversation progress when an existing stream re-enters running', async () => {
+    vi.useFakeTimers();
+    const { backend, messages } = createRecordingBackend();
+    const subscription = backend.setupEventListeners(bus);
+    const stream = 'tool-stream' as StreamTabId;
+
+    try {
+      await backend.state.snapshots.load([]);
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.activeStream = stream;
+      backend.state.snapshots.setTaskState(
+        stream,
+        toolUseTaskState('search', 'deepseekproT'),
+        'abc123' as ExecutionId,
+      );
+      backend.state.updateStreamHints(stream, {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
+
+      bus.emit('updateConversationProgress', {
+        streamId: stream,
+        progress: { toolCallCount: 7 },
+      });
+
+      await backend.eventHandler.setStreamStatus(
+        stream,
+        STREAM_PHASE.RUNNING,
+        STREAM_PHASE.COMPLETED,
+      );
+
+      await vi.advanceTimersByTimeAsync(501);
+
+      const patch = messages.find(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+          message.streamInfo.name === stream,
+      );
+      expect(patch).toMatchObject({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+        streamState: {
+          conversationProgress: { toolCallCount: 0 },
+        },
+      });
+      expect(
+        messages.some(
+          (message) =>
+            message.command ===
+              PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS &&
+            message.stream === stream &&
+            message.progress.toolCallCount === 7,
+        ),
+      ).toBe(false);
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it('revalidates and syncs the active stream when status registration changes the filter', async () => {
     const { backend, messages } = createRecordingBackend();
 
