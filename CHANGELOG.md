@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Bug Fixes
+
+- **Web search/fetch links now block dangerous URL schemes** — a link
+  surfaced from a web search result or fetched page can no longer use a
+  `javascript:`/`data:`/`vbscript:`/`file:` URL to become a live,
+  script-executing link; only `http:`, `https:`, and `mailto:` links render
+  as clickable, in both the Progress View and exported HTML chats.
+
 #### Improvements
 
 - **Read-only tool calls in one model response now run in parallel** —
