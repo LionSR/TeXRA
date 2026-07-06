@@ -22,7 +22,8 @@ import {
   isContextWindowError,
   isPreviousResponseIdError,
   isUserAbort,
-  annotateStreamFailure,
+  consumeStreamChunks,
+  handleStreamingFailure,
   attachFlowAutoRetryRequired,
   trackStreamConnect,
   type StreamConnectTracker,
@@ -1889,6 +1890,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Processor handles interleaved thinking and web search
       // GPT can: think → web_search → think more → web_search → text
       processor = this.createStreamProcessor();
+      const streamProcessor = processor;
 
       const retrieveAfterUnhandledStreamEvent = async (
         streamError: unknown,
@@ -1947,18 +1949,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       let response: Response | undefined;
       try {
-        for await (const event of stream) {
+        await consumeStreamChunks(stream, (event) => {
           streamEventObserved = true;
           if (event.type === 'response.created') {
             responseId = event.response.id;
           }
-          processor.process(event);
+          streamProcessor.process(event);
           if (event.type === 'response.output_text.delta') {
             streamedText += event.delta;
           } else if (event.type === 'response.output_item.done') {
             streamedItems.push(event.item);
           }
-        }
+        });
       } catch (streamError) {
         response = await retrieveAfterUnhandledStreamEvent(streamError);
       }
@@ -2000,19 +2002,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
       return { response, updatedMessages: ctx.compactedMessages };
     } catch (error) {
-      // Finalize the progress streams on error so the view does not hang in a
-      // loading state (no-op if the stream never opened or already finalized).
-      processor?.abort();
-      // Attach a capped tail of any streamed text before it propagates so the
-      // retry UI receives the same structured error shape downstream.
-      annotateStreamFailure(
-        error,
-        streamedText ? takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX) : '',
-        (connect?.isConnected() ?? false) ||
+      return handleStreamingFailure(error, {
+        // Finalize the progress streams on error so the view does not hang
+        // in a loading state (no-op if the stream never opened or already
+        // finalized). Note: this only runs when `recover` above (the
+        // `retrieveAfterUnhandledStreamEvent` polling fallback attempted at
+        // both the event-loop catch and the `finalResponse()` catch) was
+        // either unavailable or itself failed — a successful recovery
+        // returns a valid `response` and never reaches this catch.
+        finalizeOnError: () => processor?.abort(),
+        // Attach a capped tail of any streamed text before it propagates so
+        // the retry UI receives the same structured error shape downstream.
+        partialTail: () =>
+          streamedText ? takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX) : '',
+        retryEligible: () =>
+          (connect?.isConnected() ?? false) ||
           streamEventObserved ||
           streamedText.length > 0,
-      );
-      throw error;
+      });
     } finally {
       connect?.cleanup();
     }
