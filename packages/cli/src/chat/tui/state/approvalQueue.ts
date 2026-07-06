@@ -9,6 +9,7 @@
 
 import { signal, type Signal } from '@lit-labs/signals';
 import PQueue from 'p-queue';
+import pTimeout from 'p-timeout';
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
@@ -54,6 +55,11 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   readonly disableChatGptSubscription?: boolean;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
+  /** Set when this decision came from an `enqueueApproval` `timeoutMs` firing
+   *  rather than the user (or policy) actually deciding. Callers that map
+   *  `ApprovalDecision` onto a richer result type (e.g. `PlanApprovalResult`)
+   *  use this to report a distinct `'timeout'` action instead of a rejection. */
+  readonly timedOut?: boolean;
 }
 
 export interface PendingApproval {
@@ -68,6 +74,9 @@ export interface ApprovalQueueStatus {
 
 export interface EnqueueApprovalOptions {
   readonly onPresent?: () => void;
+  /** Settle with a timeout decision if no decision arrives within this many
+   *  milliseconds (counted from enqueue, matching `HostInteractionOptions`). */
+  readonly timeoutMs?: number;
 }
 
 const CURRENT = signal<PendingApproval | undefined>(undefined);
@@ -94,6 +103,35 @@ const INTERRUPT: ApprovalDecision = {
   accepted: false,
   userMessage: 'Session interrupted.',
 };
+
+const TIMEOUT_DECISION: ApprovalDecision = {
+  accepted: false,
+  userMessage: 'Approval request timed out.',
+  timedOut: true,
+};
+
+/**
+ * Settle one queue item out of band (interrupt/timeout/stream-scoped cancel)
+ * rather than through the modal's own `decide()` callback: remove it from
+ * `pendingItems`, clear the foreground modal if it was the one showing, and
+ * resume the queue's blocked task so the single concurrency slot is freed.
+ * Returns false if the item was already settled.
+ */
+function settleItem(
+  item: ApprovalQueueItem,
+  decision: ApprovalDecision,
+): boolean {
+  if (!pendingItems.delete(item)) return false;
+  if (currentItem === item) {
+    currentItem = undefined;
+    CURRENT.set(undefined);
+  }
+  const advance = item.advance;
+  item.advance = undefined;
+  item.resolve(decision);
+  advance?.();
+  return true;
+}
 
 export function onApprovalsCleared(listener: () => void): () => void {
   clearListeners.add(listener);
@@ -194,13 +232,9 @@ export function enqueueApproval(
         CURRENT.set({
           payload,
           decide: (decision) => {
-            if (!pendingItems.delete(item)) return;
-            syncApprovalStatus();
-            CURRENT.set(undefined);
-            if (currentItem === item) currentItem = undefined;
-            item.advance = undefined;
-            item.resolve(decision);
-            advance();
+            // settleItem resolves item.advance (== this closure's `advance`),
+            // resuming the queue's blocked task; no separate call needed.
+            if (settleItem(item, decision)) syncApprovalStatus();
           },
         });
       });
@@ -209,13 +243,18 @@ export function enqueueApproval(
       // p-queue rejects when `queue.clear()` drops the task. Settle the
       // outer promise so the requester (e.g. ToolEditApprovalHandler)
       // doesn't hang forever.
-      if (pendingItems.delete(item)) {
-        syncApprovalStatus();
-        item.resolve(INTERRUPT);
-      }
+      if (settleItem(item, INTERRUPT)) syncApprovalStatus();
     });
 
-  return outer;
+  if (!options.timeoutMs || options.timeoutMs <= 0) return outer;
+
+  return pTimeout(outer, {
+    milliseconds: options.timeoutMs,
+    fallback: () => {
+      if (settleItem(item, TIMEOUT_DECISION)) syncApprovalStatus();
+      return TIMEOUT_DECISION;
+    },
+  });
 }
 
 /**
@@ -247,25 +286,37 @@ export function clearApprovals(): void {
   }
 }
 
-export function clearRetryApprovalsForStream(streamId: string): void {
+/** Settle every queued item matching `predicate` with `INTERRUPT`. */
+function clearMatchingApprovals(
+  predicate: (item: ApprovalQueueItem) => boolean,
+): void {
   let changed = false;
   for (const item of [...pendingItems]) {
-    if (
-      item.payload.kind !== 'retry' ||
-      item.payload.payload.streamId !== streamId
-    ) {
-      continue;
-    }
-    if (!pendingItems.delete(item)) continue;
-    changed = true;
-    const advance = item.advance;
-    item.advance = undefined;
-    item.resolve(INTERRUPT);
-    if (currentItem === item) {
-      currentItem = undefined;
-      CURRENT.set(undefined);
-      advance?.();
-    }
+    if (!predicate(item)) continue;
+    if (settleItem(item, INTERRUPT)) changed = true;
   }
   if (changed) syncApprovalStatus();
+}
+
+export function clearRetryApprovalsForStream(streamId: string): void {
+  clearMatchingApprovals(
+    (item) =>
+      item.payload.kind === 'retry' &&
+      item.payload.payload.streamId === streamId,
+  );
+}
+
+/**
+ * Settle every queued approval/question for a stream, of any kind — bash,
+ * tool-edit, plan, proposal, retry, user-question, and external-inquiry
+ * alike. Used by `HostInteractions.cancelForStream` so a per-stream
+ * interrupt/cleanup can settle whatever happens to be pending on that stream
+ * instead of leaving it stuck forever — this is the fallback
+ * `PlanApprovalCoordinator`/`AgentProposalCoordinator`/`RetryRequestCoordinator`
+ * reach for when `interactions.resolve()` doesn't find a matching request.
+ */
+export function clearApprovalsForStream(streamId: string): void {
+  clearMatchingApprovals(
+    (item) => approvalPayloadStreamId(item.payload) === streamId,
+  );
 }

@@ -10,6 +10,7 @@ import {
   approvalPayloadStreamId,
   approvalQueueStatus,
   clearApprovals,
+  clearApprovalsForStream,
   currentApproval,
   enqueueApproval,
   type ApprovalPayload,
@@ -220,5 +221,63 @@ describe('CLI approval queue', () => {
         payload: { streamId: '' },
       } as ApprovalPayload),
     ).toBeUndefined();
+  });
+
+  // Regression coverage for #7306: `cancelForStream` previously only cancelled
+  // retry routes, leaving bash/tool-edit/plan/proposal/user-question requests
+  // permanently pending on a stream-scoped interrupt.
+  it('clears every pending kind for a stream via clearApprovalsForStream, leaving other streams alone', async () => {
+    const planPayload = {
+      kind: 'plan',
+      payload: { approvalId: 'approval-1', streamId: 'stream-a' },
+    } as ApprovalPayload;
+    const staleForStreamA = bashPayload('stream-a');
+    const untouched = bashPayload('stream-b');
+
+    const planResult = enqueueApproval(planPayload);
+    const staleResult = enqueueApproval(staleForStreamA);
+    const untouchedResult = enqueueApproval(untouched);
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(planPayload);
+    });
+
+    clearApprovalsForStream('stream-a');
+
+    const interrupted = {
+      accepted: false,
+      userMessage: 'Session interrupted.',
+    };
+    await expect(planResult).resolves.toEqual(interrupted);
+    await expect(staleResult).resolves.toEqual(interrupted);
+
+    // stream-b was never touched and now becomes the foreground modal.
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(untouched);
+    });
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(untouchedResult).resolves.toEqual({ accepted: true });
+  });
+
+  // Regression coverage for #7307: `HostInteractionOptions.timeoutMs` was
+  // silently dropped, so a bounded wait never actually timed out under the
+  // CLI TUI.
+  it('settles with a distinct timeout decision when timeoutMs elapses before a decision', async () => {
+    const payload = bashPayload('timeout-stream');
+    const result = enqueueApproval(payload, { timeoutMs: 15 });
+
+    await expect(result).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Approval request timed out.',
+      timedOut: true,
+    });
+    expect(currentApproval.get()).toBeUndefined();
+    expect(approvalQueueStatus.get()).toEqual({ depth: 0, kind: 'approval' });
+
+    // A late decide() call on the now-settled item must not throw or
+    // double-resolve the caller's promise.
+    expect(() =>
+      currentApproval.get()?.decide({ accepted: true }),
+    ).not.toThrow();
   });
 });
