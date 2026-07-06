@@ -3,12 +3,15 @@ import type { MessageHandlerContext } from '@progressView/frontend/messageHandle
 import {
   executionStatusToRunOutcome,
   STREAM_STATUS,
+  STREAM_LOG_ENTRY_TYPES,
+  StreamStatusSchema,
   streamStatusToLifecycleStatus,
   type StreamLifecycleStatus,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
 import type { TraceDocument } from '@transcript';
+import { isObject } from '@utils/core';
 
 type UpdateStreamsMessage = Extract<
   ProgressViewOutboundMessage,
@@ -31,17 +34,22 @@ type SyncStreamContentMessage = Extract<
  * `StreamPhase`'s values, so it's already a valid `StreamLifecycleStatus`.
  *
  * `terminalStatus` is `null` for traces that predate outcome tracking (or
- * never reached a terminal state) — for those legacy traces, fall back to
- * deriving status from the snapshot's own recorded `status` instead of
- * unconditionally reporting `READY`, so an archived failed/stopped run
- * doesn't render as if it finished cleanly. Only when the snapshot itself
- * has no recorded status either does this default to `READY`, same as an
- * unqualified successful finish.
+ * never reached a terminal state). For those legacy traces, derive status from
+ * the persisted transcript's last terminal group row before falling back to the
+ * older snapshot-status escape hatch. Only when neither source records a
+ * terminal status does this default to `READY`, same as an unqualified
+ * successful finish.
  */
 function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
   if (trace.terminalStatus !== null) {
     const outcome = executionStatusToRunOutcome(trace.terminalStatus);
     if (outcome) return outcome;
+  }
+  for (const entry of trace.entries.toReversed()) {
+    if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) continue;
+    if (!isObject(entry.data)) continue;
+    const status = StreamStatusSchema.safeParse(entry.data.status);
+    if (status.success) return streamStatusToLifecycleStatus(status.data);
   }
   return trace.snapshot.status
     ? streamStatusToLifecycleStatus(trace.snapshot.status)
