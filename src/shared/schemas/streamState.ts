@@ -40,16 +40,42 @@ const ActiveChildInfoBaseSchema = z.object({
   toolName: z.string().optional(),
 });
 
-export const ActiveChildInfoSchema = z.discriminatedUnion('kind', [
-  ActiveChildInfoBaseSchema.extend({
-    kind: z.literal('subagent'),
-    /** Stream tab ID — subagents own their own tab. */
-    childStreamId: z.string(),
-  }),
-  ActiveChildInfoBaseSchema.extend({
-    kind: z.literal('process'),
-  }),
-]);
+/**
+ * Persisted/replayed ActiveChildInfo entries predate the `kind` discriminant,
+ * when subagent vs. process was inferred from array membership
+ * (`activeSubagents` vs. `activeProcesses`) or from whether `childStreamId`
+ * happened to be set. `childStreamId` was — and still is — exclusive to
+ * subagents, so backfill `kind` from that same signal on read, matching the
+ * legacy inference, instead of failing to parse.
+ */
+function fillLegacyActiveChildKind(raw: unknown): unknown {
+  if (
+    typeof raw !== 'object' ||
+    raw === null ||
+    (raw as { kind?: unknown }).kind !== undefined
+  ) {
+    return raw;
+  }
+  const data = raw as Record<string, unknown>;
+  return {
+    ...data,
+    kind: typeof data.childStreamId === 'string' ? 'subagent' : 'process',
+  };
+}
+
+export const ActiveChildInfoSchema = z.preprocess(
+  fillLegacyActiveChildKind,
+  z.discriminatedUnion('kind', [
+    ActiveChildInfoBaseSchema.extend({
+      kind: z.literal('subagent'),
+      /** Stream tab ID — subagents own their own tab. */
+      childStreamId: z.string(),
+    }),
+    ActiveChildInfoBaseSchema.extend({
+      kind: z.literal('process'),
+    }),
+  ]),
+);
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 export type SubagentChildInfo = Extract<ActiveChildInfo, { kind: 'subagent' }>;
