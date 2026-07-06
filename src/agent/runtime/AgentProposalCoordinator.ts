@@ -53,6 +53,12 @@ export class AgentProposalCoordinator extends BasePromiseCoordinator<
     this.runtimeHost.emit('requestEnsureProgressView', {});
     this.runtimeHost.emit('setActiveStream', { streamId });
 
+    const interaction = this.runtimeHost.interactions?.requestAgentProposal?.(
+      { proposalId, streamId, ...proposal },
+      { timeoutMs },
+    );
+    if (interaction) return interaction;
+
     return this.waitForUserAction(
       proposalId,
       { proposalId, streamId, ...proposal },

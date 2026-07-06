@@ -71,6 +71,12 @@ export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
       data: errorMessage ?? 'unknown error',
     });
 
+    const interaction = this.runtimeHost.interactions?.requestRetry?.(
+      { streamId, operation, model, errorMessage, errorDetails },
+      { timeoutMs },
+    );
+    if (interaction) return interaction;
+
     return this.waitForUserAction(
       streamId,
       { streamId, operation, model, errorMessage, errorDetails },
