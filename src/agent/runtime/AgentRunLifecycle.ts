@@ -336,17 +336,33 @@ export async function runFlowWithLifecycle(
     // Abort still carries the SDK message for event consumers; the toast mapper
     // intentionally suppresses user-facing notifications for aborts.
     if (!resultEmitted) {
+      const message = kind === 'unexpected' ? errorMsg : sdkMsg;
+      // `abort`/`disk-full` route through `formatProviderHttpError`'s
+      // `terminalError()` branch, which never populates the provider/relay/
+      // credential fields — narrow to the fields it actually sets so
+      // `ResultEvent.error`'s per-kind union stays honest (see events.ts).
+      const error: NonNullable<ResultEvent['error']> =
+        kind === 'abort' || kind === 'disk-full'
+          ? {
+              kind,
+              message,
+              userRetryable: providerErrorInfo.userRetryable,
+              isRelayError: providerErrorInfo.isRelayError,
+              streamDiagnostics: providerErrorInfo.streamDiagnostics,
+              partialText: providerErrorInfo.partialText,
+            }
+          : {
+              kind,
+              message,
+              ...providerErrorInfo,
+            };
       handle.settleResult(
         emitRunResult(
           ctx,
           category,
           toResultOutcome(outcome),
           options?.isSubagent ?? false,
-          {
-            kind,
-            message: kind === 'unexpected' ? errorMsg : sdkMsg,
-            ...providerErrorInfo,
-          },
+          error,
         ),
       );
     }

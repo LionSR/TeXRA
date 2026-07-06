@@ -37,6 +37,69 @@ function normalizeProviderErrorRetryFlag(value: unknown): unknown {
   };
 }
 
+/** Reason a credential/quota is exhausted, requiring the user to switch
+ *  credentials before any retry can succeed. The three reasons are mutually
+ *  exclusive — a single error is classified as exactly one — which is why
+ *  this is a discriminant rather than independent booleans (see
+ *  `isCredentialExhausted` below for the pre-refactor combined check). */
+export const ExhaustionReasonSchema = z.enum([
+  /** Relay monthly spending limit reached; the stored personal key is fine. */
+  'relay-limit',
+  /** The upstream provider account itself is out of credit/quota — the key
+   *  the user has IS the broken one, so a new key is required. */
+  'upstream-credit',
+  /** A ChatGPT-subscription (Codex) request was rejected because the plan's
+   *  usage quota is exhausted; accepting the switch disables the "prefer
+   *  ChatGPT subscription" preference rather than disabling relay. */
+  'chatgpt-subscription',
+]);
+export type ExhaustionReason = z.infer<typeof ExhaustionReasonSchema>;
+
+/** Migrates the pre-refactor independent `isCredentialExhausted` /
+ *  `isUpstreamCreditDepleted` / `isChatGptSubscriptionLimited` booleans (still
+ *  present in error data persisted to disk by older TeXRA versions — stream
+ *  logs are unversioned JSON reparsed on later loads) into `exhaustionReason`.
+ *  Priority mirrors the original derivation order in `formatProviderHttpError`:
+ *  ChatGPT-subscription and upstream-credit were independently detected and
+ *  OR'd into `isCredentialExhausted` alongside the relay-limit condition, so a
+ *  legacy record with only `isCredentialExhausted: true` set reconstructs as
+ *  `'relay-limit'`. */
+function normalizeLegacyExhaustionFlags(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return value;
+  }
+  const data = value as Record<string, unknown>;
+  if ('exhaustionReason' in data) {
+    return value;
+  }
+  const hasLegacyFlags =
+    'isCredentialExhausted' in data ||
+    'isUpstreamCreditDepleted' in data ||
+    'isChatGptSubscriptionLimited' in data;
+  if (!hasLegacyFlags) {
+    return value;
+  }
+  const {
+    isCredentialExhausted,
+    isUpstreamCreditDepleted,
+    isChatGptSubscriptionLimited,
+    ...rest
+  } = data;
+  const exhaustionReason: ExhaustionReason | undefined =
+    isChatGptSubscriptionLimited === true
+      ? 'chatgpt-subscription'
+      : isUpstreamCreditDepleted === true
+        ? 'upstream-credit'
+        : isCredentialExhausted === true
+          ? 'relay-limit'
+          : undefined;
+  return exhaustionReason === undefined ? rest : { ...rest, exhaustionReason };
+}
+
+function normalizeLegacyProviderErrorFields(value: unknown): unknown {
+  return normalizeLegacyExhaustionFlags(normalizeProviderErrorRetryFlag(value));
+}
+
 /** Core error details from a provider/SDK */
 const ProviderErrorObjectSchema = z.object({
   message: z.string(),
@@ -51,26 +114,17 @@ const ProviderErrorObjectSchema = z.object({
    *  before any retry makes sense). */
   userRetryable: z.boolean(),
   /** True when the error is known to come from the relay. Omitted when the
-   *  retry-state path cannot determine the relay verdict. */
+   *  retry-state path cannot determine the relay verdict. Independent of
+   *  `exhaustionReason` — a relay error can be a transient 5xx with no
+   *  exhaustion, and an exhaustion can be direct-to-provider (upstream credit
+   *  depletion) with no relay involved. */
   isRelayError: z.boolean().optional(),
-  /** True when the credential (relay monthly limit OR upstream provider
-   *  account) has been exhausted. Auto-retry is skipped for these errors
-   *  and the retry panel offers a "Use your own API key" button. */
-  isCredentialExhausted: z.boolean().optional(),
-  /** True when the upstream provider account itself is out of credit
-   *  (Anthropic 400 "credit balance is too low"). Distinguishes the
-   *  "the key I have IS the broken one" case from relay monthly limit,
-   *  where the stored personal key is fine. The auto-resume handler
-   *  uses this to require a new key rather than reusing the depleted
-   *  stored credential. */
-  isUpstreamCreditDepleted: z.boolean().optional(),
-  /** True when a ChatGPT-subscription (Codex) request was rejected because the
-   *  plan's usage quota is exhausted. Like the relay monthly limit it is a
-   *  credential exhaustion (auto-retry suppressed, "Use your own API key"
-   *  offered), but accepting that switch disables the "prefer ChatGPT
-   *  subscription" preference and retries through the OpenAI API key rather
-   *  than disabling relay. */
-  isChatGptSubscriptionLimited: z.boolean().optional(),
+  /** Reason the credential/quota is exhausted (relay monthly limit, upstream
+   *  provider credit depletion, or ChatGPT-subscription usage limit). Auto-
+   *  retry is skipped and the retry panel offers a "Use your own API key"
+   *  button for any of these. Use the `isCredentialExhausted` helper below
+   *  for the pre-refactor combined boolean check. */
+  exhaustionReason: ExhaustionReasonSchema.optional(),
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
@@ -82,7 +136,7 @@ const ProviderErrorObjectSchema = z.object({
   partialText: z.string().optional(),
 });
 const ProviderErrorSchema = z.preprocess(
-  normalizeProviderErrorRetryFlag,
+  normalizeLegacyProviderErrorFields,
   ProviderErrorObjectSchema,
 );
 export type ProviderError = z.infer<typeof ProviderErrorSchema>;
@@ -96,7 +150,7 @@ export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 
 /** Complete error log data - combines provider error with context */
 export const ErrorLogDataSchema = z.preprocess(
-  normalizeProviderErrorRetryFlag,
+  normalizeLegacyProviderErrorFields,
   ProviderErrorObjectSchema.extend(ErrorContextSchema.shape).extend({
     rawMessage: z.string().optional(),
   }),
@@ -105,7 +159,7 @@ export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
 
 /** Provider error with all fields optional for event transport */
 export const ProviderErrorPartialSchema = z.preprocess(
-  normalizeProviderErrorRetryFlag,
+  normalizeLegacyProviderErrorFields,
   ProviderErrorObjectSchema.partial(),
 );
 export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
@@ -114,13 +168,34 @@ export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
  *  usage-limit rejection". Both hosts (VS Code progress view, CLI approval
  *  policy) branch on this to switch the retry from the relay/personal-key path
  *  to disabling the subscription preference. Accepts any error shape carrying
- *  the flag (full `ProviderError`, `ProviderErrorPartial`, or `RetryErrorInfo`)
+ *  the field (full `ProviderError`, `ProviderErrorPartial`, or `RetryErrorInfo`)
  *  so the predicate stays the one place that owns the verdict. */
 export function isChatGptSubscriptionLimitError(
-  errorDetails:
-    Pick<ProviderError, 'isChatGptSubscriptionLimited'> | undefined | null,
+  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
 ): boolean {
-  return errorDetails?.isChatGptSubscriptionLimited === true;
+  return errorDetails?.exhaustionReason === 'chatgpt-subscription';
+}
+
+/** Single source of truth for "the upstream provider account itself is out of
+ *  credit/quota" — the key the user has IS the broken one, so the auto-resume
+ *  handler must require a new key rather than reusing the depleted stored
+ *  credential (unlike relay-limit exhaustion, where the stored personal key
+ *  is fine). */
+export function isUpstreamCreditDepletedError(
+  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
+): boolean {
+  return errorDetails?.exhaustionReason === 'upstream-credit';
+}
+
+/** Single source of truth for "auto-retry should be skipped because the
+ *  credential/quota is exhausted" — the combined check the pre-refactor
+ *  `isCredentialExhausted` boolean used to store directly. Kept as a derived
+ *  predicate (not a stored field) so the three exhaustion reasons can't drift
+ *  out of sync with it. */
+export function isCredentialExhausted(
+  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
+): boolean {
+  return errorDetails?.exhaustionReason !== undefined;
 }
 
 /**
@@ -135,7 +210,7 @@ export function isChatGptSubscriptionLimitError(
  * error fields are added.
  */
 export const RetryErrorInfoSchema = z.preprocess(
-  normalizeProviderErrorRetryFlag,
+  normalizeLegacyProviderErrorFields,
   ProviderErrorObjectSchema.omit({ rawErrorBody: true }),
 );
 export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
