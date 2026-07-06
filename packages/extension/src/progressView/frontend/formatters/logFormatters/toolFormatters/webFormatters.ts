@@ -17,10 +17,10 @@ import {
   buildDetailsSummary,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
-import type {
-  WebSearchPayload,
-  WebFetchPayload,
-  LogMessageData,
+import {
+  WebSearchPayloadSchema,
+  WebFetchPayloadSchema,
+  type LogMessageData,
 } from '@shared/schemas';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
@@ -66,7 +66,11 @@ export function formatWebSearchTemplate(
   const { data } = message;
   if (!data || typeof data !== 'object') return null;
 
-  const { query, results, provider, status } = data as WebSearchPayload;
+  // Parsed (not merely cast) so `WebSearchResultItemSchema` actually
+  // sanitizes each result's `url` — a `javascript:`/`data:` scheme from a
+  // web_search tool result must never reach the `<a href>` below.
+  const { query, results, provider, status } =
+    WebSearchPayloadSchema.parse(data);
   const resultCount = Array.isArray(results) ? results.length : 0;
   const providerKey = typeof provider === 'string' ? provider : 'web';
   const statusKey = typeof status === 'string' ? status : '';
@@ -83,9 +87,13 @@ export function formatWebSearchTemplate(
   const sections: TemplateResult[] = [];
 
   if (resultCount > 0) {
+    // `r.url` is already schema-sanitized (`WebSearchResultItemSchema`) to
+    // either a safe URL or `undefined` — never render an `<a>` without a
+    // real href (an empty/missing href is not itself dangerous, but a
+    // result with no safe URL should read as inert text, not a dead link).
     // prettier-ignore
     const resultItems = (results ?? []).map(
-      (r) => html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="link" aria-hidden="true"></wa-icon> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
+      (r) => html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="link" aria-hidden="true"></wa-icon> ${r.url ? html`<a href=${r.url} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>` : html`<span class="web-search-link">${r.title ?? r.domain ?? ''}</span>`}${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
     );
     // prettier-ignore
     const resultsTemplate = html`<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems}</ul>`;
@@ -134,7 +142,10 @@ export function formatWebFetchTemplate(
   const { data } = message;
   if (!data || typeof data !== 'object') return null;
 
-  const { url, title, status, errorCode } = data as WebFetchPayload;
+  // Parsed (not merely cast) so `WebFetchPayloadSchema` actually sanitizes
+  // `url` — a `javascript:`/`data:` scheme from a web_fetch tool result must
+  // never reach the `<a href>` below.
+  const { url, title, status, errorCode } = WebFetchPayloadSchema.parse(data);
   const statusKey = typeof status === 'string' ? status : '';
   const isFailed = statusKey === 'failed';
 
