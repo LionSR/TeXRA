@@ -90,7 +90,13 @@ function buildContextManagementItems(data: ContextManagementData): {
     });
   }
 
-  // For clearing actions, show tokens freed
+  // For clearing actions, show tokens freed.
+  // The `action !== 'max_tokens_reduced'` check looks redundant next to
+  // `TOKENS_FREED_ACTIONS.has(action)` (which already excludes that action
+  // at runtime), but it is what lets TypeScript narrow `data` to the
+  // tokens-freed branch of the discriminated union below — dropping it is a
+  // compile error (`tokensAfter` doesn't exist on the max_tokens_reduced
+  // variant), so keep both checks.
   if (action !== 'max_tokens_reduced' && TOKENS_FREED_ACTIONS.has(action)) {
     const tokensFreed = data.tokensBefore - data.tokensAfter;
     if (tokensFreed > 0) {

@@ -767,4 +767,28 @@ describe('attachProviderError end-to-end', () => {
     expect(logData.operation).toBe('execute orchestrator');
     expect(normalizeProviderError(wrapper)).toBe(reconstructed);
   });
+
+  it('migrates legacy fields on a cached ProviderError instead of returning them unchanged', () => {
+    // Simulates a cached error attached before the retryable/exhaustion-flag
+    // migration ran — e.g. a resumed tool-use flow's raw persisted
+    // `lastError`, which bypasses the schema-level migration on that resume
+    // path (migrateSharedState casts the persisted shape directly).
+    const legacyCached = {
+      message: 'legacy relay-limit record',
+      retryable: true,
+      isCredentialExhausted: true,
+    } as unknown as ProviderError;
+
+    const err = new Error(legacyCached.message);
+    attachProviderError(err, legacyCached);
+
+    const recovered = normalizeProviderError(err);
+
+    expect(recovered.userRetryable).toBe(true);
+    expect(recovered.exhaustionReason).toBe('relay-limit');
+    expect('retryable' in recovered).toBe(false);
+    expect('isCredentialExhausted' in recovered).toBe(false);
+    // Downstream credential-exhaustion checks must see the migrated reason.
+    expect(recovered.exhaustionReason !== undefined).toBe(true);
+  });
 });

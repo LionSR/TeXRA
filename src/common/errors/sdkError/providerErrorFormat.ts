@@ -3,6 +3,7 @@ import {
   type ErrorLogData,
   type ExhaustionReason,
   type ProviderError,
+  normalizeLegacyProviderErrorFields,
 } from '@shared/schemas';
 import {
   extractErrorMessage,
@@ -277,10 +278,18 @@ function detectCachedProviderError(err: unknown): ProviderError | undefined {
 export function normalizeProviderError(err: unknown): ProviderError {
   const cached = detectCachedProviderError(err);
   if (cached) {
-    // Migrate an explicitly-attached ProviderError from a deeper cause onto the
-    // wrapper so later reads skip the chain walk.
-    providerErrorMetadata.attach(err, cached);
-    return cached;
+    // A cached error may have been attached before the legacy retryable/
+    // exhaustion-flag migration ran (e.g. a resumed flow's raw persisted
+    // `lastError`, which bypasses the schema-level migration on the resume
+    // path) — run the same migration fresh errors get so callers never read
+    // legacy field names off a cached value.
+    const normalized = normalizeLegacyProviderErrorFields(
+      cached,
+    ) as ProviderError;
+    // Migrate the normalized error from a deeper cause onto the wrapper so
+    // later reads skip both the chain walk and this normalization.
+    providerErrorMetadata.attach(err, normalized);
+    return normalized;
   }
 
   // Compute fresh but DO NOT cache the result: a caller may format an error for
