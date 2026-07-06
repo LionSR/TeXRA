@@ -47,7 +47,7 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
@@ -327,7 +327,7 @@ export class DesktopProgressBridge {
         void this.options.showErrorMessage?.(message);
       },
     });
-    const backendSubscription = this.backend.setupEventListeners(bus);
+    const backendSubscription = this.backend.setupEventListeners();
     this.restartRepair = this.repairOrphanedStreamsAfterRestart();
     // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
     // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
@@ -1012,7 +1012,7 @@ export class DesktopProgressBridge {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
-    bus.emit(event, payload);
+    this.backend.handleProgressEvent(event, payload);
     this.progressEvents.onProgressEvent(event, payload);
   }
 

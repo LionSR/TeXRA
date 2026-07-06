@@ -82,9 +82,8 @@ export interface DesktopProgressEventBridge {
    * Handle a progress event emitted through the runtime host.
    *
    * Applies the desktop-specific rail update (persist snapshot, remove ghost,
-   * route-to-progress). Ordinary runtime-host events are also published to the
-   * process bus by the owning bridge; session-projected facts call this through
-   * a window-local path instead.
+   * route-to-progress, show root errors) for events delivered through the
+   * owning window's runtime host or session projection path.
    */
   onProgressEvent<K extends keyof ProgressEventPayloads>(
     event: K,
@@ -259,6 +258,14 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
           status: goal?.status,
           objective: goal?.objective,
         });
+        return;
+      }
+      case 'requestEnsureProgressView':
+        this.opts.routeToProgress();
+        return;
+      case 'requestShowError': {
+        const data = payload as ProgressEventPayloads['requestShowError'];
+        this.opts.onShowError(data.message);
         return;
       }
       default:

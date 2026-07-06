@@ -517,6 +517,34 @@ describe('DesktopProgressEventBridge', () => {
         bridge.dispose();
       }
     });
+
+    it('routes window-local ensure-progress requests from runtime-host events', () => {
+      const routeToProgress = vi.fn();
+      const bridge = createBridge({ routeToProgress });
+
+      try {
+        bridge.onProgressEvent('requestEnsureProgressView', {});
+
+        expect(routeToProgress).toHaveBeenCalledTimes(1);
+      } finally {
+        bridge.dispose();
+      }
+    });
+
+    it('routes window-local error requests from runtime-host events', () => {
+      const onShowError = vi.fn();
+      const bridge = createBridge({ onShowError });
+
+      try {
+        bridge.onProgressEvent('requestShowError', {
+          message: 'Root run failed',
+        });
+
+        expect(onShowError).toHaveBeenCalledWith('Root run failed');
+      } finally {
+        bridge.dispose();
+      }
+    });
   });
 
   // ── Process-bus events ──────────────────────────────────────────────────
