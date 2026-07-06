@@ -42,7 +42,7 @@ import {
   GitHubRateLimitError,
 } from './githubClient';
 import {
-  annotationFetchBudget,
+  SharedAnnotationFetchBudget,
   AnnotationFetchBudgetExhaustedError,
 } from './annotationFetchBudget';
 import {
@@ -243,7 +243,7 @@ export class PRPollingSource extends PollingSourceBase<
     remainingFetches?: number,
     nowMs?: number,
   ): void {
-    annotationFetchBudget.resetForTests(remainingFetches, nowMs);
+    SharedAnnotationFetchBudget.resetForTests(remainingFetches, nowMs);
   }
 
   subscribe(
@@ -878,11 +878,11 @@ export class PRPollingSource extends PollingSourceBase<
       repo,
       checkRunId,
       this.logger,
-      annotationFetchBudget,
+      SharedAnnotationFetchBudget,
       now,
     );
   }
 }
 
 /** Process-wide singleton. */
-export const prPollingSource = new PRPollingSource();
+export const SharedPRPollingSource = new PRPollingSource();

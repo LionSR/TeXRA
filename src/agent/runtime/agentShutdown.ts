@@ -4,7 +4,7 @@ import {
 } from '@platform/interfaces/lifecycle';
 import {
   claudeAgentSessions,
-  codexThreads,
+  CodexThreads,
 } from '@tools/agentCliSessionStores';
 
 import { executionRegistry } from './executionRegistry';
@@ -21,7 +21,7 @@ export function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   // Interrupt CLI-backed sessions so their streams don't reload in a stale
   // WAITING state.
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    codexThreads.interruptAll(),
+    CodexThreads.interruptAll(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     claudeAgentSessions.interruptAll(),

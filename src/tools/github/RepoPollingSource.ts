@@ -546,4 +546,4 @@ function parsePRNumberFromReviewCommentUrl(url: string): number | undefined {
 }
 
 /** Process-wide singleton. */
-export const repoPollingSource = new RepoPollingSource();
+export const SharedRepoPollingSource = new RepoPollingSource();

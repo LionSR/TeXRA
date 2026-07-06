@@ -49,7 +49,7 @@ import { unsupportedCommands } from '@shared/utils/dispatcher';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import {
   createExternalLocation,
-  flexibleFS,
+  FlexibleFS,
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
@@ -551,7 +551,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             )) ?? false
           );
         },
-        readFile: (file) => flexibleFS.read(createExternalLocation(file)),
+        readFile: (file) => FlexibleFS.read(createExternalLocation(file)),
         showInfo: async (message) => {
           await this.host.info(message);
         },

@@ -8,7 +8,7 @@ import {
   type RoundOutput,
 } from '@shared/schemas';
 import { normalizeFilePath } from '@shared/utils/path';
-import { flexibleFS, replaceInputCommands } from '@utils/files';
+import { FlexibleFS, replaceInputCommands } from '@utils/files';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,
@@ -142,7 +142,7 @@ export class OutputFileProcessor {
     // it almost always means it did not wrap each file in
     // `<documentTag name="…">`. Surface that as a warning so the round is not a
     // silent "success" that writes no files; the raw response is kept for recovery.
-    const rawText = await flexibleFS.read(outputLocation).catch(() => '');
+    const rawText = await FlexibleFS.read(outputLocation).catch(() => '');
     if (rawText.trim().length > 0) {
       this.ctx.logger.warn(
         `The model returned output but no files could be extracted from it — it likely did not wrap each document in <${this.ctx.agentSetting.documentTag}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
@@ -197,7 +197,7 @@ export class OutputFileProcessor {
 
     await tryOperation(
       async () => {
-        const rawContent = await flexibleFS.read(rawOutput);
+        const rawContent = await FlexibleFS.read(rawOutput);
         const tagContents: Record<string, string[]> = {};
         const documents: string[] = [];
         const documentTag = this.ctx.agentSetting.documentTag;

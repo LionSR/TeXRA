@@ -23,7 +23,7 @@ import { K_SLICE } from '@agent/core/constants';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
-import { AbsoluteFS, flexibleFS } from '@utils/files';
+import { AbsoluteFS, FlexibleFS } from '@utils/files';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extractScratchpad } from '@utils/text/xmlUtils';
@@ -111,7 +111,7 @@ class ResponsePrepNode<C> extends BaseNode<
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
     const { prompt, userVarChannels, checkInterruption } = this.services;
     const interrupted = checkInterruption();
-    const exists = await flexibleFS.exists(shared.outputLocation!);
+    const exists = await FlexibleFS.exists(shared.outputLocation!);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(prompt.systemPrompt, {
@@ -393,7 +393,7 @@ class ResponseProcessNode<C> extends BaseNode<
       logger.debug(
         `Appending to existing file: ${outputLocation.absolutePath}`,
       );
-      await flexibleFS.appendFile(
+      await FlexibleFS.appendFile(
         outputLocation,
         connector + result.processedResponse,
       );
