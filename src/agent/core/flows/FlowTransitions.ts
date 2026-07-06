@@ -3,6 +3,7 @@ export const FlowTransition = {
   COMPLETE: 'complete',
   CONTINUE: 'continue',
   FINALIZE: 'finalize',
+  WAITING: 'waiting',
 } as const;
 
 export type FlowTransition =

@@ -4,6 +4,7 @@ import { AttachedMemoryMissSchema } from '@agent/types/AttachedMemory';
 import {
   ExecutionIdSchema,
   RunOutcomeSchema,
+  STREAM_PHASE,
   StreamTabIdSchema,
   type ExecutionId,
   type RunOutcome,
@@ -51,6 +52,32 @@ export const AgentFlowResultSchema = z.discriminatedUnion('category', [
 ]);
 
 export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
+
+export const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
+  category: z.literal('toolUse'),
+  outcome: z.literal(STREAM_PHASE.WAITING),
+  lastResponse: z.string().optional(),
+  /** Workspace-relative paths of files edited by tool calls during this session. */
+  touchedFiles: z.array(z.string()).optional(),
+});
+
+export type WaitingToolUseFlowResult = z.infer<
+  typeof WaitingToolUseFlowResultSchema
+>;
+
+/** Runtime flow results include the non-terminal WAITING state. */
+export type AgentRuntimeFlowResult = AgentFlowResult | WaitingToolUseFlowResult;
+
+export function isWaitingFlowResult(
+  result: AgentRuntimeFlowResult | unknown,
+): result is WaitingToolUseFlowResult {
+  if (!result || typeof result !== 'object') return false;
+  const candidate = result as { category?: unknown; outcome?: unknown };
+  return (
+    candidate.category === 'toolUse' &&
+    candidate.outcome === STREAM_PHASE.WAITING
+  );
+}
 
 export class AgentFlowError extends Error {
   constructor(
