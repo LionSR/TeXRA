@@ -493,10 +493,7 @@ export class CodexTool extends defineTool({
         }
         // Fall through when the thread's in-memory loop is gone (extension
         // reload, crash): createCodexThread resumes via the SDK from disk.
-        const { streamId, runtimeHost } = requireRunStream(
-          'codex',
-          runContext,
-        );
+        const { streamId, runtimeHost } = requireRunStream('codex', runContext);
         return launchCodexSession(
           input,
           streamId,

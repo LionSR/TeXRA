@@ -38,7 +38,8 @@ vi.mock('@cli/runtime/approvalAdapter', () => {
   interface RetryPayloadForMock {
     errorMessage?: string;
     errorDetails?: {
-      exhaustionReason?: 'relay-limit' | 'upstream-credit' | 'chatgpt-subscription';
+      exhaustionReason?:
+        'relay-limit' | 'upstream-credit' | 'chatgpt-subscription';
       isRelayError?: boolean;
     };
   }
