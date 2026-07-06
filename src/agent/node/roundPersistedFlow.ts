@@ -73,6 +73,17 @@ export interface RoundCallbacks<S extends RoundAwareState> {
 
   /** Reset workspace state for a new round. */
   resetForNextRound?: (shared: S) => void;
+
+  /**
+   * Called only when the round loop would otherwise stop because
+   * `currentRound + 1 >= totalRounds`. Return true to run exactly one more
+   * round beyond the configured total (e.g. a compile-repair round). The
+   * callback owns recording that the extra round was granted (a persisted
+   * boolean on shared state) so it isn't asked again once it has said yes
+   * — this is what keeps the extra round bounded to exactly one per run,
+   * including across resume.
+   */
+  grantExtraRound?: (shared: S) => boolean;
 }
 
 // ============================================================================
@@ -186,12 +197,17 @@ export class RoundPersistedFlow<
    * This is the SINGLE SOURCE OF TRUTH for the continue/finalize decision.
    */
   private shouldContinueNextRound(shared: S): boolean {
-    return (
-      !shared.lastError &&
-      !this.callbacks.checkInterruption?.() &&
-      shared.continueRounds &&
-      shared.currentRound + 1 < shared.totalRounds
-    );
+    if (
+      shared.lastError ||
+      this.callbacks.checkInterruption?.() ||
+      !shared.continueRounds
+    ) {
+      return false;
+    }
+    if (shared.currentRound + 1 < shared.totalRounds) return true;
+    // Otherwise this would be the last round. Give the caller one chance to
+    // grant a bounded extra round (e.g. a compile-repair round) instead.
+    return this.callbacks.grantExtraRound?.(shared) ?? false;
   }
 
   /** Derive the canonical RunOutcome from shared state after the round loop exits. */
