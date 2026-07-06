@@ -14,8 +14,9 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
-  annotateStreamFailure,
+  consumeStreamChunks,
   detectStatusCode,
+  handleStreamingFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -244,13 +245,15 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         // starts fire (if ever) at the first reasoning/content delta.
         thinking = this.createThinkingStream();
         output = this.createOutputStream();
+        const thinkingStream = thinking;
+        const outputStream = output;
 
-        for await (const chunk of stream) {
+        await consumeStreamChunks(stream, (chunk) => {
           const { contentDelta, reasoningDelta } =
             aggregator.consumeChunk(chunk);
-          if (reasoningDelta) thinking.append(reasoningDelta);
-          if (contentDelta) output.append(contentDelta);
-        }
+          if (reasoningDelta) thinkingStream.append(reasoningDelta);
+          if (contentDelta) outputStream.append(contentDelta);
+        });
 
         const response = aggregator.buildResponse();
         const finalReasoning = this.processThinkingBlock(response);
@@ -267,24 +270,21 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         }
         return { response, updatedMessages };
       } catch (err) {
-        // Ensure progress streams are finalized on error to prevent
-        // the progress view from being stuck in a loading state. No explicit
-        // final text so any chunks already streamed are preserved (passing `''`
-        // would overwrite the visible partial output).
-        thinking?.finalize(undefined);
-        output?.finalize();
-        // Lift the accumulated partial text onto the error so the retry UI
-        // can show the tail (parity with the other streaming providers).
-        const partialTail = takeTail(
-          aggregator.partialContent,
-          PARTIAL_TEXT_TAIL_MAX,
-        );
-        annotateStreamFailure(
-          err,
-          partialTail,
-          streamConnected || partialTail.length > 0,
-        );
-        throw err;
+        return handleStreamingFailure(err, {
+          // Ensure progress streams are finalized on error to prevent the
+          // progress view from being stuck in a loading state. No explicit
+          // final text so any chunks already streamed are preserved (passing
+          // `''` would overwrite the visible partial output).
+          finalizeOnError: () => {
+            thinking?.finalize(undefined);
+            output?.finalize();
+          },
+          // Lift the accumulated partial text onto the error so the retry UI
+          // can show the tail (parity with the other streaming providers).
+          partialTail: () =>
+            takeTail(aggregator.partialContent, PARTIAL_TEXT_TAIL_MAX),
+          retryEligible: (tail) => streamConnected || tail.length > 0,
+        });
       }
     }
 

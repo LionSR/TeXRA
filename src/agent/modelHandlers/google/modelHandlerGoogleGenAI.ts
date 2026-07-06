@@ -26,7 +26,8 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   getSdkErrorMessage,
-  annotateStreamFailure,
+  consumeStreamChunks,
+  handleStreamingFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -362,13 +363,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         // the first thought/text part — the phase signal for this API.
         thinking = this.createThinkingStream();
         output = this.createOutputStream();
+        const thinkingStream = thinking;
+        const outputStream = output;
 
         let baseResponse: GenerateContentResponse | undefined;
         let latestCandidate: Candidate | undefined;
         const aggregatedParts: Part[] = [];
         let usageFromChunks: GenerateContentResponseUsageMetadata | undefined;
 
-        for await (const chunk of stream) {
+        await consumeStreamChunks(stream, (chunk) => {
           baseResponse ??= chunk;
           const candidate = chunk.candidates?.[0];
           if (candidate) {
@@ -377,7 +380,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             aggregatedParts.push(...parts);
             for (const part of parts) {
               if (part.thought && isTextPart(part)) {
-                thinking.append(part.text);
+                thinkingStream.append(part.text);
               }
             }
           }
@@ -387,7 +390,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             : '';
           if (chunkText) {
             aggregatedText += chunkText;
-            output.append(chunkText);
+            outputStream.append(chunkText);
           }
 
           if (chunk.usageMetadata) {
@@ -411,7 +414,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
               baseResponse.responseId = chunk.responseId;
             }
           }
-        }
+        });
 
         if (!baseResponse) {
           throw new Error('Stream produced no response');
@@ -469,61 +472,70 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const response = await chat.sendMessage(sendParams);
       return { response };
     } catch (error) {
-      // Finalize the progress streams on error so the view does not hang in a
-      // loading state. Undefined on the non-streaming path; `finalize` is
-      // idempotent so a re-finalize after the success path is a no-op. No
-      // explicit final text so any chunks already streamed are preserved
-      // (passing `''` would overwrite the visible partial output).
-      thinking?.finalize(undefined);
-      output?.finalize();
-      // Error logging follows "log at the boundary" principle - Node's retryPrompt
-      // or execFallback will log the error once. We only add debug diagnostics here
-      // for specific error types that need additional context.
-      if (
-        error instanceof Error &&
-        error.message?.includes('request.contents[0].parts')
-      ) {
-        this.logger.debug(
-          'Potential issue with sendMessage parameter structure. Check conversion.',
-        );
-      }
-      if (error instanceof Error && error.message?.includes('SAFETY')) {
-        // SDK errors may include response metadata at runtime
-        const errorWithResponse = error as Error & {
-          response?: { promptFeedback?: unknown };
-        };
-        const promptFeedback = errorWithResponse.response?.promptFeedback;
-        const blockReason =
-          promptFeedback &&
-          typeof promptFeedback === 'object' &&
-          'blockReason' in promptFeedback
-            ? String((promptFeedback as { blockReason?: unknown }).blockReason)
-            : undefined;
-        const safetyDetail =
-          blockReason ??
-          (promptFeedback === undefined
-            ? undefined
-            : JSON.stringify(promptFeedback));
-        this.logger.warn(
-          `Content blocked by safety filter${safetyDetail ? `: ${safetyDetail}` : ''}.`,
-          {
-            data: promptFeedback,
-          },
-        );
-      }
-      // If the stream produced any text before failing, attach a tail to the
-      // error so the retry UI can show progress and future continuation logic
-      // can reference it. Google's SDK has no currentMessage accessor, so we
-      // rely on the manually accumulated buffer above.
-      // Google's SDK never reaches the SDK-retry boundary here, so this catch
-      // does not opt into flow-level auto-retry (retryEligible = false); it only
-      // lifts any accumulated tail onto the error for the retry UI.
-      annotateStreamFailure(
-        error,
-        aggregatedText ? takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX) : '',
-        false,
-      );
-      throw error;
+      return handleStreamingFailure(error, {
+        // Finalize the progress streams on error so the view does not hang in
+        // a loading state. Undefined on the non-streaming path; `finalize` is
+        // idempotent so a re-finalize after the success path is a no-op. No
+        // explicit final text so any chunks already streamed are preserved
+        // (passing `''` would overwrite the visible partial output).
+        finalizeOnError: () => {
+          thinking?.finalize(undefined);
+          output?.finalize();
+        },
+        // If the stream produced any text before failing, attach a tail to
+        // the error so the retry UI can show progress and future
+        // continuation logic can reference it. Google's SDK has no
+        // currentMessage accessor, so we rely on the manually accumulated
+        // buffer above.
+        partialTail: () =>
+          aggregatedText ? takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX) : '',
+        // Google's SDK never reaches the SDK-retry boundary here, so this
+        // catch does not opt into flow-level auto-retry — always false,
+        // unlike every other provider's `connected || tail` formula. It only
+        // lifts any accumulated tail onto the error for the retry UI.
+        retryEligible: () => false,
+        decorateError: (err) => {
+          // Error logging follows "log at the boundary" principle - Node's
+          // retryPrompt or execFallback will log the error once. We only add
+          // debug diagnostics here for specific error types that need
+          // additional context.
+          if (
+            err instanceof Error &&
+            err.message?.includes('request.contents[0].parts')
+          ) {
+            this.logger.debug(
+              'Potential issue with sendMessage parameter structure. Check conversion.',
+            );
+          }
+          if (err instanceof Error && err.message?.includes('SAFETY')) {
+            // SDK errors may include response metadata at runtime
+            const errorWithResponse = err as Error & {
+              response?: { promptFeedback?: unknown };
+            };
+            const promptFeedback = errorWithResponse.response?.promptFeedback;
+            const blockReason =
+              promptFeedback &&
+              typeof promptFeedback === 'object' &&
+              'blockReason' in promptFeedback
+                ? String(
+                    (promptFeedback as { blockReason?: unknown }).blockReason,
+                  )
+                : undefined;
+            const safetyDetail =
+              blockReason ??
+              (promptFeedback === undefined
+                ? undefined
+                : JSON.stringify(promptFeedback));
+            this.logger.warn(
+              `Content blocked by safety filter${safetyDetail ? `: ${safetyDetail}` : ''}.`,
+              {
+                data: promptFeedback,
+              },
+            );
+          }
+          return err;
+        },
+      });
     }
   }
 
