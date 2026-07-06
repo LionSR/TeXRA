@@ -502,6 +502,35 @@ export const commandCatalog = [
 
 export type CommandId = (typeof commandCatalog)[number]['id'];
 
+/**
+ * A `contributes.commands` row in `packages/extension/package.json`. Field
+ * order mirrors the manifest so the codegen script writes a stable diff.
+ */
+export interface PackageCommandContribution {
+  command: string;
+  title: string;
+  shortTitle?: string;
+  category: string;
+  icon?: string;
+  enablement?: string;
+}
+
+/**
+ * The `contributes.commands` array, derived from {@link commandCatalog}. This
+ * is the single source of truth: `scripts/sync-package-contributes.mjs` writes
+ * it into `package.json`, and `CommandCatalog.vitest.ts` diff-checks it.
+ */
+export const packageCommandContributions: PackageCommandContribution[] = (
+  commandCatalog as readonly CommandCatalogEntry[]
+).map((entry) => ({
+  command: entry.id,
+  title: entry.title,
+  ...(entry.shortTitle === undefined ? {} : { shortTitle: entry.shortTitle }),
+  category: entry.category,
+  ...(entry.icon === undefined ? {} : { icon: entry.icon }),
+  ...(entry.enablement === undefined ? {} : { enablement: entry.enablement }),
+}));
+
 export const commandCatalogById = new Map<CommandId, CommandCatalogEntry>(
   commandCatalog.map((entry) => [entry.id, entry]),
 );
