@@ -259,7 +259,8 @@ export class HistoryHandlers {
       if (logTail) {
         this.ctx.logger.error(
           this.ctx.channel,
-          `LaTeX export compilation failed for ${storagePath}:\n${logTail}`,
+          `LaTeX export compilation failed for ${storagePath}`,
+          { data: { storagePath, logTail } },
         );
       }
       const doc = await vscode.workspace.openTextDocument(absolutePath);
