@@ -97,6 +97,10 @@ class BaseNode<
     }
     return next;
   }
+  /** Successor table used by persisted flows to build graph-local replay cursors. */
+  successorEntries(): readonly [Action, BaseNode][] {
+    return [...this._successors.entries()];
+  }
   clone(): this {
     const clonedNode = Object.create(Object.getPrototypeOf(this));
     Object.assign(clonedNode, this);
