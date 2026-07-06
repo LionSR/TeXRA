@@ -55,7 +55,6 @@ vi.mock('@cli/runtime/approvalAdapter', () => {
       mode: string;
     }) => context.approvalPolicy === 'ask' && context.mode === 'interactive',
     humanInputDenialFeedback: () => 'Denied by CLI approval policy.',
-    handleCliAgentProposalDecision: vi.fn(async () => true),
     immediateDecision: (context: { approvalPolicy: string }) => {
       if (context.approvalPolicy === 'yolo') return { accepted: true };
       if (context.approvalPolicy === 'ask') return undefined;
