@@ -160,6 +160,11 @@ class DesktopHostInteractions implements HostInteractions {
   }
 
   resolve(requestId: string, result: HostInteractionResolution): boolean {
+    if (result.kind === 'externalInquiry') {
+      this.options.getApprovalHandlers().externalInquiry.resolve(requestId);
+      return true;
+    }
+
     const request = this.pendingRequests.get(requestId);
     if (!request) return false;
     this.pendingRequests.delete(requestId);
