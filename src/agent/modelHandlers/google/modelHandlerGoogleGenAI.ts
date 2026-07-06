@@ -1009,37 +1009,26 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    * in each "step" has a thought_signature. If calls are split into separate
    * model messages, each becomes a new step requiring its own signature.
    *
-   * @param calls - Array of tool calls (should preserve original order from model response)
-   * @param results - Array of sanitized results (same order as calls)
-   * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
+   * @param entries - One entry per tool call, in original model-response order,
+   *   each bundling its own call/result/attachments (structurally aligned).
    * @param workspaceState - Workspace state to reset after consumption
    * @param text - Optional text to include before function calls
    */
   async createBatchedToolUseFollowUpMessages(
-    calls: GoogleToolCall[],
-    results: ToolResult[],
-    attachmentsPerCall: ToolFileAttachment[][],
+    entries: Array<{
+      call: GoogleToolCall;
+      result: ToolResult;
+      attachments: ToolFileAttachment[];
+    }>,
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
-    if (calls.length === 0) {
+    if (entries.length === 0) {
       return [];
     }
 
-    if (calls.length !== results.length) {
-      throw new Error(
-        `Mismatched calls and results: ${calls.length} calls, ${results.length} results`,
-      );
-    }
-
-    if (calls.length !== attachmentsPerCall.length) {
-      throw new Error(
-        `Mismatched calls and attachments: ${calls.length} calls, ${attachmentsPerCall.length} attachment arrays`,
-      );
-    }
-
     // Validate all calls have IDs
-    for (const [index, call] of calls.entries()) {
+    for (const [index, { call }] of entries.entries()) {
       if (!call.callId) {
         throw new Error(
           `Function call at index ${index} (${call.name ?? 'unknown'}) is missing callId`,
@@ -1050,13 +1039,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Build all function call parts (preserving thought signature on first call)
     const callParts: Part[] = [
       ...(text ? [createPartFromText(text)] : []),
-      ...calls.map((call) => this.buildFunctionCallPart(call)),
+      ...entries.map(({ call }) => this.buildFunctionCallPart(call)),
     ];
 
     // Build all function response parts in parallel
     const responseParts = await Promise.all(
-      calls.map((call, i) =>
-        this.buildFunctionResponsePart(call, results[i], attachmentsPerCall[i]),
+      entries.map(({ call, result, attachments }) =>
+        this.buildFunctionResponsePart(call, result, attachments),
       ),
     );
 

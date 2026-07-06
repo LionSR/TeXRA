@@ -24,6 +24,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import { clamp } from '@utils/core';
+
 const execFileAsync = promisify(execFile);
 
 /**
@@ -182,6 +184,5 @@ function clampCommitLimit(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_COMMIT_LIMIT;
   const rounded = Math.floor(value);
   if (rounded <= 0) return DEFAULT_COMMIT_LIMIT;
-  if (rounded > MAX_COMMIT_LIMIT) return MAX_COMMIT_LIMIT;
-  return rounded;
+  return clamp(rounded, 1, MAX_COMMIT_LIMIT);
 }

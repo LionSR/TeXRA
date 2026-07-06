@@ -1,3 +1,4 @@
+import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   AgentCategoryFilter,
@@ -109,8 +110,7 @@ export class WebviewUpdater {
   updateStreamMetadata(
     state: ProgressViewState,
     streamId: StreamTabId,
-    statuses?: Map<string, StreamPhase>,
-    substates?: Map<string, StreamSubstate>,
+    streamStates?: Map<StreamTabId, StreamPhaseState>,
     options?: {
       activeStream?: ActiveStreamId;
       agentFilter?: AgentCategoryFilter;
@@ -122,8 +122,7 @@ export class WebviewUpdater {
     const streamState = this.buildStreamMetadataForStream(
       state,
       streamInfo,
-      statuses,
-      substates,
+      streamStates,
     );
 
     this.sendMessage({
@@ -409,9 +408,8 @@ export class WebviewUpdater {
    */
   sendStreamMetadata(
     state: ProgressViewState,
-    statuses?: Map<string, StreamPhase>,
+    streamStates?: Map<StreamTabId, StreamPhaseState>,
     theme?: 'dark' | 'light',
-    substates?: Map<string, StreamSubstate>,
   ): ActiveStreamId {
     // Send every stream so streamById stays comprehensive for consumers like
     // BackgroundTasksPanel that need to render cross-filter subagent children
@@ -459,8 +457,7 @@ export class WebviewUpdater {
       const metadata = this.buildStreamMetadataForStream(
         state,
         streamInfo,
-        statuses,
-        substates,
+        streamStates,
       );
       streamMetadata[streamInfo.name] = metadata;
     }
@@ -482,14 +479,14 @@ export class WebviewUpdater {
   private buildStreamMetadataForStream(
     state: ProgressViewState,
     streamInfo: StreamTabInfo,
-    statuses?: Map<string, StreamPhase>,
-    substates?: Map<string, StreamSubstate>,
+    streamStates?: Map<StreamTabId, StreamPhaseState>,
   ): StreamMetadata {
     const current = state.getStreamState(streamInfo.name);
+    const streamState = streamStates?.get(streamInfo.name);
     return buildStreamMetadata({
       kind: streamInfo.agentCategory,
-      status: statuses?.get(streamInfo.name),
-      substate: substates?.get(streamInfo.name),
+      status: streamState?.phase,
+      substate: streamState?.substate,
       lastTimestamp: state.streamLogs.getLastTimestamp(streamInfo.name),
       conversationProgress: current?.conversationProgress,
       roundStage: current?.roundStage,

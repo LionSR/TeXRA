@@ -8,7 +8,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared
 import type { InquiryThreadUpdatedEvent } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
-import { isProcessAgent } from '@shared/streams/agentKind';
 
 // Local imports - progress view
 import {
@@ -119,7 +118,7 @@ export class StreamConversation extends SignalWatcher(LitElement) {
     // Process agents (e.g. bash) proxy raw stdout/stderr — render them with
     // a dedicated terminal-style container, not the LLM workflow/tool-use
     // chrome.
-    if (isProcessAgent(streamInfo.agent)) {
+    if (streamInfo.kind === 'process') {
       return html`<process-stream-content></process-stream-content>`;
     }
 

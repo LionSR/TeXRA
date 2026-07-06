@@ -812,6 +812,7 @@ describe('CLI run progress renderer', () => {
         parentStreamId: 'parent-stream',
         children: [
           {
+            kind: 'subagent',
             executionId: 'child-execution',
             childStreamId: 'child-stream',
             agentName: 'review',
@@ -835,6 +836,7 @@ describe('CLI run progress renderer', () => {
           parentStreamId: 'parent-stream',
           children: [
             {
+              kind: 'subagent',
               executionId: 'child-execution',
               childStreamId: 'child-stream',
               agentName: 'review',

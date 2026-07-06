@@ -288,11 +288,18 @@ export const WorktreeInfoSchema = z.object({
 });
 export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
 
-export const StreamTabInfoSchema = z.object({
+/**
+ * Fields shared by every stream tab regardless of what's running underneath
+ * it — split out (rather than folded into the discriminated union below) so
+ * consumers that only need the common metadata (e.g. `StreamHintsSchema` in
+ * `ProgressViewState.ts`) can `.pick()` from a plain object schema; Zod's
+ * discriminated unions don't support `.pick()`/`.partial()` directly.
+ */
+export const StreamTabInfoBaseSchema = z.object({
   name: z.string(),
   label: z.string(),
-  model: z.string().optional(),
-  modelLabel: z.string().optional(),
+  /** Name of the agent/tool that launched the stream (e.g. "bash",
+   * "paper-polish"). Present for both agent and process streams. */
   agent: z.string().optional(),
   agentCategory: AgentCategorySchema,
   isRemote: z.boolean().optional(),
@@ -302,11 +309,28 @@ export const StreamTabInfoSchema = z.object({
   parentStreamId: StreamTabIdSchema.optional(),
   /** AI-generated summary of what this session aims to accomplish. */
   description: z.string().optional(),
-  /** Full, untruncated command that spawned a process-agent stream (e.g. bash).
-   * Set only for process streams; used by the process stream view. */
-  command: z.string().optional(),
   /** Git worktree / PR context for streams whose agents operate in a
    * worktree other than the workspace root. Surfaced as a chip on the tab. */
   worktree: WorktreeInfoSchema.optional(),
 });
+
+/**
+ * Discriminated on `kind`: a stream tab is either a live LLM-driven "agent"
+ * run (carries `model`/`modelLabel`) or a raw OS "process" stream such as the
+ * `bash` tool (carries `command`, no meaningful model). Renderers switch on
+ * `kind` instead of probing which of `model`/`command` happens to be set.
+ */
+export const StreamTabInfoSchema = z.discriminatedUnion('kind', [
+  StreamTabInfoBaseSchema.extend({
+    kind: z.literal('agent'),
+    model: z.string().optional(),
+    modelLabel: z.string().optional(),
+  }),
+  StreamTabInfoBaseSchema.extend({
+    kind: z.literal('process'),
+    /** Full, untruncated command that spawned this stream; used by the
+     * process stream view. */
+    command: z.string().optional(),
+  }),
+]);
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
