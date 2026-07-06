@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumulator';
-import { ContextManagementDataSchema, OutputXmlSummarySchema } from '@shared/schemas';
+import {
+  ContextManagementDataSchema,
+  OutputXmlSummarySchema,
+} from '@shared/schemas';
 
 // Minimal NormalizedUsage fixture: all required fields, no optionals.
 const usageFixture = {
