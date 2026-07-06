@@ -9,8 +9,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   sendFollowUp: sendFollowUpMock,
 }));
 
-// Local imports - agent runtime
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 
@@ -104,9 +102,7 @@ class RegistryTestSource {
   subscribe(
     input: string,
     onEvent: (text: string) => void,
-    runtimeHost: AgentRuntimeHost,
   ): { dispose(): void } {
-    void runtimeHost;
     this.keys.add(input);
     this.onEventByKey.set(input, onEvent);
     this.emitKeysChanged();
@@ -232,12 +228,12 @@ describe('GitHub subscription app signals and follow-ups', () => {
     });
 
     try {
-      registry.bind('stream-a' as StreamTabId, 'owner/repo', host.host);
+      registry.bind('stream-a' as StreamTabId, 'owner/repo');
       host.events.length = 0;
 
-      expect(
-        registry.unbind('stream-a' as StreamTabId, 'owner/repo', host.host),
-      ).toBe(true);
+      expect(registry.unbind('stream-a' as StreamTabId, 'owner/repo')).toBe(
+        true,
+      );
 
       expect(signal.events).toEqual([
         { event: 'repoSubscriptionBindingsChanged', payload: undefined },
@@ -268,7 +264,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
           streamId,
           session,
         }),
-        () => registry.bind(streamId, 'owner/repo', host.host),
+        () => registry.bind(streamId, 'owner/repo'),
       );
 
       source.emit('owner/repo', 'new github event');
@@ -305,7 +301,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
     try {
       process.once('unhandledRejection', unhandledRejection);
-      registry.bind(streamId, 'owner/repo', host.host);
+      registry.bind(streamId, 'owner/repo');
 
       source.emit('owner/repo', 'new github event');
       await new Promise((resolve) => setImmediate(resolve));

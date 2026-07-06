@@ -14,8 +14,6 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatIssueClosed,
@@ -92,18 +90,9 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     });
   }
 
-  subscribe(
-    issue: IssueKey,
-    onEvent: (text: string) => void,
-    runtimeHost: AgentRuntimeHost,
-  ): Disposable {
+  subscribe(issue: IssueKey, onEvent: (text: string) => void): Disposable {
     const key = issueKeyToString(issue);
-    return this.register(
-      key,
-      () => createInitialState(issue),
-      onEvent,
-      runtimeHost,
-    );
+    return this.register(key, () => createInitialState(issue), onEvent);
   }
 
   protected emitKeysChangedEvent(keys: readonly string[]): void {

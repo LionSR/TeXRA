@@ -36,8 +36,6 @@
 
 import { LRUCache } from 'lru-cache';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatRepoIssueComment,
@@ -168,15 +166,9 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     owner: string,
     repo: string,
     onEvent: (text: string) => void,
-    runtimeHost: AgentRuntimeHost,
   ): Disposable {
     const key = repoKeyOf(owner, repo);
-    return this.register(
-      key,
-      () => createInitialState(owner, repo),
-      onEvent,
-      runtimeHost,
-    );
+    return this.register(key, () => createInitialState(owner, repo), onEvent);
   }
 
   protected emitKeysChangedEvent(keys: readonly RepoKey[]): void {
