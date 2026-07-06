@@ -3,40 +3,12 @@ import type { MessageHandlerContext } from '@progressView/frontend/messageHandle
 import {
   executionStatusToRunOutcome,
   STREAM_STATUS,
-  type AgentCategory,
-  type ExecutionId,
-  type ExecutionStatus,
+  streamStatusToLifecycleStatus,
   type StreamLifecycleStatus,
-  type StreamLogEntry,
-  type StreamSnapshot,
-  type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
-
-/**
- * Structurally matches `TraceDocument` from `@transcript/traceAssembler` —
- * kept as a local shape here rather than importing that type directly so
- * this package doesn't depend on an in-flight sibling PR merging first. The
- * two should be interchangeable field-for-field. `snapshot` reuses the real
- * `StreamSnapshot` shared type directly (not a hand-rolled subset) since it's
- * a stable, already-merged schema — narrowing it locally previously dropped
- * the workflow output-file/compile-failure fields silently.
- */
-export interface ReplayableTrace {
-  readonly executionId: ExecutionId;
-  readonly streamId: StreamTabId;
-  readonly config: {
-    readonly agent: string;
-    readonly model: string;
-    readonly agentCategory: AgentCategory;
-  };
-  readonly meta: { readonly description?: string } | null;
-  readonly entries: StreamLogEntry[];
-  readonly snapshot: StreamSnapshot;
-  /** `null` when the execution predates outcome tracking or never reached a terminal state. */
-  readonly terminalStatus: ExecutionStatus | null;
-}
+import type { TraceDocument } from '@transcript';
 
 type UpdateStreamsMessage = Extract<
   ProgressViewOutboundMessage,
@@ -57,14 +29,23 @@ type SyncStreamContentMessage = Extract<
  * is the sanctioned inverse of `runOutcomeToExecutionStatus` — its `RunOutcome`
  * result (`completed`/`cancelled`/`failed`) is structurally identical to
  * `StreamPhase`'s values, so it's already a valid `StreamLifecycleStatus`.
- * `null` (predates outcome tracking) defaults to `READY`, same as an
+ *
+ * `terminalStatus` is `null` for traces that predate outcome tracking (or
+ * never reached a terminal state) — for those legacy traces, fall back to
+ * deriving status from the snapshot's own recorded `status` instead of
+ * unconditionally reporting `READY`, so an archived failed/stopped run
+ * doesn't render as if it finished cleanly. Only when the snapshot itself
+ * has no recorded status either does this default to `READY`, same as an
  * unqualified successful finish.
  */
-function toStreamLifecycleStatus(
-  terminalStatus: ExecutionStatus | null,
-): StreamLifecycleStatus {
-  const outcome = executionStatusToRunOutcome(terminalStatus ?? undefined);
-  return outcome ?? STREAM_STATUS.READY;
+function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
+  if (trace.terminalStatus !== null) {
+    const outcome = executionStatusToRunOutcome(trace.terminalStatus);
+    if (outcome) return outcome;
+  }
+  return trace.snapshot.status
+    ? streamStatusToLifecycleStatus(trace.snapshot.status)
+    : STREAM_STATUS.READY;
 }
 
 /**
@@ -75,7 +56,7 @@ function toStreamLifecycleStatus(
  * `logSlice.ts`'s `if (!streamState) return`).
  */
 export function replayTrace(
-  trace: ReplayableTrace,
+  trace: TraceDocument,
   ctx: MessageHandlerContext,
 ): void {
   const { snapshot } = trace;
@@ -100,7 +81,7 @@ export function replayTrace(
     agentFilter: 'all',
     streamStates: {
       [trace.streamId]: {
-        status: toStreamLifecycleStatus(trace.terminalStatus),
+        status: toStreamLifecycleStatus(trace),
         kind: trace.config.agentCategory,
         conversationProgress: snapshot.conversationProgress,
         // Liveness is never restored as live (matches the existing

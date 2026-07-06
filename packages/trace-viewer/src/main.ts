@@ -18,7 +18,8 @@ import {
   handleToolbarCommand,
 } from '@progressView/frontend/eventHandlers';
 
-import { replayTrace, type ReplayableTrace } from './replayTrace';
+import { replayTrace } from './replayTrace';
+import type { TraceDocument } from '@transcript';
 
 const root = document.querySelector<HTMLElement>('#app');
 if (root == null) throw new Error('Trace viewer root (#app) not found.');
@@ -52,8 +53,8 @@ conversationView.addEventListener(
  * traces that shouldn't duplicate the bundle per page). Both paths feed the
  * exact same `replayTrace`.
  */
-async function loadTrace(): Promise<ReplayableTrace> {
-  const inline = (window as { __TEXRA_TRACE__?: ReplayableTrace })
+async function loadTrace(): Promise<TraceDocument> {
+  const inline = (window as { __TEXRA_TRACE__?: TraceDocument })
     .__TEXRA_TRACE__;
   if (inline) return inline;
 
