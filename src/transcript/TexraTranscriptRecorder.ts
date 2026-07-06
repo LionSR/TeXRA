@@ -107,6 +107,13 @@ export function attachTranscriptRecorder(
   store: StreamLogStore,
 ): TranscriptRecorderHandle {
   const streams = new Map<string, StreamSinkState>();
+  // stage.start's `kind` lives only on that event — `store.update` at
+  // stage.end replaces `data` wholesale (see StreamLog.update), so without
+  // this the persisted GROUP_END row would forget whether the stage was the
+  // root "Run:" stage or a nested round/phase/session. Replayed legacy traces
+  // rely on that distinction to tell a root run's terminal status apart from
+  // a round's (see toStreamLifecycleStatus in packages/trace-viewer).
+  const stageKinds = new Map<string, 'run' | 'round' | 'phase' | 'session'>();
 
   const flushStream = (state: StreamSinkState, id: string): void => {
     if (state.updateTimer) {
@@ -206,6 +213,7 @@ export function attachTranscriptRecorder(
         return;
 
       case 'stage.start':
+        if (event.kind) stageKinds.set(event.id, event.kind);
         store.append(streamId, {
           id: event.id,
           type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
@@ -224,15 +232,19 @@ export function attachTranscriptRecorder(
         });
         return;
 
-      case 'stage.end':
+      case 'stage.end': {
+        const kind = stageKinds.get(event.id);
+        stageKinds.delete(event.id);
         store.update(streamId, event.id, {
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
           data: {
             status: event.status ?? END_GROUP_STATUS.STOPPED,
             endTime: Date.now(),
+            ...(kind ? { kind } : {}),
           },
         });
         return;
+      }
 
       case 'tool.start':
         // event.logId is the canonical id — SDK consumers correlate
