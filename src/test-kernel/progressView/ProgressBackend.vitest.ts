@@ -11,7 +11,12 @@ import { streamDataDir, StreamSnapshotStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { TaskState } from '@agent/core/state/TaskState';
-import { bus } from '@eventBus/ProgressEventBus';
+import {
+  bus,
+  type ProgressEvent,
+  type ProgressEventBusLike,
+  type ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -20,6 +25,7 @@ import * as logger from '@logger/logUtils';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
+  type ActiveChildInfo,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -51,6 +57,45 @@ class MemoryMementoStorage implements MementoStorage {
       return;
     }
     this.values.set(key, value);
+  }
+}
+
+class MemoryProgressBus implements ProgressEventBusLike {
+  private readonly listeners = new Map<
+    ProgressEvent,
+    Set<(payload: ProgressEventPayloads[ProgressEvent]) => void>
+  >();
+
+  on<K extends ProgressEvent>(
+    event: K,
+    listener: (payload: ProgressEventPayloads[K]) => void,
+    options?: { signal?: AbortSignal },
+  ): () => void {
+    if (options?.signal?.aborted) return () => {};
+    let listeners = this.listeners.get(event);
+    if (!listeners) {
+      listeners = new Set();
+      this.listeners.set(event, listeners);
+    }
+    listeners.add(
+      listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
+    );
+    const cleanup = (): void => {
+      listeners?.delete(
+        listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
+      );
+    };
+    options?.signal?.addEventListener('abort', cleanup, { once: true });
+    return cleanup;
+  }
+
+  emit<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void {
+    for (const listener of this.listeners.get(event) ?? []) {
+      listener(payload);
+    }
   }
 }
 
@@ -347,6 +392,307 @@ describe('ProgressBackend', () => {
     } finally {
       subscription.dispose();
       backend.dispose();
+    }
+  });
+
+  it('scopes direct session events to each backend session', async () => {
+    const sharedBus = new MemoryProgressBus();
+    const first = createIsolatedRecordingBackend();
+    const second = createIsolatedRecordingBackend();
+    const firstSubscription = first.backend.setupEventListeners(sharedBus);
+    const secondSubscription = second.backend.setupEventListeners(sharedBus);
+    const firstStream = 'session:first' as StreamTabId;
+    const secondStream = 'session:second' as StreamTabId;
+
+    try {
+      first.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: firstStream,
+            agentCategory: AgentCategory.Workflow,
+          },
+        },
+      });
+
+      await vi.waitFor(() =>
+        expect(first.backend.state.activeStream).toBe(firstStream),
+      );
+      expect(second.backend.state.activeStream).not.toBe(firstStream);
+      expect(JSON.stringify(second.messages)).not.toContain(firstStream);
+
+      second.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: secondStream,
+            agentCategory: AgentCategory.ToolUse,
+          },
+        },
+      });
+
+      await vi.waitFor(() =>
+        expect(second.backend.state.activeStream).toBe(secondStream),
+      );
+      expect(first.backend.state.activeStream).toBe(firstStream);
+      expect(JSON.stringify(first.messages)).not.toContain(secondStream);
+    } finally {
+      firstSubscription.dispose();
+      secondSubscription.dispose();
+      first.backend.dispose();
+      second.backend.dispose();
+      first.session.dispose();
+      second.session.dispose();
+    }
+  });
+
+  it('notifies host observers for session-originated progress events', async () => {
+    const messages: ProgressViewOutboundMessage[] = [];
+    const observed: Array<{
+      event: ProgressEvent;
+      payload: ProgressEventPayloads[ProgressEvent];
+    }> = [];
+    const session = new SessionHandle();
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      snapshots: new StreamSnapshotStore(),
+      session,
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+      onSessionProgressEvent: (event, payload) => {
+        observed.push({ event, payload });
+      },
+    });
+    const subscription = backend.setupEventListeners(new MemoryProgressBus());
+    const streamId = 'session:observer' as StreamTabId;
+
+    try {
+      session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'goalStateChanged',
+          payload: { streamId },
+        },
+      });
+
+      expect(observed).toEqual([
+        { event: 'goalStateChanged', payload: { streamId } },
+      ]);
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('handles direct session events with the backend effects of the legacy projection', async () => {
+    const direct = createIsolatedRecordingBackend();
+    const legacyEquivalent = createIsolatedRecordingBackend();
+    const directSubscription = direct.backend.setupEventListeners(
+      new MemoryProgressBus(),
+    );
+    const legacySubscription = legacyEquivalent.backend.setupEventListeners(
+      new MemoryProgressBus(),
+    );
+    const parentStreamId = 'session:parent' as StreamTabId;
+    const childStreamId = 'session:child' as StreamTabId;
+    const executionId = 'exec:direct-session' as ExecutionId;
+    const child: ActiveChildInfo = {
+      kind: 'subagent',
+      executionId: 'exec:child' as ExecutionId,
+      childStreamId,
+      agentName: 'orchestrator',
+      status: 'running',
+      startedAt: 1,
+      elapsed: null,
+    };
+    const process: ActiveChildInfo = {
+      kind: 'process',
+      executionId,
+      agentName: 'bash',
+      status: 'running',
+      startedAt: 2,
+      elapsed: '1s',
+      toolName: 'bash',
+    };
+    const inquiryThread = {
+      threadId: 'ei_123456789abc',
+      parentStreamId,
+      status: 'open',
+      lastQuestionPreview: 'Can you check this estimate?',
+      lastActivityIso: '2026-07-06T12:00:00.000Z',
+      turnCount: 1,
+      resumeOutcome: null,
+    } satisfies ProgressEventPayloads['inquiryThreadUpdated'];
+
+    try {
+      for (const target of [direct, legacyEquivalent]) {
+        await target.backend.state.snapshots.load([]);
+        target.backend.handleProgressEvent('setActiveStream', {
+          streamId: parentStreamId,
+          agentCategory: AgentCategory.ToolUse,
+        });
+        target.session.followUps.enqueue(
+          parentStreamId,
+          { text: 'continue with the local calculation' },
+          { force: true },
+        );
+        target.backend.handleProgressEvent('updateMissingOutputs', {
+          streamId: parentStreamId,
+          filesByRound: { 0: ['missing-output.tex'] },
+        });
+      }
+      await vi.waitFor(() =>
+        expect(direct.backend.state.activeStream).toBe(parentStreamId),
+      );
+      await vi.waitFor(() =>
+        expect(legacyEquivalent.backend.state.activeStream).toBe(
+          parentStreamId,
+        ),
+      );
+      direct.messages.length = 0;
+      legacyEquivalent.messages.length = 0;
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'stage.start',
+          id: 'round-2',
+          label: 'round 2',
+          kind: 'round',
+          index: 2,
+          total: 4,
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateRoundStage', {
+        streamId: parentStreamId,
+        roundStage: { index: 2, total: 4 },
+      });
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'child.activity',
+          kind: 'subagents',
+          parentStreamId,
+          children: [child],
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateActiveSubagents', {
+        parentStreamId,
+        children: [child],
+      });
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'child.activity',
+          kind: 'processes',
+          parentStreamId,
+          processes: [process],
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateActiveProcesses', {
+        parentStreamId,
+        processes: [process],
+      });
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'child.activity',
+          kind: 'parent',
+          childStreamId,
+          parentStreamId,
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('setParentStream', {
+        childStreamId,
+        parentStreamId,
+      });
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'process.output',
+          parentStreamId,
+          executionId,
+          stdout: 'hello',
+          stderr: '',
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateProcessOutput', {
+        parentStreamId,
+        executionId,
+        stdout: 'hello',
+        stderr: '',
+      });
+
+      direct.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateQueuedFollowUps',
+          payload: { streamId: parentStreamId },
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateQueuedFollowUps', {
+        streamId: parentStreamId,
+      });
+
+      direct.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'clearMissingOutputs',
+          payload: { streamId: parentStreamId },
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('clearMissingOutputs', {
+        streamId: parentStreamId,
+      });
+
+      direct.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'inquiryThreadUpdated',
+          payload: inquiryThread,
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent(
+        'inquiryThreadUpdated',
+        inquiryThread,
+      );
+
+      expect(direct.backend.eventHandler.getAllStreamStates()).toEqual(
+        legacyEquivalent.backend.eventHandler.getAllStreamStates(),
+      );
+      expect(
+        direct.backend.state.snapshots.getMissingOutputs(parentStreamId),
+      ).toEqual(
+        legacyEquivalent.backend.state.snapshots.getMissingOutputs(
+          parentStreamId,
+        ),
+      );
+      expect(direct.messages).toEqual(legacyEquivalent.messages);
+    } finally {
+      directSubscription.dispose();
+      legacySubscription.dispose();
+      await direct.backend.state.clearAll();
+      await legacyEquivalent.backend.state.clearAll();
+      direct.backend.dispose();
+      legacyEquivalent.backend.dispose();
+      direct.session.dispose();
+      legacyEquivalent.session.dispose();
     }
   });
 

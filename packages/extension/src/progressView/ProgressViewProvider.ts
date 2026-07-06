@@ -113,6 +113,11 @@ export class ProgressViewProvider
       getStreamControls: getProgressStreamControls,
       getUnsupportedCommands: () =>
         this.messageHandler.getUnsupportedCommands(),
+      onSessionProgressEvent: (event, payload) => {
+        if (event === 'goalStateChanged') {
+          bus.emit(event, payload);
+        }
+      },
       configureUi: ({ webviewUpdater: u }) => {
         const canSend = () => this.canSendToWebview();
         this.approvalHandlers = buildApprovalRequestHandlerSet({
