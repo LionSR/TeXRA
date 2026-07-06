@@ -1,5 +1,5 @@
 // Third-party imports
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared constants and types
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -153,6 +153,18 @@ function restoreState(
 
 describe('MainApp persistence and restore characterization', () => {
   useLitComponentTestDom(() => import('@webview/frontend/MainApp'));
+
+  // Dynamically re-imported (module-cache hit) AFTER useLitComponentTestDom's
+  // beforeAll has installed the DOM globals and imported MainApp — a static
+  // top-level import here would evaluate persistence.ts's `webviewStorage`
+  // singleton before the HOST_BRIDGE_API_KEY mock above is wired up.
+  let persistence: typeof import('@webview/frontend/persistence');
+  let setInstruction: typeof import('@webview/frontend/mainViewActions').setInstruction;
+
+  beforeAll(async () => {
+    persistence = await import('@webview/frontend/persistence');
+    ({ setInstruction } = await import('@webview/frontend/mainViewActions'));
+  });
 
   beforeEach(() => {
     seedWebviewState();
@@ -430,5 +442,82 @@ describe('MainApp persistence and restore characterization', () => {
     const { fileState, session } = contextsOf(element);
     expect(session.instruction).toBe('');
     expect(fileState.multiFiles.mediaFiles).toEqual(['kept-figure.png']);
+  });
+
+  describe('instruction-save debounce (createFlushableDebounce migration)', () => {
+    it('coalesces rapid instruction keystrokes into a single storage write after 300ms', async () => {
+      const element = await mountMainApp();
+      storageWrites.length = 0;
+
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        setInstruction('h');
+        persistence.scheduleInstructionSave();
+        vi.advanceTimersByTime(200);
+        // A second keystroke inside the window restarts the 300ms wait — a
+        // naive one-shot timer (or a non-restarting batcher) would let the
+        // first write land at the 300ms mark below instead of waiting for
+        // this call's own full window.
+        setInstruction('hello');
+        persistence.scheduleInstructionSave();
+        vi.advanceTimersByTime(299);
+        expect(storageWrites).toHaveLength(0);
+
+        vi.advanceTimersByTime(1);
+        expect(storageWrites).toHaveLength(1);
+        expect(lastPersistedBlob().instruction).toBe('hello');
+      } finally {
+        vi.useRealTimers();
+      }
+
+      element.remove();
+    });
+
+    it('flushPendingInstructionSave (called on disconnect) synchronously persists a pending debounced save', async () => {
+      const element = await mountMainApp();
+      storageWrites.length = 0;
+
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        setInstruction('unsaved when disconnected');
+        persistence.scheduleInstructionSave();
+        expect(storageWrites).toHaveLength(0);
+
+        // disconnectedCallback -> flushPendingInstructionSave(): the pending
+        // debounced save must run synchronously, not be dropped on teardown.
+        element.remove();
+        expect(storageWrites).toHaveLength(1);
+        expect(lastPersistedBlob().instruction).toBe(
+          'unsaved when disconnected',
+        );
+
+        // flush() must clear the timer — letting it "expire" afterward must
+        // not produce a second write.
+        vi.advanceTimersByTime(1000);
+        expect(storageWrites).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('resetPersistenceRuntime cancels a pending debounced save instead of flushing it', async () => {
+      const element = await mountMainApp();
+      storageWrites.length = 0;
+
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        setInstruction('discarded by reset, not persisted');
+        persistence.scheduleInstructionSave();
+
+        persistence.resetPersistenceRuntime();
+
+        vi.advanceTimersByTime(1000);
+        expect(storageWrites).toHaveLength(0);
+      } finally {
+        vi.useRealTimers();
+      }
+
+      element.remove();
+    });
   });
 });
