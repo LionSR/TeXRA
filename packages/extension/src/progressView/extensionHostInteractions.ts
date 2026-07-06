@@ -266,6 +266,9 @@ export function createExtensionHostInteractions(
             },
             () => handlers().userQuestion.resolve(requestId),
           );
+        case 'externalInquiry':
+          handlers().externalInquiry.resolve(requestId);
+          return true;
         default:
           return false;
       }

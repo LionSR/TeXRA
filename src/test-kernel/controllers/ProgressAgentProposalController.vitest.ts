@@ -41,7 +41,7 @@ describe('ProgressAgentProposalController', () => {
         restored.push(taskState);
         return true;
       },
-      resolveProposal: (proposalId, result) => {
+      settleProposal: (proposalId, result) => {
         resolved.push({ proposalId, result });
       },
     });
@@ -88,7 +88,7 @@ describe('ProgressAgentProposalController', () => {
       restoreTaskState: async () => {
         throw new Error('restore should not run');
       },
-      resolveProposal: () => {
+      settleProposal: () => {
         throw new Error('resolve should not run');
       },
       onMissingProposal: (proposalId) => {
@@ -111,7 +111,7 @@ describe('ProgressAgentProposalController', () => {
     const controller = new ProgressAgentProposalController({
       getPendingProposal: () => createWorkflowProposal(),
       restoreTaskState: async () => false,
-      resolveProposal: (proposalId, result) => {
+      settleProposal: (proposalId, result) => {
         resolved.push({ proposalId, result });
       },
     });
@@ -141,7 +141,7 @@ describe('ProgressAgentProposalController', () => {
       restoreTaskState: async () => {
         throw new Error('restore should not run');
       },
-      resolveProposal: (proposalId, result) => {
+      settleProposal: (proposalId, result) => {
         resolved.push({ proposalId, result });
       },
     });
@@ -182,7 +182,7 @@ describe('ProgressAgentProposalController', () => {
       restoreTaskState: async () => {
         throw new Error('restore should not run');
       },
-      resolveProposal: (_proposalId, result) => {
+      settleProposal: (_proposalId, result) => {
         resolved.push({ result });
       },
     });

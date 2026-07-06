@@ -757,7 +757,7 @@ describe('CLI run progress renderer', () => {
     expect(output).toContain('polish paper.tex · 0s');
   });
 
-  it('preserves the live progress line before approval prompts', async () => {
+  it('preserves the live progress line before interactive prompts', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const host = createCliRuntimeHost(
         context({
@@ -767,15 +767,7 @@ describe('CLI run progress renderer', () => {
       );
 
       host.emit('setTaskState', workflowTaskState());
-      host.emit('showAgentProposal', {
-        proposalId: 'proposal-1',
-        streamId: 'stream-1',
-        agent: 'review',
-        model: 'deepseekT',
-        instruction: 'Please check this proof.',
-        memories: [],
-        agentCategory: AgentCategory.ToolUse,
-      });
+      host.prepareInteractivePrompt?.();
       await Promise.resolve();
       await host.close();
     });
