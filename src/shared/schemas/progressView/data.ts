@@ -102,23 +102,17 @@ export type NormalizedToolUse = z.infer<typeof NormalizedToolUseSchema>;
 const SAFE_URL_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
 
 /**
- * Returns `raw` unchanged if it's safe to render as an `href`, or
- * `undefined` if it isn't, so callers can omit the link (or fall back to
- * plain text) instead of rendering a live anchor. Behavior matches the
- * retired `safeUrl()` exactly:
- * - trims surrounding whitespace
- * - empty string → unsafe (nothing to link to)
- * - anchor-only (`#foo`) → safe as-is, no scheme to abuse
- * - root-relative (`/foo`, but NOT protocol-relative `//foo`) → safe as-is
- * - everything else must parse as an absolute URL (via the `URL` global,
- *   so protocol-relative `//foo` fails here too) with an allow-listed
- *   scheme
+ * Returns `raw` unchanged if it's safe to render as an `href`, or `undefined`
+ * otherwise. Root-relative paths are rejected, not treated as safe-as-is like
+ * an anchor fragment: unlike a browser resolving against the current page's
+ * origin, the standalone HTML export opens via `file://` with no origin,
+ * where a tool-controlled `/etc/passwd` would resolve against the filesystem
+ * root (issue #7230 follow-up).
  */
 function sanitizeUrl(raw: string): string | undefined {
   const trimmed = raw.trim();
   if (trimmed === '') return undefined;
   if (trimmed.startsWith('#')) return trimmed;
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
   const url = tryParseUrl(trimmed);
   if (!url) return undefined;
   return SAFE_URL_SCHEMES.has(url.protocol) ? trimmed : undefined;
