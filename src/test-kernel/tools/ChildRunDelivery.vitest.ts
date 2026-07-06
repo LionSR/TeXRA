@@ -1,0 +1,130 @@
+// Third-party imports
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Local imports - shared
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
+
+const mocks = vi.hoisted(() => ({
+  writeReport: vi.fn(),
+  sendFollowUp: vi.fn(),
+  wakeOrReleaseQueuedStream: vi.fn(),
+}));
+
+vi.mock('@agent/storage', () => ({
+  getExecutionStore: vi.fn(() => ({ writeReport: mocks.writeReport })),
+}));
+
+vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
+  sendFollowUp: mocks.sendFollowUp,
+  wakeOrReleaseQueuedStream: mocks.wakeOrReleaseQueuedStream,
+}));
+
+// Local imports - tools
+import {
+  deliverChildRunFollowUp,
+  persistChildRunReport,
+} from '@tools/childRunDelivery';
+
+describe('child run delivery', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('persists reports through the execution store', async () => {
+    mocks.writeReport.mockResolvedValue(undefined);
+
+    await expect(
+      persistChildRunReport('exec-1' as ExecutionId, 'payload'),
+    ).resolves.toEqual({ kind: 'persisted' });
+
+    expect(mocks.writeReport).toHaveBeenCalledWith('payload');
+  });
+
+  it('returns the storage error when report persistence fails', async () => {
+    const err = new Error('disk full');
+    mocks.writeReport.mockRejectedValue(err);
+
+    await expect(
+      persistChildRunReport('exec-1' as ExecutionId, 'payload'),
+    ).resolves.toEqual({ kind: 'failed', err });
+  });
+
+  it('delivers a follow-up with the explicit owner session', async () => {
+    const session = { tag: 'owner-session' };
+    mocks.sendFollowUp.mockResolvedValue({ status: 'sent' });
+
+    await expect(
+      deliverChildRunFollowUp({
+        targetStreamId: 'parent' as StreamTabId,
+        followUp: { text: 'done', origin: 'subagent_result' },
+        session: session as never,
+      }),
+    ).resolves.toEqual({ kind: 'delivered' });
+
+    expect(mocks.sendFollowUp).toHaveBeenCalledWith(
+      'parent',
+      { text: 'done', origin: 'subagent_result' },
+      undefined,
+      undefined,
+      session,
+    );
+    expect(mocks.wakeOrReleaseQueuedStream).not.toHaveBeenCalled();
+  });
+
+  it('wakes or releases force-opened parent queues with the same session', async () => {
+    const session = { tag: 'owner-session' };
+    const sendResult = { status: 'queued', reason: 'children_running' };
+    mocks.sendFollowUp.mockResolvedValue(sendResult);
+    mocks.wakeOrReleaseQueuedStream.mockResolvedValue(true);
+
+    await expect(
+      deliverChildRunFollowUp({
+        targetStreamId: 'parent' as StreamTabId,
+        followUp: { text: 'done', origin: 'subagent_result' },
+        session: session as never,
+        wake: true,
+      }),
+    ).resolves.toEqual({ kind: 'delivered' });
+
+    expect(mocks.wakeOrReleaseQueuedStream).toHaveBeenCalledWith(
+      'parent',
+      sendResult,
+      session,
+    );
+  });
+
+  it('classifies missing and dropped parent streams', async () => {
+    const session = { tag: 'owner-session' };
+    mocks.sendFollowUp.mockResolvedValueOnce({
+      status: 'no_session',
+      streamStatus: 'completed',
+    });
+
+    await expect(
+      deliverChildRunFollowUp({
+        targetStreamId: 'parent' as StreamTabId,
+        followUp: { text: 'done', origin: 'subagent_result' },
+        session: session as never,
+        wake: true,
+      }),
+    ).resolves.toEqual({
+      kind: 'no_session',
+      streamStatus: 'completed',
+    });
+
+    mocks.sendFollowUp.mockResolvedValueOnce({
+      status: 'queued',
+      reason: 'children_running',
+    });
+    mocks.wakeOrReleaseQueuedStream.mockResolvedValueOnce(false);
+
+    await expect(
+      deliverChildRunFollowUp({
+        targetStreamId: 'parent' as StreamTabId,
+        followUp: { text: 'done', origin: 'subagent_result' },
+        session: session as never,
+        wake: true,
+      }),
+    ).resolves.toEqual({ kind: 'dropped' });
+  });
+});
