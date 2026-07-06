@@ -7,64 +7,44 @@
  */
 
 // Local imports - agent
-import {
-  getExecutionStore,
-  registerExecution,
-  type ResultMeta,
-} from '@agent/storage';
+import { registerExecution } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   getAgentFlowErrorResult,
   type AgentFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
 // Local imports - tools
-import {
-  AgentCategory,
-  type ExecutionId,
-  type StreamTabId,
-  type SubagentProgressUpdate,
-} from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import {
   enableYoloOnChildStream,
   inheritBashBypassOnChildStream,
 } from '@tools/approval';
 import {
-  computeAndWriteWorkflowDiffs,
-  type DiffFileInfo,
-} from '@tools/subagentDiffs';
-import {
   buildSubagentFailureResultMeta,
-  buildSubagentResultMeta,
-  formatSubagentDelivery,
   formatSubagentError,
-  formatSubagentProgress,
 } from '@tools/subagentResults';
-import {
-  SUBAGENT_DELIVERY_DECISION,
-  subagentDeliveryRegistry,
-} from '@tools/subagentDeliveryState';
-import {
-  deliverChildRunFollowUp,
-  persistChildRunReport,
-} from '@tools/childRunDelivery';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';
+import {
+  NativeSubagentStrategy,
+  subagentDeliveryMessage,
+  writeSubagentReport,
+  writeSubagentResultMeta,
+} from './nativeSubagentStrategy';
 
 // ============================================================================
 // Shared utilities
@@ -80,94 +60,6 @@ interface ApprovalMeta {
   requestedModel?: string;
   agentOverride?: string;
   requestedAgent?: string;
-}
-
-/**
- * Format a subagent result for delivery to the orchestrator.
- * For workflow results, computes latexdiffs and writes them as files to the
- * execution's run directory first — the delivery references diff file paths
- * so the orchestrator can read them on demand via /executions/{id}/files/.
- */
-async function subagentDeliveryMessage(
-  executionId: string,
-  agentName: string,
-  result: AgentFlowResult,
-  options: {
-    readonly startedAt: number;
-    readonly workingDirectory?: string;
-  },
-): Promise<{ msg: string; resultMeta: ResultMeta }> {
-  let diffInfos: Map<string, DiffFileInfo> | undefined;
-  let diffsUnavailable: string | undefined;
-  if (result.category === 'workflow' && result.outputs.length > 0) {
-    try {
-      diffInfos = await computeAndWriteWorkflowDiffs(
-        executionId,
-        result.outputs,
-      );
-    } catch (err) {
-      // Diff computation failure is non-fatal — deliver without diffs, but
-      // tell the orchestrator so it can read the output files directly
-      // instead of assuming the revision was a no-op.
-      diffsUnavailable = toErrorMessage(err);
-      logger.warn(
-        'subagentDelivery',
-        `Diff computation failed for ${executionId}: ${diffsUnavailable}`,
-      );
-    }
-  }
-
-  const wallTimeMs = Date.now() - options.startedAt;
-  return {
-    msg: formatSubagentDelivery(agentName, result, {
-      diffInfos,
-      diffsUnavailable,
-      wallTimeMs,
-      workingDirectory: options.workingDirectory,
-    }),
-    resultMeta: buildSubagentResultMeta(agentName, result, {
-      diffInfos,
-      diffsUnavailable,
-      wallTimeMs,
-    }),
-  };
-}
-
-async function writeSubagentReport(
-  executionId: string,
-  message: string,
-): Promise<void> {
-  const result = await persistChildRunReport(
-    executionId as ExecutionId,
-    message,
-  );
-  if (result.kind === 'failed') {
-    // Non-fatal, but the report is the only durable copy of the result when
-    // delivery later fails — leave a trace instead of vanishing silently.
-    logger.warn(
-      'subagentDelivery',
-      `Failed to persist subagent report for ${executionId}: ${toErrorMessage(result.err)}`,
-    );
-  }
-}
-
-/**
- * Best-effort persist of the structured result manifest — the chaining
- * contract read via /executions/{id}/result. Never blocks or fails
- * delivery.
- */
-async function writeSubagentResultMeta(
-  executionId: string,
-  resultMeta: ResultMeta,
-): Promise<void> {
-  try {
-    await getExecutionStore(executionId).writeResultMeta(resultMeta);
-  } catch (err) {
-    logger.warn(
-      'subagentDelivery',
-      `Failed to persist subagent result manifest for ${executionId}: ${toErrorMessage(err)}`,
-    );
-  }
 }
 
 /**
@@ -370,121 +262,15 @@ export async function executeSubagent(
     }
   }
 
-  // Register delivery state so delegate_agent (resume) can find live subagents.
-  // The state object owns duplicate-delivery protection between onBeforeWaiting
-  // and onCompleted. When a follow-up is consumed, the next onBeforeWaiting
-  // delivers the resumed cycle's result.
-  const deliveryState = subagentDeliveryRegistry.start(executionId);
-  let childStreamId: StreamTabId | undefined;
-
-  /**
-   * Deliver a follow-up to the parent stream. For terminal results (`wake`),
-   * a parent whose cycle has exited is resumed via the host port so the
-   * queued result is consumed instead of sitting until the user pokes the
-   * stream; if the parent is gone for good (terminal status, resume failed),
-   * the force-reopened queue is re-released so late deliveries don't leak
-   * into the next run — the result stays readable in the execution report.
-   */
-  async function deliverFollowUp(
-    followUp: FollowUpQueueInput,
-    options?: { wake?: boolean },
-  ): Promise<boolean> {
-    const handle = currentSession().executions.getHandle(executionId);
-    const targetStreamId =
-      handle instanceof AgentExecutionHandle
-        ? handle.deliveryTargetStreamId
-        : orchestratorStreamId;
-    if (!targetStreamId) return false;
-
-    const result = await deliverChildRunFollowUp({
-      targetStreamId,
-      followUp,
-      session: parentSession,
-      wake: options?.wake,
-    });
-    if (result.kind === 'no_session') {
-      logger.warn(
-        'subagentDelivery',
-        `Unable to deliver subagent result for ${executionId}: parent stream ${targetStreamId} has no active session (status: ${result.streamStatus ?? 'unknown'}).`,
-      );
-      return false;
-    }
-    if (result.kind === 'dropped') {
-      logger.warn(
-        'subagentDelivery',
-        `Dropped subagent result for ${executionId}: parent stream ${targetStreamId} is gone and could not be resumed. The result remains in the execution report.`,
-      );
-      return false;
-    }
-    return true;
-  }
-
-  async function deliverTerminalFollowUp(
-    followUp: FollowUpQueueInput,
-  ): Promise<boolean> {
-    if (!deliveryState.beginDelivery()) return false;
-    try {
-      const delivered = await deliverFollowUp(followUp, { wake: true });
-      if (delivered) {
-        deliveryState.completeDelivery();
-      } else {
-        deliveryState.failDelivery();
-      }
-      return delivered;
-    } catch (err) {
-      deliveryState.failDelivery();
-      throw err;
-    }
-  }
-
-  /**
-   * Deliver a terminal result and persist its report (and, when available,
-   * its structured result manifest) concurrently — the best-effort writes
-   * never delay the parent's wakeup, and they run even when delivery is
-   * deduplicated (the report/manifest are the durable copies).
-   */
-  async function persistAndDeliverTerminal(
-    msg: string,
-    resultMeta?: ResultMeta,
-  ): Promise<boolean> {
-    // The manifest lands BEFORE the wake: a parent chaining on this result
-    // reads /executions/{id}/result the moment the follow-up arrives, so
-    // the small JSON write must not race the delivery. The prose report
-    // duplicates the delivery text, so it stays off the critical path.
-    if (resultMeta) {
-      await writeSubagentResultMeta(executionId, resultMeta);
-    }
-    const [delivered] = await Promise.all([
-      deliverTerminalFollowUp({ text: msg, origin: 'subagent_result' }),
-      writeSubagentReport(executionId, msg),
-    ]);
-    return delivered;
-  }
-
-  function onProgress(update: SubagentProgressUpdate): void {
-    if (deliveryState.isDelivered()) return;
-    const msg = formatSubagentProgress(executionId, agentName, update);
-    void deliverFollowUp({ text: msg, origin: 'subagent_result' });
-  }
-
-  async function deliverSubagentError(
-    err: unknown,
-    result?: AgentFlowResult,
-  ): Promise<void> {
-    settleSubagentCost(result);
-    const wallTimeMs = Date.now() - startedAt;
-    const msg = formatSubagentError(executionId, agentName, err, {
-      wallTimeMs,
-      workingDirectory,
-      memoryMisses: result?.memoryMisses,
-    });
-    // Overwrite any interim success manifest from onBeforeWaiting so
-    // /executions/{id}/result never claims success for a failed run.
-    await persistAndDeliverTerminal(
-      msg,
-      buildSubagentFailureResultMeta(agentName, result, wallTimeMs),
-    );
-  }
+  const nativeStrategy = new NativeSubagentStrategy({
+    executionId,
+    agentName,
+    orchestratorStreamId,
+    parentSession,
+    startedAt,
+    workingDirectory,
+    settleSubagentCost,
+  });
 
   const promise = executeAgent(configPayload, executionId, {
     runtimeHost,
@@ -496,73 +282,17 @@ export async function executeSubagent(
     runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
     toolEditApprovalHandler: parentContext.toolEditApprovalHandler,
     onStreamResolved: (resolvedStreamId) => {
-      childStreamId = resolvedStreamId;
+      nativeStrategy.setChildStreamId(resolvedStreamId);
       inheritChildStreamApprovals(resolvedStreamId);
     },
-    onProgress,
-    onFollowUpConsumed: () => {
-      deliveryState.markPending();
-    },
-    onBeforeWaiting: async (lastResponse, touchedFiles, memoryMisses) => {
-      const deliveryDecision =
-        deliveryState.resolveBeforeWaiting(childStreamId);
-      if (deliveryDecision === SUBAGENT_DELIVERY_DECISION.AlreadyDelivered) {
-        return true;
-      }
-      if (deliveryDecision === SUBAGENT_DELIVERY_DECISION.MissingStream) {
-        return false;
-      }
-      const resolvedChildStreamId = childStreamId;
-      if (!resolvedChildStreamId) return false;
-
-      const interimResult = {
-        category: 'toolUse' as const,
-        // The turn finished and the subagent is entering WAITING — for the
-        // orchestrator this interim delivery is a completed turn.
-        outcome: 'completed' as const,
-        lastResponse,
-        touchedFiles,
-        executionId,
-        streamId: resolvedChildStreamId,
-        memoryMisses: memoryMisses.length > 0 ? [...memoryMisses] : undefined,
-      };
-      const wallTimeMs = Date.now() - startedAt;
-      const msg = formatSubagentDelivery(agentName, interimResult, {
-        wallTimeMs,
-        workingDirectory,
-      });
-      // Claim only the enqueue step: formatting failures before this still
-      // leave onCompleted/onError available as terminal fallbacks.
-      return await persistAndDeliverTerminal(
-        msg,
-        buildSubagentResultMeta(agentName, interimResult, { wallTimeMs }),
-      );
-    },
-    onCompleted: async (result) => {
-      settleSubagentCost(result);
-      const { msg, resultMeta } = await subagentDeliveryMessage(
-        executionId,
-        agentName,
-        result,
-        { startedAt, workingDirectory },
-      );
-      await persistAndDeliverTerminal(msg, resultMeta);
-    },
-    onError: (err, result) => deliverSubagentError(err, result),
+    onProgress: (update) => nativeStrategy.onProgress(update),
+    onFollowUpConsumed: () => nativeStrategy.onFollowUpConsumed(),
+    onBeforeWaiting: (lastResponse, touchedFiles, memoryMisses) =>
+      nativeStrategy.onBeforeWaiting(lastResponse, touchedFiles, memoryMisses),
+    onCompleted: (result) => nativeStrategy.onCompleted(result),
+    onError: (err, result) => nativeStrategy.onError(err, result),
   });
-  promise
-    // Await the error delivery so the registry entry is not torn down while
-    // the delivery (and any resume-based follow-up routing) is in flight.
-    .catch((err: unknown) => deliverSubagentError(err))
-    .catch((deliveryErr: unknown) => {
-      logger.warn(
-        'subagentDelivery',
-        `Failed to deliver subagent error for ${executionId}: ${toErrorMessage(deliveryErr)}`,
-      );
-    })
-    .finally(() => {
-      subagentDeliveryRegistry.finish(executionId);
-    });
+  nativeStrategy.attachPromise(promise);
   const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
   const meta = options?.approvalMeta;
   const metaLines: string[] = [];
