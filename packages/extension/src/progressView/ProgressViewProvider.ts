@@ -18,6 +18,7 @@ import {
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
 import { bus } from '@eventBus/ProgressEventBus';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createChannelTrace } from '@logger';
 import {
@@ -52,6 +53,7 @@ import {
 } from '@tools/inquiry/externalInquiryStorage';
 
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
+import { createExtensionHostInteractions } from './extensionHostInteractions';
 
 import type { MainViewProvider } from '../MainViewProvider';
 
@@ -96,6 +98,7 @@ export class ProgressViewProvider
 
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
+  private readonly detachHostInteractions: () => void;
 
   private approvalHandlers!: ApprovalRequestHandlerSet;
 
@@ -166,7 +169,15 @@ export class ProgressViewProvider
       context,
       new VscodePromptHost(),
       defaultSession().coordinators,
+      defaultSession().interactions,
     );
+    this.detachHostInteractions = defaultSession().useHostInteractions(
+      createExtensionHostInteractions({
+        runtimeHost: extensionAgentRuntimeHost,
+        getApprovalHandlers: () => this.approvalHandlers,
+      }),
+    );
+    this._disposables.push({ dispose: this.detachHostInteractions });
 
     ProgressViewProvider._instance = this;
     setProgressViewBridge(this);
