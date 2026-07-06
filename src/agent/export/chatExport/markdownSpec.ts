@@ -60,7 +60,10 @@ const ATTACHMENT_LABELS: Record<string, string> = {
   document: 'Document attachment',
 };
 
-const MARKDOWN_TEXT_ESCAPE_RE = /[\\[\]()<>!]/g;
+// Backtick/*/_/# added on top of the link-syntax-breaking set: a
+// tool-controlled title containing them can trigger incidental code-span,
+// emphasis, or heading formatting even though it can't inject a live link.
+const MARKDOWN_TEXT_ESCAPE_RE = /[\\[\]()<>!`*_#]/g;
 // No `[`/`]` here (unlike MARKDOWN_TEXT_ESCAPE_RE above): CommonMark's
 // bare-form link destination grammar restricts only unescaped/unbalanced
 // parentheses, ASCII space, and control characters — square brackets have
