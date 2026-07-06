@@ -16,6 +16,7 @@ import { Component, type ReactNode } from 'react';
 
 import * as logUtils from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { WARNING } from '../ui/glyphs';
 
@@ -41,7 +42,7 @@ export function formatRenderError(error: unknown): string {
   // The marker is a single line: collapse whitespace and cap length so a long
   // or multi-line message can't reflow the transcript.
   const oneLine = message.replaceAll(/\s+/g, ' ').trim();
-  return oneLine.length > 120 ? `${oneLine.slice(0, 119)}…` : oneLine;
+  return truncateWithEllipsis(oneLine, 120);
 }
 
 export class EntryErrorBoundary extends Component<

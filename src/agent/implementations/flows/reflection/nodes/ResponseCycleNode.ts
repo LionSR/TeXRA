@@ -13,9 +13,8 @@ import type {
 } from '@agent/core/state/AgentState';
 import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import { normalizeProviderError } from '@common/errors';
+import { buildFailedRetryInfo } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
-import { toRetryErrorInfo } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -140,12 +139,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
     } catch (error) {
       recordRound(prepRes.run, prepRes.round);
       await this.services.onRoundFinalized(prepRes.run);
-      const formatted = normalizeProviderError(error);
       return {
         outcome: 'failed',
         error: ensureError(error),
-        userRetryable: formatted.userRetryable,
-        lastError: toRetryErrorInfo(formatted),
+        ...buildFailedRetryInfo(error),
       };
     }
   }
@@ -154,13 +151,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     _prepRes: CyclePrepInput,
     error: Error,
   ): Promise<CycleOutcome> {
-    const formatted = normalizeProviderError(error);
-    return {
-      outcome: 'failed',
-      error,
-      userRetryable: formatted.userRetryable,
-      lastError: toRetryErrorInfo(formatted),
-    };
+    return { outcome: 'failed', error, ...buildFailedRetryInfo(error) };
   }
 
   async post(
