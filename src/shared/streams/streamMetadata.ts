@@ -21,7 +21,7 @@ export interface StreamMetadataInputs {
   substate?: StreamSubstate;
   lastTimestamp?: number;
   conversationProgress?: ConversationProgress;
-  roundStage?: RoundStage;
+  roundStage?: RoundStage | null;
   activeSubagents?: ActiveChildInfo[];
   finishedSubagentCount?: number;
   activeProcesses?: ActiveChildInfo[];
@@ -39,7 +39,7 @@ export function buildStreamMetadata(
     conversationProgress: inputs.conversationProgress ?? {
       ...DEFAULT_CONVERSATION_PROGRESS,
     },
-    roundStage: inputs.roundStage,
+    roundStage: inputs.roundStage ?? null,
     activeSubagents: inputs.activeSubagents ?? [],
     finishedSubagentCount:
       inputs.finishedSubagentCount ?? DEFAULT_FINISHED_CHILD_COUNT,
