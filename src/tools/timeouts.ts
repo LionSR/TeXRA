@@ -8,7 +8,9 @@
 
 import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
-import { AbortError } from 'p-retry';
+import pRetry, { AbortError, type Options as PRetryOptions } from 'p-retry';
+
+import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * Unwrap a p-retry {@link AbortError} to the original error it carried.
@@ -70,4 +72,63 @@ export function isTransientHttpError(error: unknown): boolean {
   // matches only the known fetch/undici network-failure messages, so genuine
   // bugs in the wrapped call surface instead of being masked as transient.
   return isNetworkError(error);
+}
+
+/**
+ * Join a per-call timeout with the run's cancellation signal (if any).
+ *
+ * `AbortSignal.timeout` covers both connection and body read; a client's own
+ * `timeout` option (e.g. ky's) only clears once headers arrive. The run's
+ * cancellation signal joins in so an interrupted run aborts in-flight
+ * requests instead of waiting out the timeout.
+ */
+export function joinAbortSignal(
+  timeoutMs: number,
+  cancelSignal?: AbortSignal,
+): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return cancelSignal
+    ? AbortSignal.any([cancelSignal, timeoutSignal])
+    : timeoutSignal;
+}
+
+/**
+ * Run `fetchOnce` under p-retry, retrying only transient failures (timeout,
+ * network error, 429, 5xx) with jittered backoff — the pattern every
+ * network-boundary tool (web fetch/search, Loogle, Zotero) repeats: classify
+ * the error, retry if transient, otherwise abort immediately.
+ *
+ * `fetchOnce` may itself throw an {@link AbortError} (e.g. a response-shape
+ * or size-limit check) to abort retries without going through the
+ * transient-error classification; that error passes through unwrapped.
+ */
+export async function retryTransientFetch<T>(
+  fetchOnce: () => Promise<T>,
+  options: {
+    retries: number;
+    minTimeout: number;
+    cancelSignal?: AbortSignal;
+    onFailedAttempt?: PRetryOptions['onFailedAttempt'];
+  },
+): Promise<T> {
+  return pRetry(
+    async () => {
+      try {
+        return await fetchOnce();
+      } catch (error: unknown) {
+        if (error instanceof AbortError || isTransientHttpError(error)) {
+          throw error;
+        }
+        throw new AbortError(ensureError(error));
+      }
+    },
+    {
+      retries: options.retries,
+      minTimeout: options.minTimeout,
+      randomize: true,
+      // Stop retrying (and skip inter-retry delays) once the run is cancelled.
+      signal: options.cancelSignal,
+      onFailedAttempt: options.onFailedAttempt,
+    },
+  );
 }
