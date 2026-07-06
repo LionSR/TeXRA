@@ -419,14 +419,21 @@ export class LatexDiffManager {
         : null,
       this.resolveWorkspaceSourceDir(referenceLocation),
     ].filter((dir): dir is string => dir !== null);
-    const ok = await compileLatex2Pdf(diffLocation, {
+    const compiled = await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
       timeout: timeoutMs,
       extraInputDirs,
     });
 
-    if (!ok) {
+    if (!compiled.ok) {
+      this.logger.warn('Failed to compile latexdiff PDF', {
+        data: {
+          diffFile: diffLocation.absolutePath,
+          logTail: compiled.logTail,
+        },
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
       return { diffLocation, artifact: null };
     }
 

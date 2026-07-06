@@ -171,12 +171,12 @@ describe('LatexMediaManager PDF compilation', () => {
     mocks.compileLatex2Pdf.mockImplementation(
       async (file: FileLocation, options: { outputDirectory?: string }) => {
         if (path.basename(file.absolutePath) === 'missing-result.tex') {
-          return undefined;
+          return { ok: false, logTail: 'simulated compile failure' };
         }
         const outputDirectory = options.outputDirectory!;
         await mkdir(outputDirectory, { recursive: true });
         await writeFile(compiledPdfPath, 'compiled pdf');
-        return true;
+        return { ok: true };
       },
     );
 

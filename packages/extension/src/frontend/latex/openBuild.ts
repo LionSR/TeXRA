@@ -129,13 +129,15 @@ async function openAndBuildLatex(
     // packages, so compile internally with TEXINPUTS set.
     // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
     const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
-    const ok = await compileLatex2Pdf(pathToLocation(uri.fsPath), {
+    const compiled = await compileLatex2Pdf(pathToLocation(uri.fsPath), {
       outputDirectory: outDir,
     });
-    if (!ok) {
+    if (!compiled.ok) {
       logger.warn(
         CHANNEL,
-        `Internal LaTeX compilation failed for ${uri.fsPath}`,
+        `Internal LaTeX compilation failed for ${uri.fsPath}${
+          compiled.logTail ? `\n${compiled.logTail}` : ''
+        }`,
       );
     }
   }
