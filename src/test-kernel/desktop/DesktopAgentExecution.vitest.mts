@@ -32,6 +32,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { assertSupported } from '@shared/utils/dispatcher';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 
 // Local imports - desktop test paths
@@ -44,6 +45,21 @@ type Bridge = {
 };
 
 type TestableBridge = Bridge & {
+  runtimeHost: {
+    interactions?: {
+      requestPlanApproval?: (request: {
+        approvalId: string;
+        streamId: StreamTabId;
+        plan: { objective: string };
+        goalEnabled: boolean;
+      }) => Promise<unknown>;
+      requestAgentProposal?: (request: unknown) => Promise<unknown>;
+      requestRetry?: (request: {
+        streamId: StreamTabId;
+        operation: string;
+      }) => Promise<unknown>;
+    };
+  };
   handleProgressEvent(event: string, payload: unknown): void;
   syncFullView(): void;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
@@ -608,6 +624,165 @@ describe('DesktopProgressBridge', () => {
           }),
         );
       });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('installs host interactions on the desktop runtime host', async () => {
+    const bridge = await createBridge([]);
+
+    try {
+      expect(bridge.runtimeHost.interactions).toMatchObject({
+        requestPlanApproval: expect.any(Function),
+        requestAgentProposal: expect.any(Function),
+        requestRetry: expect.any(Function),
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('resolves plan approvals through desktop host interactions', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      messages.length = 0;
+      const result = bridge.runtimeHost.interactions?.requestPlanApproval?.({
+        approvalId: 'plan-host-interaction',
+        streamId: 'stream-plan' as StreamTabId,
+        plan: { objective: 'Check the desktop host interaction port.' },
+        goalEnabled: false,
+      });
+
+      await vi.waitFor(() => {
+        expect(
+          progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toContainEqual(
+          expect.objectContaining({
+            action: 'show',
+            permission: expect.objectContaining({
+              kind: PERMISSION_KIND.PLAN_APPROVAL,
+              data: expect.objectContaining({
+                approvalId: 'plan-host-interaction',
+              }),
+            }),
+          }),
+        );
+      });
+
+      const handlePlan = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION
+        ],
+      );
+      await handlePlan({
+        command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+        approvalId: 'plan-host-interaction',
+        action: 'approve',
+      });
+
+      await expect(result).resolves.toEqual({ action: 'approve' });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+      ).toContainEqual(
+        expect.objectContaining({
+          action: 'resolve',
+          kind: PERMISSION_KIND.PLAN_APPROVAL,
+          id: 'plan-host-interaction',
+        }),
+      );
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('resolves agent proposals through desktop host interactions', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      messages.length = 0;
+      const result = bridge.runtimeHost.interactions?.requestAgentProposal?.({
+        proposalId: 'proposal-host-interaction',
+        streamId: 'stream-proposal',
+        agentCategory: AgentCategory.Workflow,
+        agent: 'proofreader',
+        model: 'gemini31p',
+        instruction: 'Check this draft.',
+        inputFiles: ['main.tex'],
+        contextFiles: [],
+        mediaFiles: [],
+        outputFiles: ['main.review.tex'],
+        useMultipleOutputs: false,
+        toolConfig: DEFAULT_TOOL_CONFIG,
+      });
+
+      await vi.waitFor(() => {
+        expect(
+          progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toContainEqual(
+          expect.objectContaining({
+            action: 'show',
+            permission: expect.objectContaining({
+              kind: PERMISSION_KIND.PROPOSAL,
+              data: expect.objectContaining({
+                proposalId: 'proposal-host-interaction',
+              }),
+            }),
+          }),
+        );
+      });
+
+      const handleProposal = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION
+        ],
+      );
+      await handleProposal({
+        command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+        proposalId: 'proposal-host-interaction',
+        action: 'approve',
+      });
+
+      await expect(result).resolves.toEqual({ action: 'approve' });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+      ).toContainEqual(
+        expect.objectContaining({
+          action: 'resolve',
+          kind: PERMISSION_KIND.PROPOSAL,
+          id: 'proposal-host-interaction',
+        }),
+      );
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('keeps desktop retry requests on the existing cancel path', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      messages.length = 0;
+      await expect(
+        bridge.runtimeHost.interactions?.requestRetry?.({
+          streamId: 'stream-retry' as StreamTabId,
+          operation: 'model request',
+        }),
+      ).resolves.toEqual({ action: 'cancel' });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+      ).not.toContainEqual(
+        expect.objectContaining({
+          action: 'show',
+          permission: expect.objectContaining({
+            kind: PERMISSION_KIND.RETRY,
+          }),
+        }),
+      );
     } finally {
       bridge.dispose();
     }
