@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
 import { hasLatexCompiler } from '@latex/latexToolchain';
-import { compileLatex2Pdf } from '@latex/texTools';
+import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import type {
   CompileFailure,
   CompileResult,
@@ -23,7 +23,6 @@ import {
 } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
-import { splitContentLines } from '@utils/text/stringUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 import {
@@ -39,7 +38,6 @@ export interface CompileCheckContext {
   streamId: string;
 }
 
-const LOG_TAIL_LINES = 200;
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
@@ -283,7 +281,7 @@ async function compileOne(
       flexibleFS.delete(legacyLogDest).catch(() => undefined),
     ]);
 
-  let ok: boolean;
+  let compileResult: CompileLatex2PdfResult;
   try {
     const content = await flexibleFS.read(outputFile.location);
     if (!/\\documentclass/.test(content)) {
@@ -307,7 +305,7 @@ async function compileOne(
 
     // execa's timeout option kills the child process on expiry, so we don't
     // orphan hanging latexmk/pdflatex runs.
-    ok = await compileLatex2Pdf(outputFile.location, {
+    compileResult = await compileLatex2Pdf(outputFile.location, {
       channel: ctx.streamId,
       outputDirectory: buildDir,
       timeout: opts.timeoutMs,
@@ -336,7 +334,7 @@ async function compileOne(
     });
   }
 
-  if (ok) {
+  if (compileResult.ok) {
     ctx.logger.debug(`Compile check: ${displayName} built successfully`);
     // Only now that we know the outcome do we clear a stale failure log from
     // a previous attempt at this round — clearing it up front would leave a
@@ -355,8 +353,7 @@ async function compileOne(
     return { failure: null, failureLogExcerpt: '', artifact };
   }
 
-  const tail = await readLogTail(buildDir, compiledBasename);
-  const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${tail}`;
+  const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${compileResult.logTail}`;
   ctx.logger.warn(`Compile check: ${displayName} failed`, {
     data: path.relative(opts.runDirectory, logDest.absolutePath),
   });
@@ -505,22 +502,4 @@ function combineFailureLogExcerpts(excerpts: string[]): string {
     `[truncated to last ${COMPILE_LOG_EXCERPT_CHAR_LIMIT} characters]`,
     combined.slice(-COMPILE_LOG_EXCERPT_CHAR_LIMIT),
   ].join('\n');
-}
-
-async function readLogTail(
-  buildDir: string,
-  compiledBasename: string,
-): Promise<string> {
-  // LaTeX engines drop `<basename-without-ext>.log`; strip .tex
-  // case-insensitively so .TEX/.Tex map to the same file.
-  const latexLogAbs = path.join(
-    buildDir,
-    `${compiledBasename.replace(/\.tex$/i, '')}.log`,
-  );
-  try {
-    const full = await flexibleFS.read(pathToLocation(latexLogAbs));
-    return splitContentLines(full).slice(-LOG_TAIL_LINES).join('\n');
-  } catch (err) {
-    return `(no LaTeX log at ${latexLogAbs}: ${toErrorMessage(err)})`;
-  }
 }

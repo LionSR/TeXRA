@@ -242,7 +242,7 @@ export class HistoryHandlers {
     historyId: string,
     exportInput: ChatExportInput,
   ): Promise<void> {
-    const { absolutePath, storagePath, pdfPath } =
+    const { absolutePath, storagePath, pdfPath, logTail } =
       await this.chatExportController.exportAsLatex(historyId, exportInput);
 
     if (pdfPath) {
@@ -254,7 +254,17 @@ export class HistoryHandlers {
         `Chat exported and compiled: ${filename.replace('.tex', '.pdf')}`,
       );
     } else {
-      // Compilation failed — open the .tex source instead
+      // Compilation failed — open the .tex source instead, and log the
+      // compile log tail so the failure reason is discoverable. Included in
+      // the visible message itself, not just `data` — the logger only shows
+      // `data` when texra.logger.debugMode is on (default off).
+      if (logTail) {
+        this.ctx.logger.error(
+          this.ctx.channel,
+          `LaTeX export compilation failed for ${storagePath}:\n${logTail}`,
+          { data: { storagePath, logTail } },
+        );
+      }
       const doc = await vscode.workspace.openTextDocument(absolutePath);
       await vscode.window.showTextDocument(doc, { preview: false });
       void vscode.window.showWarningMessage(
