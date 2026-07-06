@@ -55,6 +55,7 @@ import {
   ReflectionFlowStateSchema,
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
+import { computeRoundStageTotal } from './roundStageTotal';
 import type {
   ReflectionServices,
   WorkflowOutputPolicy,
@@ -247,6 +248,18 @@ export async function runReflectionFlow<C = unknown>(
     mediaNode.next(responseCycleNode);
     responseCycleNode.next(outputNode);
 
+    const workflowOutputPolicy: WorkflowOutputPolicy =
+      input.workflowOutputPolicy ?? {
+        shouldAutoOpenPdfOrLog: () =>
+          readPlatformSetting<boolean>(
+            WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+          ),
+        shouldRejectOnCompileFailure: () =>
+          readPlatformSetting<boolean>(
+            WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+          ),
+      };
+
     const pf = new RoundPersistedFlow<
       ReflectionFlowShared,
       Record<string, unknown>,
@@ -259,12 +272,31 @@ export async function runReflectionFlow<C = unknown>(
             parent: parent ?? undefined,
             kind: 'round',
             index: roundIndex,
-            total: shared.totalRounds,
+            total: computeRoundStageTotal(shared.totalRounds, roundIndex),
           }),
         resetForNextRound: (s) => {
           s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
         },
         checkInterruption,
+        // Bounded compile-repair round (#7077): a compile failure on what
+        // would otherwise be the final round gets exactly one extra round
+        // so the model sees the failure context via PrepareContextNode
+        // instead of the run silently ending on a broken output. Gated on
+        // the same setting that produced compileFailureContext in the
+        // first place, and on the one-shot `compileRepairRoundGranted`
+        // flag so a repair round that itself fails to compile doesn't
+        // chain a second one — even across resume.
+        grantExtraRound: (s) => {
+          if (
+            !s.compileFailureContext ||
+            s.compileRepairRoundGranted ||
+            !workflowOutputPolicy.shouldRejectOnCompileFailure()
+          ) {
+            return false;
+          }
+          s.compileRepairRoundGranted = true;
+          return true;
+        },
       },
     });
 
@@ -278,16 +310,7 @@ export async function runReflectionFlow<C = unknown>(
       promptBuilder,
       fileService,
       getOutputFileLocation,
-      workflowOutputPolicy: input.workflowOutputPolicy ?? {
-        shouldAutoOpenPdfOrLog: () =>
-          readPlatformSetting<boolean>(
-            WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
-          ),
-        shouldRejectOnCompileFailure: () =>
-          readPlatformSetting<boolean>(
-            WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-          ),
-      },
+      workflowOutputPolicy,
       baseFiles,
     };
     pf.setServices(services);
