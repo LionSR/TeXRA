@@ -2,18 +2,29 @@
  * Native subagent callback strategy.
  *
  * This packages the async `executeAgent` callback choreography used by native
- * delegated agents. It does not run the child loop itself; `executeSubagent`
- * still calls `executeAgent` directly. The strategy owns only delivery policy
- * for native child results: progress/interim/terminal follow-ups, manifest
- * writes, duplicate-delivery gating, and registry cleanup.
+ * delegated agents. The strategy owns child result delivery across WAITING
+ * turns: progress/interim/terminal follow-ups, manifest writes, duplicate
+ * delivery gating, WAITING resume, and registry cleanup.
  */
 
 // Local imports - agent
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import {
+  isWaitingFlowResult,
+  type AgentFlowResult,
+  type AgentRuntimeFlowResult,
+} from '@agent/runtime/AgentFlowResult';
+import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import {
+  wakeQueuedFollowUpStream,
+  type FollowUpWakeResult,
+  type SendFollowUpResult,
+} from '@agent/followUp/ToolUseFollowUp';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 
 // Local imports - logger
@@ -45,15 +56,31 @@ import {
   type DiffFileInfo,
 } from '@tools/subagentDiffs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 
 export interface NativeSubagentStrategyParams {
   readonly executionId: ExecutionId;
   readonly agentName: string;
   readonly orchestratorStreamId: StreamTabId;
   readonly parentSession: SessionHandle;
+  readonly runtimeHost: AgentRuntimeHost;
   readonly startedAt: number;
   readonly workingDirectory?: string;
   readonly settleSubagentCost: (result?: AgentFlowResult) => void;
+}
+
+export interface NativeSubagentResumeOptions {
+  readonly approvalPromptsUnavailable?: boolean;
+  readonly runtimeUnavailableTools?: readonly string[];
+  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
+}
+
+const activeNativeSubagents = new Map<string, NativeSubagentStrategy>();
+
+export function getNativeSubagentStrategy(
+  executionId: string,
+): NativeSubagentStrategy | undefined {
+  return activeNativeSubagents.get(executionId);
 }
 
 /**
@@ -146,6 +173,7 @@ export class NativeSubagentStrategy {
 
   constructor(private readonly params: NativeSubagentStrategyParams) {
     this.deliveryState = subagentDeliveryRegistry.start(params.executionId);
+    activeNativeSubagents.set(params.executionId, this);
   }
 
   setChildStreamId(streamId: StreamTabId): void {
@@ -242,6 +270,71 @@ export class NativeSubagentStrategy {
     this.deliveryState.markPending();
   }
 
+  async wakeQueuedFollowUp(
+    result: SendFollowUpResult,
+    options: NativeSubagentResumeOptions,
+  ): Promise<FollowUpWakeResult> {
+    const streamId = this.childStreamId;
+    if (!streamId) return { kind: 'queued_resume_failed' };
+    return wakeQueuedFollowUpStream(
+      streamId,
+      result,
+      {
+        tryResumeStream: (id) => this.resumeStream(id, options),
+      },
+      this.params.parentSession,
+    );
+  }
+
+  private async resumeStream(
+    streamId: StreamTabId,
+    options: NativeSubagentResumeOptions,
+  ): Promise<boolean> {
+    if (streamId !== this.childStreamId) return false;
+    const config = await getExecutionStore(
+      this.params.executionId,
+    ).readConfig();
+    if (!config) return false;
+
+    const resume = await retrieveSessionResumeData(
+      streamId,
+      this.params.executionId,
+      config,
+    );
+    if (!resume || resume.type !== 'toolUse') return false;
+
+    return await resumeQueuedToolUseSnapshot(
+      streamId,
+      resume.snapshot,
+      this.params.runtimeHost,
+      {
+        session: this.params.parentSession,
+        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        runtimeUnavailableTools: options.runtimeUnavailableTools,
+        toolEditApprovalHandler: options.toolEditApprovalHandler,
+        parentStreamId: this.params.orchestratorStreamId,
+        allowWaitingResult: true,
+        onProgress: (update) => this.onProgress(update),
+        onFollowUpConsumed: () => this.onFollowUpConsumed(),
+        onBeforeWaiting: (lastResponse, touchedFiles, memoryMisses) =>
+          this.onBeforeWaiting(lastResponse, touchedFiles, memoryMisses),
+        onCompleted: async (result) => {
+          await this.onCompleted(result);
+          this.finish();
+        },
+        onRunError: async (err, result) => {
+          await this.onError(err, result);
+          this.finish();
+        },
+        onError: async (err) => {
+          await this.deliverSubagentError(err);
+          this.finish();
+        },
+        onRun: (handle) => this.setRunHandle(handle),
+      },
+    );
+  }
+
   async onBeforeWaiting(
     lastResponse: string | undefined,
     touchedFiles: string[],
@@ -322,8 +415,19 @@ export class NativeSubagentStrategy {
     return this.deliverSubagentError(err, result);
   }
 
+  private finish(): void {
+    subagentDeliveryRegistry.finish(this.params.executionId);
+    activeNativeSubagents.delete(this.params.executionId);
+  }
+
   attachPromise(promise: Promise<unknown>): void {
+    let suspended = false;
     promise
+      .then((result: unknown) => {
+        if (isWaitingFlowResult(result as AgentRuntimeFlowResult)) {
+          suspended = true;
+        }
+      })
       // Await the error delivery so the registry entry is not torn down while
       // the delivery and any resume-based follow-up routing are in flight.
       .catch((err: unknown) => this.deliverSubagentError(err))
@@ -334,7 +438,9 @@ export class NativeSubagentStrategy {
         );
       })
       .finally(() => {
-        subagentDeliveryRegistry.finish(this.params.executionId);
+        if (!suspended) {
+          this.finish();
+        }
       });
   }
 }
