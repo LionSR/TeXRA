@@ -227,6 +227,14 @@ export async function requestToolEditApproval(
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
+  const hostInteraction =
+    context?.runtimeHost.interactions?.requestToolEditApproval?.(
+      preparedRequest,
+    );
+  if (hostInteraction) {
+    return finalizeApprovalResult(await hostInteraction, preparedRequest);
+  }
+
   const result = await toolEditApprovalController.enqueue(async () => {
     // Prefer the run's own approval channel (set by hosts that manage more
     // than one concurrent session per process, e.g. desktop's one window per

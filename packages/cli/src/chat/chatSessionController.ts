@@ -62,7 +62,7 @@ import {
   publishChatTuiRootRunStartAvailability,
   type TuiSession,
 } from './tui/state/sessionRunState';
-import { installTuiApprovals } from './tui/state/subscribeApprovals';
+import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import { wrapRuntimeHost } from './tui/state/subscribeRuntimeHost';
 import { notify } from './tui/notifications/terminalNotifier';
 import {
@@ -226,22 +226,32 @@ export function createChatSessionController(
   } => {
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost, snapshotStore);
+    const detachHostInteractions = defaultSession().useHostInteractions(
+      createTuiHostInteractions(wrapped, sessionContext),
+    );
+    disposers.push(detachHostInteractions);
+    const interactiveHost: CliRuntimeHost = {
+      ...wrapped,
+      interactions: defaultSession().interactions,
+    };
     const detachResultToast = attachTerminalResultToast(
       defaultSession(),
-      wrapped,
+      interactiveHost,
     );
     const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
       defaultSession().events,
-      wrapped,
+      interactiveHost,
     );
-    disposers.push(installTuiApprovals(wrapped, sessionContext));
     return {
-      wrapped,
+      wrapped: interactiveHost,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
         detachResultToast();
         detachLegacyProgressProjection();
-        if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
+        detachHostInteractions();
+        if (session.runtimeHost === interactiveHost) {
+          session.runtimeHost = undefined;
+        }
         markChatTuiRunCompleted(session);
         void runtimeHost.close();
       },
