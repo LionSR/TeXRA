@@ -30,13 +30,12 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { BaseViewMessageHandler } from '@common/webview';
 import { WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
-import { bus } from '@eventBus/ProgressEventBus';
+import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import {
   applyGitAuthorConfig,
@@ -209,18 +208,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     this.handlerRegistry = this.createHandlerRegistry();
 
-    // Lifetime == extension; bus is process-global so no dispose needed.
+    // Lifetime == extension; appSignals is process-global so no dispose needed.
     const refreshSubscriptions = () =>
       void this.withActiveWebview((w) =>
         this.githubHandlers.sendPRSubscriptions(w),
       );
-    bus.on('prSubscriptionsChanged', refreshSubscriptions);
-    bus.on('prSubscriptionBindingsChanged', refreshSubscriptions);
-    bus.on('repoSubscriptionsChanged', refreshSubscriptions);
-    bus.on('repoSubscriptionBindingsChanged', refreshSubscriptions);
-    bus.on('issueSubscriptionsChanged', refreshSubscriptions);
-    bus.on('issueSubscriptionBindingsChanged', refreshSubscriptions);
-    bus.on('toolAvailabilityChanged', () => {
+    appSignals.on('prSubscriptionsChanged', refreshSubscriptions);
+    appSignals.on('prSubscriptionBindingsChanged', refreshSubscriptions);
+    appSignals.on('repoSubscriptionsChanged', refreshSubscriptions);
+    appSignals.on('repoSubscriptionBindingsChanged', refreshSubscriptions);
+    appSignals.on('issueSubscriptionsChanged', refreshSubscriptions);
+    appSignals.on('issueSubscriptionBindingsChanged', refreshSubscriptions);
+    appSignals.on('toolAvailabilityChanged', () => {
       void this.withActiveWebview((w) =>
         this.sendToolDashboardData(w, { skipChecks: true }),
       );
@@ -462,8 +461,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         openToolInstallUrl: (data) => this.openExternalUrl(data.url),
         installToolExtension: (data) =>
           this.latexHandlers.installExtension(data.extensionId),
-        recheckToolStatus: () =>
-          refreshToolAvailability(extensionAgentRuntimeHost),
+        recheckToolStatus: () => refreshToolAvailability(),
         toggleTool: async (data) => {
           await setToolEnabled(data.toolId, data.enabled);
           refreshDisabledToolCache();
