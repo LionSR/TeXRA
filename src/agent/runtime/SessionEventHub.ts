@@ -4,8 +4,11 @@ import type { AgentEvent } from '@agent/trace';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
-import { assertNever } from '@utils/core';
 
+import {
+  emitProjectedProgressEvent,
+  projectSessionFactToProgressEvent,
+} from './sessionProgressEventProjection';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('SessionEventHub');
@@ -46,25 +49,7 @@ export function emitLegacySessionFactOnHost(
   host: AgentRuntimeHost,
   fact: SessionFact,
 ): void {
-  switch (fact.type) {
-    case 'goalStateChanged':
-      host.emit('goalStateChanged', fact.payload);
-      return;
-    case 'inquiryThreadUpdated':
-      host.emit('inquiryThreadUpdated', fact.payload);
-      return;
-    case 'clearMissingOutputs':
-      host.emit('clearMissingOutputs', fact.payload);
-      return;
-    case 'updateQueuedFollowUps':
-      host.emit('updateQueuedFollowUps', fact.payload);
-      return;
-    case 'setActiveStream':
-      host.emit('setActiveStream', fact.payload);
-      return;
-    default:
-      assertNever(fact, 'Unhandled SessionFact type');
-  }
+  emitProjectedProgressEvent(host, projectSessionFactToProgressEvent(fact));
 }
 
 export interface SessionEventSubscriptionFilter {
