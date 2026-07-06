@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import { ZodError } from 'zod';
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 import { createRunTrace, type RunTrace } from '@transcript';
 import {
@@ -423,9 +423,9 @@ async function assembleAgentLaunchContext(
       prompt,
       agentPath,
       {
-        isOpenai: modelHandler.isOpenai,
-        isAnthropic: modelHandler.isAnthropic,
-        isGoogle: modelHandler.isGoogle,
+        isOpenai: modelHandler.config.provider === ModelProvider.OPENAI,
+        isAnthropic: modelHandler.config.provider === ModelProvider.ANTHROPIC,
+        isGoogle: modelHandler.config.provider === ModelProvider.GOOGLE,
       },
       agentLogger,
     );
