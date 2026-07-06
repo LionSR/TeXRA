@@ -276,4 +276,41 @@ describe('RetryState', () => {
       }
     },
   );
+
+  it('classifies a policy/headless retry denial as failed, not cancelled (#7331)', async () => {
+    const streamId = 'retry-state-deny' as StreamTabId;
+    const { node, streamStatus, waitForRetry } = createRetryNode(streamId);
+
+    waitForRetry.mockResolvedValueOnce({
+      action: 'deny',
+      reason: 'Denied by CLI approval policy.',
+    });
+    const error = new Error('stream dropped before first token');
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+
+      const shouldRetry = await withRetryRunContext(
+        streamId,
+        waitForRetry,
+        () => node.retryPrompt(undefined, error),
+      );
+
+      // A denial does not retry and — crucially — is NOT a user cancel, so the
+      // stream resumes to RUNNING to let the failure terminalize (a WAITING
+      // stream can't be written to a terminal outcome directly).
+      expect(shouldRetry).toBe(false);
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+
+      // The fallback classifies this as `failed` (→ RUN_OUTCOME.FAILED),
+      // surfacing the underlying error — rather than `cancelled`, which would
+      // let a zero-output run report COMPLETED.
+      expect(node.fallbackFor(error)).toMatchObject({
+        kind: 'failed',
+        message: 'stream dropped before first token',
+      });
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
 });
