@@ -104,7 +104,13 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
    * mirroring the Google/DeepSeek/Kimi/MiniMax direct-handler overrides.
    */
   override get requiresBatchedParallelToolResults(): boolean {
-    return this.isGoogle || this.isDeepSeek || this.isKimi || this.isMiniMax;
+    const { provider } = this.config;
+    return (
+      provider === ModelProvider.GOOGLE ||
+      provider === ModelProvider.DEEPSEEK ||
+      provider === ModelProvider.MOONSHOT ||
+      provider === ModelProvider.MINIMAX
+    );
   }
 
   /**
@@ -114,7 +120,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   override get supportsReasoningLevelOverride(): boolean {
     return (
       this.capabilities.supportsReasoningEffort ||
-      (this.isDeepSeek && this.capabilities.supportsReasoning)
+      (this.config.provider === ModelProvider.DEEPSEEK &&
+        this.capabilities.supportsReasoning)
     );
   }
 
