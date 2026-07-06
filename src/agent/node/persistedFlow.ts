@@ -16,10 +16,19 @@ export function flowKey(runId: string): string {
 const CHANNEL = 'PersistedFlow';
 logger.initialize(CHANNEL);
 
-export const FLOW_RECORD_SCHEMA_VERSION = 1;
+export const FLOW_RECORD_SCHEMA_VERSION = 2;
+const START_NODE_ID = 'start';
 
 interface NodeRecord {
   action?: string;
+  nodeId?: string;
+}
+
+export interface FlowCursor {
+  /** The next graph-local node path, or null when the flow has reached a terminal edge. */
+  nextNodeId: string | null;
+  /** Last action emitted by the previous node, for diagnostics and legacy parity. */
+  lastAction?: string;
 }
 
 export interface FlowRecord {
@@ -28,6 +37,11 @@ export interface FlowRecord {
   params: Record<string, unknown>;
   shared: unknown;
   createdAt: string;
+  /**
+   * Authoritative replay cursor. `nodes[]` is now only an audit log: it can be
+   * capped or moved later without changing resume semantics.
+   */
+  cursor?: FlowCursor;
   nodes: NodeRecord[];
 }
 
@@ -83,6 +97,8 @@ export class PersistedFlow<
    * stepWithResult that immediately follows the previous step's write).
    */
   private cachedRecord: FlowRecord | null = null;
+  private nodeIds: Map<BaseNode, string> | null = null;
+  private nodesById: Map<string, BaseNode> | null = null;
 
   /**
    * Optional write-through projection callback.
@@ -137,7 +153,8 @@ export class PersistedFlow<
     while ((await this.stepWithResult()).hasMore) {
       // step loop
     }
-    return this.cachedRecord?.nodes.at(-1)?.action as Action | undefined;
+    return (this.cachedRecord?.cursor?.lastAction ??
+      this.cachedRecord?.nodes.at(-1)?.action) as Action | undefined;
   }
 
   /**
@@ -158,16 +175,14 @@ export class PersistedFlow<
       throw new Error('Invalid or corrupted flow record');
     }
 
-    let cursor: BaseNode | undefined = this.start;
-    for (const n of flow.nodes)
-      cursor = cursor?.getNextNode(n.action as Action);
+    const cursor = this.resolveCursor(flow);
 
     // No more nodes to execute
     if (!cursor) {
       this.cachedRecord = flow;
       return {
         hasMore: false,
-        action: flow.nodes.at(-1)?.action,
+        action: flow.cursor?.lastAction ?? flow.nodes.at(-1)?.action,
         shared: flow.shared as S,
       };
     }
@@ -182,11 +197,18 @@ export class PersistedFlow<
     cursor.setParams(params);
     cursor.setServices(this._services);
     const action = await cursor._run(shared);
+    const next = cursor.getNextNode(action);
+    const cursorId = this.idForNode(cursor);
+    const nextNodeId = next ? this.idForNode(next) : null;
 
     // Invalidate cache before mutation: if kv.write fails, the next read
     // falls through to KVStore which has the correct pre-mutation state.
     this.cachedRecord = null;
-    flow.nodes.push({ action });
+    flow.nodes.push({ action, nodeId: cursorId });
+    flow.cursor = {
+      nextNodeId,
+      ...(action !== undefined ? { lastAction: action } : {}),
+    };
     flow.shared = this.serializeShared(shared);
     await this.kv.write(key, stampFlowRecordSchemaVersion(flow));
     this.cachedRecord = flow;
@@ -219,7 +241,81 @@ export class PersistedFlow<
   protected async resetNodeHistory(shared: S): Promise<void> {
     await this.commitShared(shared, (flow) => {
       flow.nodes = [];
+      flow.cursor = { nextNodeId: this.idForNode(this.start) };
     });
+  }
+
+  private resolveCursor(flow: FlowRecord): BaseNode | undefined {
+    if (flow.cursor) {
+      if (flow.cursor.nextNodeId === null) return undefined;
+      const byId = this.nodeIndex().byId;
+      const cursor = byId.get(flow.cursor.nextNodeId);
+      if (!cursor) {
+        throw new Error(
+          `Invalid persisted flow cursor: ${flow.cursor.nextNodeId}`,
+        );
+      }
+      return cursor;
+    }
+
+    return this.replayLegacyNodePath(flow.nodes);
+  }
+
+  private replayLegacyNodePath(
+    nodes: readonly NodeRecord[],
+  ): BaseNode | undefined {
+    let cursor: BaseNode | undefined = this.start;
+    for (const n of nodes) {
+      cursor = cursor?.getNextNode(n.action as Action);
+    }
+    return cursor;
+  }
+
+  private idForNode(node: BaseNode): string {
+    const id = this.nodeIndex().ids.get(node);
+    if (!id) {
+      throw new Error('Persisted flow graph contains an unindexed node');
+    }
+    return id;
+  }
+
+  private nodeIndex(): {
+    readonly ids: Map<BaseNode, string>;
+    readonly byId: Map<string, BaseNode>;
+  } {
+    if (this.nodeIds && this.nodesById) {
+      return { ids: this.nodeIds, byId: this.nodesById };
+    }
+
+    const ids = new Map<BaseNode, string>();
+    const byId = new Map<string, BaseNode>();
+    const queue: Array<{ node: BaseNode; id: string }> = [
+      { node: this.start, id: START_NODE_ID },
+    ];
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const item = queue[index];
+      if (!item) continue;
+      const { node, id } = item;
+      if (ids.has(node)) continue;
+
+      ids.set(node, id);
+      byId.set(id, node);
+      for (const [action, successor] of node
+        .successorEntries()
+        .toSorted(([left], [right]) => left.localeCompare(right))) {
+        if (!ids.has(successor)) {
+          queue.push({
+            node: successor,
+            id: `${id}/${encodeURIComponent(action)}`,
+          });
+        }
+      }
+    }
+
+    this.nodeIds = ids;
+    this.nodesById = byId;
+    return { ids, byId };
   }
 
   /**
@@ -258,6 +354,7 @@ export class PersistedFlow<
       params: this._params as Record<string, unknown>,
       shared: this.serializeShared(shared),
       createdAt: new Date().toISOString(),
+      cursor: { nextNodeId: this.idForNode(this.start) },
       nodes: [],
     };
     await this.kv.write(key, record);
