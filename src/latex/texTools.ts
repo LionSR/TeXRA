@@ -120,23 +120,22 @@ export function buildLatexSearchParts(input: {
   };
 }
 
-/** Result of a {@link compileLatex2Pdf} attempt. */
-export interface CompileLatex2PdfResult {
-  /** True if compilation succeeded. */
-  ok: boolean;
-  /**
-   * Last {@link LOG_TAIL_LINES} lines of the engine's `.log` file, present on
-   * failure so every caller can surface (or at least log) why the compile
-   * failed instead of just a bare `false`.
-   */
-  logTail?: string;
-}
+/**
+ * Result of a {@link compileLatex2Pdf} attempt. A discriminated union on `ok`
+ * so the type system guarantees {@link LOG_TAIL_LINES}'s worth of the
+ * engine's `.log` file tail is present whenever compilation fails, instead of
+ * every caller needing a defensive fallback for a theoretically-missing
+ * `logTail`.
+ */
+export type CompileLatex2PdfResult =
+  { ok: true } | { ok: false; logTail: string };
 
 /**
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
  * @param options Compilation options (channel defaults to module CHANNEL)
- * @returns `{ ok, logTail? }` -- `logTail` is populated on failure.
+ * @returns `{ ok: true } | { ok: false, logTail }` -- `logTail` is always
+ * populated on failure.
  */
 export async function compileLatex2Pdf(
   latexLocation: FileLocation,

@@ -75,7 +75,7 @@ describe('compileLatex2Pdf structured return', () => {
       { outputDirectory },
     );
 
-    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected a failed compile');
     // Last 200 of 250 lines survive: L0051 .. L0250.
     expect(result.logTail).toContain('L0051');
     expect(result.logTail).toContain('L0250');
@@ -91,7 +91,7 @@ describe('compileLatex2Pdf structured return', () => {
       { outputDirectory: path.join(workspacePath, 'build-missing') },
     );
 
-    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected a failed compile');
     expect(result.logTail).toContain('no LaTeX log at');
   });
 
@@ -105,7 +105,7 @@ describe('compileLatex2Pdf structured return', () => {
       { outputDirectory: path.join(workspacePath, 'build') },
     );
 
-    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected a failed compile');
     expect(result.logTail).toContain('boom: pdflatex crashed');
   });
 });

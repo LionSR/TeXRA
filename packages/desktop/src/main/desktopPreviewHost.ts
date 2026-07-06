@@ -138,9 +138,16 @@ export function createDesktopPreviewHost(
       outputDirectory,
     });
     if (!built.ok) {
-      const tail = built.logTail ? `\n\n${built.logTail}` : '';
+      // The full engine log (up to 200 lines) goes to console.error, not the
+      // dialog message -- fail() surfaces the message via a blocking native
+      // `dialog.showMessageBox` modal (see main/index.ts's showErrorMessage),
+      // which has no scrolling affordance and would render as an oversized,
+      // unreadable dialog for a multi-hundred-line raw compiler log.
+      console.error(
+        `[desktop] LaTeX build failed for ${sourcePath}:\n${built.logTail}`,
+      );
       await fail(
-        `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.${tail}`,
+        `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
       );
     }
 
