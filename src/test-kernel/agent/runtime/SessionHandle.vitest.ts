@@ -193,7 +193,10 @@ describe('SessionHandle', () => {
 
       // ...while B's remain live and resolvable through B's own bridge.
       expect(
-        b.coordinators.resolvePlanApproval('approval:b', { action: 'approve' }),
+        hostB.host.interactions?.resolve('approval:b', {
+          kind: 'plan',
+          action: 'approve',
+        }),
       ).toBe(true);
       expect(b.coordinators.triggerRetry(streamId, 'retry B')).toBe(true);
       await expect(planB).resolves.toEqual({ action: 'approve' });

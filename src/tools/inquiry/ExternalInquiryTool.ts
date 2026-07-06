@@ -159,11 +159,10 @@ export async function handleExternalInquiryAction(
     // this the request would replay on next webview load and the stream would
     // be reported as having pending permissions forever. Emit even for stale
     // submits so duplicate/delayed UI actions do not leave a leaked permission.
-    emitRuntimeEvent(
-      'resolveExternalInquiry',
-      { requestId: payload.threadId },
-      options.session,
-    );
+    options.session?.interactions.resolve(payload.threadId, {
+      kind: 'externalInquiry',
+      action: 'submit',
+    });
     if (!persisted) {
       logger.warn(
         `Inquiry submit ignored: thread ${payload.threadId} has no open turn.`,
@@ -189,11 +188,11 @@ export async function handleExternalInquiryAction(
     });
   }
   const droppedManifest = await markDropped({ threadId: payload.threadId });
-  emitRuntimeEvent(
-    'resolveExternalInquiry',
-    { requestId: payload.threadId },
-    options.session,
-  );
+  options.session?.interactions.resolve(payload.threadId, {
+    kind: 'externalInquiry',
+    action: 'drop',
+    feedback: payload.feedback,
+  });
   if (droppedManifest) {
     await injectContinuationForDroppedThread(
       payload.threadId,
@@ -417,11 +416,10 @@ export class ExternalInquiryTool extends defineTool({
         };
     const interaction =
       runtimeHost.interactions?.openExternalInquiry?.(permission);
-    if (interaction) {
-      void interaction;
-    } else {
-      runtimeHost.emit('showExternalInquiry', permission);
+    if (!interaction) {
+      throw new Error('HostInteractions.openExternalInquiry is required');
     }
+    void interaction;
 
     // Background Tasks panel: announce the open thread.
     const summary = await getThreadSummary(persisted.threadId);

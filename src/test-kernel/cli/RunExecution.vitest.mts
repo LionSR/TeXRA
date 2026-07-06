@@ -21,6 +21,7 @@ import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCap
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
+  createHeadlessCliHostInteractions: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   installCliApprovalHandlers: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
@@ -65,6 +66,7 @@ vi.mock('@cli/runtime/runtimeHost', () => ({
 }));
 
 vi.mock('@cli/runtime/approvalAdapter', () => ({
+  createHeadlessCliHostInteractions: mocks.createHeadlessCliHostInteractions,
   installCliApprovalHandlers: mocks.installCliApprovalHandlers,
 }));
 
@@ -115,6 +117,12 @@ function toolUseConfig() {
 function stubRunExecutionDeps(): void {
   vi.clearAllMocks();
   mocks.close.mockResolvedValue(undefined);
+  mocks.createHeadlessCliHostInteractions.mockReturnValue({
+    handleProgressEvent: vi.fn(() => false),
+    pending: vi.fn(() => []),
+    resolve: vi.fn(() => false),
+    cancelForStream: vi.fn(),
+  });
   mocks.installCliApprovalHandlers.mockReturnValue(vi.fn());
   mocks.createCliRuntimeHost.mockReturnValue({
     emit: vi.fn(),

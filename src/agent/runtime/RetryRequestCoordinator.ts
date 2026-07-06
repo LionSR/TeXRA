@@ -1,19 +1,10 @@
 /**
- * Promise-based coordinator for manual retry handling.
- *
- * 1. Agent calls `waitForRetry()` → returns Promise, emits 'showRetryRequest'.
- * 2. User clicks retry → `triggerRetry()` → resolves Promise with 'retry'.
- *    Or:    User cancels → `cancelRetry()` → resolves Promise with 'cancel'.
- *    Or:    Timeout → auto-resolves Promise with 'timeout'.
- * 3. On resolution → emits 'resolveRetryRequest' to dismiss UI.
+ * Session-scoped coordinator for manual retry handling.
  */
 
 import type { AgentTrace } from '@agent/trace';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProviderErrorPartial } from '@shared/schemas';
-import {
-  BasePromiseCoordinator,
-  type CoordinatorConfig,
-} from './BasePromiseCoordinator';
 
 export type RetryResult =
   | { action: 'retry'; feedback?: string }
@@ -35,29 +26,27 @@ export interface RetryRequestOptions {
   errorDetails?: ProviderErrorPartial;
 }
 
-interface RetryShowPayload extends Record<string, unknown> {
-  streamId: string;
-  operation: string;
-  model?: string;
-  errorMessage?: string;
-  errorDetails?: ProviderErrorPartial;
+type RuntimeHostProvider = () => AgentRuntimeHost;
+type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
+
+function toRuntimeHostProvider(
+  runtimeHost: CoordinatorRuntimeHost,
+): RuntimeHostProvider {
+  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
 }
 
-export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
-  RetryResult,
-  RetryShowPayload
-> {
-  protected readonly config: CoordinatorConfig = {
-    showEventName: 'showRetryRequest',
-    resolveEventName: 'resolveRetryRequest',
-    idFieldName: 'streamId',
-  };
+export class RetryRequestCoordinatorImpl {
+  private readonly getRuntimeHost: RuntimeHostProvider;
 
   /** Per-stream logger captured during waitForRetry, consulted by trigger/cancel. */
   private readonly loggers = new Map<string, AgentTrace>();
 
-  protected getDefaultCancelResult(): RetryResult {
-    return { action: 'cancel' };
+  constructor(runtimeHost: CoordinatorRuntimeHost) {
+    this.getRuntimeHost = toRuntimeHostProvider(runtimeHost);
+  }
+
+  private get runtimeHost(): AgentRuntimeHost {
+    return this.getRuntimeHost();
   }
 
   waitForRetry(
@@ -75,46 +64,54 @@ export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
       { streamId, operation, model, errorMessage, errorDetails },
       { timeoutMs },
     );
-    if (interaction) return interaction;
+    if (!interaction) {
+      this.loggers.delete(streamId);
+      throw new Error('HostInteractions.requestRetry is required');
+    }
 
-    return this.waitForUserAction(
-      streamId,
-      { streamId, operation, model, errorMessage, errorDetails },
-      {
-        timeoutMs,
-        onTimeout: () => {
-          const timeoutMinutes = Math.round((timeoutMs ?? 0) / 60000);
-          logger.warn(
-            `Manual retry wait timed out after ${timeoutMinutes} minutes`,
-          );
-          this.loggers.delete(streamId);
-          return { action: 'timeout' };
-        },
-      },
-    );
+    return interaction.finally(() => this.loggers.delete(streamId));
   }
 
   /** Resolve with 'retry'. Returns true if a pending request was resolved. */
   triggerRetry(streamId: string, feedback?: string): boolean {
     this.loggers.get(streamId)?.debug('Retry requested');
     this.loggers.delete(streamId);
-    return this.resolveRequest(streamId, { action: 'retry', feedback });
+    return (
+      this.runtimeHost.interactions?.resolve(streamId, {
+        kind: 'retry',
+        action: 'retry',
+        feedback,
+      }) ?? false
+    );
   }
 
   /** Resolve with 'cancel'. Returns true if a pending request was resolved. */
   cancelRetry(streamId: string): boolean {
     this.loggers.get(streamId)?.debug('Retry cancelled');
     this.loggers.delete(streamId);
-    return this.resolveRequest(streamId, { action: 'cancel' });
+    return (
+      this.runtimeHost.interactions?.resolve(streamId, {
+        kind: 'retry',
+        action: 'cancel',
+      }) ?? false
+    );
   }
 
-  override clearRequest(streamId: string): void {
+  clearRequest(streamId: string): void {
     this.loggers.delete(streamId);
-    super.clearRequest(streamId);
+    this.runtimeHost.interactions?.cancelForStream(
+      streamId,
+      'Retry request cleared.',
+    );
   }
 
-  override clearAll(): void {
+  clearAll(): void {
+    for (const streamId of this.loggers.keys()) {
+      this.runtimeHost.interactions?.cancelForStream(
+        streamId,
+        'Retry request cleared.',
+      );
+    }
     this.loggers.clear();
-    super.clearAll();
   }
 }
