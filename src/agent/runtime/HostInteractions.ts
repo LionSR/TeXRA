@@ -124,6 +124,8 @@ export interface HostInteractions {
   pending(): readonly PendingHostInteraction[];
   resolve(requestId: string, result: HostInteractionResolution): boolean;
   cancelForStream(streamId: StreamTabId, cause?: string): void;
+  cancelUnscoped?(cause?: string): void;
+  cancelAll?(cause?: string): void;
   dispose?(): void;
 }
 
@@ -132,6 +134,8 @@ const noopHostInteractions: HostInteractions = {
   pending: () => [],
   resolve: () => false,
   cancelForStream: () => {},
+  cancelUnscoped: () => {},
+  cancelAll: () => {},
 };
 
 /**
@@ -220,6 +224,14 @@ export class SessionHostInteractions implements HostInteractions {
 
   cancelForStream(streamId: StreamTabId, cause?: string): void {
     this.active.cancelForStream(streamId, cause);
+  }
+
+  cancelUnscoped(cause?: string): void {
+    this.active.cancelUnscoped?.(cause);
+  }
+
+  cancelAll(cause?: string): void {
+    this.active.cancelAll?.(cause);
   }
 
   dispose(): void {
