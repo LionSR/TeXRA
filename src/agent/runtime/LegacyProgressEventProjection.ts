@@ -2,30 +2,10 @@ import type { AgentEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
-import type { SessionEventHub, SessionFact } from './SessionEventHub';
-
-function emitLegacySessionFact(
-  runtimeHost: AgentRuntimeHost,
-  fact: SessionFact,
-): void {
-  switch (fact.type) {
-    case 'goalStateChanged':
-      runtimeHost.emit('goalStateChanged', fact.payload);
-      return;
-    case 'inquiryThreadUpdated':
-      runtimeHost.emit('inquiryThreadUpdated', fact.payload);
-      return;
-    case 'clearMissingOutputs':
-      runtimeHost.emit('clearMissingOutputs', fact.payload);
-      return;
-    case 'updateQueuedFollowUps':
-      runtimeHost.emit('updateQueuedFollowUps', fact.payload);
-      return;
-    case 'setActiveStream':
-      runtimeHost.emit('setActiveStream', fact.payload);
-      return;
-  }
-}
+import {
+  emitLegacySessionFactOnHost,
+  type SessionEventHub,
+} from './SessionEventHub';
 
 function emitLegacyRunEvent(
   runtimeHost: AgentRuntimeHost,
@@ -92,7 +72,7 @@ export function attachLegacyProgressEventProjection(
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope === 'session') {
-        emitLegacySessionFact(runtimeHost, sessionEvent.event);
+        emitLegacySessionFactOnHost(runtimeHost, sessionEvent.event);
       }
     },
     { scope: 'session' },
