@@ -170,10 +170,11 @@ export async function runHistoryExport(
       );
       return CliExitCode.Usage;
     }
-    const traceFile = path.join(destDir, 'trace.json');
+    const traceFileName = `${id}.json`;
+    const traceFile = path.join(destDir, traceFileName);
     writeTextStderr(
       `Wrote trace JSON for ${id} to stdout. Save the output to ` +
-        `${traceFile}, then open ${destDir}/index.html?trace=trace.json.`,
+        `${traceFile}, then open ${destDir}/index.html?trace=${traceFileName}.`,
     );
     return CliExitCode.Success;
   }
