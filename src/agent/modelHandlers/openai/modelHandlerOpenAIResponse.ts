@@ -22,7 +22,6 @@ import {
   isContextWindowError,
   isPreviousResponseIdError,
   isUserAbort,
-  consumeStreamChunks,
   handleStreamingFailure,
   attachFlowAutoRetryRequired,
   trackStreamConnect,
@@ -1949,7 +1948,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       let response: Response | undefined;
       try {
-        await consumeStreamChunks(stream, (event) => {
+        for await (const event of stream) {
           streamEventObserved = true;
           if (event.type === 'response.created') {
             responseId = event.response.id;
@@ -1960,7 +1959,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           } else if (event.type === 'response.output_item.done') {
             streamedItems.push(event.item);
           }
-        });
+        }
       } catch (streamError) {
         response = await retrieveAfterUnhandledStreamEvent(streamError);
       }
