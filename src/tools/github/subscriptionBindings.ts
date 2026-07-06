@@ -83,12 +83,6 @@ const repoSubscriptions = new StreamSubscriptionRegistry<
         listener,
         runtimeHost,
       ),
-    updateSubscription: (input, listener, runtimeHost) =>
-      repoPollingSource.updateListenerRuntimeHost(
-        repoKeyOf(input.owner, input.repo),
-        listener,
-        runtimeHost,
-      ),
   },
   keyOf: (input) => repoKeyOf(input.owner, input.repo),
   bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
@@ -133,12 +127,6 @@ const issueSubscriptions = new StreamSubscriptionRegistry<string, IssueKey>({
     onKeysChanged: (listener) => issuePollingSource.onKeysChanged(listener),
     subscribe: (input, listener, runtimeHost) =>
       issuePollingSource.subscribe(input, listener, runtimeHost),
-    updateSubscription: (input, listener, runtimeHost) =>
-      issuePollingSource.updateListenerRuntimeHost(
-        issueKeyToString(input),
-        listener,
-        runtimeHost,
-      ),
   },
   keyOf: issueKeyToString,
   bindingsChangedEvent: 'issueSubscriptionBindingsChanged',

@@ -31,7 +31,7 @@ import {
   PollingSourceBase,
   type BasePollSubscriptionState,
 } from './PollingSourceBase';
-import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import {
   GhIssueCommentArraySchema,
   GhIssueSchema,
@@ -68,7 +68,6 @@ function createInitialState(issue: IssueKey): SubscriptionState {
     issue,
     slug: `${issue.owner}/${issue.repo}`,
     listeners: new Set(),
-    runtimeHostByListener: new Map(),
     initialized: false,
     state: undefined,
     comments: new DedupedResource<GhIssueComment>({
@@ -107,15 +106,8 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     );
   }
 
-  protected emitKeysChangedEvent(
-    keys: readonly string[],
-    runtimeHosts: readonly AgentRuntimeHost[],
-  ): void {
-    emitGitHubSubscriptionChangedToHosts(
-      runtimeHosts,
-      'issueSubscriptionsChanged',
-      { keys },
-    );
+  protected emitKeysChangedEvent(keys: readonly string[]): void {
+    emitGitHubSubscriptionChanged('issueSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(
