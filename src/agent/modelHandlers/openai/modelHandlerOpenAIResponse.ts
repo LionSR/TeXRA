@@ -17,14 +17,12 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   buildErrorLogData,
-  detectStatusCode,
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
   isUserAbort,
   consumeStreamChunks,
   handleStreamingFailure,
-  attachFlowAutoRetryRequired,
   trackStreamConnect,
   type StreamConnectTracker,
   takeTail,
@@ -57,12 +55,7 @@ import {
   normalizeOpenAIResponseUsage,
 } from './openAIUsage';
 import { tagOpenAISdkError } from './openAISdkError';
-import {
-  classifyOpenAIBackgroundResumeError,
-  createOpenAIBackgroundPollingError,
-  createOpenAIBackgroundTerminalError,
-  normalizeOpenAIResponseError,
-} from './openAIResponseErrors';
+import { normalizeOpenAIResponseError } from './openAIResponseErrors';
 
 // Local file imports
 import {
@@ -87,10 +80,8 @@ import {
 } from '../types/ServerToolTypes';
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTransport';
-import {
-  BackgroundPoller,
-  type BackgroundPollStats,
-} from '../support/BackgroundPoller';
+import { BackgroundRunLifecycle } from './BackgroundRunLifecycle';
+import { ResponseChainState } from './ResponseChainState';
 import { isResponseFunctionToolCallItem } from './responseStreamEvents';
 import {
   createInputText,
@@ -129,7 +120,6 @@ import type {
   ResponseInputItem,
   ResponseInputContent,
   ResponseInputMessageContentList,
-  ResponseStatus,
   ResponseFunctionCallOutputItemList,
   ResponseOutputItem,
   ResponseFunctionWebSearch,
@@ -259,10 +249,13 @@ function mergeMissingStreamedOutputItems(
  * abstractions. Conversation state is maintained through `previous_response_id`
  * so we only submit the new messages for each turn.
  *
- * THREAD SAFETY: This handler maintains internal state (previousResponseId,
- * pendingBackgroundResponseId, conversationState) that is NOT thread-safe.
- * Each handler instance must be used by a single agent execution at a time.
- * Do not share instances across concurrent invocations.
+ * THREAD SAFETY: This handler delegates its mutable conversation state to two
+ * collaborators — {@link ResponseChainState} (the `previous_response_id` chain
+ * anchor + sent-messages/token bookkeeping) and {@link BackgroundRunLifecycle}
+ * (the pending background-response id + poll/resume choreography) — and
+ * neither is thread-safe. Each handler instance (and the collaborators it
+ * owns) must be used by a single agent execution at a time. Do not share
+ * instances across concurrent invocations.
  */
 export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseInputItem,
@@ -389,56 +382,30 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return isGptFamilyModelName(this.config.name) && this.isWorkflowMode();
   }
 
-  /** Statuses indicating the background response is still processing. */
-  private static readonly BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] =
-    ['queued', 'in_progress'];
+  /** The `previous_response_id` chain anchor + conversation bookkeeping. See
+   *  {@link ResponseChainState} for the narrow interface this handler uses
+   *  instead of mutating chain fields directly. */
+  private readonly chainState = new ResponseChainState();
 
-  private readonly backgroundPoller = new BackgroundPoller<Response>({
-    pollIntervalMs: 15000,
-    maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
-    isPending: (r) => this.isBackgroundPending(r),
+  /** Pending background-response id + poll/resume choreography. See
+   *  {@link BackgroundRunLifecycle} for the narrow interface this handler
+   *  uses instead of mutating background-response fields directly. */
+  private readonly backgroundLifecycle = new BackgroundRunLifecycle({
     logger: () => this.logger,
+    provider: this.config.provider,
   });
-
-  private previousResponseId: string | null = null;
-
-  /**
-   * Stores the ID of a background response that is currently being polled.
-   * This allows retry logic to resume polling the same response instead of
-   * creating a new request when connection errors occur during polling.
-   *
-   * IMPORTANT: This handler assumes single-threaded execution per instance.
-   * Do not share a handler instance across concurrent agent invocations.
-   */
-  private pendingBackgroundResponseId: string | null = null;
-  private pendingBackgroundRetrieveParams:
-    ResponseRetrieveParamsNonStreaming | undefined;
 
   /**
    * Guards against concurrent createResponse() calls on the same handler.
-   * The handler's mutable conversation state (previousResponseId, sentMessages,
-   * etc.) assumes a single in-flight turn; concurrent calls would race on
-   * previousResponseId and corrupt the chain. See the class doc ("THREAD SAFETY")
-   * for the contract.
+   * The chain-state and background-lifecycle collaborators each assume a
+   * single in-flight turn; concurrent calls would race on the chain anchor
+   * and corrupt the conversation. See the class doc ("THREAD SAFETY") for
+   * the contract.
    */
   private inFlight = false;
 
   /** DIAGNOSTIC: Pre-flight token estimate for comparison with actual usage */
   private _diagPreFlightTokens: number | null = null;
-
-  /** Clears the pending background response ID. Single point of mutation. */
-  private clearPendingBackgroundResponse(): void {
-    this.pendingBackgroundResponseId = null;
-    this.pendingBackgroundRetrieveParams = undefined;
-  }
-
-  private rememberPendingBackgroundResponse(
-    responseId: string,
-    retrieveParams?: ResponseRetrieveParamsNonStreaming,
-  ): void {
-    this.pendingBackgroundResponseId = responseId;
-    this.pendingBackgroundRetrieveParams = retrieveParams;
-  }
 
   // =========================================================================
   // WebSocket transport
@@ -507,153 +474,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Attempts to resume polling a pending background response.
-   *
-   * @returns The completed response if resume succeeded, or null if a new request is needed.
-   *          Throws on abort (user cancellation).
-   */
-  private async tryResumeBackgroundResponse(
-    client: OpenAI,
-    signal?: AbortSignal,
-  ): Promise<Response | null> {
-    const pendingId = this.pendingBackgroundResponseId;
-    if (!pendingId) {
-      return null;
-    }
-    const retrieveParams = this.pendingBackgroundRetrieveParams;
-
-    this.logger.debug(
-      `Resuming polling for pending background response ${pendingId}`,
-    );
-
-    let pendingResponse: Response;
-    try {
-      pendingResponse = await client.responses.retrieve(
-        pendingId,
-        retrieveParams,
-        signal ? { signal } : undefined,
-      );
-    } catch (err) {
-      // Tag before checking: the SDK throws APIUserAbortError (not a
-      // DOMException) when the signal fires inside retrieve(), and the tag
-      // makes isUserAbort() robust even in minified bundles.
-      tagOpenAISdkError(err, this.config.provider);
-      if (isUserAbort(err)) {
-        this.clearPendingBackgroundResponse();
-        throw err;
-      }
-      // Transient failures (no status / 5xx / 429 / 408) — the background
-      // response is likely still alive server-side, so retain the ID and
-      // rethrow so the outer retry resumes the same ID. Definitive failures
-      // (4xx, notably 404 expired) — clear the ID and create a new request.
-      //
-      // Check statusCode directly rather than providerError.userRetryable: the latter
-      // is force-true for relay errors, which would incorrectly retain the ID
-      // on a relay-wrapped 404 and loop until retries are exhausted.
-      const { providerError, shouldRetainPendingResponse } =
-        classifyOpenAIBackgroundResumeError(err, this.config.provider);
-      if (shouldRetainPendingResponse) {
-        attachFlowAutoRetryRequired(err);
-        throw err;
-      }
-      this.logger.warn(
-        "Couldn't resume the pending OpenAI response; will start a new request.",
-        {
-          data: {
-            responseId: pendingId,
-            error: providerError.message,
-            statusCode: providerError.statusCode,
-          },
-        },
-      );
-      this.clearPendingBackgroundResponse();
-      return null;
-    }
-
-    // Check the status of the retrieved response
-    if (this.isBackgroundPending(pendingResponse)) {
-      // Still processing - resume polling
-      this.logger.debug(
-        'Pending background response still processing, resuming poll',
-        {
-          data: { responseId: pendingId, status: pendingResponse.status },
-        },
-      );
-      const response = await this.waitForBackgroundCompletion(
-        client,
-        pendingResponse,
-        signal,
-        retrieveParams,
-      );
-      // Note: clearPendingBackgroundResponse() called by finalizeResponse() in caller
-      return response;
-    }
-
-    if (pendingResponse.status === 'completed') {
-      // Already completed while we were disconnected
-      this.logger.debug(
-        `Pending background response ${pendingId} already completed`,
-      );
-      // Note: clearPendingBackgroundResponse() called by finalizeResponse() in caller
-      return pendingResponse;
-    }
-
-    // Response failed remotely (failed/cancelled/incomplete)
-    const errorDetail =
-      pendingResponse.error?.message ??
-      pendingResponse.incomplete_details?.reason ??
-      'no additional details';
-    this.logger.warn(
-      'OpenAI background response ended remotely; starting a new request.',
-      {
-        data: {
-          responseId: pendingId,
-          status: pendingResponse.status,
-          errorDetail,
-          error: pendingResponse.error ?? undefined,
-          incompleteDetails: pendingResponse.incomplete_details ?? undefined,
-        },
-      },
-    );
-    this.clearPendingBackgroundResponse();
-    return null;
-  }
-
-  /**
-   * Conversation state for tracking messages, tokens, and compaction.
-   * Grouped together to ensure synchronized resets.
-   */
-  private conversationState = {
-    /** Number of messages already sent to the API */
-    sentMessages: 0,
-    /** Cumulative input tokens across the conversation (for compaction trigger) */
-    cumulativeInputTokens: 0,
-    /** Whether the conversation has been compacted */
-    isCompacted: false,
-    /** Whether we've logged the OpenRouter compaction skip message */
-    openRouterSkipLogged: false,
-  };
-
-  /** Reset conversation state to initial values. */
-  private resetConversationState(): void {
-    this.conversationState = {
-      sentMessages: 0,
-      cumulativeInputTokens: 0,
-      isCompacted: false,
-      openRouterSkipLogged: false,
-    };
-  }
-
-  /** Drop server-side chain state while preserving local token history. */
-  private invalidateResponseChain(): void {
-    this.previousResponseId = null;
-    this.conversationState.sentMessages = 0;
-    this.conversationState.isCompacted = false;
-  }
-
-  /**
    * Finalize response state after a successful API call.
-   * Updates previousResponseId, conversation state, and token counts.
+   * Updates the chain anchor, conversation state, and token counts.
    */
   private finalizeResponse(
     response: Response,
@@ -677,8 +499,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       response.status === 'completed' &&
       hasInputTokens;
     if (safeToChain) {
-      this.previousResponseId = response.id;
-      this.conversationState.sentMessages = effectiveMessagesCount;
+      this.chainState.recordChained(response.id, effectiveMessagesCount);
     } else {
       const errorDetail =
         response.error?.message ?? response.incomplete_details?.reason;
@@ -701,13 +522,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // large conversation that hits a transient missing-usage response
       // would lose its compaction baseline and fail hard on the next
       // turn, bypassing the context-window recovery below (which also
-      // requires previousResponseId to be set).
-      this.invalidateResponseChain();
+      // requires a chain anchor to be set).
+      this.chainState.invalidateChain();
     }
 
     // Clear any pending background response ID - a successful finalization means
     // any previous pending ID is stale and should not be resumed
-    this.clearPendingBackgroundResponse();
+    this.backgroundLifecycle.clearPending();
 
     // Set cumulative input tokens from actual usage (not additive - this IS the total).
     // The response's input_tokens reflects the full context including server-side history.
@@ -722,7 +543,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // or reasoning token accounting). See PRD Known Issues for investigation details.
     if (response.usage?.input_tokens) {
       const actualTokens = response.usage.input_tokens;
-      this.conversationState.cumulativeInputTokens = actualTokens;
+      this.chainState.setCumulativeInputTokens(actualTokens);
 
       // DIAGNOSTIC: Compare pre-flight estimate with actual usage
       if (this._diagPreFlightTokens !== null) {
@@ -771,7 +592,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Reset compacted flag after successful request (ready for next compaction if needed)
-    this.conversationState.isCompacted = false;
+    this.chainState.clearCompactedFlag();
   }
 
   /**
@@ -779,14 +600,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Call with `null` to reset the stored ID.
    */
   setPreviousResponseId(id: string | null): void {
-    this.previousResponseId = id;
-    this.resetConversationState();
-    this.clearPendingBackgroundResponse();
+    this.chainState.setPreviousResponseId(id);
+    this.chainState.resetConversationState();
+    this.backgroundLifecycle.clearPending();
   }
 
   /** Retrieve the stored previous response ID. */
   getPreviousResponseId(): string | null {
-    return this.previousResponseId;
+    return this.chainState.getPreviousResponseId();
   }
 
   /**
@@ -823,7 +644,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         return false;
       }
       // Only compact if there are tokens to compact
-      return this.conversationState.cumulativeInputTokens > 0;
+      return this.chainState.getCumulativeInputTokens() > 0;
     }
 
     const thresholdPercent = this.getCompactionThresholdPercent();
@@ -831,14 +652,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return false;
     }
     if (this.isOpenRouterRoutingEnabled()) {
-      if (!this.conversationState.openRouterSkipLogged) {
+      if (!this.chainState.hasLoggedOpenRouterSkip()) {
         this.logger.debug('Skipping compaction: OpenRouter routing is enabled');
-        this.conversationState.openRouterSkipLogged = true;
+        this.chainState.markOpenRouterSkipLogged();
       }
       return false;
     }
     const threshold = this.getCompactionTokenThreshold();
-    return this.conversationState.cumulativeInputTokens > threshold;
+    return this.chainState.getCumulativeInputTokens() > threshold;
   }
 
   /**
@@ -860,7 +681,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private getBestInputTokenEstimate(): number {
     return (
       this.compactionResult?.tokensAfter ??
-      this.conversationState.cumulativeInputTokens
+      this.chainState.getCumulativeInputTokens()
     );
   }
 
@@ -873,7 +694,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * - Otherwise: small buffer (10) for exact counting
    */
   private getTokenSafetyBuffer(): number {
-    if (this.supportsResponseChaining && this.previousResponseId !== null) {
+    if (
+      this.supportsResponseChaining &&
+      this.chainState.hasPreviousResponseId()
+    ) {
       // Proportional margin scales with context window size - critical at high utilization
       // where even a small percentage error can cause overflow.
       const proportionalMargin = Math.floor(
@@ -892,7 +716,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * headroom for server-side context framing with previous_response_id.
    */
   private applyChainedOutputTokenBudget(maxOutputTokens: number): number {
-    if (!this.supportsResponseChaining || !this.previousResponseId) {
+    if (
+      !this.supportsResponseChaining ||
+      !this.chainState.hasPreviousResponseId()
+    ) {
       return maxOutputTokens;
     }
 
@@ -930,7 +757,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     signal?: AbortSignal,
     convertedTools?: unknown[],
   ): Promise<ResponseInputItem[]> {
-    const tokensBefore = this.conversationState.cumulativeInputTokens;
+    const tokensBefore = this.chainState.getCumulativeInputTokens();
     const contextWindow = this.getEffectiveContextWindow();
     const utilizationBefore = computeUtilizationPercent(
       tokensBefore,
@@ -967,11 +794,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const compactedMessages =
         compactedResponse.output as unknown as ResponseInputItem[];
 
-      // CRITICAL: Clear previousResponseId now that compaction has replaced the
+      // CRITICAL: Clear the chain anchor now that compaction has replaced the
       // server-side history. Must happen BEFORE estimateTokenCount — otherwise the
       // count would include the full previous conversation on top of the compacted
       // messages, massively inflating the result.
-      this.previousResponseId = null;
+      this.chainState.clearChainForCompaction();
 
       // Count the actual tokens of the compacted messages rather than relying on
       // usage fields from the compact response (usage.input_tokens is the cost of
@@ -1039,12 +866,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private applyCompactionState(): void {
     if (!this.compactionResult) return;
 
-    // Reset sent messages counter since we're using compacted output
-    this.conversationState.sentMessages = 0;
-    // Mark as compacted so subsequent requests know to send all messages
-    this.conversationState.isCompacted = true;
+    // Reset sent messages counter and mark as compacted so subsequent
+    // requests know to send all messages.
+    this.chainState.markCompactionApplied();
 
-    // Note: previousResponseId is already cleared immediately after compaction
+    // Note: the chain anchor is already cleared immediately after compaction
     // (before API call) to avoid "No tool output found" errors.
 
     // Note: compactionResult is NOT cleared here - it's read for the return value.
@@ -1077,9 +903,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<ResponseInputItem[]> {
-    this.previousResponseId = null;
-    this.resetConversationState();
-    this.clearPendingBackgroundResponse();
+    this.chainState.setPreviousResponseId(null);
+    this.chainState.resetConversationState();
+    this.backgroundLifecycle.clearPending();
     this.wsTransport?.dispose();
 
     const messages: ResponseInputItem[] = [];
@@ -1291,8 +1117,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       model: this.config.fullName,
       input: messages,
       ...(this.supportsResponseChaining &&
-        this.previousResponseId && {
-          previous_response_id: this.previousResponseId,
+        this.chainState.getPreviousResponseId() && {
+          previous_response_id: this.chainState.getPreviousResponseId(),
         }),
       ...(options?.systemPrompt && { instructions: options.systemPrompt }),
       ...(options?.tools?.length && {
@@ -1384,8 +1210,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /**
    * Single-turn guard. The base {@link ModelHandler.createResponse} owns the
    * SDK error-tag wrap; we supply only the in-flight guard. Concurrent
-   * callers would race on previousResponseId and conversationState, so fail
-   * loudly instead of corrupting the conversation silently.
+   * callers would race on the chain-state collaborator's anchor and
+   * conversation bookkeeping, so fail loudly instead of corrupting the
+   * conversation silently.
    */
   protected override async withCreateResponseGuard<T>(
     run: () => Promise<T>,
@@ -1410,7 +1237,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
 
-    if (this.pendingBackgroundResponseId) {
+    if (this.backgroundLifecycle.hasPendingResume()) {
       const resumeContext: ResponseFinalizeContext = {
         effectiveMessagesLength:
           this.compactionResult?.compactedMessages.length ?? messages.length,
@@ -1484,13 +1311,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (wasManualRequest) {
         logProgressStatus(
           this.logger,
-          `Compacting conversation (manually requested, ${this.conversationState.cumulativeInputTokens} input tokens)`,
+          `Compacting conversation (manually requested, ${this.chainState.getCumulativeInputTokens()} input tokens)`,
         );
       } else {
         const threshold = this.getCompactionTokenThreshold();
         logProgressStatus(
           this.logger,
-          `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+          `Compacting conversation (${this.chainState.getCumulativeInputTokens()} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
         );
       }
       effectiveMessages = await this.compactConversation(
@@ -1503,7 +1330,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // compactionResult is set if compaction succeeded
       compactedThisCall = this.compactionResult !== undefined;
       if (compactedThisCall) {
-        // Note: previousResponseId is already cleared inside compactConversation()
+        // Note: the chain anchor is already cleared inside compactConversation()
         // immediately after the compact endpoint succeeds (before token counting).
         compactedMessages = this.compactionResult!.compactedMessages;
       }
@@ -1515,10 +1342,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const shouldSendAll =
       !this.supportsResponseChaining ||
       compactedThisCall ||
-      this.conversationState.isCompacted;
+      this.chainState.getIsCompacted();
     const newMessages = shouldSendAll
       ? effectiveMessages
-      : effectiveMessages.slice(this.conversationState.sentMessages);
+      : effectiveMessages.slice(this.chainState.getSentMessagesCount());
 
     if (this.supportsInlineInputFileUpload) {
       await uploadInlineInputFiles(client, newMessages, {
@@ -1542,8 +1369,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       input: newMessages,
       ...(systemPrompt && { instructions: systemPrompt }),
       ...(this.supportsResponseChaining &&
-        this.previousResponseId && {
-          previous_response_id: this.previousResponseId,
+        this.chainState.getPreviousResponseId() && {
+          previous_response_id: this.chainState.getPreviousResponseId(),
         }),
       ...(convertedTools?.length && { tools: convertedTools }),
       ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
@@ -1588,7 +1415,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       onCounted: (inputTokens) => {
         // DIAGNOSTIC: Log token count details for investigation.
         // Compare pre-flight estimate with cumulative tokens from prev response.
-        const prevCumulative = this.conversationState.cumulativeInputTokens;
+        const prevCumulative = this.chainState.getCumulativeInputTokens();
         const utilizationEstimate =
           (inputTokens / this.getEffectiveContextWindow()) * 100;
         this._diagPreFlightTokens = inputTokens; // Compared in finalizeResponse
@@ -1600,7 +1427,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             delta: inputTokens - prevCumulative,
             newMessagesCount: newMessages.length,
             totalMessagesCount: effectiveMessages.length,
-            hasPreviousResponseId: !!this.previousResponseId,
+            hasPreviousResponseId: !!this.chainState.getPreviousResponseId(),
             hasTools: !!convertedTools?.length,
             toolCount: convertedTools?.length ?? 0,
             contextWindow: this.getEffectiveContextWindow(),
@@ -1637,7 +1464,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         {
           data: {
             model: this.config.fullName,
-            previousResponseId: this.previousResponseId ?? undefined,
+            previousResponseId:
+              this.chainState.getPreviousResponseId() ?? undefined,
           },
         },
       );
@@ -1739,7 +1567,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     signal: AbortSignal | undefined,
     ctx: ResponseFinalizeContext,
   ): Promise<CreateResponseResult<Response, ResponseInputItem> | null> {
-    const resumedResponse = await this.tryResumeBackgroundResponse(
+    const resumedResponse = await this.backgroundLifecycle.tryResume(
       client,
       signal,
     );
@@ -1814,14 +1642,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const processor = wsResult.processor;
 
     // Safety net: handle unexpected pending status (shouldn't happen without background mode)
-    if (this.isBackgroundPending(response)) {
+    if (this.backgroundLifecycle.isPending(response)) {
       this.logger.debug(
         'WebSocket response ended with pending status — polling for completion',
         {
           data: { responseId: response.id, status: response.status },
         },
       );
-      response = await this.waitForBackgroundCompletion(
+      response = await this.backgroundLifecycle.waitForCompletion(
         client,
         response,
         signal,
@@ -1923,28 +1751,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             },
           },
         );
-        this.rememberPendingBackgroundResponse(responseId, retrieveParams);
-        try {
-          return await client.responses.retrieve(
-            responseId,
-            retrieveParams,
-            signal ? { signal } : undefined,
-          );
-        } catch (err) {
-          tagOpenAISdkError(err, this.config.provider);
-          if (isUserAbort(err)) {
-            this.clearPendingBackgroundResponse();
-            throw err;
-          }
-          const { shouldRetainPendingResponse } =
-            classifyOpenAIBackgroundResumeError(err, this.config.provider);
-          if (!shouldRetainPendingResponse) {
-            this.clearPendingBackgroundResponse();
-          } else {
-            attachFlowAutoRetryRequired(err);
-          }
-          throw err;
-        }
+        return this.backgroundLifecycle.retrieveAndRemember(
+          client,
+          responseId,
+          retrieveParams,
+          signal,
+        );
       };
 
       let response: Response | undefined;
@@ -1976,14 +1788,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // If the stream ended before the response completed (e.g., relay timeout
       // during slow GPT-5 requests), poll until it finishes instead of silently
       // returning an incomplete response.
-      if (this.isBackgroundPending(response)) {
+      if (this.backgroundLifecycle.isPending(response)) {
         this.logger.debug(
           'Streaming response ended with pending status - polling for completion',
           {
             data: { responseId: response.id, status: response.status },
           },
         );
-        response = await this.waitForBackgroundCompletion(
+        response = await this.backgroundLifecycle.waitForCompletion(
           client,
           response,
           signal,
@@ -2051,7 +1863,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // This can happen in two cases:
     // 1. Background mode explicitly enabled (expected)
     // 2. Server-side latency when using previous_response_id (unexpected but handled)
-    if (this.isBackgroundPending(response)) {
+    if (this.backgroundLifecycle.isPending(response)) {
       if (useBackgroundResponses) {
         logProgressStatus(
           this.logger,
@@ -2064,12 +1876,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             data: {
               responseId: response.id,
               status: response.status,
-              hasPreviousResponseId: !!this.previousResponseId,
+              hasPreviousResponseId: !!this.chainState.getPreviousResponseId(),
             },
           },
         );
       }
-      response = await this.waitForBackgroundCompletion(
+      response = await this.backgroundLifecycle.waitForCompletion(
         client,
         response,
         signal,
@@ -2113,15 +1925,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // This allows retry logic to recover by starting a fresh conversation
     if (isPreviousResponseIdError(error)) {
       this.logger.debug(
-        `Clearing previousResponseId=${this.previousResponseId} due to invalid/expired response - ` +
+        `Clearing previousResponseId=${this.chainState.getPreviousResponseId()} due to invalid/expired response - ` +
           'next retry will rebuild conversation from local history',
       );
-      this.invalidateResponseChain();
+      this.chainState.invalidateChain();
       // Also clear pending background response if present
-      this.clearPendingBackgroundResponse();
+      this.backgroundLifecycle.clearPending();
     } else if (
       isContextWindowError(error) &&
-      this.previousResponseId &&
+      this.chainState.hasPreviousResponseId() &&
       !compactedThisCall
     ) {
       // Recovery: When using previous_response_id, accumulated reasoning tokens
@@ -2136,10 +1948,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.logger,
         'Context window exceeded — compacting conversation and retrying.',
       );
-      this.previousResponseId = null;
+      this.chainState.setPreviousResponseId(null);
       // Don't call resetConversationState() — it zeroes cumulativeInputTokens
       // which would prevent shouldCompact() from triggering on the retry.
-      this.clearPendingBackgroundResponse();
+      this.backgroundLifecycle.clearPending();
       this.compactionRequested = true;
       this._diagPreFlightTokens = null;
       // Retry internally: the recursive call will compact (shouldCompact()=true)
@@ -2147,22 +1959,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Call the impl directly — we're still inside the outer createResponse's
       // inFlight guard, and the public entry would trip the assertion.
       return this.createResponseImpl(options);
-    } else if (this.previousResponseId) {
+    } else if (this.chainState.hasPreviousResponseId()) {
       // Log diagnostic info for other errors when chaining was active
       this.logger.debug('Request failed while response chaining was active', {
         data: {
-          previousResponseId: this.previousResponseId,
+          previousResponseId: this.chainState.getPreviousResponseId(),
           error: providerError.message,
         },
       });
     }
 
-    // Retention of pendingBackgroundResponseId is decided at the point of
-    // failure (tryResumeBackgroundResponse and waitForBackgroundCompletion).
-    // If it survived to here, the next retry will try to resume the same ID.
-    if (this.pendingBackgroundResponseId) {
+    // Retention of the pending background response id is decided at the point
+    // of failure (BackgroundRunLifecycle.tryResume and waitForCompletion). If
+    // it survived to here, the next retry will try to resume the same ID.
+    if (this.backgroundLifecycle.hasPendingResume()) {
       this.logger.debug(
-        `Retaining pendingBackgroundResponseId=${this.pendingBackgroundResponseId} for retry - ` +
+        `Retaining pendingBackgroundResponseId=${this.backgroundLifecycle.getPendingId()} for retry - ` +
           'next attempt will try to resume polling instead of creating new request',
       );
     }
@@ -2253,111 +2065,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
     const usageRoute = this.getActiveProviderCapabilities()?.usageRoute;
     return usageRoute == null ? usage : { ...usage, usageRoute };
-  }
-
-  private isBackgroundPending(response: Response): boolean {
-    return ModelHandlerOpenAIResponse.BACKGROUND_PENDING_STATUSES.includes(
-      response.status as ResponseStatus,
-    );
-  }
-
-  private async waitForBackgroundCompletion<T extends Response>(
-    client: OpenAI,
-    initialResponse: T,
-    signal?: AbortSignal,
-    retrieveParams?: ResponseRetrieveParamsNonStreaming,
-  ): Promise<T> {
-    if (!initialResponse.id) {
-      return initialResponse;
-    }
-
-    // Track which response is being polled so retry logic can resume via
-    // tryResumeBackgroundResponse instead of creating a new request.
-    this.rememberPendingBackgroundResponse(initialResponse.id, retrieveParams);
-
-    let pollStats: BackgroundPollStats | undefined;
-    let polled: T;
-    try {
-      polled = (await this.backgroundPoller.poll({
-        initialResponse,
-        retrieve: async (responseId, sig) => {
-          try {
-            return (await client.responses.retrieve(
-              responseId,
-              retrieveParams,
-              sig ? { signal: sig } : undefined,
-            )) as T;
-          } catch (err) {
-            // Tag before checking: retrieve() throws the SDK's APIUserAbortError,
-            // not a DOMException, when the signal fires.
-            tagOpenAISdkError(err, this.config.provider);
-            if (isUserAbort(err)) {
-              // User cancelled during retrieve — clear pending ID to prevent
-              // ghost-resume on next call.
-              this.clearPendingBackgroundResponse();
-              throw err;
-            }
-            // 404 "response not found" during polling means the response is truly
-            // gone server-side. Clear the pending ID so the next retry creates a
-            // fresh background request instead of routing through
-            // tryResumeBackgroundResponse to rediscover the 404.
-            const statusCode = detectStatusCode(err);
-            if (statusCode === 404) {
-              this.clearPendingBackgroundResponse();
-              throw createOpenAIBackgroundPollingError(
-                responseId,
-                err,
-                this.config.provider,
-              );
-            }
-            attachFlowAutoRetryRequired(err);
-            // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
-            // so downstream handlers (relay 401 token refresh, retryability checks,
-            // non-retryable classification) work correctly with full HTTP metadata.
-            // The ID is intentionally NOT cleared — retry may resume the same response.
-            throw err;
-          }
-        },
-        extractId: (r) => r.id,
-        extractStatus: (r) => r.status ?? 'unknown',
-        signal,
-        resourceLabel: 'response',
-        providerLabel: 'OpenAI',
-        onAbort: () => this.clearPendingBackgroundResponse(),
-        formatTimeoutError: ({ responseId, maxDurationMs }) =>
-          `OpenAI response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms. ` +
-          `Retry later or cancel the job with client.responses.cancel("${responseId}").`,
-        extraFinishData: (response) => ({
-          usage: response.usage ?? undefined,
-        }),
-        onFinished: (_response, stats) => {
-          pollStats = stats;
-        },
-      })) as T;
-    } catch (err) {
-      if (!isUserAbort(err)) {
-        attachFlowAutoRetryRequired(err);
-      }
-      throw err;
-    }
-
-    if (polled.status === 'completed') {
-      return polled;
-    }
-
-    // Terminal failure — the background response ended with a non-completed,
-    // non-pending status (failed / cancelled / incomplete).
-    this.logger.error('Background response ended with a non-completed status', {
-      data: {
-        responseId: polled.id,
-        status: polled.status,
-        pollCount: pollStats?.pollCount,
-        elapsedMs: pollStats?.elapsedMs,
-        error: polled.error ?? undefined,
-        incomplete: polled.incomplete_details ?? undefined,
-      },
-    });
-    throw createOpenAIBackgroundTerminalError(polled, this.config.provider);
   }
 
   protected override get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
@@ -2556,7 +2263,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // OpenAI's server-side history. We should only send NEW items (function_call_output).
     // Including them again causes "Duplicate item found" errors.
     const isResponseChaining =
-      this.supportsResponseChaining && Boolean(this.previousResponseId);
+      this.supportsResponseChaining && this.chainState.hasPreviousResponseId();
 
     if (text && !isResponseChaining) {
       // Only include assistant text when not chaining (it's in previous response)
