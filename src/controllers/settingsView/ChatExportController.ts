@@ -63,6 +63,8 @@ export interface ChatExportResult {
 export interface LatexExportResult extends ChatExportResult {
   /** Absolute path to the compiled PDF, or undefined if compilation failed. */
   readonly pdfPath?: string;
+  /** Tail of the LaTeX compile log, present when compilation failed. */
+  readonly logTail?: string;
 }
 
 /** `assembleTrace`'s failure statuses, re-surfaced for the HTML export path. */
@@ -147,11 +149,16 @@ export class ChatExportController {
     const location = pathToLocation(absolutePath);
     const compiled = await compileLatex2Pdf(location);
 
-    const pdfPath = compiled
+    const pdfPath = compiled.ok
       ? absolutePath.replace(/\.tex$/, '.pdf')
       : undefined;
 
-    return { storagePath, absolutePath, pdfPath };
+    return {
+      storagePath,
+      absolutePath,
+      pdfPath,
+      logTail: compiled.ok ? undefined : compiled.logTail,
+    };
   }
 
   /**

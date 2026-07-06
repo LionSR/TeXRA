@@ -23,7 +23,7 @@ interface DesktopPreviewHostModule {
 }
 
 async function loadDesktopPreviewHost(
-  compileLatex2Pdf = vi.fn(async () => true),
+  compileLatex2Pdf = vi.fn(async () => ({ ok: true })),
   access?: (filePath: string) => Promise<void>,
   checkToolInstalled = vi.fn(async () => true),
 ): Promise<DesktopPreviewHostModule> {
@@ -158,7 +158,7 @@ describe('desktop preview host', () => {
   });
 
   it('builds LaTeX previews and opens the generated PDF path', async () => {
-    const compileLatex2Pdf = vi.fn(async () => true);
+    const compileLatex2Pdf = vi.fn(async () => ({ ok: true }));
     const { createDesktopPreviewHost } =
       await loadDesktopPreviewHost(compileLatex2Pdf);
     const dir = await makeTempDir();
@@ -182,7 +182,7 @@ describe('desktop preview host', () => {
   });
 
   it('opens compile-preview PDF targets without running LaTeX', async () => {
-    const compileLatex2Pdf = vi.fn(async () => true);
+    const compileLatex2Pdf = vi.fn(async () => ({ ok: true }));
     const checkToolInstalled = vi.fn(async () => true);
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost(
       compileLatex2Pdf,
@@ -203,7 +203,7 @@ describe('desktop preview host', () => {
   });
 
   it('reports missing LaTeX toolchains before compiling preview sources', async () => {
-    const compileLatex2Pdf = vi.fn(async () => true);
+    const compileLatex2Pdf = vi.fn(async () => ({ ok: true }));
     const checkToolInstalled = vi.fn(async () => false);
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost(
       compileLatex2Pdf,
@@ -231,7 +231,8 @@ describe('desktop preview host', () => {
   });
 
   it('reports LaTeX build failures without opening stale PDFs', async () => {
-    const compileLatex2Pdf = vi.fn(async () => false);
+    const logTail = 'simulated compile log tail';
+    const compileLatex2Pdf = vi.fn(async () => ({ ok: false, logTail }));
     const { createDesktopPreviewHost } =
       await loadDesktopPreviewHost(compileLatex2Pdf);
     const dir = await makeTempDir();
@@ -242,6 +243,13 @@ describe('desktop preview host', () => {
     );
     const showErrorMessage = vi.fn();
     const shell = makeShell();
+    // Silence and inspect the console.error the full log tail is routed to
+    // instead of the (short) dialog message -- see the desktop preview host's
+    // fail() call, which must not stuff the full engine log into a native
+    // dialog.showMessageBox modal.
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage });
 
@@ -250,7 +258,14 @@ describe('desktop preview host', () => {
       host.openBuildDisplay({ absolutePath: texPath }),
     ).rejects.toThrow(message);
     expect(showErrorMessage).toHaveBeenCalledWith(message);
+    expect(showErrorMessage).not.toHaveBeenCalledWith(
+      expect.stringContaining(logTail),
+    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(logTail),
+    );
     expect(shell.openPath).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 
   it('opens external URLs through Electron shell.openExternal', async () => {
