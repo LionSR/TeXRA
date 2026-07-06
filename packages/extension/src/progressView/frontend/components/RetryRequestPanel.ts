@@ -177,15 +177,17 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const partialText = details.partialText;
     if (partialText) {
       const maxTailChars = 1024;
-      // tailWithEllipsis counts grapheme clusters, not UTF-16 code units —
-      // match it here so `isTruncated` and the header's totals agree with
-      // what it actually slices (a naive .length comparison can disagree
-      // with grapheme count for multi-codepoint characters like emoji).
-      const totalChars = toGraphemes(partialText).length;
-      const isTruncated = totalChars > maxTailChars;
       // tailWithEllipsis's budget covers its own leading "…", so pass one
       // more than the content characters we actually want displayed.
       const tail = tailWithEllipsis(partialText, maxTailChars + 1);
+      // Derive truncation from what tailWithEllipsis actually did (it
+      // returns the input unchanged when nothing needs cutting) rather than
+      // a separately-computed length comparison — two independent
+      // decisions about the same cutoff disagreed by one grapheme exactly
+      // at the boundary (partialText.length === maxTailChars + 1), where
+      // this said "truncated" but tailWithEllipsis returned the text whole.
+      const isTruncated = tail !== partialText;
+      const totalChars = toGraphemes(partialText).length;
       const header = isTruncated
         ? `--- Partial Output (last ${maxTailChars} of ${totalChars} chars) ---`
         : `--- Partial Output (${totalChars} chars) ---`;
