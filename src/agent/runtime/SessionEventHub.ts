@@ -4,6 +4,9 @@ import type { AgentEvent } from '@agent/trace';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
+import { assertNever } from '@utils/core';
+
+import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('SessionEventHub');
 
@@ -32,6 +35,37 @@ export type SessionFact =
 export type SessionEvent =
   | { scope: 'run'; streamId: StreamTabId; event: AgentEvent }
   | { scope: 'session'; event: SessionFact };
+
+/**
+ * Re-emit a {@link SessionFact} on the legacy per-host progress-event
+ * surface. Shared by `emitRuntimeEvent`'s host-channel path and
+ * `LegacyProgressEventProjection`'s hub-subscription path — both project the
+ * same fact vocabulary onto the same host events.
+ */
+export function emitLegacySessionFactOnHost(
+  host: AgentRuntimeHost,
+  fact: SessionFact,
+): void {
+  switch (fact.type) {
+    case 'goalStateChanged':
+      host.emit('goalStateChanged', fact.payload);
+      return;
+    case 'inquiryThreadUpdated':
+      host.emit('inquiryThreadUpdated', fact.payload);
+      return;
+    case 'clearMissingOutputs':
+      host.emit('clearMissingOutputs', fact.payload);
+      return;
+    case 'updateQueuedFollowUps':
+      host.emit('updateQueuedFollowUps', fact.payload);
+      return;
+    case 'setActiveStream':
+      host.emit('setActiveStream', fact.payload);
+      return;
+    default:
+      assertNever(fact, 'Unhandled SessionFact type');
+  }
+}
 
 export interface SessionEventSubscriptionFilter {
   readonly scope?: SessionEvent['scope'];
