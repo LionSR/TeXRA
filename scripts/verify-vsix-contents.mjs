@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   extensionManifestSnapshot,
   readJson,
+  withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 
 const rootDir = path.resolve(
@@ -71,8 +72,12 @@ function assertEntryExists(entries, entryPath, failures) {
 function verifyManifest(vsixPath, snapshot, failures) {
   const manifestBytes = readVsixEntry(vsixPath, 'extension/package.json');
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
+  // The built VSIX ships the full contributes (catalog-derived subtrees
+  // included); the committed snapshot omits them, so trim the same subtrees
+  // here before comparing. This only affects the comparison, not the shipped
+  // package.json.
   const manifestSnapshot = extensionManifestSnapshot(
-    manifest,
+    withoutCatalogDerivedContributes(manifest),
     Object.keys(snapshot.manifest),
   );
 
