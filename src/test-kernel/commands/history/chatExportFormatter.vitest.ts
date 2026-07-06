@@ -215,6 +215,36 @@ describe('formatChatAsMarkdown', () => {
     assert.doesNotMatch(markdown, /\]\(javascript:/);
   });
 
+  it('escapes emphasis/code-span/heading characters in web tool titles', () => {
+    const title = '`rm -rf /` *bold* _italic_ # Heading';
+    const markdown = formatChatAsMarkdown({
+      timestamp: '2026-01-01T00:00:00.000Z',
+      config: {},
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'web_search_tool_result',
+              content: [
+                {
+                  type: 'web_search_result',
+                  title,
+                  url: 'https://example.com',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.ok(
+      markdown.includes('\\`rm -rf /\\` \\*bold\\* \\_italic\\_ \\# Heading'),
+      `expected escaped title, got: ${markdown}`,
+    );
+  });
+
   it('preserves IPv6 host brackets in Markdown link destinations', () => {
     const url = 'http://[::1]:8080/path';
     const markdown = formatChatAsMarkdown({
