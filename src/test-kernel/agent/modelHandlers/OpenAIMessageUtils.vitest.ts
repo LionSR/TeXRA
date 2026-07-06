@@ -4,7 +4,6 @@ import { describe, it } from 'vitest';
 
 // Local imports - agent
 import {
-  checkBatchedToolCalls,
   insertMediaIntoChatUserMessage,
   normalizeOpenAIMessageContent,
   prependTextToChatUserMessage,
@@ -197,28 +196,6 @@ describe('normalizeOpenAIMessageContent', () => {
     assert.equal(normalized.length, 3);
     assert.equal(normalized[1].tool_call_id, 'call_1');
     assert.equal(normalized[2].tool_call_id, 'call_2');
-  });
-});
-
-describe('checkBatchedToolCalls', () => {
-  it('throws on a call/result count mismatch', () => {
-    assert.throws(
-      () => checkBatchedToolCalls(2, 1),
-      /Batched tool calls mismatch: 2 calls vs 1 results/,
-    );
-  });
-
-  it('returns false when there is nothing to send', () => {
-    assert.equal(checkBatchedToolCalls(0, 0), false);
-  });
-
-  it('returns true when counts match and are non-empty', () => {
-    assert.equal(checkBatchedToolCalls(3, 3), true);
-  });
-
-  it('reports the mismatch before the empty check', () => {
-    // A zero call count with a non-zero result count is still a mismatch.
-    assert.throws(() => checkBatchedToolCalls(0, 2), /0 calls vs 2 results/);
   });
 });
 

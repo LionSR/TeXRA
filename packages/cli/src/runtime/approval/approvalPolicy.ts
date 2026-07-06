@@ -2,6 +2,7 @@ import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   isChatGptSubscriptionLimitError,
+  isCredentialExhausted,
   type ApprovalDecision as SharedApprovalDecision,
 } from '@shared/schemas';
 
@@ -57,7 +58,7 @@ export function isCliApiSwitchableRetry(
   if (!details) return false;
   if (isChatGptSubscriptionLimitError(details)) return true;
   return (
-    details.isCredentialExhausted === true &&
+    isCredentialExhausted(details) &&
     (details.isRelayError === true ||
       isRelayMonthlyLimitMessage(payload.errorMessage))
   );
@@ -167,7 +168,7 @@ function isUnretryableRetryRequest(
   const details = (payload as ProgressEventPayloads['showRetryRequest'])
     .errorDetails;
   if (!details) return false;
-  if (details.isCredentialExhausted) return true;
+  if (isCredentialExhausted(details)) return true;
   if (details.statusCode === 401 || details.statusCode === 403) return true;
   return false;
 }

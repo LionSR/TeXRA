@@ -85,14 +85,9 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
       ? { workingDirectory: config.workingDirectory }
       : undefined);
 
-  return {
+  const base = {
     name: streamId,
     label,
-    model: processAgent ? undefined : config?.model,
-    modelLabel:
-      !processAgent && config?.model
-        ? (MODEL_CONFIGS[config.model]?.label ?? config.model)
-        : undefined,
     agent: resolvedAgent,
     agentCategory: category,
     isRemote,
@@ -101,7 +96,17 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
     executionId: inputs.executionId,
     parentStreamId: inputs.parentStreamId,
     description: inputs.description,
-    command,
     worktree,
   };
+
+  return processAgent
+    ? { ...base, kind: 'process', command }
+    : {
+        ...base,
+        kind: 'agent',
+        model: config?.model,
+        modelLabel: config?.model
+          ? (MODEL_CONFIGS[config.model]?.label ?? config.model)
+          : undefined,
+      };
 }

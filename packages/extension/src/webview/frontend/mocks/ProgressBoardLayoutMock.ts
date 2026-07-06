@@ -62,6 +62,7 @@ const SAMPLE_FILES: Record<string, OutputFileInfo[]> = {
 
 const SAMPLE_STREAMS: StreamTabInfo[] = [
   {
+    kind: 'agent',
     name: ACTIVE_STREAM_ID,
     label: 'manuscript_revised.tex - polish workflow',
     modelLabel: 'Opus 4.7',
@@ -72,6 +73,7 @@ const SAMPLE_STREAMS: StreamTabInfo[] = [
     executionId: 'abc123',
   },
   {
+    kind: 'agent',
     name: 'figures',
     label: 'figures.tex - tikz tighten',
     modelLabel: 'Sonnet 4.5',
@@ -82,6 +84,7 @@ const SAMPLE_STREAMS: StreamTabInfo[] = [
     executionId: 'abc124',
   },
   {
+    kind: 'agent',
     name: 'review',
     label: 'reviewer-response - draft',
     modelLabel: 'Opus 4.7',
@@ -92,6 +95,7 @@ const SAMPLE_STREAMS: StreamTabInfo[] = [
     executionId: 'abc125',
   },
   {
+    kind: 'agent',
     name: 'bib',
     label: 'bibliography sync',
     modelLabel: 'Sonnet 4.5',

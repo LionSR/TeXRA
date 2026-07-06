@@ -20,6 +20,7 @@ describe('LegacyProgressEventProjection', () => {
     const childStreamId = 'stream:child' as StreamTabId;
     const executionId = 'exec:process-output' as ExecutionId;
     const child: ActiveChildInfo = {
+      kind: 'subagent',
       executionId: 'exec:child' as ExecutionId,
       childStreamId,
       agentName: 'orchestrator',
@@ -28,6 +29,7 @@ describe('LegacyProgressEventProjection', () => {
       elapsed: null,
     };
     const process: ActiveChildInfo = {
+      kind: 'process',
       executionId,
       agentName: 'bash',
       status: 'running',

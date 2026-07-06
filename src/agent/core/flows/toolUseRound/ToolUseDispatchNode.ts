@@ -698,9 +698,11 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     if (shouldBatch) {
       const followUpMsgs =
         await modelHandler.createBatchedToolUseFollowUpMessages!(
-          calls,
-          extracted.map((e) => e.sanitizedResult),
-          extracted.map((e) => e.attachments),
+          calls.map((call, index) => ({
+            call,
+            result: extracted[index].sanitizedResult,
+            attachments: extracted[index].attachments,
+          })),
           workspace,
           assistantText || undefined,
         );
