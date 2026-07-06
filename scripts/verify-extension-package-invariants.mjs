@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   extensionManifestSnapshot,
   readJson,
+  withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 
 const rootDir = path.resolve(
@@ -59,18 +60,6 @@ const REQUIRED_PACKAGED_PATHS = [
 // in the source tree, but verify-vsix-contents.mjs still checks the built
 // VSIX includes them.
 const BUILD_TIME_PACKAGED_PATHS = new Set(['readme.md', 'changelog.md']);
-
-// Catalog-derived `contributes` subtrees. These are code-generated from the
-// settings/command catalogs by scripts/sync-package-contributes.mjs and
-// diff-checked by the catalog vitest suites, so snapshotting them here would
-// just duplicate that guard with ~35 KB of committed generated JSON. They are
-// omitted from the manifest snapshot; the remaining non-catalog contributes
-// (menus, views, walkthroughs, …) and manifest keys stay guarded.
-const CATALOG_DERIVED_CONTRIBUTES = [
-  'configuration',
-  'commands',
-  'keybindings',
-];
 
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
@@ -142,14 +131,6 @@ function hasFiles(relativeDir) {
     if (entry.isDirectory() && hasFiles(child)) return true;
   }
   return false;
-}
-
-function withoutCatalogDerivedContributes(packageJson) {
-  const { contributes } = packageJson;
-  if (!contributes || typeof contributes !== 'object') return packageJson;
-  const trimmedContributes = { ...contributes };
-  for (const key of CATALOG_DERIVED_CONTRIBUTES) delete trimmedContributes[key];
-  return { ...packageJson, contributes: trimmedContributes };
 }
 
 function buildSnapshot() {
