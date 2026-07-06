@@ -47,6 +47,7 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
   }
   for (const entry of trace.entries.toReversed()) {
     if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) continue;
+    if (entry.groupId !== undefined) continue;
     if (!isObject(entry.data)) continue;
     const status = StreamStatusSchema.safeParse(entry.data.status);
     if (status.success) return streamStatusToLifecycleStatus(status.data);
