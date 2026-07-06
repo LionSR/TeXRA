@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   secrets: {},
   setCliApiMode: vi.fn(async () => undefined),
   setCliCodexSubscription: vi.fn(async () => undefined),
+  markApprovalDenied: vi.fn(),
   triggerRetry: vi.fn(),
   cancelRetry: vi.fn(),
 }));
@@ -77,7 +78,7 @@ vi.mock('@cli/runtime/approvalAdapter', () => {
         (payload.errorDetails?.isRelayError === true ||
           isRelayMonthlyLimitMessage(payload.errorMessage))),
     isCliChatGptSubscriptionRetry: isChatGptSubscriptionRetry,
-    markApprovalDenied: vi.fn(),
+    markApprovalDenied: mocks.markApprovalDenied,
   };
 });
 
@@ -103,6 +104,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import { AgentCategory } from '@shared/schemas';
 
 function context(): CliContext {
   return {
@@ -176,6 +178,7 @@ afterEach(() => {
   mocks.notify.mockReset();
   mocks.setCliApiMode.mockClear();
   mocks.setCliCodexSubscription.mockClear();
+  mocks.markApprovalDenied.mockClear();
   mocks.triggerRetry.mockClear();
   mocks.cancelRetry.mockClear();
 });
@@ -403,6 +406,90 @@ describe('TUI retry approvals', () => {
 
       clearApprovals();
       await expect(result).resolves.toEqual({ action: 'cancel' });
+      expect(currentApproval.get()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('times out an active plan approval modal', async () => {
+    const { interactions, dispose } = tui();
+    try {
+      const result = interactions.requestPlanApproval?.(
+        {
+          approvalId: 'plan-timeout',
+          streamId: 'plan-stream',
+          goalEnabled: false,
+          plan: { objective: 'Check the timeout path.' },
+        },
+        { timeoutMs: 10 },
+      );
+
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'plan',
+          payload: { approvalId: 'plan-timeout' },
+        });
+      });
+      await expect(result).resolves.toEqual({ action: 'timeout' });
+      await Promise.resolve();
+      expect(mocks.markApprovalDenied).not.toHaveBeenCalled();
+      expect(currentApproval.get()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('times out an active proposal approval modal', async () => {
+    const { interactions, dispose } = tui();
+    try {
+      const result = interactions.requestAgentProposal?.(
+        {
+          proposalId: 'proposal-timeout',
+          streamId: 'proposal-stream',
+          agent: 'reviewer',
+          model: 'gpt-test',
+          instruction: 'Review this argument.',
+          memories: [],
+          agentCategory: AgentCategory.ToolUse,
+        },
+        { timeoutMs: 10 },
+      );
+
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'proposal',
+          payload: { proposalId: 'proposal-timeout' },
+        });
+      });
+      await expect(result).resolves.toEqual({ action: 'timeout' });
+      await Promise.resolve();
+      expect(mocks.markApprovalDenied).not.toHaveBeenCalled();
+      expect(currentApproval.get()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('times out an active retry modal', async () => {
+    mocks.lookupApiKey.mockResolvedValue(undefined);
+
+    const { interactions, dispose } = tui();
+    try {
+      const result = interactions.requestRetry?.(
+        relayRetry({ streamId: 'retry-timeout', provider: 'openai' }),
+        { timeoutMs: 100 },
+      );
+
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'retry',
+          payload: { streamId: 'retry-timeout' },
+        });
+      });
+      await expect(result).resolves.toEqual({ action: 'timeout' });
+      await Promise.resolve();
+      expect(mocks.markApprovalDenied).not.toHaveBeenCalled();
       expect(currentApproval.get()).toBeUndefined();
     } finally {
       dispose();
