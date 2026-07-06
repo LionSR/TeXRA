@@ -24,7 +24,7 @@ import {
 } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
-import { tailWithEllipsis } from '@utils/text/stringUtils';
+import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -177,13 +177,18 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const partialText = details.partialText;
     if (partialText) {
       const maxTailChars = 1024;
-      const isTruncated = partialText.length > maxTailChars;
+      // tailWithEllipsis counts grapheme clusters, not UTF-16 code units —
+      // match it here so `isTruncated` and the header's totals agree with
+      // what it actually slices (a naive .length comparison can disagree
+      // with grapheme count for multi-codepoint characters like emoji).
+      const totalChars = toGraphemes(partialText).length;
+      const isTruncated = totalChars > maxTailChars;
       // tailWithEllipsis's budget covers its own leading "…", so pass one
       // more than the content characters we actually want displayed.
       const tail = tailWithEllipsis(partialText, maxTailChars + 1);
       const header = isTruncated
-        ? `--- Partial Output (last ${maxTailChars} of ${partialText.length} chars) ---`
-        : `--- Partial Output (${partialText.length} chars) ---`;
+        ? `--- Partial Output (last ${maxTailChars} of ${totalChars} chars) ---`
+        : `--- Partial Output (${totalChars} chars) ---`;
       lines.push(header, tail);
     }
 

@@ -79,4 +79,24 @@ describe('retry-request-panel', () => {
     // "…" plus exactly 1024 content characters, not 1023.
     expect(tail.replace(/^…/, '')).toHaveLength(1024);
   });
+
+  it('reports and truncates by grapheme count, not UTF-16 code-unit length', async () => {
+    const element = await mountPanel();
+    const formatRetryDetails: (details: ProviderErrorPartial) => string | null =
+      (element as unknown as Record<string, unknown>)[
+        'formatRetryDetails'
+      ] as never;
+
+    // Each 😀 is a surrogate pair (2 UTF-16 units, 1 grapheme). 600 of them
+    // is 1200 code units but only 600 graphemes — under the 1024 threshold,
+    // so this must NOT be reported or truncated as if it were over it.
+    const text = formatRetryDetails.call(element, {
+      isRelayError: false,
+      userRetryable: true,
+      partialText: '😀'.repeat(600),
+    });
+
+    expect(text).toContain('--- Partial Output (600 chars) ---');
+    expect(text).not.toContain('last 1024');
+  });
 });
