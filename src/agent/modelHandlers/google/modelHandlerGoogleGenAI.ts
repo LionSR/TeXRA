@@ -88,6 +88,12 @@ import type {
 
 /**
  * Handler for Google models using the native @google/genai SDK and Chat API.
+ *
+ * Feature-frozen stateless fallback for when `texra.model.useGoogleInteractionsAPI`
+ * is off; {@link ModelHandlerGoogleInteractions} is the default, actively
+ * developed path (see modelHandlers/README.md). This handler no longer tracks
+ * behavioral parity with the Interactions handler — new Google-facing features
+ * land there only, not here.
  */
 export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
