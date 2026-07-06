@@ -7,9 +7,11 @@ import {
   StreamStatusSchema,
   streamStatusToLifecycleStatus,
   type StreamLifecycleStatus,
+  type StreamTabInfo,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
+import { isProcessAgent } from '@shared/streams/agentKind';
 import { isObject } from '@utils/core';
 import type { TraceDocument } from '@transcript';
 
@@ -69,22 +71,29 @@ export function replayTrace(
   ctx: MessageHandlerContext,
 ): void {
   const { snapshot } = trace;
+  const streamTabBase = {
+    name: trace.streamId,
+    label: trace.config.agent,
+    agent: trace.config.agent,
+    agentCategory: trace.config.agentCategory,
+    // Empty-entries traces have nothing to derive a creation time from;
+    // fall back to "now" rather than the Unix epoch, which would render
+    // as a misleadingly specific (and wrong) 1970 date.
+    creationTimestamp: trace.entries[0]?.timestamp ?? Date.now(),
+    executionId: trace.executionId,
+    description: trace.meta?.description,
+  };
+  // A replayed process-agent trace (e.g. bash) must keep kind: 'process' so
+  // the progress UI picks the terminal-style renderer instead of tool-use
+  // chrome — matches the live classification in buildStreamTabInfo.
+  const streamTabInfo: StreamTabInfo = isProcessAgent(trace.config.agent)
+    ? { ...streamTabBase, kind: 'process', command: trace.config.instruction }
+    : { ...streamTabBase, kind: 'agent', model: trace.config.model };
   const updateStreams: UpdateStreamsMessage = {
     command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
     streams: [
       {
-        kind: 'agent',
-        name: trace.streamId,
-        label: trace.config.agent,
-        model: trace.config.model,
-        agent: trace.config.agent,
-        agentCategory: trace.config.agentCategory,
-        // Empty-entries traces have nothing to derive a creation time from;
-        // fall back to "now" rather than the Unix epoch, which would render
-        // as a misleadingly specific (and wrong) 1970 date.
-        creationTimestamp: trace.entries[0]?.timestamp ?? Date.now(),
-        executionId: trace.executionId,
-        description: trace.meta?.description,
+        ...streamTabInfo,
       },
     ],
     activeStream: trace.streamId,
