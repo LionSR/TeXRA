@@ -25,7 +25,7 @@ function getDateTimeFormatter(): Intl.DateTimeFormat {
 }
 
 /** Format a timestamp for display. */
-export function formatTimestamp(date: Date): {
+export function formatDisplayTimestamp(date: Date): {
   fullTimestamp: string;
   timeDisplay: string;
   tooltipTimestamp: string;

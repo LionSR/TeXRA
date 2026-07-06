@@ -18,7 +18,7 @@ import {
 } from '../litTemplates';
 
 // Local imports - formatter helpers
-import { formatTimestamp } from '../timestampUtils';
+import { formatDisplayTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
 import { buildDetailsSummary } from '../htmlBuilders';
 
@@ -58,7 +58,7 @@ export function formatBannerContentTemplate(
   if (!trimmedContent) return null;
 
   const config = BANNER_CONFIG[messageType ?? ''] ?? BANNER_CONFIG.thinking;
-  const { fullTimestamp } = formatTimestamp(new Date(timestamp));
+  const { fullTimestamp } = formatDisplayTimestamp(new Date(timestamp));
   const markdownHtml = processMarkdownContent(trimmedContent);
   const shouldOpen = options?.defaultOpen ?? false;
   // prettier-ignore
@@ -85,7 +85,7 @@ export function formatModelResponseTemplate(
   const trimmedContent = (text ?? '').trim();
   if (!trimmedContent) return null;
 
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
+  const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
     new Date(timestamp),
   );
   const markdownHtml = processMarkdownContent(trimmedContent);

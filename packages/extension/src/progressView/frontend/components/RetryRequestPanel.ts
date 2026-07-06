@@ -21,6 +21,7 @@ import {
 import type { ProviderErrorPartial } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
+import { tailWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -175,9 +176,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     if (partialText) {
       const maxTailChars = 1024;
       const isTruncated = partialText.length > maxTailChars;
-      const tail = isTruncated
-        ? '…' + partialText.slice(-maxTailChars)
-        : partialText;
+      const tail = tailWithEllipsis(partialText, maxTailChars);
       const header = isTruncated
         ? `--- Partial Output (last ${maxTailChars} of ${partialText.length} chars) ---`
         : `--- Partial Output (${partialText.length} chars) ---`;
