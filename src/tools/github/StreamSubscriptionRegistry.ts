@@ -23,7 +23,7 @@ import {
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
-import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 import type { Disposable } from '@platform/interfaces/disposable';
 
@@ -67,7 +67,6 @@ export interface StreamSubscriptionRegistryOptions<K extends string, Input> {
 interface BoundSubscription {
   disposable: Disposable;
   onEvent: (text: string) => void;
-  runtimeHost: AgentRuntimeHost;
   /**
    * Session captured at bind() time (inside the run's AsyncLocalStorage).
    * onEvent fires later from a detached polling timer where the ALS is empty, so
@@ -113,7 +112,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     }
     const existing = bound.get(key);
     if (existing) {
-      existing.runtimeHost = runtimeHost;
       existing.session = session;
       this.opts.source.updateSubscription?.(
         input,
@@ -128,7 +126,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const subscription: BoundSubscription = {
       disposable: { dispose: () => {} },
       onEvent: () => {},
-      runtimeHost,
       session,
     };
     subscription.onEvent = (text: string) => {
@@ -172,7 +169,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     }
     subscription.disposable = disposable;
     this.logger.info(`Bound subscription ${key} → stream ${streamId}`);
-    if (!keyIsNew) this.emitBindingsChanged([runtimeHost]);
+    if (!keyIsNew) this.emitBindingsChanged();
     return true;
   }
 
@@ -180,7 +177,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   unbind(
     streamId: StreamTabId,
     input: Input,
-    runtimeHost: AgentRuntimeHost,
+    _runtimeHost: AgentRuntimeHost,
   ): boolean {
     const key = this.opts.keyOf(input);
     const bound = this.perStream.get(streamId);
@@ -188,7 +185,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     if (!bound || !binding) return false;
     this.removeBoundKey(streamId, bound, key);
     this.disposeSafe(binding.disposable, 'explicit unsubscribe');
-    this.emitBindingsChanged([runtimeHost]);
+    this.emitBindingsChanged();
     return true;
   }
 
@@ -197,22 +194,19 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
    * bindings removed. Lets the settings UI cancel a subscription globally
    * without needing to know which stream owns it.
    */
-  unbindAll(key: string, runtimeHost: AgentRuntimeHost): number {
+  unbindAll(key: string, _runtimeHost: AgentRuntimeHost): number {
     const removedBindings: BoundSubscription[] = [];
-    const runtimeHosts: AgentRuntimeHost[] = [];
     for (const [streamId, bound] of [...this.perStream]) {
       const binding = bound.get(key as K);
       if (!binding) continue;
       removedBindings.push(binding);
-      runtimeHosts.push(binding.runtimeHost);
       this.removeBoundKey(streamId, bound, key as K);
     }
     if (removedBindings.length > 0) {
       for (const binding of removedBindings) {
         this.disposeSafe(binding.disposable, 'unbindAll');
       }
-      runtimeHosts.push(runtimeHost);
-      this.emitBindingsChanged(runtimeHosts);
+      this.emitBindingsChanged();
     }
     return removedBindings.length;
   }
@@ -255,31 +249,27 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     queue.onRelease((streamId) => {
       const bound = this.perStream.get(streamId);
       if (!bound) return;
-      const runtimeHosts = [...bound.values()].map(
-        (binding) => binding.runtimeHost,
-      );
       this.perStream.delete(streamId);
       for (const binding of bound.values()) {
         this.disposeSafe(binding.disposable, 'release');
       }
-      this.emitBindingsChanged(runtimeHosts);
+      this.emitBindingsChanged();
     });
   }
 
   private pruneMissingSourceKeys(keys: readonly K[]): void {
     const active = new Set<string>(keys);
-    const runtimeHosts: AgentRuntimeHost[] = [];
+    let removed = false;
     for (const [streamId, bound] of [...this.perStream]) {
       for (const key of [...bound.keys()]) {
         if (!active.has(key)) {
-          const binding = bound.get(key);
-          if (binding) runtimeHosts.push(binding.runtimeHost);
           bound.delete(key);
+          removed = true;
         }
       }
       if (bound.size === 0) this.perStream.delete(streamId);
     }
-    if (runtimeHosts.length > 0) this.emitBindingsChanged(runtimeHosts);
+    if (removed) this.emitBindingsChanged();
   }
 
   private removeBoundKey(
@@ -299,11 +289,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     }
   }
 
-  private emitBindingsChanged(runtimeHosts: Iterable<AgentRuntimeHost>): void {
-    emitGitHubSubscriptionChangedToHosts(
-      runtimeHosts,
-      this.opts.bindingsChangedEvent,
-      undefined,
-    );
+  private emitBindingsChanged(): void {
+    emitGitHubSubscriptionChanged(this.opts.bindingsChangedEvent, undefined);
   }
 }

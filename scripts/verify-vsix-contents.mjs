@@ -23,6 +23,12 @@ const snapshotPath = path.join(
   'extension-package-invariants.snapshot.json',
 );
 
+const CATALOG_DERIVED_CONTRIBUTES = [
+  'configuration',
+  'commands',
+  'keybindings',
+];
+
 function defaultVsixPath() {
   const packageJson = readJson(path.join(extensionDir, 'package.json'));
   return path.join(rootDir, 'releases', `texra-${packageJson.version}.vsix`);
@@ -112,6 +118,14 @@ function verifyManifest(vsixPath, snapshot, failures) {
     'VSIX extension/package.json no longer matches the extension manifest snapshot.',
     failures,
   );
+}
+
+function withoutCatalogDerivedContributes(packageJson) {
+  const { contributes } = packageJson;
+  if (!contributes || typeof contributes !== 'object') return packageJson;
+  const trimmedContributes = { ...contributes };
+  for (const key of CATALOG_DERIVED_CONTRIBUTES) delete trimmedContributes[key];
+  return { ...packageJson, contributes: trimmedContributes };
 }
 
 function verifyRequiredPaths(entries, snapshot, failures) {
