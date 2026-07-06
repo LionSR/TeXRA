@@ -31,6 +31,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { createFlushableDebounce } from '@utils/core';
 
 const STREAMS_KEY = 'restoredStreams';
 export const DESKTOP_STREAM_SNAPSHOT_WRITE_DEBOUNCE_MS = 100;
@@ -86,7 +87,6 @@ export async function openDesktopStreamSnapshotStore(
   const live = new Map<StreamTabId, RestoredStreamSnapshot>(
     parseHydrated(raw, log).map((s) => [s.streamId, s]),
   );
-  let pendingDebounce: ReturnType<typeof setTimeout> | undefined;
   let pendingUpsertWaiters: Array<{
     resolve(): void;
     reject(error: unknown): void;
@@ -122,11 +122,19 @@ export async function openDesktopStreamSnapshotStore(
     return write;
   }
 
+  // The debounce batches successive `upsert()` writes; `persistPendingUpserts`
+  // (used both when it fires and on immediate/flush paths) is the actual work,
+  // so this site only needs the timer's schedule/cancel/pending primitives —
+  // its own `flush()` isn't used since the awaited write chain below is what
+  // callers actually need to observe completion.
+  const writeDebounce = createFlushableDebounce(() => {
+    void persistPendingUpserts().catch(() => {
+      // Individual upsert promises receive the rejection through their waiters.
+    });
+  }, DESKTOP_STREAM_SNAPSHOT_WRITE_DEBOUNCE_MS);
+
   function clearPendingDebounce(): typeof pendingUpsertWaiters {
-    if (pendingDebounce) {
-      clearTimeout(pendingDebounce);
-      pendingDebounce = undefined;
-    }
+    writeDebounce.cancel();
     const waiters = pendingUpsertWaiters;
     pendingUpsertWaiters = [];
     return waiters;
@@ -141,13 +149,7 @@ export async function openDesktopStreamSnapshotStore(
     const promise = new Promise<void>((resolve, reject) => {
       pendingUpsertWaiters.push({ resolve, reject });
     });
-    if (pendingDebounce) clearTimeout(pendingDebounce);
-    pendingDebounce = setTimeout(() => {
-      pendingDebounce = undefined;
-      void persistPendingUpserts().catch(() => {
-        // Individual upsert promises receive the rejection through their waiters.
-      });
-    }, DESKTOP_STREAM_SNAPSHOT_WRITE_DEBOUNCE_MS);
+    writeDebounce.schedule();
     return promise;
   }
 
@@ -161,7 +163,7 @@ export async function openDesktopStreamSnapshotStore(
       const generationBeforeFlush = writeGeneration;
       await persistPendingUpserts();
       if (
-        pendingDebounce === undefined &&
+        !writeDebounce.pending &&
         pendingUpsertWaiters.length === 0 &&
         writeGeneration === generationBeforeFlush
       ) {
