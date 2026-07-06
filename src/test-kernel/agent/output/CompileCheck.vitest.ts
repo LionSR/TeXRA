@@ -30,9 +30,17 @@ interface FakeCompileOptions {
   outputDirectory?: string;
 }
 
+interface FakeCompileResult {
+  ok: boolean;
+  logTail?: string;
+}
+
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(
-    async (_location: FileLocation, _options?: FakeCompileOptions) => true,
+    async (
+      _location: FileLocation,
+      _options?: FakeCompileOptions,
+    ): Promise<FakeCompileResult> => ({ ok: true }),
   ),
   hasLatexCompiler: vi.fn(async () => true),
 }));
@@ -99,28 +107,10 @@ function initLatexPlatform(files: Record<string, string>): Promise<void> {
   });
 }
 
-// Writes a fake LaTeX build log next to where `compileLatex2Pdf` was asked to
-// build, so `readLogTail` (which greps for `<basename>.log` in the reported
-// build directory) finds something real rather than falling back to "(no
-// LaTeX log at ...)". Lets tests control the tail's exact line content
-// without needing to reproduce compileCheck's internal safeName/hash scheme.
-async function seedLatexLog(
-  outputDirectory: string,
-  texAbsolutePath: string,
-  content: string,
-): Promise<void> {
-  const basenameNoExt = path.basename(texAbsolutePath).replace(/\.tex$/i, '');
-  const logDest = pathToLocation(
-    path.join(outputDirectory, `${basenameNoExt}.log`),
-  );
-  await flexibleFS.ensureDir(pathToLocation(outputDirectory));
-  await flexibleFS.write(logDest, content);
-}
-
 describe('runCompileCheck', () => {
   beforeEach(() => {
     mocks.compileLatex2Pdf.mockReset();
-    mocks.compileLatex2Pdf.mockResolvedValue(true);
+    mocks.compileLatex2Pdf.mockResolvedValue({ ok: true });
     mocks.hasLatexCompiler.mockReset();
     mocks.hasLatexCompiler.mockResolvedValue(true);
   });
@@ -189,8 +179,14 @@ describe('runCompileCheck', () => {
     expect(result.compileResult?.status).toBe('ok');
   });
 
-  it('truncates a single failing log tail to the last 200 lines', async () => {
-    const executionId = 'compile-tail-truncation';
+  // The 200-line raw-tail extraction itself now lives in compileLatex2Pdf
+  // (src/latex/texTools.ts), covered by TexTools.vitest.ts. This test proves
+  // the other half of issue #7079's fix: whatever `logTail` compileCheck
+  // receives from the shared { ok, logTail } return shape is threaded
+  // through, unmodified, into the persisted failure excerpt -- it is not
+  // read from disk a second time.
+  it('sources the failing log tail from compileLatex2Pdf, not a separate disk read', async () => {
+    const executionId = 'compile-tail-passthrough';
     const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
     await initLatexPlatform({
       [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
@@ -198,19 +194,11 @@ describe('runCompileCheck', () => {
 
     // Zero-padded so containment checks below can't be fooled by numeric
     // substrings (e.g. "L0001" would otherwise match inside "L00010").
-    const totalLines = 250;
-    mocks.compileLatex2Pdf.mockImplementation(async (location, options) => {
-      const lines = Array.from(
-        { length: totalLines },
-        (_, i) => `L${String(i + 1).padStart(4, '0')}`,
-      );
-      await seedLatexLog(
-        options?.outputDirectory ?? '',
-        location.absolutePath,
-        lines.join('\n'),
-      );
-      return false;
-    });
+    const logTail = Array.from(
+      { length: 200 },
+      (_, i) => `L${String(i + 51).padStart(4, '0')}`,
+    ).join('\n');
+    mocks.compileLatex2Pdf.mockResolvedValue({ ok: false, logTail });
 
     const outputState = createOutputState();
     ensureRoundData(outputState, 0).outputs = [
@@ -232,11 +220,9 @@ describe('runCompileCheck', () => {
       result.compileResult?.status === 'failed'
         ? result.compileResult.logExcerpt
         : '';
-    // Last 200 of 250 lines survive: L0051 .. L0250.
     expect(excerpt).toContain('L0051');
     expect(excerpt).toContain('L0250');
     expect(excerpt).not.toContain('L0050');
-    expect(excerpt).not.toContain('L0001');
   });
 
   it('truncates the combined excerpt to the last 12000 characters', async () => {
@@ -251,17 +237,13 @@ describe('runCompileCheck', () => {
     // wrapped with the "Compile check failed for..." header. Zero-padded
     // markers avoid numeric-substring false matches in the assertions below.
     const longLine = 'x'.repeat(100);
-    mocks.compileLatex2Pdf.mockImplementation(async (location, options) => {
-      const lines = Array.from(
-        { length: 150 },
-        (_, i) => `${longLine}-END${String(i + 1).padStart(4, '0')}`,
-      );
-      await seedLatexLog(
-        options?.outputDirectory ?? '',
-        location.absolutePath,
-        lines.join('\n'),
-      );
-      return false;
+    const lines = Array.from(
+      { length: 150 },
+      (_, i) => `${longLine}-END${String(i + 1).padStart(4, '0')}`,
+    );
+    mocks.compileLatex2Pdf.mockResolvedValue({
+      ok: false,
+      logTail: lines.join('\n'),
     });
 
     const outputState = createOutputState();
@@ -298,7 +280,7 @@ describe('runCompileCheck', () => {
       [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
     });
 
-    mocks.compileLatex2Pdf.mockResolvedValueOnce(false);
+    mocks.compileLatex2Pdf.mockResolvedValueOnce({ ok: false });
 
     const outputState = createOutputState();
     ensureRoundData(outputState, 0).outputs = [
@@ -320,7 +302,7 @@ describe('runCompileCheck', () => {
 
     // Re-run the same round (e.g. after a repaired retry); this time the
     // compile succeeds.
-    mocks.compileLatex2Pdf.mockResolvedValueOnce(true);
+    mocks.compileLatex2Pdf.mockResolvedValueOnce({ ok: true });
     const secondResult = await runCompileCheck(ctx, 0);
     expect(secondResult.compileResult?.status).toBe('ok');
 
@@ -382,14 +364,9 @@ describe('runCompileCheck', () => {
       [texPathB]: '\\documentclass{article}\\begin{document}B\\end{document}',
     });
 
-    mocks.compileLatex2Pdf.mockImplementation(async (location, options) => {
+    mocks.compileLatex2Pdf.mockImplementation(async (location) => {
       const abs = location.absolutePath;
-      await seedLatexLog(
-        options?.outputDirectory ?? '',
-        abs,
-        `LOG MARKER FOR ${abs}`,
-      );
-      return false;
+      return { ok: false, logTail: `LOG MARKER FOR ${abs}` };
     });
 
     const outputState = createOutputState();

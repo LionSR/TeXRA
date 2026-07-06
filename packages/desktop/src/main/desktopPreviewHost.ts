@@ -137,9 +137,10 @@ export function createDesktopPreviewHost(
     const built = await compileLatex2Pdf(createExternalLocation(sourcePath), {
       outputDirectory,
     });
-    if (!built) {
+    if (!built.ok) {
+      const tail = built.logTail ? `\n\n${built.logTail}` : '';
       await fail(
-        `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
+        `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.${tail}`,
       );
     }
 
