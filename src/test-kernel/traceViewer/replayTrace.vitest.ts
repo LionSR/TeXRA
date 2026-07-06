@@ -260,6 +260,68 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
+  it('ignores a cleanly-closed tool-use round with no data.kind at all — archived before the stage.end kind fix (issue #7291)', () => {
+    // Traces archived before TexraTranscriptRecorder started re-attaching
+    // `kind` to `stage.end` (this same effort, #7267) have GROUP_END rows
+    // with NO `data.kind` whatsoever: `store.update` replaces `data`
+    // wholesale, so the round's `kind: 'round'` tag from stage.start never
+    // made it onto its GROUP_END row. `data.kind` alone can't tell this
+    // legacy round's end apart from the legacy root run's end (crash
+    // mid-run) — the fallback must key on entry ordering instead (see
+    // `findRootStageId`): the root run's stage entry is always the first
+    // top-level ("no parent") stage entry in the trace, since the round
+    // only starts after the root run stage has already opened. Labels are
+    // deliberately non-canonical ("Legacy run" / "Round 0", not "Run: ...")
+    // to prove the fallback doesn't key on label text either.
+    const { ctx, getState } = createContext(createInitialState());
+    const trace: TraceDocument = {
+      ...legacyTrace(undefined),
+      config: AgentConfigSchema.parse({
+        agent: 'correct',
+        model: 'gemini35f',
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      entries: [
+        {
+          seqNo: 1,
+          id: 'root-run',
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+          level: LOG_LEVELS.INFO,
+          timestamp: 100,
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'Legacy run',
+          // Legacy trace predates stage kinds entirely, so even the
+          // GROUP_START row carries no `kind`.
+          data: { status: 'running' },
+          // No matching GROUP_END: the root run stage never closed (crash
+          // mid-run), so this entry stays a GROUP_START forever.
+        },
+        {
+          seqNo: 2,
+          id: 'r0',
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+          level: LOG_LEVELS.INFO,
+          timestamp: 120,
+          // No groupId — rounds have no ambient parent, so this is
+          // indistinguishable from a root stage by groupId alone.
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'Round 0',
+          // No `kind` — the legacy shape this fix must handle: the round
+          // closed cleanly before TexraTranscriptRecorder preserved `kind`
+          // across the stage.end merge, so this row has only its entry
+          // position (second top-level stage entry, opened after root) to
+          // distinguish it from root.
+          data: { status: 'stopped', endTime: 120 },
+        },
+      ],
+    };
+
+    replayTrace(trace, ctx);
+
+    const replayed = getState().streamStates.get(trace.streamId);
+    expect(replayed?.status).toBe(STREAM_STATUS.READY);
+  });
+
   it('derives "failed" from snapshot.status "error" instead of defaulting to ready', () => {
     const { ctx, getState } = createContext(createInitialState());
     const trace = legacyTrace('error');

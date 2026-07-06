@@ -42,6 +42,42 @@ type SyncStreamContentMessage = Extract<
 const NESTED_STAGE_KINDS = new Set(['round', 'phase', 'session']);
 
 /**
+ * Identifies the root run stage's entry id by structural position, for
+ * archived traces where `data.kind` isn't available to check — recorded
+ * before `TexraTranscriptRecorder` started re-attaching `kind` across the
+ * stage.end merge, or even before per-stage `kind` existed at all. The stage
+ * label (`entry.text`) isn't a safe fallback either: it's arbitrary
+ * human-authored text with no enforced format guarantee across every past
+ * recorder revision (see the "Legacy run" fixture in
+ * `replayTrace.vitest.ts`'s issue #7188 case).
+ *
+ * What *is* guaranteed for every historical trace: each stage occupies
+ * exactly one entry for its whole lifetime — `stage.end` mutates that same
+ * entry in place (`StreamLogStore.update` / `StreamLog.update`) rather than
+ * appending a new one — so a stage's position in `trace.entries` is fixed at
+ * `stage.start` time and never moves. `beginRunStage` opens the root run
+ * stage before any flow (and therefore any tool-use round, which shares the
+ * root's "no parent" `groupId === undefined` shape) ever starts, so among
+ * every top-level stage entry the root's is always the earliest by seqNo.
+ * Any later entry sharing that "no parent" shape is a nested round/phase/
+ * session stage that started after the root, never the root itself.
+ */
+function findRootStageId(
+  entries: TraceDocument['entries'],
+): string | undefined {
+  for (const entry of entries) {
+    if (entry.groupId !== undefined) continue;
+    if (
+      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
+      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END
+    ) {
+      return entry.id;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Maps the persisted-history `ExecutionStatus` onto the `StreamLifecycleStatus`
  * vocabulary `StreamMetadataSchema.status` renders. `executionStatusToRunOutcome`
  * is the sanctioned inverse of `runOutcomeToExecutionStatus` — its `RunOutcome`
@@ -60,14 +96,21 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
     const outcome = executionStatusToRunOutcome(trace.terminalStatus);
     if (outcome) return outcome;
   }
+  const rootStageId = findRootStageId(trace.entries);
   for (const entry of trace.entries.toReversed()) {
     if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) continue;
     if (entry.groupId !== undefined) continue;
     if (!isObject(entry.data)) continue;
-    if (
-      typeof entry.data.kind === 'string' &&
-      NESTED_STAGE_KINDS.has(entry.data.kind)
-    ) {
+    const kind =
+      typeof entry.data.kind === 'string' ? entry.data.kind : undefined;
+    if (kind !== undefined) {
+      if (NESTED_STAGE_KINDS.has(kind)) continue;
+    } else if (entry.id !== rootStageId) {
+      // No `data.kind` to check — this entry predates kind-tagging
+      // altogether. Fall back to the structural ordering invariant: only
+      // the entry at the root stage's fixed position (the first top-level
+      // stage entry in the trace) can be the run's own GROUP_END; anything
+      // else sharing the "no parent" shape is a nested round/phase/session.
       continue;
     }
     const status = StreamStatusSchema.safeParse(entry.data.status);
