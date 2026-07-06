@@ -22,28 +22,10 @@ import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 import { tryUseRunContext } from './RunContext';
 import { defaultSession, type SessionHandle } from './SessionHandle';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import type { SessionFact } from './SessionEventHub';
-
-function emitLegacyHostFact(host: AgentRuntimeHost, fact: SessionFact): void {
-  switch (fact.type) {
-    case 'goalStateChanged':
-      host.emit('goalStateChanged', fact.payload);
-      return;
-    case 'inquiryThreadUpdated':
-      host.emit('inquiryThreadUpdated', fact.payload);
-      return;
-    case 'clearMissingOutputs':
-      host.emit('clearMissingOutputs', fact.payload);
-      return;
-    case 'updateQueuedFollowUps':
-      host.emit('updateQueuedFollowUps', fact.payload);
-      return;
-    case 'setActiveStream':
-      host.emit('setActiveStream', fact.payload);
-      return;
-  }
-}
+import {
+  emitLegacySessionFactOnHost,
+  type SessionFact,
+} from './SessionEventHub';
 
 function emitSessionFact(fact: SessionFact, session?: SessionHandle): void {
   const owner = session ?? tryUseRunContext()?.session;
@@ -52,7 +34,7 @@ function emitSessionFact(fact: SessionFact, session?: SessionHandle): void {
     return;
   }
   if (owner?.hostChannel) {
-    emitLegacyHostFact(owner.hostChannel, fact);
+    emitLegacySessionFactOnHost(owner.hostChannel, fact);
     return;
   }
   defaultSession().events.emit({ scope: 'session', event: fact });
