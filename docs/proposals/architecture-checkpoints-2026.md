@@ -10,6 +10,165 @@ Sources of truth for the current program:
 - [`session-scoped-runtime-architecture.md`](./session-scoped-runtime-architecture.md)
 - GitHub trackers #6951, #6953, and #6981.
 
+## 2026-07-06 - Checkpoint B before Stage 4
+
+**Verdict:** Stage 4 may start, but Stage 5 may not. Stages 3a-3c have enough
+session-owned runtime and persistence structure for the interactions port to
+land: #7284 made native subagents suspend at WAITING without terminal cleanup,
+and #7292 moved completed-run summary todos behind a transcript-sidecar reader
+with a ledgered legacy fallback. The next work is therefore not another
+persistence slice and not bus deletion; it is the CLI-first `HostInteractions`
+port from #6967.
+
+This checkpoint re-read #6979 against `main` at `c9b3b86fa`. The approval and
+retry machinery has not collapsed by accident: the three mechanisms named in
+the proposal are still live and still point to one missing abstraction.
+
+### Stage 4 And F2 Sequence
+
+F2 must land with the host implementation it simplifies, not as a separate
+pre-flight branch and not after Stage 4 has already rewired the same files.
+The concrete order is:
+
+1. **Core contract + CLI implementation.** Add session-owned
+   `HostInteractions` and the shared request bookkeeping, then implement the
+   CLI port first. This PR deletes the TUI `host.emit` monkey-patch in
+   `packages/cli/src/chat/tui/state/subscribeApprovals.ts` and routes CLI
+   decisions through the session interaction resolver. Extension and desktop may
+   keep adapters around their current UI handlers in this first PR, but those
+   adapters are migration scaffolding and need #6981 rows if they keep old
+   resolver names alive.
+2. **Desktop implementation + desktop host factory.** Rewire
+   `packages/desktop/src/main/desktopAgentExecution.ts` once: construct the
+   desktop `HostInteractions` implementation together with the desktop host
+   factory changes. Do not first add a factory that still forwards the old
+   show/resolve bus keys and then rewrite it again.
+3. **Extension implementation + extension host factory/message-handler pass.**
+   Rewire `packages/extension/src/progressView/ProgressViewProvider.ts` and
+   `ProgressViewMessageHandler.ts` in the same PR that turns the extension
+   progress view handlers into an interaction implementation.
+4. **Only after all three host implementations land, start Stage 5.** Stage 5
+   deletes the event keys and projector scaffolding. It is not an adapter PR.
+
+This ordering is the least-churn path through the shared files named by #6979:
+desktop execution and both progress-view message handlers are each rewritten
+once for their host implementation, not once for factories and once again for
+interactions.
+
+### Current Interaction Evidence
+
+- `BasePromiseCoordinator` still owns `pDefer`, `pTimeout`, replacement
+  cancellation, first-wins resolution, and resolve-event cleanup for plan,
+  proposal, and retry requests. These mechanics should move into the
+  interactions port's shared pending registry rather than be wrapped by another
+  coordinator layer.
+- `RunCoordinatorBridge` still holds the process-wide request-id index that lets
+  host callbacks resolve plan/proposal/retry requests outside the async
+  `RunContext`. Stage 4's resolver is the same idea with the correct owner:
+  `session.interactions.resolve(requestId, result)`.
+- `ApprovalRequestHandler` still owns a separate `pending`/`delivered` replay
+  registry for progress-view prompts. Stage 4 must make this data a view of
+  `session.interactions.pending()`, not a second registry beside it.
+- The CLI TUI still intercepts approvals by replacing `host.emit` in
+  `installTuiApprovals`. It handles bash, plan, proposal, retry, external
+  inquiry, and user-question events there, while tool-edit goes through the
+  separate platform approval handler. The CLI-first Stage 4 PR should delete
+  this monkey-patch rather than preserve it as an adapter.
+- Bash/tool-edit bypass state still rides the approval queue/progress-event
+  machinery. The `updateBashApprovalBypassState` path is effectively CLI-only
+  today; Stage 4 should either make that explicit inside the CLI
+  implementation or fold it into shared interaction bypass state. It is not an
+  early deletion candidate.
+- Extension and desktop already have a session in reach at legitimate resolve
+  sites. Desktop mostly calls `this.session.coordinators`; extension still holds
+  a coordinator dependency in `ProgressViewMessageHandler`. Neither host needs a
+  process-global resolver after Stage 4.
+- External inquiry remains thread-shaped. It must not be flattened into the
+  same yes/no result shape as bash or plan approval. It also has two replay
+  sources today, in-memory pending prompts and durable thread hydration, so
+  `HostInteractions` should expose a durable thread handle or equivalent
+  host-owned thread operation and must avoid duplicate cards on reload.
+
+### Retry Design
+
+`requestRetry` is the host interaction surface for the error-pipeline retry
+owner; it is not a second retry owner. The Stage 4 port owns presentation,
+pending/replay state, and a single settlement path. The retry policy owner
+remains the model/retry layer described in `error-pipeline-and-ownership.md`
+T2:
+
+- SDK-internal retry settings are still a separate T2-1 task. Stage 4 must not
+  change model-handler retry counts.
+- `RetryState` remains the visible in-run retry loop. `HostInteractions`
+  returns `retry` or `cancel` plus host-specific fields such as CLI API-mode
+  switching; it does not decide whether provider errors are retryable.
+- Desktop's current retry behavior is still intentionally weaker than the
+  extension's panel. Stage 4 may first preserve the current desktop
+  cancel-on-show behavior, but the desktop host implementation must make that
+  policy explicit rather than silently dropping retry requests.
+
+### Stage 5 Go/No-Go
+
+Stage 5 is **no-go** at this checkpoint. The bus still has live consumers in
+all three host families:
+
+- **Interaction RPC:** show/resolve keys are registered through
+  `UIEvents.ts`, progress-backend UI config, extension/desktop message
+  handlers, CLI approval dispatch, tool-edit approval, user question, and
+  external inquiry handlers.
+- **Legacy run projections:** `SessionRunFactProjector` and
+  `LegacyProgressEventProjection` still project session facts to progress-event
+  keys for CLI, progress backend, child streams, and tests. These are correct
+  migration scaffolds until hosts consume the session plane directly.
+- **Desktop fan-out:** desktop still re-emits runtime events onto the process
+  bus before feeding the per-window bridge. This is the remaining multi-window
+  hazard Stage 4/F2 must route through a per-window implementation before Stage
+  5 can delete the process bus path.
+- **Display and app lifecycle:** extension and desktop still subscribe to
+  status, usage, stream removal, goal changes, GitHub/subscription changes,
+  settings refreshes, file-decoration/output events, and requestShow/open-file
+  events on the process bus. Those are either Stage 5 run-fact deletion targets
+  or later app-signal work; they are not safe early deletions.
+- **Typed stage compatibility:** `setTaskState`, `updateRoundStage`, and
+  `updateStreamStatus` remain live host inputs in CLI, desktop, progress
+  backend, snapshot restoration, and tests. Their compatibility projections
+  remain ledgered until the Stage 5 switchover removes their consumers.
+
+No additional Stage 3 cleanup is mandatory before Stage 4. The completed-run
+todo fallback introduced by #7292 is already in #6981. The remaining safe
+cleanup class is local to Stage 4 PRs themselves: if a PR removes one old
+resolve path, it should delete the corresponding adapter and test in the same
+branch rather than leaving a pass-through helper behind.
+
+### Stage 4 Test Plan
+
+The first Stage 4 PR needs focused tests before broad suites:
+
+- a host-neutral `HostInteractions` registry test for pending requests,
+  first-wins resolution, replacement cancellation, timeout, and
+  `cancelForStream`;
+- CLI tests proving approvals no longer depend on mutating `host.emit`, while
+  preserving yolo/never policy, API-mode retry switching, modal cancellation,
+  and human-input refusal behavior;
+- regression tests for session isolation: two sessions can hold same-shaped
+  request ids without cross-resolution, and per-session prompt serialization
+  does not block another session;
+- existing coordinator and progress tests:
+  `PromiseCoordinators.vitest.ts`, `runCoordinators.vitest.ts`,
+  `TuiApprovalRetry.vitest.mts`, `ApprovalQueue.vitest.mts`,
+  `ProgressBackend.vitest.ts`, and the desktop/extension message-handler tests
+  touched by the host-specific PR.
+
+Stage 5 needs an additional deletion-gate suite before each bus-family removal:
+`SessionRunFactProjectorEquivalence.vitest.ts`,
+`LegacyProgressEventProjection.vitest.ts`, `SessionEventHub.vitest.ts`,
+`EmitRuntimeEvent.vitest.ts`, `StreamSnapshotStore.vitest.ts`,
+`DesktopAgentExecution.vitest.mts`, `DesktopProgressEventBridge.vitest.mts`,
+`TuiStateAndFocus.vitest.mts`, and `RunProgressRenderer.vitest.mts`. Add a
+multi-window desktop isolation test and a legacy-vs-session backend equivalence
+test before removing the corresponding projectors. Do not retire the projector
+equivalence test until the projector and its legacy keys are actually gone.
+
 ## 2026-07-05 - Checkpoint A after stages 0-2
 
 **Verdict:** Stage 3 remains a correctness track, not pre-payment. The
