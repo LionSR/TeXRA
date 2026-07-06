@@ -14,9 +14,38 @@ import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
+
+// Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
+// tex compile logs are noisy and heuristic parsing is a losing game, so every
+// caller gets the same last-N-lines excerpt an LLM or a human can read as-is.
+const LOG_TAIL_LINES = 200;
+
+/**
+ * Read the tail of the `.log` file a LaTeX engine drops next to its output
+ * (`<basename-without-ext>.log` inside `outDir`). Shared by every
+ * {@link compileLatex2Pdf} caller so a failed compile always comes with
+ * enough context to act on, not just a boolean.
+ */
+async function readCompileLogTail(
+  outDir: string,
+  latexFile: string,
+): Promise<string> {
+  // Strip whatever extension the source actually has (.tex/.ltx/.latex are
+  // all compilable, per isLatexFile) — the engine's .log file is always
+  // named after the source with its own extension removed, not just .tex.
+  const compiledBasename = path.basename(latexFile, path.extname(latexFile));
+  const logAbs = path.join(outDir, `${compiledBasename}.log`);
+  try {
+    const full = await flexibleFS.read(pathToLocation(logAbs));
+    return splitContentLines(full).slice(-LOG_TAIL_LINES).join('\n');
+  } catch (err) {
+    return `(no LaTeX log at ${logAbs}: ${toErrorMessage(err)})`;
+  }
+}
 
 export function buildKpathseaSearchPath(
   prependPaths: readonly string[],
@@ -92,22 +121,33 @@ export function buildLatexSearchParts(input: {
 }
 
 /**
+ * Result of a {@link compileLatex2Pdf} attempt. A discriminated union on `ok`
+ * so the type system guarantees {@link LOG_TAIL_LINES}'s worth of the
+ * engine's `.log` file tail is present whenever compilation fails, instead of
+ * every caller needing a defensive fallback for a theoretically-missing
+ * `logTail`.
+ */
+export type CompileLatex2PdfResult =
+  { ok: true } | { ok: false; logTail: string };
+
+/**
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
  * @param options Compilation options (channel defaults to module CHANNEL)
- * @returns Promise<boolean> True if compilation succeeded
+ * @returns `{ ok: true } | { ok: false, logTail }` -- `logTail` is always
+ * populated on failure.
  */
 export async function compileLatex2Pdf(
   latexLocation: FileLocation,
   options: LaTeXCompileOptions = {},
-): Promise<boolean> {
+): Promise<CompileLatex2PdfResult> {
   // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
   const channel = parsed.channel ?? CHANNEL;
   const { outputDirectory, compiler, timeout, extraInputDirs } = parsed;
+  const latexFile = latexLocation.absolutePath;
+  const outDir = outputDirectory ?? path.dirname(latexFile);
   try {
-    const latexFile = latexLocation.absolutePath;
-    const outDir = outputDirectory ?? path.dirname(latexFile);
     await flexibleFS.ensureDir(pathToLocation(outDir));
 
     // TeX resolves relative `\input{…}` / `\bibliography{…}` against the
@@ -192,11 +232,16 @@ export async function compileLatex2Pdf(
 
     if (result && result.success) {
       logger.debug(channel, `Successfully compiled ${latexFile}`);
-      return true;
+      return { ok: true };
     }
-    return false;
+    return { ok: false, logTail: await readCompileLogTail(outDir, latexFile) };
   } catch (err) {
-    logger.error(channel, `Error compiling LaTeX: ${toErrorMessage(err)}`);
-    return false;
+    const message = toErrorMessage(err);
+    logger.error(channel, `Error compiling LaTeX: ${message}`);
+    const tail = await readCompileLogTail(outDir, latexFile);
+    return {
+      ok: false,
+      logTail: `Error compiling LaTeX: ${message}\n\n${tail}`,
+    };
   }
 }

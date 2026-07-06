@@ -182,10 +182,22 @@ class TikzPictureManager {
           buildDirLocation,
           suffix,
         );
-        await compileLatex2Pdf(texLocation, {
+        const compiled = await compileLatex2Pdf(texLocation, {
           channel: this.channel,
           compiler: 'pdflatex',
         });
+        if (!compiled.ok) {
+          logger.warn(
+            this.channel,
+            `Failed to compile TikZ picture ${texLocation.absolutePath}:\n${compiled.logTail}`,
+            {
+              data: {
+                texFile: texLocation.absolutePath,
+                logTail: compiled.logTail,
+              },
+            },
+          );
+        }
 
         // Derive PDF location from tex location
         const pdfFilename = path

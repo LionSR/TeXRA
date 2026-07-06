@@ -419,14 +419,27 @@ export class LatexDiffManager {
         : null,
       this.resolveWorkspaceSourceDir(referenceLocation),
     ].filter((dir): dir is string => dir !== null);
-    const ok = await compileLatex2Pdf(diffLocation, {
+    const compiled = await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
       timeout: timeoutMs,
       extraInputDirs,
     });
 
-    if (!ok) {
+    if (!compiled.ok) {
+      // No MESSAGE_TYPES.INTERNAL here (unlike the diagnostic logs above) —
+      // this is a real failure (the diff PDF silently doesn't appear), so it
+      // must reach the standard channel subscriber, and the tail belongs in
+      // the visible message itself since `data` is only shown in debug mode.
+      this.logger.warn(
+        `Failed to compile latexdiff PDF:\n${compiled.logTail}`,
+        {
+          data: {
+            diffFile: diffLocation.absolutePath,
+            logTail: compiled.logTail,
+          },
+        },
+      );
       return { diffLocation, artifact: null };
     }
 
