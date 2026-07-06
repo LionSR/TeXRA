@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { AgentCategory } from '@shared/schemas';
 import { buildStreamTabInfo } from '@shared/progressView/backend/streamTabInfo';
-import { isProcessAgent } from '@shared/streams/agentKind';
 
 describe('buildStreamTabInfo', () => {
   it('classifies stream-id-derived bash child streams as process agents', () => {
@@ -16,7 +15,6 @@ describe('buildStreamTabInfo', () => {
 
     expect(info.label).toBe('bash');
     expect(info.agent).toBe('bash');
-    expect(isProcessAgent(info.agent)).toBe(true);
-    expect(info.model).toBeUndefined();
+    expect(info.kind).toBe('process');
   });
 });

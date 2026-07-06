@@ -7,6 +7,7 @@ import {
   STREAM_STATUS,
   type ActiveChildInfo,
   type StreamTabId,
+  type SubagentChildInfo,
 } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { formatCompactDuration } from '@utils/core';
@@ -132,12 +133,10 @@ export function childElapsed(
 }
 
 function streamDescription(
-  child: Pick<ActiveChildInfo, 'childStreamId'>,
+  child: SubagentChildInfo,
   streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'description'>>,
 ): string | undefined {
-  return child.childStreamId
-    ? streamsById.get(child.childStreamId)?.description
-    : undefined;
+  return streamsById.get(child.childStreamId)?.description;
 }
 
 const TASK_DETAIL_TRANSCRIPT_COLUMNS = 120;
@@ -153,10 +152,9 @@ function streamEntryTailLines(entry: ConversationEntry): readonly string[] {
 }
 
 function streamTranscriptLines(
-  child: Pick<ActiveChildInfo, 'childStreamId'>,
+  child: SubagentChildInfo,
   streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'entries'>>,
 ): readonly string[] {
-  if (!child.childStreamId) return [];
   const stream = streamsById.get(child.childStreamId);
   if (!stream) return [];
   return stream.entries.flatMap((entry) =>
@@ -164,50 +162,58 @@ function streamTranscriptLines(
   );
 }
 
-function buildSubagentItem(
+/**
+ * Build a picker/detail row for either a subagent or a process badge. The two
+ * kinds share the same `ChildControlItem` output shape and most of the
+ * derivation logic (label, elapsed, status), so they're built by one function
+ * switching on `child.kind` — the two remaining differences are genuine, not
+ * artifacts of a shared-but-undiscriminated input type: a subagent's tail
+ * comes from its own stream's transcript (looked up by `childStreamId`),
+ * while a process's tail comes from its captured stdout/stderr, and only
+ * subagents can be individually non-killable (already-detached rows).
+ */
+function buildChildControlItem(
   child: ActiveChildInfo,
-  streamsById: ReadonlyMap<
-    StreamTabId,
-    Pick<StreamSlice, 'description' | 'entries'>
-  >,
-  nowMs?: number,
-  killable = true,
+  ctx: {
+    readonly streamsById: ReadonlyMap<
+      StreamTabId,
+      Pick<StreamSlice, 'description' | 'entries'>
+    >;
+    readonly processOutput: ReadonlyMap<string, ProcessOutputTail>;
+    readonly killable: boolean;
+    readonly nowMs?: number;
+  },
 ): ChildControlItem {
   const label = childExecutionLabel(child);
-  const command = streamDescription(child, streamsById) ?? label;
-  const elapsed = childElapsed(child, nowMs);
+  const elapsed = childElapsed(child, ctx.nowMs);
   const statusLabel = childStatusDescription(child.status);
-  return {
-    executionId: child.executionId,
-    childStreamId: child.childStreamId,
-    kind: 'subagent',
-    label,
-    command,
-    description: compactParts([statusLabel, elapsed ?? undefined]),
-    statusLabel,
-    elapsed,
-    killable,
-    tailLines: streamTranscriptLines(child, streamsById),
-  };
-}
 
-function buildProcessItem(
-  child: ActiveChildInfo,
-  tail: ProcessOutputTail | undefined,
-  nowMs?: number,
-): ChildControlItem {
-  const tailLines = processTailLines(tail);
-  const lastLine = tailLines.at(-1);
-  const label = childExecutionLabel(child);
-  const elapsed = childElapsed(child, nowMs);
-  const statusLabel = childStatusDescription(child.status);
+  if (child.kind === 'subagent') {
+    return {
+      executionId: child.executionId,
+      childStreamId: child.childStreamId,
+      kind: 'subagent',
+      label,
+      command: streamDescription(child, ctx.streamsById) ?? label,
+      description: compactParts([statusLabel, elapsed ?? undefined]),
+      statusLabel,
+      elapsed,
+      killable: ctx.killable,
+      tailLines: streamTranscriptLines(child, ctx.streamsById),
+    };
+  }
+
+  const tailLines = processTailLines(ctx.processOutput.get(child.executionId));
   return {
     executionId: child.executionId,
-    childStreamId: child.childStreamId,
     kind: 'process',
     label,
     command: label,
-    description: compactParts([statusLabel, elapsed ?? undefined, lastLine]),
+    description: compactParts([
+      statusLabel,
+      elapsed ?? undefined,
+      tailLines.at(-1),
+    ]),
     statusLabel,
     elapsed,
     killable: true,
@@ -252,12 +258,12 @@ export function buildChildControlItems(
 ): readonly ChildControlItem[] {
   const activeKeys = new Set(slice.activeSubagents.map(childExecutionKey));
   const subagentItems = visibleSubagentRows(slice).map((child) =>
-    buildSubagentItem(
-      child,
+    buildChildControlItem(child, {
       streamsById,
+      processOutput: slice.processOutput,
       nowMs,
-      activeKeys.has(childExecutionKey(child)),
-    ),
+      killable: activeKeys.has(childExecutionKey(child)),
+    }),
   );
   if (mode === 'subagents') {
     return subagentItems;
@@ -266,11 +272,12 @@ export function buildChildControlItems(
   return [
     ...subagentItems,
     ...slice.activeProcesses.map((child) =>
-      buildProcessItem(
-        child,
-        slice.processOutput.get(child.executionId),
+      buildChildControlItem(child, {
+        streamsById,
+        processOutput: slice.processOutput,
         nowMs,
-      ),
+        killable: true,
+      }),
     ),
   ];
 }

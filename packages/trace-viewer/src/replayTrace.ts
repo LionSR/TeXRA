@@ -10,8 +10,8 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
-import type { TraceDocument } from '@transcript';
 import { isObject } from '@utils/core';
+import type { TraceDocument } from '@transcript';
 
 type UpdateStreamsMessage = Extract<
   ProgressViewOutboundMessage,
@@ -73,6 +73,7 @@ export function replayTrace(
     command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
     streams: [
       {
+        kind: 'agent',
         name: trace.streamId,
         label: trace.config.agent,
         model: trace.config.model,

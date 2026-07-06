@@ -82,11 +82,7 @@ function buildContextManagementItems(data: ContextManagementData): {
   const items: StatItem[] = [];
 
   // For max_tokens_reduced, show the reduction
-  if (
-    action === 'max_tokens_reduced' &&
-    data.originalMaxTokens !== undefined &&
-    data.reducedMaxTokens !== undefined
-  ) {
+  if (action === 'max_tokens_reduced') {
     items.push({
       icon: 'arrow-down',
       label: 'Max tokens reduced',
@@ -95,7 +91,7 @@ function buildContextManagementItems(data: ContextManagementData): {
   }
 
   // For clearing actions, show tokens freed
-  if (TOKENS_FREED_ACTIONS.has(action) && data.tokensAfter !== undefined) {
+  if (action !== 'max_tokens_reduced' && TOKENS_FREED_ACTIONS.has(action)) {
     const tokensFreed = data.tokensBefore - data.tokensAfter;
     if (tokensFreed > 0) {
       items.push({
@@ -108,7 +104,7 @@ function buildContextManagementItems(data: ContextManagementData): {
 
   // Show context utilization
   const utilizationDisplay =
-    data.utilizationAfter !== undefined
+    action !== 'max_tokens_reduced'
       ? `${data.utilizationBefore.toFixed(1)}% → ${data.utilizationAfter.toFixed(1)}%`
       : `${data.utilizationBefore.toFixed(1)}%`;
   items.push({
@@ -147,7 +143,6 @@ export function formatContextManagementTemplate(
   // Hide max_tokens_reduced events when the reduced value is still comfortable
   if (
     parsed.data.action === 'max_tokens_reduced' &&
-    parsed.data.reducedMaxTokens !== undefined &&
     parsed.data.reducedMaxTokens >= MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD
   ) {
     return null;

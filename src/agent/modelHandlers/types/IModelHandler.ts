@@ -110,16 +110,18 @@ export type IModelHandler<
    * - All function calls go in ONE model message (first call has thoughtSignature)
    * - All function responses go in ONE user message
    *
-   * @param calls - Array of tool calls (preserving original order from model response)
-   * @param results - Array of tool result payloads (same order as calls)
-   * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
+   * @param entries - One entry per tool call, in original model-response order.
+   *   Each entry bundles the call with its own result and attachments, so
+   *   alignment is structural rather than three positionally-zipped arrays.
    * @param workspaceState - Optional workspace state for reasoning blocks
    * @param text - Optional text to include before function calls
    */
   createBatchedToolUseFollowUpMessages?(
-    calls: T[],
-    results: ToolResult[],
-    attachmentsPerCall: ToolFileAttachment[][],
+    entries: Array<{
+      call: T;
+      result: ToolResult;
+      attachments: ToolFileAttachment[];
+    }>,
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;

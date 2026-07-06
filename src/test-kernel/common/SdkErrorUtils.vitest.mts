@@ -283,7 +283,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.statusCode).toBe(429);
     expect(formatted.isRelayError).toBe(true);
-    expect(formatted.isCredentialExhausted).toBe(true);
+    expect(formatted.exhaustionReason).toBe('relay-limit');
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -335,8 +335,7 @@ describe('formatProviderHttpError', () => {
     const formatted = formatProviderHttpError(error);
 
     expect(formatted.provider).toBe('openai');
-    expect(formatted.isCredentialExhausted).toBe(true);
-    expect(formatted.isUpstreamCreditDepleted).toBe(true);
+    expect(formatted.exhaustionReason).toBe('upstream-credit');
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -355,8 +354,7 @@ describe('formatProviderHttpError', () => {
     const formatted = formatProviderHttpError(error);
 
     expect(formatted.provider).toBe('openai');
-    expect(formatted.isCredentialExhausted).toBe(true);
-    expect(formatted.isUpstreamCreditDepleted).toBe(true);
+    expect(formatted.exhaustionReason).toBe('upstream-credit');
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -376,8 +374,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBeUndefined();
-    expect(formatted.isCredentialExhausted).toBe(true);
-    expect(formatted.isUpstreamCreditDepleted).toBe(true);
+    expect(formatted.exhaustionReason).toBe('upstream-credit');
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -396,7 +393,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBeUndefined();
-    expect(formatted.isCredentialExhausted).toBeUndefined();
+    expect(formatted.exhaustionReason).toBeUndefined();
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -532,6 +529,43 @@ describe('provider error schemas', () => {
     expect('retryable' in errorLog).toBe(false);
     expect(retryInfo.userRetryable).toBe(true);
   });
+
+  it('migrates legacy exhaustion booleans persisted by older TeXRA versions', () => {
+    // Stream logs are unversioned JSON reparsed on later loads (see
+    // StreamLogStore) — a record written before the exhaustionReason
+    // refactor still carries the independent boolean flags.
+    const chatgptLegacy = ErrorLogDataSchema.parse({
+      message: 'legacy chatgpt-subscription record',
+      userRetryable: true,
+      isCredentialExhausted: true,
+      isChatGptSubscriptionLimited: true,
+    });
+    expect(chatgptLegacy.exhaustionReason).toBe('chatgpt-subscription');
+    expect('isCredentialExhausted' in chatgptLegacy).toBe(false);
+    expect('isChatGptSubscriptionLimited' in chatgptLegacy).toBe(false);
+
+    const upstreamLegacy = RetryErrorInfoSchema.parse({
+      message: 'legacy upstream-credit record',
+      userRetryable: true,
+      isCredentialExhausted: true,
+      isUpstreamCreditDepleted: true,
+    });
+    expect(upstreamLegacy.exhaustionReason).toBe('upstream-credit');
+
+    const relayLimitLegacy = RetryErrorInfoSchema.parse({
+      message: 'legacy relay-limit record',
+      userRetryable: true,
+      isCredentialExhausted: true,
+    });
+    expect(relayLimitLegacy.exhaustionReason).toBe('relay-limit');
+
+    const noExhaustionLegacy = RetryErrorInfoSchema.parse({
+      message: 'legacy non-exhausted record',
+      userRetryable: true,
+      isCredentialExhausted: false,
+    });
+    expect(noExhaustionLegacy.exhaustionReason).toBeUndefined();
+  });
 });
 
 describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
@@ -542,8 +576,7 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
     statusCode: 429,
     statusText: 'Too Many Requests',
     provider: 'anthropic',
-    isCredentialExhausted: true,
-    isUpstreamCreditDepleted: undefined,
+    exhaustionReason: 'relay-limit',
     requestId: 'req_abc123',
     streamDiagnostics: {
       thinkingChars: 100,
@@ -570,7 +603,7 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
     expect(reconstructed.statusCode).toBe(429);
     expect(reconstructed.provider).toBe('anthropic');
     expect(reconstructed.isRelayError).toBe(true);
-    expect(reconstructed.isCredentialExhausted).toBe(true);
+    expect(reconstructed.exhaustionReason).toBe('relay-limit');
     expect(reconstructed.requestId).toBe('req_abc123');
     expect(reconstructed.userRetryable).toBe(true);
   });
@@ -646,7 +679,6 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
       statusText: 'Too Many Requests',
       provider: 'openai',
       isRelayError: false,
-      isCredentialExhausted: undefined,
       requestId: 'req_tooluse_123',
     };
 

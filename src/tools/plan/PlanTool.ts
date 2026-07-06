@@ -33,8 +33,9 @@ import {
   isGoalInFlight,
   type Goal,
 } from '@shared/schemas/goal';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { type ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovalState } from '@tools/approval';
+import { requireStreamId } from '@tools/contextHelpers';
 import {
   GoalStore,
   isGoalEnabled,
@@ -109,27 +110,18 @@ Best practices:
 }) {
   protected async execute(input: PlanToolInput): Promise<ToolResult> {
     const contexts = getCurrentToolContexts();
-    const streamId = contexts?.runContext?.streamId;
 
     switch (input.command) {
       case 'update':
         return this.executeUpdate({ objective: input.objective }, contexts);
       case 'pause':
-        if (!streamId) {
-          throw new ToolError('plan(pause) requires an active stream context.');
-        }
         return this.executePause(
-          streamId,
+          requireStreamId('plan(pause)', contexts?.runContext),
           requireNonEmptyString(input.reason, 'reason'),
         );
       case 'complete':
-        if (!streamId) {
-          throw new ToolError(
-            'plan(complete) requires an active stream context.',
-          );
-        }
         return this.executeComplete(
-          streamId,
+          requireStreamId('plan(complete)', contexts?.runContext),
           requireNonEmptyString(input.reason, 'reason'),
         );
     }

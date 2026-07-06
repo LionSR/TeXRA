@@ -784,7 +784,7 @@ function makeRetryApprovalPayload(): RetryPermission {
     operation: 'Tool-use call',
     errorMessage: 'HTTP 429 Too Many Requests',
     errorDetails: {
-      isCredentialExhausted: true,
+      exhaustionReason: 'relay-limit',
       isRelayError: true,
       statusCode: 429,
     },
@@ -996,6 +996,7 @@ if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
   const nestedStartedAt = startedAt + 24_000;
   const nestedStrategyChild = {
+    kind: 'subagent' as const,
     executionId: 'harness-nested-local-checker',
     agentName: 'localChecker',
     childStreamId: 'harness-nested-local-checker-stream',
@@ -1003,6 +1004,7 @@ if (SHOW_CHILDREN) {
     startedAt: nestedStartedAt,
   };
   const nestedStrategyProcess = {
+    kind: 'process' as const,
     executionId: 'harness-nested-proof-audit',
     agentName: 'proof audit',
     toolName: 'bash',
@@ -1011,6 +1013,7 @@ if (SHOW_CHILDREN) {
   };
   const childStreams = [
     {
+      kind: 'subagent' as const,
       executionId: 'harness-child-strategy',
       agentName: 'strategy',
       childStreamId: 'harness-child-strategy-stream',
@@ -1018,6 +1021,7 @@ if (SHOW_CHILDREN) {
       startedAt,
     },
     {
+      kind: 'subagent' as const,
       executionId: 'harness-child-lean',
       agentName: 'leanSolver',
       childStreamId: 'harness-child-lean-stream',
@@ -1025,6 +1029,7 @@ if (SHOW_CHILDREN) {
       elapsed: '2m 3s',
     },
     {
+      kind: 'subagent' as const,
       executionId: 'harness-child-review',
       agentName: 'reviewer',
       childStreamId: 'harness-child-review-stream',
@@ -1052,6 +1057,7 @@ if (SHOW_CHILDREN) {
     childStreams,
     activeProcesses: [
       {
+        kind: 'process' as const,
         executionId: 'harness-process-latexmk',
         agentName: 'latex build',
         toolName: 'bash',

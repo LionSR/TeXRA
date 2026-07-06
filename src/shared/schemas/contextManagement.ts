@@ -13,18 +13,35 @@ export type ContextManagementAction = z.infer<typeof ContextManagementAction>;
 
 const PositiveTokenCountSchema = z.int().positive();
 
-export const ContextManagementDataSchema = z.object({
-  action: ContextManagementAction,
+const ContextManagementDataBaseSchema = z.object({
   tokensBefore: TokenCountSchema,
-  tokensAfter: TokenCountSchema.optional(),
   contextWindow: PositiveTokenCountSchema,
   utilizationBefore: z.number().nonnegative(),
-  utilizationAfter: z.number().nonnegative().optional(),
   details: z.string().optional(),
   summary: z.string().optional(),
-  originalMaxTokens: PositiveTokenCountSchema.optional(),
-  reducedMaxTokens: PositiveTokenCountSchema.optional(),
 });
+
+const MaxTokensReducedDataSchema = ContextManagementDataBaseSchema.extend({
+  action: z.literal('max_tokens_reduced'),
+  originalMaxTokens: PositiveTokenCountSchema,
+  reducedMaxTokens: PositiveTokenCountSchema,
+});
+
+const TokensFreedDataSchema = ContextManagementDataBaseSchema.extend({
+  action: z.enum([
+    'compaction',
+    'clear_tool_uses',
+    'clear_thinking',
+    'truncation',
+  ]),
+  tokensAfter: TokenCountSchema,
+  utilizationAfter: z.number().nonnegative(),
+});
+
+export const ContextManagementDataSchema = z.discriminatedUnion('action', [
+  MaxTokensReducedDataSchema,
+  TokensFreedDataSchema,
+]);
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
 

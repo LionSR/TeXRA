@@ -18,24 +18,42 @@ import { TodoItemSchema } from './todo';
 import { ContextStateDataSchema } from './contextManagement';
 import { RunUsageMapSchema, TokenUsageStatsSchema } from './usage';
 
-// Active Child Info (shared shape for subagent and process badges)
+// Active Child Info — discriminated by `kind` rather than by which array the
+// entry came from (`activeSubagents` vs `activeProcesses`) or by guessing from
+// which optional field happens to be set. Only `childStreamId` is genuinely
+// exclusive to one kind (only subagents own a stream tab); `toolName` can
+// appear on either kind — e.g. a subagent launched via a specific CLI tool
+// (`options.toolName` in `createChildStream`), or a background process running
+// a named tool (`bash`, `codex`) — so it stays a shared, optional field.
 
-export const ActiveChildInfoSchema = z.object({
+const ActiveChildInfoBaseSchema = z.object({
   executionId: z.string(),
   agentName: z.string(),
-  /** Stream tab ID for subagents (they have their own tab). Absent for processes. */
-  childStreamId: z.string().optional(),
   /** Current execution status (e.g. "running", "waiting"). Defaults to "running". */
   status: z.string().optional(),
   /** Epoch milliseconds when the child execution began. */
   startedAt: z.int().positive().optional(),
   /** Formatted elapsed time (e.g. "1m 23s"). */
   elapsed: z.string().nullish(),
-  /** Tool name that spawned this process (e.g. "bash", "codex"). Absent for subagents. */
+  /** Tool that spawned this child (e.g. "bash", "codex"). Used for icon/label
+   *  selection in the UI; may be set on either kind. */
   toolName: z.string().optional(),
 });
 
+export const ActiveChildInfoSchema = z.discriminatedUnion('kind', [
+  ActiveChildInfoBaseSchema.extend({
+    kind: z.literal('subagent'),
+    /** Stream tab ID — subagents own their own tab. */
+    childStreamId: z.string(),
+  }),
+  ActiveChildInfoBaseSchema.extend({
+    kind: z.literal('process'),
+  }),
+]);
+
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
+export type SubagentChildInfo = Extract<ActiveChildInfo, { kind: 'subagent' }>;
+export type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
 
 // Round Stage (ephemeral round label from typed stage.start metadata)
 
