@@ -377,6 +377,7 @@ describe('process output frontend state', () => {
         streamInfo: {
           name: streamId,
           label: 'stream-a',
+          kind: 'agent',
           agentCategory: AgentCategory.Workflow,
           creationTimestamp: 1,
         },

@@ -9,17 +9,13 @@
 //
 // Host-agnostic, VS Code-free.
 
-import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
+import { writeTerminalStatus } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import {
-  sendFollowUp,
-  wakeOrReleaseQueuedStream,
-} from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import {
   deriveRunOutcome,
@@ -31,6 +27,10 @@ import { STREAM_STATUS } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { isCleanInterruption, logTurnSummary } from './agentCliShared';
+import {
+  deliverChildRunFollowUp,
+  persistChildRunReport,
+} from './childRunDelivery';
 import type { ChildStream } from './childStream';
 
 /** Minimal token usage shape consumed by the loop's turn summary. */
@@ -189,11 +189,10 @@ async function persistReportBestEffort(
   msg: string,
   logger: AgentTrace,
 ): Promise<void> {
-  try {
-    await getExecutionStore(executionId).writeReport(msg);
-  } catch (storageErr) {
+  const result = await persistChildRunReport(executionId, msg);
+  if (result.kind === 'failed') {
     logger.warn(`Failed to persist report for ${executionId}`, {
-      data: storageErr,
+      data: result.err,
     });
   }
 }
@@ -277,17 +276,13 @@ export function runAgentCliSession<TTurn>(
             ? strategy.formatDelivery(turn, prompt, wallTimeMs)
             : strategy.formatError(turn, prompt, err);
         await persistReportBestEffort(executionId, msg, logger);
-        const delivery = await sendFollowUp(
-          parentStreamId,
-          {
-            text: msg,
-            origin: 'subagent_result',
-          },
-          undefined,
-          undefined,
-          runSession,
-        );
-        if (delivery.status === 'no_session') {
+        const delivery = await deliverChildRunFollowUp({
+          targetStreamId: parentStreamId,
+          followUp: { text: msg, origin: 'subagent_result' },
+          session: runSession,
+          wake: true,
+        });
+        if (delivery.kind === 'no_session') {
           logger.warn(
             'Turn result not delivered: parent stream has no active session. The result remains in the execution report.',
             {
@@ -298,13 +293,7 @@ export function runAgentCliSession<TTurn>(
               },
             },
           );
-        } else if (
-          !(await wakeOrReleaseQueuedStream(
-            parentStreamId,
-            delivery,
-            runSession,
-          ))
-        ) {
+        } else if (delivery.kind === 'dropped') {
           logger.warn(
             'Turn result dropped: parent stream is gone and could not be resumed. The result remains in the execution report.',
             { data: { executionId, parentStreamId } },
