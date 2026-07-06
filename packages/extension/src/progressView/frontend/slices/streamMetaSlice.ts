@@ -23,7 +23,10 @@ import {
   isToolUseState,
   type ProcessOutputMap,
 } from '../store';
-import { mergeBackendOwnedState } from './streamStateMerge';
+import {
+  mergeBackendOwnedState,
+  metadataToStreamStatePartial,
+} from './streamStateMerge';
 import type { HandlerRegistry } from '../messageHandlerTypes';
 
 /**
@@ -87,7 +90,10 @@ export const streamMetaHandlers: HandlerRegistry = {
       const existingState = prev.streamStates.get(name);
       const mergedState = existingState
         ? mergeBackendOwnedState(existingState, data.streamState)
-        : createStreamState(data.streamState.kind, data.streamState);
+        : createStreamState(
+            data.streamState.kind,
+            metadataToStreamStatePartial(data.streamState),
+          );
 
       return create(prev, (draft) => {
         if (

@@ -16,6 +16,7 @@ describe('buildStreamMetadata', () => {
       kind: AgentCategory.Workflow,
       status: STREAM_STATUS.READY,
       conversationProgress: { toolCallCount: 0 },
+      roundStage: null,
       activeSubagents: [],
       finishedSubagentCount: 0,
       activeProcesses: [],
