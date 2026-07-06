@@ -440,11 +440,13 @@ describe('ProgressBackend', () => {
         kind: AgentCategory.ToolUse,
         status: STREAM_PHASE.RUNNING,
         conversationProgress: { toolCallCount: 0 },
+        roundStage: null,
         finishedSubagentCount: 0,
         finishedProcessCount: 0,
       });
-      expect(Object.hasOwn(patch.streamState, 'roundStage')).toBe(true);
-      expect(patch.streamState.roundStage).toBeUndefined();
+      expect(
+        JSON.parse(JSON.stringify(patch)).streamState.roundStage,
+      ).toBeNull();
     } finally {
       backend.dispose();
     }

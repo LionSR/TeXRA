@@ -359,6 +359,47 @@ describe('process output frontend state', () => {
     expect(getState().streamStates.get(streamId)?.substate).toBeUndefined();
   });
 
+  it('clears round stage from a transport-safe metadata patch', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    registerWorkflowStream(state, streamId);
+    state.streamStates.set(
+      streamId,
+      createStreamState(AgentCategory.Workflow, {
+        roundStage: { index: 2 },
+      } satisfies Partial<StreamState>),
+    );
+    const { ctx, getState } = createContext(state);
+
+    const message = JSON.parse(
+      JSON.stringify({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+        streamInfo: {
+          name: streamId,
+          label: 'stream-a',
+          agentCategory: AgentCategory.Workflow,
+          creationTimestamp: 1,
+        },
+        streamState: {
+          kind: AgentCategory.Workflow,
+          status: STREAM_PHASE.RUNNING,
+          conversationProgress: {
+            toolCallCount: 0,
+          },
+          roundStage: null,
+          activeSubagents: [],
+          finishedSubagentCount: 0,
+          activeProcesses: [],
+          finishedProcessCount: 0,
+        },
+      } satisfies ProgressViewOutboundMessage),
+    ) as ProgressViewOutboundMessage;
+
+    dispatch(streamMetaHandlers, message, ctx);
+
+    expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
+  });
+
   it('clears round stage when synced content explicitly clears it', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
@@ -371,19 +412,19 @@ describe('process output frontend state', () => {
     );
     const { ctx, getState } = createContext(state);
 
-    dispatch(
-      syncHandlers,
-      {
+    const message = JSON.parse(
+      JSON.stringify({
         command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
         stream: streamId,
         action: 'render',
         todos: [],
         plan: null,
         queuedFollowUps: [],
-        roundStage: undefined,
-      } as ProgressViewOutboundMessage,
-      ctx,
-    );
+        roundStage: null,
+      } satisfies ProgressViewOutboundMessage),
+    ) as ProgressViewOutboundMessage;
+
+    dispatch(syncHandlers, message, ctx);
 
     expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
   });
