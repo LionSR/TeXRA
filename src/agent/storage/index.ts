@@ -37,3 +37,11 @@ export {
   type ResumabilityCause,
   type ResumabilityDecision,
 } from './resumability';
+export {
+  HIDDEN_PROVIDER_REASONING_MARKER,
+  type ConversationFormatOptions,
+  formatConversationBlock,
+  formatConversationContent,
+  hasProviderReasoningBlock,
+  stringifyConversationValue,
+} from './conversationFormat';

@@ -43,7 +43,6 @@ import { tagOpenAISdkError } from './openAISdkError';
 import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import {
-  checkBatchedToolCalls,
   insertMediaIntoChatUserMessage,
   normalizeOpenAIMessageContent,
   prependTextToChatUserMessage,
@@ -1327,17 +1326,21 @@ export class ModelHandlerOpenAI<
    * subsequent calls, causing the API to reject the request.
    */
   async createBatchedToolUseFollowUpMessages(
-    calls: TCall[],
-    results: ToolResult[],
-    _attachmentsPerCall: ToolFileAttachment[][],
+    entries: Array<{
+      call: TCall;
+      result: ToolResult;
+      attachments: ToolFileAttachment[];
+    }>,
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    if (!checkBatchedToolCalls(calls.length, results.length)) {
+    if (entries.length === 0) {
       return [];
     }
 
-    const toolCalls = calls.map((call) => this.normalizeToolCall(call.raw));
+    const toolCalls = entries.map(({ call }) =>
+      this.normalizeToolCall(call.raw),
+    );
     const callMsg = this.buildAssistantMessageWithToolCalls(
       toolCalls,
       workspaceState,
@@ -1347,7 +1350,7 @@ export class ModelHandlerOpenAI<
     const toolResultMessages = toolCalls.map((call, i) => ({
       role: 'tool' as const,
       tool_call_id: call.id,
-      content: formatToolResultAsText(results[i]),
+      content: formatToolResultAsText(entries[i].result),
     }));
 
     return [callMsg, ...toolResultMessages];

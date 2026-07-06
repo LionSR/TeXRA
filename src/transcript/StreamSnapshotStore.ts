@@ -128,6 +128,18 @@ function descriptorFromConfig(
   });
 }
 
+/**
+ * A stream's executionId, preferring the canonical `runDescriptor.executionId`
+ * over the legacy top-level `executionId` field written before descriptors
+ * existed. Both fields are set together on new writes (see `setTaskState`),
+ * so this only matters for meta read from older on-disk data.
+ */
+function executionIdFromMeta(
+  meta: StreamTabMeta | undefined,
+): ExecutionId | undefined {
+  return meta?.runDescriptor?.executionId ?? meta?.executionId;
+}
+
 export class StreamSnapshotStore {
   // -- In-memory accumulators (one entry per stream that has emitted) --------
   private readonly outputFiles = new Map<
@@ -351,6 +363,29 @@ export class StreamSnapshotStore {
     return inner;
   }
 
+  /**
+   * Shared round→value patch application for the round-keyed accumulators
+   * (missing outputs, compile failures). `normalize` returns `null` to delete
+   * a round's entry (e.g. once its failure list empties out) or the value to
+   * store otherwise.
+   */
+  private applyRoundKeyedPatch<V>(
+    map: Map<StreamTabId, Map<number, V>>,
+    stream: StreamTabId,
+    filesByRound: Record<string, unknown>,
+    normalize: (raw: unknown) => V | null,
+  ): Map<number, V> {
+    const rounds = this.getOrCreate(map, stream);
+    for (const [round, raw] of Object.entries(filesByRound)) {
+      const key = RoundKeySchema.safeParse(round);
+      if (!key.success) continue;
+      const value = normalize(raw);
+      if (value === null) rounds.delete(key.data);
+      else rounds.set(key.data, value);
+    }
+    return rounds;
+  }
+
   private parseOutputFilesPatch(
     filesByRound: RoundIndexed<OutputFileInfo>,
   ): OutputFilesPatch {
@@ -460,11 +495,12 @@ export class StreamSnapshotStore {
     filesByRound: RoundIndexed<string>,
   ): void {
     this.mutate(stream, () => {
-      const rounds = this.getOrCreate(this.missingOutputs, stream);
-      for (const [round, files] of Object.entries(filesByRound)) {
-        const key = RoundKeySchema.safeParse(round);
-        if (key.success) rounds.set(key.data, files);
-      }
+      const rounds = this.applyRoundKeyedPatch<string[]>(
+        this.missingOutputs,
+        stream,
+        filesByRound,
+        (raw) => raw as string[],
+      );
       this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, mapToRecord(rounds));
     });
   }
@@ -474,16 +510,17 @@ export class StreamSnapshotStore {
     filesByRound: RoundIndexed<CompileFailure>,
   ): void {
     this.mutate(stream, () => {
-      const rounds = this.getOrCreate(this.compileFailures, stream);
-      for (const [round, failures] of Object.entries(filesByRound)) {
-        const key = RoundKeySchema.safeParse(round);
-        if (!key.success) continue;
-        const normalized = CompileFailureSchema.array().parse(
-          Array.isArray(failures) ? failures : [],
-        );
-        if (normalized.length === 0) rounds.delete(key.data);
-        else rounds.set(key.data, normalized);
-      }
+      const rounds = this.applyRoundKeyedPatch<CompileFailure[]>(
+        this.compileFailures,
+        stream,
+        filesByRound,
+        (raw) => {
+          const normalized = CompileFailureSchema.array().parse(
+            Array.isArray(raw) ? raw : [],
+          );
+          return normalized.length === 0 ? null : normalized;
+        },
+      );
       this.write(
         stream,
         STREAM_DATA_KEYS.COMPILE_FAILURES,
@@ -785,7 +822,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     const meta = (await readStreamData(this.kv(stream))).meta;
-    return meta?.runDescriptor?.executionId ?? meta?.executionId;
+    return executionIdFromMeta(meta);
   }
 
   /**
@@ -1065,7 +1102,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     meta: StreamTabMeta,
   ): Promise<HydratedRunState> {
-    const executionId = meta.runDescriptor?.executionId ?? meta.executionId;
+    const executionId = executionIdFromMeta(meta);
     let descriptor = meta.runDescriptor;
     if (meta.runDescriptor) {
       descriptor = meta.runDescriptor;
@@ -1151,7 +1188,7 @@ export class StreamSnapshotStore {
         : undefined;
     const runConfig =
       latestRunConfigOverlay ?? runConfigOverlay ?? hydrated.config;
-    const executionId = meta?.runDescriptor?.executionId ?? meta?.executionId;
+    const executionId = executionIdFromMeta(meta);
     const runDescriptor =
       latestRunDescriptorOverlay ??
       runDescriptorOverlay ??
