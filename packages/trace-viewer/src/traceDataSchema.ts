@@ -26,11 +26,20 @@ import {
   ExecutionStatusSchema,
   RunOutcomeSchema,
 } from '@shared/schemas/stream';
-import { StreamSnapshotSchema } from '@shared/schemas/streamSnapshot';
+import {
+  STREAM_SNAPSHOT_SCHEMA_VERSION,
+  StreamSnapshotSchema,
+} from '@shared/schemas/streamSnapshot';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import type { TraceDocument } from '@transcript/traceAssembler';
 
 const TRACE_EXECUTION_META_SCHEMA_VERSION = 1;
+
+const TraceStreamSnapshotSchema = StreamSnapshotSchema.extend({
+  schemaVersion: z
+    .literal(STREAM_SNAPSHOT_SCHEMA_VERSION)
+    .prefault(STREAM_SNAPSHOT_SCHEMA_VERSION),
+});
 
 const TraceAgentConfigSchema = NullableFileFieldsSchema.extend({
   agent: z.string(),
@@ -73,7 +82,7 @@ export const TraceDataSchema = z.object({
   config: TraceAgentConfigSchema,
   meta: TraceExecutionMetaSchema.nullable(),
   entries: z.array(StreamLogEntrySchema),
-  snapshot: StreamSnapshotSchema,
+  snapshot: TraceStreamSnapshotSchema,
   terminalStatus: ExecutionStatusSchema.nullable(),
 });
 
