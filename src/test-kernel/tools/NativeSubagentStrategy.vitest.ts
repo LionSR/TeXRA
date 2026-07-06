@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 
 // Local imports - shared
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   deliverChildRunFollowUp: vi.fn(),
@@ -353,6 +357,57 @@ describe('NativeSubagentStrategy', () => {
     // Despite the throw, `finish()` must still run (moved into `finally`) so
     // a later `delegate_agent` call doesn't find stale delivery state for a
     // run that has already exited its lifecycle.
+    expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
+    expect(
+      SharedSubagentDeliveryRegistry.getActive(executionId),
+    ).toBeUndefined();
+  });
+
+  it('registers a waiting-cleanup that abandons the strategy once the run confirms WAITING (issue #7287)', async () => {
+    // Regression: a WAITING subagent's promise never resolves again (no
+    // resume through attachPromise), so nothing else ever calls this
+    // strategy's private finish() for it. Without a waiting-cleanup hook,
+    // killing the suspended child left `activeNativeSubagents` (and the
+    // delivery registry) pointing at a gone execution forever.
+    const handleParent = 'handle-parent-waiting' as StreamTabId;
+    const childStream = 'child-stream-waiting' as StreamTabId;
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
+      startedAt: 0,
+      settleSubagentCost: vi.fn(),
+    });
+    const handle = new AgentExecutionHandle(
+      executionId,
+      handleParent,
+      childStream,
+      'review',
+      'toolUse',
+      {} as never,
+    );
+    strategy.setRunHandle(handle);
+    expect(getNativeSubagentStrategy(executionId)).toBe(strategy);
+
+    strategy.attachPromise(
+      Promise.resolve({
+        category: 'toolUse',
+        outcome: STREAM_PHASE.WAITING,
+        executionId,
+        streamId: childStream,
+      }),
+    );
+    // Let attachPromise's .then()/.finally() chain settle.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Suspended, not finished: the strategy stays registered for a resume.
+    expect(getNativeSubagentStrategy(executionId)).toBe(strategy);
+
+    // Simulate ExecutionRegistry.terminate()'s waiting-cleanup fallback.
+    expect(handle.runWaitingCleanup()).toBe(true);
+
     expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
     expect(
       SharedSubagentDeliveryRegistry.getActive(executionId),

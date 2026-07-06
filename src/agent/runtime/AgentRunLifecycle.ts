@@ -3,8 +3,9 @@ import {
   setFirstRunDone,
 } from '@controllers/onboarding/onboardingFunnel';
 import { platform } from '@platform/platform';
-import { writeTerminalStatus } from '@agent/storage';
+import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import { logSdkError, type ResultEvent } from '@agent/trace';
+import { flowKey } from '@agent/node/persistedFlow';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
@@ -224,6 +225,18 @@ export async function runFlowWithLifecycle(
     const result = await runner(handle);
     if (isWaitingFlowResult(result)) {
       logger.debug(`Task suspended with outcome: ${result.outcome}`);
+      // The handle stays tracked (correct for resume) but the live tool-use
+      // session and its interrupt registration are already gone by the time
+      // this returns (runToolUseFlow's finally). Register a fallback so a
+      // stop/kill during the suspended window still tears this down instead
+      // of ExecutionRegistry.terminate() finding no interruptible context and
+      // no-oping — see AgentRunLifecycle/ExecutionRegistry issue #7287.
+      handle.registerWaitingCleanup(() => {
+        ctx.session.followUps.release(streamId);
+        void getExecutionStore(ctx.executionId)
+          .delete(flowKey(ctx.executionId))
+          .catch(() => {});
+      });
       return result;
     }
     // The flow's outcome is the canonical terminal fact; everything below is

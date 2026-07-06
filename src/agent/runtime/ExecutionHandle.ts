@@ -64,6 +64,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private _parentStreamId: StreamTabId;
   private _deliveryTargetStreamId: StreamTabId | undefined;
   private toolUseFlowContext?: LiveToolUseFlowContext;
+  private waitingCleanups?: Set<() => void>;
 
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
   toolName?: string;
@@ -132,6 +133,33 @@ export class AgentExecutionHandle implements ExecutionHandle {
   getToolUseFlow(): LiveToolUseFlowContext | undefined {
     return this.toolUseFlowContext;
   }
+
+  /**
+   * Register a teardown callback for when this handle is torn down while
+   * suspended at WAITING — the live tool-use session and interrupt
+   * registration are already gone by then (`runToolUseFlow`'s `finally`
+   * unregisters them unconditionally on return, while the handle itself stays
+   * tracked so a later resume can find it). `ExecutionRegistry.terminate()`
+   * runs these instead of the (now absent) live interrupt when a stop/kill
+   * targets a suspended subagent. Multiple independent owners (the run
+   * lifecycle, a native subagent delivery strategy) may each register their
+   * own teardown.
+   */
+  registerWaitingCleanup(cleanup: () => void): void {
+    (this.waitingCleanups ??= new Set()).add(cleanup);
+  }
+
+  /**
+   * Run and clear every registered waiting-cleanup callback.
+   * Returns whether any callback was registered (and thus ran).
+   */
+  runWaitingCleanup(): boolean {
+    const cleanups = this.waitingCleanups;
+    if (!cleanups || cleanups.size === 0) return false;
+    this.waitingCleanups = undefined;
+    for (const cleanup of cleanups) cleanup();
+    return true;
+  }
 }
 
 export type AgentRunHandle = Pick<
@@ -146,6 +174,7 @@ export type AgentRunHandle = Pick<
   | 'trace'
   | 'result'
   | 'deliveryTargetStreamId'
+  | 'registerWaitingCleanup'
 >;
 
 /**

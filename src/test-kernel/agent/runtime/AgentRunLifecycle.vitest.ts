@@ -47,10 +47,12 @@ import { createRecordingHost } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   writeTerminalStatus: vi.fn().mockResolvedValue(undefined),
+  deleteFlowRecord: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@agent/storage', () => ({
   writeTerminalStatus: storageMocks.writeTerminalStatus,
+  getExecutionStore: () => ({ delete: storageMocks.deleteFlowRecord }),
 }));
 
 async function initLifecycleTestPlatform(firstRunDone: boolean) {
@@ -449,6 +451,52 @@ describe('runFlowWithLifecycle', () => {
     } finally {
       SharedExecutionRegistry.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('lets a stop/kill tear down a subagent suspended at WAITING (issue #7287)', async () => {
+    const { executionId, streamId, ctx } = lifecycleFixture(
+      'lifecycle-subagent-waiting-kill',
+    );
+    const followUpsRelease = vi.spyOn(ctx.session.followUps, 'release');
+    storageMocks.deleteFlowRecord.mockClear();
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => ({
+          category: 'toolUse',
+          outcome: STREAM_PHASE.WAITING,
+          executionId,
+          streamId,
+        }),
+        { isSubagent: true },
+      );
+
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      expect(executionRegistry.getHandle(executionId)).toBeDefined();
+      expect(followUpsRelease).not.toHaveBeenCalled();
+      expect(storageMocks.deleteFlowRecord).not.toHaveBeenCalled();
+
+      // runToolUseFlow's finally has already disposed the live session and
+      // unregistered this stream's interrupt by the time a native subagent
+      // suspends at WAITING (not reproduced by this fake runner, but true in
+      // production — see runToolUseFlow.ts). Before the fix,
+      // executionRegistry.kill() found no interruptible context for a
+      // suspended handle and silently no-opped, leaving the handle stuck
+      // registered forever. It must now fall back to the waiting-cleanup
+      // registered above and actually tear the execution down.
+      expect(executionRegistry.kill(executionId)).toBe(true);
+
+      expect(executionRegistry.getHandle(executionId)).toBeUndefined();
+      expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(followUpsRelease).toHaveBeenCalledWith(streamId);
+      expect(storageMocks.deleteFlowRecord).toHaveBeenCalledWith(
+        `flow_${executionId}`,
+      );
+    } finally {
+      executionRegistry.untrack(executionId);
+      clearStreamStatusForTest(StreamStatusService, streamId);
     }
   });
 

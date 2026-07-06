@@ -70,6 +70,77 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('falls back to a registered waiting-cleanup when a suspended handle has no live interrupt (issue #7287)', () => {
+    // Regression: a native subagent suspended at WAITING has already had its
+    // live interrupt unregistered (runToolUseFlow's finally), while the
+    // handle stays tracked for resume. Before the fix, terminate() found no
+    // interruptible context and silently no-opped, leaving the handle stuck
+    // registered forever with no way to tear it down from a stop/kill.
+    const explicit = createRecordingHost();
+    const interrupts = new InterruptRegistry();
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const executionId = 'exec-waiting-cleanup-kill-test';
+    const parentStreamId = 'parent-waiting-cleanup-kill-test' as StreamTabId;
+    const childStreamId = 'child-waiting-cleanup-kill-test' as StreamTabId;
+    const cleanup = vi.fn();
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
+      );
+      registry.track(handle);
+      handle.registerWaitingCleanup(cleanup);
+      // No interrupts.register() for childStreamId: mirrors a suspended
+      // subagent whose live tool-use session has already been disposed.
+
+      expect(registry.kill(executionId)).toBe(true);
+
+      expect(cleanup).toHaveBeenCalledOnce();
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(registry.getHandle(executionId)).toBeUndefined();
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('reports a failed kill for a tracked handle with neither an interrupt nor a waiting-cleanup', () => {
+    // Guards the fallback above: a handle that never registered a
+    // waiting-cleanup (i.e. was never confirmed suspended at WAITING) must
+    // still no-op exactly like before the fix — otherwise the fallback could
+    // spuriously tear down a handle mid-completion, in the narrow window
+    // between its own interrupt unregister and its own untrack.
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const executionId = 'exec-no-cleanup-kill-test';
+    const parentStreamId = 'parent-no-cleanup-kill-test' as StreamTabId;
+    const childStreamId = 'child-no-cleanup-kill-test' as StreamTabId;
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        createRecordingHost().host,
+      );
+      registry.track(handle);
+
+      expect(registry.kill(executionId)).toBe(false);
+
+      expect(streamStatus.get(childStreamId)).toBeUndefined();
+      expect(registry.getHandle(executionId)).toBe(handle);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('owns visible stream stop policy for root and children', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();

@@ -822,18 +822,25 @@ export class ExecutionRegistry {
         this.interruptActiveChildren(handle.childStreamId, visited, options);
       }
       const interruptible = this.interrupts.get(handle.childStreamId);
-      if (!interruptible) return false;
-      interruptible.interrupt();
-      this.streamStatus.transition(
-        handle.childStreamId,
-        STREAM_PHASE.CANCELLED,
-        'user-stop',
-        {
-          runtimeHost: handle.runtimeHost,
-          trace: handle.trace,
-        },
-      );
-      return true;
+      if (interruptible) {
+        interruptible.interrupt();
+        this.streamStatus.transition(
+          handle.childStreamId,
+          STREAM_PHASE.CANCELLED,
+          'user-stop',
+          {
+            runtimeHost: handle.runtimeHost,
+            trace: handle.trace,
+          },
+        );
+        return true;
+      }
+      // No live interrupt context: a native subagent suspended at WAITING has
+      // already had its tool-use session disposed and interrupt unregistered
+      // (runToolUseFlow's finally), while the handle stays tracked for resume
+      // (runFlowWithLifecycle). Run its registered waiting-cleanup instead of
+      // silently no-oping the kill.
+      return this.terminateWaitingHandle(handle);
     }
 
     if (handle instanceof ProcessExecutionHandle) {
@@ -841,6 +848,27 @@ export class ExecutionRegistry {
     }
 
     return false;
+  }
+
+  /**
+   * Tear down an `AgentExecutionHandle` suspended at WAITING with no live
+   * interrupt context. Returns false (no-op) when the handle never registered
+   * a waiting-cleanup — i.e. it isn't actually suspended, just momentarily
+   * between its own interrupt-unregister and untrack during normal teardown.
+   */
+  private terminateWaitingHandle(handle: AgentExecutionHandle): boolean {
+    if (!handle.runWaitingCleanup()) return false;
+    this.untrackHandle(handle);
+    this.streamStatus.transition(
+      handle.childStreamId,
+      STREAM_PHASE.CANCELLED,
+      'user-stop',
+      {
+        runtimeHost: handle.runtimeHost,
+        trace: handle.trace,
+      },
+    );
+    return true;
   }
 
   private interruptRegisteredStream(

@@ -454,12 +454,27 @@ export class NativeSubagentStrategy {
     activeNativeSubagents.delete(this.params.executionId);
   }
 
+  /**
+   * Tear down this strategy's tracking state without delivering anything.
+   * Registered as a WAITING-suspend cleanup (see `attachPromise`) so a
+   * stop/kill of a suspended child — which never resolves this strategy's
+   * own promise again — doesn't leave `activeNativeSubagents`/the delivery
+   * registry pointing at a gone execution.
+   */
+  abandon(): void {
+    this.finish();
+  }
+
   attachPromise(promise: Promise<unknown>): void {
     let suspended = false;
     promise
       .then((result: unknown) => {
         if (isWaitingFlowResult(result as AgentRuntimeFlowResult)) {
           suspended = true;
+          // Only reachable once the flow genuinely suspended (not a
+          // near-miss cycle that kept running in-process), so this can't
+          // race with the strategy's own normal completion teardown below.
+          this.runHandle?.registerWaitingCleanup(() => this.abandon());
         }
       })
       // Await the error delivery so the registry entry is not torn down while
