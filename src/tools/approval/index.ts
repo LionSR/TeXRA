@@ -71,9 +71,13 @@ export function releaseStreamResources(
  * pending with no UI prompt to answer. Multi-session hosts pass their own
  * `runtimeHost` so sibling windows' streamless approvals stay intact.
  */
-export function cleanupUnscopedApprovals(runtimeHost?: AgentRuntimeHost): void {
+export function cleanupUnscopedApprovals(
+  runtimeHost?: AgentRuntimeHost,
+  session: SessionHandle = defaultSession(),
+): void {
   toolEditApprovalController.rejectUnscopedPending(runtimeHost);
   bashApprovalController.rejectUnscopedPending(runtimeHost);
+  session.interactions.cancelUnscoped?.('Streamless approval cleanup.');
 }
 
 /**
@@ -96,6 +100,7 @@ export function cleanupAllApprovals(
   toolEditApprovalController.bypass.clearAll();
   bashApprovalController.bypass.clearAll();
   proposalApprovalState.clearAll();
+  session.interactions.cancelAll?.('All approvals cleared.');
   session.coordinators.cleanupAllRequests();
 }
 
