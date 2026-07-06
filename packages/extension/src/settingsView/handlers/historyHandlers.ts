@@ -255,11 +255,13 @@ export class HistoryHandlers {
       );
     } else {
       // Compilation failed — open the .tex source instead, and log the
-      // compile log tail so the failure reason is discoverable.
+      // compile log tail so the failure reason is discoverable. Included in
+      // the visible message itself, not just `data` — the logger only shows
+      // `data` when texra.logger.debugMode is on (default off).
       if (logTail) {
         this.ctx.logger.error(
           this.ctx.channel,
-          `LaTeX export compilation failed for ${storagePath}`,
+          `LaTeX export compilation failed for ${storagePath}:\n${logTail}`,
           { data: { storagePath, logTail } },
         );
       }
