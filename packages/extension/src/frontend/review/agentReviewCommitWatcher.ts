@@ -17,6 +17,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import * as logger from '@logger/logUtils';
+import { createFlushableDebounce } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -49,9 +50,32 @@ function watchRepository(
 
   let lastName = repository.state.HEAD?.name;
   let lastCommit = repository.state.HEAD?.commit;
-  let debounce: NodeJS.Timeout | undefined;
   /** Oldest un-reviewed base while commits coalesce in the debounce window. */
   let pendingBaseRef: string | undefined;
+  /** Branch name at the moment the pending review was (re)scheduled. */
+  let pendingBranchName: string | undefined;
+
+  // Fixed callback: reads the mutable pending* state above at fire time
+  // rather than threading per-call args through the timer, so `schedule()`
+  // rescheduling from a later commit picks up the latest branch name.
+  const reviewDebounce = createFlushableDebounce(() => {
+    const baseRef = pendingBaseRef;
+    const name = pendingBranchName;
+    pendingBaseRef = undefined;
+    pendingBranchName = undefined;
+    if (!baseRef) return;
+    // Re-check at fire time: the user may have disabled run-on-commit
+    // during the debounce window, and a review costs a model session.
+    if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
+    logger.info(
+      CHANNEL,
+      `Commit detected on ${name ?? 'HEAD'}; starting agent review`,
+    );
+    void AgentReviewService.runReview('commit', {
+      baseRef,
+      baseDescription: `previous commit on ${name ?? 'HEAD'}`,
+    });
+  }, COMMIT_DEBOUNCE_MS);
 
   const subscription = repository.state.onDidChange(() => {
     const head = repository.state.HEAD;
@@ -64,9 +88,9 @@ function watchRepository(
       // checkout also invalidates the reviewed change set, so stale results
       // are cleared — except on the initial state population (lastName
       // undefined), which is not a user checkout.
-      if (debounce) clearTimeout(debounce);
-      debounce = undefined;
+      reviewDebounce.cancel();
       pendingBaseRef = undefined;
+      pendingBranchName = undefined;
       if (lastName !== undefined) {
         AgentReviewService.clear();
       }
@@ -88,35 +112,24 @@ function watchRepository(
     if (!hadCommit) return;
     if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
 
-    if (debounce) clearTimeout(debounce);
     // Rapid commits (amend, rebase replays) coalesce into one review; keep
     // the OLDEST pending base so the combined run still covers every commit
     // since the last completed review.
     pendingBaseRef ??= previousCommit;
-    const baseRef = pendingBaseRef;
-    if (!baseRef) return;
-    debounce = setTimeout(() => {
-      debounce = undefined;
-      pendingBaseRef = undefined;
-      // Re-check at fire time: the user may have disabled run-on-commit
-      // during the debounce window, and a review costs a model session.
-      if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
-      logger.info(
-        CHANNEL,
-        `Commit detected on ${name ?? 'HEAD'}; starting agent review`,
-      );
-      void AgentReviewService.runReview('commit', {
-        baseRef,
-        baseDescription: `previous commit on ${name ?? 'HEAD'}`,
-      });
-    }, COMMIT_DEBOUNCE_MS);
+    if (!pendingBaseRef) return;
+    pendingBranchName = name;
+    reviewDebounce.schedule();
   });
 
   context.subscriptions.push({
     dispose: () => {
       subscription.dispose();
-      if (debounce) clearTimeout(debounce);
+      // Intentionally cancel (not flush): a review still pending at dispose
+      // (extension deactivation, workspace close) must not kick off a fresh
+      // model session during teardown.
+      reviewDebounce.cancel();
       pendingBaseRef = undefined;
+      pendingBranchName = undefined;
       watchedRoots.delete(repoRoot);
     },
   });

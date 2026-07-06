@@ -26,7 +26,12 @@ export {
   unique,
   assertNever,
 } from './typeGuards';
-export { debounce, delay } from './async';
+export {
+  debounce,
+  delay,
+  createFlushableDebounce,
+  type FlushableDebounce,
+} from './async';
 export { byName, byString, toNewestFirstByTimestamp } from './comparators';
 export { clamp, clampIndex, clampOptional, roundTo } from './math';
 export { tryParseUrl } from './urlCore';
