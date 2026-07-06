@@ -132,6 +132,46 @@ describe('formatChatAsMarkdown', () => {
     assert.doesNotMatch(markdown, /data:text\/html/);
   });
 
+  it('escapes Markdown syntax in web tool titles before rendering Markdown links', () => {
+    const markdown = formatChatAsMarkdown({
+      timestamp: '2026-01-01T00:00:00.000Z',
+      config: {},
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'web_search_tool_result',
+              content: [
+                {
+                  type: 'web_search_result',
+                  title: 'safe ](javascript:alert(1)) [again',
+                  url: 'https://example.com/search',
+                },
+              ],
+            },
+            {
+              type: 'web_fetch_tool_result',
+              url: 'https://example.com/fetch',
+              title: '[pwn](javascript:alert(1))',
+              page_content: 'body',
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.ok(
+      markdown.includes(
+        '- [safe \\]\\(javascript:alert\\(1\\)\\) \\[again](https://example.com/search)',
+      ),
+    );
+    assert.ok(
+      markdown.includes('**Title:** \\[pwn\\]\\(javascript:alert\\(1\\)\\)'),
+    );
+    assert.doesNotMatch(markdown, /\]\(javascript:/);
+  });
+
   it('sanitizes web tool URLs before rendering LaTeX links', () => {
     const latex = formatChatAsLatex(
       {
