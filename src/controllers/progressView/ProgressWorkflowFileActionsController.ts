@@ -234,7 +234,7 @@ export class ProgressWorkflowFileActionsController {
     try {
       const content = await this.deps.host.readFile(file);
       const streamBackups = this.modelOutputBackups.get(streamId) ?? new Map();
-      streamBackups.set(file, { content, streamId });
+      streamBackups.set(file, { content });
       this.modelOutputBackups.set(streamId, streamBackups);
     } catch {
       // Best-effort: backup only informs the accepted-edit follow-up.
