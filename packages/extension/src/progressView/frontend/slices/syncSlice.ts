@@ -103,7 +103,7 @@ export const syncHandlers: HandlerRegistry = {
             draft.conversationProgress = data.conversationProgress;
           }
           if ('roundStage' in data) {
-            draft.roundStage = data.roundStage;
+            draft.roundStage = data.roundStage ?? undefined;
           }
           if (data.badges) {
             draft.activeSubagents = data.badges.activeSubagents;
