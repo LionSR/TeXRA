@@ -3,11 +3,13 @@ import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - node/flow primitives under test
+import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { BaseNode } from '@agent/node';
 import {
   RoundPersistedFlow,
   type RoundAwareState,
 } from '@agent/node/roundPersistedFlow';
+import { computeRoundStageTotal } from '@agent/implementations/flows/reflection/roundStageTotal';
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import type { RoundStage } from '@shared/schemas';
 
@@ -16,49 +18,17 @@ import type { RoundStage } from '@shared/schemas';
  * bounded compile-repair round): when the repair round is granted,
  * `currentRound` becomes `totalRounds` (one index past the configured last
  * round). `runReflectionFlow.ts`'s `createRoundStage` callback widens the
- * stage's `total` for that round (`Math.max(shared.totalRounds,
- * roundIndex + 1)`) so the webview progress badge never displays an
- * over-total round count like "Round 3 of 2".
+ * stage's `total` for that round via the exported `computeRoundStageTotal`
+ * so the webview progress badge never displays an over-total round count
+ * like "Round 3 of 2".
  *
- * These tests mirror that exact widening formula against `RoundPersistedFlow`
- * (the same mechanics `RoundPersistedFlowCompileRepair.vitest.ts` exercises)
- * to confirm the repair round really is opened with the widened total, then
- * feed the resulting stage through the actual webview badge formatters to
- * confirm the rendered badge stays sensible rather than over-total.
+ * These tests exercise the REAL `computeRoundStageTotal` (not a local copy
+ * of its formula) against `RoundPersistedFlow` (the same mechanics
+ * `RoundPersistedFlowCompileRepair.vitest.ts` exercises) to confirm the
+ * repair round really is opened with the widened total, then feed the
+ * resulting stage through the actual webview badge formatters to confirm
+ * the rendered badge stays sensible rather than over-total.
  */
-
-function createFakeKv(): ExecutionKVStore {
-  const store = new Map<string, unknown>();
-  return {
-    read: async <T>(key: string) => store.get(key) as T | undefined,
-    write: async <T>(key: string, value: T) => {
-      store.set(key, value);
-    },
-    delete: async (key: string) => {
-      store.delete(key);
-    },
-    exists: async (key: string) => store.has(key),
-    listKeys: async () => [...store.keys()],
-    clear: async () => store.clear(),
-    getExecutionId: () => 'test-exec-repair-badge',
-    readMeta: async () => null,
-    readConfig: async () => null,
-    readReport: async () => null,
-    readTodos: async () => [],
-    readConversation: async () => null,
-    readWorkspaceFiles: async () => [],
-    readChildren: async () => [],
-    readResultMeta: async () => null,
-    writeMeta: async () => {},
-    writeConfig: async () => {},
-    writeReport: async () => {},
-    writeTodos: async () => {},
-    writeConversation: async () => {},
-    writeWorkspaceFiles: async () => {},
-    writeChild: async () => {},
-    writeResultMeta: async () => {},
-  } as unknown as ExecutionKVStore;
-}
 
 interface FakeShared extends RoundAwareState {
   failingRounds: number[];
@@ -86,10 +56,11 @@ function makeFlowWithStageCapture(
   const node = new FakeRoundNode();
   return new RoundPersistedFlow<FakeShared>(node, kv, {
     callbacks: {
-      // Mirrors runReflectionFlow.ts's createRoundStage callback exactly,
-      // including the fix's widened total.
+      // Mirrors runReflectionFlow.ts's createRoundStage callback, using the
+      // SAME exported computeRoundStageTotal (not a local reimplementation)
+      // so this test actually fails if the real widening logic regresses.
       createRoundStage: (roundIndex, _parent, shared) => {
-        const total = Math.max(shared.totalRounds, roundIndex + 1);
+        const total = computeRoundStageTotal(shared.totalRounds, roundIndex);
         capturedStages.push({ index: roundIndex, total });
         return {
           id: `r${roundIndex}`,
