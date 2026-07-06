@@ -11,7 +11,6 @@
  * layer above.
  */
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getConfig } from '@utils/config';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -248,14 +247,12 @@ export class PRPollingSource extends PollingSourceBase<
   subscribe(
     input: PRSubscribeInput,
     onEvent: (text: string) => void,
-    runtimeHost: AgentRuntimeHost,
   ): Disposable {
     const key = prKeyToString(input);
     const disposable = this.register(
       key,
       () => createInitialState(input),
       onEvent,
-      runtimeHost,
     );
     this.setListenerAnnotationLevel(key, onEvent, input);
     return {
@@ -271,7 +268,6 @@ export class PRPollingSource extends PollingSourceBase<
   updateSubscription(
     input: PRSubscribeInput,
     onEvent: (text: string) => void,
-    _runtimeHost: AgentRuntimeHost,
   ): void {
     const key = prKeyToString(input);
     this.setListenerAnnotationLevel(key, onEvent, input);

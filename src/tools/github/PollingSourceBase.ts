@@ -14,7 +14,6 @@
 import pMap from 'p-map';
 
 import type { AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { appSignals } from '@eventBus/AppSignals';
 import { createChannelTrace } from '@logger';
 
@@ -187,7 +186,6 @@ export abstract class PollingSourceBase<
     key: K,
     initState: () => S,
     onEvent: (text: string) => void,
-    _runtimeHost: AgentRuntimeHost,
   ): Disposable {
     let state = this.subscriptions.get(key);
     let created = false;
