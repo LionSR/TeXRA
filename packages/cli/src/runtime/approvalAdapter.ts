@@ -152,10 +152,23 @@ function toProposalResult(decision: ApprovalDecision): ProposalResult {
     : { action: 'reject', feedback: decision.userMessage };
 }
 
-function toRetryResult(decision: ApprovalDecision): RetryResult {
-  return decision.accepted
-    ? { action: 'retry', feedback: decision.userMessage }
-    : { action: 'cancel' };
+function toRetryResult(
+  decision: ApprovalDecision,
+  humanInputAvailable: boolean,
+): RetryResult {
+  if (decision.accepted) {
+    return { action: 'retry', feedback: decision.userMessage };
+  }
+  // A non-accepted retry with no human available is a policy/headless
+  // auto-denial (e.g. `--approval-policy never --no-input`), not a user
+  // cancel — surface it as a distinct `deny` so a run that produces zero
+  // output across all retries reports FAILED, not COMPLETED. See #7331.
+  return humanInputAvailable
+    ? { action: 'cancel' }
+    : {
+        action: 'deny',
+        ...(decision.userMessage ? { reason: decision.userMessage } : {}),
+      };
 }
 
 async function askHeadlessUserQuestion(
@@ -261,7 +274,7 @@ export function createHeadlessCliHostInteractions(
         hooks,
         { writeRejectionToStderr: true },
       );
-      return toRetryResult(decision);
+      return toRetryResult(decision, approvalPromptAllowed(context));
     },
     askUserQuestion(request) {
       return askHeadlessUserQuestion(request, context, hooks);
