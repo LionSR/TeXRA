@@ -84,16 +84,17 @@ function createResponseStream(response: ReturnType<typeof createResponse>) {
   };
 }
 
-/** Seed the handler's running input-token tally (a private field). */
+/** Seed the handler's running input-token tally (owned by the chain-state
+ *  collaborator; reached here via its narrow setter, not a raw field write). */
 function setCumulativeInputTokens(
   handler: ModelHandlerCodex,
   tokens: number,
 ): void {
   (
     handler as unknown as {
-      conversationState: { cumulativeInputTokens: number };
+      chainState: { setCumulativeInputTokens(tokens: number): void };
     }
-  ).conversationState.cumulativeInputTokens = tokens;
+  ).chainState.setCumulativeInputTokens(tokens);
 }
 
 describe('ModelHandlerCodex subscription fallback', () => {
