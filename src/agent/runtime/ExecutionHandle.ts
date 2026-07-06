@@ -145,6 +145,7 @@ export type AgentRunHandle = Pick<
   | 'runtimeHost'
   | 'trace'
   | 'result'
+  | 'deliveryTargetStreamId'
 >;
 
 /**
