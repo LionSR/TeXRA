@@ -165,6 +165,52 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     expect(replayed?.status).toBe('failed');
   });
 
+  it('ignores nested group-end status when the root run stage never closed', () => {
+    const { ctx, getState } = createContext(createInitialState());
+    const trace: TraceDocument = {
+      ...legacyTrace(undefined),
+      entries: [
+        {
+          seqNo: 1,
+          id: 'root-run',
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+          level: LOG_LEVELS.INFO,
+          timestamp: 100,
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'Run',
+          data: { status: 'running' },
+        },
+        {
+          seqNo: 2,
+          id: 'inner-round',
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+          level: LOG_LEVELS.INFO,
+          timestamp: 110,
+          groupId: 'root-run',
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'Round',
+          data: { status: 'running' },
+        },
+        {
+          seqNo: 3,
+          id: 'inner-round',
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+          level: LOG_LEVELS.INFO,
+          timestamp: 120,
+          groupId: 'root-run',
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'Round',
+          data: { status: 'stopped', endTime: 120 },
+        },
+      ],
+    };
+
+    replayTrace(trace, ctx);
+
+    const replayed = getState().streamStates.get(trace.streamId);
+    expect(replayed?.status).toBe(STREAM_STATUS.READY);
+  });
+
   it('derives "failed" from snapshot.status "error" instead of defaulting to ready', () => {
     const { ctx, getState } = createContext(createInitialState());
     const trace = legacyTrace('error');
