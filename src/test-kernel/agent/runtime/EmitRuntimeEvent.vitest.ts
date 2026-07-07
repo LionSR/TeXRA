@@ -8,6 +8,7 @@ import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 import { createRecordingHost } from '../progressTestUtils';
 
 const streamId = (s: string): StreamTabId => s as StreamTabId;
@@ -39,22 +40,70 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
     }
   });
 
-  it("keeps non-migrated events on the active run's runtimeHost", () => {
+  it("routes in-run facts through the active run's session", () => {
     const run = createRecordingHost();
+    const session = new SessionHandle();
+    const detachProjection = attachSessionProgressEventProjectionForTest(
+      session.events,
+      run.host,
+    );
+    const busSeen: unknown[] = [];
+    const off = ProgressEventBus.on('updateQueuedFollowUps', (p) =>
+      busSeen.push(p),
+    );
+    try {
+      withRunContext(
+        createRunContext({
+          runtimeHost: run.host,
+          session,
+        }),
+        () => {
+          emitRuntimeEvent('updateQueuedFollowUps', {
+            streamId: streamId('s:run'),
+          });
+        },
+      );
+      expect(run.events).toEqual([
+        {
+          event: 'updateQueuedFollowUps',
+          payload: { streamId: 's:run' },
+        },
+      ]);
+      expect(busSeen).toEqual([]);
+    } finally {
+      off();
+      detachProjection();
+      session.dispose();
+    }
+  });
+
+  it('rejects non-session events instead of falling back to the process bus', () => {
     const busSeen: unknown[] = [];
     const off = ProgressEventBus.on('requestShowError', (p) => busSeen.push(p));
     try {
-      withRunContext(createRunContext({ runtimeHost: run.host }), () => {
+      expect(() => {
+        // @ts-expect-error requestShowError is host interaction, not a session fact.
         emitRuntimeEvent('requestShowError', { message: 'run error' });
-      });
-      expect(run.events).toEqual([
-        { event: 'requestShowError', payload: { message: 'run error' } },
-      ]);
-      // Not double-emitted onto the bus.
+      }).toThrow(
+        'emitRuntimeEvent only supports session facts; use the owning runtime host for requestShowError',
+      );
       expect(busSeen).toEqual([]);
     } finally {
       off();
     }
+  });
+
+  it('rejects non-session events instead of using the active run host', () => {
+    const run = createRecordingHost();
+    withRunContext(createRunContext({ runtimeHost: run.host }), () => {
+      expect(() => {
+        // @ts-expect-error requestShowError is host interaction, not a session fact.
+        emitRuntimeEvent('requestShowError', { message: 'run error' });
+      }).toThrow(
+        'emitRuntimeEvent only supports session facts; use the owning runtime host for requestShowError',
+      );
+    });
+    expect(run.events).toEqual([]);
   });
 
   it('prefers an explicit session event hub over the run context and bus for migrated facts', () => {
