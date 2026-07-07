@@ -121,6 +121,8 @@ import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
 const child2 = 'child-2' as StreamTabId;
+const GOAL_PAUSED_TRANSCRIPT_NOTICE =
+  'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
 afterEach(() => {
   clearAllStreamStatusesForTest(StreamStatusService);
@@ -2683,6 +2685,41 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
+  it('applies direct runFact.goalPaused events without host emission', () => {
+    const hub = new SessionEventHub();
+    const hostEmit = vi.fn();
+    const wrapped = wrapRuntimeHost({
+      emit: hostEmit,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const wrappedEmit = vi.spyOn(wrapped, 'emit');
+    const detach = attachTuiRunFactSubscription(hub);
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('goalPaused'),
+          data: { streamId: root },
+        },
+      });
+
+      expect(
+        streams
+          .get()
+          .get(root)
+          ?.entries.map((entry) => entry.text),
+      ).toEqual([GOAL_PAUSED_TRANSCRIPT_NOTICE]);
+      expect(wrappedEmit).not.toHaveBeenCalled();
+      expect(hostEmit).not.toHaveBeenCalled();
+    } finally {
+      detach();
+      wrappedEmit.mockRestore();
+    }
+  });
+
   it('applies direct usage events without host emission', () => {
     const hub = new SessionEventHub();
     const hostEmit = vi.fn();
@@ -2837,6 +2874,80 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         reasoningTokens: 7,
       });
       expect(hostEmit).toHaveBeenCalledWith('updateStreamUsage', payload);
+    } finally {
+      detachTui();
+      detachProjector();
+    }
+  });
+
+  it('does not duplicate the goalPaused notice when the TUI subscriber is first', () => {
+    const hub = new SessionEventHub();
+    const hostEmit = vi.fn();
+    const wrapped = wrapRuntimeHost({
+      emit: hostEmit,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const detachTui = attachTuiRunFactSubscription(hub);
+    const detachProjector = attachSessionRunFactProjector(hub, wrapped, root);
+    const payload = { streamId: root };
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('goalPaused'),
+          data: payload,
+        },
+      });
+
+      expect(
+        streams
+          .get()
+          .get(root)
+          ?.entries.filter(
+            (entry) => entry.text === GOAL_PAUSED_TRANSCRIPT_NOTICE,
+          ),
+      ).toHaveLength(1);
+      expect(hostEmit).toHaveBeenCalledWith('goalPaused', payload);
+    } finally {
+      detachProjector();
+      detachTui();
+    }
+  });
+
+  it('does not duplicate the goalPaused notice when the projector is first', () => {
+    const hub = new SessionEventHub();
+    const hostEmit = vi.fn();
+    const wrapped = wrapRuntimeHost({
+      emit: hostEmit,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const detachProjector = attachSessionRunFactProjector(hub, wrapped, root);
+    const detachTui = attachTuiRunFactSubscription(hub);
+    const payload = { streamId: root };
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('goalPaused'),
+          data: payload,
+        },
+      });
+
+      expect(
+        streams
+          .get()
+          .get(root)
+          ?.entries.filter(
+            (entry) => entry.text === GOAL_PAUSED_TRANSCRIPT_NOTICE,
+          ),
+      ).toHaveLength(1);
+      expect(hostEmit).toHaveBeenCalledWith('goalPaused', payload);
     } finally {
       detachTui();
       detachProjector();
