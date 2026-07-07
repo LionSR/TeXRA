@@ -1,11 +1,13 @@
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { isFileNotFoundError } from '@common/errors';
 import {
   decideRunModel,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
 import { toNewestFirstByTimestamp } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
@@ -19,6 +21,7 @@ import {
   isImplicitDefaultEligible,
   pickDefaultToolUseAgent,
 } from './defaultAgents';
+import { writeTextStderr } from './logSinks';
 
 /**
  * A configured or environment agent value, trimmed and dropped if it can't be
@@ -74,11 +77,22 @@ async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
 }
 
 async function loadUserDefaults(): Promise<PartialDefaults> {
-  // A missing or corrupt user config means no user defaults:
-  // parseCliConfigValues maps the undefined fallback to {}.
-  const raw: unknown = await GlobalStorageFS.readJson(
-    TEXRA_CONFIG_FILE_NAME,
-  ).catch(() => undefined);
+  // A missing user config means no user defaults (parseCliConfigValues maps
+  // the undefined fallback to {}). Anything else — corrupt JSON, a permission
+  // error — is surfaced as a warning instead of silently dropping the user's
+  // chat defaults, mirroring loadWorkspaceCliConfig's handling of the same
+  // class of failure for the workspace config.
+  let raw: unknown;
+  try {
+    raw = await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME);
+  } catch (error: unknown) {
+    if (!isFileNotFoundError(error)) {
+      writeTextStderr(
+        `WARN Could not read user config (${TEXRA_CONFIG_FILE_NAME}): ${toErrorMessage(error)}`,
+      );
+    }
+    raw = undefined;
+  }
   return defaultsFromConfigValues(parseCliConfigValues(raw));
 }
 

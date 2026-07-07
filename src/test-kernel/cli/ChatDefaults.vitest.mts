@@ -12,7 +12,17 @@ import {
   BUILTIN_DEFAULT_CHAT_MODEL,
   resolveChatDefaults,
 } from '@cli/runtime/chatDefaults';
+import * as logSinks from '@cli/runtime/logSinks';
 import { GlobalStorageFS } from '@utils/files/storageFS';
+
+/** A missing user config, shaped like a genuine `fs` ENOENT rejection. */
+function enoentError(): NodeJS.ErrnoException {
+  const error = new Error(
+    'ENOENT: no such file or directory',
+  ) as NodeJS.ErrnoException;
+  error.code = 'ENOENT';
+  return error;
+}
 
 vi.mock('@agent/storage', () => ({
   listExecutions: vi.fn(async () => []),
@@ -50,7 +60,8 @@ beforeEach(() => {
   mockedListExecutions.mockReset();
   mockedListExecutions.mockResolvedValue([]);
   mockedReadJson.mockReset();
-  mockedReadJson.mockRejectedValue(new Error('no user defaults'));
+  // A missing user config (the common case) mirrors a real ENOENT rejection.
+  mockedReadJson.mockRejectedValue(enoentError());
 });
 
 async function workspaceWithConfig(config: unknown): Promise<string> {
@@ -367,5 +378,29 @@ describe('CLI chat defaults', () => {
       agentSource: 'user-config',
       modelSource: 'user-config',
     });
+  });
+
+  it('warns instead of silently dropping defaults when the user config is corrupt', async () => {
+    // Not an ENOENT — e.g. truncated/hand-edited JSON, or a permission error.
+    // The old behavior caught every readJson failure alike and silently fell
+    // through to {}, indistinguishable from "no user config".
+    const corrupt = new Error('Failed to parse JSON from config.json');
+    mockedReadJson.mockRejectedValueOnce(corrupt);
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expect(
+      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
+    ).resolves.toMatchObject({
+      agent: 'assistant',
+      model: 'deepseekproT',
+      source: 'builtin',
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('config.json'),
+    );
+    warnSpy.mockRestore();
   });
 });

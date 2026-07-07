@@ -8,6 +8,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
+import { isFileNotFoundError } from '@common/errors';
 
 import type {
   CliApprovalPolicy,
@@ -87,7 +88,12 @@ export async function ensureTexraGitignored(
   let existed = true;
   try {
     existing = await readFile(gitignorePath, 'utf8');
-  } catch {
+  } catch (error: unknown) {
+    // A missing .gitignore is fine — we create one. Anything else (EACCES,
+    // a transient I/O error, ...) must not be treated as "file absent": doing
+    // so would fall through to the write below and overwrite unreadable-but-
+    // present content instead of surfacing the failure.
+    if (!isFileNotFoundError(error)) throw error;
     existed = false;
   }
   const next = gitignoreWithTexra(existing);
