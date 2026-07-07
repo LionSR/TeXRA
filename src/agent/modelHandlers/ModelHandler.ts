@@ -12,7 +12,7 @@ import {
 // Local imports - agent
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
-import { logContextManagementEvent } from '@agent/trace';
+import { logContextManagementEvent, TraceEmitter } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -39,7 +39,7 @@ import {
 // Local imports - platform
 
 // Local imports - model
-import { createChannelTrace } from '@logger';
+import { attachChannelSubscriber } from '@logger/logUtils';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { isGpt5ModelName } from '@model/modelNames';
 
@@ -208,8 +208,14 @@ export abstract class ModelHandler<
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
-    // Initialize with default channel, will be overwritten by agent
-    this.logger = createChannelTrace('Agent');
+    // Initialize with default channel, will be overwritten by agent. Unlike
+    // the other ~25 log-only `createChannelTrace` singletons, this default
+    // is exercised through `createThinkingStream`/`createOutputStream`
+    // (`this.logger.openStream(...)`) before `setLogger` swaps in the real
+    // per-run trace in some paths, so it needs the full `TraceEmitter`, not
+    // the log-only closure `createChannelTrace` now returns.
+    this.logger = new TraceEmitter();
+    attachChannelSubscriber(this.logger, { channel: 'Agent', isAgent: false });
     this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
       getCapabilities: () => this.capabilities,
       isOpenAIProvider: () => this.config.provider === ModelProvider.OPENAI,
