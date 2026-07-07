@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
+  type ModelCapabilities,
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
@@ -29,8 +30,11 @@ function createLoggerStub(): AgentTrace {
 
 function buildConfig(
   provider: ModelProvider,
-  overrides: Partial<ModelConfig> = {},
+  overrides: Partial<Omit<ModelConfig, 'capabilities'>> & {
+    capabilities?: Partial<ModelCapabilities>;
+  } = {},
 ): ModelConfig {
+  const { capabilities: capabilityOverrides, label, ...rest } = overrides;
   return {
     name: 'test-model',
     fullName: 'test-model',
@@ -40,14 +44,14 @@ function buildConfig(
     inputPrice: 0,
     outputPrice: 0,
     contextWindow: 200000,
+    openRouterOnly: false,
+    ...rest,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsVision: false,
-      ...(overrides.capabilities ?? {}),
+      ...(capabilityOverrides ?? {}),
     },
-    openRouterOnly: false,
-    ...overrides,
-    label: overrides.label ?? 'Test Model',
+    label: label ?? 'Test Model',
   };
 }
 
