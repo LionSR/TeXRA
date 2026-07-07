@@ -111,6 +111,33 @@ function createUsageRecordingCallback(
   };
 }
 
+/** Notify the progress view of a consumed follow-up, then run the caller's own callback. */
+function wrapOnFollowUpConsumed(
+  ctx: AgentLaunchContext,
+  onFollowUpConsumed?: () => void,
+): () => void {
+  return () => {
+    emitRuntimeEvent('updateQueuedFollowUps', { streamId: ctx.streamId });
+    onFollowUpConsumed?.();
+  };
+}
+
+/**
+ * Guard against a non-terminal WAITING result escaping to a caller that
+ * didn't opt into it via `allowWaitingResult`.
+ */
+function assertAllowedWaitingResult(
+  result: AgentRuntimeFlowResult,
+  allowWaitingResult: boolean | undefined,
+  callerName: string,
+): void {
+  if (isWaitingFlowResult(result) && allowWaitingResult !== true) {
+    throw new Error(
+      `${callerName} received a non-terminal WAITING result without allowWaitingResult.`,
+    );
+  }
+}
+
 /**
  * Run the tool-use flow for a single agent execution.
  *
@@ -147,12 +174,10 @@ async function runToolUseAgent(
           }
           options.onProgress?.(update);
         },
-        onFollowUpConsumed: () => {
-          emitRuntimeEvent('updateQueuedFollowUps', {
-            streamId: ctx.streamId,
-          });
-          options.onFollowUpConsumed?.();
-        },
+        onFollowUpConsumed: wrapOnFollowUpConsumed(
+          ctx,
+          options.onFollowUpConsumed,
+        ),
         onModelChanged: (modelHandler) => {
           // The tool-use flow already wrote services.config.model
           // (=== ctx.config.model, same object), so the live model is updated
@@ -393,11 +418,11 @@ export async function executeAgent(
         onRun: options.onRun,
       },
     );
-    if (isWaitingFlowResult(result) && options.allowWaitingResult !== true) {
-      throw new Error(
-        'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
-      );
-    }
+    assertAllowedWaitingResult(
+      result,
+      options.allowWaitingResult,
+      'executeAgent',
+    );
     return result;
   });
 }
@@ -485,12 +510,10 @@ export async function resumeToolUseFromSnapshot(
             isSubagent,
             onBeforeWaiting: options.onBeforeWaiting,
             onProgress: options.onProgress,
-            onFollowUpConsumed: () => {
-              emitRuntimeEvent('updateQueuedFollowUps', {
-                streamId: ctx.streamId,
-              });
-              options.onFollowUpConsumed?.();
-            },
+            onFollowUpConsumed: wrapOnFollowUpConsumed(
+              ctx,
+              options.onFollowUpConsumed,
+            ),
           },
           undefined,
           (flowContext) => {
@@ -514,11 +537,11 @@ export async function resumeToolUseFromSnapshot(
         onRun: options.onRun,
       },
     );
-    if (isWaitingFlowResult(result) && options.allowWaitingResult !== true) {
-      throw new Error(
-        'resumeToolUseFromSnapshot received a non-terminal WAITING result without allowWaitingResult.',
-      );
-    }
+    assertAllowedWaitingResult(
+      result,
+      options.allowWaitingResult,
+      'resumeToolUseFromSnapshot',
+    );
     return result;
   });
 }
