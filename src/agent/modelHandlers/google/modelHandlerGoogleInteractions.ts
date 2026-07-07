@@ -586,15 +586,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return true;
   }
 
-  /**
-   * Google passes the system prompt per-call (as `system_instruction`)
-   * rather than storing it in `messages` (see `initializeMessages` below) —
-   * the round flow must resupply it on every invocation.
-   */
-  override get requiresPerCallSystemPrompt(): boolean {
-    return true;
-  }
-
   protected override get sdkErrorTagger() {
     return tagGoogleSdkError;
   }

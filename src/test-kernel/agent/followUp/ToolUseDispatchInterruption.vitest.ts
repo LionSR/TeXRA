@@ -1,5 +1,6 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent core
 import { createRunTrace } from '@transcript';
@@ -88,6 +89,7 @@ describe('ToolUseDispatchNode interruption', () => {
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
+        config: { provider: ModelProvider.OPENAI },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
             ({ type: 'message', role: 'assistant', content: text }) as never,
@@ -258,6 +260,7 @@ describe('ToolUseDispatchNode interruption', () => {
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
+        config: { provider: ModelProvider.OPENAI },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
             ({ type: 'message', role: 'assistant', content: text }) as never,

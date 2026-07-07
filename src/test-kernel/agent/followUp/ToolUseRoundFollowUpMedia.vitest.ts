@@ -1,5 +1,6 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent core
 import { createRunTrace } from '@transcript';
@@ -38,6 +39,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       modelHandler: {
         addMediaToUserMessage,
         capabilities: { supportsVision: true },
+        config: { provider: ModelProvider.OPENAI },
         createResponse: vi.fn(async () => ({ response: null })),
         createUserFollowUpMessages,
         setOutputStreaming: vi.fn(),
@@ -165,6 +167,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
+        config: { provider: ModelProvider.OPENAI },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
             ({ type: 'message', role: 'assistant', content: text }) as never,
@@ -332,7 +335,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     expect(shared.endTurn).toBe(true);
   });
 
-  function createSystemPromptServices(requiresPerCallSystemPrompt: boolean): {
+  function createSystemPromptServices(provider: ModelProvider): {
     createResponse: ReturnType<typeof vi.fn>;
     services: ToolUseRoundServices;
   } {
@@ -351,6 +354,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
+        config: { provider },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
             ({ type: 'message', role: 'assistant', content: text }) as never,
@@ -371,7 +375,6 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,
-        requiresPerCallSystemPrompt,
         setOutputStreaming: vi.fn(),
       },
       prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
@@ -389,7 +392,9 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
   }
 
   it('passes systemPrompt to createResponse when the handler requires it per-call', async () => {
-    const { createResponse, services } = createSystemPromptServices(true);
+    const { createResponse, services } = createSystemPromptServices(
+      ModelProvider.ANTHROPIC,
+    );
     const shared = createShared([], 'You are a helpful assistant.');
 
     await runRound(services, shared);
@@ -402,7 +407,9 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
   });
 
   it('omits systemPrompt from createResponse when the handler embeds it in messages', async () => {
-    const { createResponse, services } = createSystemPromptServices(false);
+    const { createResponse, services } = createSystemPromptServices(
+      ModelProvider.OPENAI,
+    );
     const shared = createShared([], 'You are a helpful assistant.');
 
     await runRound(services, shared);

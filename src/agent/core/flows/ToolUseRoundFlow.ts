@@ -15,6 +15,9 @@
  * and shared schema/state types from here.
  */
 
+// Third-party imports
+import { ModelProvider } from 'llm-zoo';
+
 // Local imports - core flow primitives
 import { Flow } from '@agent/node';
 import { defaultPostCompactionContext } from '@agent/core/flows/CommonCycleTypes';
@@ -65,7 +68,8 @@ export function createToolUseRoundFlow<C>(): Flow<
     // (OpenAI, OpenRouter) already have it in history — resupplying it here
     // too would duplicate it alongside the persisted message.
     getSystemPrompt: (shared, services) =>
-      services.modelHandler.requiresPerCallSystemPrompt
+      services.modelHandler.config.provider === ModelProvider.ANTHROPIC ||
+      services.modelHandler.config.provider === ModelProvider.GOOGLE
         ? shared.systemPrompt
         : undefined,
     storeResponse: (shared, response) => {
