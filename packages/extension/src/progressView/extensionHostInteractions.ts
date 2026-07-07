@@ -14,6 +14,7 @@ import type {
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { nativeRequestApproval } from '@frontend/approval/nativeToolEditApproval';
 import type {
   AgentProposalPermission,
@@ -29,6 +30,7 @@ import type {
 export interface ExtensionHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
+  removeStream(streamId: StreamTabId): void;
 }
 
 type PendingKind = 'bash' | 'plan' | 'proposal' | 'retry' | 'userQuestion';
@@ -203,7 +205,12 @@ export function createExtensionHostInteractions(
       return { threadId: request.threadId };
     },
 
-    handleProgressEvent: () => false,
+    handleProgressEvent(event, payload): boolean {
+      if (event !== 'removeStream') return false;
+      const data = payload as ProgressEventPayloads['removeStream'];
+      options.removeStream(data.streamId);
+      return true;
+    },
 
     pending(): readonly PendingHostInteraction[] {
       return [...pendingRequests.values()].map(({ id, kind, streamId }) => ({
