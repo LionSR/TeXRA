@@ -311,7 +311,9 @@ export function runAgentCliSession<TTurn>(
       // single outcome derivation and its projections: stage end, persisted
       // terminal status (before untrack notifies waiters), settled result,
       // and terminal stream phase. This loop only reports its terminal facts.
-      childStream.finalize({
+      // Awaited so a headless CLI process cannot exit before the terminal
+      // status persists to execution history.
+      await childStream.finalize({
         failed: sawTurnFailure,
         cancelled: session.isInterrupted(),
         stage: sessionStage,

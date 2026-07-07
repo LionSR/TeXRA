@@ -70,8 +70,13 @@ export interface ChildStream {
   beginTurn: () => void;
   /** The active turn failed; preserve explicit user stops. */
   failTurn: () => void;
-  /** Complete the child stream lifecycle through the owning execution handle. */
-  finalize: (options?: FinalizeChildStreamOptions) => void;
+  /**
+   * Complete the child stream lifecycle through the owning execution handle.
+   * Resolves once the shared terminal finalizer has persisted, settled, and
+   * untracked — callers that must not exit before the terminal status lands
+   * (headless CLI session loops) await it.
+   */
+  finalize: (options?: FinalizeChildStreamOptions) => Promise<void>;
 }
 
 /** Create a child stream tab and execution handle for a background child task. */
@@ -169,15 +174,14 @@ export function createChildStream(
         STREAM_PHASE.FAILED,
       );
     },
-    finalize: (finalizeOptions) => {
+    finalize: (finalizeOptions) =>
       finalizeChildStream({
         handle,
         session,
         logger: runTrace.trace,
         disposeTrace,
         options: finalizeOptions,
-      });
-    },
+      }),
   };
 }
 
@@ -195,7 +199,9 @@ interface FinalizeChildStreamArgs {
  * terminal stream phase) and the autoClose emit. Child streams never traverse
  * the run lifecycle, so this is their only settle point.
  */
-function finalizeChildStream(args: FinalizeChildStreamArgs): void {
+async function finalizeChildStream(
+  args: FinalizeChildStreamArgs,
+): Promise<void> {
   const { handle, session, logger, disposeTrace, options } = args;
   const hasError = options?.error != null || options?.errorMessage != null;
   const errorMessage =
@@ -238,7 +244,7 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
         }
       : undefined;
 
-  void finalizeRunTerminal({
+  await finalizeRunTerminal({
     handle,
     executions: session.executions,
     streamStatus: session.status,
@@ -249,19 +255,18 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     // No trace emit: child-stream results must stay out of `session.onResult`
     // (host toast) consumers — the loop already presents them as follow-ups.
     persistTerminalStatus: options?.persistTerminalStatus === true,
-  }).then(() => {
-    disposeTrace();
-
-    if (options?.autoClose) {
-      const handled = handle.runtimeHost.interactions?.handleProgressEvent(
-        'removeStream',
-        { streamId: handle.childStreamId },
-      );
-      if (!handled) {
-        handle.runtimeHost.emit('removeStream', {
-          streamId: handle.childStreamId,
-        });
-      }
-    }
   });
+  disposeTrace();
+
+  if (options?.autoClose) {
+    const handled = handle.runtimeHost.interactions?.handleProgressEvent(
+      'removeStream',
+      { streamId: handle.childStreamId },
+    );
+    if (!handled) {
+      handle.runtimeHost.emit('removeStream', {
+        streamId: handle.childStreamId,
+      });
+    }
+  }
 }

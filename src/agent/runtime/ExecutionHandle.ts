@@ -78,6 +78,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private readonly _deferred = pDefer<ResultEvent>();
   readonly result = this._deferred.promise;
   private _settled = false;
+  private _finalizeClaimed = false;
 
   constructor(
     readonly executionId: string,
@@ -101,14 +102,18 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 
   /**
-   * True once a terminal `result` has settled. `finalizeRunTerminal` uses this
-   * as its exactly-once guard: a second finalize of the same handle (e.g. the
-   * lifecycle catch arm after the success arm already finalized, or a finalize
-   * racing a `terminateWaitingHandle` that settled the handle) no-ops instead
-   * of publishing a second, contradictory terminal result.
+   * Atomically claim the exactly-once terminal finalization of this handle.
+   * Returns true for exactly one caller — the flag flips synchronously in the
+   * same tick as the check, so two `finalizeRunTerminal` calls racing across
+   * await points (e.g. a lifecycle arm vs a concurrent finalize of the same
+   * handle) cannot both win. Also refuses when a terminal result already
+   * settled outside the finalizer (`terminateWaitingHandle` settles directly),
+   * so a late finalize cannot publish a second, contradictory result.
    */
-  get isSettled(): boolean {
-    return this._settled;
+  claimTerminalFinalize(): boolean {
+    if (this._finalizeClaimed || this._settled) return false;
+    this._finalizeClaimed = true;
+    return true;
   }
 
   get parentStreamId(): StreamTabId {

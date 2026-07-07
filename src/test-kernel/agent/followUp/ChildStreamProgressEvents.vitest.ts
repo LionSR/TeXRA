@@ -125,7 +125,7 @@ describe('child stream progress events', () => {
           toolName: 'bash',
         }),
       );
-      childStream.finalize({ autoClose: true });
+      void childStream.finalize({ autoClose: true });
 
       expect(assertSpy).toHaveBeenCalledWith(orderingChildStreamId);
       expect(sequence.slice(0, 2)).toEqual([
@@ -154,11 +154,9 @@ describe('child stream progress events', () => {
 
     expect(childStream.childStreamId).toBe(childStreamId);
 
-    withSessionProgressProjection(active.host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({ autoClose: true }),
     );
-    // The autoClose emit chains on the shared finalizer's promise.
-    await Promise.resolve();
 
     const { events } = active;
     expect(events.map((entry) => entry.event)).toEqual([
@@ -267,11 +265,9 @@ describe('child stream progress events', () => {
       }),
     );
 
-    withSessionProgressProjection(host, () =>
+    await withSessionProgressProjection(host, () =>
       childStream.finalize({ autoClose: true }),
     );
-    // The autoClose emit chains on the shared finalizer's promise.
-    await Promise.resolve();
 
     expect(removedStreams).toEqual([childStreamId]);
     expect(active.events.map((entry) => entry.event)).not.toContain(
@@ -297,7 +293,7 @@ describe('child stream progress events', () => {
     childStream.waitForInput();
     childStream.beginTurn();
     childStream.failTurn();
-    withSessionProgressProjection(active.host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({ failed: true }),
     );
 
@@ -352,7 +348,7 @@ describe('child stream progress events', () => {
     childStream.waitForInput();
     childStream.beginTurn();
     childStream.failTurn();
-    withSessionProgressProjection(active.host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({ failed: true }),
     );
 
@@ -385,7 +381,7 @@ describe('child stream progress events', () => {
     );
     expect(handle).toBeDefined();
 
-    withSessionProgressProjection(active.host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({ cancelled: true }),
     );
 
@@ -411,7 +407,7 @@ describe('child stream progress events', () => {
       defaultSession().executions.getAgentHandleByStream(failedChildStreamId);
     expect(handle).toBeDefined();
 
-    withSessionProgressProjection(active.host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({ errorMessage: 'child process exited 1' }),
     );
 
@@ -442,7 +438,7 @@ describe('child stream progress events', () => {
     );
     expect(handle).toBeDefined();
 
-    withSessionProgressProjection(active.host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({
         failed: false,
         cancelled: false,

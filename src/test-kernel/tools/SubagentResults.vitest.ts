@@ -93,7 +93,7 @@ describe('formatChildRunDelivery', () => {
     );
   });
 
-  it('omits the id attribute, usage, and extra lines when absent/falsy', () => {
+  it('omits the provider id attribute (thread-id), usage, and extra lines when absent/falsy', () => {
     const xml = formatChildRunDelivery(
       {
         tag: 'codex-result',

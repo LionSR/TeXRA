@@ -109,15 +109,17 @@ export interface FinalizeRunTerminalParams {
  * (`finalizeChildStream`): waiting-cleanup clear, outcome projection to
  * persisted history, transcript stage end, the terminal `result` event
  * (emit + settle), the delivery hook, then registry untrack + terminal stream
- * phase — in that order. Exactly-once per handle: a second call (e.g. the
- * lifecycle catch arm after the success arm already finalized, or a finalize
- * racing a `terminateWaitingHandle` that already settled the handle) no-ops.
+ * phase — in that order. Exactly-once per handle: the claim below flips
+ * synchronously in the same tick as the check, so a second call (e.g. the
+ * lifecycle catch arm after the success arm already finalized, a concurrent
+ * finalize racing across this function's await points, or a finalize after a
+ * `terminateWaitingHandle` already settled the handle) no-ops structurally.
  */
 export async function finalizeRunTerminal(
   params: FinalizeRunTerminalParams,
 ): Promise<ResultEvent | undefined> {
   const { handle, outcome } = params;
-  if (handle.isSettled) return undefined;
+  if (!handle.claimTerminalFinalize()) return undefined;
   // This run is terminating, not suspending: drop any speculative
   // waiting-cleanup (pre-registered via onBeforeWaiting on a turn that then
   // continued past the wait) before teardown unregisters the interrupt —
