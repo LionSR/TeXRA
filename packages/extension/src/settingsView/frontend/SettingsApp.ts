@@ -93,7 +93,6 @@ import {
   memoryItems,
   memoryToggleDisabled,
   modelSelectionItems,
-  nestedDelegationMaxDepth,
   orchestratorAgents,
   preferShortModelNames,
   prSubscriptions,
@@ -454,10 +453,6 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleDetachSubagentsOnStopToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
-  );
-
-  private handleNestedDelegationMaxDepthChange = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH,
   );
 
   private handleApplyAgentModePreset = forwardDetail(
@@ -857,7 +852,6 @@ export class SettingsApp extends SettingsAppBase {
               .allowOrchestratorKill=${allowOrchestratorKill.get()}
               .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
               .worktreeSupport=${gitWorktreeSupport.get()}
-              .nestedDelegationMaxDepth=${nestedDelegationMaxDepth.get()}
               @allow-orchestrator-kill-toggle=${
                 this.handleAllowOrchestratorKillToggle
               }
@@ -865,9 +859,6 @@ export class SettingsApp extends SettingsAppBase {
                 this.handleDetachSubagentsOnStopToggle
               }
               @worktree-support-toggle=${this.handleWorktreeSupportToggle}
-              @nested-delegation-max-depth-change=${
-                this.handleNestedDelegationMaxDepthChange
-              }
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
             ></multi-agent-tab>
