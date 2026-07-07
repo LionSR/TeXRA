@@ -20,7 +20,6 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
-  consumeStreamChunks,
   handleStreamingFailure,
   trackStreamConnect,
   type StreamConnectTracker,
