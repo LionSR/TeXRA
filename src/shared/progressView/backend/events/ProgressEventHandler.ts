@@ -226,15 +226,7 @@ export class ProgressEventHandler {
       addOutputFiles: {
         module: 'ProgressEvents',
         context: 'failed to handle addOutputFiles',
-        handle: ({ streamId, filesByRound }) => {
-          this.state.snapshots.addOutputFiles(streamId, filesByRound);
-          this.sendIfActive(streamId, () => {
-            const rounds = this.state.snapshots.getOutputFiles(streamId);
-            this.webviewUpdater.updateFiles(streamId, {
-              rounds: rounds.size ? mapToRecord(rounds) : undefined,
-            });
-          });
-        },
+        handle: (payload) => this.handleAddOutputFiles(payload),
       },
       updateMissingOutputs: {
         module: 'ProgressEvents',
@@ -479,6 +471,19 @@ export class ProgressEventHandler {
     withEventErrorHandling(registration.module, registration.context, () =>
       registration.handle(payload),
     );
+  }
+
+  handleAddOutputFiles({
+    streamId,
+    filesByRound,
+  }: ProgressEventPayloads['addOutputFiles']): void {
+    this.state.snapshots.addOutputFiles(streamId, filesByRound);
+    this.sendIfActive(streamId, () => {
+      const rounds = this.state.snapshots.getOutputFiles(streamId);
+      this.webviewUpdater.updateFiles(streamId, {
+        rounds: rounds.size ? mapToRecord(rounds) : undefined,
+      });
+    });
   }
 
   /** Send to webview only if streamId is the active stream. */
