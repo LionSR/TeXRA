@@ -12,7 +12,7 @@ import {
 // Local imports - agent
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
-import { logWebSearch, logContextManagementEvent } from '@agent/trace';
+import { logContextManagementEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -98,10 +98,7 @@ import type {
   TokenCountOptions,
   TokenValidationResult,
 } from './types/ModelHandlerContracts';
-import type {
-  ServerToolExtractionResult,
-  WebSearchResult,
-} from './types/ServerToolTypes';
+import type { ServerToolExtractionResult } from './types/ServerToolTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -317,17 +314,6 @@ export abstract class ModelHandler<
       deferStart: !options?.atPhaseSignal,
       phaseOnly: !this.outputStreaming,
     });
-  }
-
-  /**
-   * Emit web search result to progress view during streaming.
-   * This allows search results to appear in correct order based on when
-   * they occurred in the response, rather than being logged after streaming.
-   */
-  protected emitWebSearchResult(result: WebSearchResult): void {
-    if (this.progressViewEnabled) {
-      logWebSearch(this.logger, result);
-    }
   }
 
   /**

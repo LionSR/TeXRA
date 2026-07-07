@@ -3,12 +3,12 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
-import { logWebFetch, logWebSearch, type AgentTrace } from '@agent/trace';
+import { logWebFetch, type AgentTrace } from '@agent/trace';
 import {
   mapAnthropicWebSearchEntries,
   type WebFetchResult,
-  type WebSearchResult,
 } from '@agent/modelHandlers/types/ServerToolTypes';
+import { emitServerToolResult } from '@agent/modelHandlers/support/emitServerToolResult';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { StreamDiagnostics } from '@shared/schemas';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
@@ -344,7 +344,7 @@ export class AnthropicStreamHandler {
 
     // Emit to progress view
     if (entries.length > 0 || query) {
-      this.emitWebSearchResult({
+      emitServerToolResult(this.logger, this.config.progressViewEnabled, {
         query,
         results: entries,
         provider: 'anthropic',
@@ -439,15 +439,6 @@ export class AnthropicStreamHandler {
   private finalizeOutputStream(): void {
     this.state.outputStream?.finalize();
     this.state.outputStream = null;
-  }
-
-  /**
-   * Emits a web search result to the progress view.
-   */
-  private emitWebSearchResult(result: WebSearchResult): void {
-    if (this.config.progressViewEnabled) {
-      logWebSearch(this.logger, result);
-    }
   }
 
   /**

@@ -49,6 +49,7 @@ import { getConfig } from '@utils/config/configUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
+import { emitServerToolResult } from '../support/emitServerToolResult';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import {
@@ -486,7 +487,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.createThinkingStream({ atPhaseSignal: true }),
       createOutputStream: () => this.createOutputStream(),
       extractText: (response) => this.extractResponse(response, '').text,
-      emitWebSearchResult: (result) => this.emitWebSearchResult(result),
+      emitWebSearchResult: (result) =>
+        emitServerToolResult(this.logger, this.progressViewEnabled, result),
       logger: this.logger,
     });
   }
