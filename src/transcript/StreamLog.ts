@@ -10,6 +10,11 @@ export type StreamLogUpdatePatch = Partial<
   Omit<StreamLogEntry, 'id' | 'seqNo'>
 >;
 
+export interface StreamLogPreservedRawEntry {
+  readonly beforeTypedIndex: number;
+  readonly raw: unknown;
+}
+
 export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START) return false;
   const data = isObject(entry.data) ? entry.data : {};
@@ -19,13 +24,19 @@ export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
 
 export class StreamLog {
   private entries: StreamLogEntry[] = [];
+  private readonly preservedRawEntries: StreamLogPreservedRawEntry[] = [];
   private seqCounter = 0;
   private readonly indexById = new Map<string, number>();
   private readonly dirtyUpdates = new Set<string>();
   private readonly dirtyTextDeltas = new Map<string, StreamLogTextDelta>();
   private runningGroupCount = 0;
 
-  constructor(entries: StreamLogEntry[] = []) {
+  constructor(
+    entries: readonly StreamLogEntry[] = [],
+    preservedRawEntries: readonly StreamLogPreservedRawEntry[] = [],
+  ) {
+    this.preservedRawEntries = [...preservedRawEntries];
+
     if (entries.length === 0) {
       return;
     }
@@ -305,7 +316,30 @@ export class StreamLog {
    * Internal persistence view. Callers must treat the returned array as
    * immutable; avoiding a defensive copy matters on the stream-log save path.
    */
-  toPersistedEntries(): readonly StreamLogEntry[] {
-    return this.entries;
+  toPersistedEntries(): readonly unknown[] {
+    if (this.preservedRawEntries.length === 0) return this.entries;
+
+    const preservedByIndex = new Map<number, unknown[]>();
+    for (const preserved of this.preservedRawEntries) {
+      const index = Math.min(
+        Math.max(0, preserved.beforeTypedIndex),
+        this.entries.length,
+      );
+      const bucket = preservedByIndex.get(index);
+      if (bucket) {
+        bucket.push(preserved.raw);
+      } else {
+        preservedByIndex.set(index, [preserved.raw]);
+      }
+    }
+
+    const persisted: unknown[] = [];
+    for (let index = 0; index <= this.entries.length; index += 1) {
+      const preserved = preservedByIndex.get(index);
+      if (preserved) persisted.push(...preserved);
+      const entry = this.entries[index];
+      if (entry) persisted.push(entry);
+    }
+    return persisted;
   }
 }
