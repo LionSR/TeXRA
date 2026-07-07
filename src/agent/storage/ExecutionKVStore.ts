@@ -94,8 +94,8 @@ const TodoEntrySchema = z.object({
 });
 export type TodoEntry = z.infer<typeof TodoEntrySchema>;
 
-const TodoArraySchema = z.array(TodoEntrySchema).catch([]);
-const WorkspaceFilePathArraySchema = z.array(z.string()).catch([]);
+const TodoArraySchema = z.array(TodoEntrySchema);
+const WorkspaceFilePathArraySchema = z.array(z.string());
 
 /** Stored data for a child execution record (without the derived `id` field). */
 const ChildRecordDataSchema = z.object({
@@ -237,35 +237,33 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   // -- Typed readers --------------------------------------------------------
 
   /**
-   * Read a key and validate it against a schema, returning the parsed value or
-   * `null` when the key is absent or fails validation. Single source of truth
-   * for the read-validate-or-null policy shared by the typed readers below.
+   * Read a key and validate it against a schema, returning the parsed value
+   * or `null` when the key is absent or fails validation. Single source of
+   * truth for the read-validate-or-null policy shared by the typed readers
+   * below. A missing file is the expected case and stays quiet; a present
+   * value that fails validation is a loud read (#6966 bullet 5) — corrupt is
+   * never silently conflated with missing (#7210 pattern).
    */
   private async readValidated<T>(
     key: string,
     schema: z.ZodType<T>,
-    options: { warnOnFailure?: boolean } = {},
   ): Promise<T | null> {
     const raw = await this.read(key);
     if (raw == null) return null;
     const result = schema.nullable().safeParse(raw);
     if (result.success) return result.data;
-    if (options.warnOnFailure) {
-      logger.warn(
-        CHANNEL,
-        `Failed to parse execution ${this.executionId} ${key}.json: ${toErrorMessage(
-          result.error,
-        )}`,
-        { data: result.error },
-      );
-    }
+    logger.warn(
+      CHANNEL,
+      `Failed to parse execution ${this.executionId} ${key}.json: ${toErrorMessage(
+        result.error,
+      )}`,
+      { data: result.error },
+    );
     return null;
   }
 
   async readMeta(): Promise<ExecutionMeta | null> {
-    return this.readValidated(KEYS.META, ExecutionMetaSchema, {
-      warnOnFailure: true,
-    });
+    return this.readValidated(KEYS.META, ExecutionMetaSchema);
   }
 
   async readConfig(): Promise<AgentConfig | null> {
@@ -277,7 +275,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async readTodos(): Promise<TodoEntry[]> {
-    return TodoArraySchema.parse(await this.read<unknown[]>(KEYS.TODOS));
+    return (await this.readValidated(KEYS.TODOS, TodoArraySchema)) ?? [];
   }
 
   async todosModifiedAt(): Promise<number | undefined> {
@@ -294,8 +292,12 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async readWorkspaceFiles(): Promise<string[]> {
-    const raw = await this.read(KEYS.WORKSPACE_FILES);
-    return normalizeWorkspaceFilePaths(WorkspaceFilePathArraySchema.parse(raw));
+    const paths =
+      (await this.readValidated(
+        KEYS.WORKSPACE_FILES,
+        WorkspaceFilePathArraySchema,
+      )) ?? [];
+    return normalizeWorkspaceFilePaths(paths);
   }
 
   /** Read children: per-child KV keys with schema validation. */
