@@ -332,6 +332,21 @@ export abstract class ModelHandler<
    * Indicates whether background mode is active for this handler.
    * Background mode runs requests asynchronously and polls for completion.
    * Override in handlers that support background execution.
+   *
+   * Not foldable into a single predicate (#7101 triage): the two overriding
+   * handlers compute this with materially different formulas, not just
+   * different booleans. `ModelHandlerGoogleInteractions` gates on server
+   * state plus a workflow-mode eligibility check and a config toggle
+   * (`useBackgroundMode(this.serverStateEnabled())`).
+   * `ModelHandlerOpenAIResponse` gates on `backgroundModeSupported`, its own
+   * toggle/eligibility checks, *and* a `ProviderCapabilityProfile` override
+   * (`getOpenAIResponseCapabilities()?.backgroundMode === 'disabled'`) that
+   * can force it off regardless of the other checks. `ModelHandlerOpenRouterNative`
+   * doesn't override this at all — it correctly inherits the base `false`,
+   * and since the base is a plain constant rather than a `config.provider`
+   * read, there's no OpenRouterNative-shares-config.provider risk here (see
+   * `requiresPerCallSystemPrompt`'s note on that failure mode). Stays an
+   * overridable method.
    */
   public isBackgroundModeActive(): boolean {
     return false;
