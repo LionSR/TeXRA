@@ -301,14 +301,48 @@ export class NativeSubagentStrategy {
   ): Promise<FollowUpWakeResult> {
     const streamId = this.childStreamId;
     if (!streamId) return { kind: 'queued_resume_failed' };
-    return wakeQueuedFollowUpStream(
-      streamId,
-      result,
-      {
-        tryResumeStream: (id) => this.resumeStream(id, options),
-      },
-      this.params.parentSession,
-    );
+    try {
+      return await wakeQueuedFollowUpStream(
+        streamId,
+        result,
+        {
+          tryResumeStream: (id) => this.resumeStream(id, options),
+        },
+        this.params.parentSession,
+      );
+    } catch (err) {
+      // DelegationTools dispatches this wake fire-and-forget (see #7289), so a
+      // rejection here has nowhere else to surface. It can happen before
+      // `resumeStream` ever reaches `resumeQueuedToolUseSnapshot` — e.g.
+      // `retrieveSessionResumeData` throwing on unreadable resume storage —
+      // i.e. before this turn's onError/onRunError callbacks are installed.
+      // Route it through the same terminal error-delivery path a resumed
+      // turn's own onError takes, instead of leaving the caller's
+      // `logger.warn` as the only observable outcome: the orchestrator was
+      // told the follow-up "will process it automatically" and needs a real
+      // delivery, not silence.
+      try {
+        // deliverSubagentError has no result to settle cost from here (the
+        // wake never reached a real turn), so roll in the most recent cost
+        // snapshot captured before suspending — same fallback abandon() uses
+        // for the same reason. settleSubagentCost is idempotent (first call
+        // wins), so deliverSubagentError's own no-result settle below is a
+        // no-op once this has already recorded the real spend.
+        if (this.lastKnownCostUsd !== undefined) {
+          this.params.settleSubagentCost({
+            category: 'toolUse',
+            outcome: RUN_OUTCOME.CANCELLED,
+            executionId: this.params.executionId,
+            streamId: this.childStreamId ?? this.params.orchestratorStreamId,
+            totalCostUsd: this.lastKnownCostUsd,
+          });
+        }
+        await this.deliverSubagentError(err);
+      } finally {
+        this.finish();
+      }
+      return { kind: 'queued_resume_failed' };
+    }
   }
 
   private async resumeStream(

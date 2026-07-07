@@ -327,6 +327,12 @@ Git worktree support: resolved from the active workspace at runtime.`,
           undefined,
           session,
         );
+    // For a native subagent, `wakeQueuedFollowUp` already routes any wake
+    // failure through the strategy's terminal error-delivery path (see
+    // `NativeSubagentStrategy.wakeQueuedFollowUp`), so the orchestrator gets
+    // an observable result even when the wake itself fails. This `.catch` is
+    // the last-resort backstop for the non-native path (no strategy to
+    // deliver through) and for a delivery-path failure in the native case.
     wake.catch((err: unknown) => {
       logger.warn(
         LOG_CHANNEL,
