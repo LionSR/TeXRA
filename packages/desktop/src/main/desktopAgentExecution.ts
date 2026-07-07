@@ -41,13 +41,13 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import {
   getFileListConfig,
   loadFileListSettings,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';

@@ -25,6 +25,7 @@ import type {
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   approvalPromptAllowed,
@@ -37,7 +38,6 @@ import {
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import {
   API_PROVIDERS,
   lookupApiKey,
