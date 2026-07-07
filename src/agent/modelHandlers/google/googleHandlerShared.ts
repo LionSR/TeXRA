@@ -153,6 +153,7 @@ interface UploadGoogleMediaEntriesOptions<T> {
   logger: AgentTrace;
   buildInline: (data: string, mimeType: string) => T;
   buildUploaded: (uri: string, mimeType: string) => T;
+  onInsertedEntry?: (entry: MediaEntry) => void;
 }
 
 /**
@@ -167,8 +168,14 @@ export async function uploadGoogleMediaEntries<T>(
     return [];
   }
 
-  const { getClient, inlineLimit, logger, buildInline, buildUploaded } =
-    options;
+  const {
+    getClient,
+    inlineLimit,
+    logger,
+    buildInline,
+    buildUploaded,
+    onInsertedEntry,
+  } = options;
   const client = await getClient();
   const parts: T[] = [];
   const summaries: MediaFileResult[] = [];
@@ -186,6 +193,7 @@ export async function uploadGoogleMediaEntries<T>(
           `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
         );
         parts.push(buildInline(inlinePayload, mimeType));
+        onInsertedEntry?.(entry);
         summaries.push({ path: fileName, ok: true });
         continue;
       }
@@ -229,6 +237,7 @@ export async function uploadGoogleMediaEntries<T>(
       const resolvedMimeType =
         uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
       parts.push(buildUploaded(fileUri, resolvedMimeType));
+      onInsertedEntry?.(entry);
       summaries.push({ path: fileName, ok: true });
     } catch (error) {
       summaries.push({ path: fileName, ok: false });

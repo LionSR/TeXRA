@@ -46,6 +46,10 @@ export function asText(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function objectStringField(value: unknown, key: string): string {
+  return isObject(value) ? asText(value[key]) : '';
+}
+
 /** `JSON.stringify` returns `undefined` for undefined/symbol/function values; fall back to `''` so truncation never sees a non-string. */
 export function stringifyConversationValue(value: unknown): string {
   try {
@@ -146,6 +150,26 @@ export function formatConversationBlock(
   // `text` field is the only signal, so check it before the `type` switch.
   if (typeof block.text === 'string') return block.text;
 
+  if (
+    isObject(block.inlineData) ||
+    isObject(block.fileData) ||
+    isObject(block.image_url) ||
+    isObject(block.source)
+  ) {
+    const mimeType =
+      asText(block.mimeType) ||
+      asText(block.media_type) ||
+      objectStringField(block.inlineData, 'mimeType') ||
+      objectStringField(block.inlineData, 'mime_type') ||
+      objectStringField(block.fileData, 'mimeType') ||
+      objectStringField(block.fileData, 'mime_type') ||
+      objectStringField(block.image_url, 'mime_type') ||
+      objectStringField(block.source, 'media_type');
+    return mimeType.startsWith('image/')
+      ? '[image attachment]'
+      : '[document attachment]';
+  }
+
   if (isObject(block.functionCall)) {
     return formatToolUseMarker(
       asText(block.functionCall.name) || 'unknown',
@@ -165,6 +189,14 @@ export function formatConversationBlock(
       // A recognized text block whose `text` failed the duck-type check
       // above (missing/non-string) — render empty, not its JSON form.
       return asText(block.text);
+    case 'image':
+    case 'image_url':
+    case 'input_image':
+      return '[image attachment]';
+    case 'document':
+    case 'file':
+    case 'input_file':
+      return '[document attachment]';
     case 'thinking':
     case 'redacted_thinking':
       return options.hideProviderReasoning

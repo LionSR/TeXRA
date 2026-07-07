@@ -32,7 +32,7 @@ import {
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -159,7 +159,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   protected async uploadMediaEntries(entries: MediaEntry[]): Promise<Part[]> {
-    return uploadGoogleMediaEntries<Part>(entries, {
+    const insertedEntries: MediaEntry[] = [];
+    const parts = await uploadGoogleMediaEntries<Part>(entries, {
       getClient: () => this.getClient(),
       inlineLimit: this.getInlineUploadLimitBytes(),
       logger: this.logger,
@@ -167,7 +168,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         createPartFromBase64(data, mimeType, this.getMediaResolution(mimeType)),
       buildUploaded: (uri, mimeType) =>
         createPartFromUri(uri, mimeType, this.getMediaResolution(mimeType)),
+      onInsertedEntry: (entry) => insertedEntries.push(entry),
     });
+    this.setCreatedMediaEntriesForAttachmentLog(insertedEntries);
+    return parts;
   }
 
   async getClient(): Promise<GoogleGenAI> {
@@ -183,7 +187,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       },
     });
   }
-
   /**
    * Gemini carries thought signatures across parallel function calls, which must
    * be preserved by batching the results into a single follow-up message.
@@ -1121,14 +1124,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async addMediaToUserMessage(
     messages: Content[],
     mediaFiles: FileLocation[],
-  ): Promise<void> {
-    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
+  ): Promise<MediaAttachmentKind[]> {
+    if (!mediaFiles.length || !this.capabilities.supportsVision) return [];
 
     const lastUserMsg = messages.findLast((m) => m.role === 'user' && m.parts);
-    if (!lastUserMsg?.parts) return;
+    if (!lastUserMsg?.parts) return [];
 
     const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
-    if (formattedMedia.length === 0) return;
+    if (formattedMedia.length === 0) return [];
     lastUserMsg.parts.unshift(...formattedMedia);
+    return this.consumeInsertedAttachmentKinds('insert');
   }
 }

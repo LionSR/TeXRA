@@ -103,6 +103,7 @@ async function writeSidecarFixture(
     streamId,
     logRow(MESSAGE_TYPES.USER_MESSAGE, {
       text: 'Fix the lemma.',
+      data: { attachments: ['image'] },
     }),
   );
   logs.append(
@@ -131,6 +132,7 @@ async function writeSidecarFixture(
         provider: 'anthropic',
         callId: 'wf-1',
         status: 'completed',
+        content: 'The Sobolev constant satisfies...',
       },
     }),
   );
@@ -213,7 +215,10 @@ describe('completedRunArchive facade', () => {
     expect(conversationResult.source).toBe('streamLog');
     expect(conversationResult.streamId).toBe(streamId);
     expect(conversationResult.conversation).toEqual([
-      { role: 'user', content: 'Fix the lemma.' },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'Fix the lemma.' }, { type: 'image' }],
+      },
       {
         role: 'assistant',
         content: [
@@ -247,6 +252,7 @@ describe('completedRunArchive facade', () => {
             type: 'web_fetch_tool_result',
             url: 'https://example.org/a',
             title: 'Sobolev notes',
+            page_content: 'The Sobolev constant satisfies...',
           },
         ],
       },

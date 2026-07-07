@@ -5,6 +5,8 @@
 // Third-party imports
 import { logWebFetch, type AgentTrace } from '@agent/trace';
 import {
+  capWebFetchContent,
+  extractWebFetchPageText,
   mapAnthropicWebSearchEntries,
   type WebFetchResult,
   type WebSearchResult,
@@ -378,6 +380,9 @@ export class AnthropicStreamHandler {
             provider: 'anthropic',
             callId: block.tool_use_id,
             status: 'completed',
+            content: capWebFetchContent(
+              extractWebFetchPageText(block.content.content),
+            ),
           }
         : {
             url: fetchUrl,

@@ -30,7 +30,7 @@ import type {
 import replacementEngine from '@replacement/engine';
 
 // Type imports
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -2719,14 +2719,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async addMediaToUserMessage(
     messages: ResponseInputItem[],
     mediaFiles: FileLocation[],
-  ): Promise<void> {
-    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
+  ): Promise<MediaAttachmentKind[]> {
+    if (!mediaFiles.length || !this.capabilities.supportsVision) return [];
 
     const lastUserMsg = this.findLastUserMessage(messages);
-    if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
+    if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return [];
 
     const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
-    if (formattedMedia.length === 0) return;
+    if (formattedMedia.length === 0) return [];
     lastUserMsg.content.unshift(...formattedMedia);
+    return this.consumeInsertedAttachmentKinds('insert');
   }
 }

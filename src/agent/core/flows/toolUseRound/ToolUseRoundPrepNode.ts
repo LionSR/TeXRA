@@ -76,17 +76,20 @@ export class ToolUseRoundPrepNode<C> extends BaseNode<
     // This ensures user's message typed during tool execution is seen
     // before the model starts thinking/responding
     if (prepRes.queuedFollowUps?.length) {
-      if (!prepRes.synthetic) {
-        for (const followUp of prepRes.queuedFollowUps) {
-          logUserMessage(this.services.logger, followUpDisplayText(followUp));
-        }
-      }
       for (const followUp of prepRes.queuedFollowUps) {
-        shared.messages = await appendFollowUpAsUserMessage(
+        const result = await appendFollowUpAsUserMessage(
           shared.messages,
           followUp,
           this.services,
         );
+        shared.messages = result.messages;
+        if (!prepRes.synthetic) {
+          logUserMessage(
+            this.services.logger,
+            followUpDisplayText(followUp),
+            result.attachmentKinds,
+          );
+        }
       }
       if (!prepRes.synthetic) {
         this.services.onFollowUpConsumed?.();
