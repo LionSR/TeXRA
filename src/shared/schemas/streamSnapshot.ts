@@ -25,11 +25,8 @@
 import { z } from 'zod';
 
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
-import {
-  OutputFileInfoSchema,
-  CompileFailureSchema,
-  roundIndexedRecord,
-} from './output';
+import { OutputFileInfoSchema, CompileFailureSchema } from './output';
+import { roundIndexedRecord } from './roundIndexed';
 import { StreamStatusSchema } from './stream';
 import {
   ActiveChildInfoSchema,
@@ -50,9 +47,13 @@ export const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 // Round / run keyed records (match the on-disk JSON: string keys → arrays)
 // ============================================================================
 
-const OutputFilesByRoundSchema = roundIndexedRecord(OutputFileInfoSchema);
-const MissingOutputsByRoundSchema = roundIndexedRecord(z.string());
-const CompileFailuresByRoundSchema = roundIndexedRecord(CompileFailureSchema);
+const OutputFilesByRoundSchema = roundIndexedRecord(
+  OutputFileInfoSchema,
+).prefault({});
+const MissingOutputsByRoundSchema = roundIndexedRecord(z.string()).prefault({});
+const CompileFailuresByRoundSchema = roundIndexedRecord(
+  CompileFailureSchema,
+).prefault({});
 const RunUsageSchema = RunUsageMapSchema.prefault({});
 
 // ============================================================================

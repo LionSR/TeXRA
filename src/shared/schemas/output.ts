@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { DiffStatsSchema } from './lineChanges';
 import { ExecutionIdSchema } from './identifiers';
+import { RoundNumberSchema } from './roundIndexed';
 
 export const WorkspaceFileLocationSchema = z.strictObject({
   kind: z.literal('workspace'),
@@ -66,7 +67,7 @@ export function getEffectiveDiffBase(
 }
 
 export const OutputFileInfoSchema = OutputFileSchema.extend({
-  round: z.number().prefault(() => 0),
+  round: RoundNumberSchema.prefault(() => 0),
   lineage: FileLineageSchema.nullable(),
   diff: DiffStatsSchema.nullable(),
 });
@@ -116,11 +117,11 @@ export type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
 export const CompileResultSchema = z.discriminatedUnion('status', [
   z.strictObject({
     status: z.literal('ok'),
-    round: z.number(),
+    round: RoundNumberSchema,
   }),
   z.strictObject({
     status: z.literal('failed'),
-    round: z.number(),
+    round: RoundNumberSchema,
     failures: z.array(CompileFailureSchema),
     logExcerpt: z.string(),
   }),
@@ -142,24 +143,8 @@ export const OutputXmlSummarySchema = z.strictObject({
 });
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 
-/**
- * Schema factory for round-indexed records: `{ "1": T[], "2": T[], … }`.
- * Used by both the live stream state and the persisted snapshot so the
- * shape is defined once and shared.
- */
-export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z.record(z.string(), z.array(valueSchema)).prefault({});
-}
-
-/**
- * Map keyed by round number to arrays of `T`, e.g. `{ 1: T[], 2: T[], … }`.
- * Used to batch round-scoped data (output files, missing-output paths,
- * compile failures) for a subset of rounds without touching the others.
- */
-export type RoundIndexed<T> = { [round: number]: T[] };
-
 export const RoundOutputSchema = z.strictObject({
-  round: z.number(),
+  round: RoundNumberSchema,
   rawOutput: FileLocationSchema.nullable(),
   outputs: OutputFileInfoSchema.array(),
   compileFailures: CompileFailureSchema.array().prefault(() => []),
