@@ -4,7 +4,6 @@ import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
   ProgressEvent,
-  ProgressEventBusLike,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
@@ -381,27 +380,6 @@ export class ProgressEventHandler {
         context: 'failed to resolve user question',
         handle: (payload) =>
           this.uiCallbacks.resolveUserQuestion(payload.requestId),
-      },
-    };
-  }
-
-  setupEventListeners(bus: ProgressEventBusLike): ProgressEventSubscription {
-    const controller = new AbortController();
-    const { signal } = controller;
-    const localSubscription = this.createLocalSubscription();
-
-    for (const event of Object.keys(
-      this.eventRegistrations,
-    ) as ProgressEvent[]) {
-      bus.on(event, (payload) => this.handleProgressEvent(event, payload), {
-        signal,
-      });
-    }
-
-    return {
-      dispose: () => {
-        controller.abort();
-        localSubscription.dispose();
       },
     };
   }
