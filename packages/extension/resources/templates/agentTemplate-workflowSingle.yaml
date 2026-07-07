@@ -8,8 +8,6 @@ settings:
   agentCategory: workflow
   temperature: 0.1
   isRewrite: true
-  documentTag: documents
-  endTag: </documents>
 
 # --- Agent Prompts ---
 prompts:
@@ -20,7 +18,7 @@ prompts:
     AI agents using YAML files. TeXRA loads selected documents and exposes them
     as variables, so prompts can reference data like {{ INPUT_CONTENT }} or
     {{ ALL_INPUTS }}. Each agent runs one or more rounds and produces its
-    final output wrapped in the configured documentTag.
+    final output wrapped in the standard <documents> container.
 
     Variable Retrieval (VR) exposes runtime data as variables in these prompts:
       - {{ INPUT_FILE }} / {{ INPUT_CONTENT }}: main file path and text

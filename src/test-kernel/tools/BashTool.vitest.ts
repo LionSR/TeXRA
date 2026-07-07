@@ -158,9 +158,7 @@ function roundServices(opts: {
     config: testModelConfig as any,
     setting: {
       agentCategory: AgentCategory.ToolUse,
-      documentTag: 'doc',
       temperature: 0,
-      endTag: '</doc>',
       requiredFiles: {},
       requiredFilesInternal: {},
       defaultOutputFiles: [],

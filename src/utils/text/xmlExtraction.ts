@@ -55,10 +55,10 @@ function getObjectStructure(obj: unknown): string {
  */
 export function extractTextFromTag(
   inputContent: string,
-  documentTag: string,
+  tagName: string,
 ): string {
   // Find all matches and get the last one using matchAll
-  const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 'gs');
+  const regex = new RegExp(`<${tagName}>(.*?)<\/${tagName}>`, 'gs');
   const matches = [...inputContent.matchAll(regex)];
   const lastContent = matches.at(-1)?.[1] ?? '';
 
@@ -137,7 +137,7 @@ export function extractMultipleTextFromTag(
  */
 export function extractContentFromXMLbyTagMultiple(
   root: Record<string, unknown>,
-  documentTag: string,
+  containerTag: string,
 ): Array<{ content: string; name: string }> | null {
   if (!isObject(root)) {
     logger.error(
@@ -147,8 +147,8 @@ export function extractContentFromXMLbyTagMultiple(
     return null;
   }
 
-  if (documentTag in root) {
-    const container = root[documentTag];
+  if (containerTag in root) {
+    const container = root[containerTag];
     if (isObject(container) && 'document' in container) {
       const documents = container.document;
       if (Array.isArray(documents)) {
@@ -169,7 +169,7 @@ export function extractContentFromXMLbyTagMultiple(
 
   logger.error(
     CHANNEL,
-    `No ${documentTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
+    `No ${containerTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
   );
   return null;
 }
@@ -207,15 +207,15 @@ export interface MultipleExtractionResult {
  * Tries in order: simple tag -> markdown block -> latex document
  *
  * @param outputContent The raw output content to extract from
- * @param documentTag The XML tag to look for
+ * @param tagName The XML tag to look for
  * @returns Extraction result with content and method used
  */
 function extractDocument(
   outputContent: string,
-  documentTag: string,
+  tagName: string,
 ): ExtractionResult {
   // Try simple tag extraction
-  const fallbackContent = extractTextFromTag(outputContent, documentTag);
+  const fallbackContent = extractTextFromTag(outputContent, tagName);
   if (fallbackContent) {
     return { content: fallbackContent, method: 'simple' };
   }
@@ -247,17 +247,17 @@ function extractDocument(
  * unambiguous destination.
  *
  * @param outputContent The raw output content to extract from
- * @param documentTag The container tag to look for documents within
+ * @param containerTag The container tag to look for documents within
  * @param preferredName Recovery hint — when set, treat single-doc legacy
  *   shapes as a one-document result named after the hint
  * @returns Extraction result with documents array and method used
  */
 export function extractDocuments(
   outputContent: string,
-  documentTag: string,
+  containerTag: string,
   preferredName?: string,
 ): MultipleExtractionResult {
-  const documents = extractMultipleTextFromTag(outputContent, documentTag);
+  const documents = extractMultipleTextFromTag(outputContent, containerTag);
   if (documents && documents.length > 0) {
     return { documents, method: 'simple' };
   }

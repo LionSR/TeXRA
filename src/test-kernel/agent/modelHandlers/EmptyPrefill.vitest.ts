@@ -70,8 +70,6 @@ function buildConfig(
 function createAgentSetting() {
   return AgentSettingSchema.parse({
     agentCategory: AgentCategory.Workflow,
-    documentTag: 'documents',
-    endTag: '</documents>',
   });
 }
 
