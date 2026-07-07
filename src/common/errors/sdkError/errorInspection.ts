@@ -171,11 +171,9 @@ export function detectRequestId(err: unknown): string | undefined {
   }
 
   // Try headers (Anthropic SDK uses 'request-id'; relay may use 'x-request-id')
-  // ?? undefined converts null from headers.get() to undefined
   return (
     getHeaderValue(candidate.headers, 'request-id') ??
-    getHeaderValue(candidate.headers, 'x-request-id') ??
-    undefined
+    getHeaderValue(candidate.headers, 'x-request-id')
   );
 }
 

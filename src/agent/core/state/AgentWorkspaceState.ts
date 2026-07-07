@@ -196,16 +196,12 @@ export class MediaAttachmentState {
     return { files: [...this.files] };
   }
 
-  private addFile(location: FileLocation): void {
-    if (!this.pathSet.has(location.absolutePath)) {
-      this.pathSet.add(location.absolutePath);
-      this.files.push(location);
-    }
-  }
-
   addMediaFiles(locations: FileLocation[]): void {
     for (const location of locations) {
-      this.addFile(location);
+      if (!this.pathSet.has(location.absolutePath)) {
+        this.pathSet.add(location.absolutePath);
+        this.files.push(location);
+      }
     }
   }
 

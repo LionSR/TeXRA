@@ -426,12 +426,10 @@ const BARE_COMMAND_RES = (['critique', 'comment'] as const).map(
 );
 
 export function wrapCritiqueInAlign(text: string): string {
-  // Helper to wrap both \critique and \comment
-  function wrapCommands(block: string): string {
+  return text.replaceAll(ALIGN_BLOCK_RE, (block) => {
     for (const [regex, replacement] of BARE_COMMAND_RES) {
       block = block.replace(regex, replacement);
     }
     return block;
-  }
-  return text.replaceAll(ALIGN_BLOCK_RE, wrapCommands);
+  });
 }
