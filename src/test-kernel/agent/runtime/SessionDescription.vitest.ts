@@ -6,12 +6,12 @@ import {
   generateSessionDescription,
   getSessionDescriptionInstruction,
 } from '@agent/runtime/sessionDescription';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   createHelperModelKit: vi.fn(),
-  emit: vi.fn(),
   getAgent: vi.fn(),
   writeSessionDescription: vi.fn(),
 }));
@@ -63,19 +63,31 @@ describe('session description helpers', () => {
   });
 
   it('does not generate helper-model descriptions for workflow runs', async () => {
+    const session = new SessionHandle();
+    const events: SessionEvent[] = [];
+    const detach = session.events.subscribe((event) => events.push(event), {
+      scope: 'session',
+    });
+
     await generateSessionDescription(
       'exec-workflow' as ExecutionId,
       'stream-workflow' as StreamTabId,
       configFor(AgentCategory.Workflow),
-      { emit: mocks.emit } as unknown as AgentRuntimeHost,
+      session,
     );
+    detach();
 
     expect(mocks.createHelperModelKit).not.toHaveBeenCalled();
     expect(mocks.writeSessionDescription).not.toHaveBeenCalled();
-    expect(mocks.emit).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
   });
 
   it('keeps generating compact descriptions for tool-use runs', async () => {
+    const session = new SessionHandle();
+    const events: SessionEvent[] = [];
+    const detach = session.events.subscribe((event) => events.push(event), {
+      scope: 'session',
+    });
     const handler = {
       createResponse: vi.fn().mockResolvedValue({ response: {} }),
       extractResponse: vi.fn().mockReturnValue({ text: 'Fixing proof typos' }),
@@ -90,16 +102,25 @@ describe('session description helpers', () => {
       'exec-tool' as ExecutionId,
       'stream-tool' as StreamTabId,
       configFor(AgentCategory.ToolUse),
-      { emit: mocks.emit } as unknown as AgentRuntimeHost,
+      session,
     );
+    detach();
 
     expect(mocks.writeSessionDescription).toHaveBeenCalledWith(
       'exec-tool',
       'Fixing proof typos',
     );
-    expect(mocks.emit).toHaveBeenCalledWith('updateStreamDescription', {
-      streamId: 'stream-tool',
-      description: 'Fixing proof typos',
-    });
+    expect(events).toEqual([
+      {
+        scope: 'session',
+        event: {
+          type: 'updateStreamDescription',
+          payload: {
+            streamId: 'stream-tool',
+            description: 'Fixing proof typos',
+          },
+        },
+      },
+    ]);
   });
 });
