@@ -7,6 +7,7 @@ import type {
 } from '@agent/runtime/hostProgressEvents';
 import {
   ExtendedTokenUsageStatsSchema,
+  ConversationProgressSchema,
   type StorageKey,
   type StreamTabId,
   type UpdateStreamUsagePayload,
@@ -147,6 +148,18 @@ export function projectRunFactToProgressEvent(
   }
 
   if (event.type === 'domain') {
+    if (event.key === 'conversationProgress') {
+      const progress = ConversationProgressSchema.safeParse(event.data);
+      if (!progress.success) return undefined;
+      return {
+        event: 'updateConversationProgress',
+        payload: {
+          streamId,
+          progress: progress.data,
+        },
+      };
+    }
+
     const factName = fromRunFactDomainKey(event.key);
     if (!factName || !isObject(event.data)) return undefined;
     return {

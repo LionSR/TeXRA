@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { logConversationProgress, TraceEmitter } from '@agent/trace';
-import { attachConversationProgressHub } from '@agent/runtime/conversationProgressHub';
+import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -14,7 +14,7 @@ function setupHub(streamId: StreamTabId) {
   const detachTrace = trace.subscribe((event) =>
     hub.emit({ scope: 'run', streamId, event }),
   );
-  const detach = attachConversationProgressHub(hub, host, streamId);
+  const detach = attachSessionProgressEventProjection(hub, host);
   return {
     trace,
     events,
@@ -25,7 +25,7 @@ function setupHub(streamId: StreamTabId) {
   };
 }
 
-describe('attachConversationProgressHub (F-1b)', () => {
+describe('conversationProgress session projection', () => {
   it('derives updateConversationProgress from a conversationProgress domain event', () => {
     const streamId = 'stream:hub-test' as StreamTabId;
     const { trace, events, detachAll } = setupHub(streamId);
