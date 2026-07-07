@@ -64,7 +64,7 @@ import {
 } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import {
-  attachTuiWorkPlanRunFactSubscription,
+  attachTuiRunFactSubscription,
   wrapRuntimeHost,
 } from './tui/state/subscribeRuntimeHost';
 import { notify } from './tui/notifications/terminalNotifier';
@@ -241,7 +241,7 @@ export function createChatSessionController(
       defaultSession(),
       interactiveHost,
     );
-    const detachTuiWorkPlanRunFacts = attachTuiWorkPlanRunFactSubscription(
+    const detachTuiRunFacts = attachTuiRunFactSubscription(
       defaultSession().events,
     );
     const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
@@ -253,7 +253,7 @@ export function createChatSessionController(
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
         detachResultToast();
-        detachTuiWorkPlanRunFacts();
+        detachTuiRunFacts();
         detachLegacyProgressProjection();
         detachHostInteractions();
         if (session.runtimeHost === interactiveHost) {

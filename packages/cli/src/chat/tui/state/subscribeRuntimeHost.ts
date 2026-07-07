@@ -11,6 +11,7 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import {
+  ExtendedTokenUsageStatsSchema,
   UpdatePlanPayloadSchema,
   UpdateTodosPayloadSchema,
 } from '@shared/schemas';
@@ -19,6 +20,7 @@ import {
   reduceStreamMeta,
   type StreamMetaCommand,
 } from '@shared/streams/streamMetaReducer';
+import { isObject } from '@utils/core';
 
 import { activeStreamId } from './cliState/focusSlice';
 import {
@@ -38,6 +40,110 @@ type Emit = <K extends ProgressEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
 ) => void;
+
+type UpdateStreamUsagePayload = ProgressEventPayloads['updateStreamUsage'];
+
+function usageEchoKey(payload: UpdateStreamUsagePayload): string {
+  const parsedUsage = ExtendedTokenUsageStatsSchema.safeParse(payload.usage);
+  const usage = parsedUsage.success ? parsedUsage.data : payload.usage;
+  const extendedUsage = parsedUsage.success ? parsedUsage.data : undefined;
+  return JSON.stringify({
+    streamId: payload.streamId,
+    storageKey: payload.storageKey,
+    executionId: payload.executionId ?? null,
+    usage: {
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cost: usage.cost,
+      cacheReadInputTokens: usage.cacheReadInputTokens ?? null,
+      cacheMissInputTokens: usage.cacheMissInputTokens ?? null,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens ?? null,
+      elapsedTime: extendedUsage?.elapsedTime ?? null,
+      percentageCached: extendedUsage?.percentageCached ?? null,
+      reasoningTokens: extendedUsage?.reasoningTokens ?? null,
+      toolUseTokens: extendedUsage?.toolUseTokens ?? null,
+      usageRoute: usage.usageRoute ?? null,
+    },
+  });
+}
+
+function consumeUsageEchoCount(
+  counts: Map<string, number>,
+  key: string,
+): boolean {
+  const count = counts.get(key);
+  if (!count) return false;
+  if (count === 1) {
+    counts.delete(key);
+  } else {
+    counts.set(key, count - 1);
+  }
+  return true;
+}
+
+class UsageEchoGuard {
+  private readonly directAppliedCounts = new Map<string, number>();
+  private readonly legacyAppliedCounts = new Map<string, number>();
+
+  applyDirect(payload: UpdateStreamUsagePayload): void {
+    const key = usageEchoKey(payload);
+    if (consumeUsageEchoCount(this.legacyAppliedCounts, key)) return;
+    applyUsageUpdate(payload);
+    this.rememberForThisTurn(this.directAppliedCounts, key);
+  }
+
+  applyLegacy(payload: UpdateStreamUsagePayload): void {
+    const key = usageEchoKey(payload);
+    if (consumeUsageEchoCount(this.directAppliedCounts, key)) return;
+    applyUsageUpdate(payload);
+    this.rememberForThisTurn(this.legacyAppliedCounts, key);
+  }
+
+  clear(): void {
+    this.directAppliedCounts.clear();
+    this.legacyAppliedCounts.clear();
+  }
+
+  private rememberForThisTurn(counts: Map<string, number>, key: string): void {
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    queueMicrotask(() => {
+      consumeUsageEchoCount(counts, key);
+    });
+  }
+}
+
+let activeUsageEchoGuard: UsageEchoGuard | undefined;
+
+function toUpdateStreamUsagePayload(
+  data: unknown,
+  fallbackStreamId: string,
+): UpdateStreamUsagePayload | undefined {
+  if (!isObject(data)) return undefined;
+  const storageKey = typeof data.storageKey === 'string' ? data.storageKey : '';
+  if (!storageKey) return undefined;
+  const usage = ExtendedTokenUsageStatsSchema.safeParse(data.usage);
+  if (!usage.success) return undefined;
+  const streamId =
+    typeof data.streamId === 'string' ? data.streamId : fallbackStreamId;
+  const executionId =
+    typeof data.executionId === 'string' ? data.executionId : undefined;
+  return {
+    streamId: streamId as UpdateStreamUsagePayload['streamId'],
+    storageKey: storageKey as UpdateStreamUsagePayload['storageKey'],
+    ...(executionId ? { executionId } : {}),
+    usage: usage.data,
+  };
+}
+
+function applyUsageUpdate(payload: UpdateStreamUsagePayload): void {
+  patchStream(payload.streamId, (s) => ({
+    ...s,
+    usage: payload.usage,
+    cumulativeUsage: sumResumeUsageStats(
+      s.cumulativeUsage ? [s.cumulativeUsage, payload.usage] : [payload.usage],
+    ),
+  }));
+}
 
 function sameQueuedFollowUps(
   left: readonly string[],
@@ -114,13 +220,26 @@ export function wrapRuntimeHost(
   return { ...host, emit };
 }
 
-export function attachTuiWorkPlanRunFactSubscription(
+export function attachTuiRunFactSubscription(
   events: SessionEventHub,
 ): () => void {
-  return events.subscribe(
+  const usageEchoGuard = new UsageEchoGuard();
+  activeUsageEchoGuard = usageEchoGuard;
+  const detach = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
       const { event } = sessionEvent;
+      if (event.type === 'usage') {
+        const payload = toUpdateStreamUsagePayload(
+          event.data,
+          sessionEvent.streamId,
+        );
+        if (payload) {
+          usageEchoGuard.applyDirect(payload);
+        }
+        return;
+      }
+
       if (event.type !== 'domain') return;
       const factName = fromRunFactDomainKey(event.key);
 
@@ -149,8 +268,15 @@ export function attachTuiWorkPlanRunFactSubscription(
           return;
       }
     },
-    { scope: 'run', types: ['domain'] },
+    { scope: 'run', types: ['domain', 'usage'] },
   );
+  return () => {
+    detach();
+    usageEchoGuard.clear();
+    if (activeUsageEchoGuard === usageEchoGuard) {
+      activeUsageEchoGuard = undefined;
+    }
+  };
 }
 
 function applyToState<K extends ProgressEvent>(
@@ -206,13 +332,11 @@ function applyToState<K extends ProgressEvent>(
       return;
     case 'updateStreamUsage': {
       const p = payload as ProgressEventPayloads['updateStreamUsage'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        usage: p.usage,
-        cumulativeUsage: sumResumeUsageStats(
-          s.cumulativeUsage ? [s.cumulativeUsage, p.usage] : [p.usage],
-        ),
-      }));
+      if (activeUsageEchoGuard) {
+        activeUsageEchoGuard.applyLegacy(p);
+      } else {
+        applyUsageUpdate(p);
+      }
       return;
     }
     case 'updateConversationProgress': {
