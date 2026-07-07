@@ -5,10 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  ProgressEventBusLike,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type {
   DiffOptions,
   DiffSession,
@@ -44,7 +41,12 @@ interface DesktopPlatformModule {
   createDesktopToolEditApprovalPort(): import('@platform/interfaces/toolEditApproval').ToolEditApprovalPort;
 }
 
-function createBusRuntimeHost(bus: ProgressEventBusLike): AgentRuntimeHost {
+type TestProgressEventBus = Pick<
+  typeof import('@eventBus/ProgressEventBus').ProgressEventBus,
+  'emit' | 'on'
+>;
+
+function createBusRuntimeHost(bus: TestProgressEventBus): AgentRuntimeHost {
   return {
     emit: (event, payload) => bus.emit(event, payload),
   };
@@ -66,7 +68,7 @@ async function waitForEmptyDir(dir: string): Promise<void> {
   }
 }
 
-function trackShownApprovals(bus: ProgressEventBusLike): {
+function trackShownApprovals(bus: TestProgressEventBus): {
   shown: ProgressEventPayloads['showToolEditPermission'][];
   offShow: () => void;
 } {
