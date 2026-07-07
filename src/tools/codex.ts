@@ -62,9 +62,11 @@ import {
   formatChildRunError,
 } from './deliveryEnvelope';
 import {
-  runAgentCliSession,
-  type AgentCliSessionStrategy,
-} from './agentCliSessionLoop';
+  startChildRunLoop,
+  type ChildRunPorts,
+  type ChildRunStrategy,
+} from '@agent/runtime/childRunLoop';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
@@ -387,17 +389,36 @@ function startCodexLoop(params: {
     }
   };
 
-  const strategy: AgentCliSessionStrategy<RunResult> = {
+  // The joined prompt text for whichever turn is currently in flight —
+  // captured here (rather than threaded through the loop contract) since
+  // `formatDelivery`/`formatError` run strictly after the turn that set it.
+  let lastPrompt = initialPrompt;
+  const runTurn = (
+    followUps: readonly FollowUpQueueBatchItem[],
+    _ports: ChildRunPorts,
+    abortController: AbortController,
+  ): Promise<RunResult> => {
+    lastPrompt = followUps.map((f) => f.text).join('\n\n');
+    return runStreamedTurn(
+      thread,
+      lastPrompt,
+      childStreamId,
+      logger,
+      abortController.signal,
+    );
+  };
+
+  const strategy: ChildRunStrategy<RunResult> = {
     stageLabel: 'Codex session',
     onSessionStart: registerThread,
-    runTurn: (prompt, abortController) =>
-      runStreamedTurn(
-        thread,
-        prompt,
-        childStreamId,
-        logger,
-        abortController.signal,
+    launch: (ports, abortController) =>
+      runTurn(
+        [{ text: initialPrompt, origin: 'user' }],
+        ports,
+        abortController,
       ),
+    runTurn,
+    isTerminal: () => false,
     getUsage: (turn) => turn.usage,
     onTurnSuccess: (_turn, session) => registerThread(session),
     publishUsage: (turn) => {
@@ -410,11 +431,11 @@ function startCodexLoop(params: {
         );
       }
     },
-    formatDelivery: (turn, prompt, wallTimeMs) =>
-      formatCodexDelivery(executionId, prompt, wallTimeMs, turn, thread.id),
-    formatError: (_turn, prompt, err) =>
+    formatDelivery: (turn, wallTimeMs) =>
+      formatCodexDelivery(executionId, lastPrompt, wallTimeMs, turn, thread.id),
+    formatError: (_turn, err) =>
       formatChildRunError(
-        { tag: 'codex-error', executionId, prompt },
+        { tag: 'codex-error', executionId, prompt: lastPrompt },
         { message: toErrorMessage(err) },
       ),
     onSessionCleanup: () => {
@@ -423,11 +444,12 @@ function startCodexLoop(params: {
     },
   };
 
-  runAgentCliSession({
+  startChildRunLoop({
     childStream,
+    childStreamId,
     parentStreamId,
     executionId,
-    initialPrompt,
+    agentName: 'codex',
     strategy,
   });
 }

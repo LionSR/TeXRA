@@ -580,9 +580,9 @@ export function buildSubagentResultMeta(
 
 /**
  * Build the failure manifest written when a subagent errors. Overwrites any
- * interim success manifest persisted at onBeforeWaiting — without this, a
- * later failure would leave /executions/{id}/result claiming success while
- * the prose report describes the error, breaking the chaining contract.
+ * interim success manifest persisted by an earlier turn's delivery — without
+ * this, a later failure would leave /executions/{id}/result claiming success
+ * while the prose report describes the error, breaking the chaining contract.
  */
 export function buildSubagentFailureResultMeta(
   agentName: string,
