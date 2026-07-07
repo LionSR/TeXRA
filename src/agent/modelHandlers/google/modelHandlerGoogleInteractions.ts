@@ -557,10 +557,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     });
   }
 
-  override get supportsTokenCounting(): boolean {
-    return this.capabilities.supportsTokenCounting;
-  }
-
   /**
    * The handler implements client-side compaction (see `compactConversation`),
    * so manual (user-requested) compaction is supported. Always true: the
