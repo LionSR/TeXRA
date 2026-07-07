@@ -41,28 +41,42 @@ function findSuffixMatch(
   return streams.find((id) => id.endsWith(suffix));
 }
 
+interface MetaMatchDataPresence {
+  readonly hasLog: boolean;
+  readonly hasWorkPlan: boolean;
+}
+
 /**
  * Whether a meta-matched candidate actually holds durable data for this
- * execution, as opposed to a bare `meta.json` record. Checked cheaply: an
- * already-loaded `StreamLogStore.has()` lookup is O(1) in-memory, and
- * `hasPersistedWorkPlan()` is a single stat, so this never re-reads the full
- * per-stream sidecar set.
+ * execution, as opposed to a bare `meta.json` record, broken out by kind so
+ * callers can rank a log-backed candidate ahead of a workPlan-only one.
+ * Checked cheaply: an already-loaded `StreamLogStore.has()` lookup is O(1)
+ * in-memory, and `hasPersistedWorkPlan()` is a single stat, so this never
+ * re-reads the full per-stream sidecar set.
  */
-async function hasRealPersistedData(
+async function readMetaMatchDataPresence(
   snapshotStore: StreamSnapshotStore,
   streamId: StreamTabId,
   streamLogStore: Pick<StreamLogStore, 'keys' | 'has'> | undefined,
-): Promise<boolean> {
-  if (streamLogStore?.has(streamId)) return true;
-  return snapshotStore.hasPersistedWorkPlan(streamId);
+): Promise<MetaMatchDataPresence> {
+  const hasLog = streamLogStore?.has(streamId) ?? false;
+  return {
+    hasLog,
+    // hasWorkPlan is irrelevant once hasLog is true (log rank always wins in
+    // pickBestMetaMatch) — skip the disk stat in that case, since this runs
+    // on the hot path #7299 already had to bound for fd pressure.
+    hasWorkPlan: hasLog || (await snapshotStore.hasPersistedWorkPlan(streamId)),
+  };
 }
 
 /**
  * Disambiguate multiple persisted streams whose sidecar `meta.json` all
  * reference the same `executionId` (e.g. a parent orchestrator tab and a
- * `bash@tool#executionId` child stream). Prefers the first candidate that
- * actually has `streamLogs`/`workPlan.json` data; a bare metadata match is a
- * last resort so the resolver still returns *something* rather than nothing.
+ * `bash@tool#executionId` child stream). Ranks candidates by data kind: a
+ * real `streamLogs` entry always outranks a `workPlan.json`-only match,
+ * which in turn outranks a bare metadata match (scan order only breaks ties
+ * within the same rank), so a log-backed candidate is never shadowed by an
+ * earlier-ordered workPlan-only one.
  */
 async function pickBestMetaMatch(
   candidates: readonly MetaMatchCandidate[],
@@ -75,16 +89,17 @@ async function pickBestMetaMatch(
     candidates,
     async (candidate) => ({
       candidate,
-      hasData: await hasRealPersistedData(
+      ...(await readMetaMatchDataPresence(
         snapshotStore,
         candidate.streamId,
         streamLogStore,
-      ),
+      )),
     }),
     { concurrency: META_SCAN_CONCURRENCY },
   );
   return (
-    withData.find((entry) => entry.hasData)?.candidate.streamId ??
+    withData.find((entry) => entry.hasLog)?.candidate.streamId ??
+    withData.find((entry) => entry.hasWorkPlan)?.candidate.streamId ??
     candidates[0].streamId
   );
 }
