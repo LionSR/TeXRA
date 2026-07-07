@@ -1,6 +1,10 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+// Local imports - agent
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+
 // Local imports - runtime
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
@@ -11,6 +15,7 @@ import type {
   StorageKey,
   StreamTabId,
 } from '@shared/schemas';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 import { createRecordingHost } from '../agent/progressTestUtils';
 
@@ -111,6 +116,47 @@ describe('attachCliSessionProgressProjection', () => {
         {
           event: 'updateProcessOutput',
           payload: { parentStreamId, executionId, stdout: 'hello', stderr: '' },
+        },
+      ]);
+    } finally {
+      detach();
+    }
+  });
+
+  it('projects run config updates onto retained CLI task-state events', () => {
+    const hub = new SessionEventHub();
+    const host = createRecordingHost();
+    const streamId = 'stream:config' as StreamTabId;
+    const executionId = 'exec:config' as ExecutionId;
+    const config = AgentConfigSchema.parse({
+      agentCategory: AgentCategory.ToolUse,
+      agent: 'assistant',
+      model: 'sonnet46T',
+      instruction: 'Check the proof.',
+      toolConfig: DEFAULT_TOOL_CONFIG,
+    });
+
+    const detach = attachCliSessionProgressProjection(hub, host.host);
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'run.config',
+          streamId,
+          executionId,
+          config,
+        },
+      });
+
+      expect(host.events).toEqual([
+        {
+          event: 'setTaskState',
+          payload: {
+            streamId,
+            executionId,
+            taskState: { agentConfig: config },
+          },
         },
       ]);
     } finally {
