@@ -117,18 +117,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     );
   }
 
-  /**
-   * DeepSeek (proxied via OpenRouter) honors a reasoning-level override whenever
-   * it supports reasoning, even without a granular configurable-effort capability.
-   */
-  override get supportsReasoningLevelOverride(): boolean {
-    return (
-      this.capabilities.supportsReasoningEffort ||
-      (this.config.provider === ModelProvider.DEEPSEEK &&
-        this.capabilities.supportsReasoning)
-    );
-  }
-
   protected get usageProvider(): NormalizedUsage['provider'] {
     return 'openrouter';
   }

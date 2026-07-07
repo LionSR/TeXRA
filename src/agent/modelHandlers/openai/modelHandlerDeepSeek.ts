@@ -46,17 +46,6 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
   }
 
   /**
-   * DeepSeek accepts a reasoning-level override whenever it supports reasoning,
-   * even though it doesn't expose a granular configurable-effort capability.
-   */
-  override get supportsReasoningLevelOverride(): boolean {
-    return (
-      this.capabilities.supportsReasoningEffort ||
-      this.capabilities.supportsReasoning
-    );
-  }
-
-  /**
    * DeepSeek expects string content format instead of array format.
    */
   protected override formatAssistantContent(text: string): string {

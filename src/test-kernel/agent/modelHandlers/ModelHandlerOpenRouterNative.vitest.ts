@@ -110,6 +110,48 @@ describe('ModelHandlerOpenRouterNative system prompt placement', () => {
   );
 });
 
+describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
+  it.each([
+    {
+      name: 'DeepSeek (via OpenRouter) with reasoning but no granular effort control',
+      provider: ModelProvider.DEEPSEEK,
+      supportsReasoning: true,
+      supportsReasoningEffort: false,
+      expected: true,
+    },
+    {
+      name: 'non-DeepSeek provider without granular effort control',
+      provider: ModelProvider.ANTHROPIC,
+      supportsReasoning: true,
+      supportsReasoningEffort: false,
+      expected: false,
+    },
+    {
+      name: 'any provider with granular effort control',
+      provider: ModelProvider.OPENAI,
+      supportsReasoning: false,
+      supportsReasoningEffort: true,
+      expected: true,
+    },
+  ])(
+    '$name',
+    ({ provider, supportsReasoning, supportsReasoningEffort, expected }) => {
+      const handler = new ModelHandlerOpenRouterNative(
+        buildConfig({
+          provider,
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            supportsReasoning,
+            supportsReasoningEffort,
+          },
+        }),
+      );
+
+      assert.equal(handler.supportsReasoningLevelOverride, expected);
+    },
+  );
+});
+
 describe('ModelHandlerOpenRouterNative retry ownership', () => {
   it('matches the OpenRouter SDK retry boundary', () => {
     const handler = new ModelHandlerOpenRouterNative(buildConfig());

@@ -589,11 +589,29 @@ export abstract class ModelHandler<
 
   /**
    * Whether a user-set reasoning-level override applies to this handler.
-   * Defaults to the model's configurable-effort capability; handlers that honor
-   * a reasoning level without a granular effort flag override this getter.
+   * True for the model's configurable-effort capability, or for DeepSeek
+   * models (native or proxied via OpenRouter) that support reasoning without
+   * a granular effort flag.
+   *
+   * Runtime combinator (#7101 triage): `ModelHandlerDeepSeek` is only ever
+   * constructed for `ModelProvider.DEEPSEEK` (see `ModelFactory.ts`'s
+   * `PROVIDER_HANDLER_ROUTES`), so `config.provider === ModelProvider.DEEPSEEK`
+   * there is always true and this reduces to its former override exactly.
+   * For every other handler besides `ModelHandlerOpenRouterNative` — which
+   * gets its own paragraph below — `config.provider` is never
+   * `ModelProvider.DEEPSEEK`, so this reduces to the former plain
+   * `supportsReasoningEffort` default. And this is verified identical to
+   * `ModelHandlerOpenRouterNative`'s pre-existing override (which already
+   * gated on `config.provider === ModelProvider.DEEPSEEK` since
+   * OpenRouterNative shares `config.provider` with the underlying model —
+   * see that predicate's own #7101 note on `requiresPerCallSystemPrompt`).
    */
   get supportsReasoningLevelOverride(): boolean {
-    return this.capabilities.supportsReasoningEffort;
+    return (
+      this.capabilities.supportsReasoningEffort ||
+      (this.config.provider === ModelProvider.DEEPSEEK &&
+        this.capabilities.supportsReasoning)
+    );
   }
 
   /**
