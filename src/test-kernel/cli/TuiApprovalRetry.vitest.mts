@@ -29,7 +29,7 @@ vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
 }));
 
 vi.mock('@agent/runtime/runCoordinators', () => ({
-  runCoordinatorBridge: {
+  SharedRunCoordinatorBridge: {
     triggerRetry: mocks.triggerRetry,
     cancelRetry: mocks.cancelRetry,
   },

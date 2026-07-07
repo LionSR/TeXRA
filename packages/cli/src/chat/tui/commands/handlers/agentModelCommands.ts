@@ -1,6 +1,6 @@
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { assertCliAgentLaunch } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -105,7 +105,7 @@ export async function applyCliModelSelection(
   }
 
   const activeFlow = context.session.streamId
-    ? executionRegistry.getToolUseFlowContext(context.session.streamId)
+    ? SharedExecutionRegistry.getToolUseFlowContext(context.session.streamId)
     : undefined;
   if (!activeFlow) {
     appendLocalAssistantTranscript(

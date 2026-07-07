@@ -23,7 +23,7 @@ import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
@@ -444,7 +444,7 @@ export async function runChat(
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
-      executionRegistry.getToolUseFlowContext(session.streamId),
+      SharedExecutionRegistry.getToolUseFlowContext(session.streamId),
     );
   const canSelectCurrentModel = (): boolean =>
     chatTuiCanSelectModel({
@@ -460,7 +460,7 @@ export async function runChat(
       return undefined;
     }
     const activeFlow = session.streamId
-      ? executionRegistry.getToolUseFlowContext(session.streamId)
+      ? SharedExecutionRegistry.getToolUseFlowContext(session.streamId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };
@@ -733,7 +733,7 @@ export async function runChat(
       onSuspend={() => handleSigtstp()}
       onKillExecution={(executionId) => {
         clearApprovals();
-        executionRegistry.kill(executionId, {
+        SharedExecutionRegistry.kill(executionId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
       }}

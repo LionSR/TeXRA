@@ -46,7 +46,7 @@ import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { appSignals } from '@eventBus/AppSignals';
-import { bus } from '@eventBus/ProgressEventBus';
+import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
@@ -291,7 +291,7 @@ export async function activate(context: vscode.ExtensionContext) {
     SharedIssuePollingSource.disposeAll(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    bus.emit('extensionDeactivating', undefined),
+    ProgressEventBus.emit('extensionDeactivating', undefined),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
@@ -730,7 +730,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  const disposeStreamStatusListener = bus.on(
+  const disposeStreamStatusListener = ProgressEventBus.on(
     'updateStreamStatus',
     ({
       streamId,
@@ -744,7 +744,7 @@ export async function activate(context: vscode.ExtensionContext) {
       updateStatusBarText();
     },
   );
-  const disposeUsageListener = bus.on(
+  const disposeUsageListener = ProgressEventBus.on(
     'updateStreamUsage',
     ({ streamId, usage }: { streamId: string; usage: TokenUsageStats }) => {
       // UsageMonitor emits per-round deltas; the tracker accumulates them.
