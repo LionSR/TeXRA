@@ -72,7 +72,12 @@ export function resolveArxivPaperDirectoryRelative(
 }
 
 class ArxivSourceProcessor {
-  constructor(private readonly channel: string = 'ArxivProcessor') {
+  // NOTE: The default channel string stays 'arxivProcessor' (lowercase) even
+  // though the exported singleton was renamed to PascalCase in #7347. It is used
+  // directly as the logger channel and prefixes every log line as
+  // `[arxivProcessor] ...`, so keep it stable for anything filtering on the
+  // channel name — a class-identifier rename must not change this value.
+  constructor(private readonly channel: string = 'arxivProcessor') {
     logger.initialize(this.channel);
   }
 
