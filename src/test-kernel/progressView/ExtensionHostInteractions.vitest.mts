@@ -54,6 +54,15 @@ function createRuntimeHost() {
   return { emit: vi.fn() };
 }
 
+/** Reads the `requestId` passed to a handler's first `.show()` call. */
+function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
+  const requestId = (
+    show.mock.calls[0]?.[0] as { requestId?: string } | undefined
+  )?.requestId;
+  if (!requestId) throw new Error('Expected a captured requestId.');
+  return requestId;
+}
+
 function createInteractions(options?: {
   runtimeHost?: ReturnType<typeof createRuntimeHost>;
   handlers?: ApprovalRequestHandlerSet;
@@ -136,6 +145,53 @@ describe('createExtensionHostInteractions', () => {
     expect(handlers.retry.resolve).toHaveBeenCalledWith('stream-a');
   });
 
+  it('forwards a cancellation cause as bash reject feedback', async () => {
+    const handlers = createHandlers();
+    const interactions = createInteractions({ handlers });
+
+    const resultPromise = interactions.requestBashApproval?.({
+      command: 'rm -rf build',
+      streamId: 'stream-a' as StreamTabId,
+    });
+
+    interactions.cancelForStream(
+      'stream-a' as StreamTabId,
+      'Stream resources released.',
+    );
+
+    await expect(resultPromise).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Stream resources released.',
+    });
+    expect(handlers.bash.resolve).toHaveBeenCalled();
+  });
+
+  it('rejects a resolution whose kind does not match the pending request', async () => {
+    const handlers = createHandlers();
+    const interactions = createInteractions({ handlers });
+
+    const resultPromise = interactions.requestBashApproval?.({
+      command: 'echo hi',
+      streamId: 'stream-a' as StreamTabId,
+    });
+    const requestId = firstShowRequestId(
+      handlers.bash.show as ReturnType<typeof vi.fn>,
+    );
+
+    // A mismatched kind for the same requestId must not settle the pending
+    // bash approval as a plan action would (defends against a caller bug
+    // resolving the wrong pending kind under a reused/misrouted requestId).
+    expect(
+      interactions.resolve(requestId, { kind: 'plan', action: 'approve' }),
+    ).toBe(false);
+
+    // The correctly-kinded resolution still settles it.
+    expect(
+      interactions.resolve(requestId, { kind: 'bash', action: 'approve' }),
+    ).toBe(true);
+    await expect(resultPromise).resolves.toEqual({ accepted: true });
+  });
+
   it('shows external inquiries without waiting for a user decision', async () => {
     const runtimeHost = createRuntimeHost();
     const handlers = createHandlers();
@@ -185,7 +241,12 @@ describe('createExtensionHostInteractions', () => {
 
     interactions.cancelUnscoped?.('No stream owns this question.');
 
-    await expect(resultPromise).resolves.toEqual({ submitted: false });
+    // Cancellation forwards `cause` as agent-visible feedback, matching how
+    // a live UI rejection settles (see the desktop host, which does the same).
+    await expect(resultPromise).resolves.toEqual({
+      submitted: false,
+      feedback: 'No stream owns this question.',
+    });
     expect(handlers.userQuestion.resolve).toHaveBeenCalledWith('question-a');
     // The cancelled question was released: a later resolution finds nothing.
     expect(
