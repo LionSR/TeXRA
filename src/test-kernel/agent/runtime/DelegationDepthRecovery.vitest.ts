@@ -54,16 +54,40 @@ describe('computeDelegationDepthFromStorage', () => {
     expect(await computeDelegationDepthFromStorage(child)).toBe(2);
   });
 
-  it('reports the confirmed lower-bound depth instead of 0 on a cyclic chain', async () => {
+  it('reports the last confirmed depth (not the pre-incremented counter) on a cyclic chain', async () => {
     const a = 'aaa030' as ExecutionId;
     const b = 'aaa031' as ExecutionId;
     const child = 'aaa032' as ExecutionId;
-    // a -> b -> a (cycle), reached via child -> a.
+    // a -> b -> a (cycle), reached via child -> a. `a` is confirmed at depth
+    // 1, `b` at depth 2; re-encountering `a` must report 2 (the last node
+    // actually confirmed), not 3 (the counter pre-incremented for the
+    // re-encountered node as if it were new).
     await writeParentLink(a, b);
     await writeParentLink(b, a);
     await writeParentLink(child, a);
 
-    expect(await computeDelegationDepthFromStorage(child)).toBeGreaterThan(0);
+    expect(await computeDelegationDepthFromStorage(child)).toBe(2);
+  });
+
+  it('reports the last confirmed depth (not the pre-incremented counter) when the walk exceeds its bound', async () => {
+    // A long chain of 40 distinct, never-repeating executions — long enough
+    // to exceed MAX_WALK (32) without ever tripping the cycle guard. The
+    // walk must report the last node it actually confirmed before giving up,
+    // not the counter value pre-incremented for the unconfirmed next hop.
+    const chainLength = 40;
+    const ids = Array.from(
+      { length: chainLength },
+      (_, i) => `bbb${String(i).padStart(3, '0')}` as ExecutionId,
+    );
+    for (let i = 0; i < ids.length - 1; i++) {
+      await writeParentLink(ids[i], ids[i + 1]);
+    }
+    await writeParentLink(ids.at(-1));
+
+    const child = 'bbb999' as ExecutionId;
+    await writeParentLink(child, ids[0]);
+
+    expect(await computeDelegationDepthFromStorage(child)).toBe(31);
   });
 
   it('prefers the persisted delegationDepth field over walking the chain', async () => {

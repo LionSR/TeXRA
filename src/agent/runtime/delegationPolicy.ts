@@ -46,12 +46,19 @@ async function readMetaSafely(
  *
  * Best-effort: an unreadable root falls back to depth 0 (no evidence either
  * way). Once the root's own `parentExecutionId` proves the execution is
- * nested, a broken link further up the chain (cycle, unreadable ancestor, or
+ * nested, a broken link further up the chain (unreadable ancestor, cycle, or
  * an excessively long walk) returns the deepest depth confirmed so far
  * instead of 0 — the caller already knows this isn't a root, so reporting a
  * lower-bound depth is strictly more honest than silently promoting it to
  * one. Resume itself still succeeds on the surviving message snapshot
  * regardless.
+ *
+ * Note the loop's `depth` counter is pre-incremented for the *next* node
+ * before that node has been confirmed to exist, so the cycle and
+ * excessively-long-walk branches subtract one to report the last node that
+ * was actually confirmed (read successfully); the unreadable-ancestor branch
+ * doesn't need to, since a real parent meta already asserted that link
+ * before the read of its target failed.
  */
 export async function computeDelegationDepthFromStorage(
   executionId: ExecutionId,
@@ -69,16 +76,16 @@ export async function computeDelegationDepthFromStorage(
   const MAX_WALK = 32;
   while (depth < MAX_WALK) {
     if (!current) return depth; // clean terminus
-    if (visited.has(current)) return depth; // cycle — report the confirmed depth
+    if (visited.has(current)) return depth - 1; // cycle — last confirmed depth
     visited.add(current);
     const meta = await readMetaSafely(current);
-    if (meta === null) return depth; // unreadable ancestor — report the confirmed depth
+    if (meta === null) return depth; // unreadable ancestor — its parent link is confirmed
     if (meta.delegationDepth !== undefined) return meta.delegationDepth + depth;
     const parent: ExecutionId | undefined = meta.parentExecutionId;
     if (!parent) return depth; // clean terminus
     depth++;
     current = parent;
   }
-  // MAX_WALK exceeded: report the deepest depth confirmed before giving up.
-  return depth;
+  // MAX_WALK exceeded: return the last node actually confirmed to exist.
+  return depth - 1;
 }
