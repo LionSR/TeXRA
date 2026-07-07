@@ -1,12 +1,15 @@
-// Third-party imports
+// Suites for src/shared/progressView/backend stream info helpers
+// (streamOrdering + streamTabInfo).
+
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
-
-// Standard library imports
-
-// Local imports
-import type { StreamTabInfo } from '@shared/schemas';
+import { describe, expect, it } from 'vitest';
+import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/progressView/backend/streamOrdering';
+import { buildStreamTabInfo } from '@shared/progressView/backend/streamTabInfo';
+
+// ---------------------------------------------------------------------------
+// streamInfoUtils
+// ---------------------------------------------------------------------------
 
 function streamInfo(name: string, creationTimestamp: number): StreamTabInfo {
   return {
@@ -35,5 +38,25 @@ describe('compareByNewestCreationTime', () => {
       streams.sort(compareByNewestCreationTime).map((stream) => stream.name),
       expected,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// StreamTabInfo
+// ---------------------------------------------------------------------------
+
+describe('buildStreamTabInfo', () => {
+  it('classifies stream-id-derived bash child streams as process agents', () => {
+    const info = buildStreamTabInfo({
+      streamId: 'bash@tool#exec:child-stream',
+      hints: {
+        agentCategory: AgentCategory.ToolUse,
+      },
+      creationTimestamp: 1,
+    });
+
+    expect(info.label).toBe('bash');
+    expect(info.agent).toBe('bash');
+    expect(info.kind).toBe('process');
   });
 });
