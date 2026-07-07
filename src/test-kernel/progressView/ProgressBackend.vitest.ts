@@ -12,9 +12,7 @@ import { getExecutionStore } from '@agent/storage';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { TaskState } from '@agent/core/state/TaskState';
 import {
-  bus,
   type ProgressEvent,
-  type ProgressEventBusLike,
   type ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 
@@ -57,45 +55,6 @@ class MemoryMementoStorage implements MementoStorage {
       return;
     }
     this.values.set(key, value);
-  }
-}
-
-class MemoryProgressBus implements ProgressEventBusLike {
-  private readonly listeners = new Map<
-    ProgressEvent,
-    Set<(payload: ProgressEventPayloads[ProgressEvent]) => void>
-  >();
-
-  on<K extends ProgressEvent>(
-    event: K,
-    listener: (payload: ProgressEventPayloads[K]) => void,
-    options?: { signal?: AbortSignal },
-  ): () => void {
-    if (options?.signal?.aborted) return () => {};
-    let listeners = this.listeners.get(event);
-    if (!listeners) {
-      listeners = new Set();
-      this.listeners.set(event, listeners);
-    }
-    listeners.add(
-      listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
-    );
-    const cleanup = (): void => {
-      listeners?.delete(
-        listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
-      );
-    };
-    options?.signal?.addEventListener('abort', cleanup, { once: true });
-    return cleanup;
-  }
-
-  emit<K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): void {
-    for (const listener of this.listeners.get(event) ?? []) {
-      listener(payload);
-    }
   }
 }
 
@@ -310,14 +269,14 @@ describe('ProgressBackend', () => {
 
   it('patches one stream for subagent registration and run-start metadata', async () => {
     const { backend, messages } = createRecordingBackend();
-    const subscription = backend.setupEventListeners(bus);
+    const subscription = backend.setupEventListeners();
 
     try {
       for (let i = 0; i < 20; i += 1) {
         backend.state.streamLogs.ensureStream(`history-${i}`);
       }
 
-      bus.emit('setActiveStream', {
+      backend.handleProgressEvent('setActiveStream', {
         streamId: 'root',
         agentCategory: AgentCategory.Workflow,
       });
@@ -331,7 +290,7 @@ describe('ProgressBackend', () => {
       );
       messages.length = 0;
 
-      bus.emit('setActiveStream', {
+      backend.handleProgressEvent('setActiveStream', {
         streamId: 'child',
         agentCategory: AgentCategory.ToolUse,
         suppressViewSwitch: true,
@@ -354,7 +313,7 @@ describe('ProgressBackend', () => {
       ).toBe(false);
       messages.length = 0;
 
-      bus.emit('setTaskState', {
+      backend.handleProgressEvent('setTaskState', {
         streamId: 'child',
         executionId: 'c41111',
         taskState: toolUseTaskState('search', 'deepseekproT'),
@@ -415,11 +374,10 @@ describe('ProgressBackend', () => {
   });
 
   it('scopes direct session events to each backend session', async () => {
-    const sharedBus = new MemoryProgressBus();
     const first = createIsolatedRecordingBackend();
     const second = createIsolatedRecordingBackend();
-    const firstSubscription = first.backend.setupEventListeners(sharedBus);
-    const secondSubscription = second.backend.setupEventListeners(sharedBus);
+    const firstSubscription = first.backend.setupEventListeners();
+    const secondSubscription = second.backend.setupEventListeners();
     const firstStream = 'session:first' as StreamTabId;
     const secondStream = 'session:second' as StreamTabId;
 
@@ -488,7 +446,7 @@ describe('ProgressBackend', () => {
         observed.push({ event, payload });
       },
     });
-    const subscription = backend.setupEventListeners(new MemoryProgressBus());
+    const subscription = backend.setupEventListeners();
     const streamId = 'session:observer' as StreamTabId;
 
     try {
@@ -513,12 +471,8 @@ describe('ProgressBackend', () => {
   it('handles direct session events with the backend effects of the legacy projection', async () => {
     const direct = createIsolatedRecordingBackend();
     const legacyEquivalent = createIsolatedRecordingBackend();
-    const directSubscription = direct.backend.setupEventListeners(
-      new MemoryProgressBus(),
-    );
-    const legacySubscription = legacyEquivalent.backend.setupEventListeners(
-      new MemoryProgressBus(),
-    );
+    const directSubscription = direct.backend.setupEventListeners();
+    const legacySubscription = legacyEquivalent.backend.setupEventListeners();
     const parentStreamId = 'session:parent' as StreamTabId;
     const childStreamId = 'session:child' as StreamTabId;
     const executionId = 'exec:direct-session' as ExecutionId;
@@ -820,7 +774,7 @@ describe('ProgressBackend', () => {
   it('drops buffered conversation progress when an existing stream re-enters running', async () => {
     vi.useFakeTimers();
     const { backend, messages } = createRecordingBackend();
-    const subscription = backend.setupEventListeners(bus);
+    const subscription = backend.setupEventListeners();
     const stream = 'tool-stream' as StreamTabId;
 
     try {
@@ -837,7 +791,7 @@ describe('ProgressBackend', () => {
       });
       backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
 
-      bus.emit('updateConversationProgress', {
+      backend.handleProgressEvent('updateConversationProgress', {
         streamId: stream,
         progress: { toolCallCount: 7 },
       });
