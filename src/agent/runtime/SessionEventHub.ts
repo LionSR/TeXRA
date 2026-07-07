@@ -5,12 +5,6 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
-import {
-  emitProjectedProgressEvent,
-  projectSessionFactToProgressEvent,
-} from './sessionProgressEventProjection';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
-
 const logger = createChannelTrace('SessionEventHub');
 
 export type SessionFact =
@@ -38,18 +32,6 @@ export type SessionFact =
 export type SessionEvent =
   | { scope: 'run'; streamId: StreamTabId; event: AgentEvent }
   | { scope: 'session'; event: SessionFact };
-
-/**
- * Re-emit a {@link SessionFact} on the legacy per-host progress-event
- * surface. This keeps host-channel callers on the same neutral projection as
- * any host-owned hub subscription.
- */
-export function emitLegacySessionFactOnHost(
-  host: AgentRuntimeHost,
-  fact: SessionFact,
-): void {
-  emitProjectedProgressEvent(host, projectSessionFactToProgressEvent(fact));
-}
 
 export interface SessionEventSubscriptionFilter {
   readonly scope?: SessionEvent['scope'];
