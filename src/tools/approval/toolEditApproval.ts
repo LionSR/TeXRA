@@ -6,6 +6,7 @@ import type { StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
+import { recordToolFileRead } from '@tools/fileInteractions';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
@@ -282,7 +283,7 @@ export function getApprovedContent(
   return approval.appliedContent ?? fallback;
 }
 
-export function formatUnifiedApprovalUserDiff(
+function formatUnifiedApprovalUserDiff(
   path: string,
   suggestedContent: string,
   appliedContent: string,
@@ -338,6 +339,47 @@ export async function writeApprovedContent(
 
   await WorkspaceFS.write(path, finalContent);
   return { appliedContent: finalContent, baseContent: currentContent };
+}
+
+/**
+ * `writeApprovedContent` plus the `recordToolFileRead` that must always
+ * follow it — every edit tool marks the file "read" immediately after a
+ * successful approved write so a later edit in the same run doesn't hit the
+ * read-before-edit gate. Centralized because every call site paired these two
+ * calls by hand and it's an easy one to forget.
+ */
+export async function writeAndRecordApprovedEdit(
+  path: string,
+  originalContent: string,
+  finalContent: string,
+): Promise<WriteApprovedContentResult> {
+  const result = await writeApprovedContent(
+    path,
+    originalContent,
+    finalContent,
+  );
+  recordToolFileRead(path);
+  return result;
+}
+
+/**
+ * Append the unified user-adjustment diff note to a base output message, or
+ * return the base message unchanged when the user made no adjustments.
+ * `separator` defaults to a blank line between the base message and the note.
+ */
+export function appendApprovalDiffNote(
+  baseOutput: string,
+  path: string,
+  proposedContent: string,
+  appliedContent: string,
+  separator: string = '\n\n',
+): string {
+  const diffNote = formatUnifiedApprovalUserDiff(
+    path,
+    proposedContent,
+    appliedContent,
+  );
+  return diffNote ? `${baseOutput}${separator}${diffNote}` : baseOutput;
 }
 
 export function buildApprovalRejectedResult(
