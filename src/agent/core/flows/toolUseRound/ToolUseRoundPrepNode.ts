@@ -11,6 +11,7 @@ import {
   followUpDisplayText,
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
+import { mediaAttachmentKinds } from '@agent/runtime/mediaVisionWarning';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';
@@ -78,7 +79,11 @@ export class ToolUseRoundPrepNode<C> extends BaseNode<
     if (prepRes.queuedFollowUps?.length) {
       if (!prepRes.synthetic) {
         for (const followUp of prepRes.queuedFollowUps) {
-          logUserMessage(this.services.logger, followUpDisplayText(followUp));
+          logUserMessage(
+            this.services.logger,
+            followUpDisplayText(followUp),
+            mediaAttachmentKinds(followUp.mediaFiles),
+          );
         }
       }
       for (const followUp of prepRes.queuedFollowUps) {

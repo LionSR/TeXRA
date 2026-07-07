@@ -63,6 +63,7 @@ import {
 import {
   countMediaFilesNeedingVision,
   formatMediaNeedsVisionWarning,
+  mediaAttachmentKinds,
   shouldWarnMediaNeedsVision,
 } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
@@ -246,8 +247,11 @@ async function beginRunStage(
   agentLogger: AgentTrace,
   label: string,
   instruction: string | undefined,
+  mediaFiles: readonly string[] | undefined,
 ): Promise<StageHandle> {
-  if (instruction) logUserMessage(agentLogger, instruction);
+  if (instruction) {
+    logUserMessage(agentLogger, instruction, mediaAttachmentKinds(mediaFiles));
+  }
   return agentLogger.openStage(label, { kind: 'run' });
 }
 
@@ -381,6 +385,7 @@ async function assembleAgentLaunchContext(
     agentLogger,
     `Run: ${config.agent}`,
     initialInstruction,
+    config.mediaFiles,
   );
   const storageKey: StorageKey = parentStage.id
     ? normalizeRunId(parentStage.id)
