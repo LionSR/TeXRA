@@ -1,4 +1,5 @@
 import { Node } from '@agent/node';
+import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -104,6 +105,13 @@ export class ToolUsePrepareNode<C> extends Node<
       mediaFiles,
       systemMessage,
     );
+    if (this.services.initialUserMessageForTranscript) {
+      logUserMessage(
+        logger,
+        this.services.initialUserMessageForTranscript,
+        this.services.modelHandler.consumeInsertedAttachmentKinds('initial'),
+      );
+    }
 
     return {
       kind: 'success',

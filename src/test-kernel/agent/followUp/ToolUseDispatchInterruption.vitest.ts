@@ -86,7 +86,7 @@ describe('ToolUseDispatchNode interruption', () => {
       },
       logger: createRunTrace('ToolUseDispatchInterruption').trace,
       modelHandler: {
-        addMediaToUserMessage: vi.fn(async () => {}),
+        addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
@@ -256,7 +256,7 @@ describe('ToolUseDispatchNode interruption', () => {
       },
       logger: createRunTrace('ToolUseDispatchInterruption').trace,
       modelHandler: {
-        addMediaToUserMessage: vi.fn(async () => {}),
+        addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
