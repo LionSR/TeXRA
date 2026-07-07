@@ -3215,3 +3215,157 @@ unchanged. The tool-definition primitive
 absent from `@texra/core` is re-recorded as a product-scope/documentation decision, not an abstraction to
 remove. Guardrails intact (7 barrels, vscode-clean agnostic zones, 16 surface exports); no dead shim/barrel
 remains, so **no refactor was applied** this pass — only the §26 ledger reconciliation and the P26-1 record.
+
+---
+
+## 27. Re-verification addendum — 2026-07-07 (twenty-second pass — confirmation on a fresh branch lineage; one dead-method deletion applied; the `@texra/core` removal + `SessionRunFactProjector` deletion reconciled)
+
+A twenty-second pass, run on branch `claude/eager-noether-vo30tx` at HEAD **`a6f31fb`** (2026-07-07). Fresh
+feature-branch lineage past §26's `claude/eager-noether-5uum43` / `1ab46ab` (2026-07-04); the shallow working
+clone (95 commits) does not reach `1ab46ab`, so — as in §26 — branch identity, not a local `git merge-base`,
+is the reliable signal. A four-agent fresh-eyes fan-out (independent, source-only, **not** given this
+document) re-covered the four task areas: an `agent/core` + `agent/runtime` + `implementations/flows`
+abstraction audit, a `modelHandlers/` port + base + OpenAI-compatible-subclass audit, a `logger/` + surface
+(`platform`/`runtime` entrypoints) audit, and a subagent-boundary map. **All four re-reached the standing
+verdict independently** — core "already heavily and correctly refactored … no high-value abstraction to
+remove," model-handler "the layer has already been aggressively de-abstracted … no port bloat, no redundant
+per-provider helpers," surface "genuinely SDK-shaped … most `Platform` ports are genuinely multi-impl,"
+subagent "the tool-use YAML agents are the natural near-zero-cost SDK subagent boundary." The thesis holds
+for the twenty-second time: **incremental, not structural.**
+
+### Applied this pass (behavior-preserving; `npm run typecheck` ×5 projects + `eslint` + 386 model-handler vitests green) — net −16 LOC
+
+- **Dead `ModelHandler.emitWebFetchResult` deleted** (`ModelHandler.ts`, was `:338-347`) + its two
+  now-orphaned imports (`logWebFetch` from `@agent/trace`, `WebFetchResult` from `./types/ServerToolTypes`).
+  Verified **0 callers** first-hand: repo-wide the only `this.emitWebFetchResult` site
+  (`support/AnthropicStreamHandler.ts:391`) resolves to that collaborator's **own** `private`
+  `emitWebFetchResult` (`:456`) — `AnthropicStreamHandler` is a collaborator, **not** a `ModelHandler`
+  subclass — and no subclass, closure-dep, or `ResponseStreamProcessor` wiring reaches the base method. Pure
+  deletion, no behavior change, no new indirection — the §2.1/§16/§20-class line-removal this audit applies.
+  The sibling `emitWebSearchResult` is **kept**: it has one real caller (the OpenAI-Responses closure at
+  `modelHandlerOpenAIResponse.ts:484`).
+
+### Material drift since §26 (`1ab46ab` → `a6f31fb`) — all moving _with_ the audit
+
+1. **`@texra/core` package removed (#7099).** `packages/core` is **absent** at this HEAD (`packages/` =
+   cli, desktop, extension, trace-viewer); no `@texra/core` importer remains anywhere. The doc's 2026-07-05
+   packaging note anticipated this; it is now ground truth on this lineage. **The "16 surface exports"
+   guardrail (§25/§26) retires** — the host-facing surface is now the repo-root path aliases, not a curated
+   package. The §26 "tool-definition primitive absent from `@texra/core`" observation is re-framed
+   accordingly: there is no core package to curate, so the SDK-surface question becomes whether
+   `defineTool`/registry get a curated alias vs. staying `@tools/*` internals — a product-scope/documentation
+   decision, unchanged in substance.
+2. **`SessionRunFactProjector.ts` deleted (`a6f31fb`).** P26-1 is **half-closed**: the `SessionFact = never`
+   placeholder (§26) is **resolved** — `SessionEventHub.ts:16` now declares a real 5-arm `SessionFact` union
+   (`goalStateChanged`, `inquiryThreadUpdated`, `clearMissingOutputs`, `updateQueuedFollowUps`,
+   `setActiveStream`), so the `{ scope: 'session' }` event arm finally carries a payload. The **`runFact.*`
+   stringly round-trip persists**, relocated from the deleted 77-LOC projector into
+   `sessionProgressEventProjection.ts:90` (`emitRunFact` → `trace.domain({ key: 'runFact.<name>' })`, decoded
+   by `fromRunFactDomainKey` prefix-parse). P26-1's round-trip half stays open; its dead-placeholder half
+   closes.
+3. **Provider-identity getters deleted (#7346, `a1e3237`).** The base `ModelHandler`'s six
+   `isAnthropic/isOpenai/isGoogle/isDeepSeek/isKimi/isMiniMax` getters (each 1–2 callers, all with
+   `config.provider` already in scope) are gone — the team executing the audit's own
+   single-caller-base-method de-abstraction. Movement **with** the audit.
+4. **New `src/agent/workflowScript/` module + eighth barrel.** Guardrail barrel count moves **7 → 8**:
+   `workflowScript/index.ts` joins `features/goal/index/node/storage/trace/types`. It is a **legitimate
+   module barrel** (a 7-file engine: `parseScript`, `runWorkflowScript`, `sandbox`, `journal`, `types`),
+   **not** a shim — it re-exports live functions/types and is imported via the `@agent/workflowScript` alias
+   (today by its vitest; internal files use relative imports). Recorded as a real new module, not a
+   violation.
+5. Other SSOT/DRY commits over the audited dirs — `a244b5b` (route progress backend through session events),
+   `3795e96` (collapse duplicated `SessionFact` switch + inline trivial stream wrapper), `fe11aaa` (extract
+   app signals from progress bus), `7bcf380` (share one usage-payload parser) — all consolidation, none adds
+   a layer.
+
+### Guardrails at `a6f31fb`
+
+- `find src/agent -name index.ts` → **eight** barrels (§26's seven + the new `workflowScript`);
+  `src/agent/runtime/index.ts` still **absent** (§3.1).
+- `grep` for `vscode` imports over
+  `src/agent`/`src/model`/`src/latex`/`src/tools`/`src/controllers`/`src/shared`/`src/eventBus`/`src/hosts`
+  → **clean**.
+- `packages/core` → **absent** (guardrail retired — drift item 1).
+
+### Genuinely-new candidates recorded (verified first-hand; none applied — all behavior/type-touching)
+
+- **P27-1 — web-search emit cluster: single base method + duplicated guard** _(LOW, behavior-touching)_. With
+  the dead fetch method gone (applied above), `emitWebSearchResult` (`ModelHandler.ts:332`) is now a
+  1-caller base method whose `if (progressViewEnabled) logWebSearch(...)` guard is privately re-implemented in
+  `AnthropicStreamHandler.ts:447` — that collaborator can't reach the `protected` base method. Candidate: one
+  shared `support/` free function `emitServerToolResult(logger, enabled, result)`, route both through it, drop
+  the base method. ≈ −10 LOC; deferred (touches the Anthropic stream path).
+- **P27-2 — `createContinuationPrompt` single-caller hook** (`ModelHandler.ts:793`) _(LOW)_. 0 provider
+  overrides, 1 internal caller (`addContinueMessage:943`). Inlineable (≈ −6) but a plausible future override
+  seam — §2.5-class "leave or inline," recorded not applied.
+- **P27-3 — `createChannelTrace` is a heavyweight duplicate of the functional `logUtils` logger**
+  _(MEDIUM, behavior-touching)_. 25 non-test log-only singletons each allocate a full `TraceEmitter`
+  (`Set`-of-subscribers + ALS stage scope) only to call `.debug/.info/.warn/.error`; the functional
+  `@logger/logUtils` path (144 importers) reaches the same `writeLine`. Candidate: make `createChannelTrace`
+  a closure over the functional fns, dropping 25 `TraceEmitter` allocations and the "which logger?" fork.
+  Behavior-touching (the trace path suppresses `INTERNAL` console lines — unused by these plain-log sites).
+  Same theme as the still-open **P25-4** single-symbol `@logger/index.ts` barrel.
+- **P27-4 — four single-implementer `Platform` ports** (`platform.ts:51-57`: `linter`, `addCriticismSink`,
+  `toolMissingHandler`, `toolNotificationHandler`) _(LOW)_. Real impls only in VS Code (`extension.ts`); both
+  node hosts force-no-op all four (`nodeHost.ts:98-101`). Candidate: make optional (core treats absent as
+  no-op) and/or collapse the two tool-notification ports into one host-notification port. ≈ −10 LOC + 4 fewer
+  mandatory host concepts. Behavior-touching (host-contract shape).
+- **P27-5 — `RunAgentOptions` hand-mirrors `ExecuteAgentOptions`** (`runAgent.ts:15-46`)
+  _(LOW, type-hygiene)_. ~9 fields re-declared purely to forward to `ExecuteAgentOptions:87-97`; should
+  `extends Pick<ExecuteAgentOptions, …>` to drift-proof. The layer itself is justified (§21 kept
+  `runAgent`/`executeAgent`). ≈ −10.
+- **P27-6 — `@platform` barrel bypassed by ~95%** (4 importers of `@platform` vs 86 of `@platform/platform`,
+  the node hosts and `initPlatform.ts` among the deep importers). Documented-vs-actual convention mismatch;
+  standardize one way. Trivial LOC.
+
+### Ledger reconciliation at `a6f31fb`
+
+- **P26-1** — **half-closed** (drift item 2): `SessionFact = never` resolved to a real 5-arm union; the
+  `runFact.*` stringly round-trip persists (relocated into `sessionProgressEventProjection.ts`). Keep the
+  round-trip half open.
+- **P25-1** — carried (declarative route keys present; the monkey-patch compat-key brand not re-inspected this
+  pass).
+- **P25-2 / P25-3** — as §26 (largely-trimmed single `FileOpResult` re-export / effectively moot).
+- **P25-4** — unchanged, present; folded into P27-3's theme.
+- **P25-5 / P25-6** — carried.
+- **§23-N2** (`resumeToolUseFromSnapshot` duplication) — carried, still open (not re-inspected this pass).
+
+### Recurring traps re-rebutted (do not re-flag)
+
+- **`IModelHandler` width / god-interface (the fifteenth re-surfacing)** — the model-handler agent re-measured
+  it first-hand: **35 picked members + 1 optional, every one with a real consumer call through the port**
+  (grepped `AgentCore.modelHandler`, `withModelClient`, `followUpMessages` sites) — _not_ bloated. The
+  `Pick`-from-class derivation is a drift guard, and the `SdkToolCall` union + optional
+  `createBatchedToolUseFollowUpMessages` make deletion break `tsc`. The port-decomposition track (core
+  inference contract + mixins + queried `capabilities`) remains the correct _unapplied_ path, not a deletion.
+- **`runAgent`/`executeAgent` two-headed entry; cycle-node-runs-subflow "wrapper"; `assemble*` saga-split** —
+  core agent explicitly **kept all three** (distinct real callers; genuine executionId-defaulting +
+  register-on-fresh + `openWorkflowOutput` logic; the prescribed `Node.exec → createFlow → flow.run` shape).
+  Re-rebutted exactly as §21–§26.
+- **Config-only OpenAI subclasses collapse; two Google handlers** — reconfirmed as partial / flag-gated
+  behavior-touching debt, unapplied.
+
+### Subagent split points — unchanged and reconfirmed (§5)
+
+Config-driven YAML agents over the two flows (`reflection`, `ToolUseRoundFlow`) remain the isolated-context
+subagent mechanism; the tool-use YAMLs (`research`, `engineer`, `review`, …) are 1:1 with an SDK subagent
+definition (`{ systemPrompt, tools }`) and `runToolUseFlow` is already `isSubagent`-aware. The
+`src/tools/delegation/` stack (`delegate_workflow`/`delegate_agent`, `executeSubagent`,
+`NativeSubagentStrategy`, depth-gating, cost roll-up, durable result manifest) is a **full reimplementation**
+of the SDK subagent-orchestration pattern with **extra** semantics the stock SDK subagent doesn't model —
+resumable **WAITING** subagents (async `FollowUpQueue` delivery vs. synchronous tool return), human-in-the-loop
+approval (`proposalFlow`), and depth policy — so the real SDK is already treated as one delegation target
+among these (`src/tools/claudeAgent.ts` via `@anthropic-ai/claude-agent-sdk`, `codex.ts`). Ranked
+value/effort order unchanged: (1) wire the existing `review` agent as a post-draft Verifier delegation;
+(2) a typed `delegateTo(subagent, input, { maxDepth, tools })` primitive — the one structurally-open item
+(delegation is still a tool call, not an API primitive); (3) formalize `polish`/`correct`/`merge` as SDK
+actors with typed I/O; (4) relocate the module-global registries onto the per-session handle (relocate,
+never delete — load-bearing); (5) decompose the multi-phase workflow agents (gated by #4).
+
+**Net for 2026-07-07:** thesis reaffirmed for the twenty-second pass — incremental, not structural. One pure
+line-removal applied (dead `emitWebFetchResult`, net −16 LOC, all gates green). Material drift reconciled:
+`@texra/core` gone (#7099 — surface guardrail retires), `SessionRunFactProjector` deleted (P26-1 half-closed),
+provider-identity getters deleted (#7346), a legitimate new `workflowScript` module (barrels 7 → 8). Four
+independent fresh-eyes agents re-reached the standing verdict and re-rebutted every recurring trap (the
+`IModelHandler` width for the fifteenth time). Six new low/medium candidates recorded (P27-1…P27-6), all
+behavior/type-touching, none applied.
