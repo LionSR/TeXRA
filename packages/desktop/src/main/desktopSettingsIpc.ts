@@ -6,20 +6,16 @@ import {
   isAllowedLatexInstallCommand,
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
-import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import { buildProviderKeyStatuses } from '@controllers/settingsView/SettingsProfileController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
-import {
-  buildModelSelectionMessage,
-  createModelSelectionController,
-} from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
+import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
@@ -48,8 +44,8 @@ import {
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import type { ExecutionId } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -245,19 +241,17 @@ export function createDesktopSettingsIpc(
     getAgents: getAgentEntries,
     getVisibleAgents: getVisibleAgentEntries,
   });
-  const modelSelectionController = createModelSelectionController({
-    workspaceState,
-    globalState,
-  });
   const modelListRefresh =
     options.modelListRefresh ??
     refreshDesktopModelListStateIfNeeded({
       globalState,
       onError,
     });
-  const memoryController = createSettingsMemoryController({
-    globalState,
-    prompt: {
+  const settingsHost = createSettingsViewHost({
+    state: { workspaceState, globalState },
+    respond: options.postToRenderer,
+    beforeModelSelectionMessage: () => modelListRefresh,
+    memoryPrompt: {
       confirm: (message, promptOptions) =>
         options.confirmAction?.(message, promptOptions?.confirmLabel) ??
         Promise.resolve(true),
@@ -354,14 +348,11 @@ export function createDesktopSettingsIpc(
   }
 
   async function postModelSelectionData(): Promise<void> {
-    await modelListRefresh;
-    options.postToRenderer(
-      await buildModelSelectionMessage(modelSelectionController),
-    );
+    await settingsHost.sendModelSelectionData();
   }
 
   async function postMainModelOptionsData(): Promise<void> {
-    const visibleModels = modelSelectionController.getVisibleModels();
+    const visibleModels = settingsHost.getVisibleModels();
     const [workflowModelOptions, toolUseModelOptions] = await Promise.all([
       computeModelOptionsData(visibleModels, undefined, {
         agentCategory: AgentCategory.Workflow,
@@ -434,47 +425,33 @@ export function createDesktopSettingsIpc(
   }
 
   async function postMemoryData(): Promise<void> {
-    options.postToRenderer(await memoryController.getMemoryDataMessage());
+    await settingsHost.sendMemoryData();
   }
 
   async function postMemoryPreview(storagePath: string): Promise<void> {
-    try {
-      options.postToRenderer(
-        await memoryController.getMemoryPreviewMessage(storagePath),
-      );
-    } catch (error) {
-      onError(error);
-      options.postToRenderer(
-        memoryController.getMemoryPreviewErrorMessage(storagePath),
-      );
-    }
+    await settingsHost.sendMemoryPreview({ storagePath }, { onError });
   }
 
   async function postMemoryEnabled(): Promise<void> {
-    options.postToRenderer(memoryController.getMemoryEnabledMessage());
+    await settingsHost.sendMemoryEnabled();
   }
 
   async function deleteMemory(input: {
     storagePath: string;
     displayPath: string;
   }): Promise<void> {
-    const message = await memoryController.deleteMemory(input);
-    if (message) options.postToRenderer(message);
+    await settingsHost.deleteMemory(input);
   }
 
   async function setMemoryEnabled(enabled: boolean): Promise<void> {
-    const message = await memoryController.setMemoryEnabled(enabled);
-    if (message) options.postToRenderer(message);
+    await settingsHost.setMemoryEnabled(enabled);
   }
 
   async function setMemoryPinned(
     storagePath: string,
     pinned: boolean,
   ): Promise<void> {
-    const message = pinned
-      ? await memoryController.pinMemory(storagePath)
-      : await memoryController.unpinMemory(storagePath);
-    if (message) options.postToRenderer(message);
+    await settingsHost.setMemoryPinned(storagePath, pinned);
   }
 
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
@@ -641,28 +618,25 @@ export function createDesktopSettingsIpc(
     modelName: string;
     enabled: boolean;
   }): Promise<void> {
-    await modelSelectionController.setModelEnabled(input);
-    invalidateModelOptionsCache();
-    await postModelSelectionData();
-    await postMainModelOptionsData();
+    await settingsHost.setModelEnabled(input, {
+      afterUpdate: () => invalidateModelOptionsCache(),
+      afterPost: () => postMainModelOptionsData(),
+    });
   }
 
   async function updateModelReasoningLevel(input: {
     modelName: string;
     level: ReasoningLevel | null;
   }): Promise<void> {
-    await modelSelectionController.setReasoningLevel(input);
-    await postModelSelectionData();
+    await settingsHost.setReasoningLevel(input);
   }
 
   async function updateHelperModel(modelName: string): Promise<void> {
-    await modelSelectionController.setHelperModel(modelName);
-    await postModelSelectionData();
+    await settingsHost.setHelperModel(modelName);
   }
 
   async function updatePreferShortModelNames(enabled: boolean): Promise<void> {
-    await modelSelectionController.setPreferShortModelNames(enabled);
-    await postModelSelectionData();
+    await settingsHost.setPreferShortModelNames(enabled);
   }
 
   async function refreshAfterCredentialChange(): Promise<void> {
