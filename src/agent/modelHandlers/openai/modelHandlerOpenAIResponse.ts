@@ -905,7 +905,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     signal?: AbortSignal,
   ): Promise<ResponseInputItem[]> {
-    const tokensBefore = this.conversationState.cumulativeInputTokens;
+    const tokensBefore = this.chainState.getCumulativeInputTokens();
     const contextWindow = this.getEffectiveContextWindow();
 
     this.logger.debug('Compacting conversation (client-side)', {
@@ -997,7 +997,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // the compacted messages replace the discarded history, so a stale
     // previousResponseId must never be resent alongside them (same reason as
     // compactConversation()'s stateful path).
-    this.previousResponseId = null;
+    this.chainState.clearChainForCompaction();
     this.compactionResult = {
       compactedMessages,
       // Bookkeeping must reflect the INPUT cost of resending the compacted
