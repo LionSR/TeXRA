@@ -9,7 +9,6 @@ import type {
   HostPlanApprovalRequest,
   HostRetryRequest,
   HostUserQuestionResult,
-  PendingHostInteraction,
 } from '@agent/runtime/HostInteractions';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
@@ -35,8 +34,10 @@ export interface ExtensionHostInteractionsOptions {
 
 type PendingKind = 'bash' | 'plan' | 'proposal' | 'retry' | 'userQuestion';
 
-interface PendingExtensionInteraction<T> extends PendingHostInteraction {
+interface PendingExtensionInteraction<T> {
+  readonly id: string;
   readonly kind: PendingKind;
+  readonly streamId?: StreamTabId;
   readonly settle: (value: T) => void;
 }
 
@@ -210,14 +211,6 @@ export function createExtensionHostInteractions(
       const data = payload as ProgressEventPayloads['removeStream'];
       options.removeStream(data.streamId);
       return true;
-    },
-
-    pending(): readonly PendingHostInteraction[] {
-      return [...pendingRequests.values()].map(({ id, kind, streamId }) => ({
-        id,
-        kind,
-        streamId,
-      }));
     },
 
     resolve(requestId: string, result: HostInteractionResolution): boolean {
