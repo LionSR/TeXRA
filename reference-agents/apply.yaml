@@ -4,6 +4,7 @@ description: Implements suggestions from review agents (criticize, enhance, logi
 settings:
   agentCategory: workflow
   outputExt: tex
+  rounds: 1
 
 prompts:
   systemPrompt: |
@@ -82,18 +83,7 @@ prompts:
     - |
       Apply all changes suggested in the inline annotations and remove the original annotations. Watch for cross-document dependencies (shared results/definitions, consistent notation).
 
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
-
-    - |
-      SECOND PHASE: Revise, condense, and finalize.
-
-      If extensive derivations were added in the first phase, revise them to match the document's maturity level or +1 (unless the instruction requests more detail).
+      Match the document's maturity level (or +1) when implementing fixes, unless the instruction requests more detail:
 
       Document Maturity Levels:
       \begin{itemize}
