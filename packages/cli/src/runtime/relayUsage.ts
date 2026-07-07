@@ -5,16 +5,27 @@ import { SUPABASE_CONFIG, getRelaySpendingLimit } from '@auth/sharedConfig';
 
 const USAGE_PAGE_SIZE = 1000;
 
+// Billing fields intentionally have no `.catch()` fallback: a malformed
+// input_tokens/output_tokens/cached_input_tokens/reasoning_tokens/cost value
+// must fail parsing loudly rather than silently summing as 0, which would
+// under-report spend against the relay cap (see #7468, and the May-2026
+// abuse incident that motivated the cap). `cost` is restricted to
+// number|string before coercion — bare `z.coerce.number()` would otherwise
+// coerce `null`/`undefined`/booleans to `0` via `Number()`, reintroducing the
+// same silent-zero bug through coercion instead of `.catch()`.
 const RelayUsageRowSchema = z.object({
   id: z.uuid(),
   logged_at: z.iso.datetime({ offset: true }),
   model: z.string(),
   provider: z.string(),
-  input_tokens: z.int().nonnegative().catch(0),
-  output_tokens: z.int().nonnegative().catch(0),
-  cached_input_tokens: z.int().nonnegative().nullable().catch(0),
-  reasoning_tokens: z.int().nonnegative().nullable().catch(0),
-  cost: z.coerce.number().nonnegative().catch(0),
+  input_tokens: z.int().nonnegative(),
+  output_tokens: z.int().nonnegative(),
+  cached_input_tokens: z.int().nonnegative().nullable(),
+  reasoning_tokens: z.int().nonnegative().nullable(),
+  cost: z
+    .union([z.number(), z.string()])
+    .transform(Number)
+    .pipe(z.number().nonnegative()),
 });
 
 export type RelayUsageRow = z.infer<typeof RelayUsageRowSchema>;
