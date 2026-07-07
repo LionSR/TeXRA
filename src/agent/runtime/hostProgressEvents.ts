@@ -19,8 +19,6 @@ import type {
   SetActiveStreamPayload,
   SetParentStreamPayload,
   ShowAgentConfigBannerPayload,
-  StreamPhase,
-  StreamSubstate,
   StreamTabId,
   ToolEditPermission,
   UpdateActiveProcessesPayload,
@@ -32,6 +30,7 @@ import type {
   UpdateQueuedFollowUpsPayload,
   UpdateRoundStagePayload,
   UpdateStreamDescriptionPayload,
+  UpdateStreamStatusPayload,
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
   UserQuestionPermission,
@@ -59,14 +58,7 @@ import type {
 export interface ProgressEventPayloads {
   // ── Run/stream progress ──
   setActiveStream: SetActiveStreamPayload;
-  updateStreamStatus: {
-    streamId: StreamTabId;
-    status: StreamPhase;
-    /** Previous phase before this update, for detecting transitions. */
-    previousStatus?: StreamPhase;
-    /** Narrower in-flight display state for launch/resume overlays. */
-    substate?: StreamSubstate;
-  };
+  updateStreamStatus: UpdateStreamStatusPayload;
   addOutputFiles: AddOutputFilesPayload;
   updateMissingOutputs: UpdateMissingOutputsPayload;
   updateCompileFailures: UpdateCompileFailuresPayload;

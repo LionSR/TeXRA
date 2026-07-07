@@ -290,12 +290,18 @@ describe('child stream progress events', () => {
     expect(handle).toBeDefined();
     active.events.splice(0);
 
-    childStream.waitForInput();
-    childStream.beginTurn();
-    childStream.failTurn();
-    await withSessionProgressProjection(active.host, () =>
-      childStream.finalize({ failed: true }),
+    const detach = attachSessionProgressEventProjectionForTest(
+      defaultSession().events,
+      active.host,
     );
+    try {
+      childStream.waitForInput();
+      childStream.beginTurn();
+      childStream.failTurn();
+      await childStream.finalize({ failed: true });
+    } finally {
+      detach();
+    }
 
     const statusEvents = active.events.filter(
       (entry) => entry.event === 'updateStreamStatus',

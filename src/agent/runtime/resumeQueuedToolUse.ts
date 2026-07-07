@@ -79,7 +79,7 @@ export async function resumeQueuedToolUseSnapshot(
 
   followUpsQueue.acquire(streamId);
   streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-    runtimeHost,
+    events: session.events,
     substate: STREAM_SUBSTATE.RESUMING,
   });
 
@@ -125,7 +125,7 @@ export async function resumeQueuedToolUseSnapshot(
     // error so a blocking host dialog cannot hold the stream in RESUMING.
     if (streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING) {
       streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait', {
-        runtimeHost,
+        events: session.events,
       });
     }
   }

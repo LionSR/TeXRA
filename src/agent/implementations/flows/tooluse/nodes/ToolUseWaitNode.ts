@@ -1,6 +1,6 @@
-import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
+import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
@@ -123,7 +123,6 @@ export class ToolUseWaitNode<C> extends Node<
       !this.services.stopAfterCycle;
     if (shouldSuspendNativeSubagent && !session.hasQueuedFollowUp()) {
       streamStatus.transitionToWaiting(streamId, 'wait', {
-        runtimeHost,
         trace: this.services.logger,
       });
       return { kind: 'waiting' };
@@ -151,7 +150,6 @@ export class ToolUseWaitNode<C> extends Node<
 
     if (!session.hasQueuedFollowUp()) {
       streamStatus.transitionToWaiting(streamId, 'wait', {
-        runtimeHost,
         trace: this.services.logger,
       });
     }
@@ -208,7 +206,6 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-      runtimeHost,
       trace: logger,
     });
 
