@@ -23,7 +23,7 @@ import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core/async';
 
 interface MockStorageOptions {
-  logs: Record<string, StreamLogEntry[]>;
+  logs: Record<string, unknown[]>;
   summaries: Record<string, unknown>;
   logMtimes?: Record<string, number>;
   summaryMtimes?: Record<string, number>;
@@ -742,5 +742,106 @@ describe('StreamLogStore load', () => {
       lastTimestamp: 500,
       hasRunningGroup: false,
     });
+  });
+
+  it('preserves unparseable persisted entries when appending after rehydrate', async () => {
+    const unknownFutureEntry = {
+      seqNo: 2,
+      id: 'alpha-future',
+      type: 'future-entry-type',
+      level: LOG_LEVELS.INFO,
+      timestamp: 150,
+      futurePayload: { ok: true },
+    };
+    const malformedEntry = {
+      seqNo: 4,
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 300,
+      text: 'missing id',
+    };
+    const storage = mockStorage({
+      logs: {
+        alpha: [
+          logEntry('alpha', 1, 100),
+          unknownFutureEntry,
+          logEntry('alpha', 3, 200),
+          malformedEntry,
+        ],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 200,
+          hasRunningGroup: false,
+        },
+      },
+    });
+    const store = new StreamLogStore();
+    await store.load();
+    await store.ensureLoaded('alpha');
+
+    expect(
+      store
+        .get('alpha')
+        ?.getRange(0)
+        .map((entry) => entry.id),
+    ).toEqual(['alpha-1', 'alpha-3']);
+
+    store.append('alpha', {
+      id: 'alpha-new',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 400,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'new entry',
+    });
+    await store.flush();
+
+    expect(storage.writes.get(storageFile(STREAM_LOGS_DIR, 'alpha'))).toEqual([
+      expect.objectContaining({ id: 'alpha-1', seqNo: 1 }),
+      unknownFutureEntry,
+      expect.objectContaining({ id: 'alpha-3', seqNo: 2 }),
+      malformedEntry,
+      expect.objectContaining({ id: 'alpha-new', seqNo: 3 }),
+    ]);
+  });
+
+  it('keeps an unknown-only stream loadable so a later save preserves it', async () => {
+    const unknownEntry = {
+      seqNo: 1,
+      id: 'beta-future',
+      type: 'future-entry-type',
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      data: { text: 'not understood by this version' },
+    };
+    const storage = mockStorage({
+      logs: {
+        beta: [unknownEntry],
+      },
+      summaries: {},
+    });
+    const store = new StreamLogStore();
+    await store.load();
+
+    expect(store.keys()).toEqual(['beta']);
+    expect(store.get('beta')).toBeUndefined();
+
+    await store.ensureLoaded('beta');
+    store.append('beta', {
+      id: 'beta-new',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 200,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'new entry',
+    });
+    await store.flush();
+
+    expect(storage.writes.get(storageFile(STREAM_LOGS_DIR, 'beta'))).toEqual([
+      unknownEntry,
+      expect.objectContaining({ id: 'beta-new', seqNo: 1 }),
+    ]);
   });
 });
