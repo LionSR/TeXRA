@@ -2,7 +2,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import {
   type ProjectedProgressEvent,
   projectRunFactToProgressEvent,
@@ -25,10 +24,7 @@ import {
 } from '@shared/progressView/backend/events/ProgressEventHandler';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
-import { isObject } from '@utils/core';
 import type { StreamSnapshotStore } from '@transcript';
-
-const ADD_OUTPUT_FILES_DOMAIN_KEY = toRunFactDomainKey('addOutputFiles');
 
 export interface ProgressBackendServices {
   state: ProgressViewState;
@@ -154,31 +150,17 @@ export class ProgressBackend {
       },
       {
         scope: 'run',
-        types: ['stage.start', 'child.activity', 'process.output'],
+        types: [
+          'domain',
+          'usage',
+          'stage.start',
+          'child.activity',
+          'process.output',
+        ],
       },
-    );
-    const detachOutputFileRunFacts = this.session.events.subscribe(
-      (sessionEvent) => {
-        if (sessionEvent.scope !== 'run') return;
-        const { event } = sessionEvent;
-        if (
-          event.type !== 'domain' ||
-          event.key !== ADD_OUTPUT_FILES_DOMAIN_KEY ||
-          !isObject(event.data)
-        ) {
-          return;
-        }
-
-        const payload =
-          event.data as unknown as ProgressEventPayloads['addOutputFiles'];
-        this.handleProgressEvent('addOutputFiles', payload);
-        this.onSessionProgressEvent?.('addOutputFiles', payload);
-      },
-      { scope: 'run', types: ['domain'] },
     );
     return {
       dispose: () => {
-        detachOutputFileRunFacts();
         detachRunFacts();
         detachSessionFacts();
         eventHandlerSubscription.dispose();
