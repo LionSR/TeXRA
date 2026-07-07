@@ -578,9 +578,9 @@ describe('DesktopProgressBridge', () => {
   it('routes runtime events to the desktop backend without the shared progress bus', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
-    const { bus } = await import('@eventBus/ProgressEventBus');
+    const { ProgressEventBus } = await import('@eventBus/ProgressEventBus');
     const seen: unknown[] = [];
-    const off = bus.on('setActiveStream', (payload) => {
+    const off = ProgressEventBus.on('setActiveStream', (payload) => {
       seen.push(payload);
     });
 

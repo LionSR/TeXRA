@@ -32,7 +32,7 @@ export const CodexThreads = new AgentCliSessionRegistry<ActiveCodexThread>(
   'codex_thread_id',
 );
 
-export const claudeAgentSessions =
+export const ClaudeAgentSessions =
   new AgentCliSessionRegistry<ActiveClaudeAgentSession>(
     'claude_agent_session_id',
   );

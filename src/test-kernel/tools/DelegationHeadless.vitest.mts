@@ -7,7 +7,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   AgentExecutionHandle,
-  executionRegistry,
+  SharedExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
@@ -153,8 +153,8 @@ describe('headless delegation', () => {
   });
 
   afterEach(() => {
-    for (const executionId of executionRegistry.getActiveIds()) {
-      executionRegistry.untrack(executionId);
+    for (const executionId of SharedExecutionRegistry.getActiveIds()) {
+      SharedExecutionRegistry.untrack(executionId);
     }
     ToolUseFollowUpQueue.release('parent-stream' as StreamTabId);
     ToolUseFollowUpQueue.release('child-stream' as StreamTabId);
@@ -602,7 +602,7 @@ describe('headless delegation', () => {
 
     mocks.executeAgent.mockImplementationOnce(
       async (_config, executionId: string, options) => {
-        executionRegistry.track(
+        SharedExecutionRegistry.track(
           new AgentExecutionHandle(
             executionId,
             parentStreamId,
@@ -628,7 +628,7 @@ describe('headless delegation', () => {
       () => callDelegateReview(),
     );
 
-    executionRegistry.detachActiveChildren(parentStreamId, host);
+    SharedExecutionRegistry.detachActiveChildren(parentStreamId, host);
 
     expect(onBeforeWaiting).toBeDefined();
     const delivered = await onBeforeWaiting!('The proof is correct.', [], []);
