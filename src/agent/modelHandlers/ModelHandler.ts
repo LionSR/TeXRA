@@ -595,12 +595,14 @@ export abstract class ModelHandler<
    *
    * Runtime combinator (#7101 triage): `ModelHandlerDeepSeek` is only ever
    * constructed for `ModelProvider.DEEPSEEK` (see `ModelFactory.ts`'s
-   * `PROVIDER_HANDLER_ROUTES`), so `config.provider === DEEPSEEK` there is
-   * always true and this reduces to its former override exactly. For every
-   * other native handler, `config.provider` is never `DEEPSEEK`, so this
-   * reduces to the former plain `supportsReasoningEffort` default. And this
-   * is verified identical to `ModelHandlerOpenRouterNative`'s pre-existing
-   * override (which already gated on `config.provider === DEEPSEEK` since
+   * `PROVIDER_HANDLER_ROUTES`), so `config.provider === ModelProvider.DEEPSEEK`
+   * there is always true and this reduces to its former override exactly.
+   * For every other handler besides `ModelHandlerOpenRouterNative` — which
+   * gets its own paragraph below — `config.provider` is never
+   * `ModelProvider.DEEPSEEK`, so this reduces to the former plain
+   * `supportsReasoningEffort` default. And this is verified identical to
+   * `ModelHandlerOpenRouterNative`'s pre-existing override (which already
+   * gated on `config.provider === ModelProvider.DEEPSEEK` since
    * OpenRouterNative shares `config.provider` with the underlying model —
    * see that predicate's own #7101 note on `requiresPerCallSystemPrompt`).
    */
