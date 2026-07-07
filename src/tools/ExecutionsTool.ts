@@ -9,7 +9,10 @@
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
-import { readCompletedRunTodos } from '@transcript';
+import {
+  readCompletedRunConversation,
+  readCompletedRunTodos,
+} from '@transcript';
 
 // Local imports - agent
 import {
@@ -445,10 +448,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       store.readMeta(),
       store.readConfig(),
       store.readChildren(),
-      readCompletedRunTodos(executionId, {
-        legacyFallback: () => store.readTodos(),
-        legacyModifiedAt: () => store.todosModifiedAt(),
-      }),
+      readCompletedRunTodos(executionId),
       store.readReport(),
     ]);
 
@@ -682,12 +682,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     const store = getExecutionStore(executionId);
     const todos = handle
       ? await store.readTodos()
-      : (
-          await readCompletedRunTodos(executionId, {
-            legacyFallback: () => store.readTodos(),
-            legacyModifiedAt: () => store.todosModifiedAt(),
-          })
-        ).todos;
+      : (await readCompletedRunTodos(executionId)).todos;
 
     if (todos.length === 0) {
       return {
@@ -768,7 +763,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     viewRange?: number[],
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
-    const conversation = await store.readConversation();
+    const { conversation } = await readCompletedRunConversation(executionId);
 
     if (!conversation) {
       // Match the top-level execution lookup: a flow-only record is found only
