@@ -873,10 +873,12 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Tear down an `AgentExecutionHandle` suspended at WAITING with no live
-   * interrupt context. Returns false (no-op) when the handle never registered
-   * a waiting-cleanup — i.e. it isn't actually suspended, just momentarily
-   * between its own interrupt-unregister and untrack during normal teardown.
+   * Tear down an `AgentExecutionHandle` suspended at WAITING (or transitioning
+   * out of it via a resume that hasn't yet installed its own live context)
+   * with no live interrupt context. Returns false (no-op) when the handle
+   * never registered a waiting-cleanup — i.e. it isn't actually suspended,
+   * just momentarily between its own interrupt-unregister and untrack during
+   * normal teardown — or when `streamStatus` shows neither state (see below).
    *
    * A registered waiting-cleanup alone does not prove the run is genuinely
    * suspended: `NativeSubagentStrategy.onBeforeWaiting` speculatively
@@ -894,6 +896,15 @@ export class ExecutionRegistry {
    * independent, authoritative confirmation that this handle is really
    * parked, not mid-flight — belt and suspenders against a future non-waiting
    * exit that forgets the clear (see #7324 review discussion).
+   *
+   * `resumeQueuedToolUseSnapshot` flips `streamStatus` to RUNNING with a
+   * RESUMING substate *before* the resumed run installs its own interrupt
+   * context, so a stop landing in that window would otherwise find this same
+   * still-WAITING-suspended handle but a non-WAITING phase, and get wrongly
+   * no-opped by the check above. `getToolUseFollowUpTarget` already treats
+   * RESUMING the same as WAITING for the analogous follow-up-admission
+   * decision — mirrored here so a stop during that window still tears the
+   * stalled resume down instead of silently ignoring it.
    *
    * This path bypasses `runFlowWithLifecycle`'s own terminal handling (the
    * flow never resumes to produce one), so it publishes the terminal
@@ -914,7 +925,11 @@ export class ExecutionRegistry {
    * though the turn's own trace is already gone.
    */
   private terminateWaitingHandle(handle: AgentExecutionHandle): boolean {
-    if (this.streamStatus.get(handle.childStreamId) !== STREAM_PHASE.WAITING) {
+    const status = this.streamStatus.get(handle.childStreamId);
+    const resuming =
+      this.streamStatus.getSubstate(handle.childStreamId) ===
+      STREAM_SUBSTATE.RESUMING;
+    if (status !== STREAM_PHASE.WAITING && !resuming) {
       return false;
     }
     if (!handle.runWaitingCleanup()) return false;
