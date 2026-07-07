@@ -11,6 +11,9 @@ import {
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import type { SessionEvent } from '@agent/runtime/SessionEventHub';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 
 // Local imports - progress schemas
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
@@ -235,10 +238,17 @@ function mockLoggerModule(): void {
   }));
 }
 
-async function createBridge(
-  messages: unknown[],
-  options: CreateBridgeOptions = {},
-): Promise<TestableBridge> {
+/**
+ * Registers the desktop module mocks once and imports the bridge module.
+ * `createBridge` builds one window on top of this; the multi-window isolation
+ * tests load the module once and construct several `DesktopProgressBridge`
+ * windows from the same module registry — matching how the desktop main
+ * process hosts multiple BrowserWindows over one set of process globals.
+ */
+async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
+  bridgeModule: DesktopAgentExecutionModule;
+  progressSnapshotStore?: ProgressSnapshotStore;
+}> {
   vi.resetModules();
   const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
     import('@platform/platform'),
@@ -398,14 +408,26 @@ async function createBridge(
     options.configureProgressSnapshotStore(progressSnapshotStore);
     await progressSnapshotStore.flush();
   }
-  const { DesktopProgressBridge } = (await import(
+  const bridgeModule = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
-  return new DesktopProgressBridge((message) => messages.push(message), {
-    streamSnapshotStore: options.streamSnapshotStore,
-    progressSnapshotStore,
-    showErrorMessage: options.showErrorMessage,
-  }) as TestableBridge;
+  return { bridgeModule, progressSnapshotStore };
+}
+
+async function createBridge(
+  messages: unknown[],
+  options: CreateBridgeOptions = {},
+): Promise<TestableBridge> {
+  const { bridgeModule, progressSnapshotStore } =
+    await loadBridgeModule(options);
+  return new bridgeModule.DesktopProgressBridge(
+    (message) => messages.push(message),
+    {
+      streamSnapshotStore: options.streamSnapshotStore,
+      progressSnapshotStore,
+      showErrorMessage: options.showErrorMessage,
+    },
+  ) as TestableBridge;
 }
 
 async function createExecution(options: {
@@ -2933,5 +2955,456 @@ describe('DesktopProgressBridge', () => {
     } finally {
       bridge.dispose();
     }
+  });
+
+  // Stage-5 acceptance gate (#6968): two desktop windows, runs in each, zero
+  // cross-talk in view state, transcripts, and status. Each window is a
+  // `DesktopProgressBridge` with its own per-window `SessionHandle`, built
+  // from ONE module registry — the same process globals a real multi-window
+  // desktop main process shares — so any leak through a surviving singleton
+  // would surface here. Pins the L1–L3 leak fixes from
+  // docs/proposals/session-scoped-runtime-architecture.md §1.
+  describe('multi-window session isolation', () => {
+    const streamA = 'stream-window-a' as StreamTabId;
+    const streamB = 'stream-window-b' as StreamTabId;
+    const executionA = 'ec00aa';
+    const executionB = 'ec00bb';
+
+    type WindowFixture = {
+      bridge: TestableBridge;
+      session: SessionHandle;
+      /** Loosely-typed runtime-host emit, as runs use it (`runtimeHost.emit`). */
+      emit: (event: string, payload: unknown) => void;
+      messages: unknown[];
+      snapshots: TestDesktopStreamSnapshotStore;
+    };
+
+    type WindowPair = {
+      windowA: WindowFixture;
+      windowB: WindowFixture;
+      /** Same-registry runtime modules (the ones the bridges actually use). */
+      registry: {
+        emitRuntimeEvent: typeof import('@agent/runtime/emitRuntimeEvent').emitRuntimeEvent;
+        StreamStatusService: StreamStatusMachine;
+        getDefaultStreamLogStore: typeof import('@transcript').getDefaultStreamLogStore;
+      };
+      dispose(): void;
+    };
+
+    async function createWindowPair(): Promise<WindowPair> {
+      const { bridgeModule } = await loadBridgeModule();
+      // Same registry as the bridge module graph — identity comparisons
+      // against process-wide defaults must use these instances, not the
+      // statically imported copies from the pre-reset registry.
+      const [{ emitRuntimeEvent }, { StreamStatusService }, transcript] =
+        await Promise.all([
+          import('@agent/runtime/emitRuntimeEvent'),
+          import('@agent/runtime/StreamStatusService'),
+          import('@transcript'),
+        ]);
+      const makeWindow = (): WindowFixture => {
+        const messages: unknown[] = [];
+        const snapshots = createStreamSnapshotStore([]);
+        const bridge = new bridgeModule.DesktopProgressBridge(
+          (message) => messages.push(message),
+          { streamSnapshotStore: snapshots },
+        ) as TestableBridge;
+        const session = (bridge as unknown as { session: SessionHandle })
+          .session;
+        const { hostChannel } =
+          session as unknown as BridgeWithSession['session'];
+        if (!hostChannel) throw new Error('desktop window has no host channel');
+        return {
+          bridge,
+          session,
+          emit: (event, payload) => hostChannel.emit(event, payload),
+          messages,
+          snapshots,
+        };
+      };
+      const windowA = makeWindow();
+      const windowB = makeWindow();
+      // Let both windows' startup repair settle, then start assertions from a
+      // clean renderer feed.
+      await settleProgressEvents();
+      windowA.messages.length = 0;
+      windowB.messages.length = 0;
+      return {
+        windowA,
+        windowB,
+        registry: {
+          emitRuntimeEvent,
+          StreamStatusService,
+          getDefaultStreamLogStore: transcript.getDefaultStreamLogStore,
+        },
+        dispose: () => {
+          windowA.bridge.dispose();
+          windowB.bridge.dispose();
+        },
+      };
+    }
+
+    function messagesMentioning(
+      messages: unknown[],
+      needle: string,
+    ): unknown[] {
+      return messages.filter((message) => {
+        let serialized: string | undefined;
+        try {
+          serialized = JSON.stringify(message);
+        } catch {
+          return false;
+        }
+        return serialized?.includes(needle) ?? false;
+      });
+    }
+
+    /** Bridge a fake run trace into a session, as `runAgent` does. */
+    function attachTrace(
+      session: SessionHandle,
+      streamId: StreamTabId,
+      trace: ReturnType<typeof makeFakeTrace>,
+    ): void {
+      session.attachRunTrace(
+        trace as unknown as Parameters<SessionHandle['attachRunTrace']>[0],
+        streamId,
+      );
+    }
+
+    it('keeps one window’s rail, entries, and status updates out of the sibling view state', async () => {
+      const pair = await createWindowPair();
+      const { windowA, windowB } = pair;
+
+      try {
+        // Simulated run lifecycle in each window over its own runtime host:
+        // track → status transitions → log entry → terminal.
+        for (const [window, streamId, executionId] of [
+          [windowA, streamA, executionA],
+          [windowB, streamB, executionB],
+        ] as const) {
+          window.emit('setActiveStream', {
+            streamId,
+            agentCategory: AgentCategory.Workflow,
+          });
+          window.emit('setTaskState', {
+            streamId,
+            executionId,
+            taskState: TaskStateSchema.parse(workflowTaskState()),
+          });
+          window.emit('updateStreamStatus', {
+            streamId,
+            status: STREAM_PHASE.RUNNING,
+          });
+          window.bridge.streamLogs.append(streamId, {
+            id: `${streamId}-log`,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: LOG_LEVELS.INFO,
+            timestamp: 1_000,
+            text: `${streamId} run log`,
+          });
+          window.emit('updateStreamStatus', {
+            streamId,
+            status: STREAM_PHASE.COMPLETED,
+            previousStatus: STREAM_PHASE.RUNNING,
+          });
+        }
+        await settleProgressEvents();
+        windowA.bridge.syncFullView();
+        windowB.bridge.syncFullView();
+        await settleProgressEvents();
+
+        // Each window's own run is fully visible to itself...
+        expect(windowA.bridge.streamLogs.get(streamA)).toBeDefined();
+        expect(
+          progressMessages(
+            windowA.messages,
+            PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+          ).at(-1),
+        ).toMatchObject({ activeStream: streamA });
+        expect(windowB.bridge.streamLogs.get(streamB)).toBeDefined();
+
+        // ...and completely invisible to the sibling: no view-state entry, no
+        // renderer message (stream list, status, log delta, snapshot) at all.
+        expect(windowB.bridge.streamLogs.get(streamA)).toBeUndefined();
+        expect(windowA.bridge.streamLogs.get(streamB)).toBeUndefined();
+        expect(messagesMentioning(windowB.messages, streamA)).toEqual([]);
+        expect(messagesMentioning(windowA.messages, streamB)).toEqual([]);
+        expect(
+          windowA.snapshots.getAll().map((snapshot) => snapshot.streamId),
+        ).not.toContain(streamB);
+        expect(
+          windowB.snapshots.getAll().map((snapshot) => snapshot.streamId),
+        ).not.toContain(streamA);
+      } finally {
+        pair.dispose();
+      }
+    });
+
+    it('delivers run facts and session facts only to the owning session’s hub subscribers', async () => {
+      const pair = await createWindowPair();
+      const { windowA, windowB, registry } = pair;
+
+      try {
+        const factKey = (event: SessionEvent): string =>
+          event.scope === 'run'
+            ? `run:${event.streamId}:${event.event.type}`
+            : `session:${event.event.type}:${
+                (event.event.payload as { streamId?: string }).streamId ?? ''
+              }`;
+        const seenByA: string[] = [];
+        const seenByB: string[] = [];
+        windowA.session.events.subscribe((event) =>
+          seenByA.push(factKey(event)),
+        );
+        windowB.session.events.subscribe((event) =>
+          seenByB.push(factKey(event)),
+        );
+        // Even a subscriber that explicitly asks B's hub for A's stream must
+        // see nothing — the hub itself never carries the foreign stream.
+        const crossStreamFacts: SessionEvent[] = [];
+        windowB.session.events.subscribe(
+          (event) => crossStreamFacts.push(event),
+          { scope: 'run', streamId: streamA },
+        );
+        const resultsSeenByB: unknown[] = [];
+        windowB.session.onResult((event) => resultsSeenByB.push(event));
+
+        // A run in each window: trace bridged into the launching session
+        // (as runAgent does), distinct streamIds and executionIds.
+        for (const [window, streamId, executionId] of [
+          [windowA, streamA, executionA],
+          [windowB, streamB, executionB],
+        ] as const) {
+          const trace = makeFakeTrace();
+          attachTrace(window.session, streamId, trace);
+          trace.emit({
+            type: 'log',
+            level: 'info',
+            message: `${streamId} progress`,
+          });
+          registry.emitRuntimeEvent(
+            'updateStreamDescription',
+            { streamId, description: `${streamId} description` },
+            window.session,
+          );
+          trace.emit({
+            type: 'result',
+            outcome: RUN_OUTCOME.COMPLETED,
+            executionId,
+            streamId,
+            agentName: 'proofreader',
+            category: 'workflow',
+            isSubagent: false,
+          });
+        }
+
+        expect(seenByA).toEqual([
+          `run:${streamA}:log`,
+          `session:updateStreamDescription:${streamA}`,
+          `run:${streamA}:result`,
+        ]);
+        expect(seenByB).toEqual([
+          `run:${streamB}:log`,
+          `session:updateStreamDescription:${streamB}`,
+          `run:${streamB}:result`,
+        ]);
+        // Fully disjoint streams: no fact key is seen by both hubs.
+        expect(seenByA.filter((key) => seenByB.includes(key))).toEqual([]);
+        expect(crossStreamFacts).toEqual([]);
+        expect(resultsSeenByB).toEqual([
+          expect.objectContaining({ executionId: executionB }),
+        ]);
+      } finally {
+        pair.dispose();
+      }
+    });
+
+    it('keeps a pending approval invisible and unresolvable from the sibling window', async () => {
+      const pair = await createWindowPair();
+      const { windowA, windowB } = pair;
+
+      try {
+        const approvalId = 'plan-window-a';
+        const result =
+          windowA.bridge.runtimeHost.interactions?.requestPlanApproval?.({
+            approvalId,
+            streamId: streamA,
+            plan: { objective: 'Prove per-window interaction isolation.' },
+            goalEnabled: false,
+          });
+        expect(result).toBeDefined();
+        let settled = false;
+        void (result as Promise<unknown>).then(() => {
+          settled = true;
+        });
+
+        await vi.waitFor(() => {
+          expect(
+            progressMessages(
+              windowA.messages,
+              PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+            ),
+          ).toContainEqual(expect.objectContaining({ action: 'show' }));
+        });
+        // The prompt never reaches window B's renderer.
+        expect(
+          progressMessages(
+            windowB.messages,
+            PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          ),
+        ).toEqual([]);
+
+        // B's session port cannot settle A's pending approval...
+        expect(
+          windowB.session.interactions.resolve(approvalId, {
+            kind: 'plan',
+            action: 'approve',
+          }),
+        ).toBe(false);
+        // ...neither can B's inbound plan-approval handler...
+        const handlePlanB = assertSupported(
+          windowB.bridge.progressViewInboundHandlers[
+            PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION
+          ],
+        );
+        await handlePlanB({
+          command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+          approvalId,
+          action: 'approve',
+        });
+        // ...nor B's delete-all sweep (the cross-window sweep the Stage-5
+        // gate exists to rule out).
+        await windowB.bridge.deleteAllStreams();
+        await settleProgressEvents();
+        expect(settled).toBe(false);
+
+        // A's own surface still resolves it, first try.
+        const handlePlanA = assertSupported(
+          windowA.bridge.progressViewInboundHandlers[
+            PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION
+          ],
+        );
+        await handlePlanA({
+          command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+          approvalId,
+          action: 'approve',
+        });
+        await expect(result).resolves.toEqual({ action: 'approve' });
+      } finally {
+        pair.dispose();
+      }
+    });
+
+    it('scopes transcript stores to the launching session (L1)', async () => {
+      const pair = await createWindowPair();
+      const { windowA, windowB, registry } = pair;
+
+      try {
+        // The L1 fix, by identity: each window owns a fresh transcript store,
+        // and neither aliases the process-default (last-writer-wins) store.
+        expect(windowA.session.transcripts).not.toBe(
+          windowB.session.transcripts,
+        );
+        expect(windowA.session.transcripts).not.toBe(
+          registry.getDefaultStreamLogStore(),
+        );
+        expect(windowB.session.transcripts).not.toBe(
+          registry.getDefaultStreamLogStore(),
+        );
+
+        for (const [window, streamId] of [
+          [windowA, streamA],
+          [windowB, streamB],
+        ] as const) {
+          window.session.transcripts.append(streamId, {
+            id: `${streamId}-transcript`,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: LOG_LEVELS.INFO,
+            timestamp: 1_000,
+            text: `${streamId} transcript entry`,
+          });
+        }
+
+        expect(windowA.session.transcripts.has(streamA)).toBe(true);
+        expect(windowB.session.transcripts.has(streamB)).toBe(true);
+        // A's transcript writes never land under B's stores, and vice versa —
+        // neither the session transcript store nor the view-state log store.
+        expect(windowB.session.transcripts.has(streamA)).toBe(false);
+        expect(windowA.session.transcripts.has(streamB)).toBe(false);
+        expect(windowB.bridge.streamLogs.get(streamA)).toBeUndefined();
+        expect(windowA.bridge.streamLogs.get(streamB)).toBeUndefined();
+        expect(registry.getDefaultStreamLogStore().has(streamA)).toBe(false);
+        expect(registry.getDefaultStreamLogStore().has(streamB)).toBe(false);
+      } finally {
+        pair.dispose();
+      }
+    });
+
+    it('keeps stream phases, listeners, and sweeps per-window in the status machine (L3)', async () => {
+      const pair = await createWindowPair();
+      const { windowA, windowB, registry } = pair;
+
+      try {
+        // Desktop windows own fresh status machines. The process-wide default
+        // machine (`StreamStatusService`) survives, but only as the
+        // single-session default-session compatibility path (extension/CLI) —
+        // a ledgered residue tracked on #6981 (D1 rows), not a desktop
+        // multi-window sharing point. Assert the isolation that IS promised:
+        // neither window aliases it, and neither window writes to it.
+        expect(windowA.session.status).not.toBe(windowB.session.status);
+        expect(windowA.session.status).not.toBe(registry.StreamStatusService);
+        expect(windowB.session.status).not.toBe(registry.StreamStatusService);
+
+        const changesSeenByB: unknown[] = [];
+        windowB.session.status.onDidChange((change) =>
+          changesSeenByB.push(change),
+        );
+
+        expect(
+          windowA.session.status.transition(
+            streamA,
+            STREAM_PHASE.RUNNING,
+            STREAM_TRANSITION_CAUSE.LIFECYCLE,
+          ),
+        ).toBe(true);
+        expect(
+          windowB.session.status.transition(
+            streamB,
+            STREAM_PHASE.RUNNING,
+            STREAM_TRANSITION_CAUSE.LIFECYCLE,
+          ),
+        ).toBe(true);
+        expect(
+          windowA.session.status.transitionToTerminal(
+            streamA,
+            STREAM_PHASE.COMPLETED,
+          ),
+        ).toBe(true);
+
+        // A's phases never appear in B's machine, and A's transitions never
+        // fire B's listeners (the L3 waiter fan-out half).
+        expect(windowB.session.status.get(streamA)).toBeUndefined();
+        expect(windowA.session.status.get(streamB)).toBeUndefined();
+        expect(
+          changesSeenByB.filter(
+            (change) => (change as { streamId: string }).streamId === streamA,
+          ),
+        ).toEqual([]);
+        // Neither window's run leaked into the process-default machine.
+        expect(registry.StreamStatusService.get(streamA)).toBeUndefined();
+        expect(registry.StreamStatusService.get(streamB)).toBeUndefined();
+
+        // One window's delete-all sweep (bridge path AND machine path) cannot
+        // reset the sibling's streams — the exact L3 clearAll leak.
+        await windowB.bridge.deleteAllStreams();
+        windowB.session.status.clearAll();
+        expect(windowA.session.status.get(streamA)).toBe(
+          STREAM_PHASE.COMPLETED,
+        );
+        expect(windowB.session.status.get(streamB)).toBeUndefined();
+      } finally {
+        pair.dispose();
+      }
+    });
   });
 });
