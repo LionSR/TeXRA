@@ -357,6 +357,66 @@ describe('completedRunArchive facade', () => {
     expect(sidecarWins.source).toBe('streamLog');
   });
 
+  it('never lets an empty-but-present legacy file beat a full sidecar (non-empty rule)', async () => {
+    const executionId = 'fff666fff666' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#fff666fff666' as StreamTabId;
+    await writeSidecarFixture(executionId, streamId);
+    // Present but EMPTY legacy projection with an mtime after the stream
+    // log — under pure mtime arbitration this would win and hide the full
+    // transcript. The non-empty rule orders legacy first but falls through.
+    await getExecutionStore(executionId).writeConversation([]);
+    const legacyPath = await findFile(tempDirs.at(-1)!, 'conversation.json');
+    await setMtime(legacyPath, Date.now() + 60_000);
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result.source).toBe('streamLog');
+    expect(result.streamId).toBe(streamId);
+    expect(result.conversation).not.toBeNull();
+    expect(result.conversation!.length).toBeGreaterThan(0);
+  });
+
+  it('falls through to the content-bearing sibling when the resolver picks an empty log (non-empty rule)', async () => {
+    const executionId = '0777aa0777aa' as ExecutionId;
+    // Both streams are meta-matched and log-backed; the alphabetically
+    // first-scanned one holds only non-conversation rows, so the resolver's
+    // log-rank pick (#7433 criteria) reconstructs empty. No legacy file
+    // exists — the facade must fall through to the sibling that actually
+    // holds the transcript.
+    const emptyStream = 'aChild@tool#0777aa0777aa' as StreamTabId;
+    const fullStream = 'zOrchestrator@deepseekproT#0777aa0777aa' as StreamTabId;
+
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setTaskState(emptyStream, taskState('bash'), executionId);
+    snapshots.setTaskState(fullStream, taskState('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const logs = new StreamLogStore();
+    await logs.load();
+    logs.ensureStream(emptyStream);
+    logs.append(
+      emptyStream,
+      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Working...' }),
+    );
+    logs.ensureStream(fullStream);
+    logs.append(
+      fullStream,
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Real question' }),
+    );
+    logs.append(
+      fullStream,
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Real answer' }),
+    );
+    await logs.flush();
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result.source).toBe('streamLog');
+    expect(result.streamId).toBe(fullStream);
+    expect(result.conversation).toEqual([
+      { role: 'user', content: 'Real question' },
+      { role: 'assistant', content: [{ type: 'text', text: 'Real answer' }] },
+    ]);
+  });
+
   it('falls back to legacy when the transcript holds no conversation-shaped rows', async () => {
     const executionId = 'eee555eee555' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#eee555eee555' as StreamTabId;
