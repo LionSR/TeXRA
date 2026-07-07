@@ -107,6 +107,35 @@ async function writeSidecarFixture(
   );
   logs.append(
     streamId,
+    logRow(MESSAGE_TYPES.THINKING, {
+      text: 'Consider the boundary terms.',
+    }),
+  );
+  logs.append(
+    streamId,
+    logRow(MESSAGE_TYPES.WEB_SEARCH, {
+      data: {
+        query: 'sobolev constant',
+        results: [{ url: 'https://example.org/a', title: 'Sobolev notes' }],
+        provider: 'anthropic',
+        status: 'completed',
+      },
+    }),
+  );
+  logs.append(
+    streamId,
+    logRow(MESSAGE_TYPES.WEB_FETCH, {
+      data: {
+        url: 'https://example.org/a',
+        title: 'Sobolev notes',
+        provider: 'anthropic',
+        callId: 'wf-1',
+        status: 'completed',
+      },
+    }),
+  );
+  logs.append(
+    streamId,
     logRow(MESSAGE_TYPES.TOOL_USE, {
       data: {
         toolName: 'write_file',
@@ -114,6 +143,15 @@ async function writeSidecarFixture(
         output: 'File written.',
         status: 'completed',
       },
+    }),
+  );
+  // Diagnostic row: deliberately skipped by the mapper (never lived in the
+  // legacy conversation.json projection either).
+  logs.append(
+    streamId,
+    logRow(MESSAGE_TYPES.STATISTICS, {
+      text: 'Usage - input: 10, output: 5',
+      data: { inputTokens: 10, outputTokens: 5 },
     }),
   );
   logs.append(
@@ -176,6 +214,42 @@ describe('completedRunArchive facade', () => {
     expect(conversationResult.streamId).toBe(streamId);
     expect(conversationResult.conversation).toEqual([
       { role: 'user', content: 'Fix the lemma.' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'Consider the boundary terms.' },
+        ],
+      },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'server_tool_use',
+            name: 'web_search',
+            input: { query: 'sobolev constant' },
+          },
+          {
+            type: 'web_search_tool_result',
+            content: [
+              {
+                type: 'web_search_result',
+                url: 'https://example.org/a',
+                title: 'Sobolev notes',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'web_fetch_tool_result',
+            url: 'https://example.org/a',
+            title: 'Sobolev notes',
+          },
+        ],
+      },
       {
         role: 'assistant',
         content: [

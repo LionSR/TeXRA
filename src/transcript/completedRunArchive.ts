@@ -16,6 +16,8 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   ToolUseLogSchema,
+  WebFetchPayloadSchema,
+  WebSearchPayloadSchema,
   type ExecutionId,
   type StreamLogEntry,
   type StreamTabId,
@@ -23,6 +25,7 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
+import { assertNever } from '@utils/core/typeGuards';
 
 import { resolvePersistedStreamIdForExecution } from './executionStreamResolver';
 import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';
@@ -154,62 +157,158 @@ function toolResultText(tool: ToolUseLog): string | undefined {
   return tool.summary;
 }
 
+function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
+  return entry.text ? [{ role: 'user', content: entry.text }] : [];
+}
+
+function modelResponseEntryToMessages(entry: StreamLogEntry): unknown[] {
+  if (!entry.text?.trim()) return [];
+  return [{ role: 'assistant', content: [{ type: 'text', text: entry.text }] }];
+}
+
+function thinkingEntryToMessages(entry: StreamLogEntry): unknown[] {
+  if (!entry.text?.trim()) return [];
+  return [
+    {
+      role: 'assistant',
+      content: [{ type: 'thinking', thinking: entry.text }],
+    },
+  ];
+}
+
+function toolUseEntryToMessages(entry: StreamLogEntry): unknown[] {
+  const parsed = ToolUseLogSchema.safeParse(entry.data);
+  if (!parsed.success) return [];
+  const tool = parsed.data;
+  const messages: unknown[] = [
+    {
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          name: tool.toolName ?? 'unknown',
+          input: tool.input ?? {},
+        },
+      ],
+    },
+  ];
+  const resultText = toolResultText(tool);
+  if (resultText !== undefined) {
+    messages.push({
+      role: 'user',
+      content: [{ type: 'tool_result', content: resultText }],
+    });
+  }
+  return messages;
+}
+
+/** Anthropic-shaped `server_tool_use` + `web_search_tool_result` blocks. */
+function webSearchEntryToMessages(entry: StreamLogEntry): unknown[] {
+  const parsed = WebSearchPayloadSchema.safeParse(entry.data);
+  if (!parsed.success) return [];
+  const blocks: unknown[] = [];
+  if (parsed.data.query) {
+    blocks.push({
+      type: 'server_tool_use',
+      name: 'web_search',
+      input: { query: parsed.data.query },
+    });
+  }
+  const results = (parsed.data.results ?? [])
+    .filter((result) => result.url)
+    .map((result) => ({
+      type: 'web_search_result',
+      url: result.url,
+      title: result.title ?? result.url,
+    }));
+  if (results.length > 0) {
+    blocks.push({ type: 'web_search_tool_result', content: results });
+  }
+  return blocks.length > 0 ? [{ role: 'assistant', content: blocks }] : [];
+}
+
+function webFetchEntryToMessages(entry: StreamLogEntry): unknown[] {
+  const parsed = WebFetchPayloadSchema.safeParse(entry.data);
+  if (!parsed.success || !parsed.data.url) return [];
+  return [
+    {
+      role: 'assistant',
+      content: [
+        {
+          type: 'web_fetch_tool_result',
+          url: parsed.data.url,
+          ...(parsed.data.title !== undefined && { title: parsed.data.title }),
+        },
+      ],
+    },
+  ];
+}
+
+/**
+ * Map one transcript row to conversation messages. Exhaustive over the
+ * {@link MessageType} union — the transcript is the single completed-run
+ * record, so every entry kind must carry an explicit map-or-skip decision
+ * here; adding a new `MessageType` without deciding fails to compile
+ * (`assertNever`), instead of silently dropping conversation content.
+ */
+function conversationMessagesForEntry(entry: StreamLogEntry): unknown[] {
+  const { messageType } = entry;
+  if (messageType === undefined) return [];
+  switch (messageType) {
+    // ── Conversation content ────────────────────────────────────────────
+    case MESSAGE_TYPES.USER_MESSAGE:
+      return userMessageEntryToMessages(entry);
+    case MESSAGE_TYPES.MODEL_RESPONSE:
+      return modelResponseEntryToMessages(entry);
+    case MESSAGE_TYPES.THINKING:
+      return thinkingEntryToMessages(entry);
+    case MESSAGE_TYPES.TOOL_USE:
+      return toolUseEntryToMessages(entry);
+    case MESSAGE_TYPES.WEB_SEARCH:
+      return webSearchEntryToMessages(entry);
+    case MESSAGE_TYPES.WEB_FETCH:
+      return webFetchEntryToMessages(entry);
+    // ── Deliberately skipped: not conversation content ──────────────────
+    // scratchpad is a derived view carved from the modelResponse raw text
+    // (already mapped above); the rest are run diagnostics/status rows that
+    // the legacy conversation.json projection never contained either.
+    case MESSAGE_TYPES.SCRATCHPAD:
+    case MESSAGE_TYPES.FILE_LIST:
+    case MESSAGE_TYPES.MISSING_OUTPUTS:
+    case MESSAGE_TYPES.LATEXDIFF:
+    case MESSAGE_TYPES.STATISTICS:
+    case MESSAGE_TYPES.PROGRESS_STATUS:
+    case MESSAGE_TYPES.ERROR:
+    case MESSAGE_TYPES.INTERNAL:
+    case MESSAGE_TYPES.CONTEXT_MANAGEMENT:
+    case MESSAGE_TYPES.CONTEXT_STATE:
+    case MESSAGE_TYPES.DEFAULT:
+      return [];
+    default:
+      return assertNever(
+        messageType,
+        `Unmapped stream-log messageType: ${String(messageType)}`,
+      );
+  }
+}
+
 /**
  * Reconstruct a provider-agnostic conversation from persisted transcript
- * rows. Uses the Anthropic-style content-block vocabulary
- * (`text`/`tool_use`/`tool_result`) that every existing conversation
- * consumer (`@agent/storage/conversationFormat`, the chat-export
- * normalizer, the CLI workspace-file extractor) already recognizes, so
- * downstream rendering code needs no new shape.
+ * rows. Uses the Anthropic-style content-block vocabulary (`text`,
+ * `thinking`, `tool_use`/`tool_result`, `server_tool_use`,
+ * `web_search_tool_result`, `web_fetch_tool_result`) that every existing
+ * conversation consumer (`@agent/storage/conversationFormat`, the
+ * chat-export normalizer, the CLI workspace-file extractor) already
+ * recognizes, so downstream rendering code needs no new shape.
  */
 export function streamLogEntriesToConversation(
   entries: readonly StreamLogEntry[],
 ): unknown[] {
-  const messages: unknown[] = [];
-  for (const entry of entries) {
-    if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) continue;
-    switch (entry.messageType) {
-      case MESSAGE_TYPES.USER_MESSAGE: {
-        if (entry.text) messages.push({ role: 'user', content: entry.text });
-        break;
-      }
-      case MESSAGE_TYPES.MODEL_RESPONSE: {
-        if (entry.text?.trim()) {
-          messages.push({
-            role: 'assistant',
-            content: [{ type: 'text', text: entry.text }],
-          });
-        }
-        break;
-      }
-      case MESSAGE_TYPES.TOOL_USE: {
-        const parsed = ToolUseLogSchema.safeParse(entry.data);
-        if (!parsed.success) break;
-        const tool = parsed.data;
-        messages.push({
-          role: 'assistant',
-          content: [
-            {
-              type: 'tool_use',
-              name: tool.toolName ?? 'unknown',
-              input: tool.input ?? {},
-            },
-          ],
-        });
-        const resultText = toolResultText(tool);
-        if (resultText !== undefined) {
-          messages.push({
-            role: 'user',
-            content: [{ type: 'tool_result', content: resultText }],
-          });
-        }
-        break;
-      }
-      default:
-        break;
-    }
-  }
-  return messages;
+  return entries.flatMap((entry) =>
+    entry.type === STREAM_LOG_ENTRY_TYPES.LOG
+      ? conversationMessagesForEntry(entry)
+      : [],
+  );
 }
 
 async function readLegacyConversation(
