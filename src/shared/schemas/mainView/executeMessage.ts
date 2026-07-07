@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 import { ToolConfigInputFieldsSchema } from '../toolConfig';
 

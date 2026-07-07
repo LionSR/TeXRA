@@ -32,7 +32,7 @@ import { StorageFS } from '@utils/files';
 import { SettingsMemoryController } from './SettingsMemoryController';
 
 // Type-only imports
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 type ConstructorArgs = ConstructorParameters<
   typeof SettingsMemoryController

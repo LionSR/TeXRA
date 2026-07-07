@@ -29,7 +29,7 @@ import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
-import type { ManualCriticismEntry } from '@platform/interfaces/criticism';
+import type { ManualCriticismEntry } from '@platform/interfaces';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';

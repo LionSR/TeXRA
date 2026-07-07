@@ -24,7 +24,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import { getDefaultTeamId } from './onboardingFunnel';
 
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 const DEFAULT_STARTUP_TEAM_ID = 'physicist';
 

@@ -4,7 +4,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { normalizeFilePath } from '@shared/utils/path';
 import { AbsoluteFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
-import { byStringProp } from '@utils/core/comparators';
+import { byStringProp } from '@utils/core';
 
 export interface ExecutionWorkspaceFile {
   readonly path: string;

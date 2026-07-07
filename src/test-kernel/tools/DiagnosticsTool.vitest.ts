@@ -4,7 +4,7 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import { installPlatform } from '../support/setupPlatform';
-import type { AddCriticismSink } from '@platform/interfaces/criticism';
+import type { AddCriticismSink } from '@platform/interfaces';
 
 afterEach(async () => {
   await installPlatform();

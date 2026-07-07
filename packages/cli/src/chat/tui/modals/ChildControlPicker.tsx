@@ -40,7 +40,7 @@ import { textDisplayWidth } from '../render/terminalText';
 import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
 import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
-import type { StreamSlice } from '../state/cliState/types';
+import type { StreamSlice } from '../state/cliState';
 
 interface ChildControlPickerProps {
   readonly availableColumns?: number;

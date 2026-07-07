@@ -26,7 +26,7 @@ import {
 import { trimSet } from './formatUtils';
 import type { ZodType } from 'zod';
 
-import type { Disposable } from '@platform/interfaces/disposable';
+import type { Disposable } from '@platform/interfaces';
 
 export interface BasePollSubscriptionState {
   listeners: Set<(text: string) => void>;

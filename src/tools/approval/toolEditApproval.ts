@@ -25,7 +25,7 @@ import { createStreamApprovalController } from './streamApprovalQueue';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
-} from '@platform/interfaces/toolEditApproval';
+} from '@platform/interfaces';
 
 export type { ToolEditApprovalRequest, ToolEditApprovalResult };
 

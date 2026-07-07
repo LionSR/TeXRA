@@ -3,12 +3,12 @@ import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
 
-import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { tryPlatform } from '@platform/platform';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { unique } from '@utils/core';
-import type { Disposable } from '@platform/interfaces/disposable';
+import type { Disposable } from '@platform/interfaces';
 import type { Stats } from 'node:fs';
 
 const STDIN_INPUT_TOKEN = '-';

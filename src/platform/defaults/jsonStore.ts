@@ -6,7 +6,7 @@ import writeFileAtomic from 'write-file-atomic';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
-import type { StateStore } from '../interfaces/state';
+import type { StateStore } from '../interfaces';
 
 const CHANNEL = 'JsonStore';
 

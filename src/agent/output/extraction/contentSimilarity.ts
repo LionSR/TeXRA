@@ -6,13 +6,124 @@
  * diff, so blocks can be routed to filenames without trusting response order.
  */
 
+import escapeRegExp from 'escape-string-regexp';
+
 import { diffTextLevenshtein } from '@utils/text/diff';
-import {
-  isClosingMarkdownFence,
-  type MarkdownFence,
-  parseMarkdownFenceDelimiter,
-} from './markdownFences';
-import { responseLines } from './responseText';
+
+// ---------------------------------------------------------------------------
+// responseText
+// ---------------------------------------------------------------------------
+
+/**
+ * Response-text preprocessing for fallback output extraction.
+ *
+ * Strips the model's thinking-tag XML blocks from a raw response and
+ * normalizes the remainder into lines, so the header/fence recovery
+ * heuristics only ever see candidate document text.
+ */
+
+function stripXmlTagBlocks(content: string, tagName: string): string {
+  const trimmedTag = tagName.trim();
+  if (!trimmedTag) {
+    return content;
+  }
+  return content.replaceAll(
+    new RegExp(
+      `<${escapeRegExp(trimmedTag)}\\b[^>]*>[\\s\\S]*?<\\/${escapeRegExp(trimmedTag)}>`,
+      'gi',
+    ),
+    '',
+  );
+}
+
+/** Strip `thinkingTag` blocks, normalize CRLF/CR to LF, and split into lines. */
+export function responseLines(content: string, thinkingTag: string): string[] {
+  return stripXmlTagBlocks(content, thinkingTag)
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .split('\n');
+}
+
+// ---------------------------------------------------------------------------
+// markdownFences
+// ---------------------------------------------------------------------------
+
+/**
+ * Markdown code-fence recognition for fallback output extraction.
+ *
+ * Parses backtick/tilde fence delimiter lines and strips a fence that wraps
+ * an entire block of lines, following CommonMark's closing-fence rule (same
+ * marker, at least the opening delimiter's length).
+ */
+
+export type MarkdownFence = {
+  marker: '`' | '~';
+  length: number;
+  info: string;
+};
+
+export function parseMarkdownFenceDelimiter(
+  line: string,
+): MarkdownFence | null {
+  const match = /^(`{3,}|~{3,})(?:\s*(.*?))?\s*$/.exec(line.trim());
+  if (!match) {
+    return null;
+  }
+  const delimiter = match[1];
+  return {
+    marker: delimiter[0] as '`' | '~',
+    length: delimiter.length,
+    info: (match[2] ?? '').trim(),
+  };
+}
+
+export function isLatexMarkdownFence(fence: MarkdownFence): boolean {
+  return fence.info === '' || /^(?:latex|tex)$/i.test(fence.info);
+}
+
+export function isClosingMarkdownFence(
+  line: string,
+  openingFence: MarkdownFence,
+): boolean {
+  const closingFence = parseMarkdownFenceDelimiter(line);
+  return (
+    closingFence !== null &&
+    closingFence.marker === openingFence.marker &&
+    closingFence.length >= openingFence.length
+  );
+}
+
+export function stripSurroundingMarkdownFence(
+  lines: readonly string[],
+): string[] {
+  const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
+  if (firstContentIndex === -1) {
+    return [];
+  }
+
+  const lastContentIndex = lines.findLastIndex((line) => line.trim() !== '');
+  const openingFence = parseMarkdownFenceDelimiter(lines[firstContentIndex]);
+  if (
+    firstContentIndex < lastContentIndex &&
+    openingFence &&
+    isClosingMarkdownFence(lines[lastContentIndex], openingFence) &&
+    !lines
+      .slice(firstContentIndex + 1, lastContentIndex)
+      .some((line) => isClosingMarkdownFence(line, openingFence))
+  ) {
+    return [
+      ...lines.slice(0, firstContentIndex),
+      ...lines.slice(firstContentIndex + 1, lastContentIndex),
+      ...lines.slice(lastContentIndex + 1),
+    ];
+  }
+
+  return [...lines];
+}
+
+// ---------------------------------------------------------------------------
+// contentSimilarity
+// ---------------------------------------------------------------------------
 
 /** Opening delimiter for a fenced block explicitly tagged as latex/tex. */
 const LATEX_FENCE_OPEN_REGEX = /^(`{3,}|~{3,})\s*(?:latex|tex)\s*$/i;

@@ -73,8 +73,7 @@ import {
   RESTART_REPAIR_PHASES,
 } from '@shared/progressView/backend/restartRepair';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
-import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
+import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {

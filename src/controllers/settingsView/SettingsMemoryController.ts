@@ -2,7 +2,7 @@
 import type { PromptHost } from '@hosts/uiHosts';
 
 // Local imports - shared
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   MemoryPreview,
   MemoryViewItem,

@@ -42,13 +42,12 @@ import {
   streams$,
   tabStreams$,
 } from '@progressView/frontend/progressState';
-import { COMMON_COMMANDS } from '@shared/ipc';
+import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
 import { Signal } from '@shared/signals';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { SetThemeMessageSchema } from '@shared/schemas/commonViewMessages';
 import {
   ProgressViewOutboundMessageSchema,

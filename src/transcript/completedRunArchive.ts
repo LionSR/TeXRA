@@ -27,7 +27,7 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
-import { assertNever } from '@utils/core/typeGuards';
+import { assertNever } from '@utils/core';
 
 import { resolvePersistedStreamIdForExecution } from './executionStreamResolver';
 import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';

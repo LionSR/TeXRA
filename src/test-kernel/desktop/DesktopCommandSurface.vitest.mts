@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview commands
 import type { DesktopCommandActions } from '@desktop/desktopCommandSurface';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - command catalog and shared schemas
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';

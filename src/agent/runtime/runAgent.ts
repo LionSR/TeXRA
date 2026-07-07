@@ -2,7 +2,7 @@ import { registerExecution } from '@agent/storage';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { ExecutionId } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core/executionId';
+import { generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';

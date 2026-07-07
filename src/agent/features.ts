@@ -1,4 +1,6 @@
+import { platform } from '@platform/platform';
 import { SharedToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isGoalEnabled } from '@tools/goal';
 
 /**
@@ -13,9 +15,24 @@ import { isGoalEnabled } from '@tools/goal';
  * `maybeBuildGoalContinuation` directly at the pre-wait point. There is no
  * idle-continuation registry — goal was its only consumer.
  */
-export function registerGoalFeature(): void {
+function registerGoalFeature(): void {
   SharedToolInjectionRegistry.register({
     toolName: 'plan',
     shouldInject: () => isGoalEnabled(),
   });
+}
+
+function registerMemoryFeature(): void {
+  SharedToolInjectionRegistry.register({
+    toolName: 'memory',
+    shouldInject: () =>
+      platform().globalState.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true),
+  });
+}
+
+// Must be called after initPlatform(): predicates read host services
+// (platform().config, platform().globalState).
+export function registerAgentFeatures(): void {
+  registerMemoryFeature();
+  registerGoalFeature();
 }

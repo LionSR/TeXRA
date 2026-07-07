@@ -37,7 +37,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
-import { generateExecutionId } from '@utils/core/executionId';
+import { generateExecutionId } from '@utils/core';
 import {
   NativeSubagentStrategy,
   subagentDeliveryMessage,

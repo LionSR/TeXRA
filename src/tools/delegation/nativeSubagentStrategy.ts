@@ -60,7 +60,7 @@ import {
   type DiffFileInfo,
 } from '@tools/subagentDiffs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
+import type { ToolEditApprovalPort } from '@platform/interfaces';
 
 export interface NativeSubagentStrategyParams {
   readonly executionId: ExecutionId;

@@ -8,7 +8,7 @@ import type {
 } from '@shared/schemas/profileViewMessages';
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
 import { buildProfileMessage } from './ProfileMessageBuilder';
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 export type SettingsReliabilitySetting = Omit<NumberVscodeSetting, 'value'> & {
   defaultValue: number;

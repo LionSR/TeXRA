@@ -6,7 +6,7 @@ import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
-} from '@platform/interfaces/config';
+} from '@platform/interfaces';
 
 interface VscodeConfigInspection<T> {
   defaultValue?: T;

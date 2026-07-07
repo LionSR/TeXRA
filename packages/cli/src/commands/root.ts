@@ -9,29 +9,23 @@ import {
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeTextStderr } from '../runtime/logSinks';
 
-import { isCliError } from './_helpers/dispatch/cliError';
-import { resolveDeepestSubCommand } from './_helpers/dispatch/commandTree';
 import {
+  isCliError,
+  resolveDeepestSubCommand,
   normalizeRootShortcuts,
   reorderGlobalFlags,
   reorderNestedGlobalFlags,
-} from './_helpers/dispatch/reorderFlags';
-import {
   setUsageColorOverrideFromRawArgs,
   showUsage,
   showUsageStderr,
   withUsageSections,
-} from './_helpers/dispatch/usage';
-import {
   detectUnknownCliCommand as detectUnknownCliCommandImpl,
   formatUnknownCliCommand,
   type UnknownCliCommand,
-} from './_helpers/dispatch/unknownCommand';
-import {
   detectUnknownCliFlag as detectUnknownCliFlagImpl,
   formatUnknownCliFlag,
   type UnknownCliFlag,
-} from './_helpers/dispatch/unknownFlag';
+} from './_helpers/dispatch';
 import { getExitCode, resetExitCode } from './_helpers/exitCode';
 import { ROOT_ROUTING_ARGS } from './_helpers/globalArgs';
 

@@ -12,7 +12,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 function fakeStateStore(initial: Record<string, unknown> = {}): StateStore {
   const store = new Map<string, unknown>(Object.entries(initial));

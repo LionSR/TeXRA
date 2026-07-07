@@ -2,7 +2,7 @@ import type {
   Goal,
   UpdateGoalListMessage,
 } from '@shared/schemas/settingsViewMessages';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 export interface SettingsGoalControllerDeps {
   listGoals(): readonly Goal[];

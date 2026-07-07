@@ -8,10 +8,7 @@ import {
   formatResumeUsage,
   type ResumeUsageStats,
 } from '@cli/chat/tui/state/resumeHint';
-import {
-  NO_BYPASS,
-  type StreamSlice,
-} from '@cli/chat/tui/state/cliState/types';
+import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   AgentCategory,
   type ActiveChildInfo,

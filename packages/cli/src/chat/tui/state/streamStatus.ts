@@ -2,7 +2,7 @@ import {
   StreamStatusService,
   type StreamStatusChange,
 } from '@agent/runtime/StreamStatusService';
-import { setStreamStatusInCliState } from './cliState/streamsSlice';
+import { setStreamStatusInCliState } from './cliState';
 
 export function applyStreamStatusChange(change: StreamStatusChange): void {
   setStreamStatusInCliState({

@@ -20,7 +20,7 @@ import { type OAuthProvider } from '@auth/sharedConfig';
 import type { AuthCallbackUriParts } from '@auth/core/authCallback';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { TEXRA_PROTOCOL } from '../desktopProtocol.js';
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
   DesktopProtocolCallback,

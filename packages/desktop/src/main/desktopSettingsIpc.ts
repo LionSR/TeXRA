@@ -49,8 +49,7 @@ import {
 } from '@model/computeModelOptions';
 import type { ExecutionId } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { SETTINGS_VIEW_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -126,8 +125,7 @@ import {
   type DesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
-import type { ConfigProvider } from '@platform/interfaces/config';
-import type { StateStore } from '@platform/interfaces/state';
+import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 
 type ToolDashboardBuilder = (

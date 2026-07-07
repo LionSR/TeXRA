@@ -32,18 +32,18 @@ import {
 } from '@shared/streams/streamMetaReducer';
 import { isObject } from '@utils/core';
 
-import { activeStreamId } from './cliState/focusSlice';
 import {
+  activeStreamId,
   registerChildStreams,
   setParentStream,
-} from './cliState/parentStreamSlice';
-import { removeStream } from './cliState/removeStream';
-import { patchStream } from './cliState/streamsSlice';
+  removeStream,
+  patchStream,
+  type StreamSlice,
+} from './cliState';
 import { mergeChildStreams } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
-import type { StreamSlice } from './cliState/types';
 import type { StreamSnapshotStore } from '@transcript';
 
 type Emit = <K extends ProgressEvent>(

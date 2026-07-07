@@ -11,8 +11,10 @@ import {
   type TodoStatus,
 } from '@shared/schemas';
 
-import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
-import { streams as streamsSignal } from '../state/cliState/streamsSlice';
+import {
+  activeStreamId as activeStreamIdSignal,
+  streams as streamsSignal,
+} from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import { TODO_ACTIVE, TODO_DONE, TODO_PENDING } from '../ui/glyphs';
 

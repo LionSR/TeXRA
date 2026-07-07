@@ -4,7 +4,7 @@ import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { isLiveElapsedStatus } from '@common/constants/streamStatus';
 import { type StreamLifecycleStatus } from '@shared/schemas';
 
-import type { ConversationEntry } from '../state/cliState/types';
+import type { ConversationEntry } from '../state/cliState';
 
 const INQUIRY_CONTINUATION_RE =
   /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;

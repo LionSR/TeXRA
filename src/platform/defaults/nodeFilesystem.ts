@@ -12,7 +12,7 @@ import {
   FileType,
   type FileSystemProvider,
   type FileStat,
-} from '../interfaces/filesystem';
+} from '../interfaces';
 import * as nodeFsOps from './nodeFsOps';
 
 /**

@@ -25,7 +25,7 @@ import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/pro
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
-} from '@platform/interfaces/toolEditApproval';
+} from '@platform/interfaces';
 
 import type { DesktopToolEditApprovalController } from './desktopToolEditApproval.js';
 

@@ -12,10 +12,7 @@ import {
   selectCliRunnableModel,
 } from '@cli/runtime/modelAccess';
 
-import {
-  patchSessionMeta,
-  sessionMeta,
-} from '@cli/chat/tui/state/cliState/sessionSlice';
+import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';

@@ -5,7 +5,7 @@ import {
   HIDDEN_PROVIDER_REASONING_MARKER,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
-import { isObject } from '@utils/core/typeGuards';
+import { isObject } from '@utils/core';
 
 import type {
   CliHistoryConversationPreview,

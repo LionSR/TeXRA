@@ -1,7 +1,4 @@
-import {
-  SHUTDOWN_PHASE,
-  type LifecycleHost,
-} from '@platform/interfaces/lifecycle';
+import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import {
   ClaudeAgentSessions,
   CodexThreads,
