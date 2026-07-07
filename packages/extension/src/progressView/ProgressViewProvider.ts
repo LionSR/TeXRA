@@ -178,6 +178,8 @@ export class ProgressViewProvider
       createExtensionHostInteractions({
         runtimeHost: extensionAgentRuntimeHost,
         getApprovalHandlers: () => this.approvalHandlers,
+        removeStream: (streamId) =>
+          this.messageHandler.removeStreamFromHost(streamId),
       }),
     );
     this._disposables.push({ dispose: this.detachHostInteractions });
