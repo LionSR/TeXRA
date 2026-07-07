@@ -426,7 +426,16 @@ export function attachTuiRunFactSubscription(
   activeGoalPausedNoticeEchoGuard = goalPausedNoticeEchoGuard;
   activeProcessesEchoGuard = activeProcessesGuard;
   activeProcessOutputEchoGuard = processOutputGuard;
-  const detach = events.subscribe(
+  const detachSessionFacts = events.subscribe(
+    (sessionEvent) => {
+      if (sessionEvent.scope !== 'session') return;
+      if (sessionEvent.event.type === 'setParentStream') {
+        applyParentStream(sessionEvent.event.payload);
+      }
+    },
+    { scope: 'session' },
+  );
+  const detachRunFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
       const { event } = sessionEvent;
@@ -500,7 +509,8 @@ export function attachTuiRunFactSubscription(
     },
   );
   return () => {
-    detach();
+    detachRunFacts();
+    detachSessionFacts();
     usageEchoGuard.clear();
     goalPausedNoticeEchoGuard.clear();
     activeProcessesGuard.clear();

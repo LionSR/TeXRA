@@ -17,6 +17,7 @@ import type {
   RequestShowInstructionPayload,
   RetryPermission,
   SetActiveStreamPayload,
+  SetParentStreamPayload,
   ShowAgentConfigBannerPayload,
   StreamPhase,
   StreamSubstate,
@@ -30,6 +31,7 @@ import type {
   UpdateProcessOutputPayload,
   UpdateQueuedFollowUpsPayload,
   UpdateRoundStagePayload,
+  UpdateStreamDescriptionPayload,
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
   UserQuestionPermission,
@@ -51,8 +53,8 @@ import type {
  * session/host surfaces.
  * Every fact-plane key below references its named vocabulary type — this map
  * projects the vocabulary, it does not define it. Keys still typed inline are
- * not facts: host-rail status/RPC keys plus the Stage-5 residue trio
- * (`setTaskState`, `updateStreamDescription`, `setParentStream`).
+ * not facts: host-rail status/RPC keys plus the remaining Stage-5 residue
+ * (`setTaskState`).
  */
 export interface ProgressEventPayloads {
   // ── Run/stream progress ──
@@ -114,14 +116,8 @@ export interface ProgressEventPayloads {
   updateActiveSubagents: UpdateActiveSubagentsPayload;
   updateActiveProcesses: UpdateActiveProcessesPayload;
   updateProcessOutput: UpdateProcessOutputPayload;
-  updateStreamDescription: {
-    streamId: StreamTabId;
-    description: string;
-  };
-  setParentStream: {
-    childStreamId: StreamTabId;
-    parentStreamId: StreamTabId | null;
-  };
+  updateStreamDescription: UpdateStreamDescriptionPayload;
+  setParentStream: SetParentStreamPayload;
   /** A follow-up message was sent to an active tool-use session.
    *  Listened by blocking tools (e.g. ExecutionsTool wait) to abort early. */
   followUpSent: { streamId: StreamTabId };

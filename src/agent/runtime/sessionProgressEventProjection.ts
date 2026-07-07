@@ -106,6 +106,8 @@ export function projectSessionFactToProgressEvent(
       return { event: 'setActiveStream', payload: fact.payload };
     case 'updateStreamDescription':
       return { event: 'updateStreamDescription', payload: fact.payload };
+    case 'setParentStream':
+      return { event: 'setParentStream', payload: fact.payload };
   }
 }
 
@@ -173,13 +175,6 @@ export function projectRunFactToProgressEvent(
         },
       };
     }
-    return {
-      event: 'setParentStream',
-      payload: {
-        childStreamId: event.childStreamId,
-        parentStreamId: event.parentStreamId,
-      },
-    };
   }
 
   if (event.type === 'process.output') {
