@@ -25,3 +25,5 @@ export function findRatchetViolations(
   current: KnipCounts,
   baseline: KnipCounts,
 ): RatchetViolation[];
+
+export function parseKnipIssues(stdout: string, stderr: string): KnipIssue[];
