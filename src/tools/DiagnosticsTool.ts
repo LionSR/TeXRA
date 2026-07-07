@@ -128,7 +128,7 @@ export class DiagnosticsTool extends defineTool({
     const diagnosticsPath = this.resolveAbsolutePath(path);
 
     try {
-      const messages = await platform().linter(diagnosticsPath);
+      const messages = (await platform().linter?.(diagnosticsPath)) ?? [];
       const counts = countBySeverity(messages);
       const header = `${diagnosticsPath}: ${formatCounts(counts)}`;
       const summary = `Diagnostics ${command} for ${diagnosticsPath}`;
@@ -173,13 +173,13 @@ export class DiagnosticsTool extends defineTool({
 
     try {
       const absolutePath = this.resolveAbsolutePath(path);
-      const result = platform().addCriticismSink({
+      const result = platform().addCriticismSink?.({
         absolutePath,
         line,
         message,
         severity,
         confidence,
-      });
+      }) ?? { accepted: false, resolvedPath: '' };
       if (!result.accepted) {
         return {
           status: 'executed',
