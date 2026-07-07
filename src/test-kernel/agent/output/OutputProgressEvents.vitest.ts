@@ -13,7 +13,6 @@ import {
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { normalizeRunId } from '@common/constants/runIds';
 import type {
   AgentFileLocation,
@@ -27,6 +26,7 @@ import type {
 } from '@shared/schemas';
 import { FlexibleFS } from '@utils/files';
 import { createRecordingHost, withTestRunContext } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 function createLocation(path: string): FileLocation {
   return { kind: 'external', absolutePath: path };
@@ -135,7 +135,10 @@ function createProjectedRuntime(streamId: string) {
   const detachTrace = logger.subscribe((event) =>
     hub.emit({ scope: 'run', streamId: typedStreamId, event }),
   );
-  const detachProjection = attachLegacyProgressEventProjection(hub, host);
+  const detachProjection = attachSessionProgressEventProjectionForTest(
+    hub,
+    host,
+  );
   return {
     events,
     host,
