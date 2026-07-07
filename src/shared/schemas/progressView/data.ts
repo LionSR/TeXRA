@@ -44,7 +44,7 @@ export const MissingOutputsPayloadSchema = z.object({
  * the split `normalizeConversationForExport` already renders attachment
  * markers for (`[image attachment]` / `[document attachment]`).
  */
-export const MediaAttachmentKindSchema = z.enum(['image', 'document']);
+const MediaAttachmentKindSchema = z.enum(['image', 'document']);
 export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
 
 /**
@@ -56,7 +56,6 @@ export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
 export const UserMessagePayloadSchema = z.object({
   attachments: z.array(MediaAttachmentKindSchema).optional(),
 });
-export type UserMessagePayload = z.infer<typeof UserMessagePayloadSchema>;
 
 export const TOOL_USE_STATUS = {
   IN_PROGRESS: 'in_progress',
