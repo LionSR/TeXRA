@@ -289,7 +289,6 @@ export function createHeadlessCliHostInteractions(
       return { threadId: request.threadId };
     },
     handleProgressEvent: () => false,
-    pending: () => [],
     resolve: () => false,
     cancelForStream: () => {},
   };
