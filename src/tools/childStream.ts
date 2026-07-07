@@ -1,9 +1,10 @@
 // Local imports - agent
 import { createRunTrace } from '@transcript';
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
@@ -20,12 +21,7 @@ import { deriveRunOutcome } from '@common/constants/streamStatus';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
-import {
-  RUN_OUTCOME,
-  STREAM_PHASE,
-  STREAM_STATUS,
-  buildRunDescriptor,
-} from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_PHASE, buildRunDescriptor } from '@shared/schemas';
 
 // Local imports - utils
 import { formatDuration } from '@utils/core';
@@ -51,15 +47,19 @@ interface FinalizeChildStreamOptions {
   } | null;
   error?: unknown;
   errorMessage?: string;
-  status?: ChildStreamTerminalStatus;
+  /** Terminal facts reported by a child session loop (agent-CLI). */
+  failed?: boolean;
+  cancelled?: boolean;
+  /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
+  stage?: Pick<StageHandle, 'end'>;
+  /**
+   * Persist the outcome projection to execution history. Callers that own a
+   * richer persistence block (background bash) leave this unset.
+   */
+  persistTerminalStatus?: boolean;
   /** Remove the child stream tab from the progress view once finalized. */
   autoClose?: boolean;
 }
-
-type ChildStreamTerminalStatus =
-  | typeof STREAM_STATUS.READY
-  | typeof STREAM_STATUS.ERROR
-  | typeof STREAM_STATUS.STOPPED;
 
 export interface ChildStream {
   childStreamId: StreamTabId;
@@ -70,8 +70,13 @@ export interface ChildStream {
   beginTurn: () => void;
   /** The active turn failed; preserve explicit user stops. */
   failTurn: () => void;
-  /** Complete the child stream lifecycle through the owning execution handle. */
-  finalize: (options?: FinalizeChildStreamOptions) => void;
+  /**
+   * Complete the child stream lifecycle through the owning execution handle.
+   * Resolves once the shared terminal finalizer has persisted, settled, and
+   * untracked — callers that must not exit before the terminal status lands
+   * (headless CLI session loops) await it.
+   */
+  finalize: (options?: FinalizeChildStreamOptions) => Promise<void>;
 }
 
 /** Create a child stream tab and execution handle for a background child task. */
@@ -169,15 +174,14 @@ export function createChildStream(
         STREAM_PHASE.FAILED,
       );
     },
-    finalize: (finalizeOptions) => {
+    finalize: (finalizeOptions) =>
       finalizeChildStream({
         handle,
         session,
         logger: runTrace.trace,
         disposeTrace,
         options: finalizeOptions,
-      });
-    },
+      }),
   };
 }
 
@@ -189,8 +193,15 @@ interface FinalizeChildStreamArgs {
   options?: FinalizeChildStreamOptions;
 }
 
-/** Finalize a child stream tab and untrack its execution handle. */
-function finalizeChildStream(args: FinalizeChildStreamArgs): void {
+/**
+ * Finalize a child stream tab: presentation logging plus the child-specific
+ * outcome derivation, then the shared terminal finalizer (settle, untrack,
+ * terminal stream phase) and the autoClose emit. Child streams never traverse
+ * the run lifecycle, so this is their only settle point.
+ */
+async function finalizeChildStream(
+  args: FinalizeChildStreamArgs,
+): Promise<void> {
   const { handle, session, logger, disposeTrace, options } = args;
   const hasError = options?.error != null || options?.errorMessage != null;
   const errorMessage =
@@ -212,57 +223,38 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     });
   }
 
-  // The terminal status the child finishes with — the single source of truth
-  // for both the registry status and the handle's result outcome. Deriving from
-  // status (not just `hasError`) covers callers that pass ERROR without an
-  // error payload, and long-lived child loops that finalize after an interrupt.
-  const requestedStatus =
-    options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY);
-  const currentStatus = session.executions.getStatus(handle).status;
-  let finalStatus: ChildStreamTerminalStatus;
-  if (
-    currentStatus === STREAM_PHASE.CANCELLED ||
-    requestedStatus === STREAM_STATUS.STOPPED
-  ) {
-    finalStatus = STREAM_STATUS.STOPPED;
-  } else if (hasError) {
-    finalStatus = STREAM_STATUS.ERROR;
-  } else {
-    finalStatus = requestedStatus;
-  }
+  // The terminal outcome the child finishes with — the single derivation for
+  // everything the shared finalizer projects. Explicit user stops win: the
+  // registry may already show CANCELLED (stop/kill transitioned it) for a
+  // child whose own exit reported a failure (e.g. a killed bash process exits
+  // non-zero), and long-lived child loops finalize after an interrupt. Clean
+  // exits project to `completed` so the tab clears.
+  const stopped =
+    options?.cancelled === true ||
+    session.executions.getStatus(handle).status === STREAM_PHASE.CANCELLED;
   const outcome = deriveRunOutcome({
-    failed: finalStatus === STREAM_STATUS.ERROR,
-    cancelled: finalStatus === STREAM_STATUS.STOPPED,
+    failed: !stopped && (options?.failed === true || hasError),
+    cancelled: stopped,
   });
   const error =
-    outcome === 'failed'
+    outcome === RUN_OUTCOME.FAILED
       ? {
           kind: classifyAgentError(options?.error),
           message: errorMessage ?? 'Child stream failed',
         }
       : undefined;
 
-  // Settle the handle's `result` before untracking (F-2): child streams never
-  // traverse the run lifecycle, so this is their only settle point. Without it
-  // a consumer awaiting a child handle's `result` would hang forever.
-  handle.settleResult({
-    type: 'result',
+  await finalizeRunTerminal({
+    handle,
+    executions: session.executions,
+    streamStatus: session.status,
     outcome,
-    executionId: handle.executionId,
-    streamId: handle.childStreamId,
-    agentName: handle.agentName,
-    category: handle.category,
+    error,
     isSubagent: handle.parentStreamId !== handle.childStreamId,
-    ...(error ? { error } : {}),
-  });
-
-  session.executions.finishAgentExecution(handle, {
-    status:
-      outcome === RUN_OUTCOME.FAILED
-        ? STREAM_PHASE.FAILED
-        : outcome === RUN_OUTCOME.CANCELLED
-          ? STREAM_PHASE.CANCELLED
-          : STREAM_PHASE.COMPLETED,
+    stage: options?.stage,
+    // No trace emit: child-stream results must stay out of `session.onResult`
+    // (host toast) consumers — the loop already presents them as follow-ups.
+    persistTerminalStatus: options?.persistTerminalStatus === true,
   });
   disposeTrace();
 

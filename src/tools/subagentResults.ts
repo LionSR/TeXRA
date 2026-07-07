@@ -120,18 +120,15 @@ function formatMemoryMisses(
 }
 
 /**
- * Shared opening lines for both delivery and error messages: wall-time,
- * working-directory, then memory-misses, in that order.
+ * Shared context lines for both native delivery and error messages:
+ * working-directory, then memory-misses, in that order (rendered right after
+ * the builder-owned wall-time).
  */
 function formatDeliveryPreamble(options: {
-  wallTimeMs?: number;
   workingDirectory?: string;
   memoryMisses?: readonly AttachedMemoryMiss[];
 }): string[] {
   const lines: string[] = [];
-  if (options.wallTimeMs !== undefined) {
-    lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
-  }
   const wdElement = workingDirectoryElement(options.workingDirectory);
   if (wdElement) lines.push(wdElement);
   lines.push(...formatMemoryMisses(options.memoryMisses));
@@ -160,7 +157,6 @@ export function formatSubagentDelivery(
 ): string {
   const lines = [
     ...formatDeliveryPreamble({
-      wallTimeMs: options?.wallTimeMs,
       workingDirectory: options?.workingDirectory,
       memoryMisses: result.memoryMisses,
     }),
@@ -197,16 +193,24 @@ export function formatSubagentDelivery(
     }
   }
 
-  return formatChildRunDelivery({
-    tag: 'subagent-result',
-    executionId: result.executionId,
-    attributes: [
-      { name: 'agent', value: agentName },
-      { name: 'category', value: result.category },
-      { name: 'status', value: result.outcome },
-    ],
-    bodyLines: lines,
-  });
+  return formatChildRunDelivery(
+    {
+      tag: 'subagent-result',
+      executionId: result.executionId,
+      attributes: [
+        { name: 'agent', value: agentName },
+        { name: 'category', value: result.category },
+        { name: 'status', value: result.outcome },
+      ],
+    },
+    {
+      wallTime:
+        options?.wallTimeMs !== undefined
+          ? formatDuration(options.wallTimeMs)
+          : undefined,
+      lines,
+    },
+  );
 }
 
 /**
@@ -223,23 +227,27 @@ export function formatSubagentError(
   },
 ): string {
   const formatted = normalizeProviderError(err);
-  const preambleLines = [
-    ...formatDeliveryPreamble({
-      wallTimeMs: options?.wallTimeMs,
-      workingDirectory: options?.workingDirectory,
-      memoryMisses: options?.memoryMisses,
-    }),
-  ];
-  return formatChildRunError({
-    tag: 'subagent-error',
-    executionId,
-    attributes: [
-      { name: 'agent', value: agentName },
-      { name: 'retryable', value: formatted.userRetryable },
-    ],
-    preambleLines,
-    message: formatted.message,
-  });
+  return formatChildRunError(
+    {
+      tag: 'subagent-error',
+      executionId,
+      attributes: [
+        { name: 'agent', value: agentName },
+        { name: 'retryable', value: formatted.userRetryable },
+      ],
+    },
+    {
+      wallTime:
+        options?.wallTimeMs !== undefined
+          ? formatDuration(options.wallTimeMs)
+          : undefined,
+      lines: formatDeliveryPreamble({
+        workingDirectory: options?.workingDirectory,
+        memoryMisses: options?.memoryMisses,
+      }),
+      message: formatted.message,
+    },
+  );
 }
 
 // ============================================================================

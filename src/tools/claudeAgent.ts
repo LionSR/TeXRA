@@ -38,6 +38,7 @@ import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { isNonEmptyString } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -50,12 +51,14 @@ import { type ChildStream } from './childStream';
 import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   publishAgentCliStreamUsage,
-  formatAgentCliDelivery,
-  formatAgentCliError,
   launchAgentCliSession,
   resumeAgentCliSession,
   withAgentCliApproval,
 } from './agentCliShared';
+import {
+  formatChildRunDelivery,
+  formatChildRunError,
+} from './deliveryEnvelope';
 import {
   runAgentCliSession,
   type AgentCliSessionStrategy,
@@ -146,21 +149,25 @@ function formatClaudeDelivery(
     typeof turn.totalCostUsd === 'number' && turn.totalCostUsd > 0
       ? [`<cost-usd>${turn.totalCostUsd.toFixed(4)}</cost-usd>`]
       : undefined;
-  return formatAgentCliDelivery({
-    tag: 'claude-agent-result',
-    executionId,
-    prompt,
-    wallTimeMs,
-    response: turn.finalResponse,
-    idAttr: { name: 'session-id', value: turn.sessionId },
-    usage: turn.usage
-      ? {
-          input: turn.usage.input_tokens ?? 0,
-          output: turn.usage.output_tokens ?? 0,
-        }
-      : null,
-    extraLines,
-  });
+  return formatChildRunDelivery(
+    {
+      tag: 'claude-agent-result',
+      executionId,
+      prompt,
+      attributes: [{ name: 'session-id', value: turn.sessionId || null }],
+    },
+    {
+      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      response: turn.finalResponse,
+      usage: turn.usage
+        ? {
+            input: turn.usage.input_tokens ?? 0,
+            output: turn.usage.output_tokens ?? 0,
+          }
+        : null,
+      lines: extraLines,
+    },
+  );
 }
 
 // ============================================================================
@@ -452,11 +459,13 @@ function startClaudeAgentLoop(params: {
     formatDelivery: (turn, prompt, wallTimeMs) =>
       formatClaudeDelivery(executionId, prompt, wallTimeMs, turn),
     formatError: (turn, prompt, err) =>
-      formatAgentCliError(
-        'claude-agent-error',
-        executionId,
-        prompt,
-        err ?? turn?.errorMessage ?? turn?.finalResponse,
+      formatChildRunError(
+        { tag: 'claude-agent-error', executionId, prompt },
+        {
+          message: toErrorMessage(
+            err ?? turn?.errorMessage ?? turn?.finalResponse,
+          ),
+        },
       ),
     onSessionCleanup: () => {
       ClaudeAgentSessions.releaseMany(storedSessionIds);
