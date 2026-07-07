@@ -290,7 +290,9 @@ export function createHeadlessCliHostInteractions(
     },
     handleProgressEvent: () => false,
     resolve: () => false,
-    cancelForStream: () => {},
+    // Headless requests decide inline (policy or prompt hooks) — there is no
+    // pending registry to cancel into.
+    cancel: () => {},
   };
 }
 

@@ -99,7 +99,7 @@ type BridgeWithSession = TestableBridge & {
       emit(event: string, payload: unknown): void;
     };
     interactions: {
-      cancelAll(cause?: string): void;
+      cancel(selector?: { cause?: string }): void;
     };
     status: StreamStatusMachine;
     followUps: {
@@ -2193,9 +2193,9 @@ describe('DesktopProgressBridge', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
-    const cancelAll = vi.spyOn(
+    const cancel = vi.spyOn(
       (bridge as BridgeWithSession).session.interactions,
-      'cancelAll',
+      'cancel',
     );
 
     try {
@@ -2220,7 +2220,7 @@ describe('DesktopProgressBridge', () => {
         streams: [],
         streamStates: {},
       });
-      expect(cancelAll).toHaveBeenCalledOnce();
+      expect(cancel).toHaveBeenCalledWith({ cause: 'All streams deleted.' });
     } finally {
       bridge.dispose();
     }

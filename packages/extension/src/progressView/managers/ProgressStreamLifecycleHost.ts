@@ -38,7 +38,14 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     options: { clearRetryRequest?: boolean } = {},
   ): Promise<void> {
     if (options.clearRetryRequest === true) {
-      this.interactions.cancelForStream(stream, 'Retry request cleared.');
+      // Kind-scoped: clear only the pending retry panel. Other pending
+      // interactions on the stream (plan approvals, proposals, questions)
+      // belong to the run being stopped and settle through their own paths.
+      this.interactions.cancel({
+        streamId: stream,
+        kind: 'retry',
+        cause: 'Retry request cleared.',
+      });
     }
     await vscode.commands.executeCommand('texra.stopAgent', stream);
   }

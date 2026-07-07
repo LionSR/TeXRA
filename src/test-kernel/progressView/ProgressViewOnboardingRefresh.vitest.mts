@@ -47,7 +47,7 @@ function createHostInteractions(
   return {
     handleProgressEvent: vi.fn(() => false),
     resolve: vi.fn(() => false),
-    cancelForStream: vi.fn(),
+    cancel: vi.fn(),
     ...overrides,
   };
 }

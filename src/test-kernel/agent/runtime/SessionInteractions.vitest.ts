@@ -178,7 +178,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     }
   });
 
-  it('cancelForStream settles every pending request for that stream only', async () => {
+  it('a stream-scoped cancel settles every pending request for that stream only', async () => {
     const { session } = createPortSession();
     const otherStreamId = 'stream:interactions-other' as StreamTabId;
     try {
@@ -200,7 +200,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
         goalEnabled: false,
       });
 
-      session.interactions.cancelForStream(streamId, 'Run ended.');
+      session.interactions.cancel({ streamId, cause: 'Run ended.' });
 
       await expect(pendingPlan).resolves.toMatchObject({ action: 'reject' });
       await expect(pendingProposal).resolves.toMatchObject({
@@ -227,6 +227,44 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
         }),
       ).toBe(true);
       await expect(surviving).resolves.toEqual({ action: 'approve' });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('a kind-scoped cancel settles only that kind on the stream', async () => {
+    const { session } = createPortSession();
+    try {
+      const pendingPlan = session.interactions.requestPlanApproval({
+        approvalId: 'approval:kind-scope',
+        streamId,
+        plan,
+        goalEnabled: false,
+      });
+      const pendingProposal = session.interactions.requestAgentProposal({
+        proposalId: 'proposal:kind-scope',
+        streamId,
+        ...proposal,
+      });
+
+      session.interactions.cancel({
+        streamId,
+        kind: 'plan',
+        cause: 'Plan approval cleared.',
+      });
+
+      await expect(pendingPlan).resolves.toMatchObject({ action: 'reject' });
+
+      // The proposal on the same stream is untouched and still resolvable.
+      expect(
+        session.interactions.resolve('proposal:kind-scope', {
+          kind: 'proposal',
+          action: 'approve',
+        }),
+      ).toBe(true);
+      await expect(pendingProposal).resolves.toMatchObject({
+        action: 'approve',
+      });
     } finally {
       session.dispose();
     }

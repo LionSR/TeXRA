@@ -63,7 +63,7 @@ function runtimeHost(): AgentRuntimeHost {
     interactions: {
       handleProgressEvent: vi.fn(() => false),
       resolve: vi.fn(() => false),
-      cancelForStream: vi.fn(),
+      cancel: vi.fn(),
     } satisfies HostInteractions,
   };
 }

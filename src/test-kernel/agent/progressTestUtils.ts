@@ -1,12 +1,15 @@
 // Local imports
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  HostBashApprovalResult,
-  HostInteractions,
-  HostUserQuestionResult,
-  PlanApprovalResult,
-  ProposalResult,
-  RetryResult,
+import {
+  matchesCancelSelector,
+  type HostBashApprovalResult,
+  type HostInteractionCancelSelector,
+  type HostInteractions,
+  type HostUserQuestionResult,
+  type PendingInteractionKind,
+  type PlanApprovalResult,
+  type ProposalResult,
+  type RetryResult,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -207,14 +210,17 @@ export function createRecordingHost(): {
       }
       return false;
     },
-    cancelForStream: (streamId) => cancelWhere((s) => s === streamId),
-    cancelUnscoped: () => cancelWhere((s) => !s),
-    cancelAll: () => cancelWhere(() => true),
-    dispose: () => cancelWhere(() => true),
+    cancel: (selector = {}) => cancelWhere(selector),
+    dispose: () => cancelWhere({}),
   };
-  function cancelWhere(match: (streamId?: string) => boolean): void {
+  function cancelWhere(selector: HostInteractionCancelSelector): void {
+    const match = (kind: PendingInteractionKind, streamId?: string) =>
+      matchesCancelSelector(
+        { kind, streamId: streamId || undefined },
+        selector,
+      );
     for (const [requestId, pending] of pendingBashes) {
-      if (!match(pending.streamId)) continue;
+      if (!match('bash', pending.streamId)) continue;
       pendingBashes.delete(requestId);
       events.push({
         event: 'resolveBashPermission',
@@ -223,7 +229,7 @@ export function createRecordingHost(): {
       pending.settle({ accepted: false });
     }
     for (const [approvalId, pending] of pendingPlans) {
-      if (!match(pending.streamId)) continue;
+      if (!match('plan', pending.streamId)) continue;
       pendingPlans.delete(approvalId);
       events.push({
         event: 'resolvePlanApproval',
@@ -232,7 +238,7 @@ export function createRecordingHost(): {
       pending.settle({ action: 'reject' });
     }
     for (const [proposalId, pending] of pendingProposals) {
-      if (!match(pending.streamId)) continue;
+      if (!match('proposal', pending.streamId)) continue;
       pendingProposals.delete(proposalId);
       events.push({
         event: 'resolveAgentProposal',
@@ -241,7 +247,7 @@ export function createRecordingHost(): {
       pending.settle({ action: 'reject' });
     }
     for (const [streamId, pending] of pendingRetries) {
-      if (!match(pending.streamId)) continue;
+      if (!match('retry', pending.streamId)) continue;
       pendingRetries.delete(streamId);
       events.push({
         event: 'resolveRetryRequest',
@@ -250,7 +256,7 @@ export function createRecordingHost(): {
       pending.settle({ action: 'cancel' });
     }
     for (const [requestId, pending] of pendingUserQuestions) {
-      if (!match(pending.streamId)) continue;
+      if (!match('userQuestion', pending.streamId)) continue;
       pendingUserQuestions.delete(requestId);
       events.push({
         event: 'resolveUserQuestion',

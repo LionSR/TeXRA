@@ -103,6 +103,47 @@ export interface HostInteractionResolution {
   readonly value?: unknown;
 }
 
+export type PendingInteractionKind =
+  | 'toolEdit'
+  | 'bash'
+  | 'plan'
+  | 'proposal'
+  | 'retry'
+  | 'userQuestion'
+  | 'externalInquiry';
+
+/**
+ * Selector for {@link HostInteractions.cancel}.
+ *
+ * - `{}` — cancel every pending request.
+ * - `{ kind }` — cancel every pending request of that kind.
+ * - `{ streamId }` — cancel every pending request on that stream.
+ * - `{ streamId, kind }` — cancel that kind on that stream.
+ * - `streamId: null` — cancel only requests with no concrete stream
+ *   (the streamless/unscoped sweep).
+ */
+export interface HostInteractionCancelSelector {
+  readonly streamId?: StreamTabId | null;
+  readonly kind?: PendingInteractionKind;
+  readonly cause?: string;
+}
+
+/** Shared selector predicate for the ports' pending registries. */
+export function matchesCancelSelector(
+  pending: {
+    readonly kind: PendingInteractionKind;
+    readonly streamId?: StreamTabId;
+  },
+  selector: HostInteractionCancelSelector,
+): boolean {
+  if (selector.kind !== undefined && pending.kind !== selector.kind) {
+    return false;
+  }
+  if (selector.streamId === undefined) return true;
+  if (selector.streamId === null) return !pending.streamId;
+  return pending.streamId === selector.streamId;
+}
+
 /**
  * Session-owned host interaction surface.
  *
@@ -144,18 +185,15 @@ export interface HostInteractions {
     payload: ProgressEventPayloads[K],
   ): boolean;
   resolve(requestId: string, result: HostInteractionResolution): boolean;
-  cancelForStream(streamId: StreamTabId, cause?: string): void;
-  cancelUnscoped?(cause?: string): void;
-  cancelAll?(cause?: string): void;
+  /** Settle pending requests matching the selector with their reject/cancel defaults. */
+  cancel(selector?: HostInteractionCancelSelector): void;
   dispose?(): void;
 }
 
 const noopHostInteractions: HostInteractions = {
   handleProgressEvent: () => false,
   resolve: () => false,
-  cancelForStream: () => {},
-  cancelUnscoped: () => {},
-  cancelAll: () => {},
+  cancel: () => {},
 };
 
 /**
@@ -238,16 +276,8 @@ export class SessionHostInteractions implements HostInteractions {
     return this.active.resolve(requestId, result);
   }
 
-  cancelForStream(streamId: StreamTabId, cause?: string): void {
-    this.active.cancelForStream(streamId, cause);
-  }
-
-  cancelUnscoped(cause?: string): void {
-    this.active.cancelUnscoped?.(cause);
-  }
-
-  cancelAll(cause?: string): void {
-    this.active.cancelAll?.(cause);
+  cancel(selector?: HostInteractionCancelSelector): void {
+    this.active.cancel(selector);
   }
 
   dispose(): void {

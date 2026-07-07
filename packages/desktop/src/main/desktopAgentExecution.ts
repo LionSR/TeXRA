@@ -1091,7 +1091,7 @@ export class DesktopProgressBridge {
     // desktop stream entry, so cancel the owning window's remaining pending
     // interactions after the visible per-stream sweep. This is session-scoped
     // and does not touch sibling windows.
-    this.session.interactions.cancelAll?.('All streams deleted.');
+    this.session.interactions.cancel({ cause: 'All streams deleted.' });
     await GoalStore.forgetMany([...streamIds], this.session);
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
@@ -1121,10 +1121,12 @@ export class DesktopProgressBridge {
   }
 
   private stopStream(streamId: StreamTabId): void {
-    this.session.interactions.cancelForStream(
+    // Kind-scoped: clear only the pending retry panel for this stream.
+    this.session.interactions.cancel({
       streamId,
-      'Retry request cleared.',
-    );
+      kind: 'retry',
+      cause: 'Retry request cleared.',
+    });
     this.session.executions.stopAgentStream(streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
       runtimeHost: this.runtimeHost,

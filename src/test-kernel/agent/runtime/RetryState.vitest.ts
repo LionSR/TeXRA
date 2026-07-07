@@ -98,7 +98,7 @@ async function withRetryRunContext<T>(
       requestRetry,
       handleProgressEvent: () => false,
       resolve: () => false,
-      cancelForStream: () => {},
+      cancel: () => {},
     }),
   });
   return await withRunContext(context, fn);

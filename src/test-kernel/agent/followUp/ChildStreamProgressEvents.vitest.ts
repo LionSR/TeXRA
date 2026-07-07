@@ -242,7 +242,7 @@ describe('child stream progress events', () => {
           return true;
         },
         resolve: () => false,
-        cancelForStream: () => {},
+        cancel: () => {},
       },
     };
 

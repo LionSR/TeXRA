@@ -112,7 +112,7 @@ describe('SessionHandle', () => {
     }
   });
 
-  it("cancelAll on one session leaves the other's pending requests", async () => {
+  it("an unfiltered cancel on one session leaves the other's pending requests", async () => {
     const a = new SessionHandle();
     const b = new SessionHandle();
     const hostA = createRecordingHost();
@@ -143,7 +143,7 @@ describe('SessionHandle', () => {
         operation: 'Model invocation',
       });
 
-      a.interactions.cancelAll('All approvals cleared.');
+      a.interactions.cancel({ cause: 'All approvals cleared.' });
 
       // A's pending requests resolve to their cancelled defaults...
       await expect(planA).resolves.toEqual({ action: 'reject' });

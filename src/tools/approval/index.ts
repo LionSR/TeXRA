@@ -35,7 +35,10 @@ export function cleanupApprovalsForStream(
   toolEditApprovalController.bypass.clearForStream(streamId);
   bashApprovalController.bypass.clearForStream(streamId);
   proposalApprovalState.clearForStream(streamId);
-  session.interactions.cancelForStream(streamId, 'Stream resources released.');
+  session.interactions.cancel({
+    streamId,
+    cause: 'Stream resources released.',
+  });
 }
 
 /**
@@ -76,7 +79,10 @@ export function cleanupUnscopedApprovals(
 ): void {
   toolEditApprovalController.rejectUnscopedPending(runtimeHost);
   bashApprovalController.rejectUnscopedPending(runtimeHost);
-  session.interactions.cancelUnscoped?.('Streamless approval cleanup.');
+  session.interactions.cancel({
+    streamId: null,
+    cause: 'Streamless approval cleanup.',
+  });
 }
 
 /**
@@ -99,7 +105,7 @@ export function cleanupAllApprovals(
   toolEditApprovalController.bypass.clearAll();
   bashApprovalController.bypass.clearAll();
   proposalApprovalState.clearAll();
-  session.interactions.cancelAll?.('All approvals cleared.');
+  session.interactions.cancel({ cause: 'All approvals cleared.' });
 }
 
 export { enableYoloOnChildStream, inheritBashBypassOnChildStream };

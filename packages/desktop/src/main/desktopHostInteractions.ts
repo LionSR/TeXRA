@@ -1,16 +1,18 @@
 import { nanoid } from 'nanoid';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  HostBashApprovalRequest,
-  HostBashApprovalResult,
-  HostInteractionResolution,
-  HostInteractions,
-  HostPlanApprovalRequest,
-  HostRetryRequest,
-  HostUserQuestionResult,
-  PlanApprovalResult,
-  ProposalResult,
-  RetryResult,
+import {
+  matchesCancelSelector,
+  type HostBashApprovalRequest,
+  type HostBashApprovalResult,
+  type HostInteractionCancelSelector,
+  type HostInteractionResolution,
+  type HostInteractions,
+  type HostPlanApprovalRequest,
+  type HostRetryRequest,
+  type HostUserQuestionResult,
+  type PlanApprovalResult,
+  type ProposalResult,
+  type RetryResult,
 } from '@agent/runtime/HostInteractions';
 import {
   toBashApprovalResult,
@@ -193,38 +195,23 @@ class DesktopHostInteractions implements HostInteractions {
 
   /**
    * Cancellation is a synthesized rejection routed through the same
-   * `resolve()`/mapper path a live UI action takes, forwarding `cause` as
-   * agent-visible feedback — so a cancelled request and a rejected one settle
-   * identically for a given kind.
+   * `resolve()`/mapper path a live UI action takes, forwarding the selector's
+   * `cause` as agent-visible feedback — so a cancelled request and a rejected
+   * one settle identically for a given kind.
    */
-  cancelForStream(streamId: StreamTabId, cause?: string): void {
-    this.cancelMatching((request) => request.streamId === streamId, cause);
-  }
-
-  cancelUnscoped(cause?: string): void {
-    this.cancelMatching((request) => !request.streamId, cause);
-  }
-
-  cancelAll(cause?: string): void {
-    this.cancelMatching(() => true, cause);
-  }
-
-  private cancelMatching(
-    matches: (request: PendingDesktopInteraction) => boolean,
-    cause?: string,
-  ): void {
+  cancel(selector: HostInteractionCancelSelector = {}): void {
     for (const [requestId, request] of [...this.pendingRequests.entries()]) {
-      if (!matches(request)) continue;
+      if (!matchesCancelSelector(request, selector)) continue;
       this.resolve(requestId, {
         kind: request.kind,
         action: 'reject',
-        feedback: cause,
+        feedback: selector.cause,
       });
     }
   }
 
   dispose(): void {
-    this.cancelAll('Desktop session disposed.');
+    this.cancel({ cause: 'Desktop session disposed.' });
   }
 
   private showPending<TResult, TEntry extends PendingDesktopInteraction>(
