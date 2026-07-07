@@ -35,8 +35,9 @@ symptom; element count is the metric. Two corollaries drive everything below:
 
 ## 2. Measured reality (2026-07-02..07)
 
-All numbers reproducible from `git log --since=2026-07-02 --numstat` (lockfiles
-excluded) and the GitHub record; census methods stated inline.
+All numbers reproducible from
+`git log --since=2026-07-02 --numstat -- . ':(exclude)pnpm-lock.yaml' ':(exclude)**/deno.lock'`
+and the GitHub record; census methods stated inline.
 
 - **~300 PRs merged; net +44k LoC whole-repo.** Tests +24.7k (55%,
   `src/test-kernel` grew 113.9k to 138.6k, +80 vitest files in 5 days),
@@ -45,8 +46,9 @@ excluded) and the GitHub record; census methods stated inline.
   +85 test files.
 - **PR mix:** ~53% forward work; ~34% correction PRs fixing or finishing
   something another same-week PR created; ~9% process artifacts (checkpoints,
-  audits, ledger bookkeeping). Roughly 42% of the week, net +12.2k LoC, went
-  to managing the middle itself.
+  audits, ledger bookkeeping); ~4% unclassified (deps bumps, reverts).
+  Roughly 42% of the week, net +12.2k LoC, went to managing the middle
+  itself.
 - **Ledger (#6981):** 38 rows (34 at the audit snapshot plus 4 gap-filled the
   same day for shims that had merged without rows); 2 ever executed (5%);
   22 of 38 are hops the campaign itself minted.
@@ -85,8 +87,10 @@ measured mass:
    the real duplication (paired per-host `postX`/`sendX` functions) was left
    alive in both hosts. Both verdicts: unjustified.
 2. **Test ceremony.** Up to 713 test lines per PR (typically 130-450 among the
-   twelve that added tests). 49 of the window's 84 new test files are under
-   150 LoC (three under 20); ~1.8k LoC of shim/projection pinning carries a
+   twelve that added tests). Of the window's ~90 added test files (net +85
+   after in-window deletions; the test audit examined the 84 added as vitest
+   suites), 49 are under 150 LoC (three under 20); ~1.8k LoC of
+   shim/projection pinning carries a
    planned expiry with no expiry marker; 3,329 LoC across 10 files assert
    against the legacy `ProgressEventPayloads` plane Stage 5 deletes; 506 LoC
    of tests were written and deleted within the same 5 days.
