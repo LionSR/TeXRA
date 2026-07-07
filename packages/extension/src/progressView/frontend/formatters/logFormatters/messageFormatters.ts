@@ -112,7 +112,7 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   // message that merely duplicates the original summary.
   const detailLines = ERROR_DETAIL_FIELDS.flatMap((key) => {
     const value = errorData[key];
-    if (value === null || value === undefined) return [];
+    if (value == null) return [];
     if (key === 'message' && value === originalSummaryText) return [];
     // Format objects (like rawErrorBody) as indented JSON
     const displayValue =

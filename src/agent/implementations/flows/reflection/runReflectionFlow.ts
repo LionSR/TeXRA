@@ -217,13 +217,11 @@ export async function runReflectionFlow<C = unknown>(
 
     if (validated?.success) {
       shared = validated.data as ReflectionFlowShared;
-      shared.modelHandlerCompatibilityKey =
-        shared.modelHandlerCompatibilityKey ??
+      shared.modelHandlerCompatibilityKey ??=
         inferPersistedModelHandlerCompatibilityKey(
           config.model,
           shared.conversation,
-        ) ??
-        compatibilityKey;
+        ) ?? compatibilityKey;
       // Always sync totalRounds from the current agent config so that changes
       // to the YAML (e.g. rounds: 2 → 1) take effect on resume.
       shared.totalRounds = totalRounds;
