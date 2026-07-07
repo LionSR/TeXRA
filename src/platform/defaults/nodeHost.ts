@@ -92,13 +92,10 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
       ...services.toolAvailability,
     },
     // Neither Node host has a UI surface for these yet (linter diagnostics,
-    // inline criticism, tool-missing/unavailable toasts) — explicit no-ops
-    // here, in the one place both hosts share, rather than an invisible
-    // per-module default.
-    linter: async () => [],
-    addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
-    toolMissingHandler: () => {},
-    toolNotificationHandler: () => {},
+    // inline criticism, tool-missing/unavailable toasts). These four Platform
+    // ports are optional and single-implementer (VS Code only); core call
+    // sites already treat an absent port as a no-op, so omitting them here is
+    // enough — no per-host stub needed.
     // Default handler throws — a host must override this to support tool-edit
     // approvals.  CLI and desktop override via a session-scoped indirection
     // (see the host's own initPlatform code); the extension wires its native

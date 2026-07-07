@@ -8,10 +8,9 @@
  * The `session` is load-bearing: desktop passes its per-window session, while
  * CLI/extension pass the process {@link defaultSession}. A helper that
  * hard-coded the default would route desktop to the wrong session and never see
- * its results. Every host presents through its `runtimeHost` — including the
- * extension, whose `extensionAgentRuntimeHost.emit` is `ProgressEventBus.emit`,
- * so the `requestShow*` events reach the same `ProgressEventBus.on` handlers
- * exactly once.
+ * its results. Every host presents through its `runtimeHost`; in the extension,
+ * `extensionAgentRuntimeHost.emit` routes these presentation requests to the
+ * extension presentation handlers exactly once.
  */
 import { terminalResultToast } from '@shared/agent/terminalResultPresentation';
 

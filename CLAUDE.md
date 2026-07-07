@@ -106,7 +106,7 @@ Key directories in `src/`:
 
 - `agent/` - Agent core, implementations, model handlers, runtime, output, storage, remote, node, trace, goal, review, export, followUp, templates, features
   - `implementations/flows/` - PocketFlow-based flow implementations (`reflection`, `tooluse`, `agentCreator`)
-- `platform/` - Platform abstraction layer (composition root). Hosts (VS Code, CLI, Electron) call `initPlatform()` once at startup; core code accesses host services via `platform()` from `@platform`. See `src/platform/platform.ts`.
+- `platform/` - Platform abstraction layer (composition root). Hosts (VS Code, CLI, Electron) call `initPlatform()` once at startup; core code accesses host services via `platform()` from `@platform/platform`. See `src/platform/platform.ts`.
 - `controllers/` - Host-neutral orchestration for the main, progress, and settings views behind injected ports
 - `common/` - Backend-only helpers (errors, state, files, webview base classes)
 - `utils/` - Utilities shared between extension host and webviews
@@ -428,7 +428,7 @@ For good separation of concerns, testability, and platform independence, core bu
 
 **Patterns for keeping code platform-agnostic:**
 
-- Reach host services through `platform()` from `@platform` (config, state, log, fs, workspace, storage, secrets) — never import `vscode` in agnostic zones.
+- Reach host services through `platform()` from `@platform/platform` (config, state, log, fs, workspace, storage, secrets) — never import `vscode` in agnostic zones.
 - Use `isFile()` / `isDirectory()` from `@utils/files/fsEntryType` instead of `vscode.FileType`
 - Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
 - Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
@@ -445,7 +445,7 @@ Common aliases (full list in `tsconfig.json`):
 - `@replacement/*`, `@housekeeping/*`, `@auth/*`, `@types/*`
 - `@controllers/*`, `@hosts/*`, `@skills/*`, `@telemetry/*`, `@transcript/*`
 - `@cli/*`, `@desktop/*`, `@test/*`, `@resources/*`, `@extensionSchemas/*`
-- `@platform`, `@platform/*` (platform abstraction layer)
+- `@platform/*` (platform abstraction layer; import `platform()`/`initPlatform()` from `@platform/platform`)
 
 ## Adding New Components
 

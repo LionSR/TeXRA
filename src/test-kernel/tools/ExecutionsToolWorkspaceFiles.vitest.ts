@@ -383,6 +383,45 @@ describe('ExecutionsTool', () => {
     });
   });
 
+  // Regression for #7404: a legacy write landing after the sidecar write but
+  // rounding to the same millisecond tick (the VS Code filesystem adapter's
+  // mtime resolution) used to lose to the strict `>` comparison, reproducing
+  // the #7301 staleness regression on every tie.
+  it('prefers the legacy KV write when its mtime ties the sidecar mtime', async () => {
+    await withTempStorage(async () => {
+      const executionId = 'abc123' as ExecutionId;
+      const streamId = `codex#${executionId}` as StreamTabId;
+      await writeSidecarTodos(streamId, executionId, [
+        {
+          content: 'Stale sidecar todo',
+          status: 'pending',
+          activeForm: 'Doing the stale sidecar todo',
+        },
+      ]);
+      const sidecarMtime = (
+        await StorageFS.stat(`${streamDataDir(streamId)}/workPlan.json`)
+      ).mtime;
+      mocks.readMeta.mockResolvedValue({
+        timestamp: '2026-06-15T09:36:02.345Z',
+        category: 'toolUse',
+      });
+      mocks.readConfig.mockResolvedValue(config);
+      mocks.readTodos.mockResolvedValue([
+        { content: 'Fresher legacy todo', status: 'completed' },
+      ]);
+      // Simulate a final todo_write that lands after the sidecar write but
+      // rounds to the exact same millisecond tick.
+      mocks.todosModifiedAt.mockResolvedValue(sidecarMtime);
+
+      const result = await new ExecutionsTool().call({
+        path: `/executions/${executionId}`,
+      });
+
+      expect(result.output).toContain('Fresher legacy todo');
+      expect(result.output).not.toContain('Stale sidecar todo');
+    });
+  });
+
   it('lists and reads persisted workspace files for tool-use executions', async () => {
     await withTempWorkspace(async (workspace) => {
       await writeFile(path.join(workspace, 'review.md'), '# report\n');
