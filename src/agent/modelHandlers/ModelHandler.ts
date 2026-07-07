@@ -12,7 +12,7 @@ import {
 // Local imports - agent
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
-import { logWebSearch, logContextManagementEvent } from '@agent/trace';
+import { logContextManagementEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -70,6 +70,7 @@ import {
 import { computeUtilizationPercent } from './support/contextUtilization';
 import { logCompactionEvent } from './support/compactionLogging';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
+import { emitServerToolResult } from './support/serverToolResultEmission';
 import {
   resolveBaseUrl,
   shouldUseOpenRouter,
@@ -325,9 +326,7 @@ export abstract class ModelHandler<
    * they occurred in the response, rather than being logged after streaming.
    */
   protected emitWebSearchResult(result: WebSearchResult): void {
-    if (this.progressViewEnabled) {
-      logWebSearch(this.logger, result);
-    }
+    emitServerToolResult(this.logger, this.progressViewEnabled, result);
   }
 
   /**
@@ -769,19 +768,6 @@ export abstract class ModelHandler<
     return content.some((c) => c.text?.includes(marker));
   }
 
-  /**
-   * Creates a continuation message for truncated responses.
-   * Shared implementation used by all model handlers that don't support assistant prefill.
-   * @returns The formatted continuation message string
-   */
-  protected createContinuationPrompt(
-    workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
-  ): string {
-    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
-    return `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
-  }
-
   /** Creates and configures a client instance for the specific model provider. */
   abstract getClient(): Promise<C>;
 
@@ -915,7 +901,7 @@ export abstract class ModelHandler<
   addContinueMessage(
     messages: M[],
     workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
+    _agentSetting: AgentSetting,
   ): void {
     if (this.capabilities.supportsAssistantPrefill) {
       this.logger.debug(
@@ -924,10 +910,8 @@ export abstract class ModelHandler<
       return;
     }
 
-    const continuationPrompt = this.createContinuationPrompt(
-      workspaceState,
-      agentSetting,
-    );
+    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
+    const continuationPrompt = `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
 
     this.logger.debug('Adding continuation message to conversation', {
       data: { continuationMessage: continuationPrompt },
