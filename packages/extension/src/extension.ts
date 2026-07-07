@@ -21,6 +21,7 @@ import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
@@ -46,7 +47,6 @@ import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { appSignals } from '@eventBus/AppSignals';
-import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
@@ -59,6 +59,7 @@ import { runTerminalCommand } from '@frontend/setupTerminalRunner';
 import { agentDirectories } from '@frontend/agents';
 import { FileLister } from '@frontend/files';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
+import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
 import { killActiveRecording } from '@frontend/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
@@ -98,10 +99,6 @@ import {
   hasUsableApiKey,
 } from '@model/apiProviders';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
-import {
-  type StreamLifecycleStatus,
-  type TokenUsageStats,
-} from '@shared/schemas';
 import { migrateLegacyGlobalBashApprovalOverride } from '@shared/settingsView/handlers/approvalHandlers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
@@ -730,33 +727,16 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  const disposeStreamStatusListener = ProgressEventBus.on(
-    'updateStreamStatus',
-    ({
-      streamId,
-      status,
-    }: {
-      streamId: string;
-      status: StreamLifecycleStatus;
-    }) => {
-      statusBarUsageTracker.updateStreamStatus(streamId, status);
+  disposeStatusListener = subscribeStatusBarSessionEvents({
+    session: defaultSession(),
+    tracker: statusBarUsageTracker,
+    onStatusChanged: () => {
       updateStatusBarTooltip();
       updateStatusBarText();
     },
-  );
-  const disposeUsageListener = ProgressEventBus.on(
-    'updateStreamUsage',
-    ({ streamId, usage }: { streamId: string; usage: TokenUsageStats }) => {
-      // UsageMonitor emits per-round deltas; the tracker accumulates them.
-      if (statusBarUsageTracker.recordUsage(streamId, usage)) {
-        updateStatusBarTooltip();
-      }
-    },
-  );
-  disposeStatusListener = () => {
-    disposeStreamStatusListener();
-    disposeUsageListener();
-  };
+    // UsageMonitor emits per-round deltas; the tracker accumulates them.
+    onUsageChanged: updateStatusBarTooltip,
+  });
 
   const showMainView = async () => {
     const mvp = getMainViewProvider();
