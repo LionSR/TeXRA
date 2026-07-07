@@ -14,6 +14,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import {
   EXECUTION_STATUS,
+  type ExecutionId,
   type StorageKey,
   type StreamTabId,
   type TodoItem,
@@ -58,7 +59,8 @@ vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
 }));
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage')>()),
   writeTerminalStatus: mocks.writeTerminalStatus,
 }));
 
@@ -277,6 +279,8 @@ describe('executeCliRequest', () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
     const streamId = 'stream-1' as StreamTabId;
+    const parentStreamId = 'parent-stream' as StreamTabId;
+    const executionId = 'b1c2d3e4' as ExecutionId;
     const todo: TodoItem = {
       content: 'Write the introduction',
       status: 'in_progress',
@@ -284,9 +288,25 @@ describe('executeCliRequest', () => {
     };
 
     mocks.runAgent.mockImplementationOnce(async (_request, options) => {
+      const { getExecutionStore } = await import('@agent/storage');
+      const { AgentConfigSchema } =
+        await import('@agent/core/definition/AgentConfig');
       const { defaultSession } = await import('@agent/runtime/SessionHandle');
       const { toRunFactDomainKey } =
         await import('@agent/runtime/runFactEvents');
+      const config = AgentConfigSchema.parse(toolUseConfig());
+
+      await getExecutionStore(executionId).writeConfig(config);
+      defaultSession().events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'run.config',
+          streamId,
+          executionId,
+          config,
+        },
+      });
       defaultSession().events.emit({
         scope: 'run',
         streamId,
@@ -312,6 +332,26 @@ describe('executeCliRequest', () => {
           },
         },
       });
+      defaultSession().events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateStreamDescription',
+          payload: {
+            streamId,
+            description: 'chat / gpt54',
+          },
+        },
+      });
+      defaultSession().events.emit({
+        scope: 'session',
+        event: {
+          type: 'setParentStream',
+          payload: {
+            childStreamId: streamId,
+            parentStreamId,
+          },
+        },
+      });
       // This is the legacy projected event still visible on the public host
       // channel. It must not be persisted a second time by the CLI bridge.
       options.runtimeHost.emit('updateStreamUsage', {
@@ -334,12 +374,22 @@ describe('executeCliRequest', () => {
     await executeCliRequest(request, cliContext());
 
     const { StreamSnapshotStore } = await import('@transcript');
-    const snapshot = await new StreamSnapshotStore().read(streamId);
+    const reader = new StreamSnapshotStore();
+    await reader.load([streamId]);
+    const snapshot = await reader.read(streamId);
     expect(snapshot.todos).toEqual([todo]);
     expect(snapshot.runUsage['run-1']).toMatchObject({
       inputTokens: 100,
       outputTokens: 20,
       cost: 0.5,
+    });
+    expect(snapshot.executionId).toBe(executionId);
+    expect(snapshot.description).toBe('chat / gpt54');
+    expect(snapshot.parentStreamId).toBe(parentStreamId);
+    expect(reader.getTaskState(streamId)?.agentConfig).toMatchObject({
+      agent: 'chat',
+      model: 'gpt54',
+      agentCategory: 'toolUse',
     });
   });
 
