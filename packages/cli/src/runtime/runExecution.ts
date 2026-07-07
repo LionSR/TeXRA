@@ -66,7 +66,7 @@ type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
     ? Extract<ExecuteAgentResult, { category: C }>
     : ExecuteAgentResult;
 
-function persistCliProgressEvents(
+function persistCliMetadataProgressEvents(
   host: CliRuntimeHost,
   snapshotStore: StreamSnapshotStore,
 ): CliRuntimeHost {
@@ -74,7 +74,17 @@ function persistCliProgressEvents(
     event: K,
     payload: ProgressEventPayloads[K],
   ): void => {
-    snapshotStore.handleProgressEvent(event, payload);
+    // Durable run facts enter StreamSnapshotStore from SessionEventHub. Keep
+    // only the legacy metadata events here until they move to typed run facts.
+    switch (event) {
+      case 'setTaskState':
+      case 'updateStreamDescription':
+      case 'setParentStream':
+        snapshotStore.handleProgressEvent(event, payload);
+        break;
+      default:
+        break;
+    }
     host.emit(event, payload);
   };
   return { ...host, emit };
@@ -181,7 +191,13 @@ export async function executeCliRequest(
 ): Promise<{ result: ExecuteAgentResult; terminalStatus: ExecutionStatus }> {
   const baseRuntimeHost = createCliRuntimeHost(runContext);
   const snapshotStore = new StreamSnapshotStore();
-  const runtimeHost = persistCliProgressEvents(baseRuntimeHost, snapshotStore);
+  const detachSnapshotEvents = snapshotStore.attachSessionEvents(
+    defaultSession().events,
+  );
+  const runtimeHost = persistCliMetadataProgressEvents(
+    baseRuntimeHost,
+    snapshotStore,
+  );
   const detachHostInteractions = defaultSession().useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
@@ -265,7 +281,11 @@ export async function executeCliRequest(
     detachHostInteractions();
     uninstallApprovalHandlers();
     try {
-      flushPendingRunTraces();
+      try {
+        flushPendingRunTraces();
+      } finally {
+        detachSnapshotEvents();
+      }
       await Promise.all([streamLogStore.flush(), snapshotStore.flush()]);
     } finally {
       await interactionHost.close();
