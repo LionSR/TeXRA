@@ -93,6 +93,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ── Client-side compaction state ──────────────────────────────────────
   private lastKnownInputTokens = 0;
 
+  /** Client-side compaction is implemented for tool-use sessions regardless of the routed-through provider. */
   override get supportsManualCompaction(): boolean {
     return this.isToolUseMode();
   }
