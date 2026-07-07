@@ -113,6 +113,7 @@ describe('ToolUseFollowUp', () => {
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},
+      interrupt: () => {},
     });
     SharedExecutionRegistry.track(handle);
     return executionId;

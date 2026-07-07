@@ -1,7 +1,9 @@
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type {
+  AgentFlowResult,
+  AgentRuntimeFlowResult,
+} from '@agent/runtime/AgentFlowResult';
 import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
 import {
   STREAM_PHASE,
@@ -29,15 +31,21 @@ export interface ResumeQueuedToolUseOptions {
   readonly parentStreamId?: StreamTabId;
   /** Allow native subagent resume to halt at WAITING instead of terminalizing. */
   readonly allowWaitingResult?: boolean;
-  readonly onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   readonly onFollowUpConsumed?: () => void;
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  readonly onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   readonly onRunError?: (
     error: unknown,
     result: AgentFlowResult,
   ) => void | Promise<void>;
   readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+  /**
+   * Fires with the resumed run's raw outcome — terminal or WAITING — right
+   * after the call returns successfully. Additive to `onRunError`, which only
+   * covers the terminal branch; native child-run strategies use this to
+   * recover the WAITING result value that would otherwise be discarded by
+   * this function's own boolean return.
+   */
+  readonly onResult?: (result: AgentRuntimeFlowResult) => void;
   /**
    * Follow-ups to replay ahead of any items already queued for the stream
    * (e.g. an explicit follow-up typed alongside a manual resume). Seeded before
@@ -90,17 +98,15 @@ export async function resumeQueuedToolUseSnapshot(
     followUps = [...seed, ...followUpsQueue.drainItems(streamId)];
     emitRuntimeEvent('updateQueuedFollowUps', { streamId }, session);
 
-    await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
+    const result = await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
       session: options.session,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       toolEditApprovalHandler: options.toolEditApprovalHandler,
       parentStreamId: options.parentStreamId,
       allowWaitingResult: options.allowWaitingResult,
-      onBeforeWaiting: options.onBeforeWaiting,
       onFollowUpConsumed: options.onFollowUpConsumed,
       onProgress: options.onProgress,
-      onCompleted: options.onCompleted,
       onError: options.onRunError,
       onRun: options.onRun,
       setupSession: (session) => {
@@ -109,6 +115,7 @@ export async function resumeQueuedToolUseSnapshot(
         }
       },
     });
+    options.onResult?.(result);
   } catch (error) {
     resumeError = { error };
     // Re-enqueue the drained follow-ups (explicit seed first) so a later

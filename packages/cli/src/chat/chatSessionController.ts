@@ -303,7 +303,7 @@ export function createChatSessionController(
             activeStreamId.set(resolvedStreamId);
             if (session.stopRequested) interruptActiveRun();
           },
-          onBeforeWaiting: (lastResponse) => {
+          onIdle: (lastResponse) => {
             if (!session.streamId) return;
             projectStreamTranscript(session.streamId, {
               fallbackAssistant: {
