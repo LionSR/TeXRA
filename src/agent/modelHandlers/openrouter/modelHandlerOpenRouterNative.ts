@@ -7,7 +7,7 @@ import {
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
-import { logSdkError, type StreamHandle } from '@agent/trace';
+import type { StreamHandle } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -396,7 +396,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       (this.capabilities.supportsVision ||
         this.capabilities.supportsNativeAudio)
     ) {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      const formattedMedia = await this.createMediaForRound(
+        mediaFiles,
+        'initial',
+      );
       userContent.push(...formattedMedia);
     }
 
@@ -445,14 +448,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       (this.capabilities.supportsVision ||
         this.capabilities.supportsNativeAudio)
     ) {
-      try {
-        const formattedMedia = await this.createMediaMessage(mediaFiles);
-        roundContent.push(...formattedMedia);
-      } catch (err) {
-        this.logger.error('Error processing media files for follow-up round', {
-          data: err,
-        });
-      }
+      const formattedMedia = await this.createMediaForRound(
+        mediaFiles,
+        'followUp',
+      );
+      roundContent.push(...formattedMedia);
     }
 
     if (userMessage) {
@@ -833,13 +833,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     const lastUserMsg = messages.findLast((m) => m.role === 'user');
     if (!lastUserMsg || !('content' in lastUserMsg)) return;
 
-    try {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
-      insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
-    } catch (err) {
-      logSdkError(this.logger, 'Error adding media to user message', err, {
-        operation: 'add media to user message',
-      });
-    }
+    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
+    if (formattedMedia.length === 0) return;
+    insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
   }
 }

@@ -5,7 +5,6 @@ import { toFile } from '@anthropic-ai/sdk';
 
 // Local imports - common
 import type { AgentTrace } from '@agent/trace';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Type imports - agent and tools
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
@@ -18,6 +17,7 @@ import {
   sanitizeAnthropicFilename,
 } from './anthropicDocumentHandling';
 import { loadAttachmentBuffer, wipeBuffer } from '../utils/toolAttachmentUtils';
+import { reportMediaAttachmentFailure } from '../support/mediaAttachmentPolicy';
 
 // Type imports - Anthropic SDK
 import type { Base64ImageSource } from '@anthropic-ai/sdk/resources/messages';
@@ -86,12 +86,11 @@ export async function uploadToolAttachments(
     try {
       buffer = await loadAttachmentBuffer(attachment);
     } catch (err) {
-      const attachmentPath = attachment.path ?? 'attachment';
-      logger.warn(
-        `Unable to read attachment ${attachmentPath}: ${getSdkErrorMessage(err)}`,
-        {
-          data: { path: attachmentPath, error: err },
-        },
+      reportMediaAttachmentFailure(
+        logger,
+        'toolAttachment',
+        err,
+        `unable to read ${attachment.path ?? 'attachment'}`,
       );
       unsupported.push(attachment);
       continue;
@@ -134,14 +133,13 @@ export async function uploadToolAttachments(
         mediaType: normalized,
       });
     } catch (err) {
-      // Upload failed — degrade to unsupported, but log so a dropped
+      // Upload failed — degrade to unsupported, but report so a dropped
       // attachment isn't silently omitted from the request.
-      const attachmentPath = attachment.path ?? 'attachment';
-      logger.warn(
-        `Failed to upload attachment ${attachmentPath}: ${getSdkErrorMessage(err)}`,
-        {
-          data: { path: attachmentPath, error: err },
-        },
+      reportMediaAttachmentFailure(
+        logger,
+        'toolAttachment',
+        err,
+        `failed to upload ${attachment.path ?? 'attachment'}`,
       );
       unsupported.push(attachment);
     } finally {

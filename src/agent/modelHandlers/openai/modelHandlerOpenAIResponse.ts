@@ -5,11 +5,7 @@ import OpenAI, { OpenAIError } from 'openai';
 import { addOutputText } from 'openai/lib/ResponsesParser';
 
 // Local imports - agent
-import {
-  logContextManagementEvent,
-  logProgressStatus,
-  logSdkError,
-} from '@agent/trace';
+import { logContextManagementEvent, logProgressStatus } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -1113,17 +1109,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     ];
 
     if (mediaFiles && mediaFiles.length > 0 && supportsMedia) {
-      try {
-        const mediaContent = await this.createMediaMessage(mediaFiles);
-        userContent.push(...mediaContent);
-      } catch (err) {
-        logSdkError(
-          this.logger,
-          `Error processing media files: ${getSdkErrorMessage(err)}`,
-          err,
-          { operation: 'process media files' },
-        );
-      }
+      const mediaContent = await this.createMediaForRound(
+        mediaFiles,
+        'initial',
+      );
+      userContent.push(...mediaContent);
     }
 
     const initialUserMessage: ResponseInputItem.Message = {
@@ -1164,17 +1154,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       (this.capabilities.supportsVision ||
         this.capabilities.supportsNativeAudio)
     ) {
-      try {
-        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-        roundContent.push(...formattedMediaContent);
-      } catch (err) {
-        logSdkError(
-          this.logger,
-          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          err,
-          { operation: 'process media files' },
-        );
-      }
+      const formattedMediaContent = await this.createMediaForRound(
+        mediaFiles,
+        'followUp',
+      );
+      roundContent.push(...formattedMediaContent);
     }
 
     roundContent.push(createInputText(userMessage));
@@ -2741,16 +2725,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const lastUserMsg = this.findLastUserMessage(messages);
     if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
 
-    try {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
-      lastUserMsg.content.unshift(...formattedMedia);
-    } catch (err) {
-      logSdkError(
-        this.logger,
-        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
-      );
-    }
+    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
+    if (formattedMedia.length === 0) return;
+    lastUserMsg.content.unshift(...formattedMedia);
   }
 }
