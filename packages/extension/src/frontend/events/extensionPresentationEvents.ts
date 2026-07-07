@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 
 export const EXTENSION_PRESENTATION_EVENTS = [
   'requestOpenFile',
