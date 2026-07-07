@@ -1,4 +1,4 @@
-import { platform } from '@platform';
+import { platform } from '@platform/platform';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
 

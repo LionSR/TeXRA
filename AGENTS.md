@@ -98,7 +98,7 @@ aliases until a future SDK surface is enforced with a build and import-boundary 
 - `packages/extension/src/progressView/` - Task tracking board webview
 - `packages/extension/src/webview/` - Main agent interaction webview
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
-- `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform`.
+- `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform/platform`.
 - `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
 - `src/test-kernel/` - Vitest suites for host-neutral and Electron-facing behavior.
 
