@@ -292,7 +292,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * OpenAI Response API supports file uploads.
+   * OpenAI Response API supports file uploads. Reads the ChatGPT-subscription
+   * profile when active (that backend disables tool-result file upload);
+   * otherwise defaults to true for the base Responses API (#7101 triage:
+   * runtime combinator over profile data, not a per-provider override).
    */
   protected override get supportsToolResultFileUpload(): boolean {
     return (
