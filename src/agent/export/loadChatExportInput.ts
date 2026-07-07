@@ -2,7 +2,7 @@
  * Host-neutral loader for a stored execution's chat export input.
  *
  * Both the CLI (`texra history show <id> --export`) and the extension's
- * Settings "Export chat" action need to read the same execution-store triple
+ * Settings "Export chat" action need to read the same execution triple
  * (config, conversation, meta) and assemble the same format-agnostic
  * {@link ChatExportInput} the html/markdown/LaTeX formatters consume, so the
  * two hosts render a stored conversation identically. This module is the
@@ -12,6 +12,11 @@
  * `ChatExportController.buildExportInput` in
  * `src/controllers/settingsView/ChatExportController.ts`).
  *
+ * The conversation comes from the completed-run archive facade
+ * (`readCompletedRunConversation`): the transcript sidecar owns completed-run
+ * display/export per #7246 Decision 1, with the legacy
+ * `executions/{id}/conversation.json` projection as a read-only fallback.
+ *
  * `store.readConfig()` already validates against `AgentConfigSchema`
  * internally and falls back to `null` on a schema mismatch (see the private
  * `readValidated` helper on `StorageFSKVStore` in `ExecutionKVStore.ts`), so
@@ -19,6 +24,7 @@
  * (and no risk of it throwing on a corrupt record) is needed.
  */
 
+import { readCompletedRunConversation } from '@transcript';
 import { getExecutionStore, type ExecutionMeta } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@agent/export/schemas';
@@ -42,16 +48,16 @@ export interface ChatExportLoadResult {
 
 /**
  * A stored conversation is only "present" when it has at least one message.
- * `ExecutionKVStore.readConversation()` already normalizes an empty stored
- * array to `null` at the store layer, so this check is defensive rather than
- * the primary fix — but it keeps the "non-empty array only" contract
- * explicit for this module's callers (and for tests, which mock the store
- * directly and can return `[]` without going through that normalization).
- * Without it, a plain truthiness check (`!conversation`) would treat `[]` as
- * "present" — `![]` is `false` in JS — and every existence check downstream
- * (this module's `exportInput`, and each host's own not-found/incomplete
- * classification) would disagree with `readCliHistoryDetails`, which builds
- * no preview from an empty array either.
+ * The archive facade already normalizes an empty read to `null`, so this
+ * check is defensive rather than the primary fix — but it keeps the
+ * "non-empty array only" contract explicit for this module's callers (and
+ * for tests, which mock the facade directly and can return `[]` without
+ * going through that normalization). Without it, a plain truthiness check
+ * (`!conversation`) would treat `[]` as "present" — `![]` is `false` in JS —
+ * and every existence check downstream (this module's `exportInput`, and
+ * each host's own not-found/incomplete classification) would disagree with
+ * `readCliHistoryDetails`, which builds no preview from an empty array
+ * either.
  */
 function hasConversationMessages(
   conversation: readonly unknown[] | null,
@@ -63,13 +69,13 @@ export async function loadChatExportInput(
   id: ExecutionId,
 ): Promise<ChatExportLoadResult> {
   const store = getExecutionStore(id);
-  const [config, rawConversation, meta] = await Promise.all([
+  const [config, conversationResult, meta] = await Promise.all([
     store.readConfig(),
-    store.readConversation(),
+    readCompletedRunConversation(id),
     store.readMeta(),
   ]);
-  const conversation = hasConversationMessages(rawConversation)
-    ? rawConversation
+  const conversation = hasConversationMessages(conversationResult.conversation)
+    ? conversationResult.conversation
     : null;
 
   if (!config || !conversation) {
