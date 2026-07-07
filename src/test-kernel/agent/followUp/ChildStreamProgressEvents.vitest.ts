@@ -241,7 +241,6 @@ describe('child stream progress events', () => {
           removedStreams.push(data.streamId);
           return true;
         },
-        pending: () => [],
         resolve: () => false,
         cancelForStream: () => {},
       },

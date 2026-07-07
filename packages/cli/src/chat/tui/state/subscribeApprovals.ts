@@ -230,7 +230,6 @@ export function createTuiHostInteractions(
       return openExternalInquiryInteraction(request, context, host);
     },
     handleProgressEvent: () => false,
-    pending: () => [],
     resolve: () => false,
     cancelForStream(streamId) {
       cancelRetryRoute(retryRoutes, streamId);
