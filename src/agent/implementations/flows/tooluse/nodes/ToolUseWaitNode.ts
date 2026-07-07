@@ -94,7 +94,17 @@ export class ToolUseWaitNode<C> extends Node<
         await setGoalSessionBashAutoApproval(streamId, false, runtimeHost);
         emitRunFact(this.services.logger, 'goalPaused', { streamId });
       }
-    } else if (!prepRes.previouslyDeliveredToOrchestrator) {
+    } else {
+      // Always call `onBeforeWaiting`, even when an earlier cycle already
+      // delivered this subagent's result. `NativeSubagentStrategy.onBeforeWaiting`
+      // re-registers this turn's `abandon()` cleanup on the current
+      // `runHandle` on every genuinely-suspending call — initial launch and
+      // every resume alike (see its doc comment) — and is otherwise a no-op
+      // "already delivered" short-circuit. Skipping the call here (as a
+      // `previouslyDeliveredToOrchestrator` fast path once did) would leave a
+      // turn that resumes already-delivered and suspends again with no
+      // cleanup registered on its handle, so a later stop/kill of that
+      // suspension would bypass the strategy's own teardown.
       const delivered = await onBeforeWaiting?.(
         prepRes.lastResponse,
         prepRes.touchedFiles,
@@ -102,9 +112,8 @@ export class ToolUseWaitNode<C> extends Node<
         prepRes.totalCostUsd,
       );
       prepRes.deliveredToOrchestrator =
-        onBeforeWaiting !== undefined && delivered !== false;
-    } else {
-      prepRes.deliveredToOrchestrator = true;
+        prepRes.previouslyDeliveredToOrchestrator ||
+        (onBeforeWaiting !== undefined && delivered !== false);
     }
 
     const shouldSuspendNativeSubagent =

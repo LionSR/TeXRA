@@ -154,7 +154,11 @@ describe('ToolUseWaitNode', () => {
       },
     );
 
-    expect(onBeforeWaiting).toHaveBeenCalledOnce();
+    // Called on both turns: `onBeforeWaiting` fires on every genuine-suspend
+    // attempt regardless of prior delivery (see the dedicated abandon-hook
+    // regression test below) — the second call's `mockResolvedValueOnce(true)`
+    // exercises that.
+    expect(onBeforeWaiting).toHaveBeenCalledTimes(2);
     expect(secondTransition).toBe(FlowTransition.WAITING);
     expect(shared.deliveredToOrchestrator).toBe(true);
   });
@@ -202,10 +206,58 @@ describe('ToolUseWaitNode', () => {
       },
     );
 
-    expect(onBeforeWaiting).not.toHaveBeenCalled();
+    // `onBeforeWaiting` is now called even on an already-delivered turn (see
+    // "still calls onBeforeWaiting ... suspends again" below): it is
+    // idempotent (NativeSubagentStrategy short-circuits redelivery via its
+    // own delivery-state) and registering the strategy's abandon() cleanup on
+    // *this* turn's runHandle must not depend on whether delivery is a no-op.
+    expect(onBeforeWaiting).toHaveBeenCalledOnce();
     expect(onFollowUpConsumed).toHaveBeenCalledOnce();
     expect(transition).toBe(FlowTransition.CONTINUE);
     expect(shared.deliveredToOrchestrator).toBeUndefined();
+  });
+
+  it('still calls onBeforeWaiting (registering waiting-cleanup) when an already-delivered turn suspends again (Bugbot: skipped wait omits abandon hook)', async () => {
+    // Regression: previously, `previouslyDeliveredToOrchestrator` skipped
+    // `onBeforeWaiting` entirely, so a native subagent that resumes
+    // already-delivered and then suspends at WAITING again never registered
+    // this turn's `abandon()` cleanup on its `runHandle` — a later stop/kill
+    // of that second suspension fell through to bare untrack side effects
+    // instead of the strategy's own teardown. `onBeforeWaiting` must fire
+    // (and thus its cleanup-registration side effect run) on every turn that
+    // reaches a genuine WAITING suspend, regardless of prior delivery.
+    const shared: ToolUseRunShared = {
+      deliveredToOrchestrator: true,
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const onBeforeWaiting = vi.fn(async () => true);
+    const runtimeHost = { emit: vi.fn() };
+
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: true,
+      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
+      modelHandler: { extractAssistantText: () => undefined },
+      onBeforeWaiting,
+      runtimeHost,
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp: vi.fn(),
+      },
+      streamStatus: new StreamStatusMachine(),
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+
+    const node = new ToolUseWaitNode().setServices(services);
+    const prep = await node.prep(shared);
+    const exec = await withTestRunContext(runtimeHost, 'test-stream', () =>
+      node.exec(prep),
+    );
+
+    expect(onBeforeWaiting).toHaveBeenCalledOnce();
+    expect(exec.kind).toBe('waiting');
   });
 
   it('preserves delivered state when interruption is already set before waiting', async () => {

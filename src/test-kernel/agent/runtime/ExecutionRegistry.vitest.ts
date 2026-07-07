@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import type { AgentTrace } from '@agent/trace';
 import {
   AgentExecutionHandle,
   ExecutionRegistry,
@@ -11,8 +12,14 @@ import {
 } from '@agent/runtime/executionRegistry';
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  STREAM_PHASE,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
 
@@ -104,6 +111,75 @@ describe('executionRegistry', () => {
       expect(cleanup).toHaveBeenCalledOnce();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(registry.getHandle(executionId)).toBeUndefined();
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('publishes the cancelled terminal result when killing a suspended WAITING handle (Bugbot: waiting kill omits trace result)', async () => {
+    // Regression: terminateWaitingHandle settles handle.result and the run's
+    // own (already-disposed, per runFlowWithLifecycle's finally) trace, but
+    // previously never told the owning session about the terminal event —
+    // trace/session-result-stream subscribers (session.onResult et al.) would
+    // silently miss a user-initiated stop of a suspended native subagent even
+    // though handle.result itself resolved correctly. `publishResult` is the
+    // callback SessionHandle injects (see SessionHandle.publishRunEvent) so
+    // this path can reach those subscribers directly, since the turn's own
+    // trace subscriptions are already torn down by the time a kill runs.
+    const streamStatus = new StreamStatusMachine();
+    const publishResult = vi.fn();
+    const registry = new ExecutionRegistry({
+      streamStatus,
+      events: new SessionEventHub(),
+      publishResult,
+    });
+    const executionId = 'exec-waiting-kill-publish-result-test';
+    const parentStreamId =
+      'parent-waiting-kill-publish-result-test' as StreamTabId;
+    const childStreamId =
+      'child-waiting-kill-publish-result-test' as StreamTabId;
+    const trace: AgentTrace = { emit: vi.fn() } as unknown as AgentTrace;
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        createRecordingHost().host,
+        undefined,
+        trace,
+      );
+      registry.track(handle);
+      handle.registerWaitingCleanup(() => {});
+
+      expect(registry.kill(executionId)).toBe(true);
+
+      expect(publishResult).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          type: 'result',
+          outcome: RUN_OUTCOME.CANCELLED,
+          executionId,
+          streamId: childStreamId,
+        }),
+        childStreamId,
+      );
+      // The (already-disposed-in-production) trace still gets a best-effort
+      // emit — harmless when there are no subscribers left, but exercised
+      // here to confirm the call site didn't drop it. (A second, unrelated
+      // `trace.emit` call comes from the streamStatus transition below.)
+      expect(trace.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'result',
+          outcome: RUN_OUTCOME.CANCELLED,
+        }),
+      );
+      await expect(handle.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.CANCELLED,
+        executionId,
+      });
     } finally {
       registry.dispose();
     }

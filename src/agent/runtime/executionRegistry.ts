@@ -144,6 +144,15 @@ export class ExecutionRegistry {
   private readonly streamStatus: StreamStatusMachine;
   private readonly interrupts: InterruptRegistry;
   private events: SessionEventHub | undefined;
+  /**
+   * Publishes a synthesized terminal `result` event to the owning session's
+   * `onResult` channel — the same forwarding `SessionHandle.attachRunTrace`
+   * does for a live run's own trace, injected here because
+   * `terminateWaitingHandle` produces its `result` event *after* the
+   * suspended run's own trace has already been disposed (see there).
+   */
+  private publishResult:
+    ((event: ResultEvent, streamId: StreamTabId) => void) | undefined;
   // Persistent listeners stay attached across notifications (unlike one-shot
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
   private readonly persistentListeners = new Map<
@@ -156,16 +165,21 @@ export class ExecutionRegistry {
     processOutput = new ProcessOutputPoller(),
     streamStatus = StreamStatusService,
     events,
+    publishResult,
   }: {
     readonly interrupts?: InterruptRegistry;
     readonly processOutput?: ProcessOutputPoller;
     readonly streamStatus?: StreamStatusMachine;
     readonly events?: SessionEventHub;
+    readonly publishResult?: (
+      event: ResultEvent,
+      streamId: StreamTabId,
+    ) => void;
   } = {}) {
     this.interrupts = interrupts;
     this.processOutput = processOutput;
     this.streamStatus = streamStatus;
-    if (events) this.attachSessionEvents(events);
+    if (events) this.attachSessionEvents(events, publishResult);
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). Without this, waitForChange only resolves
     // on progress/kill/untrack, and the background-tasks panel shows stale badges.
@@ -190,8 +204,12 @@ export class ExecutionRegistry {
     );
   }
 
-  attachSessionEvents(events: SessionEventHub): void {
+  attachSessionEvents(
+    events: SessionEventHub,
+    publishResult?: (event: ResultEvent, streamId: StreamTabId) => void,
+  ): void {
     this.events = events;
+    if (publishResult) this.publishResult = publishResult;
     this.processOutput.setOutputEmitter((payload) => {
       events.emit({
         scope: 'run',
@@ -861,13 +879,22 @@ export class ExecutionRegistry {
    * between its own interrupt-unregister and untrack during normal teardown.
    *
    * This path bypasses `runFlowWithLifecycle`'s own terminal handling (the
-   * flow never resumes to produce one), so it emits the terminal `result` on
-   * the run trace, settles `handle.result`, and persists the terminal status
-   * itself — otherwise trace subscribers would miss the stop, a consumer
-   * awaiting `handle.result` (F-2) would hang forever, and the execution's
-   * history would keep a non-terminal status. Unlike `emitRunResult`, no
-   * usage totals ride the event: the flow is suspended, so there is no live
-   * usage monitor to read.
+   * flow never resumes to produce one), so it publishes the terminal
+   * `result`, settles `handle.result`, and persists the terminal status
+   * itself — otherwise trace/session subscribers would miss the stop, a
+   * consumer awaiting `handle.result` (F-2) would hang forever, and the
+   * execution's history would keep a non-terminal status. Unlike
+   * `emitRunResult`, no usage totals ride the event: the flow is suspended,
+   * so there is no live usage monitor to read.
+   *
+   * `handle.trace` belongs to the turn that suspended this handle at WAITING,
+   * and `runFlowWithLifecycle`'s own `finally` already disposed it (channel +
+   * transcript + session bridge) the moment that turn returned — emitting on
+   * it is a harmless best effort, not the real fix. `publishResult` (wired
+   * from `SessionHandle.publishRunEvent`) reaches this session's
+   * `onResult`/event-bus subscribers directly instead, so a user-initiated
+   * stop of a suspended native subagent still surfaces a terminal event even
+   * though the turn's own trace is already gone.
    */
   private terminateWaitingHandle(handle: AgentExecutionHandle): boolean {
     if (!handle.runWaitingCleanup()) return false;
@@ -881,6 +908,7 @@ export class ExecutionRegistry {
       isSubagent: handle.isChildExecution,
     };
     handle.trace?.emit(cancelledResult);
+    this.publishResult?.(cancelledResult, handle.childStreamId);
     handle.settleResult(cancelledResult);
     void writeTerminalStatus(
       handle.executionId,
