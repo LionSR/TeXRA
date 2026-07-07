@@ -13,10 +13,23 @@ import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 
 // Local imports - tools
 import { BashTool } from '@tools/bash';
+import { requestBashApproval } from '@tools/approval/bashApproval';
 import * as agentConfig from '@utils/config/configUtils';
 
 // Local imports - system utilities
 import * as execUtils from '@utils/system/execUtils';
+
+vi.mock('@tools/approval/bashApproval', async (importActual) => {
+  const actual =
+    await importActual<typeof import('@tools/approval/bashApproval')>();
+  return {
+    ...actual,
+    // Default to auto-accept so tests unrelated to approval behavior (which
+    // stub bash approval off via config) keep working; individual tests
+    // override with mockResolvedValueOnce for the approval outcome they need.
+    requestBashApproval: vi.fn(actual.requestBashApproval),
+  };
+});
 
 class TestOpenAIResponseHandler extends ModelHandlerOpenAIResponse {
   async getClient(): Promise<never> {
@@ -139,5 +152,28 @@ describe('BashTool error feedback', () => {
 
     expect(result.status).toBe('executed');
     expect(executeSpy).toHaveBeenCalledOnce();
+  });
+
+  it('reports a real rejection distinctly from an approval timeout', async () => {
+    // Regression coverage for #7444: a host-side approval timeout must not
+    // collapse into the same "User rejected bash command" shape as an
+    // explicit reject once it reaches the agent.
+    vi.mocked(requestBashApproval).mockResolvedValueOnce({
+      accepted: false,
+      userMessage: 'No thanks.',
+    });
+    const rejected = await new BashTool().call({ command: 'echo rejected' });
+    expect(rejected.status).toBe('error');
+    expect(rejected.error).toContain('User rejected bash command');
+
+    vi.mocked(requestBashApproval).mockResolvedValueOnce({
+      accepted: false,
+      userMessage: 'Approval request timed out.',
+      timedOut: true,
+    });
+    const timedOut = await new BashTool().call({ command: 'echo timeout' });
+    expect(timedOut.status).toBe('error');
+    expect(timedOut.error).not.toContain('User rejected bash command');
+    expect(timedOut.error).toContain('timed out');
   });
 });
