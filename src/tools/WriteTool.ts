@@ -5,19 +5,16 @@ import { z } from 'zod';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
 import { ToolResult } from '@shared/schemas/toolResult';
-import {
-  recordToolFileRead,
-  requireFileReadForEdit,
-} from '@tools/fileInteractions';
+import { requireFileReadForEdit } from '@tools/fileInteractions';
 import {
   assertWritable,
   resolveAndFormat,
   currentToolRoot,
 } from '@tools/pathResolution';
 import {
-  formatUnifiedApprovalUserDiff,
+  appendApprovalDiffNote,
   requestApprovedEditContent,
-  writeApprovedContent,
+  writeAndRecordApprovedEdit,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
@@ -73,20 +70,18 @@ export class WriteFileTool extends defineTool({
     }
     const { approval, finalContent } = outcome;
 
-    const { appliedContent } = await writeApprovedContent(
+    const { appliedContent } = await writeAndRecordApprovedEdit(
       filePath,
       originalContent,
       finalContent,
     );
 
-    recordToolFileRead(filePath);
-
-    const userDiffNote = formatUnifiedApprovalUserDiff(
+    const output = appendApprovalDiffNote(
+      'written',
       displayPath,
       proposedContent,
       appliedContent,
     );
-    const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
 
     const originalLineCount = countLines(originalContent);
     const newLineCount = countLines(appliedContent);
