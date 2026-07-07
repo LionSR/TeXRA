@@ -99,18 +99,28 @@ export class ToolUsePrepareNode<C> extends Node<
     const mediaFiles = config.mediaFiles.length
       ? config.mediaFiles.map((p) => fileService.createLocation(p))
       : undefined;
-    const messages = await this.services.modelHandler.initializeMessages(
-      userPrefix,
-      userRequest,
-      mediaFiles,
-      systemMessage,
-    );
-    if (this.services.initialUserMessageForTranscript) {
-      logUserMessage(
-        logger,
-        this.services.initialUserMessageForTranscript,
-        this.services.modelHandler.consumeInsertedAttachmentKinds('initial'),
+    // The transcript's opening row must be logged whether initializeMessages
+    // succeeds or throws (e.g. a corrupt/oversized media file) -- otherwise a
+    // failed first turn leaves no record of what the user asked for. `finally`
+    // preserves the throw so the run still fails as before; a throw before any
+    // attachment was inserted just yields an empty attachments list, which is
+    // accurate (nothing was actually inserted).
+    let messages: ProviderMessage[];
+    try {
+      messages = await this.services.modelHandler.initializeMessages(
+        userPrefix,
+        userRequest,
+        mediaFiles,
+        systemMessage,
       );
+    } finally {
+      if (this.services.initialUserMessageForTranscript) {
+        logUserMessage(
+          logger,
+          this.services.initialUserMessageForTranscript,
+          this.services.modelHandler.consumeInsertedAttachmentKinds('initial'),
+        );
+      }
     }
 
     return {
