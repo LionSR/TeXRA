@@ -19,6 +19,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 
 // Type imports
 import { pathToLocation } from '@utils/files';
@@ -29,19 +30,23 @@ setupPlatform({}, { fs: nodeFilesystem });
 function createLoggerStub(): {
   logger: AgentTrace;
   errorMessages: string[];
+  warnMessages: string[];
 } {
   const errorMessages: string[] = [];
+  const warnMessages: string[] = [];
   const logger: Partial<AgentTrace> = {
     streamId: 'test-channel',
     debug: () => {},
     info: () => {},
-    warn: () => {},
+    warn: (message: string) => {
+      warnMessages.push(message);
+    },
     error: (message: string) => {
       errorMessages.push(message);
     },
     domain: () => {},
   } as Partial<AgentTrace>;
-  return { logger: logger as AgentTrace, errorMessages };
+  return { logger: logger as AgentTrace, errorMessages, warnMessages };
 }
 
 const MEDIA_FAILURE = new Error('media processing exploded');
@@ -175,5 +180,30 @@ describe('media attachment failure policy (#7465)', () => {
       handler.initializeMessages('prefix', 'request', MEDIA_FILES),
       (err: unknown) => err === MEDIA_FAILURE,
     );
+  });
+
+  // Regression (Copilot review on #7499): centralizing the policy must not
+  // silently escalate `toolAttachment` failures from warn to error. Prior
+  // per-site behavior (e.g. anthropicTools.ts's upload loop) used
+  // `logger.warn` — a transient upload-service hiccup on one attachment is
+  // common enough that it shouldn't render as a red error in the progress
+  // view, unlike followUp/insert media failures which do stay error-level.
+  it('reports a toolAttachment failure as a warning, not an error', () => {
+    const { logger, errorMessages, warnMessages } = createLoggerStub();
+
+    reportMediaAttachmentFailure(logger, 'toolAttachment', MEDIA_FAILURE);
+
+    assert.equal(errorMessages.length, 0);
+    assert.equal(warnMessages.length, 1);
+    assert.ok(warnMessages[0].includes('tool result attachment'));
+  });
+
+  it('still reports a followUp failure as an error', () => {
+    const { logger, errorMessages, warnMessages } = createLoggerStub();
+
+    reportMediaAttachmentFailure(logger, 'followUp', MEDIA_FAILURE);
+
+    assert.equal(warnMessages.length, 0);
+    assert.equal(errorMessages.length, 1);
   });
 });

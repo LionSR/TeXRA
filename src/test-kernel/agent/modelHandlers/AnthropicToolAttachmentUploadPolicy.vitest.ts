@@ -7,31 +7,33 @@ import type { AgentTrace } from '@agent/trace';
 import { uploadToolAttachments } from '@agent/modelHandlers/anthropic/anthropicTools';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
-function createLoggerStub(): { logger: AgentTrace; errorMessages: string[] } {
-  const errorMessages: string[] = [];
+function createLoggerStub(): { logger: AgentTrace; warnMessages: string[] } {
+  const warnMessages: string[] = [];
   const logger: Partial<AgentTrace> = {
     streamId: 'test-channel',
     debug: () => {},
     info: () => {},
-    warn: () => {},
-    error: (message: string) => {
-      errorMessages.push(message);
+    warn: (message: string) => {
+      warnMessages.push(message);
     },
+    error: () => {},
     domain: () => {},
   } as Partial<AgentTrace>;
-  return { logger: logger as AgentTrace, errorMessages };
+  return { logger: logger as AgentTrace, warnMessages };
 }
 
 /**
  * #7465: `uploadToolAttachments`'s per-attachment upload-failure catch now
  * funnels through the single `reportMediaAttachmentFailure` policy owner
  * instead of an ad hoc `logger.warn` call. Behavior is unchanged (degrade to
- * `unsupported`, continue with the rest) — this pins that down and confirms
- * the failure is still reported (as an error-level trace entry).
+ * `unsupported`, continue with the rest, warn-level report — not escalated
+ * to error, since a transient upload-service hiccup on one attachment is
+ * common enough that it shouldn't render as a red error in the progress view;
+ * see `CONTEXT_SEVERITY` in mediaAttachmentPolicy.ts) — this pins that down.
  */
 describe('anthropicTools.uploadToolAttachments attachment failure policy (#7465)', () => {
   it('degrades a failed upload to unsupported, reports it, and still uploads the rest', async () => {
-    const { logger, errorMessages } = createLoggerStub();
+    const { logger, warnMessages } = createLoggerStub();
 
     const attachments: ToolFileAttachment[] = [
       {
@@ -82,7 +84,7 @@ describe('anthropicTools.uploadToolAttachments attachment failure policy (#7465)
     );
     assert.equal(result.unsupported[0].path, 'broken.png');
     assert.ok(
-      errorMessages.some((m) => m.includes('broken.png')),
+      warnMessages.some((m) => m.includes('broken.png')),
       'the failure should be reported through the shared policy owner',
     );
   });
