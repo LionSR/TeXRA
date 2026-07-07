@@ -376,7 +376,7 @@ export async function executeAgent(
       ctx.executionId,
       streamId,
       config,
-      ctx.runtimeHost,
+      ctx.session,
     ).catch(() => {});
     const result = await runFlowWithLifecycle(
       ctx,

@@ -181,6 +181,37 @@ describe('SessionEventHub', () => {
     detachTrace();
   });
 
+  it('projects stream descriptions from session facts to the runtime host', () => {
+    const hub = new SessionEventHub();
+    const host = createRecordingHost();
+    const detachProjection = attachSessionProgressEventProjectionForTest(
+      hub,
+      host.host,
+    );
+
+    hub.emit({
+      scope: 'session',
+      event: {
+        type: 'updateStreamDescription',
+        payload: {
+          streamId,
+          description: 'Checking proof outline',
+        },
+      },
+    });
+
+    expect(host.events).toEqual([
+      {
+        event: 'updateStreamDescription',
+        payload: {
+          streamId,
+          description: 'Checking proof outline',
+        },
+      },
+    ]);
+    detachProjection();
+  });
+
   it('detaches test projection subscriptions cleanly', () => {
     const trace = new TraceEmitter();
     const hub = new SessionEventHub();
