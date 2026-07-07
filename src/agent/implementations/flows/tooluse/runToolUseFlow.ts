@@ -38,6 +38,7 @@ import type { SubagentProgressUpdate } from '@shared/schemas';
 // Local imports - tools and flow
 import { getDefaultToolRegistry } from '@tools/registry';
 import { TaskRunFileService } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -322,8 +323,13 @@ export async function runToolUseFlow<C = unknown>(
     let flowRecord: FlowRecord | null = null;
     try {
       flowRecord = (await kv.read<FlowRecord>(flowKey(executionId))) ?? null;
-    } catch {
-      logger.debug('Resume parse failed, starting fresh');
+    } catch (error) {
+      // A failed read here silently converts a resume into an empty-history
+      // fresh run -- as loud as the adjacent migration-failure warning below,
+      // so it is visible instead of vanishing into debug output.
+      logger.warn('Resume parse failed, starting fresh', {
+        data: { executionId, error: toErrorMessage(error) },
+      });
     }
     if (flowRecord?.shared) {
       logger.debug('Resuming tool-use flow from persistence');
