@@ -2034,12 +2034,11 @@ describe('DesktopProgressBridge', () => {
 
       await bridge.deleteStream('plan-delete-stream' as StreamTabId);
 
-      // Before the fix, this promise never settled: releaseStreamResources
-      // only cleared the legacy approval registries, not
-      // DesktopHostInteractions' own pendingRequests map.
+      // This promise must settle through releaseStreamResources, which owns
+      // stream-scoped interaction cleanup.
       await expect(result).resolves.toEqual({
         action: 'reject',
-        feedback: 'Stream deleted.',
+        feedback: 'Stream resources released.',
       });
       expect(
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
@@ -2271,12 +2270,11 @@ describe('DesktopProgressBridge', () => {
 
       await bridge.deleteAllStreams();
 
-      // Before the fix, this promise never settled: releaseStreamResources
-      // only cleared the legacy approval registries, not
-      // DesktopHostInteractions' own pendingRequests map.
+      // This promise must settle through releaseStreamResources, which owns
+      // stream-scoped interaction cleanup.
       await expect(result).resolves.toEqual({
         accepted: false,
-        userMessage: 'All streams deleted.',
+        userMessage: 'Stream resources released.',
       });
     } finally {
       bridge.dispose();
