@@ -174,7 +174,6 @@ export async function finalizeRunTerminal(
     params.executions.untrack(handle.executionId);
     if (
       !params.streamStatus.transitionToTerminal(handle.childStreamId, outcome, {
-        runtimeHost: handle.runtimeHost,
         trace: handle.trace,
       })
     ) {
@@ -196,7 +195,6 @@ export async function finalizeRunTerminal(
 
 function transitionRunStart(ctx: AgentLaunchContext): void {
   const options = {
-    runtimeHost: ctx.runtimeHost,
     trace: ctx.logger,
   };
   if (
