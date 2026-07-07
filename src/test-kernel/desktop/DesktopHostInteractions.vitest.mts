@@ -1,0 +1,190 @@
+// Third-party imports
+import { describe, expect, it, vi } from 'vitest';
+
+// Local imports - shared
+import type { StreamTabId } from '@shared/schemas';
+
+// Local imports - desktop test paths
+import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+
+interface HostInteractionResolution {
+  readonly kind: string;
+  readonly action: string;
+  readonly feedback?: string;
+  readonly value?: unknown;
+}
+
+interface DesktopHostInteractions {
+  requestBashApproval(request: {
+    command: string;
+    streamId?: StreamTabId;
+  }): Promise<{ accepted: boolean; userMessage?: string }>;
+  requestPlanApproval(request: {
+    approvalId: string;
+    streamId: StreamTabId;
+    goalEnabled: boolean;
+    plan: { objective: string };
+  }): Promise<unknown>;
+  requestAgentProposal(request: unknown): Promise<unknown>;
+  resolve(requestId: string, result: HostInteractionResolution): boolean;
+  cancelForStream(streamId: StreamTabId, cause?: string): void;
+  dispose?(): void;
+}
+
+interface DesktopHostInteractionsModule {
+  createDesktopHostInteractions(options: {
+    runtimeHost: { emit: (event: string, payload: unknown) => void };
+    getApprovalHandlers(): unknown;
+    getToolEditApprovals(): unknown;
+  }): DesktopHostInteractions;
+}
+
+interface RecordingApprovalHandler {
+  readonly show: ReturnType<typeof vi.fn>;
+  readonly resolve: ReturnType<typeof vi.fn>;
+}
+
+function handler(): RecordingApprovalHandler {
+  return { show: vi.fn(), resolve: vi.fn() };
+}
+
+function createHandlers() {
+  return {
+    toolEdit: handler(),
+    bash: handler(),
+    retry: handler(),
+    agentProposal: handler(),
+    planApproval: handler(),
+    externalInquiry: handler(),
+    userQuestion: handler(),
+  };
+}
+
+/** Reads the `requestId` passed to a handler's first `.show()` call. */
+function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
+  const requestId = (
+    show.mock.calls[0]?.[0] as { requestId?: string } | undefined
+  )?.requestId;
+  if (!requestId) throw new Error('Expected a captured requestId.');
+  return requestId;
+}
+
+async function createInteractions(handlers = createHandlers()) {
+  const { createDesktopHostInteractions } = (await import(
+    moduleFileUrl(desktopSourcePath('main', 'desktopHostInteractions.ts'))
+  )) as DesktopHostInteractionsModule;
+
+  return {
+    interactions: createDesktopHostInteractions({
+      runtimeHost: { emit: vi.fn() },
+      getApprovalHandlers: () => handlers,
+      getToolEditApprovals: () => ({}),
+    }),
+    handlers,
+  };
+}
+
+describe('createDesktopHostInteractions', () => {
+  it('rejects a resolution whose kind does not match the pending request', async () => {
+    const handlers = createHandlers();
+    const { interactions } = await createInteractions(handlers);
+
+    const resultPromise = interactions.requestBashApproval({
+      command: 'echo hi',
+      streamId: 'stream-a' as StreamTabId,
+    });
+    const requestId = firstShowRequestId(handlers.bash.show);
+
+    // A mismatched kind under the same requestId must not settle the
+    // pending bash approval as a plan action would — matches the extension
+    // host's discriminant check.
+    expect(
+      interactions.resolve(requestId, { kind: 'plan', action: 'approve' }),
+    ).toBe(false);
+
+    expect(
+      interactions.resolve(requestId, { kind: 'bash', action: 'approve' }),
+    ).toBe(true);
+    await expect(resultPromise).resolves.toEqual({ accepted: true });
+  });
+
+  it('forwards a cancellation cause as bash reject feedback', async () => {
+    const handlers = createHandlers();
+    const { interactions } = await createInteractions(handlers);
+
+    const resultPromise = interactions.requestBashApproval({
+      command: 'rm -rf build',
+      streamId: 'stream-a' as StreamTabId,
+    });
+
+    interactions.cancelForStream(
+      'stream-a' as StreamTabId,
+      'Stream resources released.',
+    );
+
+    await expect(resultPromise).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Stream resources released.',
+    });
+    expect(handlers.bash.resolve).toHaveBeenCalled();
+  });
+
+  it('whitelists only known proposal actions from a pass-through value', async () => {
+    const handlers = createHandlers();
+    const { interactions } = await createInteractions(handlers);
+
+    const resultPromise = interactions.requestAgentProposal({
+      proposalId: 'proposal-a',
+      streamId: 'stream-a' as StreamTabId,
+      agentCategory: 'toolUse',
+      agent: 'demo-agent',
+    });
+
+    // An unrelated object shape smuggled through `value` (containing an
+    // `action` that isn't a real ProposalResult action) must not be trusted
+    // verbatim — it should fall back to the resolution's own `action`.
+    expect(
+      interactions.resolve('proposal-a', {
+        kind: 'proposal',
+        action: 'reject',
+        value: { action: 'not-a-real-action', foo: 'bar' },
+        feedback: 'Rejected via unrelated caller shape.',
+      }),
+    ).toBe(true);
+
+    await expect(resultPromise).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Rejected via unrelated caller shape.',
+    });
+    expect(handlers.agentProposal.resolve).toHaveBeenCalledWith('proposal-a');
+  });
+
+  it('cancels all pending requests on dispose with a stable cause', async () => {
+    const handlers = createHandlers();
+    const { interactions } = await createInteractions(handlers);
+
+    const bashPromise = interactions.requestBashApproval({
+      command: 'echo hi',
+      streamId: 'stream-a' as StreamTabId,
+    });
+    const planPromise = interactions.requestPlanApproval({
+      approvalId: 'plan-a',
+      streamId: 'stream-b' as StreamTabId,
+      goalEnabled: false,
+      plan: { objective: 'Prove the lemma.' },
+    });
+
+    interactions.dispose?.();
+
+    await expect(bashPromise).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Desktop session disposed.',
+    });
+    await expect(planPromise).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Desktop session disposed.',
+    });
+    expect(handlers.bash.resolve).toHaveBeenCalled();
+    expect(handlers.planApproval.resolve).toHaveBeenCalled();
+  });
+});
