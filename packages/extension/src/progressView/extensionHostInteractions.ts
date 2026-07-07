@@ -17,12 +17,15 @@ import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@agent/runtime/hostProgressEvents';
+import {
+  toBashApprovalResult,
+  toPlanApprovalResult,
+  toProposalResult,
+  toRetryResult,
+  toUserQuestionResult,
+} from '@agent/runtime/hostInteractionResultMappers';
 import { nativeRequestApproval } from '@frontend/approval/nativeToolEditApproval';
-import type {
-  AgentProposalPermission,
-  StreamTabId,
-  UserQuestionAnswers,
-} from '@shared/schemas';
+import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
 import type {
   ToolEditApprovalRequest,
@@ -99,31 +102,61 @@ export function createExtensionHostInteractions(
     return true;
   };
 
+  /**
+   * Releases a pending interaction as a synthesized rejection, forwarding
+   * `cause` as agent-visible feedback through the same result mappers
+   * `resolve()` uses — so a cancellation and a live UI rejection settle
+   * identically for a given kind.
+   */
   const releasePending = (
     pending: PendingExtensionInteraction<PendingExtensionInteractionValue>,
+    cause?: string,
   ): void => {
     pendingRequests.delete(pending.id);
+    const rejection: HostInteractionResolution = {
+      kind: pending.kind,
+      action: 'reject',
+      feedback: cause,
+    };
     switch (pending.kind) {
       case 'bash':
         handlers().bash.resolve(pending.id);
-        pending.settle({ accepted: false });
+        pending.settle(toBashApprovalResult(rejection));
         break;
       case 'plan':
         handlers().planApproval.resolve(pending.id);
-        pending.settle({ action: 'reject' });
+        pending.settle(toPlanApprovalResult(rejection));
         break;
       case 'proposal':
         handlers().agentProposal.resolve(pending.id);
-        pending.settle({ action: 'reject' });
+        pending.settle(toProposalResult(rejection));
         break;
       case 'retry':
         handlers().retry.resolve(pending.id);
-        pending.settle({ action: 'cancel' });
+        pending.settle(toRetryResult(rejection));
         break;
       case 'userQuestion':
         handlers().userQuestion.resolve(pending.id);
-        pending.settle({ submitted: false });
+        pending.settle(toUserQuestionResult(rejection));
         break;
+    }
+  };
+
+  const cancelForStream = (streamId: StreamTabId, cause?: string): void => {
+    for (const pending of [...pendingRequests.values()]) {
+      if (pending.streamId === streamId) releasePending(pending, cause);
+    }
+  };
+
+  const cancelUnscoped = (cause?: string): void => {
+    for (const pending of [...pendingRequests.values()]) {
+      if (!pending.streamId) releasePending(pending, cause);
+    }
+  };
+
+  const cancelAll = (cause?: string): void => {
+    for (const pending of [...pendingRequests.values()]) {
+      releasePending(pending, cause);
     }
   };
 
@@ -230,13 +263,7 @@ export function createExtensionHostInteractions(
           return resolvePending<HostBashApprovalResult>(
             requestId,
             'bash',
-            {
-              accepted: result.action === 'approve',
-              userMessage:
-                result.action === 'reject'
-                  ? result.feedback?.trim()
-                  : undefined,
-            },
+            toBashApprovalResult(result),
             () => handlers().bash.resolve(requestId),
           );
         case 'plan':
@@ -257,24 +284,14 @@ export function createExtensionHostInteractions(
           return resolvePending<RetryResult>(
             requestId,
             'retry',
-            result.action === 'retry'
-              ? { action: 'retry', feedback: result.feedback }
-              : { action: 'cancel' },
+            toRetryResult(result),
             () => handlers().retry.resolve(requestId),
           );
         case 'userQuestion':
           return resolvePending<HostUserQuestionResult>(
             requestId,
             'userQuestion',
-            {
-              submitted: result.action === 'submit',
-              answers:
-                result.action === 'submit'
-                  ? (result.value as UserQuestionAnswers | undefined)
-                  : undefined,
-              feedback:
-                result.action === 'submit' ? undefined : result.feedback,
-            },
+            toUserQuestionResult(result),
             () => handlers().userQuestion.resolve(requestId),
           );
         case 'externalInquiry':
@@ -285,53 +302,12 @@ export function createExtensionHostInteractions(
       }
     },
 
-    cancelForStream(streamId: StreamTabId): void {
-      for (const pending of [...pendingRequests.values()]) {
-        if (pending.streamId === streamId) {
-          releasePending(pending);
-        }
-      }
-    },
-
-    cancelUnscoped(cause?: string): void {
-      void cause;
-      for (const pending of [...pendingRequests.values()]) {
-        if (!pending.streamId) {
-          releasePending(pending);
-        }
-      }
-    },
-
-    cancelAll(cause?: string): void {
-      void cause;
-      for (const pending of [...pendingRequests.values()]) {
-        releasePending(pending);
-      }
-    },
+    cancelForStream,
+    cancelUnscoped,
+    cancelAll,
 
     dispose(): void {
-      for (const pending of [...pendingRequests.values()]) {
-        releasePending(pending);
-      }
+      cancelAll('Extension session disposed.');
     },
   };
-}
-
-function toPlanApprovalResult(
-  result: HostInteractionResolution,
-): PlanApprovalResult {
-  if (result.action === 'approve') return { action: 'approve' };
-  if (result.action === 'approve_and_goal')
-    return { action: 'approve_and_goal' };
-  return { action: 'reject', feedback: result.feedback };
-}
-
-function toProposalResult(result: HostInteractionResolution): ProposalResult {
-  const value = result.value as ProposalResult | undefined;
-  if (value?.action === 'approve') return value;
-  if (value?.action === 'setup') return value;
-  if (value?.action === 'reject') return value;
-  if (result.action === 'setup') return { action: 'setup' };
-  if (result.action === 'approve') return { action: 'approve' };
-  return { action: 'reject', feedback: result.feedback };
 }
