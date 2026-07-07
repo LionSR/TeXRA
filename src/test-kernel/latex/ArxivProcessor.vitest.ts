@@ -43,6 +43,18 @@ describe('arXiv processor paths', () => {
   });
 });
 
+describe('arXiv processor logger channel', () => {
+  it('defaults the log channel to "arxivProcessor" (stable across the #7347 PascalCase rename)', () => {
+    // `channel` is private, but it is the exact value passed to
+    // logger.info(this.channel, ...) and rendered as the `[channel]` prefix on
+    // every log line this class emits. #7347 renamed the exported singleton to
+    // PascalCase and accidentally changed this string too; the channel value
+    // must stay lowercase so log filters keep matching `[arxivProcessor]`.
+    const channel = (ArxivProcessor as unknown as { channel: string }).channel;
+    expect(channel).toBe('arxivProcessor');
+  });
+});
+
 describe('arXiv source download filenames', () => {
   it('does not infer a missing header filename when it matches the base path', async () => {
     const dir = await makeTempDir();
