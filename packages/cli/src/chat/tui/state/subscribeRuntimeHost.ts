@@ -5,6 +5,7 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { toUpdateStreamUsagePayload } from '@agent/runtime/SessionRunFactProjector';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,
@@ -143,27 +144,6 @@ function appendGoalPausedTranscriptNotice(payload: GoalPausedPayload): void {
     GOAL_PAUSED_TRANSCRIPT_NOTICE,
     payload.streamId,
   );
-}
-
-function toUpdateStreamUsagePayload(
-  data: unknown,
-  fallbackStreamId: string,
-): UpdateStreamUsagePayload | undefined {
-  if (!isObject(data)) return undefined;
-  const storageKey = typeof data.storageKey === 'string' ? data.storageKey : '';
-  if (!storageKey) return undefined;
-  const usage = ExtendedTokenUsageStatsSchema.safeParse(data.usage);
-  if (!usage.success) return undefined;
-  const streamId =
-    typeof data.streamId === 'string' ? data.streamId : fallbackStreamId;
-  const executionId =
-    typeof data.executionId === 'string' ? data.executionId : undefined;
-  return {
-    streamId: streamId as UpdateStreamUsagePayload['streamId'],
-    storageKey: storageKey as UpdateStreamUsagePayload['storageKey'],
-    ...(executionId ? { executionId } : {}),
-    usage: usage.data,
-  };
 }
 
 function applyUsageUpdate(payload: UpdateStreamUsagePayload): void {
