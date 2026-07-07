@@ -1,3 +1,82 @@
+// Suites for loose src/shared/schemas helpers (work plan, agent CLI
+// settings, main-view housekeeping messages, web URL sanitization,
+// settings-view tab invariants).
+
+import { describe, expect, it } from 'vitest';
+import { planSummaryLine } from '@shared/schemas/workPlan';
+import {
+  parseClaudeAgentModel,
+  parseCodexApprovalPolicy,
+} from '@shared/schemas/agentCliSettings';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { MainViewInboundMessageSchema } from '@shared/schemas/mainView';
+import {
+  SETTINGS_TAB_PANEL_NAMES,
+  WebFetchPayloadSchema,
+  WebSearchPayloadSchema,
+} from '@shared/schemas';
+
+// ---------------------------------------------------------------------------
+// WorkPlan
+// ---------------------------------------------------------------------------
+
+describe('work plan schema helpers', () => {
+  it('returns a stable placeholder for whitespace-only objectives', () => {
+    expect(planSummaryLine(' \n\t')).toBe('(empty plan)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// agentCliSettings
+// ---------------------------------------------------------------------------
+
+describe('parseCodexApprovalPolicy', () => {
+  it('accepts SDK approval policies', () => {
+    expect(parseCodexApprovalPolicy('never')).toBe('never');
+    expect(parseCodexApprovalPolicy('on-request')).toBe('on-request');
+    expect(parseCodexApprovalPolicy('on-failure')).toBe('on-failure');
+    expect(parseCodexApprovalPolicy('untrusted')).toBe('untrusted');
+  });
+
+  it('defaults to automatic approval for invalid persisted values', () => {
+    expect(parseCodexApprovalPolicy('ask')).toBe('never');
+  });
+});
+
+describe('parseClaudeAgentModel', () => {
+  it('maps retired Opus selections to the current Opus model', () => {
+    expect(parseClaudeAgentModel('claude-opus-4-7')).toBe('claude-opus-4-8');
+  });
+
+  it('defaults invalid persisted selections to Sonnet', () => {
+    expect(parseClaudeAgentModel('claude-opus-3')).toBe('claude-sonnet-4-6');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MainViewHousekeeping
+// ---------------------------------------------------------------------------
+
+describe('MainView housekeeping messages', () => {
+  it('uses inputFiles for Pack/Clean multiple payloads', () => {
+    const parsed = MainViewInboundMessageSchema.parse({
+      command: MAIN_VIEW_COMMANDS.PACK_MULTIPLE,
+      inputFile: 'main.tex',
+      inputFiles: ['chapter.tex'],
+      agent: 'correct',
+      model: 'gpt-5.4',
+    });
+
+    expect('inputFiles' in parsed ? parsed.inputFiles : undefined).toEqual([
+      'chapter.tex',
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WebUrlSanitization
+// ---------------------------------------------------------------------------
+
 /**
  * Regression coverage for issue #7230: `web_search`/`web_fetch` `url` fields
  * are LLM/tool-controlled and must never carry a dangerous scheme through to
@@ -17,9 +96,6 @@
  * filesystem root instead of a web origin, becoming a live link to a local
  * file.
  */
-import { describe, expect, it } from 'vitest';
-
-import { WebFetchPayloadSchema, WebSearchPayloadSchema } from '@shared/schemas';
 
 function parseSearchUrl(url: string): string | undefined {
   return WebSearchPayloadSchema.parse({
@@ -125,5 +201,17 @@ describe('web tool URL sanitization (issue #7230)', () => {
   it('leaves a missing url as undefined without throwing', () => {
     expect(WebSearchPayloadSchema.parse({}).results).toBeUndefined();
     expect(WebFetchPayloadSchema.parse({}).url).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SettingsViewTabs
+// ---------------------------------------------------------------------------
+
+describe('settings view tab definitions', () => {
+  it('keeps panel names unique', () => {
+    expect(new Set(SETTINGS_TAB_PANEL_NAMES).size).toBe(
+      SETTINGS_TAB_PANEL_NAMES.length,
+    );
   });
 });

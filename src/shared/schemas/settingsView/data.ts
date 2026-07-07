@@ -82,7 +82,7 @@ export const SETTINGS_TAB_ORDER = [
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
 
-export function toSettingsTabPanelName(name: SettingsTabName): string {
+function toSettingsTabPanelName(name: SettingsTabName): string {
   return name.toLowerCase().replaceAll('_', '-');
 }
 
