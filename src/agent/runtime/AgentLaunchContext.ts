@@ -53,8 +53,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas/agent';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { generateExecutionId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   createRunContext,
@@ -486,12 +486,12 @@ async function assembleAgentLaunchContext(
 function acquireStreamOrThrow(
   streamId: StreamTabId,
   streamStatus: StreamStatusMachine,
-  runtimeHost: AgentRuntimeHost,
+  session: SessionHandle,
   taskType: string = 'Task',
 ): void {
   if (
     streamStatus.tryAcquire(streamId, {
-      runtimeHost,
+      events: session.events,
     })
   ) {
     return;
@@ -525,7 +525,7 @@ function compensateFailedActivation(args: {
   reservedStreamId?: StreamTabId;
   activatedStreamId?: StreamTabId;
   streamStatus: StreamStatusMachine;
-  runtimeHost: AgentRuntimeHost;
+  session: SessionHandle;
   err: unknown;
   // The run-trace from assembleAgentLaunchContext when it was created before the
   // throw. Reused for the error log so we don't allocate a second one; outer
@@ -537,7 +537,7 @@ function compensateFailedActivation(args: {
     reservedStreamId,
     activatedStreamId,
     streamStatus,
-    runtimeHost,
+    session,
     err,
     runTrace,
   } = args;
@@ -559,8 +559,8 @@ function compensateFailedActivation(args: {
         activatedStreamId,
         STREAM_PHASE.FAILED,
         {
-          runtimeHost,
           trace: runTrace?.trace,
+          ...(runTrace ? {} : { events: session.events }),
         },
       )
     ) {
@@ -576,7 +576,7 @@ function compensateFailedActivation(args: {
 
   if (reservedStreamId) {
     streamStatus.releaseIfReserved(reservedStreamId, {
-      runtimeHost,
+      events: session.events,
     });
   }
 }
@@ -610,7 +610,7 @@ export async function buildAgentLaunchContext(
     acquireStreamOrThrow(
       reservedStreamId,
       streamStatus,
-      runtimeHost,
+      launchSession,
       input.taskType,
     );
   }
@@ -641,7 +641,7 @@ export async function buildAgentLaunchContext(
       reservedStreamId,
       activatedStreamId,
       streamStatus,
-      runtimeHost,
+      session: launchSession,
       err,
       runTrace,
     });

@@ -195,9 +195,6 @@ describe('CLI conversation transcript splitting', () => {
         STREAM_ID,
         STREAM_PHASE.COMPLETED,
         'restart-repair',
-        {
-          runtimeHost: { emit: () => undefined },
-        },
       );
 
       expect(
@@ -227,14 +224,7 @@ describe('CLI conversation transcript splitting', () => {
     const dispose = subscribeStreamStatus();
 
     try {
-      StreamStatusService.transition(
-        STREAM_ID,
-        STREAM_PHASE.RUNNING,
-        'resume',
-        {
-          runtimeHost: { emit: () => undefined },
-        },
-      );
+      StreamStatusService.transition(STREAM_ID, STREAM_PHASE.RUNNING, 'resume');
 
       expect(streams.get().get(STREAM_ID)?.status).toBe(STREAM_STATUS.RUNNING);
     } finally {

@@ -1,5 +1,5 @@
 import type { AgentTrace, StatusEvent } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   canAcquireStreamReservation,
   canTransitionStreamPhase,
@@ -25,7 +25,7 @@ export interface StreamStatusChange {
 }
 
 export interface StreamStatusEmitOptions {
-  runtimeHost?: AgentRuntimeHost;
+  events?: SessionEventHub;
   trace?: AgentTrace;
   substate?: StreamSubstate;
 }
@@ -306,7 +306,15 @@ export class StreamStatusMachine {
     options.trace?.emit(event);
 
     const change = projectStatusEvent(event);
-    options.runtimeHost?.emit('updateStreamStatus', change);
+    if (!options.trace && options.events) {
+      options.events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateStreamStatus',
+          payload: change,
+        },
+      });
+    }
     for (const listener of this.statusListeners) {
       listener(change);
     }

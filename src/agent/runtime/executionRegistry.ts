@@ -10,6 +10,7 @@ import type { ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   StreamStatusService,
+  type StreamStatusEmitOptions,
   type StreamStatusMachine,
 } from '@agent/runtime/StreamStatusService';
 import {
@@ -265,10 +266,7 @@ export class ExecutionRegistry {
         handle.childStreamId,
         options.status,
         'lifecycle',
-        {
-          runtimeHost: handle.runtimeHost,
-          trace: handle.trace,
-        },
+        this.streamStatusEmitOptions(handle),
       );
     }
     this.track(handle);
@@ -291,10 +289,12 @@ export class ExecutionRegistry {
         : status === STREAM_PHASE.RUNNING && previous === STREAM_PHASE.WAITING
           ? 'resume'
           : 'lifecycle';
-    return this.streamStatus.transition(handle.childStreamId, status, cause, {
-      runtimeHost: handle.runtimeHost,
-      trace: handle.trace,
-    });
+    return this.streamStatus.transition(
+      handle.childStreamId,
+      status,
+      cause,
+      this.streamStatusEmitOptions(handle),
+    );
   }
 
   /** Remove an execution handle and notify waiters. */
@@ -628,7 +628,7 @@ export class ExecutionRegistry {
       STREAM_PHASE.CANCELLED,
       'user-stop',
       {
-        runtimeHost,
+        ...(this.events ? { events: this.events } : {}),
       },
     );
     return { kind: 'marked_stopped', streamId, childPolicy };
@@ -810,10 +810,7 @@ export class ExecutionRegistry {
           handle.childStreamId,
           STREAM_PHASE.CANCELLED,
           'user-stop',
-          {
-            runtimeHost: handle.runtimeHost,
-            trace: handle.trace,
-          },
+          this.streamStatusEmitOptions(handle),
         );
         return true;
       }
@@ -914,12 +911,16 @@ export class ExecutionRegistry {
       handle.childStreamId,
       STREAM_PHASE.CANCELLED,
       'user-stop',
-      {
-        runtimeHost: handle.runtimeHost,
-        trace: handle.trace,
-      },
+      this.streamStatusEmitOptions(handle),
     );
     return true;
+  }
+
+  private streamStatusEmitOptions(
+    handle: AgentExecutionHandle,
+  ): StreamStatusEmitOptions {
+    if (handle.trace) return { trace: handle.trace };
+    return this.events ? { events: this.events } : {};
   }
 
   private interruptRegisteredStream(
@@ -935,7 +936,7 @@ export class ExecutionRegistry {
         STREAM_PHASE.CANCELLED,
         'user-stop',
         {
-          runtimeHost,
+          ...(this.events ? { events: this.events } : {}),
         },
       );
     }
