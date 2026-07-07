@@ -1062,13 +1062,10 @@ export class DesktopProgressBridge {
     this.progressEvents.onStreamDeleted(streamId);
 
     // Releases approval state (pending approvals, bypass flags, coordinator
-    // requests) and the follow-up queue for this stream.
+    // requests) and the follow-up queue for this stream. cleanupApprovalsForStream
+    // already cancels DesktopHostInteractions' own pendingRequests map (#7333),
+    // so a pending bash/plan/proposal/user-question approval is settled here too.
     releaseStreamResources(streamId, this.session);
-    // releaseStreamResources only settles the legacy approval registries;
-    // DesktopHostInteractions keeps its own pendingRequests map (bash/plan/
-    // proposal/user-question) that only this cancels, so a pending approval
-    // wouldn't otherwise be settled and the awaiting tool call would hang.
-    this.session.interactions.cancelForStream(streamId, 'Stream deleted.');
 
     this.releaseApprovalsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
@@ -1094,12 +1091,6 @@ export class DesktopProgressBridge {
     for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
       releaseStreamResources(streamId, this.session);
-      // See the matching comment in deleteStream: DesktopHostInteractions'
-      // pendingRequests map is not covered by releaseStreamResources.
-      this.session.interactions.cancelForStream(
-        streamId,
-        'All streams deleted.',
-      );
     }
     // Catch pending approvals with no concrete stream context (undefined or
     // empty streamId) — the per-stream loop skips them because they do not

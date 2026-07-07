@@ -2036,10 +2036,12 @@ describe('DesktopProgressBridge', () => {
 
       // Before the fix, this promise never settled: releaseStreamResources
       // only cleared the legacy approval registries, not
-      // DesktopHostInteractions' own pendingRequests map.
+      // DesktopHostInteractions' own pendingRequests map. #7333 closed that
+      // gap generically (cleanupApprovalsForStream cancels every pending
+      // interaction kind for the stream), hence the shared message.
       await expect(result).resolves.toEqual({
         action: 'reject',
-        feedback: 'Stream deleted.',
+        feedback: 'Stream resources released.',
       });
       expect(
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
@@ -2273,10 +2275,12 @@ describe('DesktopProgressBridge', () => {
 
       // Before the fix, this promise never settled: releaseStreamResources
       // only cleared the legacy approval registries, not
-      // DesktopHostInteractions' own pendingRequests map.
+      // DesktopHostInteractions' own pendingRequests map. #7333 closed that
+      // gap generically (cleanupApprovalsForStream cancels every pending
+      // interaction kind for the stream), hence the shared message.
       await expect(result).resolves.toEqual({
         accepted: false,
-        userMessage: 'All streams deleted.',
+        userMessage: 'Stream resources released.',
       });
     } finally {
       bridge.dispose();
