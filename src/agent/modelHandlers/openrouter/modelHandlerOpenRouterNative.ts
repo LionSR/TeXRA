@@ -22,7 +22,7 @@ import {
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools and utils
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -828,13 +828,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   async addMediaToUserMessage(
     messages: ChatMessages[],
     mediaFiles: FileLocation[],
-  ): Promise<void> {
-    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
+  ): Promise<MediaAttachmentKind[]> {
+    if (!mediaFiles.length || !this.capabilities.supportsVision) return [];
     const lastUserMsg = messages.findLast((m) => m.role === 'user');
-    if (!lastUserMsg || !('content' in lastUserMsg)) return;
+    if (!lastUserMsg || !('content' in lastUserMsg)) return [];
 
     const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
-    if (formattedMedia.length === 0) return;
+    if (formattedMedia.length === 0) return [];
     insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
+    return this.consumeInsertedAttachmentKinds('insert');
   }
 }

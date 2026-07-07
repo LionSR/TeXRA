@@ -9,6 +9,7 @@ import {
   formatMediaNeedsVisionWarning,
   shouldWarnMediaNeedsVision,
 } from '@agent/runtime/mediaVisionWarning';
+import type { MediaAttachmentKind } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import type { TaskRunFileService } from '@utils/files';
 import type { FollowUpQueueBatchItem } from './FollowUpQueue';
@@ -29,17 +30,24 @@ export function followUpDisplayText(followUp: FollowUpQueueBatchItem): string {
     : followUp.text;
 }
 
+export interface AppendFollowUpResult {
+  readonly messages: ProviderMessage[];
+  readonly attachmentKinds: MediaAttachmentKind[];
+}
+
 export async function appendFollowUpAsUserMessage<C>(
   messages: ProviderMessage[],
   followUp: FollowUpQueueBatchItem,
   services: FollowUpMessageServices<C>,
-): Promise<ProviderMessage[]> {
+): Promise<AppendFollowUpResult> {
   const nextMessages = await services.modelHandler.createUserFollowUpMessages(
     messages,
     followUp.text,
   );
 
-  if (!followUp.mediaFiles?.length) return nextMessages;
+  if (!followUp.mediaFiles?.length) {
+    return { messages: nextMessages, attachmentKinds: [] };
+  }
 
   if (
     shouldWarnMediaNeedsVision(
@@ -53,9 +61,9 @@ export async function appendFollowUpAsUserMessage<C>(
     );
   }
 
-  await services.modelHandler.addMediaToUserMessage(
+  const attachmentKinds = await services.modelHandler.addMediaToUserMessage(
     nextMessages,
     followUp.mediaFiles.map((p) => services.fileService.createLocation(p)),
   );
-  return nextMessages;
+  return { messages: nextMessages, attachmentKinds };
 }
