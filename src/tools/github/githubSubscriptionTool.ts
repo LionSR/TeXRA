@@ -158,12 +158,12 @@ async function execSubscribe(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
   await requireToken();
-  const { streamId, runtimeHost } = requireRunStream('github_subscription');
+  const { streamId } = requireRunStream('github_subscription');
   const target = requirePath(input);
   const minAnnotationLevel =
     input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
   if (target.kind === 'repo') {
-    const created = bindRepoSubscription(streamId, target, runtimeHost);
+    const created = bindRepoSubscription(streamId, target);
     const slug = `${target.owner}/${target.repo}`;
     return {
       status: 'executed',
@@ -176,14 +176,10 @@ async function execSubscribe(
     };
   }
   if (target.kind === 'pr') {
-    const created = bindPRSubscription(
-      streamId,
-      {
-        ...target,
-        minAnnotationLevel,
-      },
-      runtimeHost,
-    );
+    const created = bindPRSubscription(streamId, {
+      ...target,
+      minAnnotationLevel,
+    });
     const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
     const annotationLevelDescription =
       ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
@@ -217,16 +213,12 @@ async function execSubscribe(
       (await resolveIssueIsPR(target.owner, target.repo, target.issueNumber)));
 
   if (isPR) {
-    const created = bindPRSubscription(
-      streamId,
-      {
-        owner: target.owner,
-        repo: target.repo,
-        pullNumber: target.issueNumber,
-        minAnnotationLevel,
-      },
-      runtimeHost,
-    );
+    const created = bindPRSubscription(streamId, {
+      owner: target.owner,
+      repo: target.repo,
+      pullNumber: target.issueNumber,
+      minAnnotationLevel,
+    });
     const wasIssuePath = !knownPR;
     const annotationLevelDescription =
       ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
@@ -242,7 +234,7 @@ async function execSubscribe(
         : `Already subscribed to ${prSlug}. Inline check annotation filter is now ${annotationLevelDescription}.`,
     };
   }
-  const created = bindIssueSubscription(streamId, target, runtimeHost);
+  const created = bindIssueSubscription(streamId, target);
   return {
     status: 'executed',
     summary: created
@@ -275,10 +267,10 @@ async function resolveIssueIsPR(
 }
 
 function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
-  const { streamId, runtimeHost } = requireRunStream('github_subscription');
+  const { streamId } = requireRunStream('github_subscription');
   const target = requirePath(input);
   if (target.kind === 'repo') {
-    const removed = unbindRepoSubscription(streamId, target, runtimeHost);
+    const removed = unbindRepoSubscription(streamId, target);
     const slug = `${target.owner}/${target.repo}`;
     return {
       status: 'executed',
@@ -288,7 +280,7 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
     };
   }
   if (target.kind === 'pr') {
-    const removed = unbindPRSubscription(streamId, target, runtimeHost);
+    const removed = unbindPRSubscription(streamId, target);
     const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
     return {
       status: 'executed',
@@ -299,16 +291,12 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
   }
   // Symmetric to subscribe: a /issues/N path may have been re-routed to a
   // PR subscription. Try both — whichever owns it wins.
-  const issueRemoved = unbindIssueSubscription(streamId, target, runtimeHost);
-  const prRemoved = unbindPRSubscription(
-    streamId,
-    {
-      owner: target.owner,
-      repo: target.repo,
-      pullNumber: target.issueNumber,
-    },
-    runtimeHost,
-  );
+  const issueRemoved = unbindIssueSubscription(streamId, target);
+  const prRemoved = unbindPRSubscription(streamId, {
+    owner: target.owner,
+    repo: target.repo,
+    pullNumber: target.issueNumber,
+  });
   const slug = `${target.owner}/${target.repo}/issues/${target.issueNumber}`;
   return {
     status: 'executed',

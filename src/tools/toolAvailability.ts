@@ -13,7 +13,7 @@
  */
 
 // Local imports
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { appSignals } from '@eventBus/AppSignals';
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
@@ -187,11 +187,9 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * `runExternalToolChecks`, so the dashboard-load probe and a refresh-triggered
  * probe can't race.
  */
-export async function refreshToolAvailability(
-  runtimeHost: AgentRuntimeHost,
-): Promise<void> {
+export async function refreshToolAvailability(): Promise<void> {
   await runExternalToolChecks();
-  runtimeHost.emit('toolAvailabilityChanged', undefined);
+  appSignals.emit('toolAvailabilityChanged', undefined);
 }
 
 /**
