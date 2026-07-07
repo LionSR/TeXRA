@@ -32,7 +32,11 @@ export {
   type TraceDocument,
 } from './traceAssembler';
 export {
+  readCompletedRunConversation,
   readCompletedRunTodos,
+  streamLogEntriesToConversation,
+  type CompletedRunConversationReadResult,
+  type CompletedRunConversationSource,
   type CompletedRunTodosReadResult,
   type CompletedRunTodosSource,
 } from './completedRunArchive';

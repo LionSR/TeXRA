@@ -195,6 +195,8 @@ export interface ExecutionKVStore {
    */
   todosModifiedAt(): Promise<number | undefined>;
   readConversation(): Promise<unknown[] | null>;
+  /** Same freshness accessor as {@link todosModifiedAt}, for `conversation.json`. */
+  conversationModifiedAt(): Promise<number | undefined>;
   readWorkspaceFiles(): Promise<string[]>;
   readChildren(): Promise<ChildRecord[]>;
   readResultMeta(): Promise<ResultMeta | null>;
@@ -285,6 +287,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   async readConversation(): Promise<unknown[] | null> {
     const raw = await this.read<unknown[]>(KEYS.CONVERSATION);
     return Array.isArray(raw) && raw.length > 0 ? raw : null;
+  }
+
+  async conversationModifiedAt(): Promise<number | undefined> {
+    return this.modifiedAt(KEYS.CONVERSATION);
   }
 
   async readWorkspaceFiles(): Promise<string[]> {

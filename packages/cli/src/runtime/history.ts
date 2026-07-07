@@ -1,6 +1,7 @@
 import { cp, readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { readCompletedRunConversation } from '@transcript';
 import {
   deleteAllExecutions,
   deleteExecution,
@@ -137,7 +138,7 @@ export async function readCliHistoryDetails(
     config,
     resultMeta,
     report,
-    conversation,
+    conversationResult,
     persistedWorkspaceFilePaths,
     generatedFiles,
     resumability,
@@ -146,11 +147,14 @@ export async function readCliHistoryDetails(
     store.readConfig(),
     store.readResultMeta(),
     store.readReport(),
-    store.readConversation(),
+    // Transcript sidecar owns completed-run display (#7246 Decision 1); the
+    // facade keeps `conversation.json` as a read-only legacy fallback.
+    readCompletedRunConversation(id),
     store.readWorkspaceFiles(),
     listGeneratedFiles(id),
     deriveResumability(id),
   ]);
+  const conversation = conversationResult.conversation;
   const resumeData =
     resumability.resumable && config
       ? await readCliToolUseResumeDataForListing(id, config)
