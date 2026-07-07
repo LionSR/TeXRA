@@ -12,6 +12,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { debounce, filterNotNull, isObject } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   isRunningGroupEntry,
@@ -246,13 +247,17 @@ export class StreamLogStore {
         // append to unblock it.
         this.loadFailed.delete(streamId);
         if (this.dirtyStreamIds.has(streamId)) void this.save();
-      } catch {
+      } catch (err) {
         // Rehydrate failed. Mark so `executeWrite` skips this stream and
         // doesn't overwrite the on-disk history with whatever empty/partial
         // log the agent may now be appending to. `append` retries the load
         // in the background; once it succeeds the merge path runs.
         this.loadFailed.add(streamId);
-        log.warn(LOG_TAG, `Failed to reload stream ${streamId} from disk`);
+        log.warn(
+          LOG_TAG,
+          `Failed to reload stream ${streamId} from disk: ` +
+            toErrorMessage(err),
+        );
       }
     })();
     this.pendingLoads.set(streamId, work);
@@ -606,8 +611,11 @@ export class StreamLogStore {
         log.warn(LOG_TAG, `Failed to write stream summary: ${streamId}`);
       });
       return { streamId, summary };
-    } catch {
-      log.warn(LOG_TAG, `Skipping corrupt stream log: ${streamId}`);
+    } catch (err) {
+      log.warn(
+        LOG_TAG,
+        `Skipping corrupt stream log: ${streamId} (${toErrorMessage(err)})`,
+      );
       return null;
     }
   }
@@ -754,7 +762,20 @@ export class StreamLogStore {
       entries: [],
       preservedRawEntries: [],
     };
-    if (!Array.isArray(rawEntries)) return parsed;
+    // A missing file reads as `undefined` (KVStore's quiet-missing contract):
+    // an empty log, nothing to warn about. Anything else that isn't an array
+    // is corrupt persisted data — throw so both callers route through the
+    // same failure path as unparseable JSON (`ensureLoaded` marks the load
+    // failed, which blocks saves from overwriting the on-disk file; startup
+    // summary loading skips the stream). Returning an empty log here would
+    // let a later save() destructively rewrite the corrupt source (#7464).
+    if (rawEntries === undefined) return parsed;
+    if (!Array.isArray(rawEntries)) {
+      throw new Error(
+        `Stream ${streamId}: persisted log is not an array ` +
+          `(got ${typeof rawEntries}).`,
+      );
+    }
 
     for (const raw of rawEntries) {
       const result = PersistedStreamLogEntrySchema.safeParse(raw);
