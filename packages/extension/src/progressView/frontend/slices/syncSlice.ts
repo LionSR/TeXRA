@@ -12,7 +12,13 @@ import {
 import { updateParentStreamId } from '../stateUtils';
 import type { HandlerRegistry } from '../messageHandlerTypes';
 
-export const syncHandlers: HandlerRegistry = {
+// `HandlerRegistry` is now exhaustive (every ProgressView outbound command
+// needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
+// This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
+// subset rather than the full registry; `messageDispatcher.ts` spreads all
+// slices together and is the actual exhaustiveness checkpoint TypeScript
+// enforces.
+export const syncHandlers = {
   [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data, ctx) => {
     if (!data.stream || data.action === 'clear') return;
 
@@ -119,4 +125,4 @@ export const syncHandlers: HandlerRegistry = {
       updateParentStreamId(ctx, data.stream as string, data.parentStreamId);
     }
   },
-};
+} satisfies Partial<HandlerRegistry>;

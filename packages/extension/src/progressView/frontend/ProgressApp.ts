@@ -257,8 +257,17 @@ export class ProgressApp extends ProgressAppBase {
     `;
   }
 
-  protected handleMessage(message: ProgressViewOutboundMessage): void {
-    dispatchMessage(message, this.createMessageHandlerContext());
+  protected override handleMessage(raw: unknown): void {
+    dispatchMessage(raw, this.createMessageHandlerContext(), (error) => {
+      const command =
+        raw && typeof raw === 'object' && 'command' in raw
+          ? String((raw as { command: unknown }).command)
+          : 'unknown';
+      this.logSchemaError(
+        `[ProgressApp] Message validation failed for command "${command}".`,
+        error,
+      );
+    });
   }
 
   /**

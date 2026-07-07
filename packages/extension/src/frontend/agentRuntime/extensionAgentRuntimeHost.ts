@@ -1,7 +1,6 @@
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { ProgressEventBus } from '@eventBus/ProgressEventBus';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import {
   extensionPresentationEvents,
   type ExtensionPresentationEvent,
@@ -18,6 +17,6 @@ export const extensionAgentRuntimeHost: AgentRuntimeHost = {
       );
       return;
     }
-    ProgressEventBus.emit(event, payload);
+    defaultSession().interactions.handleProgressEvent(event, payload);
   },
 };

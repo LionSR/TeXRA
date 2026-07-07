@@ -1,5 +1,5 @@
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
