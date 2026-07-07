@@ -11,7 +11,7 @@ import {
   type StreamStatusMachine,
 } from '@agent/runtime/StreamStatusService';
 import {
-  interruptRegistry,
+  SharedInterruptRegistry,
   type InterruptRegistry,
 } from '@agent/runtime/InterruptRegistry';
 import {
@@ -148,7 +148,7 @@ export class ExecutionRegistry {
   >();
 
   constructor({
-    interrupts = interruptRegistry,
+    interrupts = SharedInterruptRegistry,
     processOutput = new ProcessOutputPoller(),
     streamStatus = StreamStatusService,
     events,
@@ -906,4 +906,4 @@ export class ExecutionRegistry {
   }
 }
 
-export const executionRegistry = new ExecutionRegistry();
+export const SharedExecutionRegistry = new ExecutionRegistry();

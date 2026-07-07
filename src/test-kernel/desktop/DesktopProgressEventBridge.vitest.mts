@@ -133,7 +133,7 @@ async function loadBridgeModule(): Promise<
     },
   }));
   vi.doMock('@eventBus/ProgressEventBus', () => ({
-    bus: {
+    ProgressEventBus: {
       on: vi.fn((event: string, handler: MockBusHandler) => {
         mockBusHandlers.set(event, handler);
         return () => {

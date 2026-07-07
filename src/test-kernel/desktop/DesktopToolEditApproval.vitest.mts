@@ -163,7 +163,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   );
 
   const [
-    { bus },
+    { ProgressEventBus: bus },
     { requestToolEditApproval },
     { cleanupApprovalsForStream },
     desktopModule,
