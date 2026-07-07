@@ -76,9 +76,11 @@ async function readSidecarTodos(
  * Read the archived task list for a completed run, preferring the durable
  * stream sidecar (`streamData/{stream}/workPlan.json`) but falling back to
  * `executions/{id}/todos.json` for runs recorded before sidecars existed —
- * or when the legacy write is demonstrably fresher than the sidecar (a final
+ * or when the legacy write is at least as fresh as the sidecar (a final
  * `todo_write` can land before the snapshot store's asynchronous sidecar
- * write has flushed).
+ * write has flushed). Millisecond-resolution mtimes mean a legacy write that
+ * actually landed after the sidecar write can round to the same tick, so ties
+ * break toward the legacy write rather than the sidecar.
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
@@ -97,7 +99,10 @@ export async function readCompletedRunTodos(
   }
 
   const legacyMtime = await options.legacyModifiedAt?.();
-  if (legacyMtime !== undefined && legacyMtime > sidecarMtime) {
+  // `>=`, not `>`: filesystem mtimes are millisecond-resolution, so a legacy
+  // write that lands after the sidecar write but rounds to the same tick must
+  // still win the tie — otherwise the sidecar wins and stale todos display.
+  if (legacyMtime !== undefined && legacyMtime >= sidecarMtime) {
     return readLegacyTodos(options.legacyFallback);
   }
 
