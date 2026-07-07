@@ -12,11 +12,7 @@ import {
 // Local imports - agent
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
-import {
-  logWebFetch,
-  logWebSearch,
-  logContextManagementEvent,
-} from '@agent/trace';
+import { logWebSearch, logContextManagementEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -104,7 +100,6 @@ import type {
 } from './types/ModelHandlerContracts';
 import type {
   ServerToolExtractionResult,
-  WebFetchResult,
   WebSearchResult,
 } from './types/ServerToolTypes';
 
@@ -332,17 +327,6 @@ export abstract class ModelHandler<
   protected emitWebSearchResult(result: WebSearchResult): void {
     if (this.progressViewEnabled) {
       logWebSearch(this.logger, result);
-    }
-  }
-
-  /**
-   * Emit web fetch result to progress view during streaming.
-   * This allows fetch results to appear in correct order based on when
-   * they occurred in the response, rather than being logged after streaming.
-   */
-  protected emitWebFetchResult(result: WebFetchResult): void {
-    if (this.progressViewEnabled) {
-      logWebFetch(this.logger, result);
     }
   }
 
