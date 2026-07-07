@@ -14,7 +14,7 @@ import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+} from '@agent/runtime/hostProgressEvents';
 import {
   ExtendedTokenUsageStatsSchema,
   UpdatePlanPayloadSchema,

@@ -90,7 +90,7 @@ describe('tool-use follow-up progress events', () => {
     ]);
   });
 
-  it('notifies local follow-up observers without using the progress bus', async () => {
+  it('notifies local follow-up observers through onFollowUpSent', async () => {
     const { host } = createRecordingHost();
     const observed: StreamTabId[] = [];
     unsubscribeFollowUpObserver = onFollowUpSent((observedStreamId) => {

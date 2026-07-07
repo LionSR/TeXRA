@@ -5,7 +5,7 @@ import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+} from '@agent/runtime/hostProgressEvents';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,
@@ -31,9 +31,24 @@ import {
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 
 import { withEventErrorHandling } from './errorHandling';
-import type { UICallbacks } from './UIEvents';
 
-export type { UICallbacks };
+/**
+ * UI callbacks for the approval events that still flow on the host progress
+ * rail: tool-edit show/resolve (emitted by `src/tools/approval` and the native
+ * approval paths) and the bypass-state pushes. All other approval kinds reach
+ * the webview through their typed `ApprovalRequestHandler` directly.
+ */
+export interface UICallbacks {
+  showToolEditPermission: (
+    payload: ProgressEventPayloads['showToolEditPermission'],
+  ) => void;
+  resolveToolEditPermission: (requestId: string) => void;
+  updateToolEditApprovalBypassState: (
+    streamId: string,
+    bypassActive: boolean,
+  ) => void;
+  updateSuperYoloBypassState: (streamId: string, bypassActive: boolean) => void;
+}
 
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
@@ -74,7 +89,7 @@ function getDefaultProgressStreamControls(): ProgressStreamControls {
   };
 }
 
-/** Handles progress event bus subscriptions for the progress view. */
+/** Applies host progress events to progress-view state and webview updates. */
 export class ProgressEventHandler {
   private readonly logger: AgentTrace;
   private readonly eventRegistrations: ProgressEventRegistrationMap;
@@ -286,30 +301,19 @@ export class ProgressEventHandler {
           });
         },
       },
-      showRetryRequest: {
-        module: 'UIEvents',
-        context: 'failed to show retry request',
-        handle: this.uiCallbacks.showRetryRequest,
-      },
-      resolveRetryRequest: {
-        module: 'UIEvents',
-        context: 'failed to resolve retry request',
-        handle: (payload) =>
-          this.uiCallbacks.resolveRetryRequest(payload.streamId),
-      },
       showToolEditPermission: {
-        module: 'UIEvents',
+        module: 'ProgressEventHandler',
         context: 'failed to show approval prompt',
         handle: this.uiCallbacks.showToolEditPermission,
       },
       resolveToolEditPermission: {
-        module: 'UIEvents',
+        module: 'ProgressEventHandler',
         context: 'failed to resolve approval prompt',
         handle: (payload) =>
           this.uiCallbacks.resolveToolEditPermission(payload.requestId),
       },
       updateToolEditApprovalBypassState: {
-        module: 'UIEvents',
+        module: 'ProgressEventHandler',
         context: 'failed to update approval bypass state',
         handle: (payload) =>
           this.uiCallbacks.updateToolEditApprovalBypassState(
@@ -318,68 +322,13 @@ export class ProgressEventHandler {
           ),
       },
       updateSuperYoloBypassState: {
-        module: 'UIEvents',
+        module: 'ProgressEventHandler',
         context: 'failed to update super yolo bypass state',
         handle: (payload) =>
           this.uiCallbacks.updateSuperYoloBypassState(
             payload.streamId,
             payload.bypassActive,
           ),
-      },
-      showBashPermission: {
-        module: 'UIEvents',
-        context: 'failed to show bash approval prompt',
-        handle: this.uiCallbacks.showBashPermission,
-      },
-      resolveBashPermission: {
-        module: 'UIEvents',
-        context: 'failed to resolve bash approval prompt',
-        handle: (payload) =>
-          this.uiCallbacks.resolveBashPermission(payload.requestId),
-      },
-      showAgentProposal: {
-        module: 'UIEvents',
-        context: 'failed to show agent proposal',
-        handle: this.uiCallbacks.showAgentProposal,
-      },
-      resolveAgentProposal: {
-        module: 'UIEvents',
-        context: 'failed to resolve agent proposal',
-        handle: (payload) =>
-          this.uiCallbacks.resolveAgentProposal(payload.proposalId),
-      },
-      showPlanApproval: {
-        module: 'UIEvents',
-        context: 'failed to show plan approval',
-        handle: this.uiCallbacks.showPlanApproval,
-      },
-      resolvePlanApproval: {
-        module: 'UIEvents',
-        context: 'failed to resolve plan approval',
-        handle: (payload) =>
-          this.uiCallbacks.resolvePlanApproval(payload.approvalId),
-      },
-      showExternalInquiry: {
-        module: 'UIEvents',
-        context: 'failed to show external inquiry',
-        handle: this.uiCallbacks.showExternalInquiry,
-      },
-      resolveExternalInquiry: {
-        module: 'UIEvents',
-        context: 'failed to resolve external inquiry',
-        handle: (payload) =>
-          this.uiCallbacks.resolveExternalInquiry(payload.requestId),
-      },
-      showUserQuestion: {
-        module: 'UIEvents',
-        context: 'failed to show user question',
-        handle: this.uiCallbacks.showUserQuestion,
-      },
-      resolveUserQuestion: {
-        module: 'UIEvents',
-        context: 'failed to resolve user question',
-        handle: (payload) =>
-          this.uiCallbacks.resolveUserQuestion(payload.requestId),
       },
     };
   }

@@ -3,8 +3,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
-import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
+import type {
+  AddOutputFilesPayload,
+  OutputFileInfo,
+  StreamTabId,
+} from '@shared/schemas';
 import type * as VSCode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
@@ -142,9 +145,7 @@ function workspaceOutputFile(absolutePath: string): OutputFileInfo {
   };
 }
 
-function addOutputFilesPayload(
-  absolutePath: string,
-): ProgressEventPayloads['addOutputFiles'] {
+function addOutputFilesPayload(absolutePath: string): AddOutputFilesPayload {
   return {
     streamId,
     filesByRound: { 1: [workspaceOutputFile(absolutePath)] },
@@ -153,7 +154,7 @@ function addOutputFilesPayload(
 
 function emitAddOutputFilesRunFact(
   hub: InstanceType<typeof SessionEventHub>,
-  payload: ProgressEventPayloads['addOutputFiles'],
+  payload: AddOutputFilesPayload,
 ): void {
   hub.emit({
     scope: 'run',
