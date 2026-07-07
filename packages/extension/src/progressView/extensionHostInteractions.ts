@@ -266,6 +266,9 @@ export function createExtensionHostInteractions(
             },
             () => handlers().userQuestion.resolve(requestId),
           );
+        case 'externalInquiry':
+          handlers().externalInquiry.resolve(requestId);
+          return true;
         default:
           return false;
       }
@@ -276,6 +279,22 @@ export function createExtensionHostInteractions(
         if (pending.streamId === streamId) {
           releasePending(pending);
         }
+      }
+    },
+
+    cancelUnscoped(cause?: string): void {
+      void cause;
+      for (const pending of [...pendingRequests.values()]) {
+        if (!pending.streamId) {
+          releasePending(pending);
+        }
+      }
+    },
+
+    cancelAll(cause?: string): void {
+      void cause;
+      for (const pending of [...pendingRequests.values()]) {
+        releasePending(pending);
       }
     },
 

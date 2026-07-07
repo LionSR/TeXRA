@@ -49,7 +49,7 @@ import {
 } from '@tools/subagentResults';
 import {
   SUBAGENT_DELIVERY_DECISION,
-  subagentDeliveryRegistry,
+  SharedSubagentDeliveryRegistry,
 } from '@tools/subagentDeliveryState';
 import {
   computeAndWriteWorkflowDiffs,
@@ -173,7 +173,9 @@ export class NativeSubagentStrategy {
   private readonly detachAbandonListener: () => void;
 
   constructor(private readonly params: NativeSubagentStrategyParams) {
-    this.deliveryState = subagentDeliveryRegistry.start(params.executionId);
+    this.deliveryState = SharedSubagentDeliveryRegistry.start(
+      params.executionId,
+    );
     activeNativeSubagents.set(params.executionId, this);
     // Backstop for an abandoned WAITING session: a native subagent that
     // suspends and is never resumed and never errors has no other terminal
@@ -448,7 +450,7 @@ export class NativeSubagentStrategy {
 
   private finish(): void {
     this.detachAbandonListener();
-    subagentDeliveryRegistry.finish(this.params.executionId);
+    SharedSubagentDeliveryRegistry.finish(this.params.executionId);
     activeNativeSubagents.delete(this.params.executionId);
   }
 

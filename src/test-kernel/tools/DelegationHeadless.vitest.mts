@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   AgentExecutionHandle,
-  executionRegistry,
+  SharedExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
@@ -68,8 +69,16 @@ vi.mock('@tools/approval', () => ({
   },
 }));
 
-function runtimeHost() {
-  return { emit: vi.fn() };
+function runtimeHost(): AgentRuntimeHost {
+  return {
+    emit: vi.fn(),
+    interactions: {
+      handleProgressEvent: vi.fn(() => false),
+      pending: vi.fn(() => []),
+      resolve: vi.fn(() => false),
+      cancelForStream: vi.fn(),
+    } satisfies HostInteractions,
+  };
 }
 
 /** The shared delegation call used by nearly every case (agent name varies). */
@@ -144,8 +153,8 @@ describe('headless delegation', () => {
   });
 
   afterEach(() => {
-    for (const executionId of executionRegistry.getActiveIds()) {
-      executionRegistry.untrack(executionId);
+    for (const executionId of SharedExecutionRegistry.getActiveIds()) {
+      SharedExecutionRegistry.untrack(executionId);
     }
     ToolUseFollowUpQueue.release('parent-stream' as StreamTabId);
     ToolUseFollowUpQueue.release('child-stream' as StreamTabId);
@@ -409,13 +418,9 @@ describe('headless delegation', () => {
       proposal: new AgentProposalCoordinator(host),
       retry: new RetryRequestCoordinatorImpl(host),
     };
-    host.emit.mockImplementation((event, payload) => {
-      if (event !== 'showAgentProposal') return;
-      runCoordinatorBridge.resolveProposal(
-        (payload as { proposalId: string }).proposalId,
-        { action: 'reject' },
-      );
-    });
+    host.interactions!.requestAgentProposal = vi
+      .fn()
+      .mockResolvedValue({ action: 'reject' });
 
     const result = await withRunContext(
       createRunContext({
@@ -456,13 +461,9 @@ describe('headless delegation', () => {
       proposal: new AgentProposalCoordinator(host),
       retry: new RetryRequestCoordinatorImpl(host),
     };
-    host.emit.mockImplementation((event, payload) => {
-      if (event !== 'showAgentProposal') return;
-      runCoordinatorBridge.resolveProposal(
-        (payload as { proposalId: string }).proposalId,
-        { action: 'approve', model: 'gpt5' },
-      );
-    });
+    host.interactions!.requestAgentProposal = vi
+      .fn()
+      .mockResolvedValue({ action: 'approve', model: 'gpt5' });
 
     const result = await withRunContext(
       createRunContext({
@@ -499,13 +500,9 @@ describe('headless delegation', () => {
       proposal: new AgentProposalCoordinator(host),
       retry: new RetryRequestCoordinatorImpl(host),
     };
-    host.emit.mockImplementation((event, payload) => {
-      if (event !== 'showAgentProposal') return;
-      runCoordinatorBridge.resolveProposal(
-        (payload as { proposalId: string }).proposalId,
-        { action: 'approve', model: 'gpt5' },
-      );
-    });
+    host.interactions!.requestAgentProposal = vi
+      .fn()
+      .mockResolvedValue({ action: 'approve', model: 'gpt5' });
 
     const result = await withRunContext(
       createRunContext({
@@ -605,7 +602,7 @@ describe('headless delegation', () => {
 
     mocks.executeAgent.mockImplementationOnce(
       async (_config, executionId: string, options) => {
-        executionRegistry.track(
+        SharedExecutionRegistry.track(
           new AgentExecutionHandle(
             executionId,
             parentStreamId,
@@ -631,7 +628,7 @@ describe('headless delegation', () => {
       () => callDelegateReview(),
     );
 
-    executionRegistry.detachActiveChildren(parentStreamId, host);
+    SharedExecutionRegistry.detachActiveChildren(parentStreamId, host);
 
     expect(onBeforeWaiting).toBeDefined();
     const delivered = await onBeforeWaiting!('The proof is correct.', [], []);

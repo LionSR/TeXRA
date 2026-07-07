@@ -20,7 +20,7 @@ type AgentProposalActionInput = Omit<
 export interface ProgressAgentProposalControllerDeps {
   getPendingProposal(proposalId: string): AgentProposalPermission | undefined;
   restoreTaskState(taskState: TaskState): Promise<boolean>;
-  resolveProposal(proposalId: string, result: ProposalResult): void;
+  settleProposal(proposalId: string, result: ProposalResult): void;
   onMissingProposal?(proposalId: string): void;
   onInvalidProposal?(issues: unknown): void;
   onSetupComplete?(proposal: AgentProposalPermission): void;
@@ -34,14 +34,14 @@ export class ProgressAgentProposalController {
       case 'setup':
         return this.setupProposal(input.proposalId);
       case 'approve':
-        this.deps.resolveProposal(input.proposalId, {
+        this.deps.settleProposal(input.proposalId, {
           action: 'approve',
           ...(input.model ? { model: input.model } : {}),
           ...(input.agent ? { agent: input.agent } : {}),
         });
         return true;
       case 'reject':
-        this.deps.resolveProposal(input.proposalId, {
+        this.deps.settleProposal(input.proposalId, {
           action: 'reject',
           ...(input.feedback ? { feedback: input.feedback } : {}),
         });
@@ -66,14 +66,14 @@ export class ProgressAgentProposalController {
 
     const restored = await this.restoreProposalConfig(proposal);
     if (!restored) {
-      this.deps.resolveProposal(proposalId, {
+      this.deps.settleProposal(proposalId, {
         action: 'reject',
         feedback: 'Unable to restore the proposal configuration for setup.',
       });
       return false;
     }
 
-    this.deps.resolveProposal(proposalId, { action: 'setup' });
+    this.deps.settleProposal(proposalId, { action: 'setup' });
     this.deps.onSetupComplete?.(proposal);
     return true;
   }

@@ -2,15 +2,27 @@
 // import the focused modules under ./approval/ directly; this barrel keeps the
 // stable surface for command modules, the TUI, and tests.
 
+import type {
+  HostAgentProposalRequest,
+  HostBashApprovalResult,
+  HostInteractions,
+  HostRetryRequest,
+  HostUserQuestionResult,
+} from '@agent/runtime/HostInteractions';
+import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
+import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
+import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { UserQuestionAnswers } from '@shared/schemas';
 
+import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { setActiveCliToolEditApprovalHandler } from './initPlatform';
 
-import { isCliDecisionApprovalEvent } from './approvalEvents';
+import { type CliDecisionApprovalEvent } from './approvalEvents';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 
@@ -18,21 +30,24 @@ import {
   type ApprovalDecision,
   type CliApprovalPromptHooks,
   askApproval,
+  approvalPromptAllowed,
+  humanInputDenialFeedback,
   immediateDecision,
   immediateDecisionForApproval,
+  markApprovalDenied,
+  queueCliApprovalQuestion,
 } from './approval/approvalPolicy';
 import {
+  formatUserQuestionPrompt,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
 } from './approval/approvalSummaries';
-import {
-  dispatchApprovalDecision,
-  summarizeApprovalEvent,
-} from './approval/eventDispatch';
+import { summarizeApprovalEvent } from './approval/eventDispatch';
 import {
   handleExternalInquiry,
   handleUserQuestion,
 } from './approval/humanInputHandlers';
+import { parseUserQuestionAnswer } from './userQuestionAnswer';
 
 export {
   type ApprovalDecision,
@@ -48,9 +63,9 @@ export {
   isCliChatGptSubscriptionRetry,
   markApprovalDenied,
 } from './approval/approvalPolicy';
-export { handleCliAgentProposalDecision } from './approval/agentProposalController';
 export {
   formatAgentProposalApprovalSummary,
+  formatUserQuestionPrompt,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
 } from './approval/approvalSummaries';
@@ -92,6 +107,194 @@ export function installCliApprovalHandlers(
   };
 }
 
+async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
+  event: K,
+  payload: ProgressEventPayloads[K],
+  context: CliContext,
+  hooks: CliApprovalPromptHooks,
+  options: { writeRejectionToStderr?: boolean } = {},
+): Promise<ApprovalDecision> {
+  const immediate = immediateDecisionForApproval(event, payload, context);
+
+  if (event === 'showRetryRequest') {
+    const data = payload as ProgressEventPayloads['showRetryRequest'];
+    if (!immediate) hooks.beforePrompt?.();
+    writeTextStderr(formatRetryRequestMessage(data));
+  }
+
+  if (immediate) return immediate;
+
+  const summary = summarizeApprovalEvent(event, payload);
+  const decision = await askApproval(context, summary, hooks);
+  if (!decision.accepted && options.writeRejectionToStderr) {
+    writeTextStderr(
+      decision.userMessage ? `${summary}\n${decision.userMessage}` : summary,
+    );
+  }
+  return decision;
+}
+
+function toBashResult(decision: ApprovalDecision): HostBashApprovalResult {
+  return decision.accepted
+    ? { accepted: true }
+    : { accepted: false, userMessage: decision.userMessage };
+}
+
+function toPlanResult(decision: ApprovalDecision): PlanApprovalResult {
+  return decision.accepted
+    ? { action: 'approve' }
+    : { action: 'reject', feedback: decision.userMessage };
+}
+
+function toProposalResult(decision: ApprovalDecision): ProposalResult {
+  return decision.accepted
+    ? { action: 'approve' }
+    : { action: 'reject', feedback: decision.userMessage };
+}
+
+function toRetryResult(
+  decision: ApprovalDecision,
+  humanInputAvailable: boolean,
+): RetryResult {
+  if (decision.accepted) {
+    return { action: 'retry', feedback: decision.userMessage };
+  }
+  // A non-accepted retry with no human available is a policy/headless
+  // auto-denial (e.g. `--approval-policy never --no-input`), not a user
+  // cancel — surface it as a distinct `deny` so a run that produces zero
+  // output across all retries reports FAILED, not COMPLETED. See #7331.
+  return humanInputAvailable
+    ? { action: 'cancel' }
+    : {
+        action: 'deny',
+        ...(decision.userMessage ? { reason: decision.userMessage } : {}),
+      };
+}
+
+async function askHeadlessUserQuestion(
+  payload: ProgressEventPayloads['showUserQuestion'],
+  context: CliContext,
+  hooks: CliApprovalPromptHooks,
+): Promise<HostUserQuestionResult> {
+  if (!approvalPromptAllowed(context)) {
+    return {
+      submitted: false,
+      feedback: humanInputDenialFeedback(
+        context,
+        'User question requires human input; yolo mode cannot synthesize an answer.',
+      ),
+    };
+  }
+
+  const answers: UserQuestionAnswers = {};
+  try {
+    for (const question of payload.questions) {
+      hooks.beforePrompt?.();
+      const answer = await queueCliApprovalQuestion(context, {
+        kind: 'approval',
+        summary: payload.context
+          ? `${payload.context}\n\n${formatUserQuestionPrompt({
+              ...payload,
+              questions: [question],
+            })}`
+          : formatUserQuestionPrompt({ ...payload, questions: [question] }),
+        prompt: 'Answer (blank to skip): ',
+      });
+      const parsed = parseUserQuestionAnswer(answer, question);
+      if (parsed != null) answers[question.question] = parsed;
+    }
+  } catch {
+    markApprovalDenied(context);
+    return {
+      submitted: false,
+      feedback: 'CLI user question prompt failed.',
+    };
+  }
+
+  if (Object.keys(answers).length === 0) {
+    return { submitted: false, feedback: 'User question skipped by user.' };
+  }
+  return { submitted: true, answers };
+}
+
+export function createHeadlessCliHostInteractions(
+  context: CliContext,
+  hooks: CliApprovalPromptHooks = {},
+): HostInteractions {
+  return {
+    requestToolEditApproval(request) {
+      return decideToolEdit(request, context, hooks);
+    },
+    async requestBashApproval(request) {
+      const payload: ProgressEventPayloads['showBashPermission'] = {
+        requestId: 'headless-bash',
+        command: request.command,
+        ...(request.cwd ? { cwd: request.cwd } : {}),
+        allowBypass: true,
+        streamId: request.streamId ?? '',
+      };
+      const decision = await decideApprovalEvent(
+        'showBashPermission',
+        payload,
+        context,
+        hooks,
+      );
+      return toBashResult(decision);
+    },
+    async requestPlanApproval(request) {
+      const decision = await decideApprovalEvent(
+        'showPlanApproval',
+        request,
+        context,
+        hooks,
+      );
+      return toPlanResult(decision);
+    },
+    async requestAgentProposal(request: HostAgentProposalRequest) {
+      const decision = await decideApprovalEvent(
+        'showAgentProposal',
+        request,
+        context,
+        hooks,
+      );
+      return toProposalResult(decision);
+    },
+    async requestRetry(request: HostRetryRequest) {
+      const payload: ProgressEventPayloads['showRetryRequest'] = {
+        streamId: request.streamId,
+        operation: request.operation,
+        ...(request.model ? { model: request.model } : {}),
+        ...(request.errorMessage ? { errorMessage: request.errorMessage } : {}),
+        ...(request.errorDetails ? { errorDetails: request.errorDetails } : {}),
+      };
+      const decision = await decideApprovalEvent(
+        'showRetryRequest',
+        payload,
+        context,
+        hooks,
+        { writeRejectionToStderr: true },
+      );
+      return toRetryResult(decision, approvalPromptAllowed(context));
+    },
+    askUserQuestion(request) {
+      return askHeadlessUserQuestion(request, context, hooks);
+    },
+    async openExternalInquiry(request) {
+      await handleExternalInquiryAction({
+        action: 'drop',
+        threadId: request.threadId,
+        feedback:
+          'External inquiry is not available in non-TUI CLI runs: inquiry answers are delivered as asynchronous continuations, and this process cannot resume them after the run finalizes. Use texra chat for the inquiry panel, or ask_user_question for synchronous CLI input.',
+      });
+      return { threadId: request.threadId };
+    },
+    handleProgressEvent: () => false,
+    pending: () => [],
+    resolve: () => false,
+    cancelForStream: () => {},
+  };
+}
+
 export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
   event: K,
   payload: ProgressEventPayloads[K],
@@ -116,40 +319,5 @@ export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
     return true;
   }
 
-  if (!isCliDecisionApprovalEvent(event)) return false;
-
-  const approvalPayload = payload as ProgressEventPayloads[typeof event];
-
-  const immediate = immediateDecisionForApproval(
-    event,
-    approvalPayload,
-    context,
-  );
-
-  // Surface the upstream cause of every retry request before any auto-decision.
-  // Without this, non-interactive runs (--print + never/yolo) lose the only
-  // place the relay/provider error appears, leaving users with an opaque
-  // "Node exceeded maximum manual retry limit" after the budget runs out.
-  if (event === 'showRetryRequest') {
-    const data = approvalPayload as ProgressEventPayloads['showRetryRequest'];
-    if (!immediate) hooks.beforePrompt?.();
-    writeTextStderr(formatRetryRequestMessage(data));
-  }
-
-  if (immediate) {
-    dispatchApprovalDecision(event, approvalPayload, immediate);
-    return true;
-  }
-
-  void (async () => {
-    const decision = await askApproval(
-      context,
-      summarizeApprovalEvent(event, approvalPayload),
-      hooks,
-    );
-    dispatchApprovalDecision(event, approvalPayload, decision, {
-      writeRejectionToStderr: true,
-    });
-  })();
-  return true;
+  return false;
 }

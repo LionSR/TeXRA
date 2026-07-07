@@ -54,7 +54,7 @@ import { withDelegationWorktreeAvailability } from '@tools/delegationWorktreeAva
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  toolInjectionRegistry,
+  SharedToolInjectionRegistry,
   type ToolInjectionRegistry,
 } from './toolInjection';
 
@@ -136,7 +136,7 @@ export async function resolveAgentTools({
   delegationBlocked,
   approvalPromptsUnavailable,
   runtimeUnavailableTools,
-  toolInjections = toolInjectionRegistry,
+  toolInjections = SharedToolInjectionRegistry,
 }: ResolveAgentToolsInput): Promise<ResolvedAgentTools> {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames();

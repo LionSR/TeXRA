@@ -8,7 +8,7 @@ import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local file imports
-import { CROSSREF_CONSTANTS, crossrefClient } from './constants';
+import { CROSSREF_CONSTANTS, CrossrefClient } from './constants';
 import { rateLimitedRequest } from './rateLimiter';
 
 const CrossrefDoiInputSchema = z.strictObject({
@@ -32,7 +32,7 @@ export class CrossrefDoiTool extends defineTool({
           'crossref',
           CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
           'Crossref DOI lookup',
-          () => crossrefClient.work(trimmedDoi),
+          () => CrossrefClient.work(trimmedDoi),
         ),
       'Crossref lookup failed',
     );

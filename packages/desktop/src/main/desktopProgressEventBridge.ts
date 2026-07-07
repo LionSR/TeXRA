@@ -12,7 +12,10 @@
 
 import type { AgentTrace } from '@agent/trace';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import {
+  ProgressEventBus,
+  type ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import {
   STREAM_PHASE,
   type ProgressViewOutboundMessage,
@@ -82,9 +85,8 @@ export interface DesktopProgressEventBridge {
    * Handle a progress event emitted through the runtime host.
    *
    * Applies the desktop-specific rail update (persist snapshot, remove ghost,
-   * route-to-progress). Ordinary runtime-host events are also published to the
-   * process bus by the owning bridge; session-projected facts call this through
-   * a window-local path instead.
+   * route-to-progress, show root errors) for events delivered through the
+   * owning window's runtime host or session projection path.
    */
   onProgressEvent<K extends keyof ProgressEventPayloads>(
     event: K,
@@ -125,6 +127,9 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
   /** Streams that became live in this bridge and must not be restored as ghosts. */
   private readonly liveStreams = new Set<StreamTabId>();
 
+  /** True once `dispose()` has torn down this bridge. */
+  private disposed = false;
+
   private readonly unsubscribe: () => void;
 
   constructor(private readonly opts: DesktopProgressEventBridgeOptions) {
@@ -139,26 +144,22 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     this.hydrateRestoredStreams();
 
     // These events can be emitted on the process bus without an active desktop
-    // runtime host. Keep them subscribed here so all desktop windows see goal
-    // badge, progress-routing, and root-error updates.
-    const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
-      const goal = GoalStore.getForStream(streamId);
-      opts.onGoalStateChanged(streamId, isGoalInFlight(goal), {
-        status: goal?.status,
-        objective: goal?.objective,
-      });
-    });
-    const unsubscribeEnsureProgress = bus.on(
+    // runtime host. Keep them subscribed here so all desktop windows see
+    // progress-routing and root-error updates. Goal state is session-scoped and
+    // reaches this bridge through `onProgressEvent`.
+    const unsubscribeEnsureProgress = ProgressEventBus.on(
       'requestEnsureProgressView',
       () => {
         opts.routeToProgress();
       },
     );
-    const unsubscribeShowError = bus.on('requestShowError', ({ message }) => {
-      opts.onShowError(message);
-    });
+    const unsubscribeShowError = ProgressEventBus.on(
+      'requestShowError',
+      ({ message }) => {
+        opts.onShowError(message);
+      },
+    );
     this.unsubscribe = () => {
-      unsubscribeGoal();
       unsubscribeEnsureProgress();
       unsubscribeShowError();
     };
@@ -216,6 +217,14 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
+    // A headless run may still hold the owning bridge's `hostChannel.emit`
+    // closure that routes here after the desktop window closed and this bridge
+    // was disposed. Applying events post-dispose would repopulate the ghost /
+    // live stream maps that `dispose()` just cleared, re-persist snapshots, and
+    // route/show-error into a closed renderer. Mirror the ProgressBackend guard
+    // from #7372 (its sibling caller reached from the same fan-out point) so
+    // this second route also no-ops once disposed.
+    if (this.disposed) return;
     switch (event) {
       case 'setActiveStream': {
         const data = payload as ProgressEventPayloads['setActiveStream'];
@@ -266,6 +275,14 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
           status: goal?.status,
           objective: goal?.objective,
         });
+        return;
+      }
+      case 'requestEnsureProgressView':
+        this.opts.routeToProgress();
+        return;
+      case 'requestShowError': {
+        const data = payload as ProgressEventPayloads['requestShowError'];
+        this.opts.onShowError(data.message);
         return;
       }
       default:
@@ -384,6 +401,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
   // ── Dispose ──────────────────────────────────────────────────────────────
 
   dispose(): void {
+    this.disposed = true;
     this.unsubscribe();
     this.restoredStreams.clear();
     this.restoredDisplaySent.clear();

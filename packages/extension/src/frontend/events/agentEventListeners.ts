@@ -11,7 +11,10 @@ import * as vscode from 'vscode';
 import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { bus, INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
+import {
+  ProgressEventBus,
+  INSTRUCTION_ACTION,
+} from '@eventBus/ProgressEventBus';
 import type {
   InstructionAction,
   ProgressEventPayloads,
@@ -139,15 +142,17 @@ export function registerAgentEventListeners(): vscode.Disposable {
   const controller = new AbortController();
   const { signal } = controller;
 
-  bus.on('requestOpenFile', handleRequestOpenFile, { signal });
-  bus.on('requestShowInstruction', handleRequestShowInstruction, { signal });
-  bus.on(
+  ProgressEventBus.on('requestOpenFile', handleRequestOpenFile, { signal });
+  ProgressEventBus.on('requestShowInstruction', handleRequestShowInstruction, {
+    signal,
+  });
+  ProgressEventBus.on(
     'showAgentConfigBanner',
     (payload) => void handleShowAgentConfigBanner(payload),
     { signal },
   );
-  bus.on('requestShowError', handleRequestShowError, { signal });
-  bus.on(
+  ProgressEventBus.on('requestShowError', handleRequestShowError, { signal });
+  ProgressEventBus.on(
     'requestEnsureProgressView',
     (payload) => void handleRequestEnsureProgressView(payload),
     { signal },
@@ -155,8 +160,9 @@ export function registerAgentEventListeners(): vscode.Disposable {
 
   // Terminal-error toasts now come from the run's `result` event (the lifecycle
   // no longer emits them directly). The same shared helper every host uses
-  // re-emits `requestShow*` through `extensionAgentRuntimeHost` (= `bus.emit`),
-  // reaching the `bus.on` handlers registered above exactly once.
+  // re-emits `requestShow*` through `extensionAgentRuntimeHost` (=
+  // `ProgressEventBus.emit`), reaching the `ProgressEventBus.on` handlers
+  // registered above exactly once.
   const detachResult = attachTerminalResultToast(
     defaultSession(),
     extensionAgentRuntimeHost,

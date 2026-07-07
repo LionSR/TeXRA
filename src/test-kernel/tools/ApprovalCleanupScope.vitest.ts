@@ -1,11 +1,12 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import {
   cleanupApprovalsForStream,
@@ -49,6 +50,15 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
   it('scopes streamless cleanup to the owning runtime host', () => {
     const hostA = host();
     const hostB = host();
+    const session = new SessionHandle();
+    const cancelUnscoped = vi.fn();
+    const detach = session.useHostInteractions({
+      handleProgressEvent: () => false,
+      pending: () => [],
+      resolve: () => false,
+      cancelForStream: () => {},
+      cancelUnscoped,
+    });
     const settled = new Set<string>();
     const createPending = (id: string, runtimeHost: AgentRuntimeHost) => {
       let isSettled = false;
@@ -75,9 +85,12 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
         createPending('bash-b', hostB),
       );
 
-      cleanupUnscopedApprovals(hostA);
+      cleanupUnscopedApprovals(hostA, session);
 
       expect(settled).toEqual(new Set(['tool-a', 'bash-a']));
+      expect(cancelUnscoped).toHaveBeenCalledWith(
+        'Streamless approval cleanup.',
+      );
 
       cleanupUnscopedApprovals();
 
@@ -89,6 +102,7 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
       unregisterPendingApproval('tool-b');
       bashApprovalController.unregisterPending('bash-a');
       bashApprovalController.unregisterPending('bash-b');
+      detach();
     }
   });
 });
