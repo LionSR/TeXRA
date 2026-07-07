@@ -73,6 +73,45 @@ describe('CLI relay usage summary', () => {
     expect(rows[0]?.cost).toBe(1.25);
   });
 
+  it('rejects rows with a malformed cost instead of zero-defaulting spend', () => {
+    // Regression test for #7468: billing fields must never silently parse to
+    // 0 on a malformed value, since that would under-report spend against
+    // the relay cap.
+    expect(() =>
+      parseRelayUsageRows([
+        {
+          logged_at: '2026-05-17T12:00:00+00:00',
+          id: '00000000-0000-4000-8000-000000000003',
+          model: 'gpt-5.4',
+          provider: 'openai',
+          input_tokens: 10,
+          output_tokens: 4,
+          cached_input_tokens: null,
+          reasoning_tokens: null,
+          cost: 'not-a-number',
+        },
+      ]),
+    ).toThrow();
+  });
+
+  it('rejects rows with a malformed token count instead of zero-defaulting usage', () => {
+    expect(() =>
+      parseRelayUsageRows([
+        {
+          logged_at: '2026-05-17T12:00:00+00:00',
+          id: '00000000-0000-4000-8000-000000000004',
+          model: 'gpt-5.4',
+          provider: 'openai',
+          input_tokens: 'not-a-number',
+          output_tokens: 4,
+          cached_input_tokens: null,
+          reasoning_tokens: null,
+          cost: 1.25,
+        },
+      ]),
+    ).toThrow();
+  });
+
   it('builds stable keyset pagination URLs', () => {
     const first = buildRelayUsageRowsUrl({
       startIso: '2026-05-01T00:00:00.000Z',
