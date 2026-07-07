@@ -8,12 +8,10 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { delay } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ProcessExecutionHandle } from './ExecutionHandle';
 
 interface ProcessOutputSource {
   handle: ProcessExecutionHandle;
-  runtimeHost: AgentRuntimeHost;
 }
 
 export interface ProcessOutputPayload {
@@ -23,7 +21,7 @@ export interface ProcessOutputPayload {
   readonly stderr: string;
 }
 
-type ProcessOutputEmitter = (payload: ProcessOutputPayload) => void;
+export type ProcessOutputEmitter = (payload: ProcessOutputPayload) => void;
 
 /** Interval at which temp files are read and pushed to the progress UI. */
 const OUTPUT_POLL_INTERVAL_MS = 500;
@@ -61,13 +59,9 @@ export class ProcessOutputPoller {
     this.emitOutput = emitOutput;
   }
 
-  register(
-    handle: ProcessExecutionHandle,
-    runtimeHost: AgentRuntimeHost,
-  ): void {
+  register(handle: ProcessExecutionHandle): void {
     this.processOutputs.set(handle.executionId, {
       handle,
-      runtimeHost,
     });
     this.reconcile();
   }
@@ -78,10 +72,7 @@ export class ProcessOutputPoller {
     this.reconcile();
   }
 
-  async flush(
-    handle: ProcessExecutionHandle,
-    runtimeHost: AgentRuntimeHost,
-  ): Promise<void> {
+  async flush(handle: ProcessExecutionHandle): Promise<void> {
     if (!handle.outputPaths) return;
 
     await this.readIncremental(
@@ -89,7 +80,6 @@ export class ProcessOutputPoller {
       handle.parentStreamId,
       handle.outputPaths.stdout,
       handle.outputPaths.stderr,
-      runtimeHost,
     );
 
     // Flush any incomplete UTF-8 sequences that StringDecoder buffered
@@ -103,7 +93,7 @@ export class ProcessOutputPoller {
       state.stdout.decoder = new StringDecoder('utf8');
       state.stderr.decoder = new StringDecoder('utf8');
       if (outTail || errTail) {
-        this.emitProcessOutput(runtimeHost, {
+        this.emitProcessOutput({
           parentStreamId: handle.parentStreamId,
           executionId: handle.executionId,
           stdout: outTail,
@@ -192,7 +182,6 @@ export class ProcessOutputPoller {
           source.handle.parentStreamId,
           outputPaths.stdout,
           outputPaths.stderr,
-          source.runtimeHost,
           true,
         );
       },
@@ -205,7 +194,6 @@ export class ProcessOutputPoller {
     parentStreamId: StreamTabId,
     stdoutPath: string,
     stderrPath: string,
-    runtimeHost: AgentRuntimeHost,
     requireRegistered = false,
   ): Promise<void> {
     const inflight = this.readingInProgress.get(executionId);
@@ -231,7 +219,7 @@ export class ProcessOutputPoller {
         ]);
         if (!outText && !errText) return;
 
-        this.emitProcessOutput(runtimeHost, {
+        this.emitProcessOutput({
           parentStreamId,
           executionId,
           stdout: outText,
@@ -259,15 +247,12 @@ export class ProcessOutputPoller {
     }
   }
 
-  private emitProcessOutput(
-    runtimeHost: AgentRuntimeHost,
-    payload: ProcessOutputPayload,
-  ): void {
+  private emitProcessOutput(payload: ProcessOutputPayload): void {
     if (this.emitOutput) {
       this.emitOutput(payload);
       return;
     }
-    runtimeHost.emit('updateProcessOutput', payload);
+    throw new Error('ProcessOutputPoller requires a process output emitter');
   }
 }
 
