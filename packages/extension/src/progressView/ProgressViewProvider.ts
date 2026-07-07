@@ -17,7 +17,8 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
-import { bus } from '@eventBus/ProgressEventBus';
+import { appSignals } from '@eventBus/AppSignals';
+import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createChannelTrace } from '@logger';
@@ -54,6 +55,8 @@ import {
 
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { createExtensionHostInteractions } from './extensionHostInteractions';
+import { attachProgressBackendAppSignals } from './progressBackendAppSignals';
+import { attachProgressBackendProcessBus } from './progressBackendProcessBus';
 
 import type { MainViewProvider } from '../MainViewProvider';
 
@@ -197,7 +200,11 @@ export class ProgressViewProvider
 
   public async initialize(): Promise<void> {
     await this.backend.load();
-    this._disposables.push(this.backend.setupEventListeners(bus));
+    this._disposables.push(
+      this.backend.setupEventListeners(),
+      attachProgressBackendAppSignals(this.backend, appSignals),
+      attachProgressBackendProcessBus(this.backend, ProgressEventBus),
+    );
     this.logger.debug('ProgressViewProvider initialized');
   }
 

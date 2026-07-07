@@ -12,7 +12,6 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import {
   getProgressStreamLabel,
   revealProgressStream,
@@ -23,12 +22,12 @@ import {
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
 import {
-  issuePollingSource,
+  SharedIssuePollingSource,
   listIssueSubscriptionBindings,
   listPRSubscriptionBindings,
   listRepoSubscriptionBindings,
-  prPollingSource,
-  repoPollingSource,
+  SharedPRPollingSource,
+  SharedRepoPollingSource,
   unbindAllForIssue,
   unbindAllForPR,
   unbindAllForRepo,
@@ -107,15 +106,15 @@ export class GitHubSubscriptionHandlers {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
       subscriptions: [
-        ...listPRSubscriptionBindings(prPollingSource.activeKeys()).map(
+        ...listPRSubscriptionBindings(SharedPRPollingSource.activeKeys()).map(
           toEntry,
         ),
-        ...listRepoSubscriptionBindings(repoPollingSource.activeKeys()).map(
-          toEntry,
-        ),
-        ...listIssueSubscriptionBindings(issuePollingSource.activeKeys()).map(
-          toEntry,
-        ),
+        ...listRepoSubscriptionBindings(
+          SharedRepoPollingSource.activeKeys(),
+        ).map(toEntry),
+        ...listIssueSubscriptionBindings(
+          SharedIssuePollingSource.activeKeys(),
+        ).map(toEntry),
       ],
     });
   }
@@ -130,11 +129,11 @@ export class GitHubSubscriptionHandlers {
     const k = data.key;
     let removed: number;
     if (k.includes('/pulls/')) {
-      removed = unbindAllForPR(k, extensionAgentRuntimeHost);
+      removed = unbindAllForPR(k);
     } else if (k.includes('/issues/')) {
-      removed = unbindAllForIssue(k, extensionAgentRuntimeHost);
+      removed = unbindAllForIssue(k);
     } else {
-      removed = unbindAllForRepo(k, extensionAgentRuntimeHost);
+      removed = unbindAllForRepo(k);
     }
     if (removed === 0) {
       void vscode.window.showInformationMessage(

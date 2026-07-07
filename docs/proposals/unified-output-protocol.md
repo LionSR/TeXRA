@@ -1,9 +1,12 @@
 # Unified Output Protocol
 
-> **Status:** Partially landed proposal (2026-07-04 status sweep). Bundled agents
-> and templates have converged on the `<documents><document ...>` protocol, but
-> the schema/registry deletion plan is not complete: configurable
-> `documentTag`/`endTag` still exist for compatibility.
+> **Status:** Partially landed proposal (2026-07-07 status sweep). Bundled agents
+> and templates have converged on the `<documents><document ...>` protocol, and
+> `documentTag`/`endTag` are now fixed protocol constants
+> (`@shared/constants/outputProtocol`) rather than per-agent settings — old
+> YAML that still sets them is ignored with a warning (#7094). The rest of the
+> schema/registry deletion plan (`isMultipleOutput`, `MULTIPLE_SUFFIX`,
+> `groupByBaseName`, the paired-YAML/`_multiple` fork) is not complete.
 
 ## Problem
 

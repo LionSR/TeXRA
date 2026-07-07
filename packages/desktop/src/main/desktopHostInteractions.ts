@@ -216,6 +216,27 @@ class DesktopHostInteractions implements HostInteractions {
     }
   }
 
+  cancelUnscoped(cause?: string): void {
+    for (const [requestId, request] of [...this.pendingRequests.entries()]) {
+      if (request.streamId) continue;
+      this.resolve(requestId, {
+        kind: request.kind,
+        action: 'reject',
+        feedback: cause,
+      });
+    }
+  }
+
+  cancelAll(cause?: string): void {
+    for (const [requestId, request] of [...this.pendingRequests.entries()]) {
+      this.resolve(requestId, {
+        kind: request.kind,
+        action: 'reject',
+        feedback: cause,
+      });
+    }
+  }
+
   dispose(): void {
     for (const requestId of [...this.pendingRequests.keys()]) {
       this.resolve(requestId, {

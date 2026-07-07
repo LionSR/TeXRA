@@ -20,7 +20,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 vi.mock('@eventBus/ProgressEventBus', () => ({
-  bus: { emit: vi.fn() },
+  ProgressEventBus: { emit: vi.fn() },
 }));
 
 vi.mock('@platform/platform', () => ({

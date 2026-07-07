@@ -24,6 +24,8 @@ import { getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
+import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import type {
@@ -40,8 +42,11 @@ import {
   RUN_DESCRIPTOR_SCHEMA_VERSION,
   planSummaryLine,
   RoundKeySchema,
+  StreamTabIdSchema,
   sumUsageStats,
   TokenUsageStatsParsingSchema,
+  UpdatePlanPayloadSchema,
+  UpdateTodosPayloadSchema,
   buildRunDescriptor,
   type CompileFailure,
   type ExecutionId,
@@ -73,6 +78,7 @@ import {
   assembleSnapshot,
   EMPTY_WORK_PLAN,
   readLegacyInstruction as readLegacyInstructionFromDisk,
+  readMeta,
   readStreamData,
   type StreamData,
 } from './streamSnapshotRead';
@@ -82,6 +88,24 @@ const CHANNEL = 'StreamSnapshotStore';
 /** Bounded fan-out for seeding many streams' sidecars (mirrors the retired
  *  managers' `pMap` hydration so startup doesn't open a file handle per tab). */
 const SEED_IO_CONCURRENCY = 8;
+
+const AddOutputFilesRunFactSchema = z.looseObject({
+  streamId: StreamTabIdSchema,
+  filesByRound: z.record(z.string(), OutputFileInfoListSchema),
+});
+const UpdateMissingOutputsRunFactSchema = z.looseObject({
+  streamId: StreamTabIdSchema,
+  filesByRound: z.record(z.string(), z.array(z.string())),
+});
+const UpdateCompileFailuresRunFactSchema = z.looseObject({
+  streamId: StreamTabIdSchema,
+  filesByRound: z.record(z.string(), z.array(CompileFailureSchema)),
+});
+const UsageRunEventDataSchema = z.looseObject({
+  streamId: StreamTabIdSchema,
+  storageKey: z.string().min(1),
+  usage: TokenUsageStatsParsingSchema,
+});
 
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 type UsageUpdateResult =
@@ -284,6 +308,93 @@ export class StreamSnapshotStore {
       default:
         return;
     }
+  }
+
+  /**
+   * Persist already-migrated durable run facts directly from the session event
+   * plane. The legacy progress-event entry point remains for extension/desktop
+   * consumers and for CLI metadata that has not moved to run-scoped facts.
+   */
+  attachSessionEvents(events: SessionEventHub): () => void {
+    return events.subscribe(
+      (sessionEvent) => {
+        if (sessionEvent.scope !== 'run') return;
+        const { event } = sessionEvent;
+
+        if (event.type === 'usage') {
+          this.handleSessionUsageEvent(event.data);
+          return;
+        }
+
+        if (event.type !== 'domain') return;
+        const factName = fromRunFactDomainKey(event.key);
+        if (!factName || factName === 'goalPaused') return;
+
+        switch (factName) {
+          case 'updateTodos': {
+            const payload = UpdateTodosPayloadSchema.safeParse(event.data);
+            if (payload.success) {
+              this.setTodos(payload.data.streamId, payload.data.todos);
+            }
+            return;
+          }
+          case 'updatePlan': {
+            const payload = UpdatePlanPayloadSchema.safeParse(event.data);
+            if (payload.success) {
+              this.setPlan(payload.data.streamId, payload.data.plan);
+            }
+            return;
+          }
+          case 'addOutputFiles': {
+            const payload = AddOutputFilesRunFactSchema.safeParse(event.data);
+            if (payload.success) {
+              this.addOutputFiles(
+                payload.data.streamId,
+                payload.data.filesByRound,
+              );
+            }
+            return;
+          }
+          case 'updateMissingOutputs': {
+            const payload = UpdateMissingOutputsRunFactSchema.safeParse(
+              event.data,
+            );
+            if (payload.success) {
+              this.updateMissingOutputs(
+                payload.data.streamId,
+                payload.data.filesByRound,
+              );
+            }
+            return;
+          }
+          case 'updateCompileFailures': {
+            const payload = UpdateCompileFailuresRunFactSchema.safeParse(
+              event.data,
+            );
+            if (payload.success) {
+              this.updateCompileFailures(
+                payload.data.streamId,
+                payload.data.filesByRound,
+              );
+            }
+            return;
+          }
+          default:
+            return;
+        }
+      },
+      { scope: 'run', types: ['domain', 'usage'] },
+    );
+  }
+
+  private handleSessionUsageEvent(data: unknown): void {
+    const payload = UsageRunEventDataSchema.safeParse(data);
+    if (!payload.success) return;
+    void this.addUsage(
+      payload.data.streamId,
+      payload.data.storageKey as StorageKey,
+      payload.data.usage,
+    );
   }
 
   /**
@@ -817,12 +928,29 @@ export class StreamSnapshotStore {
       .filter((stream): stream is StreamTabId => stream !== undefined);
   }
 
-  /** Execution id recorded in a stream sidecar, without seeding memory. */
+  /**
+   * Execution id recorded in a stream sidecar's `meta.json`, without seeding
+   * memory or reading the stream's other sidecar files. Callers that scan
+   * every persisted stream (the `executionStreamResolver` meta-match, bulk
+   * admin sweeps in `SessionStores`) only ever need this one field, so this
+   * reads just `meta.json` rather than the full 6-file `readStreamData()`.
+   */
   async readPersistedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
-    const meta = (await readStreamData(this.kv(stream))).meta;
-    return executionIdFromMeta(meta);
+    return executionIdFromMeta(await readMeta(this.kv(stream)));
+  }
+
+  /**
+   * Whether a stream has a persisted `workPlan.json` sidecar — an existence
+   * check only (a single stat via `KVStore.exists`), not a read. Used by the
+   * resolver to disambiguate between multiple persisted streams that share an
+   * `executionId` (e.g. a parent orchestrator tab and a child stream): the
+   * candidate that actually holds durable todo/plan data is preferred over a
+   * bare `meta.json`-only match.
+   */
+  async hasPersistedWorkPlan(stream: StreamTabId): Promise<boolean> {
+    return this.kv(stream).exists(STREAM_DATA_KEYS.WORK_PLAN);
   }
 
   /**

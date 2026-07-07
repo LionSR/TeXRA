@@ -9,7 +9,6 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
@@ -20,6 +19,7 @@ import {
 } from '@shared/schemas';
 import { createChildStream } from '@tools/childStream';
 import { createRecordingHost } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 const executionId = 'c11111' as ExecutionId;
 const parentStreamId = 'stream:parent' as StreamTabId;
@@ -58,8 +58,11 @@ function startCodexChild(
   });
 }
 
-function withLegacyProjection<T>(host: AgentRuntimeHost, run: () => T): T {
-  const detach = attachLegacyProgressEventProjection(
+function withSessionProgressProjection<T>(
+  host: AgentRuntimeHost,
+  run: () => T,
+): T {
+  const detach = attachSessionProgressEventProjectionForTest(
     defaultSession().events,
     host,
   );
@@ -110,10 +113,8 @@ describe('child stream progress events', () => {
     };
 
     try {
-      const childStream = createChildStream(
-        orderingExecutionId,
-        parentStreamId,
-        {
+      const childStream = withSessionProgressProjection(host, () =>
+        createChildStream(orderingExecutionId, parentStreamId, {
           runtimeHost: host,
           streamPrefix: 'bash',
           streamCategory: AgentCategory.ToolUse,
@@ -121,7 +122,7 @@ describe('child stream progress events', () => {
           description: 'Run a background bash command',
           config,
           toolName: 'bash',
-        },
+        }),
       );
       childStream.finalize({ autoClose: true });
 
@@ -138,7 +139,7 @@ describe('child stream progress events', () => {
   it('publishes child stream lifecycle events through the explicit runtime host', () => {
     const active = createRecordingHost();
 
-    const childStream = withLegacyProjection(active.host, () =>
+    const childStream = withSessionProgressProjection(active.host, () =>
       createChildStream(executionId, parentStreamId, {
         runtimeHost: active.host,
         streamPrefix: 'bash',
@@ -152,7 +153,7 @@ describe('child stream progress events', () => {
 
     expect(childStream.childStreamId).toBe(childStreamId);
 
-    withLegacyProjection(active.host, () =>
+    withSessionProgressProjection(active.host, () =>
       childStream.finalize({ autoClose: true }),
     );
 
@@ -230,7 +231,7 @@ describe('child stream progress events', () => {
   it('publishes child loop status changes through the child stream owner', async () => {
     const active = createRecordingHost();
 
-    const childStream = withLegacyProjection(active.host, () =>
+    const childStream = withSessionProgressProjection(active.host, () =>
       startCodexChild(
         loopExecutionId,
         active.host,
@@ -245,7 +246,7 @@ describe('child stream progress events', () => {
     childStream.waitForInput();
     childStream.beginTurn();
     childStream.failTurn();
-    withLegacyProjection(active.host, () =>
+    withSessionProgressProjection(active.host, () =>
       childStream.finalize({ status: STREAM_STATUS.ERROR }),
     );
 
@@ -280,10 +281,12 @@ describe('child stream progress events', () => {
   it('preserves explicit user stops during child loop status changes', async () => {
     const active = createRecordingHost();
 
-    const childStream = startCodexChild(
-      stoppedExecutionId,
-      active.host,
-      'Run a stopped Codex child loop',
+    const childStream = withSessionProgressProjection(active.host, () =>
+      startCodexChild(
+        stoppedExecutionId,
+        active.host,
+        'Run a stopped Codex child loop',
+      ),
     );
     const handle =
       defaultSession().executions.getAgentHandleByStream(stoppedChildStreamId);
@@ -298,7 +301,9 @@ describe('child stream progress events', () => {
     childStream.waitForInput();
     childStream.beginTurn();
     childStream.failTurn();
-    childStream.finalize({ status: STREAM_STATUS.ERROR });
+    withSessionProgressProjection(active.host, () =>
+      childStream.finalize({ status: STREAM_STATUS.ERROR }),
+    );
 
     expect(StreamStatusService.get(stoppedChildStreamId)).toBe(
       STREAM_PHASE.CANCELLED,
@@ -317,17 +322,21 @@ describe('child stream progress events', () => {
   it('settles child handle results as cancelled for stopped finalization', async () => {
     const active = createRecordingHost();
 
-    const childStream = startCodexChild(
-      cancelledExecutionId,
-      active.host,
-      'Run an interrupted Codex child loop',
+    const childStream = withSessionProgressProjection(active.host, () =>
+      startCodexChild(
+        cancelledExecutionId,
+        active.host,
+        'Run an interrupted Codex child loop',
+      ),
     );
     const handle = defaultSession().executions.getAgentHandleByStream(
       cancelledChildStreamId,
     );
     expect(handle).toBeDefined();
 
-    childStream.finalize({ status: STREAM_STATUS.STOPPED });
+    withSessionProgressProjection(active.host, () =>
+      childStream.finalize({ status: STREAM_STATUS.STOPPED }),
+    );
 
     await expect(handle?.result).resolves.toMatchObject({
       type: 'result',
@@ -340,16 +349,20 @@ describe('child stream progress events', () => {
   it('settles failed child handle results with error details', async () => {
     const active = createRecordingHost();
 
-    const childStream = startCodexChild(
-      failedExecutionId,
-      active.host,
-      'Run a failing Codex child loop',
+    const childStream = withSessionProgressProjection(active.host, () =>
+      startCodexChild(
+        failedExecutionId,
+        active.host,
+        'Run a failing Codex child loop',
+      ),
     );
     const handle =
       defaultSession().executions.getAgentHandleByStream(failedChildStreamId);
     expect(handle).toBeDefined();
 
-    childStream.finalize({ errorMessage: 'child process exited 1' });
+    withSessionProgressProjection(active.host, () =>
+      childStream.finalize({ errorMessage: 'child process exited 1' }),
+    );
 
     await expect(handle?.result).resolves.toMatchObject({
       type: 'result',
@@ -366,20 +379,24 @@ describe('child stream progress events', () => {
   it('normalizes explicit non-error status when child finalization has an error', async () => {
     const active = createRecordingHost();
 
-    const childStream = startCodexChild(
-      normalizedErrorExecutionId,
-      active.host,
-      'Run a child loop with mismatched finalization inputs',
+    const childStream = withSessionProgressProjection(active.host, () =>
+      startCodexChild(
+        normalizedErrorExecutionId,
+        active.host,
+        'Run a child loop with mismatched finalization inputs',
+      ),
     );
     const handle = defaultSession().executions.getAgentHandleByStream(
       normalizedErrorChildStreamId,
     );
     expect(handle).toBeDefined();
 
-    childStream.finalize({
-      status: STREAM_STATUS.READY,
-      errorMessage: 'tool failed after reporting ready',
-    });
+    withSessionProgressProjection(active.host, () =>
+      childStream.finalize({
+        status: STREAM_STATUS.READY,
+        errorMessage: 'tool failed after reporting ready',
+      }),
+    );
 
     expect(StreamStatusService.get(normalizedErrorChildStreamId)).toBe(
       STREAM_PHASE.FAILED,

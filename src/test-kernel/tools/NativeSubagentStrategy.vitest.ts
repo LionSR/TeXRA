@@ -36,7 +36,7 @@ vi.mock('@tools/childRunDelivery', () => ({
   persistChildRunReport: mocks.persistChildRunReport,
 }));
 
-import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
+import { SharedSubagentDeliveryRegistry } from '@tools/subagentDeliveryState';
 import { NativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
 
 describe('NativeSubagentStrategy', () => {
@@ -49,7 +49,7 @@ describe('NativeSubagentStrategy', () => {
   });
 
   afterEach(() => {
-    subagentDeliveryRegistry.finish(executionId);
+    SharedSubagentDeliveryRegistry.finish(executionId);
   });
 
   it('persists the result manifest before waking the parent', async () => {

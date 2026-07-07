@@ -17,6 +17,7 @@ import { ProgressWorkflowFileActionsController } from '@controllers/progressView
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   validateExecutionRequest,
@@ -26,7 +27,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { setPreferCodexSubscription } from '@auth/codex';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
-import { bus } from '@eventBus/ProgressEventBus';
+import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { loadOptions } from '@frontend/agents/optionsLoader';
@@ -45,10 +46,10 @@ import {
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
-import { GoalStore } from '@tools/goal';
+import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import {
   createExternalLocation,
-  flexibleFS,
+  FlexibleFS,
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
@@ -124,20 +125,26 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.followUpPolishController = new ProgressFollowUpPolishController();
     this.handlerRegistry = this.createHandlerRegistry();
 
-    const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
-      void this.streamLifecycleController.deleteStream(streamId);
-      void GoalStore.forget(streamId);
-    });
+    const unsubscribeRemoveStream = ProgressEventBus.on(
+      'removeStream',
+      ({ streamId }) => {
+        void this.streamLifecycleController.deleteStream(streamId);
+        void GoalStore.forget(streamId);
+      },
+    );
     context.subscriptions.push({ dispose: unsubscribeRemoveStream });
 
-    const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
-      const goal = GoalStore.getForStream(streamId);
-      this.provider.webviewUpdater.updateGoalActive(
-        streamId,
-        isGoalInFlight(goal),
-        { status: goal?.status, objective: goal?.objective },
-      );
-    });
+    const unsubscribeGoal = subscribeGoalStateChanges(
+      defaultSession(),
+      ({ streamId }) => {
+        const goal = GoalStore.getForStream(streamId);
+        this.provider.webviewUpdater.updateGoalActive(
+          streamId,
+          isGoalInFlight(goal),
+          { status: goal?.status, objective: goal?.objective },
+        );
+      },
+    );
     context.subscriptions.push({ dispose: unsubscribeGoal });
   }
 
@@ -547,7 +554,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             )) ?? false
           );
         },
-        readFile: (file) => flexibleFS.read(createExternalLocation(file)),
+        readFile: (file) => FlexibleFS.read(createExternalLocation(file)),
         showInfo: async (message) => {
           await this.host.info(message);
         },

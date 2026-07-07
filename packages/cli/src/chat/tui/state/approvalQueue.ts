@@ -9,7 +9,6 @@
 
 import { signal, type Signal } from '@lit-labs/signals';
 import PQueue from 'p-queue';
-import pTimeout from 'p-timeout';
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
@@ -32,7 +31,7 @@ export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 export type ApprovalPayload =
   | { kind: 'bash'; payload: BashPermission }
-  | { kind: 'toolEdit'; request: ToolEditApprovalRequest }
+  | { kind: 'toolEdit'; payload: ToolEditApprovalRequest }
   | { kind: 'plan'; payload: PlanApprovalPermission }
   | { kind: 'proposal'; payload: AgentProposalPermission }
   | { kind: 'retry'; payload: RetryPermission }
@@ -55,11 +54,6 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   readonly disableChatGptSubscription?: boolean;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
-  /** Set when this decision came from an `enqueueApproval` `timeoutMs` firing
-   *  rather than the user (or policy) actually deciding. Callers that map
-   *  `ApprovalDecision` onto a richer result type (e.g. `PlanApprovalResult`)
-   *  use this to report a distinct `'timeout'` action instead of a rejection. */
-  readonly timedOut?: boolean;
 }
 
 export interface PendingApproval {
@@ -74,9 +68,6 @@ export interface ApprovalQueueStatus {
 
 export interface EnqueueApprovalOptions {
   readonly onPresent?: () => void;
-  /** Settle with a timeout decision if no decision arrives within this many
-   *  milliseconds (counted from enqueue, matching `HostInteractionOptions`). */
-  readonly timeoutMs?: number;
 }
 
 const CURRENT = signal<PendingApproval | undefined>(undefined);
@@ -102,12 +93,6 @@ let currentItem: ApprovalQueueItem | undefined;
 const INTERRUPT: ApprovalDecision = {
   accepted: false,
   userMessage: 'Session interrupted.',
-};
-
-const TIMEOUT_DECISION: ApprovalDecision = {
-  accepted: false,
-  userMessage: 'Approval request timed out.',
-  timedOut: true,
 };
 
 /**
@@ -186,9 +171,8 @@ export function approvalPayloadStreamId(
     case 'retry':
     case 'externalInquiry':
     case 'userQuestion':
-      return payload.payload.streamId || undefined;
     case 'toolEdit':
-      return payload.request.streamId || undefined;
+      return payload.payload.streamId || undefined;
     default:
       return assertNever(payload, 'Unhandled approval payload kind');
   }
@@ -246,15 +230,7 @@ export function enqueueApproval(
       if (settleItem(item, INTERRUPT)) syncApprovalStatus();
     });
 
-  if (!options.timeoutMs || options.timeoutMs <= 0) return outer;
-
-  return pTimeout(outer, {
-    milliseconds: options.timeoutMs,
-    fallback: () => {
-      if (settleItem(item, TIMEOUT_DECISION)) syncApprovalStatus();
-      return TIMEOUT_DECISION;
-    },
-  });
+  return outer;
 }
 
 /**
@@ -286,24 +262,34 @@ export function clearApprovals(): void {
   }
 }
 
-/** Settle every queued item matching `predicate` with `INTERRUPT`. */
-function clearMatchingApprovals(
-  predicate: (item: ApprovalQueueItem) => boolean,
-): void {
-  let changed = false;
-  for (const item of [...pendingItems]) {
-    if (!predicate(item)) continue;
-    if (settleItem(item, INTERRUPT)) changed = true;
-  }
-  if (changed) syncApprovalStatus();
+export function clearRetryApprovalsForStream(streamId: string): void {
+  clearApprovalsWhere(
+    (payload) =>
+      payload.kind === 'retry' && payload.payload.streamId === streamId,
+    INTERRUPT,
+  );
 }
 
-export function clearRetryApprovalsForStream(streamId: string): void {
-  clearMatchingApprovals(
-    (item) =>
-      item.payload.kind === 'retry' &&
-      item.payload.payload.streamId === streamId,
-  );
+export function clearApprovalsWhere(
+  predicate: (payload: ApprovalPayload) => boolean,
+  decision: ApprovalDecision = INTERRUPT,
+): number {
+  let cleared = 0;
+  for (const item of [...pendingItems]) {
+    if (!predicate(item.payload)) continue;
+    if (!pendingItems.delete(item)) continue;
+    cleared += 1;
+    const advance = item.advance;
+    item.advance = undefined;
+    item.resolve(decision);
+    if (currentItem === item) {
+      currentItem = undefined;
+      CURRENT.set(undefined);
+      advance?.();
+    }
+  }
+  if (cleared > 0) syncApprovalStatus();
+  return cleared;
 }
 
 /**
@@ -316,7 +302,7 @@ export function clearRetryApprovalsForStream(streamId: string): void {
  * reach for when `interactions.resolve()` doesn't find a matching request.
  */
 export function clearApprovalsForStream(streamId: string): void {
-  clearMatchingApprovals(
-    (item) => approvalPayloadStreamId(item.payload) === streamId,
+  clearApprovalsWhere(
+    (payload) => approvalPayloadStreamId(payload) === streamId,
   );
 }

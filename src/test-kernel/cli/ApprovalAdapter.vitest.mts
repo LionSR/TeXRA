@@ -26,7 +26,12 @@ import {
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import {
+  AgentCategory,
+  DEFAULT_TOOL_CONFIG,
+  type StreamTabId,
+} from '@shared/schemas';
+import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
@@ -236,6 +241,35 @@ describe('approval prompt hooks', () => {
       threadId: 'ei_aabbccdd0011',
       feedback: expect.stringContaining('non-TUI CLI runs'),
     });
+  });
+});
+
+describe('requestRetry classification (#7331)', () => {
+  const retryRequest: HostRetryRequest = {
+    streamId: 'root@deepseekT#abc' as StreamTabId,
+    operation: 'Model invocation',
+    errorMessage: 'stream dropped before first token',
+  };
+
+  it('denies (not cancels) a retry when no human input is available', async () => {
+    const result = await createHeadlessCliHostInteractions(
+      context({ approvalPolicy: 'never', mode: 'headless' }),
+    ).requestRetry?.(retryRequest);
+
+    // A policy/headless auto-denial is a distinct failure, not a user cancel,
+    // so a zero-output run reports FAILED rather than COMPLETED.
+    expect(result).toEqual({
+      action: 'deny',
+      reason: 'Denied by CLI approval policy.',
+    });
+  });
+
+  it('cancels a retry the interactive user explicitly rejects', async () => {
+    const result = await createHeadlessCliHostInteractions(
+      context({ approvalPrompt: async () => 'n not now' }),
+    ).requestRetry?.(retryRequest);
+
+    expect(result).toEqual({ action: 'cancel' });
   });
 });
 

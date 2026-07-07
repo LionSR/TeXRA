@@ -3,13 +3,23 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  toRuntimeHostProvider,
+  type AgentRuntimeHost,
+  type CoordinatorRuntimeHost,
+  type RuntimeHostProvider,
+} from '@agent/runtime/AgentRuntimeHost';
 import type { ProviderErrorPartial } from '@shared/schemas';
 
 export type RetryResult =
   | { action: 'retry'; feedback?: string }
   | { action: 'cancel' }
-  | { action: 'timeout' };
+  | { action: 'timeout' }
+  // Policy/headless auto-denial: the retry could not be approved because no
+  // human input was available (e.g. `--approval-policy never --no-input`).
+  // Distinct from a user `cancel` so retry-exhaustion with no human lands in
+  // the `failed` fallback (→ RUN_OUTCOME.FAILED) instead of `cancelled`. See #7331.
+  | { action: 'deny'; reason?: string };
 
 export interface RetryRequestOptions {
   /** Name of the operation that failed (e.g. "Model invocation"). */
@@ -24,15 +34,6 @@ export interface RetryRequestOptions {
   timeoutMs?: number;
   /** Structured error details for expandable display. */
   errorDetails?: ProviderErrorPartial;
-}
-
-type RuntimeHostProvider = () => AgentRuntimeHost;
-type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
-
-function toRuntimeHostProvider(
-  runtimeHost: CoordinatorRuntimeHost,
-): RuntimeHostProvider {
-  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
 }
 
 export class RetryRequestCoordinatorImpl {

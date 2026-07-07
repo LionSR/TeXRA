@@ -36,7 +36,7 @@ import {
   type FileLocation,
   type RoundOutput,
 } from '@shared/schemas';
-import { flexibleFS } from '@utils/files';
+import { FlexibleFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -116,11 +116,7 @@ export class OutputNode<C = unknown> extends Node<
       logger.debug(`Processing output for round ${currentRound}`);
 
       await tryOperation(
-        () =>
-          xmlManager.ensureCorrectXmlStructure(
-            outputLocation,
-            setting.documentTag,
-          ),
+        () => xmlManager.ensureCorrectXmlStructure(outputLocation),
         this.recoverWarn('XML structure'),
       );
 
@@ -376,7 +372,7 @@ export class OutputNode<C = unknown> extends Node<
     const { logger } = this.services;
 
     const existingBase = await Promise.all(
-      baseFiles.map((base) => flexibleFS.exists(base)),
+      baseFiles.map((base) => FlexibleFS.exists(base)),
     );
     if (!existingBase.some(Boolean)) {
       logger.debug('No base files found for latexdiff');

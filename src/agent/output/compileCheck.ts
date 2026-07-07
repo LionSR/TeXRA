@@ -15,7 +15,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
 import {
   createRunStorageLocation,
-  flexibleFS,
+  FlexibleFS,
   getComparablePath,
   pathToLocation,
   WorkspaceFS,
@@ -277,13 +277,13 @@ async function compileOne(
 
   const clearStaleLogs = (): Promise<void[]> =>
     Promise.all([
-      flexibleFS.delete(logDest).catch(() => undefined),
-      flexibleFS.delete(legacyLogDest).catch(() => undefined),
+      FlexibleFS.delete(logDest).catch(() => undefined),
+      FlexibleFS.delete(legacyLogDest).catch(() => undefined),
     ]);
 
   let compileResult: CompileLatex2PdfResult;
   try {
-    const content = await flexibleFS.read(outputFile.location);
+    const content = await FlexibleFS.read(outputFile.location);
     if (!/\\documentclass/.test(content)) {
       ctx.logger.debug(
         `Compile check: ${displayName} has no \\documentclass, skipping`,
@@ -406,8 +406,8 @@ async function writeCompileFailure(args: WriteCompileFailureArgs): Promise<{
   } = args;
 
   try {
-    await flexibleFS.ensureDir(pathToLocation(opts.compileRoot));
-    await flexibleFS.write(logDest, `${failureLogExcerpt}\n`);
+    await FlexibleFS.ensureDir(pathToLocation(opts.compileRoot));
+    await FlexibleFS.write(logDest, `${failureLogExcerpt}\n`);
   } catch (writeErr) {
     ctx.logger.warn(
       `Compile check: failed to persist log for ${displayName}: ${toErrorMessage(writeErr)}`,

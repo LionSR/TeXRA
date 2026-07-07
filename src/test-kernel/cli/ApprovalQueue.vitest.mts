@@ -206,7 +206,7 @@ describe('CLI approval queue', () => {
     expect(
       approvalPayloadStreamId({
         kind: 'toolEdit',
-        request: { streamId: 'child-edit' },
+        payload: { streamId: 'child-edit' },
       } as ApprovalPayload),
     ).toBe('child-edit');
     expect(
@@ -257,27 +257,5 @@ describe('CLI approval queue', () => {
     });
     currentApproval.get()?.decide({ accepted: true });
     await expect(untouchedResult).resolves.toEqual({ accepted: true });
-  });
-
-  // Regression coverage for #7307: `HostInteractionOptions.timeoutMs` was
-  // silently dropped, so a bounded wait never actually timed out under the
-  // CLI TUI.
-  it('settles with a distinct timeout decision when timeoutMs elapses before a decision', async () => {
-    const payload = bashPayload('timeout-stream');
-    const result = enqueueApproval(payload, { timeoutMs: 15 });
-
-    await expect(result).resolves.toEqual({
-      accepted: false,
-      userMessage: 'Approval request timed out.',
-      timedOut: true,
-    });
-    expect(currentApproval.get()).toBeUndefined();
-    expect(approvalQueueStatus.get()).toEqual({ depth: 0, kind: 'approval' });
-
-    // A late decide() call on the now-settled item must not throw or
-    // double-resolve the caller's promise.
-    expect(() =>
-      currentApproval.get()?.decide({ accepted: true }),
-    ).not.toThrow();
   });
 });

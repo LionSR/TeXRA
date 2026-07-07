@@ -49,7 +49,7 @@ import {
 } from '@tools/subagentResults';
 import {
   SUBAGENT_DELIVERY_DECISION,
-  subagentDeliveryRegistry,
+  SharedSubagentDeliveryRegistry,
 } from '@tools/subagentDeliveryState';
 import {
   computeAndWriteWorkflowDiffs,
@@ -172,7 +172,9 @@ export class NativeSubagentStrategy {
   private runHandle: AgentRunHandle | undefined;
 
   constructor(private readonly params: NativeSubagentStrategyParams) {
-    this.deliveryState = subagentDeliveryRegistry.start(params.executionId);
+    this.deliveryState = SharedSubagentDeliveryRegistry.start(
+      params.executionId,
+    );
     activeNativeSubagents.set(params.executionId, this);
   }
 
@@ -416,7 +418,7 @@ export class NativeSubagentStrategy {
   }
 
   private finish(): void {
-    subagentDeliveryRegistry.finish(this.params.executionId);
+    SharedSubagentDeliveryRegistry.finish(this.params.executionId);
     activeNativeSubagents.delete(this.params.executionId);
   }
 

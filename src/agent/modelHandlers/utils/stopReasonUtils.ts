@@ -19,30 +19,16 @@ const TOKEN_LIMIT_STOP_REASONS: readonly ProviderStopReason[] = [
   GOOGLE_FINISH.MAX_TOKENS,
 ];
 
-/** Keywords for fallback string matching */
-const TOKEN_LIMIT_KEYWORDS = [
-  'max_token',
-  'max-token',
-  'token limit',
-  'token_limit',
-  'length',
-];
-
 /**
  * Determines whether a provider stop reason represents a token limit hit.
  *
- * This consolidates provider-specific enums with best-effort string matching so
- * call sites can share the same continuation heuristics.
+ * Every supported SDK reports a clean enum stop reason for this condition, so
+ * this is a direct membership check against the known enum values — no
+ * best-effort string matching.
  */
 export function isTokenLimitStopReason(
   reason: ProviderStopReason | undefined,
 ): boolean {
   if (!reason) return false;
-
-  if (TOKEN_LIMIT_STOP_REASONS.includes(reason)) {
-    return true;
-  }
-
-  const normalized = String(reason).toLowerCase();
-  return TOKEN_LIMIT_KEYWORDS.some((keyword) => normalized.includes(keyword));
+  return TOKEN_LIMIT_STOP_REASONS.includes(reason);
 }

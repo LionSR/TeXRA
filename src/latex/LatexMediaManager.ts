@@ -7,7 +7,7 @@ import type { AgentTrace } from '@agent/trace/AgentTrace';
 
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas/toolConfig';
-import { TaskRunFileService, flexibleFS, pathToLocation } from '@utils/files';
+import { TaskRunFileService, FlexibleFS, pathToLocation } from '@utils/files';
 import { filterNotNullish } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isFile } from '@utils/files/fsEntryType';
@@ -17,7 +17,7 @@ import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
 import { resolveLatexDir, stripLatexComments } from './latexParsingUtils';
-import { tikzPictureManager } from './TikzPictureManager';
+import { TikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
 
 /** LaTeX project siblings that should always ride alongside the main file. */
@@ -120,7 +120,7 @@ export class LatexMediaManager {
       async (file): Promise<FileLocation | undefined> => {
         try {
           const buildDir = path.join(path.dirname(file.absolutePath), 'build');
-          await flexibleFS.ensureDir(pathToLocation(buildDir));
+          await FlexibleFS.ensureDir(pathToLocation(buildDir));
           const compiled = await compileLatex2Pdf(file, {
             outputDirectory: buildDir,
           });
@@ -142,11 +142,11 @@ export class LatexMediaManager {
             path.basename(file.absolutePath).replace(/\.tex$/, '.pdf'),
           );
           const pdfLocation = pathToLocation(pdfFile);
-          if (!(await flexibleFS.exists(pdfLocation))) return undefined;
+          if (!(await FlexibleFS.exists(pdfLocation))) return undefined;
 
           // Stat failures are noisier than other compile failures because an
           // existing-but-unreadable PDF likely indicates a permissions/IO bug.
-          const stats = await flexibleFS.stat(pdfLocation).catch((err) => {
+          const stats = await FlexibleFS.stat(pdfLocation).catch((err) => {
             this.logger.error(
               `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
               { data: { path: pdfLocation.absolutePath, error: err } },
@@ -288,7 +288,7 @@ export class LatexMediaManager {
 
     try {
       const realPath = await platform().fs.realPath(latexFile.absolutePath);
-      const content = await flexibleFS.read(latexFile);
+      const content = await FlexibleFS.read(latexFile);
       const uncommented = stripLatexComments(content);
       const baseDir = path.dirname(realPath);
 
@@ -298,7 +298,7 @@ export class LatexMediaManager {
           if (!name) continue;
           const candidate = path.join(baseDir, `${name}.sty`);
           if (
-            await flexibleFS.exists({
+            await FlexibleFS.exists({
               kind: 'external',
               absolutePath: candidate,
             })
@@ -442,7 +442,7 @@ export class LatexMediaManager {
 
       const existenceChecks = await pMap(
         fileLocations,
-        async (loc) => ({ loc, exists: await flexibleFS.exists(loc) }),
+        async (loc) => ({ loc, exists: await FlexibleFS.exists(loc) }),
         { concurrency: LATEX_CONCURRENCY, stopOnError: false },
       );
 
@@ -472,10 +472,10 @@ export class LatexMediaManager {
       files,
       async (file): Promise<FileLocation[]> => {
         try {
-          return await tikzPictureManager.compile(file);
+          return await TikzPictureManager.compile(file);
         } catch {
           // Silent skip: TikZ compilation failures are reported by the
-          // tikzPictureManager itself; pMap with stopOnError: false must
+          // TikzPictureManager itself; pMap with stopOnError: false must
           // continue past individual failures.
           return [];
         }
@@ -529,7 +529,7 @@ export class LatexMediaManager {
 
     const existingFilesInfo = await pMap(
       files,
-      async (file) => ({ file, exists: await flexibleFS.exists(file) }),
+      async (file) => ({ file, exists: await FlexibleFS.exists(file) }),
       { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
     const existingFiles = existingFilesInfo

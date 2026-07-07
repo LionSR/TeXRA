@@ -18,6 +18,7 @@ import { platform } from '@platform/platform';
 import type {
   HostBashApprovalRequest,
   HostBashApprovalResult,
+  HostInteractionOptions,
   HostInteractions,
   HostRetryRequest,
 } from '@agent/runtime/HostInteractions';
@@ -56,6 +57,7 @@ import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
   clearApprovalsForStream,
+  clearApprovalsWhere,
   clearRetryApprovalsForStream,
   enqueueApproval,
   onApprovalsCleared,
@@ -138,7 +140,7 @@ export function createTuiHostInteractions(
       let decision: ApprovalDecision | undefined = immediateDecision(context);
       if (!decision) {
         decision = await enqueueTuiApproval(
-          { kind: 'toolEdit', request },
+          { kind: 'toolEdit', payload: request },
           host,
         );
         markIfRejected(context, decision);
@@ -158,23 +160,44 @@ export function createTuiHostInteractions(
       return requestBashInteraction(request, context, host);
     },
     requestPlanApproval(request, options) {
-      return requestPlanInteraction(request, context, host, options?.timeoutMs);
+      return withInteractionTimeout(
+        requestPlanInteraction(request, context, host),
+        options,
+        { action: 'timeout' },
+        () =>
+          clearApprovalsWhere(
+            (payload) =>
+              payload.kind === 'plan' &&
+              payload.payload.approvalId === request.approvalId,
+            NEUTRAL_TIMEOUT_DECISION,
+          ),
+      );
     },
     requestAgentProposal(request, options) {
-      return requestProposalInteraction(
-        request,
-        context,
-        host,
-        options?.timeoutMs,
+      return withInteractionTimeout(
+        requestProposalInteraction(request, context, host),
+        options,
+        { action: 'timeout' },
+        () =>
+          clearApprovalsWhere(
+            (payload) =>
+              payload.kind === 'proposal' &&
+              payload.payload.proposalId === request.proposalId,
+            NEUTRAL_TIMEOUT_DECISION,
+          ),
       );
     },
     requestRetry(request, options) {
-      return requestRetryInteraction(
-        request,
-        context,
-        host,
-        retryRoutes,
-        options?.timeoutMs,
+      return withInteractionTimeout(
+        requestRetryInteraction(request, context, host, retryRoutes),
+        options,
+        { action: 'timeout' },
+        () => {
+          settleRetryRoute(retryRoutes, request.streamId, {
+            action: 'timeout',
+          });
+          clearRetryApprovalsForStream(request.streamId);
+        },
       );
     },
     askUserQuestion(request) {
@@ -211,6 +234,53 @@ interface RetryRouteState {
   readonly activeRetryRoutes: Map<string, ActiveRetryRoute>;
 }
 
+const NEUTRAL_TIMEOUT_DECISION: ApprovalDecision = {
+  accepted: true,
+  userMessage: 'Approval request timed out.',
+};
+
+function validTimeoutMs(timeoutMs: number | undefined): number | undefined {
+  if (timeoutMs == null || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return undefined;
+  }
+  return Math.floor(timeoutMs);
+}
+
+function withInteractionTimeout<T>(
+  promise: Promise<T>,
+  options: HostInteractionOptions | undefined,
+  timeoutResult: T,
+  onTimeout: () => void,
+): Promise<T> {
+  const timeoutMs = validTimeoutMs(options?.timeoutMs);
+  if (timeoutMs == null) return promise;
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      onTimeout();
+      resolve(timeoutResult);
+    }, timeoutMs);
+
+    promise.then(
+      (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function createRetryRouteState(): RetryRouteState {
   return { activeRetryRoutes: new Map() };
 }
@@ -224,10 +294,18 @@ function isActiveRetryRoute(
 }
 
 function cancelRetryRoute(state: RetryRouteState, streamId: string): void {
+  settleRetryRoute(state, streamId, { action: 'cancel' });
+}
+
+function settleRetryRoute(
+  state: RetryRouteState,
+  streamId: string,
+  result: RetryResult,
+): void {
   const route = state.activeRetryRoutes.get(streamId);
   if (!route) return;
   state.activeRetryRoutes.delete(streamId);
-  route.settle?.({ action: 'cancel' });
+  route.settle?.(result);
 }
 
 function invalidateRetryRoutes(
@@ -247,8 +325,6 @@ function invalidateRetryRoutes(
 interface RouteWithPolicyOptions<P> {
   beforeQueue?: (payload: P) => Promise<ApprovalDecision | undefined>;
   isCurrent?: () => boolean;
-  /** Forwarded to `enqueueTuiApproval` so a bounded wait actually times out. */
-  timeoutMs?: number;
 }
 
 async function decideWithPolicy<
@@ -289,9 +365,7 @@ async function decideWithPolicy<
       ApprovalPayload,
       { kind: K }
     >;
-    const decision = await enqueueTuiApproval(queuePayload, host, {
-      timeoutMs: options.timeoutMs,
-    });
+    const decision = await enqueueTuiApproval(queuePayload, host);
     if (options.isCurrent && !options.isCurrent()) {
       return { accepted: false, userMessage: 'Approval request was replaced.' };
     }
@@ -333,12 +407,8 @@ async function requestPlanInteraction(
   request: ProgressEventPayloads['showPlanApproval'],
   context: CliContext,
   host: CliRuntimeHost,
-  timeoutMs?: number,
 ): Promise<PlanApprovalResult> {
-  const decision = await decideWithPolicy(context, host, 'plan', request, {
-    timeoutMs,
-  });
-  if (decision.timedOut) return { action: 'timeout' };
+  const decision = await decideWithPolicy(context, host, 'plan', request);
   const feedback = feedbackOnReject(decision);
   return decision.accepted
     ? { action: decision.planAction ?? 'approve' }
@@ -349,12 +419,8 @@ async function requestProposalInteraction(
   request: ProgressEventPayloads['showAgentProposal'],
   context: CliContext,
   host: CliRuntimeHost,
-  timeoutMs?: number,
 ): Promise<ProposalResult> {
-  const decision = await decideWithPolicy(context, host, 'proposal', request, {
-    timeoutMs,
-  });
-  if (decision.timedOut) return { action: 'timeout' };
+  const decision = await decideWithPolicy(context, host, 'proposal', request);
   const feedback = feedbackOnReject(decision);
   return decision.accepted
     ? { action: 'approve' }
@@ -366,7 +432,6 @@ async function requestRetryInteraction(
   context: CliContext,
   host: CliRuntimeHost,
   retryRoutes: RetryRouteState,
-  timeoutMs?: number,
 ): Promise<RetryResult> {
   cancelRetryRoute(retryRoutes, request.streamId);
   const routeId = Symbol(request.streamId);
@@ -387,14 +452,8 @@ async function requestRetryInteraction(
       const decision = await decideWithPolicy(context, host, 'retry', request, {
         beforeQueue: maybeAutoSwitchRetry,
         isCurrent,
-        timeoutMs,
       });
       if (!isCurrent()) return;
-      if (decision.timedOut) {
-        resolve({ action: 'timeout' });
-        finish();
-        return;
-      }
       if (
         decision.accepted &&
         (decision.apiMode || decision.disableChatGptSubscription)
@@ -463,7 +522,6 @@ async function openExternalInquiryInteraction(
 export function enqueueTuiApproval(
   payload: ApprovalPayload,
   host: CliRuntimeHost,
-  options: { timeoutMs?: number } = {},
 ): Promise<ApprovalDecision> {
   return enqueueApproval(payload, {
     onPresent: () => {
@@ -471,7 +529,6 @@ export function enqueueTuiApproval(
       if (streamId) host.emit('setActiveStream', { streamId });
       notify({ kind: 'approvalNeeded' });
     },
-    timeoutMs: options.timeoutMs,
   });
 }
 

@@ -92,7 +92,7 @@ export function buildAcceptSuccessMessage(
 
 /**
  * Host capabilities the accept-edited replace flow reaches through, so the
- * host-neutral orchestration can run on both the VS Code command (flexibleFS,
+ * host-neutral orchestration can run on both the VS Code command (FlexibleFS,
  * warning dialog, ProgressEventBus) and the desktop bridge (node fs, runtime
  * host emit) without each side re-implementing the confirm / write / emit /
  * success sequence.

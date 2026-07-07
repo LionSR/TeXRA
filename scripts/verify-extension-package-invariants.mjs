@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   extensionManifestSnapshot,
   readJson,
+  withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 
 const rootDir = path.resolve(
@@ -135,7 +136,12 @@ function hasFiles(relativeDir) {
 function buildSnapshot() {
   const packageJson = readJson(packagePath);
   return {
-    manifest: extensionManifestSnapshot(packageJson, MANIFEST_KEYS),
+    // Asset references scan the full manifest; the manifest snapshot omits the
+    // catalog-derived contributes (guarded by the catalog codegen instead).
+    manifest: extensionManifestSnapshot(
+      withoutCatalogDerivedContributes(packageJson),
+      MANIFEST_KEYS,
+    ),
     manifestAssetReferences: manifestAssetReferences(packageJson),
     requiredPackagedPaths: REQUIRED_PACKAGED_PATHS,
     requiredVscodeIgnoreLines: REQUIRED_VSCODEIGNORE_LINES,

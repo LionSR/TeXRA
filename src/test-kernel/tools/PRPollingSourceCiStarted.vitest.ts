@@ -1,9 +1,6 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-// Local imports - agent
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-
 // Local imports - tools
 import type {
   GhCheckRun,
@@ -22,8 +19,7 @@ interface CurrentShaState {
   ciComplete: boolean;
   ciPassed: boolean;
   checkRunsCache?: {
-    etagsByPage: Map<number, string>;
-    pagesByPage: Map<number, GhCheckRun[]>;
+    pages: Map<number, { etag?: string; runs: GhCheckRun[] }>;
     lastTotalCount: number;
   };
   pendingAnnotationRuns: GhCheckRun[];
@@ -33,10 +29,6 @@ interface CiStartedState {
   pr: { owner: string; repo: string; pullNumber: number };
   slug: string;
   listeners: Set<(text: string) => void>;
-  runtimeHostByListener: Map<
-    (text: string) => void,
-    typeof noopAgentRuntimeHost
-  >;
   initialized: boolean;
   issueComments: TestDedupedResource<GhIssueComment>;
   reviewComments: TestDedupedResource<GhReviewComment>;
@@ -105,7 +97,6 @@ function createState(
     pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
     slug: 'owner/repo',
     listeners: new Set([listener]),
-    runtimeHostByListener: new Map([[listener, noopAgentRuntimeHost]]),
     initialized: true,
     issueComments: testDedupedResource(),
     reviewComments: testDedupedResource(),

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export const DEFAULT_SUPABASE_SESSION_EXPIRY_MS = 60 * 60 * 1000;
@@ -93,23 +94,23 @@ export function parseStoredSupabaseSession(
 ): SupabaseSession | null {
   if (!sessionData) return null;
   const logSource = options?.logSource ?? 'SupabaseSession';
-  try {
-    const parsed = SupabaseSessionSchema.safeParse(JSON.parse(sessionData));
-    if (!parsed.success) {
-      options?.warn?.(
-        logSource,
-        `Stored session has invalid schema: ${z.prettifyError(parsed.error)}`,
-      );
-      return null;
-    }
-    return parsed.data;
-  } catch (error) {
+  const parsedJson = safeParseJson(sessionData);
+  if (parsedJson.isErr()) {
     options?.warn?.(
       logSource,
-      `Failed to parse stored session: ${toErrorMessage(error)}`,
+      `Failed to parse stored session: ${toErrorMessage(parsedJson.error)}`,
     );
     return null;
   }
+  const parsed = SupabaseSessionSchema.safeParse(parsedJson.value);
+  if (!parsed.success) {
+    options?.warn?.(
+      logSource,
+      `Stored session has invalid schema: ${z.prettifyError(parsed.error)}`,
+    );
+    return null;
+  }
+  return parsed.data;
 }
 
 export async function parseTokenExchangeResponse(

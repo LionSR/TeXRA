@@ -47,7 +47,7 @@ import {
   findClaudeBinaryPath,
 } from './claudeAgentImport';
 import { type ChildStream } from './childStream';
-import { claudeAgentSessions } from './agentCliSessionStores';
+import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   publishAgentCliStreamUsage,
   formatAgentCliDelivery,
@@ -424,8 +424,8 @@ function startClaudeAgentLoop(params: {
       if (turn.errorMessage) log.error(turn.errorMessage);
     },
     onTurnSuccess: (turn, session) => {
-      if (turn.sessionId && !claudeAgentSessions.isActive(turn.sessionId)) {
-        claudeAgentSessions.register(turn.sessionId, {
+      if (turn.sessionId && !ClaudeAgentSessions.isActive(turn.sessionId)) {
+        ClaudeAgentSessions.register(turn.sessionId, {
           childStreamId,
           parentStreamId,
           executionId,
@@ -459,7 +459,7 @@ function startClaudeAgentLoop(params: {
         err ?? turn?.errorMessage ?? turn?.finalResponse,
       ),
     onSessionCleanup: () => {
-      claudeAgentSessions.releaseMany(storedSessionIds);
+      ClaudeAgentSessions.releaseMany(storedSessionIds);
     },
   };
 
@@ -498,7 +498,7 @@ export class ClaudeAgentTool extends defineTool({
       `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       (runContext) => {
         if (input.session_id) {
-          return resumeAgentCliSession(claudeAgentSessions, {
+          return resumeAgentCliSession(ClaudeAgentSessions, {
             id: input.session_id,
             prompt: input.prompt,
             callerStreamId: runContext?.streamId,

@@ -13,7 +13,7 @@ import { defineTool } from '@tools/core/define';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
-import { CROSSREF_CONSTANTS, crossrefClient } from './constants';
+import { CROSSREF_CONSTANTS, CrossrefClient } from './constants';
 import { rateLimitedRequest } from './rateLimiter';
 
 const CrossrefSearchInputSchema = z.strictObject({
@@ -76,7 +76,7 @@ export class CrossrefSearchTool extends defineTool({
           'crossref',
           CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
           'Crossref search',
-          () => crossrefClient.works(options),
+          () => CrossrefClient.works(options),
         ),
       'Crossref search failed',
     );

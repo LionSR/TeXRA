@@ -1,49 +1,32 @@
 /**
- * Single emit path for run/host progress events (SDK Step 7d follow-on F-1).
+ * Single emit path for session-scoped runtime facts.
  *
- * Replaces scattered `bus.emit(...)` in `src/tools` so one fact has one emit
- * path and one name, resolving the target in priority order:
+ * Replaces scattered `ProgressEventBus.emit(...)` in `src/tools` so one
+ * session fact has one emit path and one name, resolving the target in priority
+ * order:
  *
- * 1. migrated Stage 3a facts go to the owning `SessionEventHub` and are
- *    projected to the legacy host surface by `LegacyProgressEventProjection`;
- * 2. a host-path caller's `session.hostChannel` (set only by hosts that own a
- *    non-default session, e.g. a desktop window) — when present;
- * 3. otherwise the active run's `runtimeHost`, resolved from the ambient
- *    {@link RunContext} (the in-run case — tools firing inside a run's ALS);
- * 4. otherwise the process {@link bus} — the single-session fallback that keeps
- *    the extension byte-identical (its run `runtimeHost.emit` is `bus.emit`
- *    anyway) and host-path callers that pass no session unchanged.
+ * 1. a host-path caller's explicit `session`;
+ * 2. the active run's `RunContext.session`;
+ * 3. the process default session used by the VS Code extension and CLI.
  *
- * In-run callers pass no `session` (the ALS supplies the run host). Host-path
- * callers — reachable outside any run ALS — MUST pass their owning `session`,
- * or the event resolves to the bus and a non-default session never sees it.
+ * Host/RPC events should use the owning `AgentRuntimeHost.emit` directly. This
+ * helper deliberately has no broad process-bus fallback.
  */
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 import { tryUseRunContext } from './RunContext';
 import { defaultSession, type SessionHandle } from './SessionHandle';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { SessionFact } from './SessionEventHub';
 
-function emitLegacyHostFact(host: AgentRuntimeHost, fact: SessionFact): void {
-  switch (fact.type) {
-    case 'goalStateChanged':
-      host.emit('goalStateChanged', fact.payload);
-      return;
-    case 'inquiryThreadUpdated':
-      host.emit('inquiryThreadUpdated', fact.payload);
-      return;
-    case 'clearMissingOutputs':
-      host.emit('clearMissingOutputs', fact.payload);
-      return;
-    case 'updateQueuedFollowUps':
-      host.emit('updateQueuedFollowUps', fact.payload);
-      return;
-    case 'setActiveStream':
-      host.emit('setActiveStream', fact.payload);
-      return;
-  }
-}
+type RuntimeSessionEventPayloads = {
+  goalStateChanged: ProgressEventPayloads['goalStateChanged'];
+  inquiryThreadUpdated: ProgressEventPayloads['inquiryThreadUpdated'];
+  clearMissingOutputs: ProgressEventPayloads['clearMissingOutputs'];
+  updateQueuedFollowUps: ProgressEventPayloads['updateQueuedFollowUps'];
+  setActiveStream: ProgressEventPayloads['setActiveStream'];
+};
+
+type RuntimeSessionEvent = keyof RuntimeSessionEventPayloads;
 
 function emitSessionFact(fact: SessionFact, session?: SessionHandle): void {
   const owner = session ?? tryUseRunContext()?.session;
@@ -51,16 +34,12 @@ function emitSessionFact(fact: SessionFact, session?: SessionHandle): void {
     owner.events.emit({ scope: 'session', event: fact });
     return;
   }
-  if (owner?.hostChannel) {
-    emitLegacyHostFact(owner.hostChannel, fact);
-    return;
-  }
   defaultSession().events.emit({ scope: 'session', event: fact });
 }
 
-export function emitRuntimeEvent<K extends keyof ProgressEventPayloads>(
+export function emitRuntimeEvent<K extends RuntimeSessionEvent>(
   event: K,
-  payload: ProgressEventPayloads[K],
+  payload: RuntimeSessionEventPayloads[K],
   session?: SessionHandle,
 ): void {
   switch (event) {
@@ -110,8 +89,7 @@ export function emitRuntimeEvent<K extends keyof ProgressEventPayloads>(
       );
       return;
   }
-
-  const host = session?.hostChannel ?? tryUseRunContext()?.runtimeHost;
-  if (host) host.emit(event, payload);
-  else bus.emit(event, payload);
+  throw new Error(
+    `emitRuntimeEvent only supports session facts; use the owning runtime host for ${String(event)}`,
+  );
 }
