@@ -17,11 +17,7 @@ const expandEquationMacro: ReplacementFunction = (
   trailing = '',
 ) => {
   const replacement = MACRO_TO_ENVIRONMENT[macro];
-  if (!replacement) {
-    return match;
-  }
-
-  return `${leading}${replacement}${trailing}`;
+  return replacement ? `${leading}${replacement}${trailing}` : match;
 };
 
 export const EQUATION_MACRO_REPLACEMENTS: ReplacementCategory = {
