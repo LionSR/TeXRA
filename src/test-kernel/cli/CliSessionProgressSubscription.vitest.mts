@@ -75,13 +75,10 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
       hub.emit({
-        scope: 'run',
-        streamId: parentStreamId,
+        scope: 'session',
         event: {
-          type: 'child.activity',
-          kind: 'parent',
-          childStreamId,
-          parentStreamId,
+          type: 'setParentStream',
+          payload: { childStreamId, parentStreamId },
         },
       });
       hub.emit({
