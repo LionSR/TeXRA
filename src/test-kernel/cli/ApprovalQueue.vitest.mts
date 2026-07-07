@@ -10,6 +10,7 @@ import {
   approvalPayloadStreamId,
   approvalQueueStatus,
   clearApprovals,
+  clearApprovalsForStream,
   currentApproval,
   enqueueApproval,
   type ApprovalPayload,
@@ -220,5 +221,41 @@ describe('CLI approval queue', () => {
         payload: { streamId: '' },
       } as ApprovalPayload),
     ).toBeUndefined();
+  });
+
+  // Regression coverage for #7306: `cancelForStream` previously only cancelled
+  // retry routes, leaving bash/tool-edit/plan/proposal/user-question requests
+  // permanently pending on a stream-scoped interrupt.
+  it('clears every pending kind for a stream via clearApprovalsForStream, leaving other streams alone', async () => {
+    const planPayload = {
+      kind: 'plan',
+      payload: { approvalId: 'approval-1', streamId: 'stream-a' },
+    } as ApprovalPayload;
+    const staleForStreamA = bashPayload('stream-a');
+    const untouched = bashPayload('stream-b');
+
+    const planResult = enqueueApproval(planPayload);
+    const staleResult = enqueueApproval(staleForStreamA);
+    const untouchedResult = enqueueApproval(untouched);
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(planPayload);
+    });
+
+    clearApprovalsForStream('stream-a');
+
+    const interrupted = {
+      accepted: false,
+      userMessage: 'Session interrupted.',
+    };
+    await expect(planResult).resolves.toEqual(interrupted);
+    await expect(staleResult).resolves.toEqual(interrupted);
+
+    // stream-b was never touched and now becomes the foreground modal.
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(untouched);
+    });
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(untouchedResult).resolves.toEqual({ accepted: true });
   });
 });
