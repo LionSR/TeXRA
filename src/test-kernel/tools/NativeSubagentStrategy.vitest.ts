@@ -264,6 +264,55 @@ describe('NativeSubagentStrategy', () => {
     );
   });
 
+  it('delivers a terminal error to the orchestrator when the wake fails before resumeStream installs its callbacks (issue #7402)', async () => {
+    const childStream = 'child-stream' as StreamTabId;
+    mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
+    // Simulates `retrieveSessionResumeData` throwing for unreadable resume
+    // storage (SessionResumeRetrieval.ts:110-113) — this happens inside
+    // `resumeStream` *before* `resumeQueuedToolUseSnapshot` is ever called,
+    // so no onError/onRunError callback for this turn is installed.
+    mocks.retrieveSessionResumeData.mockRejectedValue(
+      new Error('resume storage unreadable'),
+    );
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
+      startedAt: 0,
+      settleSubagentCost: vi.fn(),
+    });
+    strategy.setChildStreamId(childStream);
+
+    await expect(
+      strategy.wakeQueuedFollowUp({ status: 'queued', reason: 'waiting' }, {}),
+    ).resolves.toEqual({ kind: 'queued_resume_failed' });
+
+    // The failure must reach the orchestrator through the same terminal
+    // delivery channel a resumed turn's own onError uses — not just a log
+    // line at the DelegationTools call site.
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
+    const [deliveredCall] = mocks.deliverChildRunFollowUp.mock.calls;
+    expect(deliveredCall[0]).toMatchObject({
+      targetStreamId: parentStreamId,
+      wake: true,
+    });
+    expect(deliveredCall[0].followUp.text).toContain(
+      'resume storage unreadable',
+    );
+
+    // Terminal delivery retires this run: a later delegate_agent resume
+    // attempt must not find stale strategy/registry state.
+    expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
+    expect(
+      SharedSubagentDeliveryRegistry.getActive(executionId),
+    ).toBeUndefined();
+  });
+
   it('cleans up registry entries when the underlying execution is untracked while abandoned in WAITING', () => {
     let abandonListener: ((handle: unknown) => void) | undefined;
     const addListener = vi.fn((_id: string, cb: (handle: unknown) => void) => {

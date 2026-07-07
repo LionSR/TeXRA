@@ -301,14 +301,33 @@ export class NativeSubagentStrategy {
   ): Promise<FollowUpWakeResult> {
     const streamId = this.childStreamId;
     if (!streamId) return { kind: 'queued_resume_failed' };
-    return wakeQueuedFollowUpStream(
-      streamId,
-      result,
-      {
-        tryResumeStream: (id) => this.resumeStream(id, options),
-      },
-      this.params.parentSession,
-    );
+    try {
+      return await wakeQueuedFollowUpStream(
+        streamId,
+        result,
+        {
+          tryResumeStream: (id) => this.resumeStream(id, options),
+        },
+        this.params.parentSession,
+      );
+    } catch (err) {
+      // DelegationTools dispatches this wake fire-and-forget (see #7289), so a
+      // rejection here has nowhere else to surface. It can happen before
+      // `resumeStream` ever reaches `resumeQueuedToolUseSnapshot` — e.g.
+      // `retrieveSessionResumeData` throwing on unreadable resume storage —
+      // i.e. before this turn's onError/onRunError callbacks are installed.
+      // Route it through the same terminal error-delivery path a resumed
+      // turn's own onError takes, instead of leaving the caller's
+      // `logger.warn` as the only observable outcome: the orchestrator was
+      // told the follow-up "will process it automatically" and needs a real
+      // delivery, not silence.
+      try {
+        await this.deliverSubagentError(err);
+      } finally {
+        this.finish();
+      }
+      return { kind: 'queued_resume_failed' };
+    }
   }
 
   private async resumeStream(
