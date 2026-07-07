@@ -104,6 +104,8 @@ export function projectSessionFactToProgressEvent(
       return { event: 'updateQueuedFollowUps', payload: fact.payload };
     case 'setActiveStream':
       return { event: 'setActiveStream', payload: fact.payload };
+    case 'updateStreamDescription':
+      return { event: 'updateStreamDescription', payload: fact.payload };
   }
 }
 

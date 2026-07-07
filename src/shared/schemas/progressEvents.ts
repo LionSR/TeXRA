@@ -38,6 +38,11 @@ export interface SetActiveStreamPayload {
   suppressViewSwitch?: boolean;
 }
 
+export interface UpdateStreamDescriptionPayload {
+  streamId: StreamTabId;
+  description: string;
+}
+
 export interface AddOutputFilesPayload extends StreamScopedPayload {
   filesByRound: RoundIndexed<OutputFileInfo>;
 }
