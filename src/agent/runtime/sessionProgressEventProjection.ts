@@ -106,6 +106,8 @@ export function projectSessionFactToProgressEvent(
       return { event: 'setActiveStream', payload: fact.payload };
     case 'updateStreamDescription':
       return { event: 'updateStreamDescription', payload: fact.payload };
+    case 'updateStreamStatus':
+      return { event: 'updateStreamStatus', payload: fact.payload };
     case 'setParentStream':
       return { event: 'setParentStream', payload: fact.payload };
   }
@@ -127,6 +129,19 @@ export function projectRunFactToProgressEvent(
         streamId: event.streamId,
         executionId: event.executionId,
         taskState: agentConfigToTaskState(event.config),
+      },
+    };
+  }
+
+  if (event.type === 'status') {
+    return {
+      event: 'updateStreamStatus',
+      payload: {
+        streamId: event.streamId,
+        status: event.phase,
+        cause: event.cause,
+        ...(event.previousPhase ? { previousStatus: event.previousPhase } : {}),
+        ...(event.substate ? { substate: event.substate } : {}),
       },
     };
   }
@@ -196,6 +211,7 @@ const RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
   'domain',
   'run.config',
   'usage',
+  'status',
   'stage.start',
   'child.activity',
   'process.output',
