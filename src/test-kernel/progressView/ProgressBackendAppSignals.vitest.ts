@@ -73,22 +73,10 @@ class MemoryAppSignals implements AppSignalsLike {
 function createUiConfig(): ProgressBackendUiConfig {
   return {
     callbacks: {
-      showRetryRequest: vi.fn(),
-      resolveRetryRequest: vi.fn(),
       showToolEditPermission: vi.fn(),
       resolveToolEditPermission: vi.fn(),
       updateToolEditApprovalBypassState: vi.fn(),
       updateSuperYoloBypassState: vi.fn(),
-      showBashPermission: vi.fn(),
-      resolveBashPermission: vi.fn(),
-      showAgentProposal: vi.fn(),
-      resolveAgentProposal: vi.fn(),
-      showPlanApproval: vi.fn(),
-      resolvePlanApproval: vi.fn(),
-      showExternalInquiry: vi.fn(),
-      resolveExternalInquiry: vi.fn(),
-      showUserQuestion: vi.fn(),
-      resolveUserQuestion: vi.fn(),
     },
     hasPendingPermissions: vi.fn(() => false),
   };

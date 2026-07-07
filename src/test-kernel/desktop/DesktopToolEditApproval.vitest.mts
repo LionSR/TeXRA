@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import type {
   DiffOptions,
   DiffSession,

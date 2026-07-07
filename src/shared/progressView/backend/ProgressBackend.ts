@@ -10,7 +10,7 @@ import {
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+} from '@agent/runtime/hostProgressEvents';
 import {
   WebviewBridge,
   type ProgressViewMessageSender,
