@@ -853,10 +853,15 @@ describe('CLI TUI row allocation', () => {
     ).toBe(false);
   });
 
-  it('defers Escape interrupt only when stopped child Esc chords are visible', () => {
+  it('defers Escape interrupt whenever an Esc chord binding is visible', () => {
+    // #7496 regression: the footer advertises `[Esc s]`/`[Esc p]` whenever
+    // these controls are available, independent of the focused stream's own
+    // status — including a focused child that is still WAITING (in-flight,
+    // so its own input is NOT disabled). Deferring only for a disabled-input
+    // child left WAITING children with no chord grace window at all, so a
+    // slow `Esc s` fired an immediate interrupt and stopped the subagent.
     expect(
       shouldDeferEscapeInterruptForMetaChord({
-        childInputDisabled: true,
         shortcutModifierLabel: 'Esc',
         subagentControlsAvailable: true,
         taskControlsAvailable: false,
@@ -864,7 +869,6 @@ describe('CLI TUI row allocation', () => {
     ).toBe(true);
     expect(
       shouldDeferEscapeInterruptForMetaChord({
-        childInputDisabled: true,
         shortcutModifierLabel: 'Esc',
         subagentControlsAvailable: false,
         taskControlsAvailable: true,
@@ -872,15 +876,6 @@ describe('CLI TUI row allocation', () => {
     ).toBe(true);
     expect(
       shouldDeferEscapeInterruptForMetaChord({
-        childInputDisabled: false,
-        shortcutModifierLabel: 'Esc',
-        subagentControlsAvailable: true,
-        taskControlsAvailable: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldDeferEscapeInterruptForMetaChord({
-        childInputDisabled: true,
         shortcutModifierLabel: 'Alt',
         subagentControlsAvailable: true,
         taskControlsAvailable: false,
@@ -888,12 +883,29 @@ describe('CLI TUI row allocation', () => {
     ).toBe(false);
     expect(
       shouldDeferEscapeInterruptForMetaChord({
-        childInputDisabled: true,
         shortcutModifierLabel: 'Esc',
         subagentControlsAvailable: false,
         taskControlsAvailable: false,
       }),
     ).toBe(false);
+
+    // The exact reported repro: a focused child is WAITING (in-flight), so
+    // its own input is not disabled, yet the chord still must be deferred.
+    setParentStream(child1, root);
+    expect(
+      focusedChildInputDisabledMessage({
+        activeStreamId: child1,
+        parentStream: parentStream.get(),
+        status: STREAM_STATUS.WAITING,
+      }),
+    ).toBeUndefined();
+    expect(
+      shouldDeferEscapeInterruptForMetaChord({
+        shortcutModifierLabel: 'Esc',
+        subagentControlsAvailable: true,
+        taskControlsAvailable: false,
+      }),
+    ).toBe(true);
   });
 
   it('parses stripped meta shortcut digits', () => {
