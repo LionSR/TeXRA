@@ -94,7 +94,15 @@ export function wrapRuntimeHost(
   const original = host.emit;
   const emit: Emit = (event, payload) => {
     applyToState(event, payload);
-    snapshotStore?.handleProgressEvent(event, payload);
+    switch (event) {
+      case 'setTaskState':
+      case 'updateStreamDescription':
+      case 'setParentStream':
+        snapshotStore?.handleProgressEvent(event, payload);
+        break;
+      default:
+        break;
+    }
     return original(event, payload);
   };
   return { ...host, emit };
