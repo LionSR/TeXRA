@@ -2811,7 +2811,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
-  it('applies direct child.activity(subagents) and parent events without host emission', () => {
+  it('applies direct child activity and parent-link facts without host emission', () => {
     const hub = new SessionEventHub();
     const hostEmit = vi.fn();
     const wrapped = wrapRuntimeHost({
@@ -2840,13 +2840,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         },
       });
       hub.emit({
-        scope: 'run',
-        streamId: child2,
+        scope: 'session',
         event: {
-          type: 'child.activity',
-          kind: 'parent',
-          childStreamId: child2,
-          parentStreamId: root,
+          type: 'setParentStream',
+          payload: {
+            childStreamId: child2,
+            parentStreamId: root,
+          },
         },
       });
 
