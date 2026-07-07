@@ -29,7 +29,9 @@ logger.initialize(CHANNEL);
  * is case-insensitive as a safety net but counter should reflect
  * what primary path can extract.
  */
-export const DOCUMENT_NAME_REGEX = /<document[^>]*name="([^"]*)"[^>]*>/;
+export const DOCUMENT_NAME_REGEX = new RegExp(
+  `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>`,
+);
 
 /**
  * Get a string representation of an object's structure without its values.
@@ -102,8 +104,10 @@ export function extractMultipleTextFromTag(
     content: string,
   ): Array<{ content: string; name: string }> => {
     // Full extraction pattern - case-sensitive to match CDATA wrapping behavior
-    const documentRegex =
-      /<document[^>]*name="([^"]*)"[^>]*>(.*?)<\/document>/gs;
+    const documentRegex = new RegExp(
+      `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>(.*?)<\/${OUTPUT_DOCUMENT_TAG}>`,
+      'gs',
+    );
 
     return [...content.matchAll(documentRegex)].map((match) => ({
       name: match[1] || 'unnamed',
