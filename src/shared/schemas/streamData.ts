@@ -310,23 +310,68 @@ void (null as unknown as z.infer<
   typeof TokenUsageStatsParsingSchema
 > satisfies TokenUsageStats);
 
+export interface ParsedUsageData {
+  /** Successfully parsed, non-empty per-run usage. */
+  usage: Map<string, TokenUsageStats>;
+  /**
+   * Raw per-run values that failed to parse (e.g. a value that isn't an
+   * object at all — a corrupted or unrecognized future shape), keyed by
+   * runId and preserved byte-for-byte. `StreamSnapshotStore.writeUsage`
+   * round-trips these back into `usageStats.json` unchanged instead of
+   * dropping them, so a save can never permanently delete cost data current
+   * code doesn't understand. See #7464.
+   */
+  unparsedRuns: Map<string, unknown>;
+}
+
 /**
- * Per-run usage map: { runId: TokenUsageStats } → Map<runId, stats>.
- * Used by both workflow and tool-use streams. Workflow has one entry per
- * run (= one entry per tab); tool-use can accumulate multiple via resume.
+ * Parses the persisted per-run usage-stats record (`usageStats.json`) into
+ * `{ runId: TokenUsageStats }` → `Map<runId, stats>`. Used by both workflow
+ * and tool-use streams. Workflow has one entry per run (= one entry per
+ * tab); tool-use can accumulate multiple via resume.
+ *
+ * Failures are isolated PER RUN — via `safeParse` rather than the previous
+ * `.catch(emptyUsageStats())` — so one malformed entry can't silently zero
+ * every other run's cost data. A run whose value isn't a well-formed usage
+ * object is logged loudly (not swallowed) and its raw value is returned in
+ * `unparsedRuns` for the caller to preserve, rather than defaulted to zero
+ * and dropped. Individual numeric fields inside an otherwise object-shaped
+ * entry still coerce/zero via `TokenUsageStatsParsingBaseSchema`'s own
+ * per-field handling — that salvage behavior is unrelated to this fix and
+ * intentionally unchanged.
+ *
+ * A top-level value that isn't a record at all (e.g. corrupted to an array
+ * or a scalar) has no runId to key a preserved raw entry against, so it is
+ * only logged loudly; recovering it would require guessing intent. This is
+ * an extreme, likely-tampered edge case — the realistic failure mode this
+ * fixes is a single corrupted run entry within an otherwise valid record.
  */
-export const UsageDataSchema = z
-  .record(z.string(), TokenUsageStatsParsingSchema)
-  .transform((record): Map<string, TokenUsageStats> => {
-    const map = new Map<string, TokenUsageStats>();
-    for (const [runId, stats] of Object.entries(record)) {
-      if (!isEmptyUsage(stats)) map.set(runId, stats);
+export function parseUsageData(raw: unknown): ParsedUsageData {
+  const usage = new Map<string, TokenUsageStats>();
+  const unparsedRuns = new Map<string, unknown>();
+  if (raw === undefined) return { usage, unparsedRuns };
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    console.warn(
+      `[streamData] usageStats.json is not a per-run object (got ` +
+        `${raw === null ? 'null' : Array.isArray(raw) ? 'array' : typeof raw}); ` +
+        'ignoring for this read instead of silently zeroing usage.',
+    );
+    return { usage, unparsedRuns };
+  }
+
+  for (const [runId, value] of Object.entries(raw as Record<string, unknown>)) {
+    const parsed = TokenUsageStatsParsingBaseSchema.safeParse(value);
+    if (!parsed.success) {
+      console.warn(
+        `[streamData] Preserving unparseable usage entry for run "${runId}" ` +
+          `unchanged (not dropped): ${parsed.error.issues
+            .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+            .join('; ')}`,
+      );
+      unparsedRuns.set(runId, value);
+      continue;
     }
-    return map;
-  })
-  // `() => new Map()` (not a literal) for the same reason as `roundMapSchema`:
-  // a fresh fallback per failed parse. The current consumer copies this map
-  // (StreamSnapshotStore.applyStreamData) so a shared instance is safe today,
-  // but the factory keeps the file consistent and guards a future by-reference
-  // reader from leaking usage across streams with malformed sidecar JSON.
-  .catch(() => new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
+    if (!isEmptyUsage(parsed.data)) usage.set(runId, parsed.data);
+  }
+  return { usage, unparsedRuns };
+}
