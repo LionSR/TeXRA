@@ -607,6 +607,44 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('leaves output-file host events to the session run-fact path', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+    const streamId = 'desktop:output-files' as StreamTabId;
+    const initialFileUpdates = progressMessages(
+      messages,
+      PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+    ).length;
+
+    try {
+      bridge.handleProgressEvent('addOutputFiles', {
+        streamId,
+        filesByRound: {
+          1: [
+            {
+              source: 'paper.tex',
+              location: {
+                kind: 'workspace',
+                absolutePath: '/workspace/paper.tex',
+                relativePath: 'paper.tex',
+              },
+              round: 1,
+              lineage: null,
+              diff: null,
+            },
+          ],
+        },
+      });
+      await settleProgressEvents();
+
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_FILES),
+      ).toHaveLength(initialFileUpdates);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('keeps desktop runtime host app events on the window-local bridge path', async () => {
     const messages: unknown[] = [];
     const showErrorMessage = vi.fn();

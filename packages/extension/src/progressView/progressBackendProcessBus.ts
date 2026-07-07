@@ -1,4 +1,8 @@
-import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
+import type {
+  ProgressEvent,
+  ProgressEventBusLike,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import type { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import type { ProgressEventSubscription } from '@shared/progressView/backend/events/ProgressEventHandler';
 
@@ -11,5 +15,22 @@ export function attachProgressBackendProcessBus(
   backend: Pick<ProgressBackend, 'eventHandler'>,
   bus: ProgressEventBusLike,
 ): ProgressEventSubscription {
-  return backend.eventHandler.setupEventListeners(bus);
+  const backendBus: ProgressEventBusLike = {
+    on<K extends ProgressEvent>(
+      event: K,
+      listener: (payload: ProgressEventPayloads[K]) => void,
+      options?: { signal?: AbortSignal },
+    ): () => void {
+      if (event === 'addOutputFiles') return () => {};
+      return bus.on(event, listener, options);
+    },
+    emit<K extends ProgressEvent>(
+      event: K,
+      payload: ProgressEventPayloads[K],
+    ): void {
+      bus.emit(event, payload);
+    },
+  };
+
+  return backend.eventHandler.setupEventListeners(backendBus);
 }
