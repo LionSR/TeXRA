@@ -6,6 +6,7 @@ import type {
   OutputFileInfo,
   RoundIndexed,
 } from './output';
+import type { ActiveChildInfo, RoundStage } from './streamState';
 import type { TokenUsageStats } from './usage';
 
 /**
@@ -73,6 +74,32 @@ export interface UpdateStreamUsagePayload {
   storageKey: StorageKey;
   executionId?: ExecutionId;
   usage: TokenUsageStats;
+}
+
+/** Round advance within a run, projected from `stage.start` (kind 'round'). */
+export interface UpdateRoundStagePayload {
+  streamId: StreamTabId;
+  roundStage: RoundStage;
+}
+
+/** Active subagent roster, projected from `child.activity` (kind 'subagents'). */
+export interface UpdateActiveSubagentsPayload {
+  parentStreamId: StreamTabId;
+  children: ActiveChildInfo[];
+}
+
+/** Active process roster, projected from `child.activity` (kind 'processes'). */
+export interface UpdateActiveProcessesPayload {
+  parentStreamId: StreamTabId;
+  processes: ActiveChildInfo[];
+}
+
+/** Incremental child-process output, projected from `process.output`. */
+export interface UpdateProcessOutputPayload {
+  parentStreamId: StreamTabId;
+  executionId: ExecutionId;
+  stdout: string;
+  stderr: string;
 }
 
 /**
