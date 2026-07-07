@@ -230,6 +230,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return getAnthropicMaxPdfPages(this.getEffectiveContextWindow());
   }
 
+  /**
+   * Client-side compaction is available for tool-use sessions on models whose
+   * llm-zoo family is compaction-eligible. `isCompactionEligibleModel` is a
+   * `startsWith`-style model-family gate in `anthropicThinking.ts`; moving it
+   * to an llm-zoo capability flag is #7080's scope, not this predicate's own
+   * #7101 triage.
+   */
   override get supportsManualCompaction(): boolean {
     return (
       isCompactionEligibleModel(this.config.fullName) && this.isToolUseMode()

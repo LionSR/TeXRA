@@ -371,6 +371,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   protected override backgroundModeSupported = true;
 
+  /**
+   * Reads the ChatGPT-subscription profile when active (that backend doesn't
+   * support manual compaction); otherwise falls back to whether this request
+   * is routed through OpenRouter, which implements its own compaction path via
+   * `ModelHandlerOpenRouterNative` instead.
+   */
   override get supportsManualCompaction(): boolean {
     return (
       this.getOpenAIResponseCapabilities()?.supportsManualCompaction ??

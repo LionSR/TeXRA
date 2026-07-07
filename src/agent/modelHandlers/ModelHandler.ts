@@ -521,7 +521,16 @@ export abstract class ModelHandler<
     return this.capabilities.supportsReasoningEffort;
   }
 
-  /** Whether this handler supports manual context compaction. Override in subclasses. */
+  /**
+   * Whether this handler supports manual (user-requested) context compaction.
+   * Each override computes this differently — Anthropic combines llm-zoo
+   * model-family eligibility with tool-use mode, OpenAI-family handlers gate
+   * on tool-use mode alone, OpenAIResponse reads the ChatGPT-subscription
+   * profile with an OpenRouter-routing fallback, and GoogleInteractions is
+   * unconditionally true — so no single capability-profile read replaces the
+   * per-handler logic. Stays an overridable getter (#7101 triage: genuinely
+   * per-provider behavior, not a foldable predicate).
+   */
   get supportsManualCompaction(): boolean {
     return false;
   }
