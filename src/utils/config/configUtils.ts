@@ -1,9 +1,13 @@
 // Local imports
 import { tryPlatform } from '@platform/platform';
+import * as logger from '@logger/logUtils';
 import { ensureArray } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ZodType } from 'zod';
 import type { ConfigTarget } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
+
+const CHANNEL = 'configUtils';
 
 interface ConfigSubscriptionContext {
   subscriptions: Disposable[];
@@ -50,13 +54,28 @@ export function getConfig<T>(path: string, defaultValue?: T): T {
  * constant) makes that schema the single shared contract for both the type and
  * the runtime check, so drift surfaces as a clean fallback rather than an
  * invalid value flowing downstream.
+ *
+ * An unset setting parses as `undefined` and is expected to fail most
+ * schemas (enums, bounded numbers) — that's normal, not corruption, so it
+ * falls back to `defaultValue` silently. A setting the user *did* set but
+ * that fails validation (hand-edited/stale `settings.json`) instead warns
+ * before falling back, so an invalid user setting doesn't silently drop.
  */
 export function getValidatedConfig<T>(
   path: string,
   schema: ZodType<T>,
   defaultValue: T,
 ): T {
-  return schema.catch(defaultValue).parse(getConfig<unknown>(path));
+  const raw = getConfig<unknown>(path);
+  const result = schema.safeParse(raw);
+  if (result.success) return result.data;
+  if (isConfigExplicitlySet(path)) {
+    logger.warn(
+      CHANNEL,
+      `Ignoring invalid value for setting "${path}": ${toErrorMessage(result.error)}`,
+    );
+  }
+  return defaultValue;
 }
 
 /**
