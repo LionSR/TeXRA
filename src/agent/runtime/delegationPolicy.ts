@@ -44,10 +44,14 @@ async function readMetaSafely(
  * `parentExecutionId` chain for pre-feature snapshots that don't have the
  * field persisted yet.
  *
- * Best-effort: any corrupted, unreadable, or missing meta in the lineage —
- * including a cycle or an excessively long chain — falls back to depth 0
- * (treated as a root). Resume itself still succeeds on the surviving message
- * snapshot regardless.
+ * Best-effort: an unreadable root falls back to depth 0 (no evidence either
+ * way). Once the root's own `parentExecutionId` proves the execution is
+ * nested, a broken link further up the chain (cycle, unreadable ancestor, or
+ * an excessively long walk) returns the deepest depth confirmed so far
+ * instead of 0 — the caller already knows this isn't a root, so reporting a
+ * lower-bound depth is strictly more honest than silently promoting it to
+ * one. Resume itself still succeeds on the surviving message snapshot
+ * regardless.
  */
 export async function computeDelegationDepthFromStorage(
   executionId: ExecutionId,
@@ -65,16 +69,16 @@ export async function computeDelegationDepthFromStorage(
   const MAX_WALK = 32;
   while (depth < MAX_WALK) {
     if (!current) return depth; // clean terminus
-    if (visited.has(current)) return 0; // cycle
+    if (visited.has(current)) return depth; // cycle — report the confirmed depth
     visited.add(current);
     const meta = await readMetaSafely(current);
-    if (meta === null) return 0;
+    if (meta === null) return depth; // unreadable ancestor — report the confirmed depth
     if (meta.delegationDepth !== undefined) return meta.delegationDepth + depth;
     const parent: ExecutionId | undefined = meta.parentExecutionId;
     if (!parent) return depth; // clean terminus
     depth++;
     current = parent;
   }
-  // MAX_WALK exceeded: chain longer than any legitimate depth — treat as corrupt.
-  return 0;
+  // MAX_WALK exceeded: report the deepest depth confirmed before giving up.
+  return depth;
 }
