@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - runtime
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
+import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import type {
   ActiveChildInfo,
   ExecutionId,
@@ -12,10 +12,10 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 
-import { createRecordingHost } from '../progressTestUtils';
+import { createRecordingHost } from '../agent/progressTestUtils';
 
-describe('LegacyProgressEventProjection', () => {
-  it('maps Stage 3a session and child/process facts onto legacy progress events', () => {
+describe('attachCliSessionProgressProjection', () => {
+  it('maps session and child/process facts onto retained CLI progress events', () => {
     const hub = new SessionEventHub();
     const host = createRecordingHost();
     const parentStreamId = 'stream:parent' as StreamTabId;
@@ -40,7 +40,7 @@ describe('LegacyProgressEventProjection', () => {
       toolName: 'bash',
     };
 
-    const detach = attachLegacyProgressEventProjection(hub, host.host);
+    const detach = attachCliSessionProgressProjection(hub, host.host);
     try {
       hub.emit({
         scope: 'session',
@@ -123,7 +123,7 @@ describe('LegacyProgressEventProjection', () => {
     const host = createRecordingHost();
     const streamId = 'stream:round' as StreamTabId;
 
-    const detach = attachLegacyProgressEventProjection(hub, host.host);
+    const detach = attachCliSessionProgressProjection(hub, host.host);
     try {
       hub.emit({
         scope: 'run',
@@ -175,7 +175,7 @@ describe('LegacyProgressEventProjection', () => {
     }
   });
 
-  it('projects usage and domain run facts onto legacy progress events', () => {
+  it('projects usage and domain run facts onto retained CLI progress events', () => {
     const hub = new SessionEventHub();
     const host = createRecordingHost();
     const streamId = 'stream:domain' as StreamTabId;
@@ -187,9 +187,9 @@ describe('LegacyProgressEventProjection', () => {
         activeForm: 'Projecting run facts',
       },
     ];
-    const plan = { objective: 'Keep legacy host output compatible.' };
+    const plan = { objective: 'Keep CLI host output compatible.' };
 
-    const detach = attachLegacyProgressEventProjection(hub, host.host);
+    const detach = attachCliSessionProgressProjection(hub, host.host);
     try {
       hub.emit({
         scope: 'run',
