@@ -5,6 +5,9 @@ import path from 'node:path';
 // Local imports - platform
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 
+// Local imports - common
+import { isFileNotFoundError } from '@common/errors';
+
 // Local imports - CLI runtime
 import { cliEnvValue } from './cliContext';
 
@@ -66,13 +69,24 @@ export class CliSecrets implements PlatformSecrets {
     await mutation;
   }
 
+  /**
+   * Reads the secrets file. A missing file is the expected first-run state
+   * and defaults to `{}`. Any other read failure (permissions, corrupt
+   * JSON, etc.) is rethrown rather than swallowed: `updateSecrets()` does a
+   * read-mutate-write, so silently defaulting to `{}` here would make a
+   * transient read failure permanently wipe every other stored secret on
+   * the next write.
+   */
   private async readSecrets(): Promise<SecretFileData> {
+    let raw: string;
     try {
-      const data = JSON.parse(await readFile(this.filePath, 'utf8')) as unknown;
-      return isSecretFileData(data) ? data : {};
-    } catch {
-      return {};
+      raw = await readFile(this.filePath, 'utf8');
+    } catch (error) {
+      if (isFileNotFoundError(error)) return {};
+      throw error;
     }
+    const data = JSON.parse(raw) as unknown;
+    return isSecretFileData(data) ? data : {};
   }
 
   private async writeSecrets(data: SecretFileData): Promise<void> {
