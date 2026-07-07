@@ -12,7 +12,6 @@ import {
 } from '@agent/trace';
 import { flowKey } from '@agent/node/persistedFlow';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -240,13 +239,11 @@ function emitRunStart(ctx: AgentLaunchContext): void {
     category: ctx.setting.agentCategory,
   });
   ctx.logger.emit({ type: 'run.start', descriptor });
-
-  // Legacy compatibility for hosts still ingressing run identity through the
-  // host progress-event rail. The snapshot store no longer persists `taskState`.
-  ctx.runtimeHost.emit('setTaskState', {
+  ctx.logger.emit({
+    type: 'run.config',
     streamId: ctx.streamId,
     executionId: ctx.executionId,
-    taskState: agentConfigToTaskState(ctx.config),
+    config: ctx.config,
   });
 }
 
