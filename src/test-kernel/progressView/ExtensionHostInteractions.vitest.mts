@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
-import type { StreamTabId } from '@shared/schemas';
+import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
 
 const mocks = vi.hoisted(() => ({
@@ -58,11 +58,15 @@ function createInteractions(options?: {
   runtimeHost?: ReturnType<typeof createRuntimeHost>;
   handlers?: ApprovalRequestHandlerSet;
   removeStream?: (streamId: StreamTabId) => void;
+  handleProgressEvent?: (event: unknown, payload: unknown) => void;
 }) {
+  const handleProgressEvent = options?.handleProgressEvent ?? (() => undefined);
   return createExtensionHostInteractions({
     runtimeHost: options?.runtimeHost ?? createRuntimeHost(),
     getApprovalHandlers: () => options?.handlers ?? createHandlers(),
     removeStream: options?.removeStream ?? (() => {}),
+    handleProgressEvent: (event, payload) =>
+      handleProgressEvent(event, payload),
   });
 }
 
@@ -218,5 +222,49 @@ describe('createExtensionHostInteractions', () => {
       }),
     ).toBe(true);
     expect(removed).toEqual(['child-a']);
+  });
+
+  it('routes backend progress events through the supplied callback', () => {
+    const handleProgressEvent = vi.fn(
+      (_event: unknown, _payload: unknown) => undefined,
+    );
+    const interactions = createInteractions({ handleProgressEvent });
+
+    expect(
+      interactions.handleProgressEvent('setActiveStream', {
+        streamId: 'stream-a' as StreamTabId,
+      }),
+    ).toBe(true);
+
+    expect(handleProgressEvent).toHaveBeenCalledWith('setActiveStream', {
+      streamId: 'stream-a',
+    });
+  });
+
+  it('leaves addOutputFiles to the session run-fact path', () => {
+    const handleProgressEvent = vi.fn(
+      (_event: unknown, _payload: unknown) => undefined,
+    );
+    const interactions = createInteractions({ handleProgressEvent });
+    const outputFile: OutputFileInfo = {
+      source: 'paper.tex',
+      location: {
+        kind: 'workspace',
+        absolutePath: '/workspace/paper.tex',
+        relativePath: 'paper.tex',
+      },
+      round: 1,
+      lineage: null,
+      diff: null,
+    };
+
+    expect(
+      interactions.handleProgressEvent('addOutputFiles', {
+        streamId: 'stream-a' as StreamTabId,
+        filesByRound: { 1: [outputFile] },
+      }),
+    ).toBe(true);
+
+    expect(handleProgressEvent).not.toHaveBeenCalled();
   });
 });
