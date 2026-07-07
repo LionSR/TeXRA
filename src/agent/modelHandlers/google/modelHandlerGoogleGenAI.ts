@@ -16,16 +16,15 @@ import {
 } from '@google/genai';
 
 // Local imports - agent
-import { logSdkError } from '@agent/trace';
 import type { StreamHandle } from '@agent/trace';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
-  getSdkErrorMessage,
   handleStreamingFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -99,7 +98,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   GenerateContentResponseUsageMetadata | null,
   GoogleToolCall,
   GoogleGenAI,
-  GenerateContentResponse
+  GenerateContentResponse,
+  Part
 > {
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
@@ -548,7 +548,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const userContentParts: Part[] = [createPartFromText(userPrefix)];
 
     if (mediaFiles?.length && this.supportsFileUploads()) {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      const formattedMedia = await this.createMediaForRound(
+        mediaFiles,
+        'initial',
+      );
       if (formattedMedia.length > 0) {
         const attachmentLabel = mediaFiles
           .map((loc) => getShortDisplayPath(loc))
@@ -576,7 +579,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const roundParts: Part[] = [];
 
     if (mediaFiles?.length && this.supportsFileUploads()) {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      const formattedMedia = await this.createMediaForRound(
+        mediaFiles,
+        'followUp',
+      );
       if (formattedMedia.length > 0) {
         const attachmentLabel = mediaFiles
           .map((loc) => getShortDisplayPath(loc))
@@ -644,9 +650,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return this.uploadMediaEntries(entries);
   }
 
-  createMediaContent(mediaMessage: MediaEntry[]): MediaEntry[] {
-    // Google GenAI handles media content directly without transformation
-    return mediaMessage;
+  createMediaContent(mediaMessage: MediaEntry[]): Part[] {
+    // Dead in practice: createMediaMessage() above is overridden to
+    // upload/inline entries directly and never calls this — it exists only
+    // to satisfy ModelHandler's abstract contract now that the base class
+    // types createMediaContent/createMediaForRound against the handler's
+    // `Part` media type (#7465).
+    return mediaMessage as unknown as Part[];
   }
 
   extractResponse(
@@ -875,9 +885,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         mimeType,
       );
     } catch (attachmentError) {
-      this.logger.warn(
-        `Failed to encode attachment '${attachment.path}' for Google function response: ${getSdkErrorMessage(attachmentError)}`,
-        { data: attachmentError },
+      reportMediaAttachmentFailure(
+        this.logger,
+        'toolAttachment',
+        attachmentError,
+        `failed to encode '${attachment.path}' for Google function response`,
       );
       return null;
     }
@@ -1101,16 +1113,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const lastUserMsg = messages.findLast((m) => m.role === 'user' && m.parts);
     if (!lastUserMsg?.parts) return;
 
-    try {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
-      lastUserMsg.parts.unshift(...formattedMedia);
-    } catch (err) {
-      logSdkError(
-        this.logger,
-        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
-      );
-    }
+    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
+    if (formattedMedia.length === 0) return;
+    lastUserMsg.parts.unshift(...formattedMedia);
   }
 }

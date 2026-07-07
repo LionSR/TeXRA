@@ -7,7 +7,6 @@ import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
 // Local imports - agent components
-import { logSdkError } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -739,7 +738,10 @@ export class ModelHandlerOpenAI<
         this.capabilities.supportsNativeAudio)
     ) {
       // createMediaMessage returns an array of objects formatted by createMediaContent
-      const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+      const formattedMediaContent = await this.createMediaForRound(
+        mediaFiles,
+        'initial',
+      );
       userMessageContent.push(...formattedMediaContent);
     }
 
@@ -786,17 +788,11 @@ export class ModelHandlerOpenAI<
       (this.capabilities.supportsVision ||
         this.capabilities.supportsNativeAudio)
     ) {
-      try {
-        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-        roundContent.push(...formattedMediaContent);
-      } catch (err) {
-        logSdkError(
-          this.logger,
-          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          err,
-          { operation: 'process media files' },
-        );
-      }
+      const formattedMediaContent = await this.createMediaForRound(
+        mediaFiles,
+        'followUp',
+      );
+      roundContent.push(...formattedMediaContent);
     }
     // Only add text content if non-empty to avoid API "text content is empty" errors
     if (userMessage) {
@@ -1216,13 +1212,18 @@ export class ModelHandlerOpenAI<
       return [];
     }
 
+    // #7467: a malformed tool_calls payload used to be swallowed here (log +
+    // return []), which makes the round look like "no tool calls" and lets
+    // the run finalize as a successful completion on a corrupted provider
+    // response. Throw instead so this reaches the L4 `classifyAgentError`
+    // boundary (`AgentRunLifecycle.ts`) and fails the run loudly/retryably,
+    // matching every other genuine model-response failure.
     try {
       assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls);
-    } catch {
-      this.logger.warn(
-        'Skipping malformed OpenAI tool_calls payload while extracting tool use.',
+    } catch (err) {
+      throw new Error(
+        `Malformed OpenAI tool_calls payload: ${getSdkErrorMessage(err)}`,
       );
-      return [];
     }
 
     return toolCalls.map((call) => ({
@@ -1408,16 +1409,8 @@ export class ModelHandlerOpenAI<
     const lastUserMsg = messages.findLast((m) => m.role === 'user');
     if (!lastUserMsg || !('content' in lastUserMsg)) return;
 
-    try {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
-      insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
-    } catch (err) {
-      logSdkError(
-        this.logger,
-        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
-      );
-    }
+    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
+    if (formattedMedia.length === 0) return;
+    insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
   }
 }
