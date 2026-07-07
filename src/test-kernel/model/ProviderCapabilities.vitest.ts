@@ -48,7 +48,11 @@ describe('provider capabilities', () => {
         streaming: 'forced',
         webSocket: 'global-toggle',
         supportsTokenCounting: false,
-        supportsManualCompaction: false,
+        // Manual compaction is supported end-to-end via
+        // `ModelHandlerOpenAIResponse`'s client-side summarize-and-resend
+        // fallback (#7213) even though the stateful `/responses/compact`
+        // endpoint is unusable on this `store: false` backend.
+        supportsManualCompaction: true,
         supportsResponseChaining: false,
         storesResponsesServerSide: false,
         supportsInlineInputFileUpload: false,
