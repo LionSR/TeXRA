@@ -10,6 +10,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResumeDetection';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -52,7 +53,7 @@ async function lazyDetectWaitingStatus(
         streamId,
         'restart-repair',
         {
-          runtimeHost: extensionAgentRuntimeHost,
+          events: defaultSession().events,
         },
       );
       if (repaired) {

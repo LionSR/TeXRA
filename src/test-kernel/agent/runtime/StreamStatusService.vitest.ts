@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { TraceEmitter, type StatusEvent } from '@agent/trace';
+import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   StreamStatusMachine,
   type StreamStatusChange,
@@ -27,11 +29,16 @@ import { createRecordingHost } from '../progressTestUtils';
 function setupMachine(streamId: string): {
   machine: StreamStatusMachine;
   explicit: ReturnType<typeof createRecordingHost>;
+  events: SessionEventHub;
   streamId: StreamTabId;
 } {
+  const events = new SessionEventHub();
+  const explicit = createRecordingHost();
+  attachSessionProgressEventProjection(events, explicit.host);
   return {
     machine: new StreamStatusMachine(),
-    explicit: createRecordingHost(),
+    explicit,
+    events,
     streamId: streamId as StreamTabId,
   };
 }
@@ -56,13 +63,15 @@ describe('StreamStatusMachine', () => {
   it('keeps listeners per instance', () => {
     const first = new StreamStatusMachine();
     const second = new StreamStatusMachine();
+    const events = new SessionEventHub();
     const explicit = createRecordingHost();
+    attachSessionProgressEventProjection(events, explicit.host);
     const streamId = 'stream-status-listener-test' as StreamTabId;
     const changes: string[] = [];
 
     first.onDidChange((change) => changes.push(change.streamId));
     second.transition(streamId, STREAM_PHASE.WAITING, 'restart-repair', {
-      runtimeHost: explicit.host,
+      events,
     });
 
     expect(changes).toEqual([]);
@@ -115,7 +124,7 @@ describe('StreamStatusMachine', () => {
   });
 
   it('repairs terminal streams to waiting through resume then wait', () => {
-    const { machine, explicit, streamId } = setupMachine(
+    const { machine, explicit, events, streamId } = setupMachine(
       'stream-status-terminal-waiting-repair',
     );
 
@@ -123,7 +132,7 @@ describe('StreamStatusMachine', () => {
 
     expect(
       machine.transitionToWaiting(streamId, 'restart-repair', {
-        runtimeHost: explicit.host,
+        events,
       }),
     ).toBe(true);
 
@@ -151,7 +160,7 @@ describe('StreamStatusMachine', () => {
   });
 
   it('terminalizes waiting streams through resume then lifecycle', () => {
-    const { machine, explicit, streamId } = setupMachine(
+    const { machine, explicit, events, streamId } = setupMachine(
       'stream-status-waiting-terminal-repair',
     );
 
@@ -159,7 +168,7 @@ describe('StreamStatusMachine', () => {
 
     expect(
       machine.transitionToTerminal(streamId, STREAM_PHASE.FAILED, {
-        runtimeHost: explicit.host,
+        events,
       }),
     ).toBe(true);
 
@@ -187,13 +196,13 @@ describe('StreamStatusMachine', () => {
   });
 
   it('terminalizes visible streams that were not started yet', () => {
-    const { machine, explicit, streamId } = setupMachine(
+    const { machine, explicit, events, streamId } = setupMachine(
       'stream-status-undefined-terminal-repair',
     );
 
     expect(
       machine.transitionToTerminal(streamId, STREAM_PHASE.FAILED, {
-        runtimeHost: explicit.host,
+        events,
       }),
     ).toBe(true);
 
@@ -220,7 +229,7 @@ describe('StreamStatusMachine', () => {
   });
 
   it('accepts already-matching terminal outcomes without warning callers', () => {
-    const { machine, explicit, streamId } = setupMachine(
+    const { machine, explicit, events, streamId } = setupMachine(
       'stream-status-matching-terminal',
     );
 
@@ -228,7 +237,7 @@ describe('StreamStatusMachine', () => {
 
     expect(
       machine.transitionToTerminal(streamId, STREAM_PHASE.CANCELLED, {
-        runtimeHost: explicit.host,
+        events,
       }),
     ).toBe(true);
 
@@ -237,7 +246,7 @@ describe('StreamStatusMachine', () => {
   });
 
   it('clears a transient running substate through the table-checked resume transition', () => {
-    const { machine, explicit, streamId } = setupMachine(
+    const { machine, explicit, events, streamId } = setupMachine(
       'stream-status-clear-running-substate',
     );
 
@@ -245,7 +254,7 @@ describe('StreamStatusMachine', () => {
 
     expect(
       machine.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-        runtimeHost: explicit.host,
+        events,
       }),
     ).toBe(true);
 
@@ -265,7 +274,7 @@ describe('StreamStatusMachine', () => {
   });
 
   it('skips the write and publish for a no-op RUNNING resume with no substate to clear', () => {
-    const { machine, explicit, streamId } = setupMachine(
+    const { machine, explicit, events, streamId } = setupMachine(
       'stream-status-noop-running-resume',
     );
 
@@ -273,7 +282,7 @@ describe('StreamStatusMachine', () => {
 
     expect(
       machine.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-        runtimeHost: explicit.host,
+        events,
       }),
     ).toBe(true);
 
@@ -306,14 +315,12 @@ describe('StreamStatusMachine', () => {
   });
 
   it('publishes rollback when a visible reservation is released', () => {
-    const { machine, explicit, streamId } = setupMachine(
+    const { machine, explicit, events, streamId } = setupMachine(
       'stream-status-reservation-rollback',
     );
 
-    expect(machine.tryAcquire(streamId, { runtimeHost: explicit.host })).toBe(
-      true,
-    );
-    machine.releaseIfReserved(streamId, { runtimeHost: explicit.host });
+    expect(machine.tryAcquire(streamId, { events })).toBe(true);
+    machine.releaseIfReserved(streamId, { events });
 
     expect(machine.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
     expect(explicit.events).toEqual([
@@ -339,25 +346,21 @@ describe('StreamStatusMachine', () => {
   });
 
   it('overlays reservations on stale terminal phases and restores them on rollback', () => {
-    const { machine, explicit, streamId } = setupMachine(
+    const { machine, explicit, events, streamId } = setupMachine(
       'stream-status-reservation-overlay',
     );
 
     seedStreamStatusForTest(machine, streamId, STREAM_PHASE.COMPLETED);
 
-    expect(machine.tryAcquire(streamId, { runtimeHost: explicit.host })).toBe(
-      true,
-    );
+    expect(machine.tryAcquire(streamId, { events })).toBe(true);
     expect(machine.get(streamId)).toBe(STREAM_PHASE.RUNNING);
     expect(
       machine.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle'),
     ).toBe(true);
 
     seedStreamStatusForTest(machine, streamId, STREAM_PHASE.COMPLETED);
-    expect(machine.tryAcquire(streamId, { runtimeHost: explicit.host })).toBe(
-      true,
-    );
-    machine.releaseIfReserved(streamId, { runtimeHost: explicit.host });
+    expect(machine.tryAcquire(streamId, { events })).toBe(true);
+    machine.releaseIfReserved(streamId, { events });
 
     expect(machine.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     expect(explicit.events.at(-1)).toEqual({
@@ -373,20 +376,23 @@ describe('StreamStatusMachine', () => {
 
   it('projects status trace events to updateStreamStatus payloads', () => {
     const machine = new StreamStatusMachine();
+    const events = new SessionEventHub();
     const explicit = createRecordingHost();
+    attachSessionProgressEventProjection(events, explicit.host);
     const trace = new TraceEmitter();
     const streamId = 'stream-status-projection-test' as StreamTabId;
     const statusEvents: StatusEvent[] = [];
     const changes: StreamStatusChange[] = [];
 
     trace.subscribe((event) => {
-      if (event.type === 'status') statusEvents.push(event);
+      if (event.type !== 'status') return;
+      statusEvents.push(event);
+      events.emit({ scope: 'run', streamId, event });
     });
     machine.onDidChange((change) => changes.push(change));
 
     expect(
       machine.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle', {
-        runtimeHost: explicit.host,
         trace,
       }),
     ).toBe(true);
