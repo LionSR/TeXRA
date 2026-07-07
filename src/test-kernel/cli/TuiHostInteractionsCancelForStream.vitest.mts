@@ -16,7 +16,12 @@ import {
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
-import { AgentCategory, type AgentProposal, type Plan } from '@shared/schemas';
+import {
+  AgentCategory,
+  type AgentProposal,
+  type Plan,
+  type UserQuestionPermission,
+} from '@shared/schemas';
 
 function context(): CliContext {
   return {
@@ -41,6 +46,17 @@ const proposal: AgentProposal = {
   model: 'test-model',
   instruction: 'Review the change.',
   memories: [],
+};
+const question: UserQuestionPermission = {
+  requestId: 'question-timeout',
+  allowBypass: false,
+  streamId: 'stream-a',
+  questions: [
+    {
+      question: 'Continue?',
+      options: [{ label: 'Yes' }, { label: 'No' }],
+    },
+  ],
 };
 
 afterEach(() => {
@@ -194,6 +210,41 @@ describe('HostInteractionOptions.timeoutMs threading', () => {
       );
 
       await expect(result).resolves.toEqual({ action: 'timeout' });
+      expect(currentApproval.get()).toBeUndefined();
+    } finally {
+      interactions.dispose?.();
+    }
+  });
+
+  it('times out a bash approval that outlives timeoutMs without user input', async () => {
+    const interactions = createTuiHostInteractions(host(), context());
+    try {
+      const result = interactions.requestBashApproval?.(
+        { command: 'echo hi', streamId: 'stream-a' },
+        { timeoutMs: 15 },
+      );
+
+      await expect(result).resolves.toEqual({
+        accepted: false,
+        userMessage: 'Approval request timed out.',
+      });
+      expect(currentApproval.get()).toBeUndefined();
+    } finally {
+      interactions.dispose?.();
+    }
+  });
+
+  it('times out a user question that outlives timeoutMs without user input', async () => {
+    const interactions = createTuiHostInteractions(host(), context());
+    try {
+      const result = interactions.askUserQuestion?.(question, {
+        timeoutMs: 15,
+      });
+
+      await expect(result).resolves.toEqual({
+        submitted: false,
+        feedback: 'Approval request timed out.',
+      });
       expect(currentApproval.get()).toBeUndefined();
     } finally {
       interactions.dispose?.();
