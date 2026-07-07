@@ -15,10 +15,6 @@ import {
 import { runAgent } from '@agent/runtime/runAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 
@@ -65,30 +61,6 @@ type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
   C extends AgentCategory
     ? Extract<ExecuteAgentResult, { category: C }>
     : ExecuteAgentResult;
-
-function persistCliMetadataProgressEvents(
-  host: CliRuntimeHost,
-  snapshotStore: StreamSnapshotStore,
-): CliRuntimeHost {
-  const emit = <K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): void => {
-    // Durable run facts enter StreamSnapshotStore from SessionEventHub. Keep
-    // only the legacy metadata events here until they move to typed run facts.
-    switch (event) {
-      case 'setTaskState':
-      case 'updateStreamDescription':
-      case 'setParentStream':
-        snapshotStore.handleProgressEvent(event, payload);
-        break;
-      default:
-        break;
-    }
-    host.emit(event, payload);
-  };
-  return { ...host, emit };
-}
 
 export interface CliConfigExecuteOptions<
   C extends AgentCategory | undefined = undefined,
@@ -194,10 +166,7 @@ export async function executeCliRequest(
   const detachSnapshotEvents = snapshotStore.attachSessionEvents(
     defaultSession().events,
   );
-  const runtimeHost = persistCliMetadataProgressEvents(
-    baseRuntimeHost,
-    snapshotStore,
-  );
+  const runtimeHost = baseRuntimeHost;
   const detachHostInteractions = defaultSession().useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
