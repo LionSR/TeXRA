@@ -227,7 +227,7 @@ describe('CLI stream tabs strip', () => {
 
     expect(items.map(streamTabSegmentText)).toEqual([
       'main*',
-      '1:setup(idle)',
+      '1:setup(waiting for you)',
       '[2:bash]*',
     ]);
   });
@@ -296,7 +296,7 @@ describe('CLI stream tabs strip', () => {
     });
 
     expect(items.map(streamTabSegmentText)).toEqual([
-      '1:child-1(idle)',
+      '1:child-1(waiting for you)',
       '[2:child-2]',
     ]);
   });
@@ -330,7 +330,7 @@ describe('CLI stream tabs strip', () => {
 
     expect(items.map(streamTabSegmentText)).toEqual([
       '[main]',
-      '1:polish(idle)',
+      '1:polish(waiting for you)',
     ]);
   });
 
