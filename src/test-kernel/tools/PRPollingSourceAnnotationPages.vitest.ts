@@ -1,11 +1,14 @@
-// Third-party imports
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
+// Suites for the annotation-page budget path of @tools/github
+// (PRPollingSource pagination + AnnotationFetchBudget token bucket).
 
-// Local imports - tools
+import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
-
-// Local imports - test support
 import { mockGitHubClient } from '../support/githubClientMock';
+import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
+
+// ---------------------------------------------------------------------------
+// PRPollingSourceAnnotationPages
+// ---------------------------------------------------------------------------
 
 interface AnnotationFetchSource {
   fetchAnnotations(
@@ -171,5 +174,19 @@ describe('PRPollingSource annotation pagination', () => {
 
     expect(ghGet).not.toHaveBeenCalled();
     expect(state.currentShaState?.pendingAnnotationRuns).toEqual(runs);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AnnotationFetchBudget
+// ---------------------------------------------------------------------------
+
+describe('AnnotationFetchBudget', () => {
+  it('does not stall refills after the clock moves backward', () => {
+    const budget = new AnnotationFetchBudget(1, 1000);
+
+    expect(budget.tryClaim(1000)).toBe(true);
+    expect(budget.tryClaim(900)).toBe(false);
+    expect(budget.tryClaim(1900)).toBe(true);
   });
 });

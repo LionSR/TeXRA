@@ -1,3 +1,5 @@
+// Deliberate one-test canary: proves the vitest harness (raw ?raw/.tex
+// loaders, path aliases) is wired — do not fold into a domain suite.
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
