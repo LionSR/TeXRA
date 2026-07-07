@@ -11,16 +11,16 @@ import {
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 const STREAM = 'stream:tooluse-resume' as StreamTabId;
 const runtimeHost = { emit: vi.fn() };
-let detachLegacyProjection: (() => void) | undefined;
+let detachSessionProgressProjection: (() => void) | undefined;
 
 function snapshot(): ToolUseSessionSnapshot {
   return { streamId: STREAM } as ToolUseSessionSnapshot;
@@ -43,15 +43,16 @@ describe('resumeToolUseSnapshot', () => {
     resumeToolUseFromSnapshotMock.mockReset();
     resumeToolUseFromSnapshotMock.mockResolvedValue(undefined);
     runtimeHost.emit.mockReset();
-    detachLegacyProjection = attachLegacyProgressEventProjection(
-      defaultSession().events,
-      runtimeHost,
-    );
+    detachSessionProgressProjection =
+      attachSessionProgressEventProjectionForTest(
+        defaultSession().events,
+        runtimeHost,
+      );
   });
 
   afterEach(() => {
-    detachLegacyProjection?.();
-    detachLegacyProjection = undefined;
+    detachSessionProgressProjection?.();
+    detachSessionProgressProjection = undefined;
     ToolUseFollowUpQueue.release(STREAM);
     clearStreamStatusForTest(StreamStatusService, STREAM);
   });

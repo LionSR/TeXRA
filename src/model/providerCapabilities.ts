@@ -226,7 +226,13 @@ const resolveChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({
       streaming: 'forced',
       webSocket: 'global-toggle',
       supportsTokenCounting: false,
-      supportsManualCompaction: false,
+      // The backend forces `store: false` (see `storesResponsesServerSide`
+      // below), so OpenAI's stateful `/responses/compact` endpoint has
+      // nothing to act on. Manual compaction is still supported end-to-end
+      // via `ModelHandlerOpenAIResponse`'s client-side summarize-and-resend
+      // fallback, which the handler picks automatically whenever
+      // `storesResponsesServerSide` is false (#7213).
+      supportsManualCompaction: true,
       supportsResponseChaining: false,
       storesResponsesServerSide: false,
       supportsInlineInputFileUpload: false,

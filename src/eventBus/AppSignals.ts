@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events';
 
 export interface AppSignalPayloads {
+  /** The VS Code extension is shutting down. */
+  extensionDeactivating: undefined;
+
   /**
    * GitHub rejected the configured token. Frontends can surface the failure
    * and direct the user to token settings.
@@ -25,6 +28,12 @@ export interface AppSignalPayloads {
    * dashboards from the updated cache.
    */
   toolAvailabilityChanged: undefined;
+
+  /**
+   * One or more files were written directly to the workspace. Frontends can
+   * badge or refresh those files without routing through a run-scoped channel.
+   */
+  workspaceFilesWritten: { absolutePaths: string[] };
 }
 
 export type AppSignal = keyof AppSignalPayloads;

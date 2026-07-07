@@ -44,6 +44,23 @@ export function getAnthropicMaxPdfPages(contextWindow: number): number {
 /** Max tokens for the compaction summary response (client-side compaction for OpenAI-compatible models). */
 export const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
 
+/**
+ * Rough chars-per-token ratio for estimating token counts without a tokenizer.
+ * ~4 chars/token is the standard approximation for GPT-family models on English
+ * and code. Used only where exact counting is unavailable — e.g. the
+ * ChatGPT-subscription (Codex) profile, whose backend exposes no token-counting
+ * endpoint (`supportsTokenCounting: false`).
+ */
+const ESTIMATED_CHARS_PER_TOKEN = 4;
+
+/**
+ * Heuristic token estimate for `text` when no tokenizer or counting API is
+ * available. Deliberately coarse — callers pair it with a safety buffer.
+ */
+export function estimateTokensFromText(text: string): number {
+  return Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
+}
+
 /** System prompt used for client-side conversation compaction. */
 export const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Create a concise but complete summary of the conversation below. Preserve:
 - The original user request and goals
