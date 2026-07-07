@@ -291,7 +291,11 @@ export async function withAgentCliApproval(
 ): Promise<ToolResult> {
   const approval = await requestBashApproval({ command: approvalLabel });
   if (!approval.accepted) {
-    return buildBashApprovalRejectedResult(approvalLabel, approval.userMessage);
+    return buildBashApprovalRejectedResult(
+      approvalLabel,
+      approval.userMessage,
+      approval.timedOut,
+    );
   }
 
   const contexts = getCurrentToolContexts();
