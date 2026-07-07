@@ -153,7 +153,7 @@ function emitRunStart(ctx: AgentLaunchContext): void {
   ctx.logger.emit({ type: 'run.start', descriptor });
 
   // Legacy compatibility for hosts still ingressing run identity through the
-  // ProgressEventBus. The snapshot store no longer persists `taskState`.
+  // progress-event contract. The snapshot store no longer persists `taskState`.
   ctx.runtimeHost.emit('setTaskState', {
     streamId: ctx.streamId,
     executionId: ctx.executionId,

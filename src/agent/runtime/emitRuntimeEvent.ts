@@ -11,7 +11,7 @@
  * Host/RPC events should use the owning `AgentRuntimeHost.emit` directly. This
  * helper deliberately has no broad process-bus fallback.
  */
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 
 import { tryUseRunContext } from './RunContext';
 import { defaultSession, type SessionHandle } from './SessionHandle';
