@@ -26,7 +26,10 @@ import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { splitContentLines } from '@utils/text/stringUtils';
-import { formatDeliveryEnvelope } from './deliveryEnvelope';
+import {
+  formatChildRunDelivery,
+  formatChildRunError,
+} from './deliveryEnvelope';
 import type { DiffFileInfo } from './subagentDiffs';
 
 // ============================================================================
@@ -194,10 +197,10 @@ export function formatSubagentDelivery(
     }
   }
 
-  return formatDeliveryEnvelope({
+  return formatChildRunDelivery({
     tag: 'subagent-result',
+    executionId: result.executionId,
     attributes: [
-      { name: 'id', value: result.executionId },
       { name: 'agent', value: agentName },
       { name: 'category', value: result.category },
       { name: 'status', value: result.outcome },
@@ -220,22 +223,22 @@ export function formatSubagentError(
   },
 ): string {
   const formatted = normalizeProviderError(err);
-  const lines = [
+  const preambleLines = [
     ...formatDeliveryPreamble({
       wallTimeMs: options?.wallTimeMs,
       workingDirectory: options?.workingDirectory,
       memoryMisses: options?.memoryMisses,
     }),
   ];
-  lines.push(`<message>${escapeText(formatted.message)}</message>`);
-  return formatDeliveryEnvelope({
+  return formatChildRunError({
     tag: 'subagent-error',
+    executionId,
     attributes: [
-      { name: 'id', value: executionId },
       { name: 'agent', value: agentName },
       { name: 'retryable', value: formatted.userRetryable },
     ],
-    bodyLines: lines,
+    preambleLines,
+    message: formatted.message,
   });
 }
 
