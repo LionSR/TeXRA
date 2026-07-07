@@ -2,19 +2,16 @@
  * Frontend listeners for events emitted by agent core/runtime.
  *
  * These listeners bridge the gap between the agent layer (which must not
- * import from @frontend/) and the VS Code UI. The agent emits typed events
- * on the ProgressEventBus; this module subscribes and performs the actual
- * UI operations.
+ * import from @frontend/) and the VS Code UI. The extension runtime host
+ * routes presentation requests to the extension presentation channel; this
+ * module subscribes and performs the actual UI operations.
  */
 import * as vscode from 'vscode';
 
 import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import {
-  ProgressEventBus,
-  INSTRUCTION_ACTION,
-} from '@eventBus/ProgressEventBus';
+import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import type {
   InstructionAction,
   ProgressEventPayloads,
@@ -23,6 +20,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
+import { extensionPresentationEvents } from '@frontend/events/extensionPresentationEvents';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -142,17 +140,23 @@ export function registerAgentEventListeners(): vscode.Disposable {
   const controller = new AbortController();
   const { signal } = controller;
 
-  ProgressEventBus.on('requestOpenFile', handleRequestOpenFile, { signal });
-  ProgressEventBus.on('requestShowInstruction', handleRequestShowInstruction, {
+  extensionPresentationEvents.on('requestOpenFile', handleRequestOpenFile, {
     signal,
   });
-  ProgressEventBus.on(
+  extensionPresentationEvents.on(
+    'requestShowInstruction',
+    handleRequestShowInstruction,
+    { signal },
+  );
+  extensionPresentationEvents.on(
     'showAgentConfigBanner',
     (payload) => void handleShowAgentConfigBanner(payload),
     { signal },
   );
-  ProgressEventBus.on('requestShowError', handleRequestShowError, { signal });
-  ProgressEventBus.on(
+  extensionPresentationEvents.on('requestShowError', handleRequestShowError, {
+    signal,
+  });
+  extensionPresentationEvents.on(
     'requestEnsureProgressView',
     (payload) => void handleRequestEnsureProgressView(payload),
     { signal },
@@ -160,9 +164,8 @@ export function registerAgentEventListeners(): vscode.Disposable {
 
   // Terminal-error toasts now come from the run's `result` event (the lifecycle
   // no longer emits them directly). The same shared helper every host uses
-  // re-emits `requestShow*` through `extensionAgentRuntimeHost` (=
-  // `ProgressEventBus.emit`), reaching the `ProgressEventBus.on` handlers
-  // registered above exactly once.
+  // re-emits `requestShow*` through `extensionAgentRuntimeHost`, reaching the
+  // extension presentation handlers registered above exactly once.
   const detachResult = attachTerminalResultToast(
     defaultSession(),
     extensionAgentRuntimeHost,
