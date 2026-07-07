@@ -201,6 +201,25 @@ describe('ProgressBackend', () => {
     backend.dispose();
   });
 
+  it('handles local progress events without an external process bus', () => {
+    const { backend } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const streamId = 'desktop-local-stream' as StreamTabId;
+
+    try {
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      expect(backend.state.activeStream).toBe(streamId);
+      expect(backend.state.streamLogs.has(streamId)).toBe(true);
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+    }
+  });
+
   it('uses the injected target predicate before sending messages', () => {
     const sent = vi.fn(() => true);
     let hasTarget = false;
