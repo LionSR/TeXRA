@@ -158,6 +158,12 @@ describe('check-dead-code-ratchet parseKnipIssues', () => {
       parseKnipIssues(JSON.stringify({ issues: { oops: true } }), ''),
     ).toThrow(/knip JSON output has no `issues` array/);
   });
+
+  it('throws the contextual error, not a raw TypeError, when stdout parses to null', () => {
+    expect(() => parseKnipIssues('null', '')).toThrow(
+      /knip JSON output has no `issues` array/,
+    );
+  });
 });
 
 describe('check-dead-code-ratchet findRatchetViolations', () => {

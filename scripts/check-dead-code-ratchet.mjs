@@ -62,7 +62,7 @@ export function parseKnipIssues(stdout, stderr) {
     console.error(stderr);
     throw new Error('knip did not produce parseable JSON output', { cause });
   }
-  if (!Array.isArray(parsed.issues)) {
+  if (!Array.isArray(parsed?.issues)) {
     console.error(stdout);
     console.error(stderr);
     throw new Error(
