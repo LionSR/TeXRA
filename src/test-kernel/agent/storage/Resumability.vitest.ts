@@ -8,8 +8,15 @@ import {
   getExecutionStore,
   RESUMABILITY_CAUSE,
 } from '@agent/storage';
+import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  RUN_OUTCOME,
+  type ExecutionId,
+  type RunOutcome,
+  type StreamTabId,
+} from '@shared/schemas';
 
 const BASE_FLOW_RECORD: FlowRecord = {
   flowName: 'texra',
@@ -38,10 +45,21 @@ describe('deriveResumability', () => {
     executionId: ExecutionId,
     terminalStatus: string,
   ): Promise<void> {
+    await writeMeta(executionId, { terminalStatus });
+  }
+
+  async function writeMeta(
+    executionId: ExecutionId,
+    {
+      terminalStatus,
+      outcome,
+    }: { terminalStatus?: string; outcome?: RunOutcome },
+  ): Promise<void> {
     await getExecutionStore(executionId).writeMeta({
       schemaVersion: EXECUTION_META_SCHEMA_VERSION,
       timestamp: '2026-07-05T00:00:00.000Z',
       terminalStatus,
+      outcome,
     });
   }
 
@@ -79,6 +97,38 @@ describe('deriveResumability', () => {
       cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
       terminalStatus: EXECUTION_STATUS.INTERRUPTED,
       flowRecord: BASE_FLOW_RECORD,
+    });
+  });
+
+  it('marks cancelled executions with a valid flow record as resumable', async () => {
+    const executionId = 'cancelled-with-flow' as ExecutionId;
+    await writeMeta(executionId, {
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await writeFlow(executionId);
+
+    await expect(deriveResumability(executionId)).resolves.toMatchObject({
+      resumable: true,
+      cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
+      flowRecord: BASE_FLOW_RECORD,
+    });
+  });
+
+  it('does not mark cancelled executions resumable without a flow record', async () => {
+    const executionId = 'cancelled-missing-flow' as ExecutionId;
+    await writeMeta(executionId, {
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+
+    await expect(deriveResumability(executionId)).resolves.toMatchObject({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
     });
   });
 
@@ -146,5 +196,40 @@ describe('deriveResumability', () => {
       resumable: false,
       cause: RESUMABILITY_CAUSE.UNREADABLE_FLOW,
     });
+  });
+
+  it('projects only resumable executions into WAITING streams', async () => {
+    const crashExecutionId = 'waiting-crash-with-flow' as ExecutionId;
+    const cancelledExecutionId = 'waiting-cancelled-with-flow' as ExecutionId;
+    const completedExecutionId = 'waiting-completed-with-flow' as ExecutionId;
+    const missingFlowExecutionId =
+      'waiting-interrupted-missing-flow' as ExecutionId;
+
+    await writeFlow(crashExecutionId);
+    await writeMeta(cancelledExecutionId, {
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await writeFlow(cancelledExecutionId);
+    await writeTerminalStatus(completedExecutionId, EXECUTION_STATUS.COMPLETED);
+    await writeFlow(completedExecutionId);
+    await writeTerminalStatus(
+      missingFlowExecutionId,
+      EXECUTION_STATUS.INTERRUPTED,
+    );
+
+    const streamIdsByExecutionId = new Map<StreamTabId, ExecutionId>([
+      ['crash-stream' as StreamTabId, crashExecutionId],
+      ['cancelled-stream' as StreamTabId, cancelledExecutionId],
+      ['completed-stream' as StreamTabId, completedExecutionId],
+      ['missing-flow-stream' as StreamTabId, missingFlowExecutionId],
+    ]);
+
+    await expect(detectWaitingStreams(streamIdsByExecutionId)).resolves.toEqual(
+      new Set<StreamTabId>([
+        'crash-stream' as StreamTabId,
+        'cancelled-stream' as StreamTabId,
+      ]),
+    );
   });
 });
