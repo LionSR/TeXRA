@@ -12,10 +12,7 @@
 
 import type { AgentTrace } from '@agent/trace';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import {
-  ProgressEventBus,
-  type ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   STREAM_PHASE,
   type ProgressViewOutboundMessage,
@@ -111,7 +108,7 @@ export interface DesktopProgressEventBridge {
    */
   onAllStreamsDeleted(): Promise<void>;
 
-  /** Tear down event-bus subscriptions. */
+  /** Tear down local state and ignore any late runtime-host events. */
   dispose(): void;
 }
 
@@ -130,8 +127,6 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
   /** True once `dispose()` has torn down this bridge. */
   private disposed = false;
 
-  private readonly unsubscribe: () => void;
-
   constructor(private readonly opts: DesktopProgressEventBridgeOptions) {
     // Hydrate previously-persisted "ghost" streams so the rail shows
     // the user's prior runs at launch (audit item D / trajectory #19).
@@ -143,26 +138,11 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     // available, otherwise falls back to "start fresh".
     this.hydrateRestoredStreams();
 
-    // These events can be emitted on the process bus without an active desktop
-    // runtime host. Keep them subscribed here so all desktop windows see
-    // progress-routing and root-error updates. Goal state is session-scoped and
-    // reaches this bridge through `onProgressEvent`.
-    const unsubscribeEnsureProgress = ProgressEventBus.on(
-      'requestEnsureProgressView',
-      () => {
-        opts.routeToProgress();
-      },
-    );
-    const unsubscribeShowError = ProgressEventBus.on(
-      'requestShowError',
-      ({ message }) => {
-        opts.onShowError(message);
-      },
-    );
-    this.unsubscribe = () => {
-      unsubscribeEnsureProgress();
-      unsubscribeShowError();
-    };
+    // Desktop presentation requests are window-owned: root/runtime-host events
+    // reach this bridge through `DesktopProgressBridge.handleProgressEvent` and
+    // then `onProgressEvent`. Do not subscribe this collaborator to the
+    // process-wide bus; doing so would make root UI actions cross window
+    // boundaries and outlive the owning renderer.
   }
 
   // ── Query ───────────────────────────────────────────────────────────────
@@ -402,7 +382,6 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
 
   dispose(): void {
     this.disposed = true;
-    this.unsubscribe();
     this.restoredStreams.clear();
     this.restoredDisplaySent.clear();
     this.restoredDisplayInFlight.clear();
