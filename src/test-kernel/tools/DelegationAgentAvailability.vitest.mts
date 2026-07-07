@@ -66,7 +66,6 @@ function resolveAgentToolsInput(
     tools,
     registry: delegationRegistry(tools.map((t) => t.name)),
     logger: { warn: () => {} },
-    delegationBlocked: false,
     toolInjections: new ToolInjectionRegistry(),
   };
 }

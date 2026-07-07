@@ -25,7 +25,6 @@ import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { deriveRunOutcome } from '@common/constants/streamStatus';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import {
@@ -159,12 +158,10 @@ export async function runToolUseFlow<C = unknown>(
   );
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const delegationDepth = input.delegation?.delegationDepth ?? 0;
-  const delegationGate = evaluateCurrentDelegationGate(delegationDepth);
-  const { tools: resolvedTools, delegationTrimmed } = await resolveAgentTools({
+  const { tools: resolvedTools } = await resolveAgentTools({
     tools: setting.tools,
     registry,
     logger,
-    delegationBlocked: !delegationGate.allowed,
     approvalPromptsUnavailable: input.delegation?.approvalPromptsUnavailable,
     runtimeUnavailableTools: input.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
@@ -182,7 +179,6 @@ export async function runToolUseFlow<C = unknown>(
     persistTodos: (todos) => kv.writeTodos(todos),
     fileService: new TaskRunFileService(executionId),
     delegation: { ...input.delegation, delegationDepth },
-    delegationTrimmed,
   };
   const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
   let activePersistedFlow: ToolUsePersistedFlow<C> | undefined;

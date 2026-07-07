@@ -19,7 +19,6 @@ const WORKTREE_SHARED_KEYS: ReadonlySet<WorkspaceStateKey> =
     WorkspaceStateKey.SUPER_YOLO_ENABLED,
     WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
     WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-    WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
     WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
     WorkspaceStateKey.CODEX_SANDBOX_MODE,
     WorkspaceStateKey.CODEX_REASONING_EFFORT,

@@ -46,7 +46,6 @@ import {
   DEFAULT_GIT_MARK_COMMITS,
 } from '@shared/constants/git';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
-import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolicy';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 
@@ -120,9 +119,6 @@ export const orchestratorAgents = signal<string[]>([]);
 export const reliabilitySettings = signal<NumberVscodeSetting[]>([]);
 export const allowOrchestratorKill = signal(true);
 export const detachSubagentsOnStop = signal(false);
-export const nestedDelegationMaxDepth = signal<number>(
-  NESTED_DELEGATION_DEPTH_RANGE.default,
-);
 
 // ---------------------------------------------------------------------------
 // Approval settings state
@@ -224,7 +220,6 @@ export function resetSettingsState(): void {
   reliabilitySettings.set([]);
   allowOrchestratorKill.set(true);
   detachSubagentsOnStop.set(false);
-  nestedDelegationMaxDepth.set(NESTED_DELEGATION_DEPTH_RANGE.default);
 
   bashApprovalEnabled.set(true);
   codexSandboxMode.set('workspace-write');
