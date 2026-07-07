@@ -567,6 +567,19 @@ export abstract class ModelHandler<
   }
 
   /**
+   * Whether this handler needs the system prompt resupplied on every call via
+   * `createResponse({ systemPrompt })`, rather than embedded once into
+   * `messages` at session init. True for providers whose `system` parameter
+   * is per-call (Anthropic, Google); false for providers that embed system
+   * text into `messages[0]` in `initializeMessages` (OpenAI, OpenRouter),
+   * where resupplying it per-call would duplicate it alongside the persisted
+   * message.
+   */
+  get requiresPerCallSystemPrompt(): boolean {
+    return false;
+  }
+
+  /**
    * Whether the provider SDK already retries this error internally, so the
    * flow-level auto-retry loop should stand down. Override in subclasses that
    * delegate retries to the provider; the default is no provider-managed retry.
