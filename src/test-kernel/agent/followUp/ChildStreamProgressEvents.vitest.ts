@@ -11,6 +11,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   STREAM_PHASE,
   STREAM_STATUS,
@@ -226,6 +227,46 @@ describe('child stream progress events', () => {
       event: 'removeStream',
       payload: { streamId: childStreamId },
     });
+  });
+
+  it('uses host interactions for child stream auto-close when available', () => {
+    const active = createRecordingHost();
+    const removedStreams: StreamTabId[] = [];
+    const host: AgentRuntimeHost = {
+      ...active.host,
+      interactions: {
+        handleProgressEvent: (event, payload) => {
+          if (event !== 'removeStream') return false;
+          const data = payload as ProgressEventPayloads['removeStream'];
+          removedStreams.push(data.streamId);
+          return true;
+        },
+        pending: () => [],
+        resolve: () => false,
+        cancelForStream: () => {},
+      },
+    };
+
+    const childStream = withSessionProgressProjection(host, () =>
+      createChildStream(executionId, parentStreamId, {
+        runtimeHost: host,
+        streamPrefix: 'bash',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'test-agent',
+        description: 'Run a background bash command',
+        config,
+        toolName: 'bash',
+      }),
+    );
+
+    withSessionProgressProjection(host, () =>
+      childStream.finalize({ autoClose: true }),
+    );
+
+    expect(removedStreams).toEqual([childStreamId]);
+    expect(active.events.map((entry) => entry.event)).not.toContain(
+      'removeStream',
+    );
   });
 
   it('publishes child loop status changes through the child stream owner', async () => {
