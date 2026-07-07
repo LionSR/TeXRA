@@ -115,6 +115,16 @@ Standing rules from the 2026-07 tech-debt re-calibration, which found that a run
 - **No trivial-identity or single-caller extractions.** Grep the caller count before approving any new shared helper — one caller is not DRY. Extends `CLAUDE.md` → "Discouraged Factory Patterns".
 - **Don't reward activity.** A program/migration that opens more follow-up issues than it retires pauses further building until its tail closes.
 
+## 14. Fewer-elements rulings (2026-07-07)
+
+Mirrors [`docs/proposals/fewer-elements-2026-07.md`](../../../../docs/proposals/fewer-elements-2026-07.md) §7 (R1, R5-R8). On conflict, #6951's single-ownership section wins. Correctness and security fixes are exempt from sequencing rules, never from these checks.
+
+- **No dual-system resting state (R1).** A code-to-code shim/projection/dual-write/alias merges only if its deletion PR is already open and referenced from its #6981 row, or the row carries a calendar date ≤7 days out. Persisted-data read shims (old stream logs, flow records, agent YAML, workspace state) are the exception: age-based #6981 row with a calendar date. Check: the row cites a PR number or a date. No row, or a row with an undated trigger, is a merge blocker.
+- **Churn-class ban (R5).** Reject reflow/reformat of files the PR does not functionally touch (check: files in the diff with only whitespace/formatting hunks). Reject styles/file splits without net element accounting. Single-caller extractions remain banned (§13); #7070 is the canonical violation.
+- **Net-element accounting (R6).** A `refactor:`/`simplify:`/`consolidate`/`dedupe`/`extract` PR body must report constructs added vs deleted (files from diffstat; exported symbols via `^[+-]export` over the diff; class/interface/enum declarations likewise) alongside net LoC. Positive element delta without a stated, staged reason is a merge blocker.
+- **Test budget (R7).** New test file only when the product module has no existing suite (or one suite per named cross-module scenario, stated in the PR body); otherwise extend. Tests pinning #6981-ledgered scaffolding carry an in-file expiry comment naming the row. ≥4 structurally identical cases use `test.each`.
+- **Consumer-grep before emitter deletion (R8).** A PR deleting or re-routing an emit path states the grepped subscriber count for every affected key in its body. Missing count on a deletion PR is a merge blocker (#7398 precedent: a live `bus.on` consumer was severed for 3.5h on main).
+
 ## Final pass
 
 - Cut findings not tied to a real `path:line` in the diff.
