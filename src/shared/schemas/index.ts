@@ -29,6 +29,7 @@ export * from './onboarding';
 // Layer 2: Depends on layer 1 only
 export * from './stream';
 export * from './output';
+export * from './progressEvents';
 
 // Layer 3: Depends on layer 2
 export * from './log';

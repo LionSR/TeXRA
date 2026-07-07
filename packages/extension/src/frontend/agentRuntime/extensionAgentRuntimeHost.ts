@@ -1,9 +1,9 @@
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import {
   extensionPresentationEvents,
   type ExtensionPresentationEvent,
+  type ExtensionPresentationEventPayloads,
   isExtensionPresentationEvent,
 } from '@frontend/events/extensionPresentationEvents';
 
@@ -13,7 +13,7 @@ export const extensionAgentRuntimeHost: AgentRuntimeHost = {
     if (isExtensionPresentationEvent(event)) {
       extensionPresentationEvents.emit(
         event,
-        payload as ProgressEventPayloads[ExtensionPresentationEvent],
+        payload as ExtensionPresentationEventPayloads[ExtensionPresentationEvent],
       );
       return;
     }

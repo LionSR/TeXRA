@@ -12,7 +12,7 @@
 
 import type { AgentTrace } from '@agent/trace';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import {
   STREAM_PHASE,
   type ProgressViewOutboundMessage,
@@ -140,9 +140,9 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
 
     // Desktop presentation requests are window-owned: root/runtime-host events
     // reach this bridge through `DesktopProgressBridge.handleProgressEvent` and
-    // then `onProgressEvent`. Do not subscribe this collaborator to the
-    // process-wide bus; doing so would make root UI actions cross window
-    // boundaries and outlive the owning renderer.
+    // then `onProgressEvent` — never through any process-global channel,
+    // which would make root UI actions cross window boundaries and outlive
+    // the owning renderer.
   }
 
   // ── Query ───────────────────────────────────────────────────────────────

@@ -579,7 +579,7 @@ describe('DesktopProgressBridge', () => {
     vi.restoreAllMocks();
   });
 
-  it('routes runtime events to the desktop backend through the bridge', async () => {
+  it('routes runtime events to the window-local desktop backend', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
@@ -2848,7 +2848,9 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('showAgentProposal', {
+      // Register the pending proposal the way production does: through the
+      // session's typed host interactions, not a host progress event.
+      const result = bridge.runtimeHost.interactions?.requestAgentProposal?.({
         proposalId: 'proposal-1',
         streamId: 'stream-1',
         agentCategory: AgentCategory.Workflow,
@@ -2876,6 +2878,7 @@ describe('DesktopProgressBridge', () => {
         action: 'setup',
       });
 
+      await expect(result).resolves.toEqual({ action: 'setup' });
       expect(messages).toEqual([
         { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route: 'main' },
         expect.objectContaining({
@@ -2887,6 +2890,12 @@ describe('DesktopProgressBridge', () => {
             inputFiles: ['main.tex', 'appendix.tex'],
             outputFiles: ['main.review.tex'],
           }),
+        }),
+        expect.objectContaining({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'resolve',
+          kind: PERMISSION_KIND.PROPOSAL,
+          id: 'proposal-1',
         }),
       ]);
     } finally {

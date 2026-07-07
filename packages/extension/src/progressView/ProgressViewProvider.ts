@@ -140,14 +140,10 @@ export class ProgressViewProvider
           },
         });
 
-        // Retry is the one host-specific kind: the extension shows a retry
-        // panel via its handler (so the handler also feeds the pending guard).
         return createProgressBackendUiConfig({
           handlers: this.approvalHandlers,
           webviewUpdater: u,
           canSend,
-          showRetryRequest: (p) => this.approvalHandlers.retry.show(p),
-          resolveRetryRequest: (id) => this.approvalHandlers.retry.resolve(id),
         });
       },
     });

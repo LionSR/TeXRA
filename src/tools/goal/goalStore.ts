@@ -174,7 +174,7 @@ async function update(
   if (!goal) return null;
   const final: Goal = { ...mutate(goal), updatedAt: nowIso() };
   await writeRaw(final);
-  // In-run: the active run's host (ALS), falling back to the bus.
+  // In-run: the active run's session (ALS), falling back to the default session.
   emitRuntimeEvent('goalStateChanged', { streamId });
   return final;
 }
