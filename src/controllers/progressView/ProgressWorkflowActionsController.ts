@@ -80,6 +80,12 @@ export class ProgressWorkflowActionsController {
 
   async diffStream(stream: StreamTabId): Promise<void> {
     await this.withWorkflowTaskState(stream, async (taskState) => {
+      // Round keys are non-negative integers by construction (enforced by
+      // the shared RoundKeySchema at every write into the snapshot store's
+      // accumulator — see `@shared/schemas/roundIndexed.ts`), so this record
+      // already enumerates ascending per the ES2015+ integer-key spec rule;
+      // runLatexdiffForExecution consumes `outputsByRound` in that order
+      // without needing an explicit sort here.
       const runOutputs = this.deps.state.getOutputFiles(stream);
       const outputsByRound = Object.keys(runOutputs).length
         ? runOutputs
