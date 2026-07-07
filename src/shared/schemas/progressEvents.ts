@@ -43,6 +43,11 @@ export interface UpdateStreamDescriptionPayload {
   description: string;
 }
 
+export interface SetParentStreamPayload {
+  childStreamId: StreamTabId;
+  parentStreamId: StreamTabId | null;
+}
+
 export interface AddOutputFilesPayload extends StreamScopedPayload {
   filesByRound: RoundIndexed<OutputFileInfo>;
 }

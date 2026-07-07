@@ -1217,13 +1217,13 @@ describe('ProgressBackend', () => {
       });
 
       direct.session.events.emit({
-        scope: 'run',
-        streamId: parentStreamId,
+        scope: 'session',
         event: {
-          type: 'child.activity',
-          kind: 'parent',
-          childStreamId,
-          parentStreamId,
+          type: 'setParentStream',
+          payload: {
+            childStreamId,
+            parentStreamId,
+          },
         },
       });
       legacyEquivalent.backend.handleProgressEvent('setParentStream', {
