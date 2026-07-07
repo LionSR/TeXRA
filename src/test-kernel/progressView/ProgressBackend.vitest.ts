@@ -869,7 +869,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('handles direct session events with the backend effects of the legacy projection', async () => {
+  it('handles direct session events with the same backend effects as host projection', async () => {
     const direct = createIsolatedRecordingBackend();
     const legacyEquivalent = createIsolatedRecordingBackend();
     const directSubscription = direct.backend.setupEventListeners();
