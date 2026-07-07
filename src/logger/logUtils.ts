@@ -9,9 +9,10 @@
  *
  *   2. `attachChannelSubscriber(trace, { channel, isAgent })` — subscribes
  *      the same sink machinery to an {@link AgentTrace}. Used by
- *      `createChannelTrace` / `createRunTrace` so the trace channel
- *      converges on the same output sinks. Replaces the former
- *      `consoleSubscriber.ts` pass-through.
+ *      `createRunTrace` so the real per-run trace channel converges on the
+ *      same output sinks. Replaces the former `consoleSubscriber.ts`
+ *      pass-through. (`createChannelTrace`'s module-level singletons close
+ *      over surface 1 directly — no `AgentTrace` subscriber involved.)
  *
  * Output-channel creation is host-injected via {@link setOutputChannelFactory};
  * the VS Code extension provides a factory that returns VS Code
