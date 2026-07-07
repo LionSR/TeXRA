@@ -11,6 +11,7 @@ import type {
   ProgressViewPlacement,
   StreamTabId,
 } from '@shared/schemas';
+import type { Unsupported } from '@shared/utils/dispatcher';
 
 import type {
   ProgressState,
@@ -61,11 +62,17 @@ export type TypedHandler<T extends ProgressViewOutboundMessage> = (
 ) => void;
 
 /**
- * Handler registry mapping command to typed handler.
- * TypeScript ensures handlers receive the correct message type.
+ * Handler registry mapping command to typed handler. Exhaustive — every
+ * ProgressView outbound command needs a real handler or `unsupported(...)`
+ * (see `@shared/utils/dispatcher`), same contract `settingsView`/`webview`
+ * use for their outbound registries. Omitting a command is a compile error
+ * here, not a silent runtime no-op; `messageDispatcher.ts` spreads all
+ * slices together and is the actual exhaustiveness checkpoint TypeScript
+ * enforces (individual slices are typed as `satisfies Partial<HandlerRegistry>`
+ * subsets).
  */
 export type HandlerRegistry = {
-  [K in ProgressViewOutboundMessage['command']]?: TypedHandler<
-    Extract<ProgressViewOutboundMessage, { command: K }>
-  >;
+  [K in ProgressViewOutboundMessage['command']]:
+    | TypedHandler<Extract<ProgressViewOutboundMessage, { command: K }>>
+    | Unsupported;
 };

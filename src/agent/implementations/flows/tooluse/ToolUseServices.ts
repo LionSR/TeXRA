@@ -15,6 +15,10 @@ export type ToolUseBeforeWaitingCallback = (
   lastResponse: string | undefined,
   touchedFiles: string[],
   memoryMisses: readonly AttachedMemoryMiss[],
+  /** Run cost accumulated so far, when available — lets a native subagent
+   *  strategy settle the parent's usage totals if this suspended turn is
+   *  later abandoned instead of resumed to completion. */
+  totalCostUsd?: number,
 ) => boolean | void | Promise<boolean | void>;
 
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {

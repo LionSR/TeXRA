@@ -31,10 +31,11 @@ import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import * as logger from '@logger/logUtils';
 
 // Local imports - tools
-import type {
-  ExecutionId,
-  StreamTabId,
-  SubagentProgressUpdate,
+import {
+  RUN_OUTCOME,
+  type ExecutionId,
+  type StreamTabId,
+  type SubagentProgressUpdate,
 } from '@shared/schemas';
 import {
   deliverChildRunFollowUp,
@@ -171,6 +172,12 @@ export class NativeSubagentStrategy {
   private childStreamId: StreamTabId | undefined;
   private runHandle: AgentRunHandle | undefined;
   private readonly detachAbandonListener: () => void;
+  /**
+   * Most recent run-cost snapshot observed while suspending at WAITING. Used
+   * by `abandon()` to roll a suspended-then-stopped subagent's spend into the
+   * parent's usage totals, since that path never reaches `onCompleted`/`onError`.
+   */
+  private lastKnownCostUsd: number | undefined;
 
   constructor(private readonly params: NativeSubagentStrategyParams) {
     this.deliveryState = SharedSubagentDeliveryRegistry.start(
@@ -334,8 +341,18 @@ export class NativeSubagentStrategy {
         allowWaitingResult: true,
         onProgress: (update) => this.onProgress(update),
         onFollowUpConsumed: () => this.onFollowUpConsumed(),
-        onBeforeWaiting: (lastResponse, touchedFiles, memoryMisses) =>
-          this.onBeforeWaiting(lastResponse, touchedFiles, memoryMisses),
+        onBeforeWaiting: (
+          lastResponse,
+          touchedFiles,
+          memoryMisses,
+          totalCostUsd,
+        ) =>
+          this.onBeforeWaiting(
+            lastResponse,
+            touchedFiles,
+            memoryMisses,
+            totalCostUsd,
+          ),
         // `finish()` runs in `finally` in each hook below: `resumeQueuedToolUseSnapshot`
         // and `runFlowWithLifecycle` only log and swallow a throw from these
         // callbacks (they never propagate it back here), so a `this.finish()`
@@ -372,7 +389,24 @@ export class NativeSubagentStrategy {
     lastResponse: string | undefined,
     touchedFiles: string[],
     memoryMisses: readonly AttachedMemoryMiss[],
+    totalCostUsd?: number,
   ): Promise<boolean> {
+    if (totalCostUsd !== undefined) {
+      this.lastKnownCostUsd = totalCostUsd;
+    }
+    // `onBeforeWaiting` fires before every *potential* WAITING suspension of
+    // a native subagent — the initial launch and every later resume alike,
+    // each with its own `runHandle` (see `setRunHandle` / `resumeStream`).
+    // The flow may still continue past the wait (a follow-up raced into the
+    // queue), in which case the run lifecycle clears this pre-registration on
+    // its terminal path (`clearWaitingCleanup`), so a non-suspended run never
+    // carries a stale abandon into teardown. Registering here, rather than
+    // only once on the initial launch promise, is what makes a stop/kill
+    // during a *second* (or later) suspended turn still run this strategy's
+    // own teardown instead of leaving `activeNativeSubagents`/the delivery
+    // registry pointing at a removed execution (see `abandon()`).
+    this.runHandle?.registerWaitingCleanup(() => this.abandon());
+
     const deliveryDecision = this.deliveryState.resolveBeforeWaiting(
       this.childStreamId,
     );
@@ -454,11 +488,41 @@ export class NativeSubagentStrategy {
     activeNativeSubagents.delete(this.params.executionId);
   }
 
+  /**
+   * Tear down this strategy's tracking state without delivering anything.
+   * Registered as a WAITING-suspend cleanup on every turn's `runHandle` (see
+   * `onBeforeWaiting`) — initial launch and every later resume alike — so a
+   * stop/kill of a suspended child, on any turn, doesn't leave
+   * `activeNativeSubagents`/the delivery registry pointing at a gone
+   * execution. Also settles the parent's usage totals with the most recent
+   * cost snapshot observed before suspending, since this path never reaches
+   * `onCompleted`/`onError`.
+   */
+  abandon(): void {
+    if (this.lastKnownCostUsd !== undefined) {
+      this.params.settleSubagentCost({
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.CANCELLED,
+        executionId: this.params.executionId,
+        streamId: this.childStreamId ?? this.params.orchestratorStreamId,
+        totalCostUsd: this.lastKnownCostUsd,
+      });
+    }
+    this.finish();
+  }
+
   attachPromise(promise: Promise<unknown>): void {
     let suspended = false;
     promise
       .then((result: unknown) => {
         if (isWaitingFlowResult(result as AgentRuntimeFlowResult)) {
+          // Only reachable once the flow genuinely suspended (not a
+          // near-miss cycle that kept running in-process). The abandon
+          // cleanup itself is registered from `onBeforeWaiting`, which fires
+          // immediately before this on every suspending turn (initial launch
+          // and each resume) — this flag only needs to know a suspend
+          // happened so `.finally()` below skips the normal-completion
+          // teardown.
           suspended = true;
         }
       })

@@ -102,7 +102,13 @@ function updateStreamInfo(
 // Handlers
 // ============================================================
 
-export const streamLifecycleHandlers: HandlerRegistry = {
+// `HandlerRegistry` is now exhaustive (every ProgressView outbound command
+// needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
+// This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
+// subset rather than the full registry; `messageDispatcher.ts` spreads all
+// slices together and is the actual exhaustiveness checkpoint TypeScript
+// enforces.
+export const streamLifecycleHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data, ctx) => {
     if (data.unsupportedCommands) {
       unsupportedProgressCommands$.set(new Set(data.unsupportedCommands));
@@ -200,4 +206,4 @@ export const streamLifecycleHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM]: (data, ctx) => {
     updateParentStreamId(ctx, data.stream, data.parentStreamId);
   },
-};
+} satisfies Partial<HandlerRegistry>;

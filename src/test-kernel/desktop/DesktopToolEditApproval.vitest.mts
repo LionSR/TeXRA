@@ -5,10 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  ProgressEventBusLike,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import type {
   DiffOptions,
   DiffSession,
@@ -44,9 +41,34 @@ interface DesktopPlatformModule {
   createDesktopToolEditApprovalPort(): import('@platform/interfaces/toolEditApproval').ToolEditApprovalPort;
 }
 
-function createBusRuntimeHost(bus: ProgressEventBusLike): AgentRuntimeHost {
+interface RecordingRuntimeHost extends AgentRuntimeHost {
+  shownToolEditPermissions: ProgressEventPayloads['showToolEditPermission'][];
+  resolvedToolEditPermissions: ProgressEventPayloads['resolveToolEditPermission'][];
+}
+
+function createRecordingRuntimeHost(): RecordingRuntimeHost {
+  const shownToolEditPermissions: ProgressEventPayloads['showToolEditPermission'][] =
+    [];
+  const resolvedToolEditPermissions: ProgressEventPayloads['resolveToolEditPermission'][] =
+    [];
+  const eventHandlers: Partial<{
+    [K in keyof ProgressEventPayloads]: (
+      payload: ProgressEventPayloads[K],
+    ) => void;
+  }> = {
+    showToolEditPermission: (payload) => {
+      shownToolEditPermissions.push(payload);
+    },
+    resolveToolEditPermission: (payload) => {
+      resolvedToolEditPermissions.push(payload);
+    },
+  };
   return {
-    emit: (event, payload) => bus.emit(event, payload),
+    shownToolEditPermissions,
+    resolvedToolEditPermissions,
+    emit: (event, payload) => {
+      eventHandlers[event]?.(payload);
+    },
   };
 }
 
@@ -64,17 +86,6 @@ async function waitForEmptyDir(dir: string): Promise<void> {
     if ((await readdir(dir)).length === 0) return;
     await delay(10);
   }
-}
-
-function trackShownApprovals(bus: ProgressEventBusLike): {
-  shown: ProgressEventPayloads['showToolEditPermission'][];
-  offShow: () => void;
-} {
-  const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
-  const offShow = bus.on('showToolEditPermission', (payload) =>
-    shown.push(payload),
-  );
-  return { shown, offShow };
 }
 
 async function loadApprovalModules(workspacePath = '/workspace') {
@@ -163,12 +174,10 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   );
 
   const [
-    { ProgressEventBus: bus },
     { requestToolEditApproval },
     { cleanupApprovalsForStream },
     desktopModule,
   ] = await Promise.all([
-    import('@eventBus/ProgressEventBus'),
     import('@tools/approval/toolEditApproval'),
     import('@tools/approval'),
     import(
@@ -176,7 +185,6 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     ) as Promise<DesktopToolEditApprovalModule>,
   ]);
   return {
-    bus,
     requestToolEditApproval,
     cleanupApprovalsForStream,
     desktopModule,
@@ -193,20 +201,15 @@ describe('desktop tool edit approval', () => {
 
   it('registers the desktop approval handler and resolves approved edits', async () => {
     const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
-    const { bus, requestToolEditApproval, desktopModule } =
+    const { requestToolEditApproval, desktopModule } =
       await loadApprovalModules();
+    const runtimeHost = createRecordingRuntimeHost();
     const controller = desktopModule.createDesktopToolEditApprovalController({
-      runtimeHost: createBusRuntimeHost(bus),
+      runtimeHost,
       tempRoot,
     });
-    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
-    const resolved: ProgressEventPayloads['resolveToolEditPermission'][] = [];
-    const offShow = bus.on('showToolEditPermission', (payload) =>
-      shown.push(payload),
-    );
-    const offResolve = bus.on('resolveToolEditPermission', (payload) =>
-      resolved.push(payload),
-    );
+    const { shownToolEditPermissions: shown } = runtimeHost;
+    const { resolvedToolEditPermissions: resolved } = runtimeHost;
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -240,8 +243,6 @@ describe('desktop tool edit approval', () => {
       });
       expect(resolved).toEqual([{ requestId: shown[0].requestId }]);
     } finally {
-      offShow();
-      offResolve();
       controller.dispose();
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -249,17 +250,18 @@ describe('desktop tool edit approval', () => {
 
   it('routes preview and diff actions through desktop temp files before rejection', async () => {
     const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
-    const { bus, requestToolEditApproval, desktopModule } =
+    const { requestToolEditApproval, desktopModule } =
       await loadApprovalModules();
+    const runtimeHost = createRecordingRuntimeHost();
     const opened: string[] = [];
     const controller = desktopModule.createDesktopToolEditApprovalController({
-      runtimeHost: createBusRuntimeHost(bus),
+      runtimeHost,
       tempRoot,
       openPath: async (filePath) => {
         opened.push(filePath);
       },
     });
-    const { shown, offShow } = trackShownApprovals(bus);
+    const { shownToolEditPermissions: shown } = runtimeHost;
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -301,7 +303,6 @@ describe('desktop tool edit approval', () => {
         await expect(pathExists(opened[1])).resolves.toBe(false);
       });
     } finally {
-      offShow();
       controller.dispose();
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -309,8 +310,9 @@ describe('desktop tool edit approval', () => {
 
   it('routes diff actions through the injected desktop diff host when available', async () => {
     const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
-    const { bus, requestToolEditApproval, desktopModule } =
+    const { requestToolEditApproval, desktopModule } =
       await loadApprovalModules();
+    const runtimeHost = createRecordingRuntimeHost();
     const openPath = vi.fn(async (_filePath: string) => {});
     const openDiff = vi.fn(
       async (
@@ -321,12 +323,12 @@ describe('desktop tool edit approval', () => {
       ): Promise<DiffSession> => ({ original, proposed, title }),
     );
     const controller = desktopModule.createDesktopToolEditApprovalController({
-      runtimeHost: createBusRuntimeHost(bus),
+      runtimeHost,
       tempRoot,
       openPath,
       openDiff,
     });
-    const { shown, offShow } = trackShownApprovals(bus);
+    const { shownToolEditPermissions: shown } = runtimeHost;
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -356,7 +358,6 @@ describe('desktop tool edit approval', () => {
       });
       await expect(resultPromise).resolves.toMatchObject({ accepted: false });
     } finally {
-      offShow();
       controller.dispose();
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -364,17 +365,18 @@ describe('desktop tool edit approval', () => {
 
   it('applies user edits made in the proposed preview file', async () => {
     const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
-    const { bus, requestToolEditApproval, desktopModule } =
+    const { requestToolEditApproval, desktopModule } =
       await loadApprovalModules();
+    const runtimeHost = createRecordingRuntimeHost();
     const opened: string[] = [];
     const controller = desktopModule.createDesktopToolEditApprovalController({
-      runtimeHost: createBusRuntimeHost(bus),
+      runtimeHost,
       tempRoot,
       openPath: async (filePath) => {
         opened.push(filePath);
       },
     });
-    const { shown, offShow } = trackShownApprovals(bus);
+    const { shownToolEditPermissions: shown } = runtimeHost;
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -409,7 +411,6 @@ describe('desktop tool edit approval', () => {
         await expect(pathExists(opened[0])).resolves.toBe(false);
       });
     } finally {
-      offShow();
       controller.dispose();
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -420,15 +421,16 @@ describe('desktop tool edit approval', () => {
       path.join(tmpdir(), 'texra-workspace-'),
     );
     const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
-    const { bus, requestToolEditApproval, desktopModule } =
+    const { requestToolEditApproval, desktopModule } =
       await loadApprovalModules(workspaceRoot);
+    const runtimeHost = createRecordingRuntimeHost();
     const displayed: Array<{
       absolutePath: string;
       options?: { preserveFocus?: boolean };
     }> = [];
     const messages: string[] = [];
     const controller = desktopModule.createDesktopToolEditApprovalController({
-      runtimeHost: createBusRuntimeHost(bus),
+      runtimeHost,
       tempRoot,
       openBuildDisplay: async (location, options) => {
         displayed.push({ absolutePath: location.absolutePath, options });
@@ -437,7 +439,7 @@ describe('desktop tool edit approval', () => {
         messages.push(message);
       },
     });
-    const { shown, offShow } = trackShownApprovals(bus);
+    const { shownToolEditPermissions: shown } = runtimeHost;
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -473,7 +475,6 @@ describe('desktop tool edit approval', () => {
         );
       });
     } finally {
-      offShow();
       controller.dispose();
       await rm(tempRoot, { recursive: true, force: true });
       await rm(workspaceRoot, { recursive: true, force: true });
@@ -483,23 +484,17 @@ describe('desktop tool edit approval', () => {
   it('cleans pending entries and temp files when stream cleanup rejects a request', async () => {
     const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
     const {
-      bus,
       requestToolEditApproval,
       cleanupApprovalsForStream,
       desktopModule,
     } = await loadApprovalModules();
+    const runtimeHost = createRecordingRuntimeHost();
     const controller = desktopModule.createDesktopToolEditApprovalController({
-      runtimeHost: createBusRuntimeHost(bus),
+      runtimeHost,
       tempRoot,
     });
-    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
-    const resolved: ProgressEventPayloads['resolveToolEditPermission'][] = [];
-    const offShow = bus.on('showToolEditPermission', (payload) =>
-      shown.push(payload),
-    );
-    const offResolve = bus.on('resolveToolEditPermission', (payload) =>
-      resolved.push(payload),
-    );
+    const { shownToolEditPermissions: shown } = runtimeHost;
+    const { resolvedToolEditPermissions: resolved } = runtimeHost;
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -518,8 +513,6 @@ describe('desktop tool edit approval', () => {
       await waitForEmptyDir(tempRoot);
       expect(await readdir(tempRoot)).toEqual([]);
     } finally {
-      offShow();
-      offResolve();
       controller.dispose();
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -527,13 +520,14 @@ describe('desktop tool edit approval', () => {
 
   it('returns false for unknown approval actions', async () => {
     const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
-    const { bus, requestToolEditApproval, desktopModule } =
+    const { requestToolEditApproval, desktopModule } =
       await loadApprovalModules();
+    const runtimeHost = createRecordingRuntimeHost();
     const controller = desktopModule.createDesktopToolEditApprovalController({
-      runtimeHost: createBusRuntimeHost(bus),
+      runtimeHost,
       tempRoot,
     });
-    const { shown, offShow } = trackShownApprovals(bus);
+    const { shownToolEditPermissions: shown } = runtimeHost;
 
     try {
       const resultPromise = requestToolEditApproval({
@@ -554,7 +548,6 @@ describe('desktop tool edit approval', () => {
       controller.dispose();
       await expect(resultPromise).resolves.toMatchObject({ accepted: false });
     } finally {
-      offShow();
       controller.dispose();
       await rm(tempRoot, { recursive: true, force: true });
     }
