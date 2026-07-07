@@ -55,6 +55,7 @@
     "check:cli-architecture": "corepack pnpm --filter @texra-ai/cli check:architecture",
     "check:cli-orchestration-manifest": "node scripts/check-cli-orchestration-manifest.mjs",
     "check:dead-code": "knip --no-progress --include files,exports,types,duplicates",
+    "check:dead-code-ratchet": "node scripts/check-dead-code-ratchet.mjs",
     "texra-local:build": "corepack pnpm --filter @texra-ai/cli run prepare:trace-viewer-assets && corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
     "texra-local:link": "node scripts/link-texra-local.mjs",
     "check:desktop-installers": "node scripts/verify-desktop-installer-artifacts.mjs",
@@ -100,7 +101,7 @@
     "zod-v3-to-v4": "^1.21.3"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.201",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.202",
     "@anthropic-ai/sdk": "^0.110.0",
     "@awesome.me/webawesome": "^3.10.0",
     "@cantoo/pdf-lib": "^2.7.1",
@@ -115,7 +116,7 @@
     "@octokit/request-error": "^7.1.0",
     "@openai/codex-sdk": "^0.142.5",
     "@openrouter/sdk": "^0.13.24",
-    "@supabase/supabase-js": "2.110.0",
+    "@supabase/supabase-js": "2.110.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "arxiv-client": "^0.0.9",

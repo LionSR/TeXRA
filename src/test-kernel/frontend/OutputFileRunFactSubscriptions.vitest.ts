@@ -3,7 +3,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 import type * as VSCode from 'vscode';
 

@@ -37,7 +37,7 @@ import {
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import {
   API_PROVIDERS,
   lookupApiKey,
@@ -230,7 +230,6 @@ export function createTuiHostInteractions(
       return openExternalInquiryInteraction(request, context, host);
     },
     handleProgressEvent: () => false,
-    pending: () => [],
     resolve: () => false,
     cancelForStream(streamId) {
       cancelRetryRoute(retryRoutes, streamId);
