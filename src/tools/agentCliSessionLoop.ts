@@ -326,9 +326,7 @@ export function runAgentCliSession<TTurn>(
       strategy.onSessionCleanup?.();
       // Persist terminal status before childStream.finalize() untracks and
       // notifies waiters.
-      await writeTerminalStatus(executionId, projection.executionStatus).catch(
-        () => {},
-      );
+      await writeTerminalStatus(executionId, projection.executionStatus);
 
       const finalStatus = sawTurnFailure
         ? STREAM_STATUS.ERROR
