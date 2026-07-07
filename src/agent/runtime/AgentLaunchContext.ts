@@ -43,7 +43,7 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
-import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventContract';
+import { INSTRUCTION_ACTION } from '@shared/schemas';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,

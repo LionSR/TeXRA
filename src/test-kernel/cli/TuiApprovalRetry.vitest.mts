@@ -102,7 +102,7 @@ import {
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { AgentCategory } from '@shared/schemas';
 

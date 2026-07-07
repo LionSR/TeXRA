@@ -27,7 +27,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import { createChannelTrace } from '@logger';
 import {
   type StreamTabId,

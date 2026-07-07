@@ -1,26 +1,42 @@
 import { EventEmitter } from 'node:events';
 
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
+import type {
+  RequestEnsureProgressViewPayload,
+  RequestOpenFilePayload,
+  RequestShowErrorPayload,
+  RequestShowInstructionPayload,
+  ShowAgentConfigBannerPayload,
+} from '@shared/schemas';
 
-export const EXTENSION_PRESENTATION_EVENTS = [
+/**
+ * Extension host-presentation channel: the five UI requests the agent core
+ * emits that the VS Code frontend renders (file opens, instruction toasts,
+ * banners, errors, progress-view reveals). Payloads are the fact-native
+ * presentation types from `@shared/schemas`.
+ */
+export interface ExtensionPresentationEventPayloads {
+  requestOpenFile: RequestOpenFilePayload;
+  requestShowInstruction: RequestShowInstructionPayload;
+  showAgentConfigBanner: ShowAgentConfigBannerPayload;
+  requestShowError: RequestShowErrorPayload;
+  requestEnsureProgressView: RequestEnsureProgressViewPayload;
+}
+
+export type ExtensionPresentationEvent =
+  keyof ExtensionPresentationEventPayloads;
+
+const EVENT_SET: ReadonlySet<string> = new Set([
   'requestOpenFile',
   'requestShowInstruction',
   'showAgentConfigBanner',
   'requestShowError',
   'requestEnsureProgressView',
-] as const satisfies readonly (keyof ProgressEventPayloads)[];
-
-export type ExtensionPresentationEvent =
-  (typeof EXTENSION_PRESENTATION_EVENTS)[number];
-
-const EVENT_SET = new Set<keyof ProgressEventPayloads>(
-  EXTENSION_PRESENTATION_EVENTS,
-);
+] satisfies ExtensionPresentationEvent[]);
 
 const MAX_BUFFER_SIZE = 1000;
 
 export function isExtensionPresentationEvent(
-  event: keyof ProgressEventPayloads,
+  event: string,
 ): event is ExtensionPresentationEvent {
   return EVENT_SET.has(event);
 }
@@ -29,12 +45,12 @@ class ExtensionPresentationEventBus {
   private readonly emitter = new EventEmitter();
   private buffer: {
     event: ExtensionPresentationEvent;
-    payload: ProgressEventPayloads[ExtensionPresentationEvent];
+    payload: ExtensionPresentationEventPayloads[ExtensionPresentationEvent];
   }[] = [];
 
   emit(
     event: ExtensionPresentationEvent,
-    payload: ProgressEventPayloads[ExtensionPresentationEvent],
+    payload: ExtensionPresentationEventPayloads[ExtensionPresentationEvent],
   ): void {
     if (this.emitter.listenerCount(event) === 0) {
       this.buffer.push({ event, payload });
@@ -48,7 +64,7 @@ class ExtensionPresentationEventBus {
 
   on<K extends ExtensionPresentationEvent>(
     event: K,
-    listener: (payload: ProgressEventPayloads[K]) => void,
+    listener: (payload: ExtensionPresentationEventPayloads[K]) => void,
     options?: { signal?: AbortSignal },
   ): () => void {
     if (options?.signal?.aborted) return () => {};
@@ -62,7 +78,7 @@ class ExtensionPresentationEventBus {
     const remaining: typeof this.buffer = [];
     for (const item of this.buffer) {
       if (item.event === event) {
-        listener(item.payload as ProgressEventPayloads[K]);
+        listener(item.payload as ExtensionPresentationEventPayloads[K]);
       } else {
         remaining.push(item);
       }
