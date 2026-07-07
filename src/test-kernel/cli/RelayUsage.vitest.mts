@@ -94,6 +94,27 @@ describe('CLI relay usage summary', () => {
     ).toThrow();
   });
 
+  it('rejects a null cost instead of coercing it to zero', () => {
+    // `z.coerce.number()` alone would turn `null` into `0` via `Number(null)`
+    // — the same silent-zero bug the `.catch(0)` removal fixes, reintroduced
+    // through coercion. `cost` must reject null/undefined before coercing.
+    expect(() =>
+      parseRelayUsageRows([
+        {
+          logged_at: '2026-05-17T12:00:00+00:00',
+          id: '00000000-0000-4000-8000-000000000005',
+          model: 'gpt-5.4',
+          provider: 'openai',
+          input_tokens: 10,
+          output_tokens: 4,
+          cached_input_tokens: null,
+          reasoning_tokens: null,
+          cost: null,
+        },
+      ]),
+    ).toThrow();
+  });
+
   it('rejects rows with a malformed token count instead of zero-defaulting usage', () => {
     expect(() =>
       parseRelayUsageRows([

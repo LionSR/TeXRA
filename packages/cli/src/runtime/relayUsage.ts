@@ -9,7 +9,10 @@ const USAGE_PAGE_SIZE = 1000;
 // input_tokens/output_tokens/cached_input_tokens/reasoning_tokens/cost value
 // must fail parsing loudly rather than silently summing as 0, which would
 // under-report spend against the relay cap (see #7468, and the May-2026
-// abuse incident that motivated the cap).
+// abuse incident that motivated the cap). `cost` is restricted to
+// number|string before coercion — bare `z.coerce.number()` would otherwise
+// coerce `null`/`undefined`/booleans to `0` via `Number()`, reintroducing the
+// same silent-zero bug through coercion instead of `.catch()`.
 const RelayUsageRowSchema = z.object({
   id: z.uuid(),
   logged_at: z.iso.datetime({ offset: true }),
@@ -19,7 +22,10 @@ const RelayUsageRowSchema = z.object({
   output_tokens: z.int().nonnegative(),
   cached_input_tokens: z.int().nonnegative().nullable(),
   reasoning_tokens: z.int().nonnegative().nullable(),
-  cost: z.coerce.number().nonnegative(),
+  cost: z
+    .union([z.number(), z.string()])
+    .transform(Number)
+    .pipe(z.number().nonnegative()),
 });
 
 export type RelayUsageRow = z.infer<typeof RelayUsageRowSchema>;
