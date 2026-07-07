@@ -87,6 +87,7 @@ const views = [
         command: 'updateStreams',
         streams: [
           {
+            kind: 'agent',
             name: 'builtInToolUse:chat',
             label: 'chat',
             model: 'deepseekT',
@@ -160,6 +161,7 @@ const views = [
         command: 'updateStreams',
         streams: [
           {
+            kind: 'agent',
             name: 'builtInToolUse:orchestrator',
             label: 'orchestrator',
             model: 'deepseekT',
