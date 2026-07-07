@@ -137,7 +137,7 @@ describe('child stream progress events', () => {
     }
   });
 
-  it('publishes child stream lifecycle events through the explicit runtime host', () => {
+  it('publishes child stream lifecycle events through the explicit runtime host', async () => {
     const active = createRecordingHost();
 
     const childStream = withSessionProgressProjection(active.host, () =>
@@ -157,6 +157,8 @@ describe('child stream progress events', () => {
     withSessionProgressProjection(active.host, () =>
       childStream.finalize({ autoClose: true }),
     );
+    // The autoClose emit chains on the shared finalizer's promise.
+    await Promise.resolve();
 
     const { events } = active;
     expect(events.map((entry) => entry.event)).toEqual([
@@ -236,7 +238,7 @@ describe('child stream progress events', () => {
     });
   });
 
-  it('uses host interactions for child stream auto-close when available', () => {
+  it('uses host interactions for child stream auto-close when available', async () => {
     const active = createRecordingHost();
     const removedStreams: StreamTabId[] = [];
     const host: AgentRuntimeHost = {
@@ -268,6 +270,8 @@ describe('child stream progress events', () => {
     withSessionProgressProjection(host, () =>
       childStream.finalize({ autoClose: true }),
     );
+    // The autoClose emit chains on the shared finalizer's promise.
+    await Promise.resolve();
 
     expect(removedStreams).toEqual([childStreamId]);
     expect(active.events.map((entry) => entry.event)).not.toContain(
@@ -294,7 +298,7 @@ describe('child stream progress events', () => {
     childStream.beginTurn();
     childStream.failTurn();
     withSessionProgressProjection(active.host, () =>
-      childStream.finalize({ status: STREAM_STATUS.ERROR }),
+      childStream.finalize({ failed: true }),
     );
 
     const statusEvents = active.events.filter(
@@ -349,7 +353,7 @@ describe('child stream progress events', () => {
     childStream.beginTurn();
     childStream.failTurn();
     withSessionProgressProjection(active.host, () =>
-      childStream.finalize({ status: STREAM_STATUS.ERROR }),
+      childStream.finalize({ failed: true }),
     );
 
     expect(StreamStatusService.get(stoppedChildStreamId)).toBe(
@@ -382,7 +386,7 @@ describe('child stream progress events', () => {
     expect(handle).toBeDefined();
 
     withSessionProgressProjection(active.host, () =>
-      childStream.finalize({ status: STREAM_STATUS.STOPPED }),
+      childStream.finalize({ cancelled: true }),
     );
 
     await expect(handle?.result).resolves.toMatchObject({
@@ -423,7 +427,7 @@ describe('child stream progress events', () => {
     });
   });
 
-  it('normalizes explicit non-error status when child finalization has an error', async () => {
+  it('normalizes clean loop facts to failed when child finalization has an error', async () => {
     const active = createRecordingHost();
 
     const childStream = withSessionProgressProjection(active.host, () =>
@@ -440,7 +444,8 @@ describe('child stream progress events', () => {
 
     withSessionProgressProjection(active.host, () =>
       childStream.finalize({
-        status: STREAM_STATUS.READY,
+        failed: false,
+        cancelled: false,
         errorMessage: 'tool failed after reporting ready',
       }),
     );

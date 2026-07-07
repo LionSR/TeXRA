@@ -9,7 +9,6 @@
 //
 // Host-agnostic, VS Code-free.
 
-import { writeTerminalStatus } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import {
@@ -17,13 +16,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
-import {
-  deriveRunOutcome,
-  legacyEndGroupStatusForOutcome,
-  projectRunOutcome,
-} from '@common/constants/streamStatus';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { STREAM_STATUS } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { isCleanInterruption, logTurnSummary } from './agentCliShared';
@@ -311,30 +304,18 @@ export function runAgentCliSession<TTurn>(
         }
       }
     } finally {
-      // One outcome derivation; the stage and the persisted terminal status
-      // are projections of it. The child-stream finalize below is NOT a
-      // projection: child streams reset to READY on clean exit so the tab
-      // clears, which has no outcome equivalent.
-      const outcome = deriveRunOutcome({
-        failed: sawTurnFailure,
-        cancelled: session.isInterrupted(),
-      });
-      const projection = projectRunOutcome(outcome);
-      sessionStage.end(legacyEndGroupStatusForOutcome(outcome));
       runSession.interrupts.unregister(childStreamId);
       runSession.followUps.release(childStreamId);
       strategy.onSessionCleanup?.();
-      // Persist terminal status before childStream.finalize() untracks and
-      // notifies waiters.
-      await writeTerminalStatus(executionId, projection.executionStatus);
-
-      const finalStatus = sawTurnFailure
-        ? STREAM_STATUS.ERROR
-        : session.isInterrupted()
-          ? STREAM_STATUS.STOPPED
-          : STREAM_STATUS.READY;
+      // The shared terminal finalizer (via finalizeChildStream) owns the
+      // single outcome derivation and its projections: stage end, persisted
+      // terminal status (before untrack notifies waiters), settled result,
+      // and terminal stream phase. This loop only reports its terminal facts.
       childStream.finalize({
-        status: finalStatus,
+        failed: sawTurnFailure,
+        cancelled: session.isInterrupted(),
+        stage: sessionStage,
+        persistTerminalStatus: true,
       });
     }
   })();
