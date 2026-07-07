@@ -215,41 +215,6 @@ export interface ProgressEventPayloads {
    *  back to the UI. */
   goalStateChanged: { streamId: StreamTabId };
 
-  // ── App/session lifecycle + integration signals ──
-  extensionDeactivating: undefined;
-
-  /**
-   * Emitted when PR-activity polling is rejected by GitHub (401/403 auth).
-   * The frontend shows a toast prompting the user to replace the token.
-   */
-  githubTokenInvalid: { message: string };
-
-  /** Active PR-activity subscription keys changed; frontends refresh their list. */
-  prSubscriptionsChanged: { keys: readonly string[] };
-  /** Active PR-activity owners changed; frontends refresh owner metadata. */
-  prSubscriptionBindingsChanged: undefined;
-  /** Active repo-activity subscription keys changed. */
-  repoSubscriptionsChanged: { keys: readonly string[] };
-  /** Active repo-activity owners changed. */
-  repoSubscriptionBindingsChanged: undefined;
-  /** Active issue-activity subscription keys changed. */
-  issueSubscriptionsChanged: { keys: readonly string[] };
-  /** Active issue-activity owners changed. */
-  issueSubscriptionBindingsChanged: undefined;
-
-  /**
-   * External tool availability was re-probed. Frontends (Tools tab) refresh
-   * their dashboard from the updated cache. Emitted by
-   * {@link refreshToolAvailability}.
-   */
-  toolAvailabilityChanged: undefined;
-
-  /**
-   * One or more files were written directly to the workspace (e.g. via
-   * accept_run_files). Listened by fileDecorations to badge the files.
-   */
-  workspaceFilesWritten: { absolutePaths: string[] };
-
   // ── Frontend-bound events ──
   // Emitted by agent core/runtime; consumed by frontend listeners.
   // Keeps @agent/ free of @frontend/ imports.
@@ -311,7 +276,7 @@ export interface ProgressEventBusLike {
   ): void;
 }
 
-class ProgressEventBus implements ProgressEventBusLike {
+class ProgressEventBusImpl implements ProgressEventBusLike {
   private emitter = new EventEmitter();
   private buffer: {
     event: ProgressEvent;
@@ -359,4 +324,4 @@ class ProgressEventBus implements ProgressEventBusLike {
   }
 }
 
-export const bus = new ProgressEventBus();
+export const ProgressEventBus = new ProgressEventBusImpl();

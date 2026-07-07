@@ -358,13 +358,16 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
       steps: [
         {
           type: 'model_output',
-          content: [{ type: 'text', text: 'body</doc>' }],
+          content: [{ type: 'text', text: 'body</documents>' }],
         },
       ],
     } as never;
 
-    const { stopReason, text } = handler.extractResponse(response, '</doc>');
-    const setting = { documentTag: 'doc', endTag: '</doc>' } as never;
+    const { stopReason, text } = handler.extractResponse(
+      response,
+      '</documents>',
+    );
+    const setting = {} as never;
     const round = { continuationCount: 0 } as never;
     const global = {
       usageAccumulator: {

@@ -36,6 +36,7 @@ import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext'
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -50,6 +51,8 @@ import type { ExecResult } from '@shared/schemas/opResults';
 import { BashTool } from '@tools/bash';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
+
+import { attachSessionProgressEventProjectionForTest } from '../agent/sessionProgressTestUtils';
 import {
   createRecordingHost,
   withTestRunContext,
@@ -158,9 +161,7 @@ function roundServices(opts: {
     config: testModelConfig as any,
     setting: {
       agentCategory: AgentCategory.ToolUse,
-      documentTag: 'doc',
       temperature: 0,
-      endTag: '</doc>',
       requiredFiles: {},
       requiredFilesInternal: {},
       defaultOutputFiles: [],
@@ -418,28 +419,36 @@ describe('BashTool', () => {
     const parentStreamId = 'bash-tool-bg-parent' as StreamTabId;
     const { host } = createRecordingHost();
     const bashTool = new BashTool();
-
-    const launchResult = await withToolEnvironment(
-      {
-        run: { runtimeHost: host, streamId: parentStreamId },
-        call: { tracker: new FileInteractionState() },
-      },
-      () =>
-        bashTool.call({
-          command: 'make build',
-          run_in_background: true,
-        }),
+    const detachProjection = attachSessionProgressEventProjectionForTest(
+      defaultSession().events,
+      host,
     );
-    assert.equal(launchResult.status, 'executed');
 
-    // The background run delivers its result asynchronously as a follow-up
-    // once the (mocked) process settles.
-    await vi.waitFor(() => {
-      assert.ok(
-        sendFollowUpSpy.mock.calls.length > 0,
-        'Background bash should deliver a follow-up once the run completes',
+    try {
+      const launchResult = await withToolEnvironment(
+        {
+          run: { runtimeHost: host, streamId: parentStreamId },
+          call: { tracker: new FileInteractionState() },
+        },
+        () =>
+          bashTool.call({
+            command: 'make build',
+            run_in_background: true,
+          }),
       );
-    });
+      assert.equal(launchResult.status, 'executed');
+
+      // The background run delivers its result asynchronously as a follow-up
+      // once the (mocked) process settles.
+      await vi.waitFor(() => {
+        assert.ok(
+          sendFollowUpSpy.mock.calls.length > 0,
+          'Background bash should deliver a follow-up once the run completes',
+        );
+      });
+    } finally {
+      detachProjection();
+    }
 
     // sendFollowUp is overloaded (string | FollowUpQueueInput); bash.ts always
     // calls the object form, but Parameters<> on an overloaded function type

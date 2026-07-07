@@ -31,7 +31,7 @@ export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 export type ApprovalPayload =
   | { kind: 'bash'; payload: BashPermission }
-  | { kind: 'toolEdit'; request: ToolEditApprovalRequest }
+  | { kind: 'toolEdit'; payload: ToolEditApprovalRequest }
   | { kind: 'plan'; payload: PlanApprovalPermission }
   | { kind: 'proposal'; payload: AgentProposalPermission }
   | { kind: 'retry'; payload: RetryPermission }
@@ -148,9 +148,8 @@ export function approvalPayloadStreamId(
     case 'retry':
     case 'externalInquiry':
     case 'userQuestion':
-      return payload.payload.streamId || undefined;
     case 'toolEdit':
-      return payload.request.streamId || undefined;
+      return payload.payload.streamId || undefined;
     default:
       return assertNever(payload, 'Unhandled approval payload kind');
   }
@@ -248,24 +247,31 @@ export function clearApprovals(): void {
 }
 
 export function clearRetryApprovalsForStream(streamId: string): void {
-  let changed = false;
+  clearApprovalsWhere(
+    (payload) =>
+      payload.kind === 'retry' && payload.payload.streamId === streamId,
+    INTERRUPT,
+  );
+}
+
+export function clearApprovalsWhere(
+  predicate: (payload: ApprovalPayload) => boolean,
+  decision: ApprovalDecision = INTERRUPT,
+): number {
+  let cleared = 0;
   for (const item of [...pendingItems]) {
-    if (
-      item.payload.kind !== 'retry' ||
-      item.payload.payload.streamId !== streamId
-    ) {
-      continue;
-    }
+    if (!predicate(item.payload)) continue;
     if (!pendingItems.delete(item)) continue;
-    changed = true;
+    cleared += 1;
     const advance = item.advance;
     item.advance = undefined;
-    item.resolve(INTERRUPT);
+    item.resolve(decision);
     if (currentItem === item) {
       currentItem = undefined;
       CURRENT.set(undefined);
       advance?.();
     }
   }
-  if (changed) syncApprovalStatus();
+  if (cleared > 0) syncApprovalStatus();
+  return cleared;
 }

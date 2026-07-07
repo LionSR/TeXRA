@@ -30,13 +30,13 @@ import {
   describeMathMarkupOption,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
-import { CHANNEL, service } from '@latex/latexdiff/service';
+import { CHANNEL, LaTeXdiffService } from '@latex/latexdiff/service';
 import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
 import type { RunLatexdiffCommandConfig } from '@latex/latexdiff/types';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import { flexibleFS, pathToLocation } from '@utils/files';
+import { FlexibleFS, pathToLocation } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 
 import { getLatexdiffPackNotifications } from './latexHousekeepingNotifications';
@@ -114,7 +114,7 @@ async function openLatexdiffResult(
 
   const diffLocation = pathToLocation(diffFilePath);
 
-  if (!(await flexibleFS.exists(diffLocation))) {
+  if (!(await FlexibleFS.exists(diffLocation))) {
     await showLoggedMessage(
       CHANNEL,
       `Diff file could not be found. Expected path: ${diffFilePath}`,
@@ -225,7 +225,7 @@ async function handleLatexdiff(
   await withLatexdiffTool('latexdiff', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
     return runDiffAndOpen(fileToUseLocation, 'latexdiff', (mathMarkup) =>
-      service.runDiff(
+      LaTeXdiffService.runDiff(
         fileToUseLocation,
         pathToLocation(editedFile),
         '_diff',
@@ -245,7 +245,7 @@ async function handleLatexdiffvc(
   await withLatexdiffTool('latexdiff-vc', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
     return runDiffAndOpen(fileToUseLocation, 'latexdiff-vc', (mathMarkup) =>
-      service.runDiffVc(fileToUseLocation, commitHash, mathMarkup),
+      LaTeXdiffService.runDiffVc(fileToUseLocation, commitHash, mathMarkup),
     );
   });
 }

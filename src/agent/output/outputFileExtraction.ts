@@ -72,7 +72,6 @@ export async function extractFilesFromXml(
       const rawLocation = data.rawOutput;
 
       const processingContext: ProcessingContext = {
-        agentSetting: deps.setting,
         baseFiles: deps.baseFiles,
         streamId: deps.streamId,
         runtimeHost: deps.runtimeHost,

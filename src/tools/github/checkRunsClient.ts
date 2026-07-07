@@ -44,9 +44,13 @@ const MAX_ANNOTATION_PAGES_PER_RUN = 50;
  * Exported as a standalone type so `SubscriptionState` can reference it
  * without `checkRunsClient` importing back from `PRPollingSource` (cycle).
  */
+export interface CheckRunsCachePage {
+  etag?: string;
+  runs: GhCheckRun[];
+}
+
 export interface CheckRunsCache {
-  etagsByPage: Map<number, string>;
-  pagesByPage: Map<number, GhCheckRun[]>;
+  pages: Map<number, CheckRunsCachePage>;
   lastTotalCount: number;
 }
 
@@ -129,12 +133,11 @@ export async function fetchAllCheckRuns(
 ): Promise<FetchAllCheckRunsResult> {
   const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=${CHECK_RUNS_PAGE_SIZE}`;
 
-  // Seed scratch caches we'll stage on the return value. We rebuild from
+  // Seed a scratch cache we'll stage on the return value. We rebuild from
   // scratch each tick (rather than mutating in-place) so any pages dropped
   // on this tick — e.g. new push reduced page count from 5 to 3 — don't
   // leave stale entries behind.
-  const nextEtags = new Map<number, string>();
-  const nextPages = new Map<number, GhCheckRun[]>();
+  const nextPages = new Map<number, CheckRunsCachePage>();
 
   // We need a place to record whether *every* page returned 304 so we can
   // surface a true 304 to the caller (and skip the seeding/diff work).
@@ -154,16 +157,15 @@ export async function fetchAllCheckRuns(
     total: number | undefined;
     was304: boolean;
   }> => {
-    const pageEtag = cache?.etagsByPage.get(page);
+    const pageEtag = cache?.pages.get(page)?.etag;
     const res = await ghGet<{
       total_count: number;
       check_runs: GhCheckRun[];
     }>(`${basePath}&page=${page}`, pageEtag);
     if (res.status === 304) {
       // Reuse cached page. Carry forward the ETag we sent.
-      const cachedRuns = cache?.pagesByPage.get(page) ?? [];
-      if (pageEtag) nextEtags.set(page, pageEtag);
-      nextPages.set(page, cachedRuns);
+      const cachedRuns = cache?.pages.get(page)?.runs ?? [];
+      nextPages.set(page, { etag: pageEtag, runs: cachedRuns });
       return {
         runs: cachedRuns,
         // total_count isn't returned on 304. We deliberately return
@@ -177,8 +179,7 @@ export async function fetchAllCheckRuns(
         was304: true,
       };
     }
-    if (res.etag) nextEtags.set(page, res.etag);
-    nextPages.set(page, res.data.check_runs);
+    nextPages.set(page, { etag: res.etag, runs: res.data.check_runs });
     return {
       runs: res.data.check_runs,
       total: res.data.total_count,
@@ -201,7 +202,7 @@ export async function fetchAllCheckRuns(
     first.was304 &&
     cache &&
     cache.lastTotalCount <= CHECK_RUNS_PAGE_SIZE &&
-    cache.etagsByPage.size === 1
+    cache.pages.size === 1
   ) {
     return { response: { status: 304 } };
   }
@@ -293,8 +294,7 @@ export async function fetchAllCheckRuns(
   // We always overwrite on commit: any pages from a previous tick that we
   // didn't touch this tick (e.g. page count shrank) are intentionally evicted.
   const stagedCache: CheckRunsCache = {
-    etagsByPage: nextEtags,
-    pagesByPage: nextPages,
+    pages: nextPages,
     lastTotalCount: reportedTotal,
   };
 

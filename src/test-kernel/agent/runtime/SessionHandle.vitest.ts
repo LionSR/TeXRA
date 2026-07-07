@@ -21,11 +21,11 @@ import {
 } from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
-  executionRegistry,
+  SharedExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
-import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
-import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
+import { SharedInterruptRegistry } from '@agent/runtime/InterruptRegistry';
+import { SharedRunCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { SharedExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 
@@ -67,10 +67,12 @@ function trackAgent(
 
 describe('SessionHandle', () => {
   it('defaultSession wraps the process singletons by identity', () => {
-    expect(defaultSession().interrupts).toBe(interruptRegistry);
-    expect(defaultSession().executions).toBe(executionRegistry);
-    expect(defaultSession().coordinators).toBe(runCoordinatorBridge);
-    expect(defaultSession().subscriptions).toBe(executionSubscriptionBinder);
+    expect(defaultSession().interrupts).toBe(SharedInterruptRegistry);
+    expect(defaultSession().executions).toBe(SharedExecutionRegistry);
+    expect(defaultSession().coordinators).toBe(SharedRunCoordinatorBridge);
+    expect(defaultSession().subscriptions).toBe(
+      SharedExecutionSubscriptionBinder,
+    );
     expect(defaultSession().status).toBe(StreamStatusService);
     expect(defaultSession().events).toBeDefined();
     expect(defaultSession().transcripts).toBe(getDefaultStreamLogStore());
@@ -84,10 +86,10 @@ describe('SessionHandle', () => {
   it('a fresh session shares no member with the module singletons', () => {
     const fresh = new SessionHandle();
     try {
-      expect(fresh.interrupts).not.toBe(interruptRegistry);
-      expect(fresh.executions).not.toBe(executionRegistry);
-      expect(fresh.coordinators).not.toBe(runCoordinatorBridge);
-      expect(fresh.subscriptions).not.toBe(executionSubscriptionBinder);
+      expect(fresh.interrupts).not.toBe(SharedInterruptRegistry);
+      expect(fresh.executions).not.toBe(SharedExecutionRegistry);
+      expect(fresh.coordinators).not.toBe(SharedRunCoordinatorBridge);
+      expect(fresh.subscriptions).not.toBe(SharedExecutionSubscriptionBinder);
       expect(fresh.status).not.toBe(StreamStatusService);
       expect(fresh.events).not.toBe(defaultSession().events);
       expect(fresh.transcripts).not.toBe(defaultSession().transcripts);
@@ -104,8 +106,8 @@ describe('SessionHandle', () => {
     const session = new SessionHandle({ hostChannel: host });
     try {
       expect(session.hostChannel).toBe(host);
-      expect(session.executions).not.toBe(executionRegistry);
-      expect(session.interrupts).not.toBe(interruptRegistry);
+      expect(session.executions).not.toBe(SharedExecutionRegistry);
+      expect(session.interrupts).not.toBe(SharedInterruptRegistry);
     } finally {
       session.dispose();
     }
@@ -193,7 +195,10 @@ describe('SessionHandle', () => {
 
       // ...while B's remain live and resolvable through B's own bridge.
       expect(
-        b.coordinators.resolvePlanApproval('approval:b', { action: 'approve' }),
+        hostB.host.interactions?.resolve('approval:b', {
+          kind: 'plan',
+          action: 'approve',
+        }),
       ).toBe(true);
       expect(b.coordinators.triggerRetry(streamId, 'retry B')).toBe(true);
       await expect(planB).resolves.toEqual({ action: 'approve' });

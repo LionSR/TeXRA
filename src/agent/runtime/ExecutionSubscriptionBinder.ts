@@ -12,7 +12,7 @@
  */
 
 import {
-  executionRegistry,
+  SharedExecutionRegistry,
   type ExecutionHandle,
   type ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
@@ -188,7 +188,7 @@ export class ExecutionSubscriptionBinder {
   private releaseHook: (() => void) | undefined;
 
   constructor(options: ExecutionSubscriptionBinderOptions = {}) {
-    this.registry = options.registry ?? executionRegistry;
+    this.registry = options.registry ?? SharedExecutionRegistry;
     this.releaseSource = options.releaseSource ?? ToolUseFollowUpQueue;
     this.logger = options.logger ?? logger;
     this.session = options.session;
@@ -292,4 +292,5 @@ export class ExecutionSubscriptionBinder {
   }
 }
 
-export const executionSubscriptionBinder = new ExecutionSubscriptionBinder();
+export const SharedExecutionSubscriptionBinder =
+  new ExecutionSubscriptionBinder();

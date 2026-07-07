@@ -3,7 +3,6 @@
     "baseUrl": "../..",
     "paths": {
       "@/*": ["packages/extension/src/*", "src/*"],
-      "~/*": ["packages/extension/src/*", "src/*"],
       "@shared/*": ["src/shared/*"],
       "@common/state": ["packages/extension/src/common/state"],
       "@common/state/*": ["packages/extension/src/common/state/*"],

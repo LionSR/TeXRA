@@ -6,28 +6,15 @@ import { createRequire } from 'node:module';
 import { describe, it } from 'vitest';
 
 // Local imports - commands
-import { commandCatalog, commandKeybindings } from '@shared/commands/catalog';
-
-interface PackageCommand {
-  command: string;
-  title: string;
-  shortTitle?: string;
-  category: string;
-  icon?: string;
-  enablement?: string;
-}
-
-interface PackageKeybinding {
-  command: string;
-  key: string;
-  mac?: string;
-  when?: string;
-}
+import {
+  commandKeybindings,
+  packageCommandContributions,
+} from '@shared/commands/catalog';
 
 interface PackageJson {
   contributes: {
-    commands: PackageCommand[];
-    keybindings?: PackageKeybinding[];
+    commands: unknown[];
+    keybindings?: unknown[];
   };
 }
 
@@ -39,42 +26,21 @@ const packageJson = packageRequire(
   './packages/extension/package.json',
 ) as PackageJson;
 
-function normalizeCommand(command: PackageCommand): PackageCommand {
-  return {
-    command: command.command,
-    title: command.title,
-    ...(command.shortTitle == null ? {} : { shortTitle: command.shortTitle }),
-    category: command.category,
-    ...(command.icon == null ? {} : { icon: command.icon }),
-    ...(command.enablement == null ? {} : { enablement: command.enablement }),
-  };
-}
-
-function normalizeCatalogCommands(): PackageCommand[] {
-  return commandCatalog.map((entry) =>
-    normalizeCommand({
-      command: entry.id,
-      title: entry.title,
-      ...('shortTitle' in entry ? { shortTitle: entry.shortTitle } : {}),
-      category: entry.category,
-      ...('icon' in entry ? { icon: entry.icon } : {}),
-      ...('enablement' in entry ? { enablement: entry.enablement } : {}),
-    }),
-  );
-}
-
 describe('commandCatalog', () => {
+  // package.json contributes.commands/keybindings are code-generated from the
+  // catalog by scripts/sync-package-contributes.mjs; these are the CI diff
+  // checks that fail when the committed manifest drifts from the catalog.
   it('matches package command contributions', () => {
     assert.deepEqual(
-      normalizeCatalogCommands(),
-      packageJson.contributes.commands.map(normalizeCommand),
+      packageJson.contributes.commands,
+      packageCommandContributions,
     );
   });
 
   it('matches package keybinding contributions', () => {
     assert.deepEqual(
-      commandKeybindings,
       packageJson.contributes.keybindings ?? [],
+      commandKeybindings,
     );
   });
 });

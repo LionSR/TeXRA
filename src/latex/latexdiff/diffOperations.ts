@@ -19,14 +19,14 @@ import { getEffectiveDiffBase, RoundKeySchema } from '@shared/schemas';
 import type { OutputFileInfo } from '@shared/schemas';
 import {
   WorkspaceFS,
-  flexibleFS,
+  FlexibleFS,
   getComparablePath,
   pathToLocation,
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 
-import { CHANNEL, service } from './service';
+import { CHANNEL, LaTeXdiffService } from './service';
 import type {
   DiffOperation,
   DiffProgressReporter,
@@ -53,8 +53,8 @@ export async function executeDiffOperations(
       message: `Running ${operation.type} diff for ${operation.description}`,
     });
 
-    const baseExists = await flexibleFS.exists(operation.base);
-    const revisedExists = await flexibleFS.exists(operation.revised);
+    const baseExists = await FlexibleFS.exists(operation.base);
+    const revisedExists = await FlexibleFS.exists(operation.revised);
 
     if (!baseExists || !revisedExists) {
       results.push({
@@ -72,14 +72,14 @@ export async function executeDiffOperations(
 
     const diffResult =
       operation.type === 'round'
-        ? await service.runDiffForRound(
+        ? await LaTeXdiffService.runDiffForRound(
             operation.base,
             operation.revised,
             operation.round,
             mathMarkup,
             { cwd: operation.cwd },
           )
-        : await service.runDiffBetweenRounds(
+        : await LaTeXdiffService.runDiffBetweenRounds(
             operation.base,
             operation.revised,
             mathMarkup,

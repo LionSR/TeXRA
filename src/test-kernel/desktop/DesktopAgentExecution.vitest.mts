@@ -58,6 +58,10 @@ type TestableBridge = Bridge & {
         streamId: StreamTabId;
         operation: string;
       }) => Promise<unknown>;
+      requestBashApproval?: (request: {
+        command: string;
+        streamId?: StreamTabId;
+      }) => Promise<unknown>;
     };
   };
   handleProgressEvent(event: string, payload: unknown): void;
@@ -156,6 +160,7 @@ interface DesktopAgentExecutionModule {
     options?: {
       streamSnapshotStore?: TestDesktopStreamSnapshotStore;
       progressSnapshotStore?: ProgressSnapshotStore;
+      showErrorMessage?: (message: string) => Promise<void> | void;
     },
   ) => Bridge;
   createDesktopAgentExecution(options: {
@@ -181,6 +186,7 @@ type CreateBridgeOptions = {
   configureProgressSnapshotStore?: (store: ProgressSnapshotStore) => void;
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
   activeExecutionIds?: readonly string[] | (() => readonly string[]);
+  showErrorMessage?: (message: string) => Promise<void> | void;
 };
 
 type TestDesktopStreamSnapshotStore = {
@@ -399,6 +405,7 @@ async function createBridge(
   return new DesktopProgressBridge((message) => messages.push(message), {
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore,
+    showErrorMessage: options.showErrorMessage,
   }) as TestableBridge;
 }
 
@@ -572,23 +579,93 @@ describe('DesktopProgressBridge', () => {
     vi.restoreAllMocks();
   });
 
-  it('mirrors runtime events to the shared progress bus', async () => {
+  it('routes runtime events to the desktop backend without the shared progress bus', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
-    const { bus } = await import('@eventBus/ProgressEventBus');
+    const { ProgressEventBus } = await import('@eventBus/ProgressEventBus');
     const seen: unknown[] = [];
-    const off = bus.on('updateTodos', (payload) => {
+    const off = ProgressEventBus.on('setActiveStream', (payload) => {
       seen.push(payload);
     });
 
     try {
-      bridge.handleProgressEvent('updateTodos', {
+      bridge.handleProgressEvent('setActiveStream', {
         streamId: 'parent',
-        todos: [],
+        agentCategory: AgentCategory.Workflow,
       });
-      expect(seen).toEqual([{ streamId: 'parent', todos: [] }]);
+      await settleProgressEvents();
+      bridge.syncFullView();
+
+      expect(seen).toEqual([]);
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+          -1,
+        ),
+      ).toMatchObject({
+        activeStream: 'parent',
+        streams: [expect.objectContaining({ name: 'parent' })],
+      });
     } finally {
       off();
+      bridge.dispose();
+    }
+  });
+
+  it('leaves output-file host events to the session run-fact path', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+    const streamId = 'desktop:output-files' as StreamTabId;
+    const initialFileUpdates = progressMessages(
+      messages,
+      PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+    ).length;
+
+    try {
+      bridge.handleProgressEvent('addOutputFiles', {
+        streamId,
+        filesByRound: {
+          1: [
+            {
+              source: 'paper.tex',
+              location: {
+                kind: 'workspace',
+                absolutePath: '/workspace/paper.tex',
+                relativePath: 'paper.tex',
+              },
+              round: 1,
+              lineage: null,
+              diff: null,
+            },
+          ],
+        },
+      });
+      await settleProgressEvents();
+
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_FILES),
+      ).toHaveLength(initialFileUpdates);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('keeps desktop runtime host app events on the window-local bridge path', async () => {
+    const messages: unknown[] = [];
+    const showErrorMessage = vi.fn();
+    const bridge = await createBridge(messages, { showErrorMessage });
+
+    try {
+      bridge.handleProgressEvent('requestEnsureProgressView', {});
+      bridge.handleProgressEvent('requestShowError', {
+        message: 'Root run failed',
+      });
+
+      expect(messages).toContainEqual({
+        command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+        route: 'progress',
+      });
+      expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
+    } finally {
       bridge.dispose();
     }
   });
@@ -599,22 +676,15 @@ describe('DesktopProgressBridge', () => {
     const bridge = (await createBridge(messages, {
       streamSnapshotStore,
     })) as BridgeWithSession;
-    const { emitRuntimeEvent } =
-      await import('@agent/runtime/emitRuntimeEvent');
-    const session = bridge.session as unknown as Parameters<
-      typeof emitRuntimeEvent
-    >[2];
+    const { hostChannel } = bridge.session;
+    expect(hostChannel).toBeDefined();
 
     try {
-      emitRuntimeEvent(
-        'setTaskState',
-        {
-          streamId: 'desktop-host-stream',
-          executionId: 'de57e0',
-          taskState: TaskStateSchema.parse(workflowTaskState()),
-        },
-        session,
-      );
+      hostChannel?.emit('setTaskState', {
+        streamId: 'desktop-host-stream',
+        executionId: 'de57e0',
+        taskState: TaskStateSchema.parse(workflowTaskState()),
+      });
 
       await vi.waitFor(() => {
         expect(streamSnapshotStore.upsert).toHaveBeenCalledWith(
@@ -1922,6 +1992,61 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('cancels a pending plan approval instead of hanging when its stream is deleted', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'plan-delete-stream',
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      const result = bridge.runtimeHost.interactions?.requestPlanApproval?.({
+        approvalId: 'plan-cancel-on-delete',
+        streamId: 'plan-delete-stream' as StreamTabId,
+        plan: { objective: 'Check cancellation on stream delete.' },
+        goalEnabled: false,
+      });
+
+      await vi.waitFor(() => {
+        expect(
+          progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toContainEqual(
+          expect.objectContaining({
+            action: 'show',
+            permission: expect.objectContaining({
+              kind: PERMISSION_KIND.PLAN_APPROVAL,
+              data: expect.objectContaining({
+                approvalId: 'plan-cancel-on-delete',
+              }),
+            }),
+          }),
+        );
+      });
+
+      await bridge.deleteStream('plan-delete-stream' as StreamTabId);
+
+      // This promise must settle through releaseStreamResources, which owns
+      // stream-scoped interaction cleanup.
+      await expect(result).resolves.toEqual({
+        action: 'reject',
+        feedback: 'Stream resources released.',
+      });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+      ).toContainEqual(
+        expect.objectContaining({
+          action: 'resolve',
+          kind: PERMISSION_KIND.PLAN_APPROVAL,
+          id: 'plan-cancel-on-delete',
+        }),
+      );
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('does not resume a stream deleted in this desktop session', async () => {
     const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
     const retrieveSessionResumeData = vi.fn(async () => ({
@@ -2103,6 +2228,47 @@ describe('DesktopProgressBridge', () => {
         streamStates: {},
       });
       expect(cleanupAllRequests).toHaveBeenCalledOnce();
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('cancels a pending bash approval instead of hanging when all streams are deleted', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'bash-delete-all-stream',
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      const result = bridge.runtimeHost.interactions?.requestBashApproval?.({
+        command: 'echo hi',
+        streamId: 'bash-delete-all-stream' as StreamTabId,
+      });
+
+      await vi.waitFor(() => {
+        expect(
+          progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toContainEqual(
+          expect.objectContaining({
+            action: 'show',
+            permission: expect.objectContaining({
+              kind: PERMISSION_KIND.BASH,
+            }),
+          }),
+        );
+      });
+
+      await bridge.deleteAllStreams();
+
+      // This promise must settle through releaseStreamResources, which owns
+      // stream-scoped interaction cleanup.
+      await expect(result).resolves.toEqual({
+        accepted: false,
+        userMessage: 'Stream resources released.',
+      });
     } finally {
       bridge.dispose();
     }

@@ -1,7 +1,7 @@
 export { GitHubSubscriptionTool } from './githubSubscriptionTool';
-export { prPollingSource } from './PRPollingSource';
-export { repoPollingSource } from './RepoPollingSource';
-export { issuePollingSource } from './IssuePollingSource';
+export { SharedPRPollingSource } from './PRPollingSource';
+export { SharedRepoPollingSource } from './RepoPollingSource';
+export { SharedIssuePollingSource } from './IssuePollingSource';
 export type { RepoKey } from './RepoPollingSource';
 export {
   listIssueSubscriptionBindings,
