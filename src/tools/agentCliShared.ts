@@ -17,95 +17,15 @@ import type {
   TokenUsageStats,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { formatDuration, generateExecutionId } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createChildStream, type ChildStream } from './childStream';
-import {
-  formatChildRunDelivery,
-  formatChildRunError,
-} from './deliveryEnvelope';
-
-/** Maximum prompt length echoed back in a delivery/error XML element. */
-const DELIVERY_PROMPT_MAX = 200;
-
-export interface AgentCliDeliveryParams {
-  /** Root element name, e.g. `codex-result` or `claude-agent-result`. */
-  tag: string;
-  executionId: string;
-  prompt: string;
-  wallTimeMs: number;
-  /** Final assistant response; falls back to `(no response)` when empty. */
-  response: string;
-  /**
-   * Optional session/thread identifier rendered as an attribute on the root
-   * element (e.g. `thread-id` for codex, `session-id` for claude). Omitted when
-   * the value is falsy.
-   */
-  idAttr?: { name: string; value: string | null | undefined };
-  /** Token usage; omitted from output when null/undefined. */
-  usage?: { input: number; output: number } | null;
-  /** Extra child lines appended before the closing tag (e.g. cost). */
-  extraLines?: readonly string[];
-}
-
-/**
- * Build the `<...-result>` XML delivered to the parent's follow-up queue when an
- * agent-CLI turn completes. Shared by the codex and claudeAgent strategies;
- * provider differences (tag, id attribute, extra lines) are parameters.
- */
-export function formatAgentCliDelivery(params: AgentCliDeliveryParams): string {
-  const { tag, executionId, prompt, wallTimeMs, usage, extraLines } = params;
-  const durationSec = (wallTimeMs / 1000).toFixed(1);
-  const response = params.response || '(no response)';
-  const lines = [
-    `<wall-time>${durationSec}s</wall-time>`,
-    `<response>${escapeText(response)}</response>`,
-  ];
-  if (usage) {
-    lines.push(`<usage input="${usage.input}" output="${usage.output}" />`);
-  }
-  if (extraLines) lines.push(...extraLines);
-  return formatChildRunDelivery({
-    tag,
-    executionId,
-    attributes: [
-      { name: 'prompt', value: prompt.slice(0, DELIVERY_PROMPT_MAX) },
-      {
-        name: params.idAttr?.name ?? '',
-        value: params.idAttr?.value || null,
-      },
-    ].filter((attr) => attr.name !== ''),
-    bodyLines: lines,
-  });
-}
-
-/**
- * Build the `<...-error>` XML delivered when an agent-CLI turn fails. Identical
- * shape across providers apart from the element name.
- */
-export function formatAgentCliError(
-  tag: string,
-  executionId: string,
-  prompt: string,
-  err: unknown,
-): string {
-  return formatChildRunError({
-    tag,
-    executionId,
-    attributes: [
-      { name: 'prompt', value: prompt.slice(0, DELIVERY_PROMPT_MAX) },
-    ],
-    message: toErrorMessage(err),
-  });
-}
 
 /**
  * True when an error/abort represents a clean, caller-initiated interruption

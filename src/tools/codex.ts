@@ -42,6 +42,7 @@ import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -52,12 +53,14 @@ import { type ChildStream } from './childStream';
 import { CodexThreads } from './agentCliSessionStores';
 import {
   publishAgentCliStreamUsage,
-  formatAgentCliDelivery,
-  formatAgentCliError,
   launchAgentCliSession,
   resumeAgentCliSession,
   withAgentCliApproval,
 } from './agentCliShared';
+import {
+  formatChildRunDelivery,
+  formatChildRunError,
+} from './deliveryEnvelope';
 import {
   runAgentCliSession,
   type AgentCliSessionStrategy,
@@ -132,17 +135,21 @@ function formatCodexDelivery(
   turn: RunResult,
   threadId?: string | null,
 ): string {
-  return formatAgentCliDelivery({
-    tag: 'codex-result',
-    executionId,
-    prompt,
-    wallTimeMs,
-    response: turn.finalResponse,
-    idAttr: { name: 'thread-id', value: threadId },
-    usage: turn.usage
-      ? { input: turn.usage.input_tokens, output: turn.usage.output_tokens }
-      : null,
-  });
+  return formatChildRunDelivery(
+    {
+      tag: 'codex-result',
+      executionId,
+      prompt,
+      attributes: [{ name: 'thread-id', value: threadId || null }],
+    },
+    {
+      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      response: turn.finalResponse,
+      usage: turn.usage
+        ? { input: turn.usage.input_tokens, output: turn.usage.output_tokens }
+        : null,
+    },
+  );
 }
 
 // ============================================================================
@@ -406,7 +413,10 @@ function startCodexLoop(params: {
     formatDelivery: (turn, prompt, wallTimeMs) =>
       formatCodexDelivery(executionId, prompt, wallTimeMs, turn, thread.id),
     formatError: (_turn, prompt, err) =>
-      formatAgentCliError('codex-error', executionId, prompt, err),
+      formatChildRunError(
+        { tag: 'codex-error', executionId, prompt },
+        { message: toErrorMessage(err) },
+      ),
     onSessionCleanup: () => {
       const threadId = thread.id;
       if (threadId) CodexThreads.release(threadId);

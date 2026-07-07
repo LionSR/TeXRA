@@ -8,10 +8,16 @@ import type {
 } from '@agent/runtime/AgentFlowResult';
 import { RUN_OUTCOME } from '@shared/schemas';
 import {
+  formatChildRunDelivery,
+  formatChildRunError,
+} from '@tools/deliveryEnvelope';
+import {
   formatBashDelivery,
   formatBashError,
   formatSubagentDelivery,
+  formatSubagentError,
 } from '@tools/subagentResults';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 function toolUseResult(
   outcome: ToolUseFlowResult['outcome'] = RUN_OUTCOME.COMPLETED,
@@ -26,7 +32,182 @@ function toolUseResult(
   };
 }
 
+// formatChildRunDelivery/formatChildRunError are the one result/error builder
+// family for every child-run delivery: the native subagent path
+// (formatSubagentDelivery/formatSubagentError) and the agent-CLI tools
+// (codex.ts, claudeAgent.ts). The cases below replay the exact parameter
+// mappings used at the real call sites; the expected strings are
+// byte-identical to what the pre-merge agent-CLI formatters
+// (formatAgentCliDelivery/formatAgentCliError) produced.
+
+describe('formatChildRunDelivery', () => {
+  it('renders the codex shape: thread-id attr, raw usage, no cost line', () => {
+    const xml = formatChildRunDelivery(
+      {
+        tag: 'codex-result',
+        executionId: 'exec-1',
+        prompt: 'do the thing',
+        attributes: [{ name: 'thread-id', value: 'th-42' }],
+      },
+      {
+        wallTime: `${(1234 / 1000).toFixed(1)}s`,
+        response: 'all done',
+        usage: { input: 100, output: 20 },
+      },
+    );
+    expect(xml).toBe(
+      [
+        '<codex-result id="exec-1" prompt="do the thing" thread-id="th-42">',
+        '<wall-time>1.2s</wall-time>',
+        '<response>all done</response>',
+        '<usage input="100" output="20" />',
+        '</codex-result>',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the claude shape: session-id attr and a cost extra line', () => {
+    const xml = formatChildRunDelivery(
+      {
+        tag: 'claude-agent-result',
+        executionId: 'exec-2',
+        prompt: 'summarize',
+        attributes: [{ name: 'session-id', value: 'sess-7' }],
+      },
+      {
+        wallTime: `${(9000 / 1000).toFixed(1)}s`,
+        response: 'summary',
+        usage: { input: 5, output: 0 },
+        lines: ['<cost-usd>0.1234</cost-usd>'],
+      },
+    );
+    expect(xml).toBe(
+      [
+        '<claude-agent-result id="exec-2" prompt="summarize" session-id="sess-7">',
+        '<wall-time>9.0s</wall-time>',
+        '<response>summary</response>',
+        '<usage input="5" output="0" />',
+        '<cost-usd>0.1234</cost-usd>',
+        '</claude-agent-result>',
+      ].join('\n'),
+    );
+  });
+
+  it('omits the provider id attribute (thread-id), usage, and extra lines when absent/falsy', () => {
+    const xml = formatChildRunDelivery(
+      {
+        tag: 'codex-result',
+        executionId: 'exec-3',
+        prompt: 'p',
+        attributes: [{ name: 'thread-id', value: null }],
+      },
+      { wallTime: `${(0 / 1000).toFixed(1)}s`, response: 'r', usage: null },
+    );
+    expect(xml).toBe(
+      [
+        '<codex-result id="exec-3" prompt="p">',
+        '<wall-time>0.0s</wall-time>',
+        '<response>r</response>',
+        '</codex-result>',
+      ].join('\n'),
+    );
+  });
+
+  it('falls back to "(no response)" for an empty response', () => {
+    const xml = formatChildRunDelivery(
+      { tag: 'codex-result', executionId: 'e', prompt: 'p' },
+      { wallTime: `${(500 / 1000).toFixed(1)}s`, response: '' },
+    );
+    expect(xml).toContain('<response>(no response)</response>');
+  });
+
+  it('truncates the echoed prompt to 200 chars and escapes attrs/text', () => {
+    const longPrompt = 'x'.repeat(250);
+    const xml = formatChildRunDelivery(
+      {
+        tag: 'codex-result',
+        executionId: 'a&b"<c',
+        prompt: `${longPrompt}<&"`,
+        attributes: [{ name: 'thread-id', value: '<id&"' }],
+      },
+      { wallTime: `${(100 / 1000).toFixed(1)}s`, response: 'a < b & c "q"' },
+    );
+    // id/prompt/thread-id are attribute-escaped (&, ", < — not >); the prompt is
+    // sliced to 200 chars BEFORE escaping, so the trailing <&" never appears.
+    expect(xml).toContain(
+      `<codex-result id="a&amp;b&quot;&lt;c" prompt="${'x'.repeat(200)}" thread-id="&lt;id&amp;&quot;">`,
+    );
+    // response is text-escaped (&, < — quotes left intact)
+    expect(xml).toContain('<response>a &lt; b &amp; c "q"</response>');
+  });
+});
+
+describe('formatChildRunError', () => {
+  it('renders the error shape, escaping attrs and the message body', () => {
+    const xml = formatChildRunError(
+      { tag: 'codex-error', executionId: 'exec-1', prompt: 'why did it fail?' },
+      { message: toErrorMessage(new Error('boom <&>')) },
+    );
+    expect(xml).toBe(
+      [
+        '<codex-error id="exec-1" prompt="why did it fail?">',
+        // toErrorMessage(Error) -> message; escapeText escapes & and < (not >)
+        '<message>boom &lt;&amp;></message>',
+        '</codex-error>',
+      ].join('\n'),
+    );
+  });
+
+  it('uses the provided tag and stringifies non-Error values', () => {
+    const xml = formatChildRunError(
+      { tag: 'claude-agent-error', executionId: 'e', prompt: 'p' },
+      { message: toErrorMessage('plain') },
+    );
+    expect(xml).toBe(
+      [
+        '<claude-agent-error id="e" prompt="p">',
+        '<message>plain</message>',
+        '</claude-agent-error>',
+      ].join('\n'),
+    );
+  });
+});
+
 describe('formatSubagentDelivery', () => {
+  // Exact-string pin for the native tool-use delivery shape, byte-identical
+  // to the pre-merge output (wall-time first, then working-directory,
+  // memory-misses, and the three-line response block).
+  it('pins the exact native tool-use delivery XML', () => {
+    const xml = formatSubagentDelivery(
+      'reviewer',
+      toolUseResult(RUN_OUTCOME.COMPLETED, {
+        lastResponse: 'Checked the proof & wrote <notes>.',
+        touchedFiles: ['/ws/paper.tex'],
+        memoryMisses: [
+          { path: '/memories/missing.md', reason: 'Path is missing' },
+        ],
+      }),
+      { wallTimeMs: 65000, workingDirectory: '/ws/project' },
+    );
+    expect(xml).toBe(
+      [
+        '<subagent-result id="abc123" agent="reviewer" category="toolUse" status="completed">',
+        '<wall-time>1m 5s</wall-time>',
+        '<working-directory>/ws/project</working-directory>',
+        '<memory-misses>',
+        '<memory-miss path="/memories/missing.md" reason="Path is missing" />',
+        '</memory-misses>',
+        '<response>',
+        'Checked the proof &amp; wrote &lt;notes>.',
+        '</response>',
+        '<touched-files>',
+        '<file path="/ws/paper.tex" />',
+        '</touched-files>',
+        '</subagent-result>',
+      ].join('\n'),
+    );
+  });
+
   it('escapes tool-use response bodies at the XML boundary', () => {
     const result = toolUseResult(RUN_OUTCOME.COMPLETED, {
       lastResponse:
@@ -185,6 +366,35 @@ describe('formatSubagentDelivery', () => {
 
     expect(delivery).not.toContain('output-head');
     expect(delivery).not.toContain('elided');
+  });
+
+  // Exact-string pin for the native error shape, byte-identical to the
+  // pre-merge output (retryable attr, wall-time, context lines, message last).
+  it('pins the exact native error XML', () => {
+    const xml = formatSubagentError(
+      'abc123',
+      'reviewer',
+      new Error('subagent exploded <&>'),
+      {
+        wallTimeMs: 65000,
+        workingDirectory: '/ws/project',
+        memoryMisses: [
+          { path: '/memories/missing.md', reason: 'Path is missing' },
+        ],
+      },
+    );
+    expect(xml).toBe(
+      [
+        '<subagent-error id="abc123" agent="reviewer" retryable="true">',
+        '<wall-time>1m 5s</wall-time>',
+        '<working-directory>/ws/project</working-directory>',
+        '<memory-misses>',
+        '<memory-miss path="/memories/missing.md" reason="Path is missing" />',
+        '</memory-misses>',
+        '<message>subagent exploded &lt;&amp;></message>',
+        '</subagent-error>',
+      ].join('\n'),
+    );
   });
 
   it('normalizes CRLF when truncating background output previews', () => {
