@@ -14,7 +14,7 @@ import {
   runExecuteCommand as agentRunExecuteCommand,
 } from '@commands/agent';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex';
-import { runSetupAssistant as setupRunAssistant } from '@commands/setup';
+import { launchSetupAssistant } from '@commands/setup';
 import {
   createSampleProject as sysCreateSampleProject,
   handleTestConnection as sysHandleTestConnection,
@@ -119,7 +119,9 @@ export function createExtensionCommandActions(
     },
     signOut: authSignOut,
     viewProfile: authViewProfile,
-    runSetupAssistant: setupRunAssistant,
+    runSetupAssistant: async () => {
+      await launchSetupAssistant();
+    },
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),
     downloadArXivSource: latexDownloadArXivSource,
