@@ -16,6 +16,10 @@ import {
   createModelSelectionController,
 } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import {
+  createSettingsViewCommandHandlers,
+  type SettingsViewCommandActions,
+} from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
@@ -63,7 +67,6 @@ import {
   type LatexSettingsStatus,
   type ProviderKeyStatus,
   type ReasoningLevel,
-  type SettingsViewInboundHandlerRegistry,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
@@ -1098,78 +1101,32 @@ export function createDesktopSettingsIpc(
   const setAgent = (key: WorkspaceStateKey, value: string) =>
     updateAgentSetting(key, value);
 
-  const settingsHandlers: SettingsViewInboundHandlerRegistry = {
+  const settingsActions: SettingsViewCommandActions = {
     // WEBVIEW_READY is intercepted in handleMessage below, before reaching
     // the dispatcher, so this entry is never actually invoked — it exists
     // only to satisfy the exhaustive registry type.
-    webviewReady: () => {},
-    // VS Code-only surfaces with no desktop equivalent.
-    openVscodeSettings: unsupported('No VS Code settings in the desktop app.'),
-    setProviderVscodeSetting: unsupported(
-      'VS Code provider settings are not applicable in the desktop app.',
-    ),
-    // Not yet wired on desktop.
-    selectAgent: unsupported(
-      'Selecting an agent from Settings is not available in the desktop app yet.',
-    ),
-    createAgent: unsupported(
-      'Creating custom agents is not available in the desktop app yet.',
-    ),
-    customizeAgent: unsupported(
-      'Customizing agents is not available in the desktop app yet.',
-    ),
-    deleteCustomAgent: unsupported(
-      'Deleting custom agents is not available in the desktop app yet.',
-    ),
-    viewRemoteAgentPrompt: unsupported(
-      'Viewing a remote agent prompt is not available in the desktop app yet.',
-    ),
-    getGitHubTokenStatus: unsupported(
-      'GitHub PR subscriptions are not available in the desktop app yet.',
-    ),
-    setGitHubToken: unsupported(
-      'GitHub PR subscriptions are not available in the desktop app yet.',
-    ),
-    removeGitHubToken: unsupported(
-      'GitHub PR subscriptions are not available in the desktop app yet.',
-    ),
-    openGitHubTokenUrl: unsupported(
-      'GitHub PR subscriptions are not available in the desktop app yet.',
-    ),
-    getPRSubscriptions: unsupported(
-      'GitHub PR subscriptions are not available in the desktop app yet.',
-    ),
-    unsubscribePR: unsupported(
-      'GitHub PR subscriptions are not available in the desktop app yet.',
-    ),
-    openPRSubscriptionStream: unsupported(
-      'GitHub PR subscriptions are not available in the desktop app yet.',
-    ),
-    getInlineCriticismEnabled: unsupported(
-      'Inline criticism is not available in the desktop app yet.',
-    ),
-    setInlineCriticismEnabled: unsupported(
-      'Inline criticism is not available in the desktop app yet.',
-    ),
-    getGoalList: unsupported('Goals are not available in the desktop app yet.'),
-    revealGoalStream: unsupported(
-      'Goals are not available in the desktop app yet.',
-    ),
-    ...{
-      getMemoryData: () => postMemoryData(),
-      getMemoryPreview: (data) => postMemoryPreview(data.storagePath),
-      getMemoryEnabled: () => postMemoryEnabled(),
-      openMemoryFile: (data) => openMemoryFile(data),
-      openMemoryFolder: () => openMemoryFolder(),
-      deleteMemory: (data) => deleteMemory(data),
-      setMemoryEnabled: (data) => setMemoryEnabled(data.enabled),
-      pinMemory: (data) => setMemoryPinned(data.storagePath, true),
-      unpinMemory: (data) => setMemoryPinned(data.storagePath, false),
+    lifecycle: {
+      webviewReady: () => {},
+      // VS Code-only surfaces with no desktop equivalent.
+      openVscodeSettings: unsupported(
+        'No VS Code settings in the desktop app.',
+      ),
     },
-    ...{
-      getHistoryData: () => postHistoryData(),
-      deleteAgent: (data) => deleteHistoryItem(data.historyId),
-      clearHistory: () => clearHistory(),
+    memory: {
+      getData: () => postMemoryData(),
+      getPreview: (storagePath) => postMemoryPreview(storagePath),
+      getEnabled: () => postMemoryEnabled(),
+      openFile: (data) => openMemoryFile(data),
+      openFolder: () => openMemoryFolder(),
+      delete: (data) => deleteMemory(data),
+      setEnabled: (enabled) => setMemoryEnabled(enabled),
+      pin: (storagePath) => setMemoryPinned(storagePath, true),
+      unpin: (storagePath) => setMemoryPinned(storagePath, false),
+    },
+    history: {
+      getData: () => postHistoryData(),
+      deleteAgent: (historyId) => deleteHistoryItem(historyId),
+      clear: () => clearHistory(),
       rerunAgent: unsupported(
         'Rerun from history is not available in the desktop app yet.',
       ),
@@ -1186,163 +1143,188 @@ export function createDesktopSettingsIpc(
         'HTML export from history is not available in the desktop app yet.',
       ),
     },
-    ...{
-      getProfileData: () => postProfileData(),
+    profile: {
+      getData: () => postProfileData(),
+      selectAgent: unsupported(
+        'Selecting an agent from Settings is not available in the desktop app yet.',
+      ),
       signIn: () => signIn(),
       signOut: () => signOut(),
-      setApiAccessMode: (data) => setApiAccessMode(data.mode),
-      setProviderKey: (data) => setProviderKey(data.provider, data.apiKey),
-      removeProviderKey: (data) => removeProviderKey(data.provider),
-      openProviderKeyUrl: (data) => openProviderKeyUrl(data.provider),
-      setProviderStreaming: (data) =>
-        updateProviderStreaming({
-          provider: data.provider,
-          enabled: data.enabled,
-        }),
-      setProviderEndpoint: (data) =>
-        updateProviderEndpoint({
-          provider: data.provider,
-          endpoint: data.endpoint,
-        }),
-      setGlobalStreaming: (data) => updateGlobalStreaming(data.enabled),
-      openExternalUrl: (data) =>
-        options.openExternalUrl?.(data.url) ?? Promise.resolve(),
+      setApiAccessMode: (mode) => setApiAccessMode(mode),
+      setProviderKey: (provider, apiKey) => setProviderKey(provider, apiKey),
+      removeProviderKey: (provider) => removeProviderKey(provider),
+      openProviderKeyUrl: (provider) => openProviderKeyUrl(provider),
+      setProviderStreaming: (provider, enabled) =>
+        updateProviderStreaming({ provider, enabled }),
+      setProviderEndpoint: (provider, endpoint) =>
+        updateProviderEndpoint({ provider, endpoint }),
+      setGlobalStreaming: (enabled) => updateGlobalStreaming(enabled),
+      setProviderVscodeSetting: unsupported(
+        'VS Code provider settings are not applicable in the desktop app.',
+      ),
+      openExternalUrl: (url) =>
+        options.openExternalUrl?.(url) ?? Promise.resolve(),
     },
-    ...{
-      getModelSelection: () => postModelSelectionData(),
-      setModelEnabled: (data) =>
-        updateModelEnabled({
-          modelName: data.modelName,
-          enabled: data.enabled,
-        }),
-      setPolishModel: (data) => updateHelperModel(data.modelName),
-      setModelReasoningLevel: (data) =>
-        updateModelReasoningLevel({
-          modelName: data.modelName,
-          level: data.level,
-        }),
-      setPreferShortModelNames: (data) =>
-        updatePreferShortModelNames(data.enabled),
+    modelSelection: {
+      getData: () => postModelSelectionData(),
+      setEnabled: (modelName, enabled) =>
+        updateModelEnabled({ modelName, enabled }),
+      setHelperModel: (modelName) => updateHelperModel(modelName),
+      setReasoningLevel: (modelName, level) =>
+        updateModelReasoningLevel({ modelName, level }),
+      setPreferShortModelNames: (enabled) =>
+        updatePreferShortModelNames(enabled),
     },
-    ...{
+    orchestration: {
       getSuperYoloEnabled: () => postSuperYoloEnabled(),
       setSuperYoloEnabled: () => postSuperYoloEnabled(),
-      setAllowOrchestratorKill: (data) =>
+      setAllowOrchestratorKill: (enabled) =>
         updateBooleanWorkspaceSetting(
           StateKeys.ALLOW_ORCHESTRATOR_KILL,
-          data.enabled,
+          enabled,
         ),
-      setDetachSubagentsOnStop: (data) =>
+      setDetachSubagentsOnStop: (enabled) =>
         updateBooleanWorkspaceSetting(
           StateKeys.DETACH_SUBAGENTS_ON_STOP,
-          data.enabled,
+          enabled,
         ),
     },
-    ...{
-      getAgentSelection: () => postAgentSelectionData(),
-      setAgentEnabled: (data) =>
-        updateAgentEnabled({
-          category: data.category,
-          source: data.agentSource,
-          name: data.agentName,
-          enabled: data.enabled,
-        }),
-      setAllAgentsEnabled: (data) =>
-        updateAllAgentsEnabled({
-          category: data.category,
-          source: data.source,
-          enabled: data.enabled,
-        }),
-      openAgentYaml: (data) =>
-        openAgentYaml({ source: data.agentSource, name: data.agentName }),
-      openAgentFolder: () => openAgentFolder(),
-      revealAgentFile: (data) =>
-        revealAgentFile({ source: data.agentSource, name: data.agentName }),
-      getCustomAgentDir: () => postCustomAgentDir(),
-      setCustomAgentDir: () => setCustomAgentDir(),
-      resetCustomAgentDir: () => resetCustomAgentDir(),
-      getAgentModePresets: () => postAgentModePresets(),
-      applyAgentModePreset: (data) => applyAgentModePreset(data.presetId),
-      saveAgentModePreset: () => saveAgentModePreset(),
-      deleteAgentModePreset: (data) => deleteAgentModePreset(data.presetId),
+    agentSelection: {
+      getData: () => postAgentSelectionData(),
+      setEnabled: ({ category, source, name, enabled }) =>
+        updateAgentEnabled({ category, source, name, enabled }),
+      setAllEnabled: ({ category, source, enabled }) =>
+        updateAllAgentsEnabled({ category, source, enabled }),
+      openYaml: ({ source, name }) => openAgentYaml({ source, name }),
+      openFolder: () => openAgentFolder(),
+      create: unsupported(
+        'Creating custom agents is not available in the desktop app yet.',
+      ),
+      customize: unsupported(
+        'Customizing agents is not available in the desktop app yet.',
+      ),
+      deleteCustom: unsupported(
+        'Deleting custom agents is not available in the desktop app yet.',
+      ),
+      revealFile: ({ source, name }) => revealAgentFile({ source, name }),
+      viewRemotePrompt: unsupported(
+        'Viewing a remote agent prompt is not available in the desktop app yet.',
+      ),
+      getCustomDir: () => postCustomAgentDir(),
+      setCustomDir: () => setCustomAgentDir(),
+      resetCustomDir: () => resetCustomAgentDir(),
+      getModePresets: () => postAgentModePresets(),
+      applyModePreset: (presetId) => applyAgentModePreset(presetId),
+      saveModePreset: () => saveAgentModePreset(),
+      deleteModePreset: (presetId) => deleteAgentModePreset(presetId),
     },
-    ...{
-      getGitAuthorSettings: () => postGitAuthorSettings(),
-      setGitMarkCommits: (data) =>
-        setGitAuthor(StateKeys.GIT_MARK_COMMITS, data.enabled),
-      setGitAuthorName: (data) =>
-        setGitAuthor(StateKeys.GIT_AUTHOR_NAME, data.name),
-      setGitAuthorEmail: (data) =>
-        setGitAuthor(StateKeys.GIT_AUTHOR_EMAIL, data.email),
-      setGitWorktreeSupport: (data) =>
-        setGitAuthor(StateKeys.GIT_WORKTREE_SUPPORT, data.enabled),
+    gitAuthor: {
+      getSettings: () => postGitAuthorSettings(),
+      setMarkCommits: (enabled) =>
+        setGitAuthor(StateKeys.GIT_MARK_COMMITS, enabled),
+      setName: (name) => setGitAuthor(StateKeys.GIT_AUTHOR_NAME, name),
+      setEmail: (email) => setGitAuthor(StateKeys.GIT_AUTHOR_EMAIL, email),
+      setWorktreeSupport: (enabled) =>
+        setGitAuthor(StateKeys.GIT_WORKTREE_SUPPORT, enabled),
     },
-    ...{
-      getChatGptAuthStatus: () => postChatGptAuthStatus(),
-      signInChatGpt: () => signInChatGpt(),
-      signOutChatGpt: () => signOutChatGpt(),
-      setChatGptPreferSubscription: (data) =>
-        setChatGptPreferSubscription(data.enabled),
-      setChatGptSubscriptionToolUseOnly: (data) =>
-        setChatGptSubscriptionToolUseOnly(data.enabled),
+    githubSubscriptions: {
+      getTokenStatus: unsupported(
+        'GitHub PR subscriptions are not available in the desktop app yet.',
+      ),
+      setToken: unsupported(
+        'GitHub PR subscriptions are not available in the desktop app yet.',
+      ),
+      removeToken: unsupported(
+        'GitHub PR subscriptions are not available in the desktop app yet.',
+      ),
+      openTokenUrl: unsupported(
+        'GitHub PR subscriptions are not available in the desktop app yet.',
+      ),
+      getSubscriptions: unsupported(
+        'GitHub PR subscriptions are not available in the desktop app yet.',
+      ),
+      unsubscribe: unsupported(
+        'GitHub PR subscriptions are not available in the desktop app yet.',
+      ),
+      openSubscriptionStream: unsupported(
+        'GitHub PR subscriptions are not available in the desktop app yet.',
+      ),
     },
-    ...{
-      getApprovalSettings: () => postApprovalSettings(),
-      setBashApprovalEnabled: (data) => updateBashApprovalEnabled(data.enabled),
-      setCodexSandboxMode: (data) =>
-        setAgent(StateKeys.CODEX_SANDBOX_MODE, data.mode),
-      setCodexReasoningEffort: (data) =>
-        setAgent(StateKeys.CODEX_REASONING_EFFORT, data.effort),
-      setCodexApprovalPolicy: (data) =>
-        setAgent(StateKeys.CODEX_APPROVAL_POLICY, data.policy),
-      setClaudeAgentModel: (data) =>
-        setAgent(StateKeys.CLAUDE_AGENT_MODEL, data.model),
-      setClaudeAgentPermissionMode: (data) =>
-        setAgent(StateKeys.CLAUDE_AGENT_PERMISSION_MODE, data.mode),
-      setClaudeAgentEffort: (data) =>
-        setAgent(StateKeys.CLAUDE_AGENT_EFFORT, data.effort),
+    chatGpt: {
+      getAuthStatus: () => postChatGptAuthStatus(),
+      signIn: () => signInChatGpt(),
+      signOut: () => signOutChatGpt(),
+      setPreferSubscription: (enabled) => setChatGptPreferSubscription(enabled),
+      setSubscriptionToolUseOnly: (enabled) =>
+        setChatGptSubscriptionToolUseOnly(enabled),
     },
-    ...{
-      getToolDashboardData: () => postToolDashboardData(),
-      openToolInstallUrl: (data) =>
-        options.openExternalUrl?.(data.url) ?? Promise.resolve(),
-      installToolExtension: (data) =>
-        options.installToolExtension?.(data.extensionId) ?? Promise.resolve(),
-      recheckToolStatus: () => recheckToolStatus(),
-      toggleTool: (data) => setToolEnabled(data.toolId, data.enabled),
-      runToolCommand: (data) =>
-        runToolCommand({ toolId: data.toolId, kind: data.kind }),
+    approval: {
+      getSettings: () => postApprovalSettings(),
+      setBashApprovalEnabled: (enabled) => updateBashApprovalEnabled(enabled),
+      setCodexSandboxMode: (mode) =>
+        setAgent(StateKeys.CODEX_SANDBOX_MODE, mode),
+      setCodexReasoningEffort: (effort) =>
+        setAgent(StateKeys.CODEX_REASONING_EFFORT, effort),
+      setCodexApprovalPolicy: (policy) =>
+        setAgent(StateKeys.CODEX_APPROVAL_POLICY, policy),
+      setClaudeAgentModel: (model) =>
+        setAgent(StateKeys.CLAUDE_AGENT_MODEL, model),
+      setClaudeAgentPermissionMode: (mode) =>
+        setAgent(StateKeys.CLAUDE_AGENT_PERMISSION_MODE, mode),
+      setClaudeAgentEffort: (effort) =>
+        setAgent(StateKeys.CLAUDE_AGENT_EFFORT, effort),
     },
-    ...{
-      getLatexSettingsStatus: () => postLatexSettingsStatus(),
-      applyLatexSettings: () => postLatexSettingsStatus(),
+    tools: {
+      getDashboardData: () => postToolDashboardData(),
+      openInstallUrl: (url) =>
+        options.openExternalUrl?.(url) ?? Promise.resolve(),
+      installExtension: (extensionId) =>
+        options.installToolExtension?.(extensionId) ?? Promise.resolve(),
+      recheckStatus: () => recheckToolStatus(),
+      toggle: (toolId, enabled) => setToolEnabled(toolId, enabled),
+      runCommand: ({ toolId, kind }) => runToolCommand({ toolId, kind }),
+    },
+    latex: {
+      getSettingsStatus: () => postLatexSettingsStatus(),
+      applySettings: () => postLatexSettingsStatus(),
       installLatexWorkshop: () =>
         options.installToolExtension?.(LATEX_WORKSHOP_EXT_ID) ??
         Promise.resolve(),
-      runInstallCommand: (data) => {
-        if (!isAllowedLatexInstallCommand(data.installCommand)) {
+      runInstallCommand: (installCommand) => {
+        if (!isAllowedLatexInstallCommand(installCommand)) {
           onError(
-            new Error(
-              `Rejected unknown install command: ${data.installCommand}`,
-            ),
+            new Error(`Rejected unknown install command: ${installCommand}`),
           );
           return;
         }
-        return (
-          options.runInstallCommand?.(data.installCommand) ?? Promise.resolve()
-        );
+        return options.runInstallCommand?.(installCommand) ?? Promise.resolve();
       },
-      getLatexConfigValues: () => postLatexConfigValues(),
-      setLatexConfigValue: (data) =>
-        updateLatexConfigValue({ field: data.field, value: data.value }),
+      getConfigValues: () => postLatexConfigValues(),
+      setConfigValue: ({ field, value }) =>
+        updateLatexConfigValue({ field, value }),
     },
-    ...{
-      getDesktopCrashReporting: () => postDesktopCrashReportingStatus(),
-      setDesktopCrashReportingEnabled: (data) =>
-        updateDesktopCrashReportingEnabled(data.enabled),
-      setDesktopCrashReportingDsn: () => updateDesktopCrashReportingDsn(),
+    inlineCriticism: {
+      getEnabled: unsupported(
+        'Inline criticism is not available in the desktop app yet.',
+      ),
+      setEnabled: unsupported(
+        'Inline criticism is not available in the desktop app yet.',
+      ),
+    },
+    goals: {
+      getList: unsupported('Goals are not available in the desktop app yet.'),
+      revealStream: unsupported(
+        'Goals are not available in the desktop app yet.',
+      ),
+    },
+    desktopCrashReporting: {
+      get: () => postDesktopCrashReportingStatus(),
+      setEnabled: (enabled) => updateDesktopCrashReportingEnabled(enabled),
+      setDsn: () => updateDesktopCrashReportingDsn(),
     },
   };
+
+  const settingsHandlers = createSettingsViewCommandHandlers(settingsActions);
 
   return {
     refreshAuthDependentData,
