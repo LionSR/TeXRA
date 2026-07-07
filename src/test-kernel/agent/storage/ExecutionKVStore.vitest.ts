@@ -89,3 +89,59 @@ describe('ExecutionKVStore meta read shims', () => {
     );
   });
 });
+
+describe('ExecutionKVStore loud typed reads (#6966 bullet 5)', () => {
+  it('warns when config is malformed instead of silently returning null', async () => {
+    const id = 'bad-config' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await getExecutionStore(id).write('config', { outputFiles: 'not-a-list' });
+
+    await expect(getExecutionStore(id).readConfig()).resolves.toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(`Failed to parse execution ${id} config.json`),
+      { data: expect.any(Error) },
+    );
+  });
+
+  it('warns when todos are malformed instead of silently defaulting to []', async () => {
+    const id = 'bad-todos' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await getExecutionStore(id).write('todos', { not: 'an array' });
+
+    await expect(getExecutionStore(id).readTodos()).resolves.toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(`Failed to parse execution ${id} todos.json`),
+      { data: expect.any(Error) },
+    );
+  });
+
+  it('stays quiet for genuinely missing todos (missing != corrupt)', async () => {
+    const id = 'no-todos' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await expect(getExecutionStore(id).readTodos()).resolves.toEqual([]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('warns when workspace files are malformed instead of silently defaulting to []', async () => {
+    const id = 'bad-wsfiles' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await getExecutionStore(id).write('workspace-files', [42]);
+
+    await expect(getExecutionStore(id).readWorkspaceFiles()).resolves.toEqual(
+      [],
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(
+        `Failed to parse execution ${id} workspace-files.json`,
+      ),
+      { data: expect.any(Error) },
+    );
+  });
+});

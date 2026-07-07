@@ -4,6 +4,7 @@ import { Mutex } from 'async-mutex';
 import { z } from 'zod';
 
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { isFileNotFoundError } from '@common/errors';
 import { createChannelTrace } from '@logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
@@ -163,7 +164,13 @@ const RawTurnRecordSchema = z.looseObject(RawTurnShape);
 const ExternalInquiryTurnRecordSchema =
   RawTurnRecordSchema.transform(toCanonicalTurn);
 
+const EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION = 1;
+
 const ManifestBaseShape = {
+  /** Stamped on every write; absent on manifests written before it existed. */
+  schemaVersion: z
+    .literal(EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION)
+    .prefault(EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION),
   threadId: ExternalInquiryThreadIdSchema,
   parentStreamId: StreamTabIdSchema.nullable(),
   status: z.enum(['open', 'answered', 'dropped']),
@@ -190,6 +197,7 @@ const LegacyManifestSchema = z
     turns: z.array(ExternalInquiryTurnRecordSchema),
   })
   .transform((raw): ExternalInquiryThreadManifest => ({
+    schemaVersion: EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION,
     threadId: raw.threadId,
     parentStreamId: null,
     status: 'answered' as const,
@@ -330,14 +338,39 @@ async function hydrateAnswersFromDisk(
   return { manifest: { ...manifest, turns }, didHydrate };
 }
 
+/**
+ * Loud read (#6966 bullet 5): a missing manifest is the expected "no such
+ * thread" case, but a corrupt/unparseable one is a real failure that must
+ * not be silently conflated with it — every consumer here treats `null` as
+ * "not found" and none of them writes the manifest back on that path, so a
+ * warning (rather than a default that later gets persisted) is the correct
+ * ceiling. Distinguishes `isFileNotFoundError` from read/parse failures per
+ * the #7210 pattern.
+ */
 async function readThreadManifest(
   threadId: ExternalInquiryThreadId,
 ): Promise<ExternalInquiryThreadManifest | null> {
-  // An unreadable manifest fails schema validation below, yielding null.
-  const raw = await GlobalStorageFS.readJson<unknown>(
-    threadManifestPath(threadId),
-  ).catch(() => undefined);
-  return ExternalInquiryThreadManifestSchema.nullable().catch(null).parse(raw);
+  let raw: unknown;
+  try {
+    raw = await GlobalStorageFS.readJson<unknown>(threadManifestPath(threadId));
+  } catch (err) {
+    if (!isFileNotFoundError(err)) {
+      logger.warn(
+        `Unreadable external-inquiry manifest for ${threadId}; treating as missing.`,
+        { data: err },
+      );
+    }
+    return null;
+  }
+  const result = ExternalInquiryThreadManifestSchema.safeParse(raw);
+  if (!result.success) {
+    logger.warn(
+      `Failed to parse external-inquiry manifest for ${threadId}; treating as missing.`,
+      { data: result.error },
+    );
+    return null;
+  }
+  return result.data;
 }
 
 async function writeThreadManifest(
@@ -481,6 +514,7 @@ export async function recordOpenQuestion(params: {
 
     const timestamp = new Date().toISOString();
     const baseManifest: ExternalInquiryThreadManifest = existing ?? {
+      schemaVersion: EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION,
       threadId,
       parentStreamId: params.parentStreamId,
       status: 'open',

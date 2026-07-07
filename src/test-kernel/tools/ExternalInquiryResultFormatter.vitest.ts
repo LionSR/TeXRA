@@ -7,6 +7,7 @@ function manifestWithSessionLinks(
   turns: Array<{ turnIndex: number; sessionLinks?: string[] | null }>,
 ): ExternalInquiryThreadManifest {
   return {
+    schemaVersion: 1,
     threadId: 'thread-1',
     parentStreamId: null,
     status: 'answered',
