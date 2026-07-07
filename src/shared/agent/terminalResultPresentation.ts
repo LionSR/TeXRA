@@ -14,17 +14,18 @@
 import type { ResultEvent } from '@agent/trace';
 import {
   INSTRUCTION_ACTION,
-  type ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+  type RequestShowErrorPayload,
+  type RequestShowInstructionPayload,
+} from '@shared/schemas';
 
 export type TerminalResultToast =
   | {
       readonly type: 'instruction';
-      readonly payload: ProgressEventPayloads['requestShowInstruction'];
+      readonly payload: RequestShowInstructionPayload;
     }
   | {
       readonly type: 'error';
-      readonly payload: ProgressEventPayloads['requestShowError'];
+      readonly payload: RequestShowErrorPayload;
     };
 
 const MISSING_API_KEY_MESSAGE =

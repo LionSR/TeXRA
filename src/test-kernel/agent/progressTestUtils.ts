@@ -14,12 +14,17 @@ import {
   type RunCoordinators,
 } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
+/**
+ * Loosely-typed recording of host emissions. The recording host also encodes
+ * typed `HostInteractions` requests/resolutions as legacy-style show/resolve
+ * entries (including keys that no longer exist on the frozen production map),
+ * so the vocabulary is a plain string.
+ */
 export type RecordedProgressEvent = {
-  event: keyof ProgressEventPayloads;
-  payload: ProgressEventPayloads[keyof ProgressEventPayloads];
+  event: string;
+  payload: unknown;
 };
 
 export function createRecordingHost(): {

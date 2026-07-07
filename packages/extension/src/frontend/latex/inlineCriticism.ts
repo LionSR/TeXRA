@@ -22,11 +22,10 @@ import * as vscode from 'vscode';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { globalSM, GlobalStateKey } from '@common/state';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import * as logger from '@logger/logUtils';
-import type { OutputFileInfo } from '@shared/schemas';
+import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
@@ -123,9 +122,7 @@ async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
   ]);
 }
 
-function handleAddOutputFiles(
-  payload: ProgressEventPayloads['addOutputFiles'],
-): void {
+function handleAddOutputFiles(payload: AddOutputFilesPayload): void {
   if (!collection) return;
   const allFiles = Object.values(payload.filesByRound).flat();
   void Promise.all(allFiles.map((f) => refreshFileDiagnostics(f))).catch(

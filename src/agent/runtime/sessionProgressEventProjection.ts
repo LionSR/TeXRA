@@ -3,7 +3,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+} from '@agent/runtime/hostProgressEvents';
 import {
   ExtendedTokenUsageStatsSchema,
   type StorageKey,

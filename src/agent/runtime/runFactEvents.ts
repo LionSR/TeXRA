@@ -1,20 +1,41 @@
 import type { AgentTrace } from '@agent/trace';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
+import type {
+  AddOutputFilesPayload,
+  GoalPausedPayload,
+  UpdateCompileFailuresPayload,
+  UpdateMissingOutputsPayload,
+  UpdatePlanPayload,
+  UpdateTodosPayload,
+} from '@shared/schemas';
 
+/**
+ * Run facts ride the run trace as `domain` events keyed `'runFact.' + name`.
+ * The prefix survives this stage because every key below still has live
+ * direct consumers (extension run-fact subscriptions, CLI TUI, snapshot
+ * store) plus the retained CLI projection; retiring it means typed
+ * `AgentEvent` arms per fact, tracked for a later slice.
+ */
 export const RUN_FACT_DOMAIN_PREFIX = 'runFact.';
 
-export const RUN_FACT_EVENT_NAMES = [
+export type RunFactPayloads = {
+  updateTodos: UpdateTodosPayload;
+  updatePlan: UpdatePlanPayload;
+  addOutputFiles: AddOutputFilesPayload;
+  updateMissingOutputs: UpdateMissingOutputsPayload;
+  updateCompileFailures: UpdateCompileFailuresPayload;
+  goalPaused: GoalPausedPayload;
+};
+
+export type RunFactEventName = keyof RunFactPayloads;
+
+const RUN_FACT_EVENT_SET = new Set<string>([
   'updateTodos',
   'updatePlan',
   'addOutputFiles',
   'updateMissingOutputs',
   'updateCompileFailures',
   'goalPaused',
-] as const satisfies readonly (keyof ProgressEventPayloads)[];
-
-export type RunFactEventName = (typeof RUN_FACT_EVENT_NAMES)[number];
-
-const RUN_FACT_EVENT_SET = new Set<string>(RUN_FACT_EVENT_NAMES);
+] satisfies RunFactEventName[]);
 
 export function toRunFactDomainKey(event: RunFactEventName): string {
   return `${RUN_FACT_DOMAIN_PREFIX}${event}`;
@@ -33,7 +54,7 @@ export function fromRunFactDomainKey(
 export function emitRunFact<K extends RunFactEventName>(
   trace: AgentTrace,
   event: K,
-  payload: ProgressEventPayloads[K],
+  payload: RunFactPayloads[K],
 ): void {
   trace.domain({
     key: toRunFactDomainKey(event),
