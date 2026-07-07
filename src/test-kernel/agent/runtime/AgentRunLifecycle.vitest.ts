@@ -21,7 +21,10 @@ import {
   StreamStatusMachine,
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
-import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
+import {
+  SharedExecutionRegistry,
+  type AgentExecutionHandle,
+} from '@agent/runtime/executionRegistry';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
@@ -47,10 +50,12 @@ import { createRecordingHost } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   writeTerminalStatus: vi.fn().mockResolvedValue(undefined),
+  deleteFlowRecord: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@agent/storage', () => ({
   writeTerminalStatus: storageMocks.writeTerminalStatus,
+  getExecutionStore: () => ({ delete: storageMocks.deleteFlowRecord }),
 }));
 
 async function initLifecycleTestPlatform(firstRunDone: boolean) {
@@ -449,6 +454,110 @@ describe('runFlowWithLifecycle', () => {
     } finally {
       SharedExecutionRegistry.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('clears a pre-registered waiting-cleanup when the run completes without suspending', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-stale-waiting-cleanup',
+    );
+    const staleCleanup = vi.fn();
+    let captured: AgentExecutionHandle | undefined;
+
+    try {
+      // Simulate onBeforeWaiting pre-registering on a turn that then
+      // continues past the wait (queued follow-up) and completes normally.
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => ({
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+        }),
+        {
+          isSubagent: true,
+          onRun: (handle) => {
+            captured = handle as AgentExecutionHandle;
+            handle.registerWaitingCleanup(staleCleanup);
+          },
+        },
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      // The stale registration must be gone: nothing ran it, and a
+      // terminate() racing into the teardown window must not find it.
+      expect(staleCleanup).not.toHaveBeenCalled();
+      expect(captured?.runWaitingCleanup()).toBe(false);
+    } finally {
+      SharedExecutionRegistry.untrack(executionId);
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('lets a stop/kill tear down a subagent suspended at WAITING (issue #7287)', async () => {
+    const { executionId, streamId, ctx } = lifecycleFixture(
+      'lifecycle-subagent-waiting-kill',
+    );
+    const followUpsRelease = vi.spyOn(ctx.session.followUps, 'release');
+    const parentStageEnd = vi.spyOn(ctx.parentStage, 'end');
+    storageMocks.deleteFlowRecord.mockClear();
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => ({
+          category: 'toolUse',
+          outcome: STREAM_PHASE.WAITING,
+          executionId,
+          streamId,
+        }),
+        { isSubagent: true },
+      );
+
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      expect(SharedExecutionRegistry.getHandle(executionId)).toBeDefined();
+      expect(followUpsRelease).not.toHaveBeenCalled();
+      expect(storageMocks.deleteFlowRecord).not.toHaveBeenCalled();
+      // The fixture's ctx.logger is noopTrace, and the run handle carries it
+      // as its trace channel.
+      const traceEmit = vi.spyOn(noopTrace, 'emit');
+
+      // runToolUseFlow's finally unregisters this stream's interrupt but
+      // (post #7286) preserves the follow-up queue for WAITING — it does not
+      // dispose the session — by the time a native subagent suspends at
+      // WAITING (not reproduced by this fake runner, but true in production —
+      // see runToolUseFlow.ts). Before the fix, SharedExecutionRegistry.kill()
+      // found no interruptible context for a suspended handle and silently
+      // no-opped, leaving the handle stuck registered forever. It must now
+      // fall back to the waiting-cleanup registered above and actually tear
+      // the execution down.
+      expect(SharedExecutionRegistry.kill(executionId)).toBe(true);
+
+      // The bypassed runFlowWithLifecycle can't emit the terminal result, so
+      // terminateWaitingHandle must — trace subscribers would otherwise miss
+      // the stop entirely.
+      expect(traceEmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'result',
+          outcome: 'cancelled',
+          executionId,
+        }),
+      );
+      traceEmit.mockRestore();
+
+      expect(SharedExecutionRegistry.getHandle(executionId)).toBeUndefined();
+      expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(followUpsRelease).toHaveBeenCalledWith(streamId);
+      expect(storageMocks.deleteFlowRecord).toHaveBeenCalledWith(
+        `flow_${executionId}`,
+      );
+      // The kill path never resumes, so the per-suspension parent stage must
+      // be closed here rather than dangling open forever.
+      expect(parentStageEnd).toHaveBeenCalled();
+    } finally {
+      SharedExecutionRegistry.untrack(executionId);
+      clearStreamStatusForTest(StreamStatusService, streamId);
     }
   });
 

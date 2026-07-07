@@ -3,8 +3,9 @@ import {
   setFirstRunDone,
 } from '@controllers/onboarding/onboardingFunnel';
 import { platform } from '@platform/platform';
-import { writeTerminalStatus } from '@agent/storage';
+import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import { logSdkError, type ResultEvent } from '@agent/trace';
+import { flowKey } from '@agent/node/persistedFlow';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
@@ -224,8 +225,34 @@ export async function runFlowWithLifecycle(
     const result = await runner(handle);
     if (isWaitingFlowResult(result)) {
       logger.debug(`Task suspended with outcome: ${result.outcome}`);
+      // The handle stays tracked (correct for resume) but the live tool-use
+      // session and its interrupt registration are already gone by the time
+      // this returns (runToolUseFlow's finally). Register a fallback so a
+      // stop/kill during the suspended window still tears this down instead
+      // of ExecutionRegistry.terminate() finding no interruptible context and
+      // no-oping — see AgentRunLifecycle/ExecutionRegistry issue #7287.
+      handle.registerWaitingCleanup(() => {
+        ctx.session.followUps.release(streamId);
+        void getExecutionStore(ctx.executionId)
+          .delete(flowKey(ctx.executionId))
+          .catch(() => {});
+        // The kill path never resumes this run, so the per-suspension parent
+        // stage opened by beginRunStage would otherwise dangle open forever.
+        endParentStageSafely(
+          ctx,
+          agentIdentifier,
+          legacyEndGroupStatusForOutcome(RUN_OUTCOME.CANCELLED),
+        );
+      });
       return result;
     }
+    // The wait node may have pre-registered a suspension cleanup (via
+    // onBeforeWaiting) on a turn that then continued past the wait instead of
+    // suspending. This run is terminating normally, so drop any stale
+    // registration before teardown unregisters the interrupt — otherwise
+    // ExecutionRegistry.terminate() could mistake this handle for a suspended
+    // one in the window between interrupt-unregister and untrack.
+    handle.clearWaitingCleanup();
     // The flow's outcome is the canonical terminal fact; everything below is
     // one row of the projection table. No other layer may re-derive these.
     const projection = projectRunOutcome(result.outcome);
@@ -301,6 +328,9 @@ export async function runFlowWithLifecycle(
     logger.debug(`Task completed with outcome: ${result.outcome}`);
     return result;
   } catch (err) {
+    // Same stale-registration guard as the success arm: an errored run is
+    // not suspended, so no waiting-cleanup may survive into teardown.
+    handle.clearWaitingCleanup();
     const kind = classifyAgentError(err);
     const outcome = AGENT_ERROR_OUTCOME[kind];
     const projection = projectRunOutcome(outcome);
