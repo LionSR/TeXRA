@@ -1,9 +1,73 @@
 import { describe, expect, it } from 'vitest';
 
 import { z } from 'zod';
-import { parsePersistedRoundIndexed } from '@shared/schemas';
+import {
+  parsePersistedRoundIndexed,
+  roundIndexedRecord,
+  RoundKeySchema,
+  RoundKeyStringSchema,
+  RoundNumberSchema,
+} from '@shared/schemas';
 
 const StringItemSchema = z.string();
+
+describe('round-key/round-number invariant: non-negative safe integers only', () => {
+  it('RoundNumberSchema rejects negative and fractional round numbers', () => {
+    expect(RoundNumberSchema.safeParse(0).success).toBe(true);
+    expect(RoundNumberSchema.safeParse(5).success).toBe(true);
+    expect(RoundNumberSchema.safeParse(-1).success).toBe(false);
+    expect(RoundNumberSchema.safeParse(1.5).success).toBe(false);
+  });
+
+  it('RoundKeySchema coerces and rejects negative/fractional string keys', () => {
+    expect(RoundKeySchema.safeParse('0')).toMatchObject({
+      success: true,
+      data: 0,
+    });
+    expect(RoundKeySchema.safeParse('5')).toMatchObject({
+      success: true,
+      data: 5,
+    });
+    expect(RoundKeySchema.safeParse('-1').success).toBe(false);
+    expect(RoundKeySchema.safeParse('1.5').success).toBe(false);
+  });
+
+  it('RoundKeySchema and RoundKeyStringSchema agree on scientific notation', () => {
+    // "1e5" is a plain numeric string Number() coerces to 100000; both the
+    // scalar coercion and the record-key predicate must agree it is valid,
+    // rather than one accepting it via numeric coercion and the other
+    // rejecting it via a stricter digits-only regex.
+    expect(RoundKeySchema.safeParse('1e5')).toMatchObject({
+      success: true,
+      data: 100000,
+    });
+    expect(RoundKeyStringSchema.safeParse('1e5').success).toBe(true);
+  });
+
+  it('RoundKeyStringSchema rejects non-numeric and legacy runId-shaped keys', () => {
+    expect(RoundKeyStringSchema.safeParse('run-1').success).toBe(false);
+    expect(RoundKeyStringSchema.safeParse('abc').success).toBe(false);
+    expect(RoundKeyStringSchema.safeParse('-1').success).toBe(false);
+    expect(RoundKeyStringSchema.safeParse('1.5').success).toBe(false);
+  });
+
+  it('roundIndexedRecord() rejects negative, fractional, and non-numeric keys', () => {
+    const schema = roundIndexedRecord(StringItemSchema);
+
+    expect(schema.safeParse({ '0': ['a'], '5': ['b'] }).success).toBe(true);
+    expect(schema.safeParse({ '-1': ['a'] }).success).toBe(false);
+    expect(schema.safeParse({ '1.5': ['a'] }).success).toBe(false);
+    expect(schema.safeParse({ 'run-1': ['a'] }).success).toBe(false);
+  });
+
+  it('roundIndexedRecord() accepts scientific-notation keys, matching RoundKeySchema', () => {
+    const schema = roundIndexedRecord(StringItemSchema);
+    expect(schema.safeParse({ '1e5': ['a'] })).toMatchObject({
+      success: true,
+      data: { '1e5': ['a'] },
+    });
+  });
+});
 
 describe('parsePersistedRoundIndexed (canonical round-indexed parse entry)', () => {
   it('coerces string round keys and drops empty rounds', () => {
@@ -115,5 +179,30 @@ describe('parsePersistedRoundIndexed (canonical round-indexed parse entry)', () 
 
     expect(wasLegacy).toBe(true);
     expect(rounds).toEqual({});
+  });
+
+  it('treats a negative round key the same as any other non-integer key: legacy-shaped, salvaging nothing when not run-nested', () => {
+    // A negative key fails RoundKeyStringSchema, so the flat arm rejects the
+    // whole record (mirroring the non-integer-key case above) and the
+    // legacy-nested arm finds no nested run object to salvage from.
+    const { rounds, wasLegacy } = parsePersistedRoundIndexed(
+      'missingOutputs',
+      { '-1': ['a.tex'], '0': ['b.tex'] },
+      StringItemSchema,
+    );
+
+    expect(wasLegacy).toBe(true);
+    expect(rounds).toEqual({});
+  });
+
+  it('accepts a scientific-notation round key in the flat arm, agreeing with RoundKeySchema', () => {
+    const { rounds, wasLegacy } = parsePersistedRoundIndexed(
+      'missingOutputs',
+      { '1e2': ['a.tex'] },
+      StringItemSchema,
+    );
+
+    expect(wasLegacy).toBe(false);
+    expect(rounds).toEqual({ 100: ['a.tex'] });
   });
 });

@@ -1223,10 +1223,17 @@ export class DesktopProgressBridge {
     const stream = this.state.activeStream;
     if (!stream) return undefined;
 
-    // Round keys are non-negative integers, so the canonical round-indexed
-    // record already iterates ascending (integer object keys are spec-ordered
-    // numerically) — round and between-round diffs are produced (and opened)
-    // in order, matching the VS Code command, with no separate sort needed.
+    // Round keys are non-negative integers BY CONSTRUCTION: every write path
+    // into StreamSnapshotStore's outputFiles accumulator (both the live
+    // addOutputFiles patch path and the persisted-sidecar read path) coerces
+    // and rejects round keys through the shared RoundKeySchema
+    // (`@shared/schemas/roundIndexed.ts`), so a malformed key can never reach
+    // this accumulator. That structural guarantee is what makes the ES2015+
+    // spec's ascending-numeric-enumeration-order rule for non-negative
+    // integer keys apply here — round and between-round diffs are produced
+    // (and opened) in order, matching the VS Code command, with no separate
+    // sort needed. A defensive re-sort would only mask a schema regression,
+    // not add safety.
     const outputsByRound = this.state.snapshots.getOutputFiles(stream);
     const workspaceScan = this.getLatexdiffWorkspaceScan(stream, editedFile);
     if (Object.keys(outputsByRound).length === 0 && !workspaceScan) {

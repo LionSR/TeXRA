@@ -35,6 +35,7 @@ import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import {
   CompileFailureSchema,
+  cloneRoundIndexed,
   emptyUsageStats,
   isEmptyUsage,
   OutputFileInfoListSchema,
@@ -719,16 +720,20 @@ export class StreamSnapshotStore {
   // Read accessors over in-memory accumulated state (replace manager getters)
   // ==========================================================================
 
+  // Deep-enough copies (fresh record, fresh per-round array): a caller that
+  // mutates the returned value — including pushing into a returned round's
+  // array — can never corrupt these in-memory accumulators. A shallow
+  // `{ ...map }` spread would share the per-round arrays by reference.
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo> {
-    return { ...this.outputFiles.get(stream) };
+    return cloneRoundIndexed(this.outputFiles.get(stream));
   }
 
   getMissingOutputs(stream: StreamTabId): RoundIndexed<string> {
-    return { ...this.missingOutputs.get(stream) };
+    return cloneRoundIndexed(this.missingOutputs.get(stream));
   }
 
   getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure> {
-    return { ...this.compileFailures.get(stream) };
+    return cloneRoundIndexed(this.compileFailures.get(stream));
   }
 
   getRunUsage(stream: StreamTabId): Map<string, TokenUsageStats> {
