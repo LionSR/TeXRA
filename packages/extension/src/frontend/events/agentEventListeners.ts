@@ -11,11 +11,11 @@ import * as vscode from 'vscode';
 import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
+import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventContract';
 import type {
   InstructionAction,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+} from '@eventBus/ProgressEventContract';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';

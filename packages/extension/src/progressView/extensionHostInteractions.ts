@@ -9,7 +9,6 @@ import type {
   HostPlanApprovalRequest,
   HostRetryRequest,
   HostUserQuestionResult,
-  PendingHostInteraction,
 } from '@agent/runtime/HostInteractions';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
@@ -17,7 +16,7 @@ import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+} from '@eventBus/ProgressEventContract';
 import { nativeRequestApproval } from '@frontend/approval/nativeToolEditApproval';
 import type {
   AgentProposalPermission,
@@ -42,8 +41,10 @@ export interface ExtensionHostInteractionsOptions {
 
 type PendingKind = 'bash' | 'plan' | 'proposal' | 'retry' | 'userQuestion';
 
-interface PendingExtensionInteraction<T> extends PendingHostInteraction {
+interface PendingExtensionInteraction<T> {
+  readonly id: string;
   readonly kind: PendingKind;
+  readonly streamId?: StreamTabId;
   readonly settle: (value: T) => void;
 }
 
@@ -221,14 +222,6 @@ export function createExtensionHostInteractions(
       }
       options.handleProgressEvent(event, payload);
       return true;
-    },
-
-    pending(): readonly PendingHostInteraction[] {
-      return [...pendingRequests.values()].map(({ id, kind, streamId }) => ({
-        id,
-        kind,
-        streamId,
-      }));
     },
 
     resolve(requestId: string, result: HostInteractionResolution): boolean {

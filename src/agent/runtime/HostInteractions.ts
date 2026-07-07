@@ -1,7 +1,7 @@
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+} from '@eventBus/ProgressEventContract';
 import type {
   AgentProposal,
   Plan,
@@ -68,12 +68,6 @@ export interface HostExternalInquiryHandle {
   readonly threadId: string;
 }
 
-export interface PendingHostInteraction {
-  readonly id: string;
-  readonly kind: string;
-  readonly streamId?: StreamTabId;
-}
-
 export interface HostInteractionResolution {
   readonly kind: string;
   readonly action: string;
@@ -84,10 +78,8 @@ export interface HostInteractionResolution {
 /**
  * Session-owned host interaction surface.
  *
- * During the Stage 4 migration, hosts may still implement this port by handling
- * the legacy progress-event request names internally. The important boundary is
- * ownership: runtime code asks the session for an interaction, while host code
- * owns display, replay, and first-wins resolution.
+ * Runtime code asks the session for an interaction; host code owns display,
+ * replay (via `ApprovalRequestHandler`), and first-wins resolution.
  */
 export interface HostInteractions {
   requestToolEditApproval?(
@@ -121,7 +113,6 @@ export interface HostInteractions {
     event: K,
     payload: ProgressEventPayloads[K],
   ): boolean;
-  pending(): readonly PendingHostInteraction[];
   resolve(requestId: string, result: HostInteractionResolution): boolean;
   cancelForStream(streamId: StreamTabId, cause?: string): void;
   cancelUnscoped?(cause?: string): void;
@@ -131,7 +122,6 @@ export interface HostInteractions {
 
 const noopHostInteractions: HostInteractions = {
   handleProgressEvent: () => false,
-  pending: () => [],
   resolve: () => false,
   cancelForStream: () => {},
   cancelUnscoped: () => {},
@@ -212,10 +202,6 @@ export class SessionHostInteractions implements HostInteractions {
     request: HostExternalInquiryRequest,
   ): Promise<HostExternalInquiryHandle> | undefined {
     return this.active.openExternalInquiry?.(request);
-  }
-
-  pending(): readonly PendingHostInteraction[] {
-    return this.active.pending();
   }
 
   resolve(requestId: string, result: HostInteractionResolution): boolean {

@@ -118,7 +118,6 @@ describe('promise coordinators', () => {
           return { action: 'approve' };
         },
         handleProgressEvent: () => false,
-        pending: () => [],
         resolve: () => false,
         cancelForStream: () => {},
       },
