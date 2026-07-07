@@ -166,6 +166,61 @@ describe('resolvePersistedStreamIdForExecution', () => {
   );
 
   it(
+    'prefers a log-backed meta match over an earlier-ordered workPlan-only ' +
+      'match sharing the same executionId (#7403)',
+    async () => {
+      const executionId = 'abc444' as ExecutionId;
+      // Named so the workPlan-only candidate sorts alphabetically FIRST in
+      // the persisted-stream directory listing, mirroring the reported bug:
+      // an earlier-ordered candidate has only workPlan.json (no stream log)
+      // while a later-ordered candidate has the real streamLogs entry. The
+      // resolver must still pick the log-backed one regardless of order.
+      const workPlanOnlyStream =
+        'aOrchestrator@deepseekproT#abc444' as StreamTabId;
+      const logBackedStream = 'zBashTool@tool#abc444' as StreamTabId;
+
+      const snapshotWriter = new StreamSnapshotStore();
+      snapshotWriter.setTaskState(
+        workPlanOnlyStream,
+        taskState('orchestrator'),
+        executionId,
+      );
+      snapshotWriter.setTaskState(
+        logBackedStream,
+        taskState('bash'),
+        executionId,
+      );
+      snapshotWriter.handleProgressEvent('updateTodos', {
+        streamId: workPlanOnlyStream,
+        todos: [TODO],
+      });
+      await snapshotWriter.flush();
+
+      const logStore = new StreamLogStore();
+      await logStore.load();
+      logStore.append(logBackedStream, {
+        id: 'entry-1',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 100,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'child stream output',
+      });
+      await logStore.flush();
+
+      const resolved = await resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+        streamLogStore: logStore,
+      });
+
+      expect(resolved).toEqual({
+        streamId: logBackedStream,
+        source: 'streamDataMeta',
+      });
+    },
+  );
+
+  it(
     'bounds the concurrent meta-file reads instead of fanning out over every ' +
       'persisted stream at once (#7299)',
     async () => {
