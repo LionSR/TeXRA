@@ -292,7 +292,9 @@ describe('NativeSubagentStrategy', () => {
     abandonListener?.(undefined);
 
     expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
-    expect(SharedSubagentDeliveryRegistry.getActive(executionId)).toBeUndefined();
+    expect(
+      SharedSubagentDeliveryRegistry.getActive(executionId),
+    ).toBeUndefined();
   });
 
   it('cleans up registry entries even when a resumed completion hook throws', async () => {
@@ -352,6 +354,8 @@ describe('NativeSubagentStrategy', () => {
     // a later `delegate_agent` call doesn't find stale delivery state for a
     // run that has already exited its lifecycle.
     expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
-    expect(SharedSubagentDeliveryRegistry.getActive(executionId)).toBeUndefined();
+    expect(
+      SharedSubagentDeliveryRegistry.getActive(executionId),
+    ).toBeUndefined();
   });
 });
