@@ -26,7 +26,7 @@ export type StringifyResult = {
  * Avoids repeated parsing by tracking the serialization format used.
  */
 export function stringifyWithLanguage(value: unknown): StringifyResult {
-  if (value === undefined || value === null) {
+  if (value == null) {
     return { text: '', language: 'plaintext' };
   }
 

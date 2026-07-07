@@ -50,14 +50,12 @@ export async function probeLatexToolchain(): Promise<LatexToolchainProbe> {
   const installed = await Promise.all(
     toolNames.map((tool) => checkToolInstalled(tool, false)),
   );
-  const tools = toolNames.map((name, index): LatexToolStatus => {
-    return {
-      name,
-      installed: installed[index] ?? false,
-      required: REQUIRED_TOOLS.has(name),
-      purpose: TOOL_PURPOSES[name],
-    };
-  });
+  const tools = toolNames.map((name, index): LatexToolStatus => ({
+    name,
+    installed: installed[index] ?? false,
+    required: REQUIRED_TOOLS.has(name),
+    purpose: TOOL_PURPOSES[name],
+  }));
   return {
     tools,
     hasCompiler: tools.some(

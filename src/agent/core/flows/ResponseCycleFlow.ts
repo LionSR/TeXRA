@@ -14,7 +14,6 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 
@@ -157,14 +156,12 @@ interface ProcessPrepResult {
   shouldStop: boolean;
   responseObject: unknown;
   responseTimeMs?: number;
-  messages: ProviderMessage[];
   lastResponse: string;
   accumulatedOutput: string;
 }
 
 interface ProcessResultCommon {
   stopReason: ProviderStopReason;
-  thinkingContent?: string | null;
   useStreaming: boolean;
   responseUsage: ProviderUsage;
   normalizedUsage?: NormalizedUsage;
@@ -199,7 +196,6 @@ interface ContinuationPrepResult {
   interrupted: boolean;
   stopReason?: ProviderStopReason;
   processedResponse?: string;
-  messages: ProviderMessage[];
 }
 
 type ContinuationNodeResult = SkippableNodeResult<{
@@ -246,7 +242,6 @@ class ResponseProcessNode<C> extends BaseNode<
       shouldStop: shared.shouldStop,
       responseObject: shared.responseObject,
       responseTimeMs: shared.responseTimeMs,
-      messages: shared.messages,
       lastResponse: assembly.lastResponse,
       accumulatedOutput: assembly.accumulatedOutput,
     };
@@ -305,7 +300,6 @@ class ResponseProcessNode<C> extends BaseNode<
 
       const common = {
         stopReason,
-        thinkingContent,
         useStreaming,
         responseUsage,
         normalizedUsage,
@@ -491,7 +485,6 @@ class ResponseContinuationNode<C> extends BaseNode<
       interrupted,
       stopReason: shared.stopReason ?? undefined,
       processedResponse: shared.processedResponse,
-      messages: shared.messages,
     };
   }
 
