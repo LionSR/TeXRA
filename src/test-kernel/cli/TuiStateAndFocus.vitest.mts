@@ -13,6 +13,8 @@ import {
 } from '@transcript';
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   activeStreamId,
@@ -61,7 +63,10 @@ import {
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
-import { wrapRuntimeHost } from '@cli/chat/tui/state/subscribeRuntimeHost';
+import {
+  attachTuiWorkPlanRunFactSubscription,
+  wrapRuntimeHost,
+} from '@cli/chat/tui/state/subscribeRuntimeHost';
 import {
   COMPLETED_PROCESS_TAIL_LINES,
   buildCompletedProcessTranscript,
@@ -105,6 +110,7 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   TODO_STATUS,
+  type Plan,
   type StorageKey,
   type StreamTabId,
   type TodoItem,
@@ -2605,6 +2611,76 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       close: async () => {},
     } as unknown as CliRuntimeHost;
   }
+
+  it('applies direct runFact.updateTodos events without host emission', () => {
+    const hub = new SessionEventHub();
+    const hostEmit = vi.fn();
+    const wrapped = wrapRuntimeHost({
+      emit: hostEmit,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const wrappedEmit = vi.spyOn(wrapped, 'emit');
+    const detach = attachTuiWorkPlanRunFactSubscription(hub);
+    const todos: TodoItem[] = [
+      {
+        content: 'State the compactness lemma',
+        status: TODO_STATUS.PENDING,
+        activeForm: 'Stating the compactness lemma',
+      },
+    ];
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: { streamId: root, todos },
+        },
+      });
+
+      expect(streams.get().get(root)?.todos).toEqual(todos);
+      expect(wrappedEmit).not.toHaveBeenCalled();
+      expect(hostEmit).not.toHaveBeenCalled();
+    } finally {
+      detach();
+      wrappedEmit.mockRestore();
+    }
+  });
+
+  it('applies direct runFact.updatePlan events without host emission', () => {
+    const hub = new SessionEventHub();
+    const hostEmit = vi.fn();
+    const wrapped = wrapRuntimeHost({
+      emit: hostEmit,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const wrappedEmit = vi.spyOn(wrapped, 'emit');
+    const detach = attachTuiWorkPlanRunFactSubscription(hub);
+    const plan: Plan = {
+      objective: 'Prove the local estimate and record the stopping criterion.',
+    };
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updatePlan'),
+          data: { streamId: root, plan },
+        },
+      });
+
+      expect(streams.get().get(root)?.plan).toEqual(plan);
+      expect(wrappedEmit).not.toHaveBeenCalled();
+      expect(hostEmit).not.toHaveBeenCalled();
+    } finally {
+      detach();
+      wrappedEmit.mockRestore();
+    }
+  });
 
   it('bridges only transitional metadata events to the snapshot store', () => {
     const snapshotStore = {

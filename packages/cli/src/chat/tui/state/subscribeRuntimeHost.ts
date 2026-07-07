@@ -3,11 +3,17 @@
 // not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
+import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
+import {
+  UpdatePlanPayloadSchema,
+  UpdateTodosPayloadSchema,
+} from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
   reduceStreamMeta,
@@ -106,6 +112,45 @@ export function wrapRuntimeHost(
     return original(event, payload);
   };
   return { ...host, emit };
+}
+
+export function attachTuiWorkPlanRunFactSubscription(
+  events: SessionEventHub,
+): () => void {
+  return events.subscribe(
+    (sessionEvent) => {
+      if (sessionEvent.scope !== 'run') return;
+      const { event } = sessionEvent;
+      if (event.type !== 'domain') return;
+      const factName = fromRunFactDomainKey(event.key);
+
+      switch (factName) {
+        case 'updateTodos': {
+          const payload = UpdateTodosPayloadSchema.safeParse(event.data);
+          if (payload.success) {
+            patchStream(payload.data.streamId, (s) => ({
+              ...s,
+              todos: payload.data.todos,
+            }));
+          }
+          return;
+        }
+        case 'updatePlan': {
+          const payload = UpdatePlanPayloadSchema.safeParse(event.data);
+          if (payload.success) {
+            patchStream(payload.data.streamId, (s) => ({
+              ...s,
+              plan: payload.data.plan,
+            }));
+          }
+          return;
+        }
+        default:
+          return;
+      }
+    },
+    { scope: 'run', types: ['domain'] },
+  );
 }
 
 function applyToState<K extends ProgressEvent>(
