@@ -20,7 +20,6 @@ import {
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import {
   MESSAGE_TYPES,
@@ -31,6 +30,7 @@ import {
 import { cleanupApprovalsForStream } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 import { withTestRunContext } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 describe('ToolUseWaitNode', () => {
   it('marks a delivered native subagent cycle before suspending at WAITING', async () => {
@@ -325,7 +325,7 @@ describe('ToolUseWaitNode', () => {
     const detachTrace = logger.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjection = attachLegacyProgressEventProjection(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       hub,
       runtimeHost,
     );
