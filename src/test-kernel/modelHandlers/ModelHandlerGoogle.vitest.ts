@@ -34,10 +34,9 @@ function createGoogleHandler(): ModelHandlerGoogleGenAI {
 describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
   const handler = createGoogleHandler();
 
-  const agentSetting = {
-    endTag: '</doc>',
-    documentTag: 'doc',
-  } as AgentSetting;
+  // The end tag is now a fixed protocol constant (`</documents>`), not a
+  // per-agent setting; `agentSetting` is unused by the base `shouldContinue`.
+  const agentSetting = {} as AgentSetting;
 
   it('continues when FinishReason.MAX_TOKENS is returned without the end tag', () => {
     const shouldContinue = handler.shouldContinue(
@@ -52,7 +51,7 @@ describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
   it('stops when the end tag is present even if FinishReason.MAX_TOKENS was returned', () => {
     const shouldContinue = handler.shouldContinue(
       FinishReason.MAX_TOKENS,
-      'partial output</doc>',
+      'partial output</documents>',
       agentSetting,
     );
 
