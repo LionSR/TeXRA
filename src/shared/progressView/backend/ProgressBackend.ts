@@ -9,7 +9,6 @@ import {
 } from '@agent/runtime/sessionProgressEventProjection';
 import type {
   ProgressEvent,
-  ProgressEventBusLike,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import {
@@ -66,7 +65,7 @@ type SessionProgressEventObserver = <K extends ProgressEvent>(
   payload: ProgressEventPayloads[K],
 ) => void;
 
-class LocalProgressEventBus implements ProgressEventBusLike {
+class LocalProgressEventBus {
   private readonly listeners = new Map<
     ProgressEvent,
     Set<(payload: ProgressEventPayloads[ProgressEvent]) => void>
@@ -109,7 +108,7 @@ class LocalProgressEventBus implements ProgressEventBusLike {
  * Host-neutral progress-view backend composition.
  *
  * Hosts provide only storage, transport, and UI callbacks. The state manager,
- * message builders, log bridge, and event bus subscriber are constructed as one
+ * message builders, log bridge, and local/session event handler are constructed as one
  * graph so extension and desktop can converge on the same backend boundary.
  */
 export class ProgressBackend {
@@ -167,10 +166,7 @@ export class ProgressBackend {
     await this.state.load();
   }
 
-  setupEventListeners(bus?: ProgressEventBusLike): ProgressEventSubscription {
-    const busSubscription = bus
-      ? this.eventHandler.setupEventListeners(bus)
-      : undefined;
+  setupEventListeners(): ProgressEventSubscription {
     const localSubscription = this.eventHandler.setupEventListeners(
       this.localEvents,
     );
@@ -202,7 +198,6 @@ export class ProgressBackend {
         detachRunFacts();
         detachSessionFacts();
         localSubscription.dispose();
-        busSubscription?.dispose();
       },
     };
   }
