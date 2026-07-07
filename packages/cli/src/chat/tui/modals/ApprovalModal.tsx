@@ -37,7 +37,7 @@ export function ApprovalModal(
       return (
         <EditApproval
           availableRows={props.availableRows}
-          request={payload.request}
+          request={payload.payload}
           onDecide={decide}
         />
       );

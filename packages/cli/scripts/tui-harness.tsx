@@ -1170,7 +1170,7 @@ if (SHOW_EDIT_APPROVAL) {
     void enqueueApproval(
       {
         kind: 'toolEdit',
-        request: makeEditApprovalRequest(),
+        payload: makeEditApprovalRequest(),
       },
       { onPresent: () => notify({ kind: 'approvalNeeded' }) },
     ).then(applyHarnessApprovalDecision);
