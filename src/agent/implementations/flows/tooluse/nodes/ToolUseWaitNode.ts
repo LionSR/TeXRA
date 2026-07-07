@@ -21,12 +21,8 @@ interface WaitPrepResult {
   touchedFiles: string[];
   /** True when entering after a failed/cancelled cycle. */
   afterError: boolean;
-  /** True when an earlier cycle already delivered this subagent result. */
-  previouslyDeliveredToOrchestrator: boolean;
-  /** Set after the current cycle has been delivered to an orchestrator. */
-  deliveredToOrchestrator?: boolean;
-  /** Run cost accumulated so far — forwarded to `onBeforeWaiting` so a
-   *  suspended-then-abandoned native subagent can still settle its cost. */
+  /** Run cost accumulated so far — carried on the WAITING turn facts so the
+   *  child-run loop can settle cost even for a suspended-then-abandoned turn. */
   totalCostUsd?: number;
 }
 
@@ -36,17 +32,16 @@ export class ToolUseWaitNode<C> extends Node<
   ToolUseServices<C>
 > {
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
-    const { modelHandler, onBeforeWaiting } = this.services;
+    const { modelHandler, isSubagent, onIdle } = this.services;
 
-    // Only extract response/touched-files when the callback is wired (subagent mode).
-    const wired = onBeforeWaiting !== undefined;
-
+    // Subagent mode needs these turn facts for every delivery (the loop's
+    // one delivery site). Root mode only needs `lastResponse`, and only when
+    // `onIdle` is wired (a host projecting the transcript before it blocks).
+    const wantsLastResponse = isSubagent === true || onIdle !== undefined;
     return {
       afterError: !!(shared.lastError || shared.userCancelledRetry),
-      previouslyDeliveredToOrchestrator:
-        shared.deliveredToOrchestrator === true,
-      touchedFiles: wired ? extractTouchedFiles(shared.stateSlices) : [],
-      lastResponse: wired
+      touchedFiles: isSubagent ? extractTouchedFiles(shared.stateSlices) : [],
+      lastResponse: wantsLastResponse
         ? findLastAssistantText(shared.messages, (m) =>
             modelHandler.extractAssistantText(m),
           )
@@ -57,19 +52,11 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
-    const {
-      checkInterruption,
-      session,
-      streamStatus,
-      onBeforeWaiting,
-      isSubagent,
-    } = this.services;
+    const { checkInterruption, session, streamStatus, isSubagent } =
+      this.services;
     const { streamId, runtimeHost } = useLaunchRunContext();
 
     if (checkInterruption()) {
-      if (prepRes.previouslyDeliveredToOrchestrator) {
-        prepRes.deliveredToOrchestrator = true;
-      }
       return { kind: 'stop' };
     }
 
@@ -94,34 +81,23 @@ export class ToolUseWaitNode<C> extends Node<
         await setGoalSessionBashAutoApproval(streamId, false, runtimeHost);
         emitRunFact(this.services.logger, 'goalPaused', { streamId });
       }
-    } else {
-      // Always call `onBeforeWaiting`, even when an earlier cycle already
-      // delivered this subagent's result. `NativeSubagentStrategy.onBeforeWaiting`
-      // re-registers this turn's `abandon()` cleanup on the current
-      // `runHandle` on every genuinely-suspending call — initial launch and
-      // every resume alike (see its doc comment) — and is otherwise a no-op
-      // "already delivered" short-circuit. Skipping the call here (as a
-      // `previouslyDeliveredToOrchestrator` fast path once did) would leave a
-      // turn that resumes already-delivered and suspends again with no
-      // cleanup registered on its handle, so a later stop/kill of that
-      // suspension would bypass the strategy's own teardown.
-      const delivered = await onBeforeWaiting?.(
-        prepRes.lastResponse,
-        prepRes.touchedFiles,
-        this.services.attachedMemoryMisses ?? [],
-        prepRes.totalCostUsd,
-      );
-      prepRes.deliveredToOrchestrator =
-        prepRes.previouslyDeliveredToOrchestrator ||
-        (onBeforeWaiting !== undefined && delivered !== false);
+    } else if (!isSubagent) {
+      // Root-only notification: fires every cycle (not just a genuine
+      // block) so a host can project each round's response as it happens —
+      // e.g. the CLI syncing its terminal transcript live. Distinct from
+      // subagent delivery below, which suspends the flow; this never does.
+      this.services.onIdle?.(prepRes.lastResponse);
     }
 
-    const shouldSuspendNativeSubagent =
-      isSubagent === true &&
-      onBeforeWaiting !== undefined &&
-      prepRes.deliveredToOrchestrator === true &&
-      !this.services.stopAfterCycle;
-    if (shouldSuspendNativeSubagent && !session.hasQueuedFollowUp()) {
+    // Subagent mode always exits WAITING here, carrying this cycle's turn
+    // facts (lastResponse/touchedFiles/totalCostUsd) — no in-flow delivery,
+    // no "already queued" fast path. The child-run loop (the one delivery
+    // site) formats and delivers after suspension, then decides whether to
+    // resume immediately (a follow-up already raced into the queue) or
+    // genuinely wait. This makes duplicate/skipped delivery structurally
+    // impossible and keeps every suspension symmetric, so the loop's
+    // interruptible always has a real boundary to register against.
+    if (isSubagent === true && !this.services.stopAfterCycle) {
       streamStatus.transitionToWaiting(streamId, 'wait', {
         trace: this.services.logger,
       });
@@ -183,27 +159,19 @@ export class ToolUseWaitNode<C> extends Node<
     const { streamId, runtimeHost } = useLaunchRunContext();
 
     if (execRes.kind === 'waiting') {
-      if (prepRes.deliveredToOrchestrator) {
-        shared.deliveredToOrchestrator = true;
-      }
       return FlowTransition.WAITING;
     }
 
     if (execRes.kind === 'stop') {
-      if (prepRes.deliveredToOrchestrator) {
-        shared.deliveredToOrchestrator = true;
-      }
       return FlowTransition.COMPLETE;
     }
 
     // User sent a follow-up — clear any prior error/cancellation state
     // so the next cycle starts fresh and runToolUseFlow won't treat
-    // a previously-recovered error as a terminal failure.
+    // a previously-recovered error as a terminal failure. Only reachable in
+    // root (non-subagent) mode: subagent mode always exits above.
     shared.lastError = undefined;
     shared.userCancelledRetry = undefined;
-    if (prepRes.deliveredToOrchestrator) {
-      shared.deliveredToOrchestrator = true;
-    }
 
     streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
       trace: logger,
@@ -211,11 +179,8 @@ export class ToolUseWaitNode<C> extends Node<
 
     // Synthesized continuations don't come from the user queue, so they
     // must not emit updateQueuedFollowUps via the consume callback. They
-    // also don't need to be replayed in the chat log. Keep any prior
-    // delivery marker across synthetic continuations because the orchestrator
-    // has not consumed and replaced the delivered result.
+    // also don't need to be replayed in the chat log.
     if (!execRes.synthetic) {
-      shared.deliveredToOrchestrator = undefined;
       onFollowUpConsumed?.();
     }
 

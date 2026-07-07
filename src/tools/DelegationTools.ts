@@ -12,9 +12,13 @@
 import { z } from 'zod';
 
 // Local imports - agent
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import { isChildRunLoopActive } from '@agent/runtime/childRunLoop';
 import {
   sendFollowUp,
   wakeQueuedFollowUpStream,
@@ -33,8 +37,11 @@ import {
   type ToolUseAgentProposal,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import { formatFollowUpInstruction } from '@tools/subagentResults';
-import { SharedSubagentDeliveryRegistry } from '@tools/subagentDeliveryState';
+import {
+  formatFollowUpInstruction,
+  formatSubagentError,
+} from '@tools/subagentResults';
+import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
 import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
@@ -57,13 +64,45 @@ import {
   WorkflowAgentInputSchema,
   type WorkflowAgentInput,
 } from './delegation/inputFields';
-import { getNativeSubagentStrategy } from './delegation/nativeSubagentStrategy';
 
 export { rejectOversizedBibAttachments } from './delegation/inputFields';
 export type { WorkflowAgentInput };
 
 const LOG_CHANNEL = 'delegation';
 logger.initialize(LOG_CHANNEL);
+
+/**
+ * Deliver a terminal error to the orchestrator when a resumed subagent's wake
+ * fails outright (no child-run loop is listening, and the generic host resume
+ * port also failed) — without this, the resume tool call returns a normal
+ * "queued" success and the orchestrator never hears back. Best-effort: a
+ * failure delivering THIS message is logged, not re-thrown (this already runs
+ * fire-and-forget off `resumeAgent`'s own return).
+ */
+async function deliverResumeWakeFailure(
+  handle: AgentExecutionHandle,
+  session: SessionHandle,
+  executionId: string,
+  err: unknown,
+): Promise<void> {
+  logger.warn(
+    LOG_CHANNEL,
+    `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
+  );
+  const msg = formatSubagentError(executionId, handle.agentName, err);
+  const delivery = await deliverChildRunFollowUp({
+    targetStreamId: handle.parentStreamId,
+    followUp: { text: msg, origin: 'subagent_result' },
+    session,
+    wake: true,
+  });
+  if (delivery.kind !== 'delivered') {
+    logger.warn(
+      LOG_CHANNEL,
+      `Also failed to deliver the wake-failure error for '${executionId}' to the parent (${delivery.kind}).`,
+    );
+  }
+}
 
 // ============================================================================
 // delegate_workflow tool - for document processing agents
@@ -292,18 +331,8 @@ Git worktree support: resolved from the active workspace at runtime.`,
       );
     }
 
-    const deliveryState = SharedSubagentDeliveryRegistry.getActive(executionId);
-    if (!deliveryState) {
-      throw new Error(
-        `Execution '${executionId}' is no longer tracked for delivery. It may have already completed.`,
-      );
-    }
-
     const framedInstruction = formatFollowUpInstruction(instruction);
     const result = await sendFollowUp(handle.childStreamId, framedInstruction);
-    if (result.status !== 'no_session') {
-      deliveryState.markPending();
-    }
 
     // Dispatch the wake without awaiting it: waking a WAITING subagent resumes
     // its run all the way to the next WAITING/terminal boundary, which can be
@@ -312,33 +341,44 @@ Git worktree support: resolved from the active workspace at runtime.`,
     // follow-up queue, same as the original delegation's async-arrival
     // contract. Awaiting it here would stall this tool call, and the parent
     // orchestrator's whole turn with it, for as long as the child keeps
-    // running (see #7289). Neither branch's return value is otherwise
-    // consulted below, so nothing here depends on it settling first.
-    const nativeStrategy = getNativeSubagentStrategy(executionId);
-    const wake = nativeStrategy
-      ? nativeStrategy.wakeQueuedFollowUp(result, {
-          approvalPromptsUnavailable: parentContext?.approvalPromptsUnavailable,
-          runtimeUnavailableTools: parentContext?.runtimeUnavailableTools,
-          toolEditApprovalHandler: parentContext?.toolEditApprovalHandler,
+    // running (see #7289).
+    //
+    // A live child-run loop for this stream is already blocked in
+    // `queue.waitAndDrainAll` on the same `FollowUpQueue` instance
+    // `sendFollowUp` just enqueued into — the enqueue alone resolves that
+    // wait (see `isChildRunLoopActive`), so an additional wake here would
+    // race a second, competing resume through the generic host-level
+    // restart-recovery path against the loop's own in-flight continuation.
+    // Only genuinely wake when no loop is listening — a restarted process,
+    // where the persisted stream is WAITING but nothing in this process is
+    // watching its queue.
+    if (!isChildRunLoopActive(handle.childStreamId)) {
+      // A wake failure (thrown, or a resolved 'queued_resume_failed'/
+      // 'dropped' outcome) means the child will never actually resume and
+      // deliver a result — the orchestrator would otherwise see this tool
+      // call return a normal "queued" success and then silently never hear
+      // back. Deliver a terminal error to the parent on that failure, same
+      // as the deleted NativeSubagentStrategy.wakeQueuedFollowUp used to.
+      wakeQueuedFollowUpStream(handle.childStreamId, result, undefined, session)
+        .then((wakeResult) => {
+          if (
+            wakeResult.kind === 'queued_resume_failed' ||
+            wakeResult.kind === 'dropped'
+          ) {
+            return deliverResumeWakeFailure(
+              handle,
+              session,
+              executionId,
+              new Error(
+                `Resume wake failed (${wakeResult.kind}): the subagent's follow-up could not be delivered to a resumed run.`,
+              ),
+            );
+          }
         })
-      : wakeQueuedFollowUpStream(
-          handle.childStreamId,
-          result,
-          undefined,
-          session,
+        .catch((err: unknown) =>
+          deliverResumeWakeFailure(handle, session, executionId, err),
         );
-    // For a native subagent, `wakeQueuedFollowUp` already routes any wake
-    // failure through the strategy's terminal error-delivery path (see
-    // `NativeSubagentStrategy.wakeQueuedFollowUp`), so the orchestrator gets
-    // an observable result even when the wake itself fails. This `.catch` is
-    // the last-resort backstop for the non-native path (no strategy to
-    // deliver through) and for a delivery-path failure in the native case.
-    wake.catch((err: unknown) => {
-      logger.warn(
-        LOG_CHANNEL,
-        `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
-      );
-    });
+    }
 
     switch (result.status) {
       case 'sent':

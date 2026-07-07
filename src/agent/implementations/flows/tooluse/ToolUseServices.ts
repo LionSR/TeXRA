@@ -11,16 +11,6 @@ import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
-export type ToolUseBeforeWaitingCallback = (
-  lastResponse: string | undefined,
-  touchedFiles: string[],
-  memoryMisses: readonly AttachedMemoryMiss[],
-  /** Run cost accumulated so far, when available — lets a native subagent
-   *  strategy settle the parent's usage totals if this suspended turn is
-   *  later abandoned instead of resumed to completion. */
-  totalCostUsd?: number,
-) => boolean | void | Promise<boolean | void>;
-
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly setting: AgentToolUseSetting;
   readonly session: IToolUseSession;
@@ -31,11 +21,6 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly snapshot: ToolUseSessionSnapshot | null;
   readonly onRoundFinalized: RoundFinalizedCallback;
   readonly onFollowUpConsumed?: () => void;
-  /** Return `false` to signal nothing was delivered to an orchestrator (the
-   *  current cycle is purely internal). `true` or `void` indicates a result
-   *  was delivered; on interruption the wait node uses this to mark the flow
-   *  as completed rather than aborted. */
-  readonly onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   readonly attachedMemoryMisses?: readonly AttachedMemoryMiss[];
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Stop after one cycle instead of waiting for a conversational follow-up. */
@@ -44,4 +29,14 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;
   /** True when this agent was launched as a subagent by an orchestrator. */
   readonly isSubagent?: boolean;
+  /**
+   * Root-run-only notification: fires with the latest assistant response at
+   * every cycle boundary (not just a genuine block), before the flow either
+   * continues immediately (a follow-up is already queued) or blocks on
+   * `session.waitForFollowUp()`. Used by hosts that project a live
+   * transcript outside the flow's own event stream — e.g. the CLI syncing
+   * its terminal transcript. Never fires in subagent mode, which has its own
+   * WAITING-suspend delivery path instead.
+   */
+  readonly onIdle?: (lastResponse: string | undefined) => void;
 }
