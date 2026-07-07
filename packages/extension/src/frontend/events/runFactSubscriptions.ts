@@ -1,7 +1,7 @@
 // Local imports
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import { isObject } from '@utils/core';
 
 type AddOutputFilesPayload = ProgressEventPayloads['addOutputFiles'];

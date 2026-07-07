@@ -172,7 +172,7 @@ export const LogRecordSchema = z.object({
   groups: z.array(z.string()).readonly(),
 });
 
-// ProgressEventSchema is the existing union from @eventBus/ProgressEventBus
+// ProgressEventSchema is the existing union from @eventBus/ProgressEventContract
 // (event: "setActiveStream" | "setTaskState" | … )
 
 export const RunStreamEventSchema = z.discriminatedUnion('event', [

@@ -478,7 +478,7 @@ Parse request.references  Parse request.command
 // packages/extension/src/commands/chat/ChatStreamAgentRuntimeHost.ts
 import type * as vscode from 'vscode';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 
 export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
   constructor(private readonly stream: vscode.ChatResponseStream) {}
@@ -538,7 +538,7 @@ export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
 }
 ```
 
-This class lives in `packages/extension/src/commands/chat/` (the VS Code-allowed zone). It may import `vscode` types. It imports `AgentRuntimeHost` from `@agent/runtime/AgentRuntimeHost` and uses `ProgressEventPayloads` from `@eventBus/ProgressEventBus` as a type only — no runtime import of the event bus itself.
+This class lives in `packages/extension/src/commands/chat/` (the VS Code-allowed zone). It may import `vscode` types. It imports `AgentRuntimeHost` from `@agent/runtime/AgentRuntimeHost` and uses `ProgressEventPayloads` from `@eventBus/ProgressEventContract` as a type only — no runtime import of the event bus itself.
 
 ### `buildChatAgentConfig` Utility
 
@@ -725,7 +725,7 @@ Not applicable to v1 (TeXRA's own model handlers handle token budgeting). Deferr
 - Unit tests using a mock `vscode.ChatResponseStream` (interface-compatible stub) verifying the correct `progress()`, `button()`, and `markdown()` calls for each mapped event type.
 - Verification that the class satisfies the `AgentRuntimeHost` contract by importing `noopAgentRuntimeHost` from `src/agent/runtime/AgentRuntimeHost.ts` and asserting structural compatibility in a compile-time `satisfies` check.
 
-**Dependencies:** Phase 1 complete. Requires reading `src/agent/runtime/AgentRuntimeHost.ts` (for the interface) and `src/eventBus/ProgressEventBus.ts` (for `ProgressEventPayloads` type map and `addOutputFiles.filesByRound` shape).
+**Dependencies:** Phase 1 complete. Requires reading `src/agent/runtime/AgentRuntimeHost.ts` (for the interface) and `src/eventBus/ProgressEventContract.ts` (for `ProgressEventPayloads` type map and `addOutputFiles.filesByRound` shape).
 
 ### Phase 3: Chat Participant Registration and Handler (1 week)
 

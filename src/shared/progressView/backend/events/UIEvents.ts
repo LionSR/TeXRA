@@ -1,4 +1,4 @@
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 
 /** All UI callbacks for retry, approval, and proposal event handling. */
 export interface UICallbacks {

@@ -1,7 +1,7 @@
 // Local imports - runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';

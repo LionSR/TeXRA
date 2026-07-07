@@ -17,7 +17,7 @@ import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+} from '@eventBus/ProgressEventContract';
 import { nativeRequestApproval } from '@frontend/approval/nativeToolEditApproval';
 import type {
   AgentProposalPermission,
