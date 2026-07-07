@@ -5,7 +5,7 @@ import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+} from '@eventBus/ProgressEventContract';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,

@@ -1,5 +1,5 @@
 import type { AgentTrace } from '@agent/trace';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 
 export const RUN_FACT_DOMAIN_PREFIX = 'runFact.';
 

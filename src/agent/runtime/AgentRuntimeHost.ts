@@ -1,4 +1,4 @@
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import type { HostInteractions } from './HostInteractions';
 
 /**
