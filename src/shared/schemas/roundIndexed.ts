@@ -25,8 +25,20 @@ import { z } from 'zod';
  */
 export type RoundIndexed<T> = { [round: number]: T[] };
 
-/** Coerces and validates integer round keys from string record keys. */
-export const RoundKeySchema = z.coerce.number().int();
+/**
+ * Coerces and validates round keys from string record keys: non-negative
+ * safe integers only. Rounds never go negative (round 0 is the first), and
+ * every consumer that reads a `RoundIndexed<T>` record via plain
+ * `Object.keys()`/`for...in` enumeration (rather than {@link
+ * roundIndexedEntries}) relies on the ES2015+ spec guarantee that
+ * non-negative-integer-string keys enumerate in ascending numeric order —
+ * that guarantee does NOT hold for negative or non-integer keys, so this is
+ * a structural invariant, not just a naming convention. Enforced once, here,
+ * at parse time (see {@link RoundKeyStringSchema}, used by both
+ * {@link roundIndexedRecord} and {@link parsePersistedRoundIndexed}'s flat
+ * arm), so downstream code never re-checks it.
+ */
+export const RoundKeySchema = z.coerce.number().int().nonnegative();
 
 /**
  * Scalar round-number schema: the single definition shared by round-indexed
@@ -37,21 +49,47 @@ export const RoundKeySchema = z.coerce.number().int();
  * different concept from {@link RoundIndexed} — "which round does this diff
  * compare" rather than "items grouped by round" — so they are not folded into
  * the record container, but they still mean the same "this integer is a
- * round number" and now share one schema instead of a repeated `z.number()`.
+ * round number" (non-negative integer, matching {@link RoundKeySchema}) and
+ * now share one schema instead of a repeated `z.number()`.
  */
-export const RoundNumberSchema = z.number();
+export const RoundNumberSchema = z.int().nonnegative();
+
+/**
+ * A JSON object key that {@link RoundKeySchema} can coerce to a valid round
+ * number. The SAME predicate — not a parallel regex — backs both
+ * {@link roundIndexedRecord}'s key schema and {@link
+ * parsePersistedRoundIndexed}'s flat-arm key schema, so a key like `"1e5"`
+ * (scientific notation, which `RoundKeySchema` coerces to round `100000`) is
+ * accepted or rejected identically by every round-indexed record schema in
+ * the codebase instead of drifting between a strict `/^\d+$/`-style regex in
+ * one place and the looser numeric coercion in another.
+ */
+export const RoundKeyStringSchema = z
+  .string()
+  .refine((key) => RoundKeySchema.safeParse(key).success, {
+    message: 'Round key must be a non-negative integer',
+  });
 
 /**
  * Schema factory for the canonical record: `{ "0": T[], "1": T[], … }`.
  * Trusted-input role (IPC messages, live state, snapshots): callers attach
  * their own field policy (`.prefault({})`, `.optional()`). Untrusted persisted
- * files go through {@link parsePersistedRoundIndexed} instead.
+ * files go through {@link parsePersistedRoundIndexed} instead. Keys are
+ * validated against {@link RoundKeyStringSchema} so every consumer of a
+ * parsed record can rely on the ascending-iteration-order invariant.
  */
 export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z.record(z.string(), z.array(valueSchema));
+  return z.record(RoundKeyStringSchema, z.array(valueSchema));
 }
 
-/** Entries with numeric round keys, ascending by round. */
+/**
+ * Entries with numeric round keys, ascending by round. Prefer plain
+ * `Object.entries()`/`Object.values()` when the record is already known to
+ * come from a schema-validated {@link RoundIndexed} (its keys already
+ * enumerate in ascending order per spec); reach for this when a caller wants
+ * `[round, items]` pairs rather than the enumeration order itself, or is
+ * handling a record that was not necessarily schema-validated.
+ */
 export function roundIndexedEntries<T>(
   rounds: RoundIndexed<T>,
 ): [number, T[]][] {
@@ -60,11 +98,28 @@ export function roundIndexedEntries<T>(
     .sort((a, b) => a[0] - b[0]);
 }
 
+/**
+ * Deep-enough copy: a fresh record with a fresh array per round, so a caller
+ * that mutates the returned value — including pushing into one of its
+ * per-round arrays — can never corrupt an internal accumulator that still
+ * holds the original arrays by reference. Item objects themselves are not
+ * cloned; they are treated as immutable value objects, same as every other
+ * schema-derived type in this codebase.
+ */
+export function cloneRoundIndexed<T>(
+  rounds: RoundIndexed<T> | undefined,
+): RoundIndexed<T> {
+  const clone: RoundIndexed<T> = {};
+  if (!rounds) return clone;
+  for (const [round, items] of Object.entries(rounds)) {
+    clone[Number(round)] = [...items];
+  }
+  return clone;
+}
+
 // ============================================================================
 // Persisted-file parse entry (single legacy-absorbing entry point)
 // ============================================================================
-
-const INTEGER_KEY = /^-?\d+$/;
 
 function warnDroppedItem(
   kind: string,
@@ -155,12 +210,15 @@ export function parsePersistedRoundIndexed<T>(
     return rounds;
   };
 
-  // Canonical flat shape: every key an integer round, every value an array.
-  // The key/value constraints make this arm REJECT legacy input (a runId key,
-  // or a numeric-only runId whose value is a nested object), routing it to
-  // the legacy arm — mirroring the old `isLegacyNested` predicate.
+  // Canonical flat shape: every key a valid round (per RoundKeyStringSchema —
+  // the SAME predicate RoundKeySchema itself uses, so e.g. "1e5" is accepted
+  // or rejected identically here and in `toRounds` below), every value an
+  // array. The key/value constraints make this arm REJECT legacy input (a
+  // runId key, or a numeric-only runId whose value is a nested object),
+  // routing it to the legacy arm — mirroring the old `isLegacyNested`
+  // predicate.
   const FlatArmSchema = z
-    .record(z.string().regex(INTEGER_KEY), z.array(z.unknown()))
+    .record(RoundKeyStringSchema, z.array(z.unknown()))
     .transform((record): PersistedRoundIndexed<T> => ({
       rounds: toRounds(record),
       wasLegacy: false,
