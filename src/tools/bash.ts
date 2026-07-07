@@ -332,9 +332,9 @@ export class BashTool extends defineTool({
 
     const finalizeBackground = (
       options?: Parameters<typeof childStream.finalize>[0],
-    ): void => {
+    ): Promise<void> => {
       runSession.interrupts.unregister(childStreamId);
-      childStream.finalize(options);
+      return childStream.finalize(options);
     };
 
     const deliverParentFollowUp = async (text: string): Promise<void> => {
@@ -376,7 +376,7 @@ export class BashTool extends defineTool({
       } catch (err: unknown) {
         logBackgroundFailure('deliver', err);
       } finally {
-        finalizeBackground(finalizeOptions);
+        await finalizeBackground(finalizeOptions);
       }
     };
 
