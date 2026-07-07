@@ -814,11 +814,23 @@ describe('ToolUseWaitNode', () => {
     const streamId = 'wait-node-retry-cancelled-wait' as StreamTabId;
     const streamStatus = new StreamStatusMachine();
     const runtimeHost = { emit: vi.fn() };
+    const logger = Object.assign(new TraceEmitter(), {
+      error: vi.fn(),
+      info: vi.fn(),
+    });
+    const events = new SessionEventHub();
+    const detachProjection = attachSessionProgressEventProjectionForTest(
+      events,
+      runtimeHost,
+    );
+    const detachTrace = logger.subscribe((event) => {
+      events.emit({ scope: 'run', streamId, event });
+    });
     const waitForFollowUp = vi.fn(async () => null);
     const services = {
       checkInterruption: () => false,
       isSubagent: false,
-      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
+      logger,
       modelHandler: { extractAssistantText: () => undefined },
       runtimeHost,
       session: {
@@ -862,6 +874,8 @@ describe('ToolUseWaitNode', () => {
         }),
       );
     } finally {
+      detachTrace();
+      detachProjection();
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -880,10 +894,23 @@ describe('ToolUseWaitNode', () => {
     );
     const info = vi.fn();
     const runtimeHost = { emit: vi.fn() };
+    const streamId = 'test-stream' as StreamTabId;
+    const logger = Object.assign(new TraceEmitter(), {
+      error: vi.fn(),
+      info,
+    });
+    const events = new SessionEventHub();
+    const detachProjection = attachSessionProgressEventProjectionForTest(
+      events,
+      runtimeHost,
+    );
+    const detachTrace = logger.subscribe((event) => {
+      events.emit({ scope: 'run', streamId, event });
+    });
     const streamStatus = new StreamStatusMachine();
     const services = {
       checkInterruption: () => false,
-      logger: { emit: vi.fn(), error: vi.fn(), info },
+      logger,
       modelHandler: {
         capabilities: { supportsVision: true },
         createUserFollowUpMessages,
@@ -907,33 +934,34 @@ describe('ToolUseWaitNode', () => {
         }),
       },
       streamStatus,
-      streamId: 'test-stream',
+      streamId,
     } as unknown as ToolUseServices;
     const node = new ToolUseWaitNode().setServices(services);
-    seedStreamStatusForTest(
-      streamStatus,
-      'test-stream' as StreamTabId,
-      STREAM_PHASE.WAITING,
-    );
+    seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.WAITING);
 
     const prep = await node.prep(shared);
-    const transition = await withTestRunContext(
-      runtimeHost,
-      'test-stream',
-      async () => {
-        const exec = await node.exec(prep);
-        return node.post(shared, prep, exec);
-      },
-    );
+    try {
+      const transition = await withTestRunContext(
+        runtimeHost,
+        streamId,
+        async () => {
+          const exec = await node.exec(prep);
+          return node.post(shared, prep, exec);
+        },
+      );
 
-    expect(transition).toBe(FlowTransition.CONTINUE);
-    expect(runtimeHost.emit).toHaveBeenCalledWith(
-      'updateStreamStatus',
-      expect.objectContaining({ status: STREAM_STATUS.RUNNING }),
-    );
-    expect(runtimeHost.emit.mock.invocationCallOrder[0]).toBeLessThan(
-      info.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
-    );
+      expect(transition).toBe(FlowTransition.CONTINUE);
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateStreamStatus',
+        expect.objectContaining({ status: STREAM_STATUS.RUNNING }),
+      );
+      expect(runtimeHost.emit.mock.invocationCallOrder[0]).toBeLessThan(
+        info.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+      );
+    } finally {
+      detachTrace();
+      detachProjection();
+    }
     expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(
       1,
       [],
