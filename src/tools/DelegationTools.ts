@@ -12,7 +12,10 @@
 import { z } from 'zod';
 
 // Local imports - agent
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { isChildRunLoopActive } from '@agent/runtime/childRunLoop';
@@ -34,7 +37,11 @@ import {
   type ToolUseAgentProposal,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import { formatFollowUpInstruction } from '@tools/subagentResults';
+import {
+  formatFollowUpInstruction,
+  formatSubagentError,
+} from '@tools/subagentResults';
+import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
 import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
@@ -63,6 +70,39 @@ export type { WorkflowAgentInput };
 
 const LOG_CHANNEL = 'delegation';
 logger.initialize(LOG_CHANNEL);
+
+/**
+ * Deliver a terminal error to the orchestrator when a resumed subagent's wake
+ * fails outright (no child-run loop is listening, and the generic host resume
+ * port also failed) — without this, the resume tool call returns a normal
+ * "queued" success and the orchestrator never hears back. Best-effort: a
+ * failure delivering THIS message is logged, not re-thrown (this already runs
+ * fire-and-forget off `resumeAgent`'s own return).
+ */
+async function deliverResumeWakeFailure(
+  handle: AgentExecutionHandle,
+  session: SessionHandle,
+  executionId: string,
+  err: unknown,
+): Promise<void> {
+  logger.warn(
+    LOG_CHANNEL,
+    `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
+  );
+  const msg = formatSubagentError(executionId, handle.agentName, err);
+  const delivery = await deliverChildRunFollowUp({
+    targetStreamId: handle.parentStreamId,
+    followUp: { text: msg, origin: 'subagent_result' },
+    session,
+    wake: true,
+  });
+  if (delivery.kind !== 'delivered') {
+    logger.warn(
+      LOG_CHANNEL,
+      `Also failed to deliver the wake-failure error for '${executionId}' to the parent (${delivery.kind}).`,
+    );
+  }
+}
 
 // ============================================================================
 // delegate_workflow tool - for document processing agents
@@ -313,17 +353,31 @@ Git worktree support: resolved from the active workspace at runtime.`,
     // where the persisted stream is WAITING but nothing in this process is
     // watching its queue.
     if (!isChildRunLoopActive(handle.childStreamId)) {
-      wakeQueuedFollowUpStream(
-        handle.childStreamId,
-        result,
-        undefined,
-        session,
-      ).catch((err: unknown) => {
-        logger.warn(
-          LOG_CHANNEL,
-          `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
+      // A wake failure (thrown, or a resolved 'queued_resume_failed'/
+      // 'dropped' outcome) means the child will never actually resume and
+      // deliver a result — the orchestrator would otherwise see this tool
+      // call return a normal "queued" success and then silently never hear
+      // back. Deliver a terminal error to the parent on that failure, same
+      // as the deleted NativeSubagentStrategy.wakeQueuedFollowUp used to.
+      wakeQueuedFollowUpStream(handle.childStreamId, result, undefined, session)
+        .then((wakeResult) => {
+          if (
+            wakeResult.kind === 'queued_resume_failed' ||
+            wakeResult.kind === 'dropped'
+          ) {
+            return deliverResumeWakeFailure(
+              handle,
+              session,
+              executionId,
+              new Error(
+                `Resume wake failed (${wakeResult.kind}): the subagent's follow-up could not be delivered to a resumed run.`,
+              ),
+            );
+          }
+        })
+        .catch((err: unknown) =>
+          deliverResumeWakeFailure(handle, session, executionId, err),
         );
-      });
     }
 
     switch (result.status) {
