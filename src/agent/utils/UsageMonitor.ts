@@ -5,8 +5,7 @@ import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
-import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
-import { getServerSideKeyService } from '@auth/serverKeys';
+import { usesServerSideKeysRoute } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
@@ -228,14 +227,12 @@ export class UsageMonitor {
   }
 
   private usesRelayRoute(): boolean {
-    const { config } = this.modelInfo;
-    return (
-      !shouldUseOpenRouter(config) &&
-      getServerSideKeyService().shouldUseServerSideKeysSync(
-        config.provider,
-        config.name,
-      )
-    );
+    // Shares ModelHandler's runtime combinator (#7101 triage) rather than
+    // re-deriving the same `!openRouter && relaySync` formula independently
+    // — this class deliberately holds only `modelInfo.config`
+    // (`ModelConfig`-shaped), not a full `IModelHandler` reference, so it
+    // can't call `ModelHandler.shouldUseServerSideKeys()` directly.
+    return usesServerSideKeysRoute(this.modelInfo.config);
   }
 
   /**
