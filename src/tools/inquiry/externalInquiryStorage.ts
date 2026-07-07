@@ -20,7 +20,7 @@ import {
 } from '@shared/schemas';
 import { normalizeFilePath } from '@shared/utils/path';
 import { ToolError } from '@shared/schemas/toolResult';
-import { toNewestFirstByTimestamp, hexId12 } from '@utils/core';
+import { isObject, toNewestFirstByTimestamp, hexId12 } from '@utils/core';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
@@ -187,9 +187,14 @@ const CanonicalManifestSchema = z.looseObject(ManifestBaseShape);
  * Legacy form: pre-async manifest with no `status` or `parentStreamId`.
  * Every turn was atomic Q+A (both `question` and `answer` recorded), so we
  * treat the whole thread as `answered` with no parent (continuation off).
+ *
+ * Legacy predates versioning, so this arm only accepts version-ABSENT data:
+ * a manifest that carries any `schemaVersion` (even the current one, on a
+ * shape the canonical arm rejected) is corrupt/unsupported, never legacy.
  */
 const LegacyManifestSchema = z
   .looseObject({
+    schemaVersion: z.undefined().optional(),
     threadId: ExternalInquiryThreadIdSchema,
     createdAt: z.string().min(1),
     updatedAt: z.string().min(1),
@@ -359,6 +364,24 @@ async function readThreadManifest(
         { data: err },
       );
     }
+    return null;
+  }
+  // Version discrimination happens BEFORE shape validation: a manifest that
+  // carries a schemaVersion we don't know (e.g. written by a newer TeXRA) is
+  // unsupported data, not a shape to reinterpret — without this gate it would
+  // fail the canonical union arm and fall through to a bogus legacy parse.
+  // Warn and treat as unreadable; the on-disk file is left untouched.
+  if (
+    isObject(raw) &&
+    'schemaVersion' in raw &&
+    raw.schemaVersion !== EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION
+  ) {
+    logger.warn(
+      `Unsupported external-inquiry manifest schemaVersion ` +
+        `${JSON.stringify(raw.schemaVersion)} for ${threadId}; ` +
+        `treating as unreadable.`,
+      { data: raw.schemaVersion },
+    );
     return null;
   }
   const result = ExternalInquiryThreadManifestSchema.safeParse(raw);
