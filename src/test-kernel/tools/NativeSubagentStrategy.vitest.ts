@@ -264,6 +264,99 @@ describe('NativeSubagentStrategy', () => {
     );
   });
 
+  it('delivers a terminal error to the orchestrator when the wake fails before resumeStream installs its callbacks (issue #7402)', async () => {
+    const childStream = 'child-stream' as StreamTabId;
+    mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
+    // Simulates `retrieveSessionResumeData` throwing for unreadable resume
+    // storage (SessionResumeRetrieval.ts:110-113) — this happens inside
+    // `resumeStream` *before* `resumeQueuedToolUseSnapshot` is ever called,
+    // so no onError/onRunError callback for this turn is installed.
+    mocks.retrieveSessionResumeData.mockRejectedValue(
+      new Error('resume storage unreadable'),
+    );
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
+      startedAt: 0,
+      settleSubagentCost: vi.fn(),
+    });
+    strategy.setChildStreamId(childStream);
+
+    await expect(
+      strategy.wakeQueuedFollowUp({ status: 'queued', reason: 'waiting' }, {}),
+    ).resolves.toEqual({ kind: 'queued_resume_failed' });
+
+    // The failure must reach the orchestrator through the same terminal
+    // delivery channel a resumed turn's own onError uses — not just a log
+    // line at the DelegationTools call site.
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
+    const [deliveredCall] = mocks.deliverChildRunFollowUp.mock.calls;
+    expect(deliveredCall[0]).toMatchObject({
+      targetStreamId: parentStreamId,
+      wake: true,
+    });
+    expect(deliveredCall[0].followUp.text).toContain(
+      'resume storage unreadable',
+    );
+
+    // Terminal delivery retires this run: a later delegate_agent resume
+    // attempt must not find stale strategy/registry state.
+    expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
+    expect(
+      SharedSubagentDeliveryRegistry.getActive(executionId),
+    ).toBeUndefined();
+  });
+
+  it('settles the parent usage totals with the last known cost when a wake failure has nothing else to settle from (Bugbot: wake failure locks zero cost)', async () => {
+    const childStream = 'child-stream' as StreamTabId;
+    mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
+    mocks.retrieveSessionResumeData.mockRejectedValue(
+      new Error('resume storage unreadable'),
+    );
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+    const settleSubagentCost = vi.fn();
+
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
+      startedAt: 0,
+      settleSubagentCost,
+    });
+    strategy.setChildStreamId(childStream);
+    // Captures a cost snapshot on the suspended turn before the wake fails —
+    // mirrors the same real-world sequence as the #7287 abandon() test above
+    // (onBeforeWaiting always runs before a turn can suspend and later be
+    // resumed/abandoned/wake-failed).
+    await strategy.onBeforeWaiting('done for now', [], [], 0.0042);
+
+    await strategy.wakeQueuedFollowUp(
+      { status: 'queued', reason: 'waiting' },
+      {},
+    );
+
+    // deliverSubagentError's own settle call (below, second call) carries no
+    // result (the wake never reached a real turn), so without the fallback
+    // the parent would only ever see a 0-cost settle. The real
+    // `subagentExecution.ts` wrapper this strategy is constructed with in
+    // production is itself idempotent (first call wins), so it's this first
+    // call — not the second — that determines what the parent's usage totals
+    // actually record.
+    expect(settleSubagentCost).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ totalCostUsd: 0.0042 }),
+    );
+  });
+
   it('cleans up registry entries when the underlying execution is untracked while abandoned in WAITING', () => {
     let abandonListener: ((handle: unknown) => void) | undefined;
     const addListener = vi.fn((_id: string, cb: (handle: unknown) => void) => {
