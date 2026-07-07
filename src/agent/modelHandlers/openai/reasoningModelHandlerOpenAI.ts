@@ -18,7 +18,10 @@ import type { DeepSeekToolCall, OpenAIToolCall } from '../types/IModelHandler';
  *   reasoning must be replayed into tool-use follow-up messages.
  * - `requiresBatchedParallelToolResults` — most providers with separate
  *   reasoning channels need one batched follow-up message to preserve that
- *   reasoning across parallel tool calls.
+ *   reasoning across parallel tool calls. Unconditional here (not gated on
+ *   `capabilities.supportsReasoning`) because it's a family-wide wire-format
+ *   fact, not a per-model reasoning toggle — see the base getter's doc
+ *   comment (#7101 triage).
  *
  * Overrides that vary between these providers stay on the concrete handlers:
  * the GLM batching exception, content-stringification flags (DeepSeek

@@ -10,7 +10,6 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*", "../../src/*"],
-      "~/*": ["src/*", "../../src/*"],
       "@shared/*": ["../../src/shared/*"],
       "@common/state": ["src/common/state"],
       "@common/state/*": ["src/common/state/*"],

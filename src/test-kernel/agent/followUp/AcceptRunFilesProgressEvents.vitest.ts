@@ -6,6 +6,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
+import { appSignals } from '@eventBus/AppSignals';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import {
@@ -13,7 +14,7 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval';
-import { AbsoluteFS, flexibleFS, StorageFS, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, FlexibleFS, StorageFS, WorkspaceFS } from '@utils/files';
 import { createRecordingHost } from '../progressTestUtils';
 
 let testApprovalHandler:
@@ -69,7 +70,7 @@ describe('accept_run_files progress events', () => {
   let originalAbsoluteIsFile: typeof AbsoluteFS.isFile;
   let originalAbsoluteIsSymbolicLink: typeof AbsoluteFS.isSymbolicLink;
   let originalAbsoluteRead: typeof AbsoluteFS.read;
-  let originalFlexibleRead: typeof flexibleFS.read;
+  let originalFlexibleRead: typeof FlexibleFS.read;
 
   beforeEach(async () => {
     originalStorageExists = StorageFS.exists;
@@ -82,7 +83,7 @@ describe('accept_run_files progress events', () => {
     originalAbsoluteIsFile = AbsoluteFS.isFile;
     originalAbsoluteIsSymbolicLink = AbsoluteFS.isSymbolicLink;
     originalAbsoluteRead = AbsoluteFS.read;
-    originalFlexibleRead = flexibleFS.read;
+    originalFlexibleRead = FlexibleFS.read;
     AbsoluteFS.isSymbolicLink = async () => false;
     testApprovalHandler = undefined;
     await installTestPlatform();
@@ -109,14 +110,21 @@ describe('accept_run_files progress events', () => {
     AbsoluteFS.isFile = originalAbsoluteIsFile;
     AbsoluteFS.isSymbolicLink = originalAbsoluteIsSymbolicLink;
     AbsoluteFS.read = originalAbsoluteRead;
-    flexibleFS.read = originalFlexibleRead;
+    FlexibleFS.read = originalFlexibleRead;
     testApprovalHandler = undefined;
     cleanupAllApprovals();
   });
 
-  it('publishes accepted workspace files through the tool runtime host', async () => {
+  it('publishes accepted workspace files through app signals', async () => {
     const explicit = createRecordingHost();
     const tool = new AcceptRunFilesTool();
+    const written: string[][] = [];
+    const dispose = appSignals.on(
+      'workspaceFilesWritten',
+      ({ absolutePaths }) => {
+        written.push(absolutePaths);
+      },
+    );
 
     StorageFS.exists = async (target) =>
       target === `executions/${executionId}` ||
@@ -125,7 +133,7 @@ describe('accept_run_files progress events', () => {
     WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => undefined;
     WorkspaceFS.delete = async () => undefined;
-    flexibleFS.read = async () => 'accepted content';
+    FlexibleFS.read = async () => 'accepted content';
 
     testApprovalHandler = async () => ({ accepted: true });
 
@@ -134,28 +142,43 @@ describe('accept_run_files progress events', () => {
     ]);
 
     expect(result.status).toBe('executed');
-    expect(explicit.events).toContainEqual({
-      event: 'workspaceFilesWritten',
-      payload: { absolutePaths: [`${workspacePath}/paper.tex`] },
-    });
+    expect(explicit.events).toEqual([]);
+    expect(written).toEqual([[`${workspacePath}/paper.tex`]]);
+    dispose();
   });
 
-  it('fails before workspace writes when the tool runtime host is missing', async () => {
+  it('does not require a runtime host to publish accepted workspace files', async () => {
     const tool = new AcceptRunFilesTool();
     let writes = 0;
+    const written: string[][] = [];
+    const dispose = appSignals.on(
+      'workspaceFilesWritten',
+      ({ absolutePaths }) => {
+        written.push(absolutePaths);
+      },
+    );
 
+    StorageFS.exists = async (target) =>
+      target === `executions/${executionId}` ||
+      target === `executions/${executionId}/output.tex`;
+    WorkspaceFS.exists = async () => false;
+    WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => {
       writes++;
     };
+    WorkspaceFS.delete = async () => undefined;
+    FlexibleFS.read = async () => 'accepted content';
+    testApprovalHandler = async () => ({ accepted: true });
 
     const result = await tool.call({
       execution_id: executionId,
       files: [{ path: 'output.tex', original: 'paper.tex' }],
     });
 
-    expect(result.status).toBe('error');
-    expect(result.error).toContain('requires a tool runtime host');
-    expect(writes).toBe(0);
+    expect(result.status).toBe('executed');
+    expect(writes).toBe(1);
+    expect(written).toEqual([[`${workspacePath}/paper.tex`]]);
+    dispose();
   });
 
   it('uses the pre-run snapshot for same-path workspace outputs', async () => {
@@ -175,7 +198,7 @@ describe('accept_run_files progress events', () => {
     AbsoluteFS.isFile = async (target) =>
       target === `${storagePath}/executions/${executionId}/original/draft.tex`;
     AbsoluteFS.read = async () => 'old content';
-    flexibleFS.read = async () => 'new content';
+    FlexibleFS.read = async () => 'new content';
     testApprovalHandler = async (request) => {
       approvalOriginal = request.originalContent;
       approvalProposed = request.proposedContent;
@@ -210,7 +233,7 @@ describe('accept_run_files progress events', () => {
     };
     WorkspaceFS.delete = async () => undefined;
     AbsoluteFS.isFile = async () => false;
-    flexibleFS.read = async () => 'same content';
+    FlexibleFS.read = async () => 'same content';
     testApprovalHandler = async () => {
       approvals++;
       return { accepted: true };

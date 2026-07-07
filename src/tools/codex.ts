@@ -49,7 +49,7 @@ import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { type ChildStream } from './childStream';
-import { codexThreads } from './agentCliSessionStores';
+import { CodexThreads } from './agentCliSessionStores';
 import {
   publishAgentCliStreamUsage,
   formatAgentCliDelivery,
@@ -369,8 +369,8 @@ function startCodexLoop(params: {
   // bypass the in-memory guard and start a concurrent loop.
   const registerThread = (session: SessionHandle): void => {
     const threadId = thread.id;
-    if (threadId && !codexThreads.isActive(threadId)) {
-      codexThreads.register(threadId, {
+    if (threadId && !CodexThreads.isActive(threadId)) {
+      CodexThreads.register(threadId, {
         thread,
         childStreamId,
         parentStreamId,
@@ -409,7 +409,7 @@ function startCodexLoop(params: {
       formatAgentCliError('codex-error', executionId, prompt, err),
     onSessionCleanup: () => {
       const threadId = thread.id;
-      if (threadId) codexThreads.release(threadId);
+      if (threadId) CodexThreads.release(threadId);
     },
   };
 
@@ -478,8 +478,8 @@ export class CodexTool extends defineTool({
     return withAgentCliApproval(
       `[codex ${input.sandbox_mode}] ${input.prompt}`,
       (runContext) => {
-        if (input.thread_id && codexThreads.isActive(input.thread_id)) {
-          return resumeAgentCliSession(codexThreads, {
+        if (input.thread_id && CodexThreads.isActive(input.thread_id)) {
+          return resumeAgentCliSession(CodexThreads, {
             id: input.thread_id,
             prompt: input.prompt,
             callerStreamId: runContext?.streamId,

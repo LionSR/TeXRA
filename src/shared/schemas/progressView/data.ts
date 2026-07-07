@@ -37,7 +37,6 @@ export const StreamScopedBaseSchema = z.object({ stream: StreamTabIdSchema });
 export const MissingOutputsPayloadSchema = z.object({
   missing: z.array(z.string()).prefault([]),
   xmlFile: z.string().nullable().prefault(null),
-  documentTag: z.string().nullable().prefault(null),
 });
 
 export const TOOL_USE_STATUS = {

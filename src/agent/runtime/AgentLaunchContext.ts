@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import { ZodError } from 'zod';
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 import { createRunTrace, type RunTrace } from '@transcript';
 import {
@@ -72,7 +72,6 @@ import {
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { attachConversationProgressHub } from './conversationProgressHub';
-import { attachSessionRunFactProjector } from './SessionRunFactProjector';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -345,11 +344,6 @@ async function assembleAgentLaunchContext(
     rawRunTrace.trace,
     streamId,
   );
-  const detachRunFactProjector = attachSessionRunFactProjector(
-    session.events,
-    runtimeHost,
-    streamId,
-  );
   const detachProgressHub = attachConversationProgressHub(
     session.events,
     runtimeHost,
@@ -359,7 +353,6 @@ async function assembleAgentLaunchContext(
     trace: rawRunTrace.trace,
     dispose: () => {
       detachProgressHub();
-      detachRunFactProjector();
       detachSessionTrace();
       rawRunTrace.dispose();
     },
@@ -423,9 +416,9 @@ async function assembleAgentLaunchContext(
       prompt,
       agentPath,
       {
-        isOpenai: modelHandler.isOpenai,
-        isAnthropic: modelHandler.isAnthropic,
-        isGoogle: modelHandler.isGoogle,
+        isOpenai: modelHandler.config.provider === ModelProvider.OPENAI,
+        isAnthropic: modelHandler.config.provider === ModelProvider.ANTHROPIC,
+        isGoogle: modelHandler.config.provider === ModelProvider.GOOGLE,
       },
       agentLogger,
     );

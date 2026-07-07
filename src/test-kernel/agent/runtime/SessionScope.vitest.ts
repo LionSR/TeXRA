@@ -229,7 +229,10 @@ describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
       await expect(planA).resolves.toEqual({ action: 'reject' });
       // Session B's request is untouched and still resolvable.
       expect(
-        b.coordinators.resolvePlanApproval('approval:b', { action: 'approve' }),
+        hostB.host.interactions?.resolve('approval:b', {
+          kind: 'plan',
+          action: 'approve',
+        }),
       ).toBe(true);
       await expect(planB).resolves.toEqual({ action: 'approve' });
     } finally {

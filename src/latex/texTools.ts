@@ -10,7 +10,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import type { FileLocation } from '@shared/schemas';
-import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
+import { WorkspaceFS, FlexibleFS, pathToLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -40,7 +40,7 @@ async function readCompileLogTail(
   const compiledBasename = path.basename(latexFile, path.extname(latexFile));
   const logAbs = path.join(outDir, `${compiledBasename}.log`);
   try {
-    const full = await flexibleFS.read(pathToLocation(logAbs));
+    const full = await FlexibleFS.read(pathToLocation(logAbs));
     return splitContentLines(full).slice(-LOG_TAIL_LINES).join('\n');
   } catch (err) {
     return `(no LaTeX log at ${logAbs}: ${toErrorMessage(err)})`;
@@ -148,7 +148,7 @@ export async function compileLatex2Pdf(
   const latexFile = latexLocation.absolutePath;
   const outDir = outputDirectory ?? path.dirname(latexFile);
   try {
-    await flexibleFS.ensureDir(pathToLocation(outDir));
+    await FlexibleFS.ensureDir(pathToLocation(outDir));
 
     // TeX resolves relative `\input{…}` / `\bibliography{…}` against the
     // compiler's cwd and TEXINPUTS, not the main file's location. When a

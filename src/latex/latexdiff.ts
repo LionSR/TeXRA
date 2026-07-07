@@ -7,7 +7,7 @@ import { formatError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { flexibleFS, pathToLocation } from '@utils/files';
+import { FlexibleFS, pathToLocation } from '@utils/files';
 import { executeCommand } from '@utils/system';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { runLatexFormatter } from './texFormatter';
@@ -79,8 +79,8 @@ export class LaTeXdiffService {
   ): Promise<string[] | null> {
     try {
       return await Promise.all([
-        flexibleFS.read(inputLocation),
-        flexibleFS.read(editedLocation),
+        FlexibleFS.read(inputLocation),
+        FlexibleFS.read(editedLocation),
       ]);
     } catch {
       return null;
@@ -146,9 +146,9 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      await flexibleFS.ensureDir(pathToLocation(outputDirectory));
+      await FlexibleFS.ensureDir(pathToLocation(outputDirectory));
       const outputLocation = pathToLocation(outputPath);
-      await flexibleFS.write(outputLocation, result.stdout);
+      await FlexibleFS.write(outputLocation, result.stdout);
       await this.fileProcessor.processDiffFile(outputLocation, editedLocation);
 
       logger.debug(
@@ -287,7 +287,7 @@ export class LaTeXdiffService {
   private async validateDocumentStructure(
     file: FileLocation,
   ): Promise<boolean> {
-    return hasDocumentEnvironment(await flexibleFS.read(file));
+    return hasDocumentEnvironment(await FlexibleFS.read(file));
   }
 
   private async bothFilesExist(
@@ -295,8 +295,8 @@ export class LaTeXdiffService {
     second: FileLocation,
   ): Promise<boolean> {
     const [firstExists, secondExists] = await Promise.all([
-      flexibleFS.exists(first),
-      flexibleFS.exists(second),
+      FlexibleFS.exists(first),
+      FlexibleFS.exists(second),
     ]);
     return firstExists && secondExists;
   }
