@@ -57,7 +57,7 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 
-import { AbsoluteFS, flexibleFS } from '@utils/files';
+import { AbsoluteFS, FlexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
   getProviderStreaming,
@@ -1008,7 +1008,7 @@ export abstract class ModelHandler<
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, M[]]> {
-    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
+    if (!(await FlexibleFS.existsAndNonTrivial(outputLocation))) {
       if (this.capabilities.supportsAssistantPrefill) {
         if (prefill.length === 0) {
           this.logger.debug(
@@ -1020,7 +1020,7 @@ export abstract class ModelHandler<
         this.logger.debug('Adding prefill message', { data: prefill });
         workspaceState.assembly.accumulatedOutput = `${prefill}\n`;
         await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
-        await flexibleFS.write(
+        await FlexibleFS.write(
           outputLocation,
           workspaceState.assembly.accumulatedOutput,
         );
@@ -1072,7 +1072,7 @@ export abstract class ModelHandler<
       !fileContent.includes(prefill)
     ) {
       workspaceState.assembly.accumulatedOutput = prefill + fileContent;
-      await flexibleFS.write(
+      await FlexibleFS.write(
         outputLocation,
         workspaceState.assembly.accumulatedOutput,
       );
