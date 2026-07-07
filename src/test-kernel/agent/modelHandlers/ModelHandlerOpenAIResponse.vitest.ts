@@ -34,7 +34,7 @@ import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller'
 import { pathToLocation } from '@utils/files';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-// pathToLocation and flexibleFS resolve through platform services, so this
+// pathToLocation and FlexibleFS resolve through platform services, so this
 // suite needs the real node fs rather than the in-memory default.
 setupPlatform({}, { fs: nodeFilesystem });
 

@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - latex
-import { arxivProcessor } from '@latex/arxivProcessor';
+import { ArxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   type ArxivPaperMetadata,
@@ -40,7 +40,7 @@ export class ArxivMetadataTool extends defineTool({
 }) {
   protected async execute(input: ArxivMetadataInput): Promise<ToolResult> {
     const rawId = input.id.trim();
-    const validationError = arxivProcessor.validateId(rawId);
+    const validationError = ArxivProcessor.validateId(rawId);
     if (validationError) {
       throw new ToolError(validationError);
     }

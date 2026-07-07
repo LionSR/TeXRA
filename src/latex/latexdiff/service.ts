@@ -6,11 +6,11 @@
  * thunk, so the value is never frozen at construction time.
  */
 
-import { LaTeXdiffService } from '@latex/latexdiff';
+import { LaTeXdiffService as LaTeXdiffServiceImpl } from '@latex/latexdiff';
 import * as logger from '@logger/logUtils';
 
 export const CHANNEL = 'LaTeXCommands';
 
 logger.initialize(CHANNEL);
 
-export const service = new LaTeXdiffService(CHANNEL);
+export const LaTeXdiffService = new LaTeXdiffServiceImpl(CHANNEL);

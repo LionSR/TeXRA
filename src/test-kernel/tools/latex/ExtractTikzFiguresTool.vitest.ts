@@ -6,7 +6,7 @@ import { describe, it, afterEach, vi } from 'vitest';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 
 // Local imports - tools
-import { tikzPictureManager } from '@latex/TikzPictureManager';
+import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { ExtractTikzFiguresTool } from '@tools/latex';
 import { pathToLocation } from '@utils/files';
 
@@ -24,10 +24,10 @@ describe('ExtractTikzFiguresTool', () => {
       '/workspace/slides.tex': '\\documentclass{beamer}',
       '/workspace/build/slides/fig_a.pdf': '%PDF',
     });
-    vi.spyOn(tikzPictureManager, 'extract').mockResolvedValue([
+    vi.spyOn(TikzPictureManager, 'extract').mockResolvedValue([
       ['fig:a', ['\\begin{tikzpicture}\\end{tikzpicture}']],
     ]);
-    vi.spyOn(tikzPictureManager, 'compile').mockResolvedValue([
+    vi.spyOn(TikzPictureManager, 'compile').mockResolvedValue([
       pathToLocation('build/slides/fig_a.pdf'),
     ]);
 
@@ -51,7 +51,7 @@ describe('ExtractTikzFiguresTool', () => {
     await installPlatform({
       '/workspace/draft.tex': '\\documentclass{article}',
     });
-    vi.spyOn(tikzPictureManager, 'extract').mockResolvedValue([
+    vi.spyOn(TikzPictureManager, 'extract').mockResolvedValue([
       ['fig:b', ['\\begin{tikzpicture}\\end{tikzpicture}']],
     ]);
 
