@@ -25,6 +25,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   type ActiveChildInfo,
+  type CompileFailure,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -32,8 +33,11 @@ import {
   type ExecutionId,
   type FileLocation,
   type OutputFileInfo,
+  type Plan,
   type ProgressViewOutboundMessage,
+  type StorageKey,
   type StreamTabId,
+  type TodoItem,
 } from '@shared/schemas';
 import {
   ProgressBackend,
@@ -477,7 +481,7 @@ describe('ProgressBackend', () => {
     expect(backend.state.activeStream).not.toBe(streamId);
   });
 
-  it('applies session output-file run facts through the guarded applier', async () => {
+  it('applies session run facts through the guarded applier', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
     const handleProgressEvent = vi.spyOn(
@@ -485,7 +489,19 @@ describe('ProgressBackend', () => {
       'handleProgressEvent',
     );
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
+    const updateMissingOutputs = vi.spyOn(
+      backend.webviewUpdater,
+      'updateMissingOutputs',
+    );
+    const updateCompileFailures = vi.spyOn(
+      backend.webviewUpdater,
+      'updateCompileFailures',
+    );
+    const updateRunUsage = vi.spyOn(backend.webviewUpdater, 'updateRunUsage');
+    const updateTodos = vi.spyOn(backend.webviewUpdater, 'updateTodos');
+    const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
     const streamId = 'session:output-files' as StreamTabId;
+    const storageKey = 'run:session-usage' as StorageKey;
     const location: FileLocation = {
       kind: 'workspace',
       absolutePath: '/workspace/paper.tex',
@@ -498,6 +514,31 @@ describe('ProgressBackend', () => {
       lineage: null,
       diff: null,
     };
+    const compileFailure: CompileFailure = {
+      round: 1,
+      displayName: 'paper.tex',
+      output: {
+        kind: 'workspace',
+        absolutePath: '/workspace/paper.pdf',
+        relativePath: 'paper.pdf',
+      },
+      log: {
+        kind: 'workspace',
+        absolutePath: '/workspace/paper.log',
+        relativePath: 'paper.log',
+      },
+      logRelativePath: 'paper.log',
+    };
+    const todos: TodoItem[] = [
+      {
+        content: 'Preserve session fact projection',
+        status: 'pending',
+        activeForm: 'Preserving session fact projection',
+      },
+    ];
+    const plan: Plan = {
+      objective: 'Route session facts directly through ProgressBackend.',
+    };
 
     try {
       await backend.state.snapshots.load([]);
@@ -507,6 +548,11 @@ describe('ProgressBackend', () => {
       });
       handleProgressEvent.mockClear();
       updateFiles.mockClear();
+      updateMissingOutputs.mockClear();
+      updateCompileFailures.mockClear();
+      updateRunUsage.mockClear();
+      updateTodos.mockClear();
+      updatePlan.mockClear();
 
       session.events.emit({
         scope: 'run',
@@ -520,18 +566,169 @@ describe('ProgressBackend', () => {
           } satisfies ProgressEventPayloads['addOutputFiles'],
         },
       });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateMissingOutputs'),
+          data: {
+            streamId,
+            filesByRound: { 1: ['paper.pdf'] },
+          } satisfies ProgressEventPayloads['updateMissingOutputs'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateCompileFailures'),
+          data: {
+            streamId,
+            filesByRound: { 1: [compileFailure] },
+          } satisfies ProgressEventPayloads['updateCompileFailures'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: {
+            streamId,
+            todos,
+          } satisfies ProgressEventPayloads['updateTodos'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updatePlan'),
+          data: {
+            streamId,
+            plan,
+          } satisfies ProgressEventPayloads['updatePlan'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          stats: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          data: {
+            streamId,
+            storageKey,
+            usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          },
+          recordTranscript: false,
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('goalPaused'),
+          data: { streamId } satisfies ProgressEventPayloads['goalPaused'],
+        },
+      });
 
-      expect(handleProgressEvent).toHaveBeenCalledTimes(1);
-      expect(handleProgressEvent).toHaveBeenCalledWith('addOutputFiles', {
+      expect(handleProgressEvent).toHaveBeenCalledTimes(7);
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(1, 'addOutputFiles', {
         streamId,
         filesByRound: { 1: [outputFile] },
+      });
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(
+        2,
+        'updateMissingOutputs',
+        {
+          streamId,
+          filesByRound: { 1: ['paper.pdf'] },
+        },
+      );
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(
+        3,
+        'updateCompileFailures',
+        {
+          streamId,
+          filesByRound: { 1: [compileFailure] },
+        },
+      );
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(4, 'updateTodos', {
+        streamId,
+        todos,
+      });
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(5, 'updatePlan', {
+        streamId,
+        plan,
+      });
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(
+        6,
+        'updateStreamUsage',
+        {
+          streamId,
+          storageKey,
+          usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+        },
+      );
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(7, 'goalPaused', {
+        streamId,
       });
       expect(updateFiles).toHaveBeenCalledTimes(1);
       expect(updateFiles).toHaveBeenCalledWith(streamId, {
         rounds: { 1: [outputFile] },
       });
+      expect(updateMissingOutputs).toHaveBeenCalledWith(streamId, {
+        rounds: { 1: ['paper.pdf'] },
+      });
+      expect(updateCompileFailures).toHaveBeenCalledWith(streamId, {
+        rounds: { 1: [compileFailure] },
+        reset: true,
+      });
+      expect(updateTodos).toHaveBeenCalledWith(streamId, todos);
+      expect(updatePlan).toHaveBeenCalledWith(streamId, plan);
+      await vi.waitFor(() =>
+        expect(updateRunUsage).toHaveBeenCalledWith(streamId, storageKey, {
+          inputTokens: 10,
+          outputTokens: 5,
+          cost: 0.01,
+          cacheReadInputTokens: 0,
+          cacheMissInputTokens: 0,
+          cacheCreationInputTokens: 0,
+        }),
+      );
       expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual(
         new Map([[1, [outputFile]]]),
+      );
+      expect(backend.state.snapshots.getMissingOutputs(streamId)).toEqual(
+        new Map([[1, ['paper.pdf']]]),
+      );
+      expect(backend.state.snapshots.getCompileFailures(streamId)).toEqual(
+        new Map([[1, [compileFailure]]]),
+      );
+      expect(backend.state.snapshots.getWorkPlan(streamId)).toMatchObject({
+        todos,
+        plan,
+      });
+      expect(backend.state.snapshots.getRunUsage(streamId)).toEqual(
+        new Map([
+          [
+            storageKey,
+            {
+              inputTokens: 10,
+              outputTokens: 5,
+              cost: 0.01,
+              cacheReadInputTokens: 0,
+              cacheMissInputTokens: 0,
+              cacheCreationInputTokens: 0,
+            },
+          ],
+        ]),
       );
     } finally {
       subscription.dispose();
@@ -622,6 +819,13 @@ describe('ProgressBackend', () => {
     });
     const subscription = backend.setupEventListeners();
     const streamId = 'session:observer' as StreamTabId;
+    const todos: TodoItem[] = [
+      {
+        content: 'Notify desktop bridge',
+        status: 'pending',
+        activeForm: 'Notifying desktop bridge',
+      },
+    ];
 
     try {
       session.events.emit({
@@ -631,9 +835,32 @@ describe('ProgressBackend', () => {
           payload: { streamId },
         },
       });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: {
+            streamId,
+            todos,
+          } satisfies ProgressEventPayloads['updateTodos'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('goalPaused'),
+          data: { streamId } satisfies ProgressEventPayloads['goalPaused'],
+        },
+      });
 
       expect(observed).toEqual([
         { event: 'goalStateChanged', payload: { streamId } },
+        { event: 'updateTodos', payload: { streamId, todos } },
+        { event: 'goalPaused', payload: { streamId } },
       ]);
     } finally {
       subscription.dispose();
@@ -642,7 +869,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('handles direct session events with the backend effects of the legacy projection', async () => {
+  it('handles direct session events with the same backend effects as host projection', async () => {
     const direct = createIsolatedRecordingBackend();
     const legacyEquivalent = createIsolatedRecordingBackend();
     const directSubscription = direct.backend.setupEventListeners();

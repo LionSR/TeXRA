@@ -41,9 +41,8 @@ export type SessionEvent =
 
 /**
  * Re-emit a {@link SessionFact} on the legacy per-host progress-event
- * surface. Shared by `emitRuntimeEvent`'s host-channel path and
- * `LegacyProgressEventProjection`'s hub-subscription path — both project the
- * same fact vocabulary onto the same host events.
+ * surface. This keeps host-channel callers on the same neutral projection as
+ * any host-owned hub subscription.
  */
 export function emitLegacySessionFactOnHost(
   host: AgentRuntimeHost,
@@ -80,6 +79,7 @@ function isDevAssertionMode(): boolean {
  */
 export class SessionEventHub {
   private readonly subscribers = new Set<SubscriberRegistration>();
+  private runScopeSubscriberCount = 0;
   private readonly runScopeSubscriberCountsByStream = new Map<
     StreamTabId,
     number
@@ -119,17 +119,21 @@ export class SessionEventHub {
       types: filter.types ? new Set(filter.types) : undefined,
     };
     this.subscribers.add(registration);
-    if (registration.streamId) {
-      this.runScopeSubscriberCountsByStream.set(
-        registration.streamId,
-        (this.runScopeSubscriberCountsByStream.get(registration.streamId) ??
-          0) + 1,
-      );
+    if (registration.scope !== 'session') {
+      if (registration.streamId) {
+        this.runScopeSubscriberCountsByStream.set(
+          registration.streamId,
+          (this.runScopeSubscriberCountsByStream.get(registration.streamId) ??
+            0) + 1,
+        );
+      } else {
+        this.runScopeSubscriberCount += 1;
+      }
     }
 
     return () => {
       if (!this.subscribers.delete(registration)) return;
-      if (registration.streamId) {
+      if (registration.scope !== 'session' && registration.streamId) {
         const nextCount =
           (this.runScopeSubscriberCountsByStream.get(registration.streamId) ??
             1) - 1;
@@ -141,17 +145,24 @@ export class SessionEventHub {
         } else {
           this.runScopeSubscriberCountsByStream.delete(registration.streamId);
         }
+      } else if (registration.scope !== 'session') {
+        this.runScopeSubscriberCount -= 1;
       }
     };
   }
 
   /**
-   * Dev/test guard for startup-resume ordering: run-scoped projectors must be
+   * Dev/test guard for startup-resume ordering: run-scoped subscribers must be
    * attached before a launch activates the stream. Production logs the
    * violation so startup can continue; tests and opt-in dev runs throw.
    */
   assertRunSubscribersAttachedBeforeActivation(streamId: StreamTabId): void {
-    if ((this.runScopeSubscriberCountsByStream.get(streamId) ?? 0) > 0) return;
+    if (
+      this.runScopeSubscriberCount > 0 ||
+      (this.runScopeSubscriberCountsByStream.get(streamId) ?? 0) > 0
+    ) {
+      return;
+    }
 
     const message = `No run-scoped session event subscribers attached for ${streamId} before activation`;
     if (isDevAssertionMode()) {

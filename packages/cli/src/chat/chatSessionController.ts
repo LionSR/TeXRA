@@ -21,7 +21,6 @@ import {
   executeAgent,
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
@@ -32,6 +31,7 @@ import {
   createCliRuntimeHost,
   type CliRuntimeHost,
 } from '@cli/runtime/runtimeHost';
+import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import {
   explainNonResumable,
   resolveCliResumeSnapshot,
@@ -64,7 +64,7 @@ import {
 } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import {
-  attachTuiWorkPlanRunFactSubscription,
+  attachTuiRunFactSubscription,
   wrapRuntimeHost,
 } from './tui/state/subscribeRuntimeHost';
 import { notify } from './tui/notifications/terminalNotifier';
@@ -241,10 +241,10 @@ export function createChatSessionController(
       defaultSession(),
       interactiveHost,
     );
-    const detachTuiWorkPlanRunFacts = attachTuiWorkPlanRunFactSubscription(
+    const detachTuiRunFacts = attachTuiRunFactSubscription(
       defaultSession().events,
     );
-    const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
+    const detachSessionProgressProjection = attachCliSessionProgressProjection(
       defaultSession().events,
       interactiveHost,
     );
@@ -253,8 +253,8 @@ export function createChatSessionController(
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
         detachResultToast();
-        detachTuiWorkPlanRunFacts();
-        detachLegacyProgressProjection();
+        detachTuiRunFacts();
+        detachSessionProgressProjection();
         detachHostInteractions();
         if (session.runtimeHost === interactiveHost) {
           session.runtimeHost = undefined;

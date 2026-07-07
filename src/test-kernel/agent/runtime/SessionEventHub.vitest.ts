@@ -5,11 +5,11 @@ import {
   SessionEventHub,
   type SessionEvent,
 } from '@agent/runtime/SessionEventHub';
-import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 const streamId = 'stream:hub' as StreamTabId;
 const otherStreamId = 'stream:other' as StreamTabId;
@@ -66,7 +66,7 @@ describe('SessionEventHub', () => {
     const detachUnscopedRun = hub.subscribe(() => undefined, { scope: 'run' });
     expect(() =>
       hub.assertRunSubscribersAttachedBeforeActivation(streamId),
-    ).toThrow(/No run-scoped session event subscribers/);
+    ).not.toThrow();
     detachUnscopedRun();
 
     const detachOtherRun = hub.subscribe(() => undefined, {
@@ -101,10 +101,9 @@ describe('SessionEventHub', () => {
     const detachTrace = trace.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjector = attachSessionRunFactProjector(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       hub,
       host.host,
-      streamId,
     );
     const todos = [
       {
@@ -178,24 +177,23 @@ describe('SessionEventHub', () => {
       },
     ]);
 
-    detachProjector();
+    detachProjection();
     detachTrace();
   });
 
-  it('detaches projector subscriptions cleanly', () => {
+  it('detaches test projection subscriptions cleanly', () => {
     const trace = new TraceEmitter();
     const hub = new SessionEventHub();
     const host = createRecordingHost();
     const detachTrace = trace.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjector = attachSessionRunFactProjector(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       hub,
       host.host,
-      streamId,
     );
 
-    detachProjector();
+    detachProjection();
     emitRunFact(trace, 'goalPaused', { streamId });
 
     expect(host.events).toEqual([]);
