@@ -369,7 +369,6 @@ export class DesktopProgressBridge {
         showErrorMessage: options.showErrorMessage,
       },
       {
-        runtimeHost: this.runtimeHost,
         runExecution: (request) => this.runExecution(request),
         listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
       },
