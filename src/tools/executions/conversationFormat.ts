@@ -7,6 +7,7 @@
  * tool class stays focused on path routing and storage access.
  */
 import {
+  asText,
   formatConversationContent,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
@@ -15,10 +16,6 @@ const CONVERSATION_FORMAT_OPTIONS: ConversationFormatOptions = {
   textLimit: 500,
   toolBlockLimit: 100,
 };
-
-function asText(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
 
 interface ConversationMessage {
   role?: unknown;

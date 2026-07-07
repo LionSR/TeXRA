@@ -2,7 +2,12 @@
  * Session-scoped coordinator for plan approval gates.
  */
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  toRuntimeHostProvider,
+  type AgentRuntimeHost,
+  type CoordinatorRuntimeHost,
+  type RuntimeHostProvider,
+} from '@agent/runtime/AgentRuntimeHost';
 import type { Plan } from '@shared/schemas';
 
 export type PlanApprovalResult =
@@ -18,15 +23,6 @@ export interface PlanApprovalRequestOptions {
   goalEnabled?: boolean;
   /** Timeout in milliseconds (default: wait indefinitely). */
   timeoutMs?: number;
-}
-
-type RuntimeHostProvider = () => AgentRuntimeHost;
-type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
-
-function toRuntimeHostProvider(
-  runtimeHost: CoordinatorRuntimeHost,
-): RuntimeHostProvider {
-  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
 }
 
 export class PlanApprovalCoordinator {
