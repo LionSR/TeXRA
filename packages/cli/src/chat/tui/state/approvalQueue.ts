@@ -95,6 +95,29 @@ const INTERRUPT: ApprovalDecision = {
   userMessage: 'Session interrupted.',
 };
 
+/**
+ * Settle one queue item out of band (interrupt/timeout/stream-scoped cancel)
+ * rather than through the modal's own `decide()` callback: remove it from
+ * `pendingItems`, clear the foreground modal if it was the one showing, and
+ * resume the queue's blocked task so the single concurrency slot is freed.
+ * Returns false if the item was already settled.
+ */
+function settleItem(
+  item: ApprovalQueueItem,
+  decision: ApprovalDecision,
+): boolean {
+  if (!pendingItems.delete(item)) return false;
+  if (currentItem === item) {
+    currentItem = undefined;
+    CURRENT.set(undefined);
+  }
+  const advance = item.advance;
+  item.advance = undefined;
+  item.resolve(decision);
+  advance?.();
+  return true;
+}
+
 export function onApprovalsCleared(listener: () => void): () => void {
   clearListeners.add(listener);
   return () => {
@@ -193,13 +216,9 @@ export function enqueueApproval(
         CURRENT.set({
           payload,
           decide: (decision) => {
-            if (!pendingItems.delete(item)) return;
-            syncApprovalStatus();
-            CURRENT.set(undefined);
-            if (currentItem === item) currentItem = undefined;
-            item.advance = undefined;
-            item.resolve(decision);
-            advance();
+            // settleItem resolves item.advance (== this closure's `advance`),
+            // resuming the queue's blocked task; no separate call needed.
+            if (settleItem(item, decision)) syncApprovalStatus();
           },
         });
       });
@@ -208,10 +227,7 @@ export function enqueueApproval(
       // p-queue rejects when `queue.clear()` drops the task. Settle the
       // outer promise so the requester (e.g. ToolEditApprovalHandler)
       // doesn't hang forever.
-      if (pendingItems.delete(item)) {
-        syncApprovalStatus();
-        item.resolve(INTERRUPT);
-      }
+      if (settleItem(item, INTERRUPT)) syncApprovalStatus();
     });
 
   return outer;
@@ -261,17 +277,23 @@ export function clearApprovalsWhere(
   let cleared = 0;
   for (const item of [...pendingItems]) {
     if (!predicate(item.payload)) continue;
-    if (!pendingItems.delete(item)) continue;
-    cleared += 1;
-    const advance = item.advance;
-    item.advance = undefined;
-    item.resolve(decision);
-    if (currentItem === item) {
-      currentItem = undefined;
-      CURRENT.set(undefined);
-      advance?.();
-    }
+    if (settleItem(item, decision)) cleared += 1;
   }
   if (cleared > 0) syncApprovalStatus();
   return cleared;
+}
+
+/**
+ * Settle every queued approval/question for a stream, of any kind — bash,
+ * tool-edit, plan, proposal, retry, user-question, and external-inquiry
+ * alike. Used by `HostInteractions.cancelForStream` so a per-stream
+ * interrupt/cleanup can settle whatever happens to be pending on that stream
+ * instead of leaving it stuck forever — this is the fallback
+ * `PlanApprovalCoordinator`/`AgentProposalCoordinator`/`RetryRequestCoordinator`
+ * reach for when `interactions.resolve()` doesn't find a matching request.
+ */
+export function clearApprovalsForStream(streamId: string): void {
+  clearApprovalsWhere(
+    (payload) => approvalPayloadStreamId(payload) === streamId,
+  );
 }
