@@ -2,8 +2,8 @@
 // normalization).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { OutputFileInfo } from '@shared/schemas';
 import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
+import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 import { createOutputFile } from '../support/ProgressControllerHarnesses';
 
 // ---------------------------------------------------------------------------
@@ -35,8 +35,8 @@ const { runLatexdiffForExecution } =
 const METADATA_OUTCOME = { results: [], totalOperations: 1 };
 const SCAN_OUTCOME = { results: [], totalOperations: 2 };
 
-function roundMap(): Map<number, OutputFileInfo[]> {
-  return new Map([[1, [] as OutputFileInfo[]]]);
+function roundMap(): RoundIndexed<OutputFileInfo> {
+  return { 1: [] as OutputFileInfo[] };
 }
 
 const baseRequest = {
@@ -152,39 +152,44 @@ describe('runLatexdiffForExecution', () => {
 // ---------------------------------------------------------------------------
 
 describe('normalizeRunLatexdiffOutputsByRound', () => {
-  it('keeps non-empty tuple-array rounds in numeric order', () => {
+  it('keeps non-empty round-record entries, dropping empty rounds', () => {
     const first = createOutputFile({ round: 1 });
     const second = createOutputFile({ round: 2 });
 
     expect(
-      normalizeRunLatexdiffOutputsByRound([
-        [2, [second]],
-        [1, [first]],
-        [3, []],
-      ]),
-    ).toEqual(
-      new Map([
-        [1, [first]],
-        [2, [second]],
-      ]),
-    );
+      normalizeRunLatexdiffOutputsByRound({
+        2: [second],
+        1: [first],
+        3: [],
+      }),
+    ).toEqual({ 1: [first], 2: [second] });
   });
 
-  it('falls back for malformed or legacy map-shaped command payloads', () => {
-    expect(
-      normalizeRunLatexdiffOutputsByRound({ 1: [createOutputFile()] }),
-    ).toBeNull();
+  it('falls back to null for malformed command payloads', () => {
     expect(normalizeRunLatexdiffOutputsByRound('not-rounds')).toBeNull();
+    expect(normalizeRunLatexdiffOutputsByRound(null)).toBeNull();
+    expect(normalizeRunLatexdiffOutputsByRound([1, 2, 3])).toBeNull();
   });
 
-  it('drops non-integer round entries', () => {
+  it('drops malformed items within an otherwise-valid round record', () => {
     const valid = createOutputFile({ round: 1 });
 
     expect(
-      normalizeRunLatexdiffOutputsByRound([
-        [1.5, [createOutputFile({ round: 1.5 })]],
-        [1, [valid]],
-      ]),
-    ).toEqual(new Map([[1, [valid]]]));
+      normalizeRunLatexdiffOutputsByRound({
+        1: [valid, { not: 'an output file' }],
+      }),
+    ).toEqual({ 1: [valid] });
+  });
+
+  it('treats a record with any non-integer round key as legacy-shaped, salvaging nothing when it is not run-nested either', () => {
+    // Mirrors parsePersistedRoundIndexed's whole-file legacy fallback: a
+    // non-integer key routes the record to the run-nested arm, and since
+    // this payload isn't actually nested per-run data, nothing salvages.
+    expect(
+      normalizeRunLatexdiffOutputsByRound({
+        '1.5': [createOutputFile({ round: 1.5 })],
+        1: [createOutputFile({ round: 1 })],
+      }),
+    ).toBeNull();
   });
 });
