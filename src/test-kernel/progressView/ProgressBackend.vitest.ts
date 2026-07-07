@@ -425,6 +425,35 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('applies session-originated progress events exactly once', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const applier = vi.spyOn(backend.eventHandler, 'handleProgressEvent');
+    const streamId = 'session:single-applier' as StreamTabId;
+    const payload: ProgressEventPayloads['setActiveStream'] = {
+      streamId,
+      agentCategory: AgentCategory.Workflow,
+    };
+
+    try {
+      session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload,
+        },
+      });
+
+      await vi.waitFor(() => expect(backend.state.activeStream).toBe(streamId));
+      expect(applier).toHaveBeenCalledTimes(1);
+      expect(applier).toHaveBeenCalledWith('setActiveStream', payload);
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('notifies host observers for session-originated progress events', async () => {
     const messages: ProgressViewOutboundMessage[] = [];
     const observed: Array<{
