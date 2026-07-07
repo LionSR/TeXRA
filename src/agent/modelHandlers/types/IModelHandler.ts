@@ -67,6 +67,7 @@ export type IModelHandler<
   | 'setOutputStreaming'
   | 'isBackgroundModeActive'
   | 'supportsManualCompaction'
+  | 'requiresPerCallSystemPrompt'
   | 'isAutoRetryManagedByProvider'
   | 'requestCompaction'
   | 'getEffectiveContextWindow'
