@@ -61,6 +61,32 @@ describe('resolveAndResumeStream', () => {
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
   });
 
+  it('passes recovered parent stream identity to resume retrieval', async () => {
+    const parentStreamId = 'stream:parent' as StreamTabId;
+    const snapshot = { streamId: STREAM, executionId: 'exec-1' };
+    retrieveSessionResumeDataMock.mockResolvedValue({
+      type: 'toolUse',
+      snapshot,
+    });
+    const ports = basePorts({
+      resolveResumeState: vi.fn(async () => ({
+        runState: { agent: 'a', model: 'm' } as never,
+        executionId: 'exec-1' as never,
+        parentStreamId,
+      })),
+    });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
+
+    expect(retrieveSessionResumeDataMock).toHaveBeenCalledWith(
+      STREAM,
+      'exec-1',
+      expect.anything(),
+      { parentStreamId },
+    );
+    expect(ports.resumeToolUseSnapshot).toHaveBeenCalledWith(snapshot);
+  });
+
   it('launches workflow resumes without pre-acquiring the stream', async () => {
     const agentConfig = { agent: 'a', model: 'm' } as never;
     retrieveSessionResumeDataMock.mockResolvedValue({

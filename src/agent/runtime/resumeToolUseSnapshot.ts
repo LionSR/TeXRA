@@ -65,6 +65,7 @@ export async function resumeToolUseSnapshot(
           ? [{ text: options.explicitFollowUp, origin: 'user' as const }]
           : [],
       onError: (error) => options.reportFailure?.(error),
+      parentStreamId: snapshot.parentStreamId ?? undefined,
     },
   );
 }

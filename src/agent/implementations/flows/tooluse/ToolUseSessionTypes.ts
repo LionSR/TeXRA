@@ -14,6 +14,7 @@ export const ToolUseSessionSnapshotSchema = z.strictObject({
   version: z.literal(TOOL_USE_SNAPSHOT_VERSION),
   executionId: ExecutionIdSchema,
   streamId: StreamTabIdSchema,
+  parentStreamId: StreamTabIdSchema.nullish(),
   agentConfig: AgentConfigSchema,
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
   messages: z.array(ProviderMessageSchema),

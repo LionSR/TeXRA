@@ -11,6 +11,7 @@ import {
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
+import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -22,19 +23,27 @@ const STREAM = 'stream:tooluse-resume' as StreamTabId;
 const runtimeHost = { emit: vi.fn() };
 let detachSessionProgressProjection: (() => void) | undefined;
 
-function snapshot(): ToolUseSessionSnapshot {
-  return { streamId: STREAM } as ToolUseSessionSnapshot;
+function snapshot(parentStreamId?: StreamTabId): ToolUseSessionSnapshot {
+  return { streamId: STREAM, parentStreamId } as ToolUseSessionSnapshot;
+}
+
+function capturedResumeOptions(): {
+  parentStreamId?: StreamTabId;
+  setupSession: (session: { appendFollowUp(item: unknown): void }) => void;
+} {
+  const calls = resumeToolUseFromSnapshotMock.mock
+    .calls as unknown as unknown[][];
+  return calls.at(-1)?.[2] as {
+    parentStreamId?: StreamTabId;
+    setupSession: (session: { appendFollowUp(item: unknown): void }) => void;
+  };
 }
 
 /** Capture the `setupSession` replay callback handed to the leaf resume. */
 function capturedSetupSession(): (session: {
   appendFollowUp(item: unknown): void;
 }) => void {
-  const calls = resumeToolUseFromSnapshotMock.mock
-    .calls as unknown as unknown[][];
-  const options = calls.at(-1)?.[2] as {
-    setupSession: (session: { appendFollowUp(item: unknown): void }) => void;
-  };
+  const options = capturedResumeOptions();
   return options.setupSession;
 }
 
@@ -101,6 +110,31 @@ describe('resumeToolUseSnapshot', () => {
       text: 'queued one',
       origin: 'user',
     });
+  });
+
+  it('passes snapshot parent stream identity to the leaf resume', async () => {
+    const parentStreamId = 'stream:parent' as StreamTabId;
+
+    await resumeToolUseSnapshot(snapshot(parentStreamId), { runtimeHost });
+
+    expect(capturedResumeOptions().parentStreamId).toBe(parentStreamId);
+  });
+
+  it('keeps an explicit queue parent stream ahead of the snapshot parent', async () => {
+    const explicitParent = 'stream:explicit-parent' as StreamTabId;
+    const snapshotParent = 'stream:snapshot-parent' as StreamTabId;
+
+    await resumeQueuedToolUseSnapshot(
+      STREAM,
+      snapshot(snapshotParent),
+      runtimeHost,
+      {
+        parentStreamId: explicitParent,
+        onError: vi.fn(),
+      },
+    );
+
+    expect(capturedResumeOptions().parentStreamId).toBe(explicitParent);
   });
 
   it('re-enqueues follow-ups, settles to WAITING, and reports on failure', async () => {
