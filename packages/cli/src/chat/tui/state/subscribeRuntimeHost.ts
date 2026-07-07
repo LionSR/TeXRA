@@ -42,6 +42,10 @@ type Emit = <K extends ProgressEvent>(
 ) => void;
 
 type UpdateStreamUsagePayload = ProgressEventPayloads['updateStreamUsage'];
+type GoalPausedPayload = ProgressEventPayloads['goalPaused'];
+
+const GOAL_PAUSED_TRANSCRIPT_NOTICE =
+  'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
 function usageEchoKey(payload: UpdateStreamUsagePayload): string {
   const parsedUsage = ExtendedTokenUsageStatsSchema.safeParse(payload.usage);
@@ -67,10 +71,7 @@ function usageEchoKey(payload: UpdateStreamUsagePayload): string {
   });
 }
 
-function consumeUsageEchoCount(
-  counts: Map<string, number>,
-  key: string,
-): boolean {
+function consumeEchoCount(counts: Map<string, number>, key: string): boolean {
   const count = counts.get(key);
   if (!count) return false;
   if (count === 1) {
@@ -81,21 +82,26 @@ function consumeUsageEchoCount(
   return true;
 }
 
-class UsageEchoGuard {
+class EchoGuard<T> {
   private readonly directAppliedCounts = new Map<string, number>();
   private readonly legacyAppliedCounts = new Map<string, number>();
 
-  applyDirect(payload: UpdateStreamUsagePayload): void {
-    const key = usageEchoKey(payload);
-    if (consumeUsageEchoCount(this.legacyAppliedCounts, key)) return;
-    applyUsageUpdate(payload);
+  constructor(
+    private readonly keyFor: (payload: T) => string,
+    private readonly apply: (payload: T) => void,
+  ) {}
+
+  applyDirect(payload: T): void {
+    const key = this.keyFor(payload);
+    if (consumeEchoCount(this.legacyAppliedCounts, key)) return;
+    this.apply(payload);
     this.rememberForThisTurn(this.directAppliedCounts, key);
   }
 
-  applyLegacy(payload: UpdateStreamUsagePayload): void {
-    const key = usageEchoKey(payload);
-    if (consumeUsageEchoCount(this.directAppliedCounts, key)) return;
-    applyUsageUpdate(payload);
+  applyLegacy(payload: T): void {
+    const key = this.keyFor(payload);
+    if (consumeEchoCount(this.directAppliedCounts, key)) return;
+    this.apply(payload);
     this.rememberForThisTurn(this.legacyAppliedCounts, key);
   }
 
@@ -107,12 +113,29 @@ class UsageEchoGuard {
   private rememberForThisTurn(counts: Map<string, number>, key: string): void {
     counts.set(key, (counts.get(key) ?? 0) + 1);
     queueMicrotask(() => {
-      consumeUsageEchoCount(counts, key);
+      consumeEchoCount(counts, key);
     });
   }
 }
 
+type UsageEchoGuard = EchoGuard<UpdateStreamUsagePayload>;
 let activeUsageEchoGuard: UsageEchoGuard | undefined;
+
+function goalPausedEchoKey(payload: GoalPausedPayload): string {
+  return payload.streamId;
+}
+
+type GoalPausedNoticeEchoGuard = EchoGuard<GoalPausedPayload>;
+let activeGoalPausedNoticeEchoGuard: GoalPausedNoticeEchoGuard | undefined;
+
+function appendGoalPausedTranscriptNotice(payload: GoalPausedPayload): void {
+  // Without a transcript line, an auto-paused goal is indistinguishable
+  // from a hang: the agent simply stops mid-objective.
+  appendLocalAssistantTranscript(
+    GOAL_PAUSED_TRANSCRIPT_NOTICE,
+    payload.streamId,
+  );
+}
 
 function toUpdateStreamUsagePayload(
   data: unknown,
@@ -223,8 +246,13 @@ export function wrapRuntimeHost(
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
 ): () => void {
-  const usageEchoGuard = new UsageEchoGuard();
+  const usageEchoGuard = new EchoGuard(usageEchoKey, applyUsageUpdate);
+  const goalPausedNoticeEchoGuard = new EchoGuard(
+    goalPausedEchoKey,
+    appendGoalPausedTranscriptNotice,
+  );
   activeUsageEchoGuard = usageEchoGuard;
+  activeGoalPausedNoticeEchoGuard = goalPausedNoticeEchoGuard;
   const detach = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
@@ -264,6 +292,14 @@ export function attachTuiRunFactSubscription(
           }
           return;
         }
+        case 'goalPaused': {
+          if (isObject(event.data) && typeof event.data.streamId === 'string') {
+            goalPausedNoticeEchoGuard.applyDirect({
+              streamId: event.data.streamId as GoalPausedPayload['streamId'],
+            });
+          }
+          return;
+        }
         default:
           return;
       }
@@ -273,8 +309,12 @@ export function attachTuiRunFactSubscription(
   return () => {
     detach();
     usageEchoGuard.clear();
+    goalPausedNoticeEchoGuard.clear();
     if (activeUsageEchoGuard === usageEchoGuard) {
       activeUsageEchoGuard = undefined;
+    }
+    if (activeGoalPausedNoticeEchoGuard === goalPausedNoticeEchoGuard) {
+      activeGoalPausedNoticeEchoGuard = undefined;
     }
   };
 }
@@ -460,13 +500,12 @@ function applyToState<K extends ProgressEvent>(
       return;
     }
     case 'goalPaused': {
-      // Without a transcript line, an auto-paused goal is indistinguishable
-      // from a hang: the agent simply stops mid-objective.
       const p = payload as ProgressEventPayloads['goalPaused'];
-      appendLocalAssistantTranscript(
-        'Goal paused after a failed cycle. Review the error before starting a new goal.',
-        p.streamId,
-      );
+      if (activeGoalPausedNoticeEchoGuard) {
+        activeGoalPausedNoticeEchoGuard.applyLegacy(p);
+      } else {
+        appendGoalPausedTranscriptNotice(p);
+      }
       return;
     }
     case 'followUpSent': {
