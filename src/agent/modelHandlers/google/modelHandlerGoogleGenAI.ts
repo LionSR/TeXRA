@@ -187,6 +187,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   /**
    * Gemini carries thought signatures across parallel function calls, which must
    * be preserved by batching the results into a single follow-up message.
+   * Unconditional (not gated on `capabilities.supportsReasoning`) — see the
+   * base getter's doc comment (#7101 triage).
    */
   override get requiresBatchedParallelToolResults(): boolean {
     return true;
