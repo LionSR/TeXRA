@@ -50,6 +50,28 @@ export function findRatchetViolations(current, baseline) {
   return violations;
 }
 
+// Parses and validates the `--reporter json` stdout produced by `knip`.
+// Split out from runKnip() so the parsing/validation logic is unit-testable
+// without spawning the real knip binary.
+export function parseKnipIssues(stdout, stderr) {
+  let parsed;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch (cause) {
+    console.error(stdout);
+    console.error(stderr);
+    throw new Error('knip did not produce parseable JSON output', { cause });
+  }
+  if (!Array.isArray(parsed?.issues)) {
+    console.error(stdout);
+    console.error(stderr);
+    throw new Error(
+      'knip JSON output has no `issues` array; the --reporter json shape may have changed (see scripts/check-dead-code-ratchet.mjs)',
+    );
+  }
+  return parsed.issues;
+}
+
 function runKnip() {
   const knipBin = path.join(rootDir, 'node_modules', '.bin', 'knip');
   const result = spawnSync(
@@ -69,15 +91,7 @@ function runKnip() {
   // knip exits 1 whenever it finds any issue at all, which is expected here
   // (the whole point is to count existing issues), so a non-zero status is
   // only a real failure if it didn't produce parseable JSON.
-  let parsed;
-  try {
-    parsed = JSON.parse(result.stdout);
-  } catch (cause) {
-    console.error(result.stdout);
-    console.error(result.stderr);
-    throw new Error('knip did not produce parseable JSON output', { cause });
-  }
-  return parsed.issues ?? [];
+  return parseKnipIssues(result.stdout, result.stderr);
 }
 
 function main() {
