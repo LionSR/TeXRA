@@ -197,29 +197,23 @@ class DesktopHostInteractions implements HostInteractions {
   }
 
   cancelForStream(streamId: StreamTabId, cause?: string): void {
-    for (const [requestId, request] of [...this.pendingRequests.entries()]) {
-      if (request.streamId !== streamId) continue;
-      this.resolve(requestId, {
-        kind: request.kind,
-        action: 'reject',
-        feedback: cause,
-      });
-    }
+    this.cancelMatching((request) => request.streamId === streamId, cause);
   }
 
   cancelUnscoped(cause?: string): void {
-    for (const [requestId, request] of [...this.pendingRequests.entries()]) {
-      if (request.streamId) continue;
-      this.resolve(requestId, {
-        kind: request.kind,
-        action: 'reject',
-        feedback: cause,
-      });
-    }
+    this.cancelMatching((request) => !request.streamId, cause);
   }
 
   cancelAll(cause?: string): void {
+    this.cancelMatching(() => true, cause);
+  }
+
+  private cancelMatching(
+    matches: (request: PendingDesktopInteraction) => boolean,
+    cause?: string,
+  ): void {
     for (const [requestId, request] of [...this.pendingRequests.entries()]) {
+      if (!matches(request)) continue;
       this.resolve(requestId, {
         kind: request.kind,
         action: 'reject',

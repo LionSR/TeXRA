@@ -977,10 +977,7 @@ export abstract class ModelHandler<
       conversationMessages: M[],
     ) => Promise<{ summaryText: string; outputTokens: number }>,
     buildSummaryMessage: (summary: string) => M,
-  ): Promise<{
-    compactedMessages: M[];
-    didCompact: boolean;
-  }> {
+  ): Promise<{ compactedMessages: M[]; didCompact: boolean }> {
     const contextWindow = this.getEffectiveContextWindow();
 
     // Separate leading system/developer messages from the conversation body.
@@ -1028,10 +1025,7 @@ export abstract class ModelHandler<
         tokensAfterIsEstimate: true,
       });
 
-      return {
-        compactedMessages,
-        didCompact: true,
-      };
+      return { compactedMessages, didCompact: true };
     } catch (err) {
       this.logger.warn(
         `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
