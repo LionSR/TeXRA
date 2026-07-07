@@ -10,7 +10,7 @@ import {
 } from '@transcript';
 import { TraceEmitter } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 
 // Local imports - shared
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -61,17 +61,16 @@ async function* streamEvents(
 }
 
 describe('codex progress events', () => {
-  it('publishes todos and usage through the session fact projector', () => {
+  it('publishes todos and usage through the legacy progress projection', () => {
     const active = createRecordingHost();
     const trace = new TraceEmitter();
     const hub = new SessionEventHub();
     const detachTrace = trace.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjector = attachSessionRunFactProjector(
+    const detachProjection = attachLegacyProgressEventProjection(
       hub,
       active.host,
-      streamId,
     );
 
     publishCodexTodos(streamId, todos, trace);
@@ -93,7 +92,7 @@ describe('codex progress events', () => {
       },
     ]);
 
-    detachProjector();
+    detachProjection();
     detachTrace();
   });
 

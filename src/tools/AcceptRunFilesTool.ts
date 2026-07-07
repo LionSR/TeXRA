@@ -45,7 +45,7 @@ import {
   AbsoluteFS,
   StorageFS,
   WorkspaceFS,
-  flexibleFS,
+  FlexibleFS,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
@@ -171,7 +171,7 @@ Optional:
           );
         }
 
-        const rawContent = await flexibleFS.read(sourceLocation);
+        const rawContent = await FlexibleFS.read(sourceLocation);
         const { content: proposedContent, count: strippedCount } =
           strip_criticize
             ? stripCriticizeAnnotations(rawContent)

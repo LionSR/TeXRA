@@ -85,25 +85,6 @@ export function annotateStreamFailure(
 }
 
 /**
- * Drives an async-iterable provider stream, invoking `consume` once per chunk.
- * A named extraction of the `for await (const chunk of stream) { ... }` loop
- * every iterate-based streaming handler (OpenRouter, GoogleGenAI, and the
- * event loop inside OpenAI Responses) previously hand-wrote inline. Handlers
- * whose SDK drives consumption through its own event emitter instead of a
- * plain async iterable (Anthropic's `attachToStream`, OpenAI chat completions'
- * `stream.on('chunk', ...)`) do not use this — their "consume" hook is the
- * listener they register directly with the SDK.
- */
-export async function consumeStreamChunks<TChunk>(
-  stream: AsyncIterable<TChunk>,
-  consume: (chunk: TChunk) => void,
-): Promise<void> {
-  for await (const chunk of stream) {
-    consume(chunk);
-  }
-}
-
-/**
  * Hooks for {@link handleStreamingFailure}, the shared tail of the mid-stream
  * failure skeleton every provider handler's streaming catch block runs:
  * finalize the in-flight progress streams, compute the partial-output tail,

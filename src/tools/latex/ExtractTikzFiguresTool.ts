@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { tikzPictureManager } from '@latex/TikzPictureManager';
+import { TikzPictureManager } from '@latex/TikzPictureManager';
 import {
   type ToolFileAttachment,
   type ToolResult,
@@ -43,7 +43,7 @@ export class ExtractTikzFiguresTool extends defineTool({
   }: ExtractTikzInput): Promise<ToolResult> {
     const { path, display } = await resolveLatexFileOrThrow(texPath);
 
-    const tikzFigures = await tikzPictureManager.extract(
+    const tikzFigures = await TikzPictureManager.extract(
       pathToLocation(path.absolute),
     );
     if (tikzFigures.length === 0) {
@@ -68,7 +68,7 @@ export class ExtractTikzFiguresTool extends defineTool({
 
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
-      const compiledPaths = await tikzPictureManager.compile(
+      const compiledPaths = await TikzPictureManager.compile(
         pathToLocation(path.absolute),
       );
       if (compiledPaths.length > 0) {

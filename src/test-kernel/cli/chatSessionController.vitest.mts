@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/runtime/executionRegistry', () => ({
-  executionRegistry: {
+  SharedExecutionRegistry: {
     stopAgentStream: mocks.stopAgentStream,
   },
 }));

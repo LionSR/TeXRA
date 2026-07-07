@@ -6,7 +6,7 @@ import { describe, it } from 'vitest';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 
 // Local imports - latex
-import { tikzPictureManager } from '@latex/TikzPictureManager';
+import { TikzPictureManager } from '@latex/TikzPictureManager';
 
 // Local imports - utils
 import { pathToLocation } from '@utils/files';
@@ -30,7 +30,7 @@ describe('TikzPictureManager', () => {
 `,
     });
 
-    const result = await tikzPictureManager.extract(
+    const result = await TikzPictureManager.extract(
       pathToLocation('paper.tex'),
     );
 
@@ -64,7 +64,7 @@ describe('TikzPictureManager', () => {
 `,
     });
 
-    const result = await tikzPictureManager.extract(
+    const result = await TikzPictureManager.extract(
       pathToLocation('paper.tex'),
     );
 

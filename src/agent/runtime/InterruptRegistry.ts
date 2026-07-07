@@ -31,4 +31,4 @@ export class InterruptRegistry {
   }
 }
 
-export const interruptRegistry = new InterruptRegistry();
+export const SharedInterruptRegistry = new InterruptRegistry();

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
-import { flexibleFS, TaskRunFileService, pathToLocation } from '@utils/files';
+import { FlexibleFS, TaskRunFileService, pathToLocation } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local imports - latex utils
@@ -22,7 +22,7 @@ function runStoragePath(loc: FileLocation): string {
   return loc.kind !== 'external' ? loc.relativePath : loc.absolutePath;
 }
 
-class TikzPictureManager {
+class TikzPictureManagerImpl {
   constructor(
     private readonly channel: string = CHANNEL,
     private readonly fileService?: TaskRunFileService,
@@ -70,7 +70,7 @@ class TikzPictureManager {
    * @returns Array of [label, tikzpictures] tuples
    */
   async extract(latexFile: FileLocation): Promise<[string, string[]][]> {
-    const content = await flexibleFS.read(latexFile);
+    const content = await FlexibleFS.read(latexFile);
 
     // Match each figure block first, then inspect labels inside the block. This
     // prevents an unlabeled figure from consuming a later figure's label.
@@ -131,7 +131,7 @@ class TikzPictureManager {
       path.join(buildDirLocation.absolutePath, filename),
     );
 
-    await flexibleFS.write(texLocation, standaloneContent);
+    await FlexibleFS.write(texLocation, standaloneContent);
     logger.debug(
       this.channel,
       `Created standalone LaTeX file: ${texLocation.absolutePath}`,
@@ -155,7 +155,7 @@ class TikzPictureManager {
       path.join(path.dirname(latexFile.absolutePath), 'build', inputName),
     );
 
-    await flexibleFS.ensureDir(buildDirLocation);
+    await FlexibleFS.ensureDir(buildDirLocation);
 
     logger.debug(
       this.channel,
@@ -211,7 +211,7 @@ class TikzPictureManager {
           path.join(path.dirname(texLocation.absolutePath), pdfFilename),
         );
 
-        if (await flexibleFS.exists(pdfLocation)) {
+        if (await FlexibleFS.exists(pdfLocation)) {
           compiledFiles.push(pdfLocation);
           logger.debug(
             this.channel,
@@ -225,4 +225,4 @@ class TikzPictureManager {
   }
 }
 
-export const tikzPictureManager = new TikzPictureManager();
+export const TikzPictureManager = new TikzPictureManagerImpl();

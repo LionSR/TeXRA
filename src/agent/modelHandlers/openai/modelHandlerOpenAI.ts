@@ -279,6 +279,18 @@ export class ModelHandlerOpenAI<
     return summaryParams;
   }
 
+  /**
+   * Whether this request configures the agent's end tag as an API-level `stop`
+   * sequence (see `buildChatBaseParams`). o-series and Grok reasoning models
+   * never do, so a natural `STOP` finish from them does not imply the provider
+   * stripped the end tag. Single source of truth gating both the `stop` config
+   * and `extractResponse`'s `appendEndTagIfNeeded` restoration, so the two
+   * can't drift apart.
+   */
+  protected get configuresEndTagStopSequence(): boolean {
+    return !this.isOReasoningModel && !this.isGrokReasoningModel;
+  }
+
   protected buildChatBaseParams(
     messages: ChatCompletionMessageParam[],
     temperature?: number,
@@ -296,7 +308,7 @@ export class ModelHandlerOpenAI<
         : { max_tokens: effectiveMaxTokens }),
     };
 
-    if (!this.isOReasoningModel && !this.isGrokReasoningModel) {
+    if (this.configuresEndTagStopSequence) {
       if (endTag) {
         baseParams.stop = [endTag];
       }
@@ -941,11 +953,16 @@ export class ModelHandlerOpenAI<
           completion_tokens: 0,
         };
 
-        // Add end tag if response was stopped and tag isn't present
+        // Only restore the end tag when it was configured as an API-level
+        // stop sequence (see `configuresEndTagStopSequence`). o-series/Grok
+        // reasoning models never set `stop`, so a natural STOP there doesn't
+        // imply the provider stripped the tag — forging it could mask
+        // incomplete output as complete.
         newResponse = this.appendEndTagIfNeeded(
           newResponse,
           endTag,
-          stopReason === OPENAI_CHAT_FINISH.STOP,
+          stopReason === OPENAI_CHAT_FINISH.STOP &&
+            this.configuresEndTagStopSequence,
         );
         newResponse = replacementEngine.applyAll(newResponse);
 
@@ -987,11 +1004,16 @@ export class ModelHandlerOpenAI<
       this.logger.error('content is empty');
     }
 
-    // Add end tag if response was stopped and tag isn't present
+    // Only restore the end tag when it was configured as an API-level stop
+    // sequence (see `configuresEndTagStopSequence`). o-series/Grok reasoning
+    // models never set `stop`, so a natural STOP there doesn't imply the
+    // provider stripped the tag — forging it could mask incomplete output as
+    // complete.
     newResponse = this.appendEndTagIfNeeded(
       newResponse,
       endTag,
-      stopReason === OPENAI_CHAT_FINISH.STOP,
+      stopReason === OPENAI_CHAT_FINISH.STOP &&
+        this.configuresEndTagStopSequence,
     );
     newResponse = replacementEngine.applyAll(newResponse);
 

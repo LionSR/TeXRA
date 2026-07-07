@@ -3,8 +3,6 @@ description: Converts a research paper into a LaTeX conference poster using a pr
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   isRewrite: False
   defaultOutputFiles:
     - poster.tex

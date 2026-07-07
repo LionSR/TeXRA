@@ -31,6 +31,12 @@ const LEGACY_INDEX_KEY = 'odysseys:index';
 // without calling `forget()` leave dangling entries until next manual cleanup.
 const indexMutex = new Mutex();
 
+export interface GoalStateChange {
+  readonly streamId: StreamTabId;
+}
+
+export type GoalStateChangeListener = (change: GoalStateChange) => void;
+
 function streamKey(streamId: StreamTabId): string {
   return `${STREAM_KEY_PREFIX}${streamId}`;
 }
@@ -189,6 +195,28 @@ function requireNonEmpty(value: string, label: string): string {
     throw new Error(`${label} must not be empty or whitespace-only.`);
   }
   return trimmed;
+}
+
+/**
+ * Subscribe to goal mutations in one explicitly-owned session.
+ * Goal state is session-scoped: consumers must pass the session they render,
+ * rather than listening on a process-wide compatibility event.
+ */
+export function subscribeGoalStateChanges(
+  session: Pick<SessionHandle, 'events'>,
+  listener: GoalStateChangeListener,
+): () => void {
+  return session.events.subscribe(
+    (sessionEvent) => {
+      if (
+        sessionEvent.scope === 'session' &&
+        sessionEvent.event.type === 'goalStateChanged'
+      ) {
+        listener(sessionEvent.event.payload);
+      }
+    },
+    { scope: 'session' },
+  );
 }
 
 export const GoalStore = {

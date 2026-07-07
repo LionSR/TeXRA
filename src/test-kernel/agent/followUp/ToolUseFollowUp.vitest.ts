@@ -22,7 +22,7 @@ import {
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
-  executionRegistry,
+  SharedExecutionRegistry,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import {
@@ -56,7 +56,7 @@ function trackChildHandle(
     'toolUse',
     noopAgentRuntimeHost,
   );
-  executionRegistry.track(handle);
+  SharedExecutionRegistry.track(handle);
 }
 
 describe('ToolUseFollowUp', () => {
@@ -86,8 +86,8 @@ describe('ToolUseFollowUp', () => {
   };
 
   afterEach(() => {
-    for (const executionId of executionRegistry.getActiveIds()) {
-      executionRegistry.untrack(executionId);
+    for (const executionId of SharedExecutionRegistry.getActiveIds()) {
+      SharedExecutionRegistry.untrack(executionId);
     }
     ToolUseFollowUpQueue.release(streamId);
   });
@@ -113,7 +113,7 @@ describe('ToolUseFollowUp', () => {
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},
     });
-    executionRegistry.track(handle);
+    SharedExecutionRegistry.track(handle);
     return executionId;
   }
 
@@ -179,7 +179,7 @@ describe('ToolUseFollowUp', () => {
         'hello while running',
       ]);
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });
@@ -205,7 +205,7 @@ describe('ToolUseFollowUp', () => {
         'after release',
       ]);
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });
@@ -238,7 +238,7 @@ describe('ToolUseFollowUp', () => {
         },
       ]);
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });
@@ -286,7 +286,7 @@ describe('ToolUseFollowUp', () => {
         'result two',
       ]);
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });
@@ -312,7 +312,7 @@ describe('ToolUseFollowUp', () => {
       });
       assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), []);
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });
@@ -377,7 +377,7 @@ describe('ToolUseFollowUp', () => {
         'late result',
       ]);
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });

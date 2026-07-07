@@ -666,8 +666,7 @@ function createWindow(options: {
     refreshToolAvailability: async () => {
       const { refreshToolAvailability } =
         await import('@tools/toolAvailability');
-      const execution = await getAgentExecution();
-      await refreshToolAvailability(execution.progress.runtimeHost);
+      await refreshToolAvailability();
     },
     runInstallCommand: async (command) => {
       await runSetupCommand(command);
