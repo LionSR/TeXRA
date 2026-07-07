@@ -21,7 +21,6 @@ import {
   executeAgent,
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
@@ -32,6 +31,7 @@ import {
   createCliRuntimeHost,
   type CliRuntimeHost,
 } from '@cli/runtime/runtimeHost';
+import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import {
   explainNonResumable,
   resolveCliResumeSnapshot,
@@ -244,7 +244,7 @@ export function createChatSessionController(
     const detachTuiRunFacts = attachTuiRunFactSubscription(
       defaultSession().events,
     );
-    const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
+    const detachSessionProgressProjection = attachCliSessionProgressProjection(
       defaultSession().events,
       interactiveHost,
     );
@@ -254,7 +254,7 @@ export function createChatSessionController(
       finalize: (): void => {
         detachResultToast();
         detachTuiRunFacts();
-        detachLegacyProgressProjection();
+        detachSessionProgressProjection();
         detachHostInteractions();
         if (session.runtimeHost === interactiveHost) {
           session.runtimeHost = undefined;

@@ -7,7 +7,6 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseCycleNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseCycleNode';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import type {
   CyclePrepResult,
   ToolUseRunShared,
@@ -20,6 +19,7 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { createRecordingHost, withTestRunContext } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 const todo: TodoItem = {
   content: 'Wire progress events through runtime host',
@@ -54,7 +54,10 @@ describe('tool-use progress events', () => {
     const detachTrace = logger.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjection = attachLegacyProgressEventProjection(hub, host);
+    const detachProjection = attachSessionProgressEventProjectionForTest(
+      hub,
+      host,
+    );
     const workspaceState = AgentWorkspaceState.create();
     workspaceState.workPlan.updateTodos([todo]);
     workspaceState.workPlan.updatePlan(plan);

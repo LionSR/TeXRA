@@ -18,6 +18,9 @@ import { z } from 'zod';
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage';
 
+// Local imports - event bus
+import { appSignals } from '@eventBus/AppSignals';
+
 // Local imports - shared
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -30,7 +33,6 @@ import {
 } from '@shared/schemas/toolResult';
 
 // Local imports - tools
-import { requireRuntimeHost } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import {
   buildApprovalRejectedResult,
@@ -135,7 +137,6 @@ Optional:
 }) {
   protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
     const { execution_id: executionId, files, strip_criticize } = input;
-    const runtimeHost = requireRuntimeHost('accept_run_files');
 
     const runDir = await findExistingRunStoragePath(executionId);
     const runDirExists = runDir !== undefined;
@@ -282,7 +283,7 @@ Optional:
 
     // Badge all accepted workspace files
     if (acceptedEntries.length > 0) {
-      runtimeHost.emit('workspaceFilesWritten', {
+      appSignals.emit('workspaceFilesWritten', {
         absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
       });
     }
