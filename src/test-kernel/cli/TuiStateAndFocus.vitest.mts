@@ -255,9 +255,6 @@ describe('cliState Phase 4 fields', () => {
         child1,
         STREAM_PHASE.FAILED,
         'restart-repair',
-        {
-          runtimeHost: wrapped,
-        },
       );
 
       const parent = streams.get().get(root);
@@ -1617,9 +1614,6 @@ describe('CLI TUI row allocation', () => {
         child1,
         STREAM_PHASE.RUNNING,
         'restart-repair',
-        {
-          runtimeHost: wrapped,
-        },
       );
 
       activeStreamId.set(child1);
@@ -1663,9 +1657,6 @@ describe('CLI TUI row allocation', () => {
         child1,
         STREAM_PHASE.CANCELLED,
         'restart-repair',
-        {
-          runtimeHost: wrapped,
-        },
       );
 
       activeStreamId.set(child1);

@@ -12,6 +12,7 @@ import {
 } from '@agent/runtime/executionRegistry';
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
+import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import {
   SessionEventHub,
   type SessionEvent,
@@ -322,7 +323,13 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const events = new SessionEventHub();
+    attachSessionProgressEventProjection(events, explicit.host);
+    const registry = new ExecutionRegistry({
+      interrupts,
+      streamStatus,
+      events,
+    });
     const rootStreamId = 'root-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-stop-policy-test' as StreamTabId;
     const rootInterrupt = vi.fn();
@@ -591,7 +598,13 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const events = new SessionEventHub();
+    attachSessionProgressEventProjection(events, explicit.host);
+    const registry = new ExecutionRegistry({
+      interrupts,
+      streamStatus,
+      events,
+    });
     const streamId = 'untracked-stop-policy-test' as StreamTabId;
     const interrupt = vi.fn();
 
@@ -621,7 +634,9 @@ describe('executionRegistry', () => {
   it('marks an ownerless stream stopped when a host can publish status', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    attachSessionProgressEventProjection(events, explicit.host);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const streamId = 'ownerless-stop-policy-test' as StreamTabId;
 
     try {
@@ -1212,9 +1227,6 @@ describe('executionRegistry', () => {
       childStreamId,
       STREAM_PHASE.WAITING,
       'restart-repair',
-      {
-        runtimeHost: explicit.host,
-      },
     );
 
     expect(
