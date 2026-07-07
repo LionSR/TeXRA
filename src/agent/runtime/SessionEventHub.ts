@@ -41,9 +41,8 @@ export type SessionEvent =
 
 /**
  * Re-emit a {@link SessionFact} on the legacy per-host progress-event
- * surface. Shared by `emitRuntimeEvent`'s host-channel path and
- * `LegacyProgressEventProjection`'s hub-subscription path — both project the
- * same fact vocabulary onto the same host events.
+ * surface. This keeps host-channel callers on the same neutral projection as
+ * any host-owned hub subscription.
  */
 export function emitLegacySessionFactOnHost(
   host: AgentRuntimeHost,
