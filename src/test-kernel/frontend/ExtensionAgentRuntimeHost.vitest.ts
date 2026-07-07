@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { extensionPresentationEvents } from '@frontend/events/extensionPresentationEvents';
@@ -34,11 +35,21 @@ describe('extensionAgentRuntimeHost', () => {
     }
   });
 
-  it('keeps run progress events on ProgressEventBus', () => {
+  it('routes run progress events through extension host interactions', () => {
     const busPayloads: unknown[] = [];
+    const interactionEvents: unknown[] = [];
     const disposeBus = ProgressEventBus.on('setActiveStream', (payload) =>
       busPayloads.push(payload),
     );
+    const disposeInteractions = defaultSession().useHostInteractions({
+      handleProgressEvent: (event, payload) => {
+        interactionEvents.push({ event, payload });
+        return true;
+      },
+      pending: () => [],
+      resolve: () => false,
+      cancelForStream: () => {},
+    });
     busPayloads.length = 0;
 
     try {
@@ -46,10 +57,28 @@ describe('extensionAgentRuntimeHost', () => {
         streamId: 'extension:progress' as StreamTabId,
       });
 
-      expect(busPayloads).toEqual([
-        { streamId: 'extension:progress' as StreamTabId },
+      expect(interactionEvents).toEqual([
+        {
+          event: 'setActiveStream',
+          payload: { streamId: 'extension:progress' as StreamTabId },
+        },
       ]);
+      expect(busPayloads).toEqual([]);
+
+      disposeInteractions();
+      extensionAgentRuntimeHost.emit('setActiveStream', {
+        streamId: 'extension:after-detach' as StreamTabId,
+      });
+
+      expect(interactionEvents).toEqual([
+        {
+          event: 'setActiveStream',
+          payload: { streamId: 'extension:progress' as StreamTabId },
+        },
+      ]);
+      expect(busPayloads).toEqual([]);
     } finally {
+      disposeInteractions();
       disposeBus();
     }
   });
