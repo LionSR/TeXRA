@@ -61,6 +61,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import {
@@ -73,7 +74,6 @@ import {
   RESTART_REPAIR_PHASES,
 } from '@shared/progressView/backend/restartRepair';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
-import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
@@ -372,8 +372,7 @@ export class DesktopProgressBridge {
       state: {
         getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
         getExecutionId: (stream) => this.getStreamExecutionId(stream),
-        getOutputFiles: (stream) =>
-          new Map(this.state.snapshots.getOutputFiles(stream)),
+        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
         getKnownWorkspaceOutputPaths: () => new Set(),
       },
       executeAgent: async (request) => {
@@ -400,8 +399,7 @@ export class DesktopProgressBridge {
       state: {
         getActiveStream: () => this.state.activeStream,
         getExecutionId: (stream) => this.getStreamExecutionId(stream),
-        getOutputFiles: (stream) =>
-          new Map(this.state.snapshots.getOutputFiles(stream)),
+        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
         // The desktop bridge has no quick-pick UI, so Accept always replaces
         // the workspace file. Returning undefined keeps the controller from
         // building copy metadata that the desktop host would silently drop.
@@ -1225,15 +1223,15 @@ export class DesktopProgressBridge {
     const stream = this.state.activeStream;
     if (!stream) return undefined;
 
-    // Sort rounds ascending so round and between-round diffs are produced (and
-    // opened) in order, matching the VS Code command.
-    const outputsByRound = new Map(
-      [...this.state.snapshots.getOutputFiles(stream)].sort(
-        (a, b) => a[0] - b[0],
-      ),
-    );
+    // Round keys are non-negative integers, so the canonical round-indexed
+    // record already iterates ascending (integer object keys are spec-ordered
+    // numerically) — round and between-round diffs are produced (and opened)
+    // in order, matching the VS Code command, with no separate sort needed.
+    const outputsByRound = this.state.snapshots.getOutputFiles(stream);
     const workspaceScan = this.getLatexdiffWorkspaceScan(stream, editedFile);
-    if (outputsByRound.size === 0 && !workspaceScan) return undefined;
+    if (Object.keys(outputsByRound).length === 0 && !workspaceScan) {
+      return undefined;
+    }
 
     const executionId = this.getStreamExecutionId(stream);
     return {

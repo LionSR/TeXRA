@@ -21,7 +21,11 @@ import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import type { TaskState, WorkflowTaskState } from '@agent/core/state/TaskState';
 
 // Local imports - shared
-import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
+import type {
+  OutputFileInfo,
+  RoundIndexed,
+  StreamTabId,
+} from '@shared/schemas';
 
 export class ControllerCallRecorder<T = unknown> {
   readonly calls = new Map<string, T[]>();
@@ -226,7 +230,7 @@ export function createOutputFile(
 export interface ProgressWorkflowActionsHarnessOptions {
   taskStates?: Map<StreamTabId, TaskState>;
   executionIds?: Map<StreamTabId, string>;
-  outputs?: Map<StreamTabId, Map<number, OutputFileInfo[]>>;
+  outputs?: Map<StreamTabId, RoundIndexed<OutputFileInfo>>;
   knownWorkspaceOutputs?: Map<StreamTabId, Set<string>>;
 }
 
@@ -255,7 +259,7 @@ export function createProgressWorkflowActionsHarness(
       state: {
         getTaskState: (stream) => options.taskStates?.get(stream),
         getExecutionId: (stream) => options.executionIds?.get(stream),
-        getOutputFiles: (stream) => new Map(options.outputs?.get(stream) ?? []),
+        getOutputFiles: (stream) => options.outputs?.get(stream) ?? {},
         getKnownWorkspaceOutputPaths: (stream) =>
           new Set(options.knownWorkspaceOutputs?.get(stream) ?? []),
       },

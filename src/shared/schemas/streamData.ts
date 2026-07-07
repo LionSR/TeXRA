@@ -10,15 +10,13 @@
  *
  * Legacy data (from before the one-run-per-tab refactor) was keyed by runId:
  *   - outputFiles.json / missingOutputs.json used `{ runId: { round: … } }`
+ *     (absorbed at the canonical parse entry — see
+ *     `parsePersistedRoundIndexed` in `./roundIndexed`)
  *   - usageStats.json used `{ runId: TokenUsageStats }` (still the stored shape)
- *
- * The preprocess helpers below detect the legacy nested shape and flatten it to
- * the new format by picking the most recent run (last-inserted key).
  */
 
 import { z } from 'zod';
 
-import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
   RUN_DESCRIPTOR_SCHEMA_VERSION,
   RunDescriptorSchema,
@@ -30,13 +28,6 @@ import {
   isEmptyUsage,
   type TokenUsageStats,
 } from './usage';
-
-// ============================================================================
-// Shared: round key coercion
-// ============================================================================
-
-/** Coerces and validates integer round keys from string record keys. */
-export const RoundKeySchema = z.coerce.number().int();
 
 // ============================================================================
 // Per-stream meta file (streamData/{id}/meta.json) — single source of truth
@@ -120,144 +111,6 @@ export function selectPreferredLegacyInstruction(
 
   return selected;
 }
-
-// ============================================================================
-// Legacy detection + flattening
-// ============================================================================
-
-/**
- * Detects whether a record is the legacy nested shape
- * (`{ runId: { round: items[] } }`) rather than the flat shape
- * (`{ round: items[] }`).
- *
- * Flat records satisfy BOTH properties:
- *   - every top-level key parses as an integer (round number)
- *   - every top-level value is an array (the items list for that round)
- *
- * If either property fails on any entry, the record is treated as legacy.
- * This guards against a numeric-only runId sneaking through the key check
- * and against a legacy record whose inner maps happen to be arrays.
- */
-export function isLegacyNested(raw: unknown): raw is Record<string, unknown> {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
-  const entries = Object.entries(raw as Record<string, unknown>);
-  if (entries.length === 0) return false;
-  return entries.some(
-    ([key, value]) => !/^-?\d+$/.test(key) || !Array.isArray(value),
-  );
-}
-
-/**
- * Flatten a legacy nested record to a single run's round-keyed map.
- * Prefers the `preferredRunId` when that entry exists (legacy tabs persisted
- * `activeRunId` in meta.json to mark the selected run); otherwise falls back
- * to JS insertion order and picks the last-written run.
- */
-export function flattenLegacyRuns(
-  raw: Record<string, unknown>,
-  preferredRunId?: string | null,
-): Record<string, unknown> {
-  if (preferredRunId) {
-    const picked = raw[preferredRunId];
-    if (picked && typeof picked === 'object' && !Array.isArray(picked)) {
-      return picked as Record<string, unknown>;
-    }
-  }
-  const latest = Object.values(raw).findLast(
-    (value) =>
-      value != null && typeof value === 'object' && !Array.isArray(value),
-  );
-  return (latest as Record<string, unknown> | undefined) ?? {};
-}
-
-// ============================================================================
-// Shared transform helpers
-// ============================================================================
-
-/** Convert { stringKey: items[] } record to Map<number, items[]>, coercing keys. */
-function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
-  const map = new Map<number, T[]>();
-  for (const [key, items] of Object.entries(record)) {
-    const round = RoundKeySchema.safeParse(key);
-    if (round.success && items.length > 0) {
-      map.set(round.data, items);
-    }
-  }
-  return map;
-}
-
-/**
- * Builds a schema that parses a flat round-keyed record
- * (`{ "1": items[], … }`) into `Map<number, items[]>`: keys are coerced to
- * integers, empty/malformed rounds are dropped, and a malformed top-level
- * value falls back to an empty map. Callers pre-flatten legacy nested records
- * (`{ runId: { round: items[] } }`, see `flattenLegacyRuns`) before parsing —
- * the schema itself does not fall back to insertion order.
- *
- * The single cast here replaces the per-schema casts that the
- * `.transform(recordToRoundMap)` → `.catch(…)` pipeline would otherwise
- * require at each call site.
- *
- * The fallback uses a `() => new Map()` factory rather than a literal
- * `new Map()`: Zod stores a literal catch value once and returns that same
- * instance on every failure, and consumers (e.g. `StreamSnapshotStore`) hold
- * the parsed map by reference and mutate it via `.set()`, so a shared instance
- * would leak rounds across streams whose sidecar JSON is malformed.
- */
-function roundMapSchema<T>(
-  itemList: z.ZodType<T[]>,
-): z.ZodType<Map<number, T[]>> {
-  return z
-    .record(z.string(), itemList)
-    .transform(recordToRoundMap)
-    .catch(() => new Map()) as z.ZodType<Map<number, T[]>>;
-}
-
-function warnDroppedItem(
-  kind: string,
-  error: { issues: readonly { path: PropertyKey[]; message: string }[] },
-): void {
-  console.warn(
-    `[streamData] Dropping malformed ${kind} entry: ${error.issues
-      .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
-      .join('; ')}`,
-  );
-}
-
-// ============================================================================
-// Output files: { round: OutputFileInfo[] } (caller pre-flattens legacy input,
-// threading the activeRunId hint in via flattenLegacyRuns).
-// ============================================================================
-
-const OutputFileListSchema = z
-  .array(z.unknown())
-  .transform((items) =>
-    items.flatMap((item) => {
-      const parsed = OutputFileInfoSchema.safeParse(item);
-      if (parsed.success) return [parsed.data];
-      warnDroppedItem('OutputFileInfo', parsed.error);
-      return [];
-    }),
-  )
-  .catch([]);
-
-export const OutputFilesDataSchema = roundMapSchema(OutputFileListSchema);
-
-// ============================================================================
-// Missing outputs: { round: string[] } (caller pre-flattens legacy input).
-// ============================================================================
-
-export const MissingOutputsDataSchema = roundMapSchema(
-  z.array(z.string()).catch([]),
-);
-
-// ============================================================================
-// Compile failures: { round: CompileFailure[] } (caller pre-flattens legacy input).
-// ============================================================================
-
-export const CompileFailuresDataSchema = roundMapSchema(
-  z.array(CompileFailureSchema).catch([]),
-);
 
 // ============================================================================
 // Usage stats — per-run map kept (tool-use can resume → multiple runs).

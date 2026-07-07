@@ -6,6 +6,7 @@ import {
   type OutputFileInfo,
   OutputFileInfoSchema,
 } from './output';
+import { RoundNumberSchema } from './roundIndexed';
 import { getBasename } from '../utils/path';
 
 export const DiffStatusSchema = z.enum(['success', 'error']);
@@ -18,10 +19,18 @@ const DiffMetadataSchema = z.object({
   runId: z.string().optional(),
 });
 
-/** Canonical DiffResult format from backend */
+/**
+ * Canonical DiffResult format from backend. `baseRound` is a round POINTER
+ * (which round the base file came from — null when the base isn't
+ * round-scoped, e.g. an original pre-round source), not a round-indexed
+ * collection: it shares {@link RoundNumberSchema} with the round-indexed
+ * item fields but deliberately does not join the {@link RoundIndexed}
+ * container shape. `revisedRound` (see {@link DiffResultDisplaySchema}) is
+ * derived from `revised.round` rather than duplicated here.
+ */
 export const DiffResultSchema = DiffMetadataSchema.extend({
   baseLocation: FileLocationSchema.nullable(),
-  baseRound: z.number().nullable(),
+  baseRound: RoundNumberSchema.nullable(),
   revised: OutputFileInfoSchema,
   diffLocation: FileLocationSchema.nullable(),
 });
@@ -33,8 +42,8 @@ const DiffResultDisplayShapeSchema = DiffMetadataSchema.extend({
   revisedFile: z.string(),
   diffFile: z.string(),
   displayName: z.string(),
-  baseRound: z.number().nullable(),
-  revisedRound: z.number(),
+  baseRound: RoundNumberSchema.nullable(),
+  revisedRound: RoundNumberSchema,
 });
 
 export type DiffResultDisplay = z.infer<typeof DiffResultDisplayShapeSchema>;
@@ -103,6 +112,14 @@ const LegacyLocationsSchema = z
   })
   .optional();
 
+/**
+ * Legacy round-label parse arm: pre-#3061 persisted latexdiff log entries
+ * (see `LegacyDiffResultInputBaseSchema` below) predate the explicit
+ * `baseRound`/`revisedRound` fields and only carry the round baked into a
+ * display label (e.g. `"main.tex [r2]"`). Kept as the one read arm for that
+ * shape; tracked for D3 retirement 2026-08-04 alongside the other #3061-era
+ * shims in the #6981 ledger.
+ */
 function parseRoundFromLabel(label: string | undefined): number | null {
   if (typeof label !== 'string') return null;
   const match = label.match(/\[r(\d+)\]/);
@@ -116,8 +133,8 @@ const LegacyDiffResultInputBaseSchema = z.looseObject({
   diffPath: z.string().optional(),
   baseLabel: z.string().optional(),
   revisedLabel: z.string().optional(),
-  baseRound: z.number().optional(),
-  revisedRound: z.number().optional(),
+  baseRound: RoundNumberSchema.optional(),
+  revisedRound: RoundNumberSchema.optional(),
   originalFileName: z.string().optional(),
   status: z.string().optional(),
   message: z.string().optional(),
