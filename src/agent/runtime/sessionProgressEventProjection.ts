@@ -8,6 +8,7 @@ import {
   ExtendedTokenUsageStatsSchema,
   type StorageKey,
   type StreamTabId,
+  type UpdateStreamUsagePayload,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
@@ -57,8 +58,6 @@ export function attachSessionProgressEventProjection(
     detachSessionFacts();
   };
 }
-
-type UpdateStreamUsagePayload = ProgressEventPayloads['updateStreamUsage'];
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;

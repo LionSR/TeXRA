@@ -10,10 +10,11 @@ import type {
 
 /**
  * Run facts ride the run trace as `domain` events keyed `'runFact.' + name`.
- * The prefix survives this stage because every key below still has live
- * direct consumers (extension run-fact subscriptions, CLI TUI, snapshot
- * store) plus the retained CLI projection; retiring it means typed
- * `AgentEvent` arms per fact, tracked for a later slice.
+ * The prefix survives until v0.41: every key still has live consumers of the
+ * prefixed key (R8 census 2026-07-07 — the CLI projection decodes all six,
+ * `StreamSnapshotStore` persists all but `goalPaused`, the CLI TUI applies
+ * `updateTodos`/`updatePlan`/`goalPaused`, the extension filters on
+ * `addOutputFiles`). Retiring it means typed `AgentEvent` arms per fact.
  */
 export const RUN_FACT_DOMAIN_PREFIX = 'runFact.';
 
@@ -28,14 +29,18 @@ export type RunFactPayloads = {
 
 export type RunFactEventName = keyof RunFactPayloads;
 
-const RUN_FACT_EVENT_SET = new Set<string>([
-  'updateTodos',
-  'updatePlan',
-  'addOutputFiles',
-  'updateMissingOutputs',
-  'updateCompileFailures',
-  'goalPaused',
-] satisfies RunFactEventName[]);
+// `satisfies Record<...>` (not a name array) so a new `RunFactPayloads` key
+// fails compile here until it is decodable, instead of silently dropping.
+const RUN_FACT_EVENT_NAMES = {
+  updateTodos: true,
+  updatePlan: true,
+  addOutputFiles: true,
+  updateMissingOutputs: true,
+  updateCompileFailures: true,
+  goalPaused: true,
+} as const satisfies Record<RunFactEventName, true>;
+
+const RUN_FACT_EVENT_SET = new Set<string>(Object.keys(RUN_FACT_EVENT_NAMES));
 
 export function toRunFactDomainKey(event: RunFactEventName): string {
   return `${RUN_FACT_DOMAIN_PREFIX}${event}`;

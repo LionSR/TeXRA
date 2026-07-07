@@ -20,6 +20,10 @@ import {
   UpdatePlanPayloadSchema,
   UpdateTodosPayloadSchema,
   type ActiveChildInfo,
+  type GoalPausedPayload,
+  type UpdateActiveProcessesPayload,
+  type UpdateProcessOutputPayload,
+  type UpdateStreamUsagePayload,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
@@ -46,12 +50,6 @@ type Emit = <K extends ProgressEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
 ) => void;
-
-type UpdateStreamUsagePayload = ProgressEventPayloads['updateStreamUsage'];
-type GoalPausedPayload = ProgressEventPayloads['goalPaused'];
-type UpdateActiveProcessesPayload =
-  ProgressEventPayloads['updateActiveProcesses'];
-type UpdateProcessOutputPayload = ProgressEventPayloads['updateProcessOutput'];
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
