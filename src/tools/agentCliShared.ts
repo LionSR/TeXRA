@@ -29,7 +29,10 @@ import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createChildStream, type ChildStream } from './childStream';
-import { formatDeliveryEnvelope } from './deliveryEnvelope';
+import {
+  formatChildRunDelivery,
+  formatChildRunError,
+} from './deliveryEnvelope';
 
 /** Maximum prompt length echoed back in a delivery/error XML element. */
 const DELIVERY_PROMPT_MAX = 200;
@@ -71,10 +74,10 @@ export function formatAgentCliDelivery(params: AgentCliDeliveryParams): string {
     lines.push(`<usage input="${usage.input}" output="${usage.output}" />`);
   }
   if (extraLines) lines.push(...extraLines);
-  return formatDeliveryEnvelope({
+  return formatChildRunDelivery({
     tag,
+    executionId,
     attributes: [
-      { name: 'id', value: executionId },
       { name: 'prompt', value: prompt.slice(0, DELIVERY_PROMPT_MAX) },
       {
         name: params.idAttr?.name ?? '',
@@ -95,13 +98,13 @@ export function formatAgentCliError(
   prompt: string,
   err: unknown,
 ): string {
-  return formatDeliveryEnvelope({
+  return formatChildRunError({
     tag,
+    executionId,
     attributes: [
-      { name: 'id', value: executionId },
       { name: 'prompt', value: prompt.slice(0, DELIVERY_PROMPT_MAX) },
     ],
-    bodyLines: [`<message>${escapeText(toErrorMessage(err))}</message>`],
+    message: toErrorMessage(err),
   });
 }
 
