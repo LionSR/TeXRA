@@ -78,6 +78,7 @@ import { emitServerToolResult } from './support/serverToolResultEmission';
 import {
   resolveBaseUrl,
   shouldUseOpenRouter,
+  usesServerSideKeysRoute,
 } from './support/ProxyConfigResolver';
 import {
   type SdkErrorTagger,
@@ -358,20 +359,21 @@ export abstract class ModelHandler<
    * - Client validates SHORT NAMES (this.config.name) against tier config
    * - Server validates API NAMES (from request body) against API patterns
    * - Both are defined in RELAY_MODELS, ensuring UI filtering matches API validation
+   *
+   * Runtime combinator over profile data, not a foldable predicate (#7101
+   * triage): no handler overrides this getter — grepped across every
+   * `ModelHandler*` subclass, none redefine it — so it stays a single base
+   * implementation whose inputs (`this.config.provider`, `this.config.name`,
+   * `this.config.openRouterOnly`, `this.config.requiresResponsesAPI`) are
+   * already plain profile reads, no handler-level or stringly model-family
+   * logic feeding it. The combinator formula itself lives in
+   * {@link usesServerSideKeysRoute} so `UsageMonitor` — which deliberately
+   * holds only a `ModelConfig`-shaped value, not a full handler instance —
+   * shares it instead of re-deriving the same `!openRouter && relaySync`
+   * check independently.
    */
   protected shouldUseServerSideKeys(): boolean {
-    // Models routing through OpenRouter (openRouterOnly or global toggle) always use the
-    // OpenRouter API — the server-side relay is a direct-provider path, not an OpenRouter
-    // path, so it must never take precedence here.
-    if (shouldUseOpenRouter(this.config)) {
-      return false;
-    }
-    // Pass short name (this.config.name) for client-side tier validation.
-    // The server will separately validate the actual API model name from the request.
-    return getServerSideKeyService().shouldUseServerSideKeysSync(
-      this.config.provider,
-      this.config.name,
-    );
+    return usesServerSideKeysRoute(this.config);
   }
 
   /** Fetch an API key for the given provider, throwing `errorMessage` on failure. */
