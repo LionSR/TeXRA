@@ -35,6 +35,7 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
+  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
@@ -500,7 +501,7 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-subagent-waiting-kill',
     );
     const followUpsRelease = vi.spyOn(ctx.session.followUps, 'release');
-    const parentStageEnd = vi.spyOn(ctx.parentStage, 'end');
+    const transcriptsUpdate = vi.spyOn(ctx.session.transcripts, 'update');
     storageMocks.deleteFlowRecord.mockClear();
 
     try {
@@ -522,6 +523,17 @@ describe('runFlowWithLifecycle', () => {
       // The fixture's ctx.logger is noopTrace, and the run handle carries it
       // as its trace channel.
       const traceEmit = vi.spyOn(noopTrace, 'emit');
+
+      // terminateWaitingHandle now requires the stream to have genuinely
+      // reached WAITING (belt-and-suspenders confirmation the handle is
+      // really parked, not mid-flight — see #7324 review discussion); this
+      // fake runner returns the WAITING outcome directly but doesn't drive
+      // the real transitionToWaiting() call, so seed it explicitly.
+      seedStreamStatusForTest(
+        StreamStatusService,
+        streamId,
+        STREAM_STATUS.WAITING,
+      );
 
       // runToolUseFlow's finally unregisters this stream's interrupt but
       // (post #7286) preserves the follow-up queue for WAITING — it does not
@@ -553,8 +565,19 @@ describe('runFlowWithLifecycle', () => {
         `flow_${executionId}`,
       );
       // The kill path never resumes, so the per-suspension parent stage must
-      // be closed here rather than dangling open forever.
-      expect(parentStageEnd).toHaveBeenCalled();
+      // be closed here rather than dangling open forever. `ctx.parentStage`
+      // is already desubscribed by this point (disposeTrace ran in the
+      // WAITING branch's own finally), so the fix writes the stage's
+      // GROUP_END entry directly to the transcript store instead of calling
+      // the now-inert `ctx.parentStage.end()`.
+      expect(transcriptsUpdate).toHaveBeenCalledWith(
+        streamId,
+        expect.any(String),
+        expect.objectContaining({
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+          data: expect.objectContaining({ kind: 'run' }),
+        }),
+      );
     } finally {
       SharedExecutionRegistry.untrack(executionId);
       clearStreamStatusForTest(StreamStatusService, streamId);
