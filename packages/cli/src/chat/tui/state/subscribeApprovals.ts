@@ -139,7 +139,7 @@ export function createTuiHostInteractions(
       let decision: ApprovalDecision | undefined = immediateDecision(context);
       if (!decision) {
         decision = await enqueueTuiApproval(
-          { kind: 'toolEdit', request },
+          { kind: 'toolEdit', payload: request },
           host,
         );
         markIfRejected(context, decision);

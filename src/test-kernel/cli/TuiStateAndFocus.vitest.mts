@@ -492,7 +492,7 @@ describe('CLI TUI row allocation', () => {
       approvalForegroundMaxRows({
         payload: {
           kind: 'toolEdit',
-          request: {
+          payload: {
             path: 'draft.tex',
             originalContent: 'old',
             proposedContent: 'new',
@@ -998,7 +998,7 @@ describe('CLI TUI row allocation', () => {
     const globalApproval = {
       payload: {
         kind: 'toolEdit',
-        request: {
+        payload: {
           path: 'paper.tex',
           originalContent: '',
           proposedContent: '',

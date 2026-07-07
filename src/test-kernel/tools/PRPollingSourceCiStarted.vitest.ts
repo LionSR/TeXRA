@@ -19,8 +19,7 @@ interface CurrentShaState {
   ciComplete: boolean;
   ciPassed: boolean;
   checkRunsCache?: {
-    etagsByPage: Map<number, string>;
-    pagesByPage: Map<number, GhCheckRun[]>;
+    pages: Map<number, { etag?: string; runs: GhCheckRun[] }>;
     lastTotalCount: number;
   };
   pendingAnnotationRuns: GhCheckRun[];
