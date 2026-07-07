@@ -48,6 +48,7 @@ export class ToolUseCycleNode<C> extends Node<
         shared.stateSlices.workspaceSnapshot,
       ),
       userChannels: shared.stateSlices.userChannels,
+      systemPrompt: shared.systemPrompt,
     };
   }
 
@@ -72,6 +73,7 @@ export class ToolUseCycleNode<C> extends Node<
       endTurn: false,
       roundIndex: prepRes.runState.totalRounds,
       roundResponseTimeMs: 0,
+      systemPrompt: prepRes.systemPrompt,
     };
 
     const flow = createToolUseRoundFlow<C>();
