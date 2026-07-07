@@ -189,7 +189,13 @@ function applyTextDelta(
   return existingIndex;
 }
 
-export const logHandlers: HandlerRegistry = {
+// `HandlerRegistry` is now exhaustive (every ProgressView outbound command
+// needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
+// This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
+// subset rather than the full registry; `messageDispatcher.ts` spreads all
+// slices together and is the actual exhaustiveness checkpoint TypeScript
+// enforces.
+export const logHandlers = {
   [PROGRESS_VIEW_COMMANDS.LOG_DELTA]: (data, ctx) => {
     const { streamId, entries, updates } = data;
     const textDeltas = data.textDeltas ?? [];
@@ -254,4 +260,4 @@ export const logHandlers: HandlerRegistry = {
       }),
     );
   },
-};
+} satisfies Partial<HandlerRegistry>;
