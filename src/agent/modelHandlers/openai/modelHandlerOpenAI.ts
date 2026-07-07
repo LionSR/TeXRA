@@ -1216,14 +1216,13 @@ export class ModelHandlerOpenAI<
       return [];
     }
 
-    try {
-      assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls);
-    } catch {
-      this.logger.warn(
-        'Skipping malformed OpenAI tool_calls payload while extracting tool use.',
-      );
-      return [];
-    }
+    // Let a malformed payload throw: swallowing it here would return an
+    // empty tool-call list, which the caller reads as "the model made no
+    // tool calls" and finalizes the run as a successful completion instead
+    // of surfacing the corrupted provider response. The thrown error
+    // propagates to the existing classifyAgentError boundary
+    // (AgentRunLifecycle.ts), which fails the run loudly and retryably.
+    assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls);
 
     return toolCalls.map((call) => ({
       provider: this.toolCallProvider,
