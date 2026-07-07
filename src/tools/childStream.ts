@@ -11,7 +11,6 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
 import { classifyAgentError } from '@common/errors';
@@ -123,10 +122,11 @@ export function createChildStream(
       category: options.config.agentCategory,
     }),
   });
-  runtimeHost.emit('setTaskState', {
+  runTrace.trace.emit({
+    type: 'run.config',
     streamId: childStreamId,
     executionId,
-    taskState: agentConfigToTaskState(options.config),
+    config: options.config,
   });
   emitRuntimeEvent(
     'updateStreamDescription',
