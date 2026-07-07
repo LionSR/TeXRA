@@ -957,6 +957,30 @@ describe('ModelHandlerOpenAIResponse.extractResponse', () => {
 
     assert.equal(result.text, 'fallback text');
   });
+
+  it('does not forge a missing end tag onto a completed response', () => {
+    // The Responses API has no `stop` parameter, so a "completed" status
+    // never implies the provider stripped the end tag from the output.
+    // Forging it here would mask genuinely incomplete output as done.
+    const handler = createHandler();
+    const result = handler.extractResponse(
+      {
+        id: 'resp-no-end-tag',
+        status: 'completed',
+        output_text: 'the document body without a closing tag',
+        usage: {
+          input_tokens: 1,
+          output_tokens: 2,
+          total_tokens: 3,
+          input_tokens_details: { cached_tokens: 0 },
+          output_tokens_details: { reasoning_tokens: 0 },
+        },
+      } as any,
+      '</documents>',
+    );
+
+    assert.equal(result.text, 'the document body without a closing tag');
+  });
 });
 
 describe('ModelHandlerOpenAIResponse.extractAssistantText', () => {
