@@ -25,7 +25,7 @@ import {
   isCliApiSwitchableRetry,
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
