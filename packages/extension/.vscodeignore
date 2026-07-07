@@ -44,8 +44,9 @@ CLAUDE.md
 # `!resources/**` anywhere would silently re-include this directory no
 # matter where a plain `resources/traceViewer/**` ignore line was placed.
 # A prior `!resources/**` line here was dead weight anyway — verified no
-# earlier rule in this file matches any resources/ path, so every other
-# resources/* entry (agents, docs, examples, templates, ...) is already
+# earlier rule in this file broadly excludes resources/ content (the only
+# earlier match is the specific `resources/.DS_Store` line above), so every
+# other resources/* entry (agents, docs, examples, templates, ...) is already
 # included by default with no unignore needed at all.
 resources/traceViewer/**
 

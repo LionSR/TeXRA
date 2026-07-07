@@ -63,9 +63,11 @@ const BUILD_TIME_PACKAGED_PATHS = new Set(['readme.md', 'changelog.md']);
 
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
-  // No blanket `!resources/**` line: it was dead weight (nothing earlier in
-  // .vscodeignore matches any resources/ path, so every resources/* entry
-  // is already included by default) and, if present, would silently
+  // No blanket `!resources/**` line: it was dead weight (no earlier rule in
+  // .vscodeignore broadly excludes resources/ content — the only earlier
+  // match is the specific `resources/.DS_Store` line — so every
+  // resources/* entry is already included by default) and, if present,
+  // would silently
   // override the plain resources/traceViewer/** exclusion below — vsce
   // applies every `!`-negated line after all plain ignore lines regardless
   // of position, so a later plain ignore line can never win against it.
