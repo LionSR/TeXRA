@@ -22,13 +22,9 @@ import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
+import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
-import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
-import {
-  buildModelSelectionMessage,
-  createModelSelectionController,
-} from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -109,8 +105,7 @@ import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { HistoryHandlers } from './handlers/historyHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import { ChatGptSubscriptionHandlers } from './handlers/chatgptSubscriptionHandlers';
-import type { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
-import type { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
+import type { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Re-use the shared type helper for extracting specific message types.
@@ -128,8 +123,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly historyHandlers: HistoryHandlers;
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly chatgptHandlers: ChatGptSubscriptionHandlers;
-  private readonly memoryController: SettingsMemoryController;
-  private readonly modelSelectionController: SettingsModelSelectionController;
+  private readonly settingsHost: SettingsViewHost;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
   private readonly goalController: SettingsGoalController;
@@ -144,23 +138,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
 
-    this.memoryController = createSettingsMemoryController({
-      globalState: globalSM,
-      prompt: new VscodePromptHost(),
-      setMemoryEnabled: setToolUseMemoryEnabled,
-    });
     // Must build inside the constructor: globalSM/workspaceSM are populated
     // by extension.ts → initializeStateManagers and are still undefined at
     // module load, so destructuring them at top level captures `undefined`
     // and every later globalState.get(...) throws.
-    this.modelSelectionController = createModelSelectionController(
-      { workspaceState: workspaceSM, globalState: globalSM },
-      {
+    this.settingsHost = createSettingsViewHost({
+      state: { workspaceState: workspaceSM, globalState: globalSM },
+      memoryPrompt: new VscodePromptHost(),
+      setMemoryEnabled: setToolUseMemoryEnabled,
+      modelSelectionExtras: {
         useIncludedAccess: () =>
           getServerSideKeyService().getUseIncludedModelAccess(),
         getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
       },
-    );
+    });
     this.profileController = new SettingsProfileController({
       globalState: globalSM,
       providerIds: SecretManager.API_PROVIDERS,
@@ -328,29 +319,25 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         getData: () =>
           this.withActiveWebview((w) => this.sendModelSelectionData(w)),
         setEnabled: (modelName, enabled) =>
-          this.updateModelSelection(
-            () =>
-              this.modelSelectionController.setModelEnabled({
-                modelName,
-                enabled,
-              }),
-            { invalidateCache: true, refreshMainOptions: true },
-          ),
+          this.setModelEnabled(modelName, enabled),
         setHelperModel: (modelName) =>
-          this.updateModelSelection(() =>
-            this.modelSelectionController.setHelperModel(modelName),
-          ),
+          this.settingsHost.setHelperModel(modelName, {
+            respond: (message) => this.postMessageToActiveWebview(message),
+          }),
         setReasoningLevel: (modelName, level) =>
-          this.updateModelSelection(() =>
-            this.modelSelectionController.setReasoningLevel({
+          this.settingsHost.setReasoningLevel(
+            {
               modelName,
               level,
-            }),
+            },
+            {
+              respond: (message) => this.postMessageToActiveWebview(message),
+            },
           ),
         setPreferShortModelNames: (enabled) =>
-          this.updateModelSelection(() =>
-            this.modelSelectionController.setPreferShortModelNames(enabled),
-          ),
+          this.settingsHost.setPreferShortModelNames(enabled, {
+            respond: (message) => this.postMessageToActiveWebview(message),
+          }),
       },
       orchestration: {
         getSuperYoloEnabled: () =>
@@ -631,8 +618,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendMemoryData(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      await this.memoryController.getMemoryDataMessage(),
+    await this.settingsHost.sendMemoryData((message) =>
+      webview.postMessage(message),
     );
   }
 
@@ -640,25 +627,23 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
   ): Promise<void> {
     await this.withActiveWebview(async (webview) => {
-      try {
-        await webview.postMessage(
-          await this.memoryController.getMemoryPreviewMessage(data.storagePath),
-        );
-      } catch (error) {
-        void showLoggedErrorMessage(
-          this.channel,
-          'Failed to load memory preview',
-          error,
-        );
-        await webview.postMessage(
-          this.memoryController.getMemoryPreviewErrorMessage(data.storagePath),
-        );
-      }
+      await this.settingsHost.sendMemoryPreview(data, {
+        respond: (message) => webview.postMessage(message),
+        onError: async (error) => {
+          await showLoggedErrorMessage(
+            this.channel,
+            'Failed to load memory preview',
+            error,
+          );
+        },
+      });
     });
   }
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(this.memoryController.getMemoryEnabledMessage());
+    await this.settingsHost.sendMemoryEnabled((message) =>
+      webview.postMessage(message),
+    );
   }
 
   public async sendInlineCriticismEnabled(
@@ -684,8 +669,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      await buildModelSelectionMessage(this.modelSelectionController),
+    await this.settingsHost.sendModelSelectionData((message) =>
+      webview.postMessage(message),
     );
   }
 
@@ -866,8 +851,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
     try {
-      const message = await this.memoryController.deleteMemory(data);
-      await this.postMessageToActiveWebview(message);
+      await this.settingsHost.deleteMemory(data, (message) =>
+        this.postMessageToActiveWebview(message),
+      );
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -881,8 +867,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetMemoryEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
   ): Promise<void> {
-    const message = await this.memoryController.setMemoryEnabled(data.enabled);
-    await this.postMessageToActiveWebview(message);
+    await this.settingsHost.setMemoryEnabled(data.enabled, (message) =>
+      this.postMessageToActiveWebview(message),
+    );
   }
 
   private async setMemoryPinned(
@@ -890,10 +877,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     pinned: boolean,
   ): Promise<void> {
     try {
-      const message = pinned
-        ? await this.memoryController.pinMemory(storagePath)
-        : await this.memoryController.unpinMemory(storagePath);
-      await this.postMessageToActiveWebview(message);
+      await this.settingsHost.setMemoryPinned(storagePath, pinned, (message) =>
+        this.postMessageToActiveWebview(message),
+      );
     } catch (error) {
       const action = pinned ? 'pin' : 'unpin';
       await showLoggedErrorMessage(
@@ -1053,26 +1039,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
-  private async updateModelSelection(
-    update: () => Promise<void>,
-    options: { invalidateCache?: boolean; refreshMainOptions?: boolean } = {},
+  private async setModelEnabled(
+    modelName: string,
+    enabled: boolean,
   ): Promise<void> {
-    await update();
-    if (options.invalidateCache) {
-      invalidateModelOptionsCache();
-    }
-
-    const refreshSettings = this.withActiveWebview((w) =>
-      this.sendModelSelectionData(w),
+    await this.settingsHost.setModelEnabled(
+      { modelName, enabled },
+      {
+        afterUpdate: () => invalidateModelOptionsCache(),
+        respond: (message) => this.postMessageToActiveWebview(message),
+        afterPost: () =>
+          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+      },
     );
-    if (!options.refreshMainOptions) {
-      await refreshSettings;
-      return;
-    }
-
-    await Promise.all([
-      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-      refreshSettings,
-    ]);
   }
 }
