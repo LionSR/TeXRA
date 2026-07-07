@@ -222,7 +222,7 @@ export class DesktopProgressBridge {
 
   /**
    * This window's own session. Each desktop BrowserWindow gets a fresh one so
-   * its runs, interrupts, coordinator requests, and trace flushers are isolated
+   * its runs, interrupts, pending interactions, and trace flushers are isolated
    * from other windows and torn down on window close. Cross-window "is this
    * execution running anywhere" checks use `getAllActiveExecutionIds()`.
    */
@@ -1053,7 +1053,7 @@ export class DesktopProgressBridge {
     this.deletedStreams.add(streamId);
     this.progressEvents.onStreamDeleted(streamId);
 
-    // Releases approval state (pending approvals, bypass flags, coordinator
+    // Releases approval state (pending approvals, bypass flags, pending
     // requests) and the follow-up queue for this stream.
     releaseStreamResources(streamId, this.session);
 
@@ -1073,11 +1073,11 @@ export class DesktopProgressBridge {
       ...this.streamLogs.keys(),
       ...this.progressEvents.restoredStreams.keys(),
     ]);
-    // Approval cleanup (incl. retry/proposal/plan coordinator state) is scoped
+    // Approval cleanup (incl. retry/proposal/plan pending state) is scoped
     // to THIS window's streams via the per-stream helper, NOT the process-wide
     // `cleanupAllApprovals` reset — so one window's "delete all" can't wipe
     // another window's pending approvals (the approval controllers are
-    // process-global and streamId-keyed; the coordinator half is session-owned).
+    // process-global and streamId-keyed; the interaction half is session-owned).
     for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
       releaseStreamResources(streamId, this.session);
@@ -1087,11 +1087,11 @@ export class DesktopProgressBridge {
     // equal any StreamTabId. Scope this to THIS window's runtime host so a
     // sibling window's streamless approval is not rejected.
     cleanupUnscopedApprovals(this.runtimeHost, this.session);
-    // Child/subagent coordinator requests may be session-owned without a local
-    // desktop stream entry, so clear the owning window's coordinator bridge
-    // after the visible per-stream sweep. This is session-scoped and does not
-    // touch sibling windows.
-    this.session.coordinators.cleanupAllRequests();
+    // Child/subagent interaction requests may be session-owned without a local
+    // desktop stream entry, so cancel the owning window's remaining pending
+    // interactions after the visible per-stream sweep. This is session-scoped
+    // and does not touch sibling windows.
+    this.session.interactions.cancelAll?.('All streams deleted.');
     await GoalStore.forgetMany([...streamIds], this.session);
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
@@ -1121,7 +1121,10 @@ export class DesktopProgressBridge {
   }
 
   private stopStream(streamId: StreamTabId): void {
-    this.session.coordinators.clearRetryRequest(streamId);
+    this.session.interactions.cancelForStream(
+      streamId,
+      'Retry request cleared.',
+    );
     this.session.executions.stopAgentStream(streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
       runtimeHost: this.runtimeHost,

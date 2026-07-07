@@ -9,10 +9,10 @@ import type {
   HostPlanApprovalRequest,
   HostRetryRequest,
   HostUserQuestionResult,
+  PlanApprovalResult,
+  ProposalResult,
+  RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
@@ -79,6 +79,11 @@ export function createExtensionHostInteractions(
     pending: Omit<PendingExtensionInteraction<T>, 'settle'>,
     show: () => void,
   ): Promise<T> => {
+    // Replacement cancellation: a request re-issued under an id that is still
+    // pending dismisses the stale prompt (settling it as a rejection carrying
+    // the replacement cause) before the replacement is shown.
+    const replaced = pendingRequests.get(pending.id);
+    if (replaced) releasePending(replaced, 'Approval request was replaced.');
     return new Promise<T>((resolve) => {
       pendingRequests.set(pending.id, {
         ...pending,

@@ -9,8 +9,6 @@ import {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { type RunCoordinators } from '@agent/runtime/RunContext';
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import { planSummaryLine, type Plan, type StreamTabId } from '@shared/schemas';
 import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
@@ -23,6 +21,7 @@ import { GoalStore } from '@tools/goal';
 import { PlanTool } from '@tools/plan/PlanTool';
 import {
   createRecordingHost,
+  sessionWithInteractions,
   type RecordedProgressEvent,
 } from '../agent/progressTestUtils';
 
@@ -49,8 +48,7 @@ async function installPlatform(flagOn: boolean): Promise<Platform> {
 }
 
 function startPlanUpdate(streamId: StreamTabId, objective: string) {
-  const { events, host } = createRecordingHost();
-  const coordinator = new PlanApprovalCoordinator(host);
+  const { events, host, interactions } = createRecordingHost();
   const workPlanState = new WorkPlanState();
   const tool = new PlanTool();
 
@@ -59,7 +57,7 @@ function startPlanUpdate(streamId: StreamTabId, objective: string) {
       run: {
         runtimeHost: host,
         streamId,
-        coordinators: { plan: coordinator } as unknown as RunCoordinators,
+        session: sessionWithInteractions(interactions),
       },
       call: {
         tracker: new FileInteractionState(),
@@ -69,7 +67,7 @@ function startPlanUpdate(streamId: StreamTabId, objective: string) {
     () => tool.call({ command: 'update', objective }),
   );
 
-  return { resultPromise, events, coordinator, host, workPlanState };
+  return { resultPromise, events, host, workPlanState };
 }
 
 function findPlanApproval(

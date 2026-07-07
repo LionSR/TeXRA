@@ -11,15 +11,11 @@ import type { NonIterableObject } from '@agent/node';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { RetryableInvocationNode } from '@agent/core/flows/RetryState';
-import {
-  RetryRequestCoordinatorImpl,
-  type RetryResult,
-} from '@agent/runtime/RetryRequestCoordinator';
-import {
-  createRunContext,
-  withRunContext,
-  type RunCoordinators,
-} from '@agent/runtime/RunContext';
+import type {
+  HostRetryRequest,
+  RetryResult,
+} from '@agent/runtime/HostInteractions';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   StreamStatusMachine,
@@ -36,7 +32,10 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { createRecordingHost } from '../progressTestUtils';
+import {
+  createRecordingHost,
+  sessionWithInteractions,
+} from '../progressTestUtils';
 
 interface TestRetryServices {
   streamId: StreamTabId;
@@ -67,17 +66,12 @@ class ExposedRetryNode extends RetryableInvocationNode<
 interface RetryNodeKit {
   node: ExposedRetryNode;
   streamStatus: StreamStatusMachine;
-  waitForRetry: Mock<
-    (
-      streamId: string,
-      options: { operation: string; errorMessage?: string; logger: AgentTrace },
-    ) => Promise<RetryResult>
-  >;
+  requestRetry: Mock<(request: HostRetryRequest) => Promise<RetryResult>>;
 }
 
 function createRetryNode(streamId: StreamTabId): RetryNodeKit {
   const streamStatus = new StreamStatusMachine();
-  const waitForRetry = vi.fn<RetryNodeKit['waitForRetry']>();
+  const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
   const node = new ExposedRetryNode().setServices({
     streamId,
     runtimeHost: noopAgentRuntimeHost,
@@ -85,19 +79,14 @@ function createRetryNode(streamId: StreamTabId): RetryNodeKit {
     logger: noopTrace,
     setAbortController: vi.fn(),
   });
-  return { node, streamStatus, waitForRetry };
+  return { node, streamStatus, requestRetry };
 }
 
 async function withRetryRunContext<T>(
   streamId: StreamTabId,
-  waitForRetry: RetryNodeKit['waitForRetry'],
+  requestRetry: RetryNodeKit['requestRetry'],
   fn: () => T | Promise<T>,
 ): Promise<T> {
-  const coordinators: RunCoordinators = {
-    plan: {} as RunCoordinators['plan'],
-    proposal: {} as RunCoordinators['proposal'],
-    retry: { waitForRetry } as unknown as RunCoordinators['retry'],
-  };
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => undefined,
@@ -105,8 +94,12 @@ async function withRetryRunContext<T>(
     streamId,
     executionId: `${streamId}-execution` as ExecutionId,
     agentName: 'retry-test',
-    session: new SessionHandle(),
-    coordinators,
+    session: sessionWithInteractions({
+      requestRetry,
+      handleProgressEvent: () => false,
+      resolve: () => false,
+      cancelForStream: () => {},
+    }),
   });
   return await withRunContext(context, fn);
 }
@@ -115,14 +108,8 @@ async function withSessionRetryRunContext<T>(
   streamId: StreamTabId,
   session: SessionHandle,
   runtimeHost: AgentRuntimeHost,
-  retry: RetryRequestCoordinatorImpl,
   fn: () => T | Promise<T>,
 ): Promise<T> {
-  const coordinators: RunCoordinators = {
-    plan: {} as RunCoordinators['plan'],
-    proposal: {} as RunCoordinators['proposal'],
-    retry,
-  };
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => undefined,
@@ -131,7 +118,6 @@ async function withSessionRetryRunContext<T>(
     executionId: `${streamId}-execution` as ExecutionId,
     agentName: 'retry-test',
     session,
-    coordinators,
   });
   return await withRunContext(context, fn);
 }
@@ -192,9 +178,9 @@ describe('RetryState', () => {
 
   it('updates the injected stream status owner during manual retry', async () => {
     const streamId = 'retry-state-owner' as StreamTabId;
-    const { node, streamStatus, waitForRetry } = createRetryNode(streamId);
+    const { node, streamStatus, requestRetry } = createRetryNode(streamId);
 
-    waitForRetry.mockResolvedValueOnce({ action: 'retry' });
+    requestRetry.mockResolvedValueOnce({ action: 'retry' });
 
     try {
       seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
@@ -204,15 +190,15 @@ describe('RetryState', () => {
         STREAM_PHASE.CANCELLED,
       );
 
-      await withRetryRunContext(streamId, waitForRetry, () =>
+      await withRetryRunContext(streamId, requestRetry, () =>
         node.promptFor(new Error('temporary provider failure')),
       );
 
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
       expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-      expect(waitForRetry).toHaveBeenCalledWith(
-        streamId,
+      expect(requestRetry).toHaveBeenCalledWith(
         expect.objectContaining({
+          streamId,
           operation: 'Tool-use call',
         }),
       );
@@ -222,11 +208,11 @@ describe('RetryState', () => {
     }
   });
 
-  it('registers manual retries on the session coordinator bridge', async () => {
+  it('resolves manual retries through the session host interactions', async () => {
     const streamId = 'retry-state-session-bridge' as StreamTabId;
     const session = new SessionHandle();
-    const { host } = createRecordingHost();
-    const retry = new RetryRequestCoordinatorImpl(host);
+    const recording = createRecordingHost();
+    session.useHostInteractions(recording.interactions);
     const { node, streamStatus } = createRetryNode(streamId);
 
     try {
@@ -235,14 +221,17 @@ describe('RetryState', () => {
       const prompt = withSessionRetryRunContext(
         streamId,
         session,
-        host,
-        retry,
+        recording.host,
         () => node.promptFor(new Error('temporary provider failure')),
       );
 
-      expect(session.coordinators.triggerRetry(streamId, 'try again')).toBe(
-        true,
-      );
+      expect(
+        session.interactions.resolve(streamId, {
+          kind: 'retry',
+          action: 'retry',
+          feedback: 'try again',
+        }),
+      ).toBe(true);
 
       await expect(prompt).resolves.toMatchObject({
         shouldRetry: true,
@@ -259,14 +248,14 @@ describe('RetryState', () => {
     'stops the stream after manual retry %s',
     async (action) => {
       const streamId = `retry-state-${action}` as StreamTabId;
-      const { node, streamStatus, waitForRetry } = createRetryNode(streamId);
+      const { node, streamStatus, requestRetry } = createRetryNode(streamId);
 
-      waitForRetry.mockResolvedValueOnce({ action });
+      requestRetry.mockResolvedValueOnce({ action });
 
       try {
         seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
 
-        await withRetryRunContext(streamId, waitForRetry, () =>
+        await withRetryRunContext(streamId, requestRetry, () =>
           node.promptFor(new Error('temporary provider failure')),
         );
 
@@ -279,9 +268,9 @@ describe('RetryState', () => {
 
   it('classifies a policy/headless retry denial as failed, not cancelled (#7331)', async () => {
     const streamId = 'retry-state-deny' as StreamTabId;
-    const { node, streamStatus, waitForRetry } = createRetryNode(streamId);
+    const { node, streamStatus, requestRetry } = createRetryNode(streamId);
 
-    waitForRetry.mockResolvedValueOnce({
+    requestRetry.mockResolvedValueOnce({
       action: 'deny',
       reason: 'Denied by CLI approval policy.',
     });
@@ -292,7 +281,7 @@ describe('RetryState', () => {
 
       const shouldRetry = await withRetryRunContext(
         streamId,
-        waitForRetry,
+        requestRetry,
         () => node.retryPrompt(undefined, error),
       );
 

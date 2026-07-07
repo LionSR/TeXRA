@@ -285,7 +285,7 @@ export async function runToolUseFlow<C = unknown>(
     },
     interrupt(): void {
       onInterrupt?.();
-      runSession.coordinators.cleanupRequestsForStream(streamId);
+      runSession.interactions.cancelForStream(streamId, 'Run interrupted.');
       sessionLifecycle.interrupt();
     },
     requestImmediateCompaction(): void {
@@ -470,7 +470,7 @@ export async function runToolUseFlow<C = unknown>(
     if (outcome !== STREAM_PHASE.WAITING) {
       sessionLifecycle.dispose();
     }
-    runSession.coordinators.cleanupRequestsForStream(streamId);
+    runSession.interactions.cancelForStream(streamId, 'Run ended.');
     runSession.interrupts.unregister(streamId);
     for (const handler of switchedHandlers) {
       handler.dispose();

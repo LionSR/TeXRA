@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent runtime
-import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 
 // Local imports - progress view
@@ -42,22 +41,6 @@ type ProgressViewProviderFake = ProgressViewProvider & {
   refreshOnboardingFunnel: ReturnType<typeof vi.fn>;
 };
 
-type CoordinatorBridgeFake = Pick<
-  RunCoordinatorBridge,
-  'cancelRetry' | 'clearRetryRequest' | 'triggerRetry'
->;
-
-function createCoordinatorBridge(
-  overrides: Partial<CoordinatorBridgeFake> = {},
-): CoordinatorBridgeFake {
-  return {
-    cancelRetry: vi.fn(() => false),
-    clearRetryRequest: vi.fn(),
-    triggerRetry: vi.fn(() => true),
-    ...overrides,
-  };
-}
-
 function createHostInteractions(
   overrides: Partial<HostInteractions> = {},
 ): HostInteractions {
@@ -73,31 +56,9 @@ function createMessageHandler(
   provider: ProgressViewProvider,
   context: vscode.ExtensionContext,
   host = new FakePromptHost(),
-  coordinators = createCoordinatorBridge(),
   interactions = createHostInteractions(),
 ): ProgressViewMessageHandler {
-  return new ProgressViewMessageHandler(
-    provider,
-    context,
-    host,
-    coordinators,
-    interactions,
-  );
-}
-
-function createCoordinatorHandler(
-  coordinators: CoordinatorBridgeFake = createCoordinatorBridge(),
-): {
-  coordinators: CoordinatorBridgeFake;
-  handler: ProgressViewMessageHandler;
-} {
-  const handler = createMessageHandler(
-    createProgressViewProvider(),
-    createExtensionContext(),
-    new FakePromptHost(),
-    coordinators,
-  );
-  return { coordinators, handler };
+  return new ProgressViewMessageHandler(provider, context, host, interactions);
 }
 
 function createProgressViewProvider(): ProgressViewProviderFake {
@@ -255,42 +216,14 @@ describe('progress-view onboarding refresh wiring', () => {
     });
   });
 
-  it('routes retry request actions through the injected coordinators', async () => {
-    const { coordinators, handler } = createCoordinatorHandler();
-
-    await handler.handleMessage(
-      {
-        command: PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST,
-        stream: 'stream-a',
-        feedback: 'try the other branch',
-      },
-      createWebviewView(),
-    );
-    await handler.handleMessage(
-      {
-        command: PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST,
-        stream: 'stream-a',
-      },
-      createWebviewView(),
-    );
-
-    expect(coordinators.triggerRetry).toHaveBeenCalledWith(
-      'stream-a',
-      'try the other branch',
-    );
-    expect(coordinators.cancelRetry).toHaveBeenCalledWith('stream-a');
-  });
-
-  it('resolves retry requests through host interactions before coordinators', async () => {
+  it('routes retry request actions through host interactions', async () => {
     const interactions = createHostInteractions({
       resolve: vi.fn(() => true),
     });
-    const coordinators = createCoordinatorBridge();
     const directHandler = createMessageHandler(
       createProgressViewProvider(),
       createExtensionContext(),
       new FakePromptHost(),
-      coordinators,
       interactions,
     );
 
@@ -319,22 +252,17 @@ describe('progress-view onboarding refresh wiring', () => {
       kind: 'retry',
       action: 'cancel',
     });
-    expect(coordinators.triggerRetry).not.toHaveBeenCalled();
-    expect(coordinators.cancelRetry).not.toHaveBeenCalled();
   });
 
-  it('reports missing retry requests from the injected coordinators', async () => {
+  it('reports missing retry requests when no pending interaction matches', async () => {
     const context = createExtensionContext();
     const provider = createProgressViewProvider();
     const prompt = new FakePromptHost();
-    const coordinators = createCoordinatorBridge({
-      triggerRetry: vi.fn(() => false),
-    });
     const handler = createMessageHandler(
       provider,
       context,
       prompt,
-      coordinators,
+      createHostInteractions({ resolve: vi.fn(() => false) }),
     );
 
     await handler.handleMessage(
@@ -355,12 +283,10 @@ describe('progress-view onboarding refresh wiring', () => {
     const interactions = createHostInteractions({
       resolve: vi.fn(() => true),
     });
-    const coordinators = createCoordinatorBridge();
     const handler = createMessageHandler(
       createProgressViewProvider(),
       createExtensionContext(),
       new FakePromptHost(),
-      coordinators,
       interactions,
     );
 
@@ -390,12 +316,10 @@ describe('progress-view onboarding refresh wiring', () => {
     const interactions = createHostInteractions({
       resolve: vi.fn(() => true),
     });
-    const coordinators = createCoordinatorBridge();
     const handler = createMessageHandler(
       createProgressViewProvider(),
       createExtensionContext(),
       new FakePromptHost(),
-      coordinators,
       interactions,
     );
 

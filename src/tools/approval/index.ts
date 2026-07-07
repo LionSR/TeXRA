@@ -36,13 +36,12 @@ export function cleanupApprovalsForStream(
   bashApprovalController.bypass.clearForStream(streamId);
   proposalApprovalState.clearForStream(streamId);
   session.interactions.cancelForStream(streamId, 'Stream resources released.');
-  session.coordinators.cleanupRequestsForStream(streamId);
 }
 
 /**
  * Release all agent resources held for a deleted stream: approval state
- * (pending approvals, bypass flags, coordinator requests) AND the follow-up
- * queue. These two always need to be cleared together when a stream is
+ * (pending approvals, bypass flags, pending host interactions) AND the
+ * follow-up queue. These two always need to be cleared together when a stream is
  * removed, so this is the single function hosts should call instead of
  * combining {@link cleanupApprovalsForStream} + `session.followUps.release`
  * manually.
@@ -63,8 +62,8 @@ export function releaseStreamResources(
  * concrete stream context (streamId is undefined or empty). These would
  * otherwise survive a per-stream {@link cleanupApprovalsForStream} loop
  * because they do not equal any concrete StreamTabId, only
- * {@link cleanupAllApprovals} catches them. Bypass, proposal, and coordinator
- * state are always streamId-keyed and are not affected here.
+ * {@link cleanupAllApprovals} catches them. Bypass and proposal state are
+ * always streamId-keyed and are not affected here.
  *
  * Desktop `deleteAllStreams` calls this after the per-stream sweep so that
  * an approval emitted without a concrete stream is rejected rather than left
@@ -82,8 +81,8 @@ export function cleanupUnscopedApprovals(
 
 /**
  * PROCESS-WIDE reset of all approval state — rejects every pending tool-edit /
- * bash / user-question approval, clears all bypass + proposal state, and clears
- * `session`'s coordinator requests.
+ * bash / user-question approval, clears all bypass + proposal state, and
+ * cancels `session`'s pending host interactions.
  *
  * The tool/bypass controllers are process-global and streamId-keyed, so this
  * `clearAll` touches EVERY session's streams. Safe only for single-session
@@ -101,7 +100,6 @@ export function cleanupAllApprovals(
   bashApprovalController.bypass.clearAll();
   proposalApprovalState.clearAll();
   session.interactions.cancelAll?.('All approvals cleared.');
-  session.coordinators.cleanupAllRequests();
 }
 
 export { enableYoloOnChildStream, inheritBashBypassOnChildStream };

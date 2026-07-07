@@ -15,13 +15,32 @@ import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@platform/interfaces/toolEditApproval';
-import type { PlanApprovalResult } from './PlanApprovalCoordinator';
-import type { ProposalResult } from './AgentProposalCoordinator';
-import type { RetryResult } from './RetryRequestCoordinator';
 
 export interface HostInteractionOptions {
   readonly timeoutMs?: number;
 }
+
+export type PlanApprovalResult =
+  | { action: 'approve' }
+  | { action: 'approve_and_goal' }
+  | { action: 'reject'; feedback?: string }
+  | { action: 'timeout' };
+
+export type ProposalResult =
+  | { action: 'approve'; model?: string; agent?: string }
+  | { action: 'reject'; feedback?: string }
+  | { action: 'setup' }
+  | { action: 'timeout' };
+
+export type RetryResult =
+  | { action: 'retry'; feedback?: string }
+  | { action: 'cancel' }
+  | { action: 'timeout' }
+  // Policy/headless auto-denial: the retry could not be approved because no
+  // human input was available (e.g. `--approval-policy never --no-input`).
+  // Distinct from a user `cancel` so retry-exhaustion with no human lands in
+  // the `failed` fallback (→ RUN_OUTCOME.FAILED) instead of `cancelled`. See #7331.
+  | { action: 'deny'; reason?: string };
 
 export interface HostPlanApprovalRequest {
   readonly approvalId: string;
@@ -88,7 +107,9 @@ export interface HostInteractionResolution {
  * Session-owned host interaction surface.
  *
  * Runtime code asks the session for an interaction; host code owns display,
- * replay (via `ApprovalRequestHandler`), and first-wins resolution.
+ * replay (via `ApprovalRequestHandler`), request bookkeeping (the pending
+ * id→stream registry each implementation keeps), first-wins resolution, and
+ * replacement cancellation for duplicate request ids.
  */
 export interface HostInteractions {
   requestToolEditApproval?(

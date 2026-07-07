@@ -8,10 +8,10 @@ import type {
   HostPlanApprovalRequest,
   HostRetryRequest,
   HostUserQuestionResult,
+  PlanApprovalResult,
+  ProposalResult,
+  RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import {
   toBashApprovalResult,
   toPlanApprovalResult,
@@ -101,6 +101,7 @@ class DesktopHostInteractions implements HostInteractions {
       request.approvalId,
       { kind: 'plan', streamId: request.streamId },
       (settle) => {
+        this.activateStream(request.streamId);
         this.options.getApprovalHandlers().planApproval.show(request);
         return settle;
       },
@@ -114,6 +115,7 @@ class DesktopHostInteractions implements HostInteractions {
       request.proposalId,
       { kind: 'proposal', streamId: request.streamId },
       (settle) => {
+        this.activateStream(request.streamId);
         this.options.getApprovalHandlers().agentProposal.show(request);
         return settle;
       },
@@ -230,8 +232,17 @@ class DesktopHostInteractions implements HostInteractions {
     entry: Omit<TEntry, 'settle'>,
     show: (settle: TEntry['settle']) => TEntry['settle'],
   ): Promise<TResult> {
+    // Replacement cancellation: a request re-issued under a still-pending id
+    // rejects the stale prompt before the replacement is shown.
+    if (this.pendingRequests.has(requestId)) {
+      this.resolve(requestId, {
+        kind: this.pendingRequests.get(requestId)!.kind,
+        action: 'reject',
+        feedback: 'Approval request was replaced.',
+      });
+    }
     return new Promise<TResult>((resolve) => {
-      const settle = show((result) => resolve(result as TResult));
+      const settle = show((result: unknown) => resolve(result as TResult));
       this.pendingRequests.set(requestId, {
         ...entry,
         settle,

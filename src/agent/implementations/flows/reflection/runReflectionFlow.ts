@@ -173,7 +173,7 @@ export async function runReflectionFlow<C = unknown>(
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      runSession.coordinators.cleanupRequestsForStream(streamId);
+      runSession.interactions.cancelForStream(streamId, 'Run interrupted.');
     },
   };
 
@@ -352,7 +352,7 @@ export async function runReflectionFlow<C = unknown>(
       }
     }
 
-    runSession.coordinators.cleanupRequestsForStream(streamId);
+    runSession.interactions.cancelForStream(streamId, 'Run ended.');
 
     runSession.interrupts.unregister(streamId);
   }

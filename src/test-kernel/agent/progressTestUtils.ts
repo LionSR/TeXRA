@@ -4,15 +4,11 @@ import type {
   HostBashApprovalResult,
   HostInteractions,
   HostUserQuestionResult,
+  PlanApprovalResult,
+  ProposalResult,
+  RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
-import {
-  createRunContext,
-  withRunContext,
-  type RunCoordinators,
-} from '@agent/runtime/RunContext';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
@@ -29,6 +25,7 @@ export type RecordedProgressEvent = {
 
 export function createRecordingHost(): {
   events: RecordedProgressEvent[];
+  interactions: HostInteractions;
   host: AgentRuntimeHost;
 } {
   const events: RecordedProgressEvent[] = [];
@@ -210,61 +207,77 @@ export function createRecordingHost(): {
       }
       return false;
     },
-    cancelForStream: (streamId) => {
-      for (const [requestId, pending] of pendingBashes) {
-        if (pending.streamId !== streamId) continue;
-        pendingBashes.delete(requestId);
-        events.push({
-          event: 'resolveBashPermission',
-          payload: { requestId },
-        });
-        pending.settle({ accepted: false });
-      }
-      for (const [approvalId, pending] of pendingPlans) {
-        if (pending.streamId !== streamId) continue;
-        pendingPlans.delete(approvalId);
-        events.push({
-          event: 'resolvePlanApproval',
-          payload: { approvalId },
-        });
-        pending.settle({ action: 'reject' });
-      }
-      for (const [proposalId, pending] of pendingProposals) {
-        if (pending.streamId !== streamId) continue;
-        pendingProposals.delete(proposalId);
-        events.push({
-          event: 'resolveAgentProposal',
-          payload: { proposalId },
-        });
-        pending.settle({ action: 'reject' });
-      }
-      const pendingRetry = pendingRetries.get(streamId);
-      if (pendingRetry) {
-        pendingRetries.delete(streamId);
-        events.push({
-          event: 'resolveRetryRequest',
-          payload: { streamId },
-        });
-        pendingRetry.settle({ action: 'cancel' });
-      }
-      for (const [requestId, pending] of pendingUserQuestions) {
-        if (pending.streamId !== streamId) continue;
-        pendingUserQuestions.delete(requestId);
-        events.push({
-          event: 'resolveUserQuestion',
-          payload: { requestId },
-        });
-        pending.settle({ submitted: false });
-      }
-    },
+    cancelForStream: (streamId) => cancelWhere((s) => s === streamId),
+    cancelUnscoped: () => cancelWhere((s) => !s),
+    cancelAll: () => cancelWhere(() => true),
+    dispose: () => cancelWhere(() => true),
   };
+  function cancelWhere(match: (streamId?: string) => boolean): void {
+    for (const [requestId, pending] of pendingBashes) {
+      if (!match(pending.streamId)) continue;
+      pendingBashes.delete(requestId);
+      events.push({
+        event: 'resolveBashPermission',
+        payload: { requestId },
+      });
+      pending.settle({ accepted: false });
+    }
+    for (const [approvalId, pending] of pendingPlans) {
+      if (!match(pending.streamId)) continue;
+      pendingPlans.delete(approvalId);
+      events.push({
+        event: 'resolvePlanApproval',
+        payload: { approvalId },
+      });
+      pending.settle({ action: 'reject' });
+    }
+    for (const [proposalId, pending] of pendingProposals) {
+      if (!match(pending.streamId)) continue;
+      pendingProposals.delete(proposalId);
+      events.push({
+        event: 'resolveAgentProposal',
+        payload: { proposalId },
+      });
+      pending.settle({ action: 'reject' });
+    }
+    for (const [streamId, pending] of pendingRetries) {
+      if (!match(pending.streamId)) continue;
+      pendingRetries.delete(streamId);
+      events.push({
+        event: 'resolveRetryRequest',
+        payload: { streamId },
+      });
+      pending.settle({ action: 'cancel' });
+    }
+    for (const [requestId, pending] of pendingUserQuestions) {
+      if (!match(pending.streamId)) continue;
+      pendingUserQuestions.delete(requestId);
+      events.push({
+        event: 'resolveUserQuestion',
+        payload: { requestId },
+      });
+      pending.settle({ submitted: false });
+    }
+  }
   return {
     events,
+    interactions,
     host: {
       interactions,
       emit: (event, payload) => events.push({ event, payload }),
     },
   };
+}
+
+/**
+ * Minimal session stand-in exposing only `interactions` — enough for
+ * run-scoped code that resolves `currentSession().interactions` (plan
+ * approvals, proposals, retries) to reach the given port implementation.
+ */
+export function sessionWithInteractions(
+  interactions: HostInteractions | undefined,
+): SessionHandle {
+  return { interactions } as unknown as SessionHandle;
 }
 
 /**
@@ -285,11 +298,10 @@ export function withTestRunContext<T>(
       runtimeHost,
       streamId: streamId as StreamTabId,
       executionId: 'deadbeef' as ExecutionId,
-      coordinators: {} as RunCoordinators,
       modelSource: 'live',
       getModel: () => undefined,
       agentName: 'test-agent',
-      session: {} as SessionHandle,
+      session: sessionWithInteractions(runtimeHost.interactions),
     }),
     fn,
   ) as Promise<T>;
