@@ -13,7 +13,9 @@ import {
 
 const mocks = vi.hoisted(() => ({
   deliverChildRunFollowUp: vi.fn(),
+  deliverTerminalChildRun: vi.fn(),
   persistChildRunReport: vi.fn(),
+  persistChildRunResultMeta: vi.fn(),
   readConfig: vi.fn(),
   resumeQueuedToolUseSnapshot: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
@@ -37,7 +39,9 @@ vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
 
 vi.mock('@tools/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
+  deliverTerminalChildRun: mocks.deliverTerminalChildRun,
   persistChildRunReport: mocks.persistChildRunReport,
+  persistChildRunResultMeta: mocks.persistChildRunResultMeta,
 }));
 
 import { SharedSubagentDeliveryRegistry } from '@tools/subagentDeliveryState';
@@ -56,25 +60,20 @@ describe('NativeSubagentStrategy', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.deliverTerminalChildRun.mockResolvedValue({
+      kind: 'delivered',
+      report: { kind: 'persisted' },
+      resultMeta: { kind: 'skipped' },
+    });
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'persisted' });
   });
 
   afterEach(() => {
     SharedSubagentDeliveryRegistry.finish(executionId);
   });
 
-  it('persists the result manifest before waking the parent', async () => {
-    const order: string[] = [];
-    mocks.writeResultMeta.mockImplementation(async () => {
-      order.push('manifest');
-    });
-    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
-      order.push('wake');
-      return { kind: 'delivered' };
-    });
-    mocks.persistChildRunReport.mockImplementation(async () => {
-      order.push('report');
-      return { kind: 'persisted' };
-    });
+  it('delegates terminal delivery to the child-run delivery owner', async () => {
     const strategy = new NativeSubagentStrategy({
       executionId,
       agentName: 'review',
@@ -94,22 +93,24 @@ describe('NativeSubagentStrategy', () => {
       }),
     ).resolves.toBe(true);
 
-    expect(order[0]).toBe('manifest');
-    expect(order).toContain('wake');
-    expect(order).toContain('report');
-    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith({
+    expect(mocks.deliverTerminalChildRun).toHaveBeenCalledWith({
+      executionId,
+      message: 'payload',
+      resultMeta: {
+        agentName: 'review',
+        outcome: 'completed',
+        success: true,
+        wallTimeMs: 1,
+      },
       targetStreamId: parentStreamId,
-      followUp: { text: 'payload', origin: 'subagent_result' },
       session: ownerSession,
-      wake: true,
+      gate: expect.any(Object),
     });
   });
 
   it('uses the captured run handle delivery target', async () => {
     const handleParent = 'handle-parent' as StreamTabId;
     const childStream = 'child-stream' as StreamTabId;
-    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
-    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     const strategy = new NativeSubagentStrategy({
       executionId,
       agentName: 'review',
@@ -134,18 +135,24 @@ describe('NativeSubagentStrategy', () => {
       true,
     );
 
-    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith({
-      targetStreamId: handleParent,
-      followUp: { text: 'payload', origin: 'subagent_result' },
-      session: ownerSession,
-      wake: true,
-    });
+    expect(mocks.deliverTerminalChildRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionId,
+        message: 'payload',
+        targetStreamId: handleParent,
+        session: ownerSession,
+      }),
+    );
   });
 
-  it('suppresses delivery after the captured run handle is detached', async () => {
+  it('suppresses parent delivery after the captured run handle is detached', async () => {
     const handleParent = 'handle-parent' as StreamTabId;
     const childStream = 'child-stream' as StreamTabId;
-    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.deliverTerminalChildRun.mockResolvedValue({
+      kind: 'no_target',
+      report: { kind: 'persisted' },
+      resultMeta: { kind: 'skipped' },
+    });
     const strategy = new NativeSubagentStrategy({
       executionId,
       agentName: 'review',
@@ -170,19 +177,28 @@ describe('NativeSubagentStrategy', () => {
       false,
     );
 
-    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
-    expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
-      executionId,
-      'payload',
+    expect(mocks.deliverTerminalChildRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionId,
+        message: 'payload',
+        targetStreamId: undefined,
+        session: ownerSession,
+      }),
     );
   });
 
-  it('resets the in-flight delivery gate when terminal delivery drops', async () => {
-    mocks.writeResultMeta.mockResolvedValue(undefined);
-    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
-    mocks.deliverChildRunFollowUp
-      .mockResolvedValueOnce({ kind: 'dropped' })
-      .mockResolvedValueOnce({ kind: 'delivered' });
+  it('returns false when terminal delivery is not completed', async () => {
+    mocks.deliverTerminalChildRun
+      .mockResolvedValueOnce({
+        kind: 'dropped',
+        report: { kind: 'persisted' },
+        resultMeta: { kind: 'skipped' },
+      })
+      .mockResolvedValueOnce({
+        kind: 'delivered',
+        report: { kind: 'persisted' },
+        resultMeta: { kind: 'skipped' },
+      });
     const strategy = new NativeSubagentStrategy({
       executionId,
       agentName: 'review',
@@ -199,6 +215,45 @@ describe('NativeSubagentStrategy', () => {
     await expect(strategy.persistAndDeliverTerminal('second')).resolves.toBe(
       true,
     );
+
+    expect(mocks.deliverTerminalChildRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('delivers progress follow-ups to the captured run handle delivery target', async () => {
+    const handleParent = 'handle-parent' as StreamTabId;
+    const childStream = 'child-stream' as StreamTabId;
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
+      startedAt: 0,
+      settleSubagentCost: vi.fn(),
+    });
+    strategy.setRunHandle(
+      new AgentExecutionHandle(
+        executionId,
+        handleParent,
+        childStream,
+        'review',
+        'toolUse',
+        {} as never,
+      ),
+    );
+
+    strategy.onProgress({
+      kind: 'stage',
+      message: 'running',
+    } as never);
+
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith({
+      targetStreamId: handleParent,
+      followUp: expect.objectContaining({ origin: 'subagent_result' }),
+      session: ownerSession,
+      wake: undefined,
+    });
   });
 
   it('resumes queued follow-ups with native delivery callbacks', async () => {
@@ -274,8 +329,6 @@ describe('NativeSubagentStrategy', () => {
     mocks.retrieveSessionResumeData.mockRejectedValue(
       new Error('resume storage unreadable'),
     );
-    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
-    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
 
     const strategy = new NativeSubagentStrategy({
       executionId,
@@ -295,15 +348,13 @@ describe('NativeSubagentStrategy', () => {
     // The failure must reach the orchestrator through the same terminal
     // delivery channel a resumed turn's own onError uses — not just a log
     // line at the DelegationTools call site.
-    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
-    const [deliveredCall] = mocks.deliverChildRunFollowUp.mock.calls;
+    expect(mocks.deliverTerminalChildRun).toHaveBeenCalledTimes(1);
+    const [deliveredCall] = mocks.deliverTerminalChildRun.mock.calls;
     expect(deliveredCall[0]).toMatchObject({
+      executionId,
+      message: expect.stringContaining('resume storage unreadable'),
       targetStreamId: parentStreamId,
-      wake: true,
     });
-    expect(deliveredCall[0].followUp.text).toContain(
-      'resume storage unreadable',
-    );
 
     // Terminal delivery retires this run: a later delegate_agent resume
     // attempt must not find stale strategy/registry state.
