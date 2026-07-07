@@ -70,6 +70,10 @@ import {
 import { computeUtilizationPercent } from './support/contextUtilization';
 import { logCompactionEvent } from './support/compactionLogging';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
+import {
+  reportMediaAttachmentFailure,
+  type MediaAttachmentContext,
+} from './support/mediaAttachmentPolicy';
 import { emitServerToolResult } from './support/serverToolResultEmission';
 import {
   resolveBaseUrl,
@@ -693,6 +697,28 @@ export abstract class ModelHandler<
       await this.mediaProcessor.loadEntries(mediaFiles);
     this.mediaProcessor.logResults(results);
     return this.createMediaContent(entries);
+  }
+
+  /**
+   * Single call-through for building a round's media content (#7465): every
+   * `initializeMessages` / `createRoundMessages` / `addMediaToUserMessage`
+   * override across providers calls this instead of wrapping
+   * `createMediaMessage` in its own try/catch. The fail-vs-warn decision
+   * lives in {@link reportMediaAttachmentFailure} alone, so every provider's
+   * initial round fails the same way and every provider's follow-up/insert
+   * round warns-and-continues the same way — see that function for why the
+   * split exists.
+   */
+  protected async createMediaForRound(
+    mediaFiles: FileLocation[],
+    context: MediaAttachmentContext,
+  ): Promise<Media[]> {
+    try {
+      return await this.createMediaMessage(mediaFiles);
+    } catch (err) {
+      reportMediaAttachmentFailure(this.logger, context, err);
+      return [];
+    }
   }
 
   /**

@@ -13,17 +13,17 @@ import {
 } from '@google/genai';
 
 // Local imports - agent
-import { logProgressStatus, logSdkError } from '@agent/trace';
+import { logProgressStatus } from '@agent/trace';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { parseToolInputAsObject } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   detectStatusCode,
-  getSdkErrorMessage,
   attachPartialText,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -292,7 +292,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   Usage | null,
   GoogleToolCall,
   GoogleGenAI,
-  GoogleGenAIInteraction
+  GoogleGenAIInteraction,
+  Content
 > {
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
@@ -774,7 +775,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const content: Content[] = [this.textContent(userPrefix)];
 
     if (mediaFiles?.length && this.supportsFileUploads()) {
-      const media = await this.createMediaMessage(mediaFiles);
+      const media = await this.createMediaForRound(mediaFiles, 'initial');
       if (media.length > 0) {
         const label = mediaFiles
           .map((loc) => getShortDisplayPath(loc))
@@ -801,7 +802,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const content: Content[] = [];
 
     if (mediaFiles?.length && this.supportsFileUploads()) {
-      const media = await this.createMediaMessage(mediaFiles);
+      const media = await this.createMediaForRound(mediaFiles, 'followUp');
       if (media.length > 0) {
         const label = mediaFiles
           .map((loc) => getShortDisplayPath(loc))
@@ -864,10 +865,19 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return this.uploadMediaEntries(entries);
   }
 
-  createMediaContent(mediaMessage: MediaEntry[]): MediaEntry[] {
-    // Interactions handles media entries via uploadMediaEntries; identity here
-    // matches the chat handler's REUSE of createMediaContent.
-    return mediaMessage;
+  createMediaContent(_mediaMessage: MediaEntry[]): Content[] {
+    // Dead in practice: createMediaMessage() above is overridden to upload
+    // entries directly via uploadMediaEntries() and never calls this — it
+    // exists only to satisfy ModelHandler's abstract contract now that the
+    // base class types createMediaContent/createMediaForRound against the
+    // handler's `Content` media type (#7465). Throws rather than casting
+    // MediaEntry[] to Content[]: a future refactor that removes the
+    // createMediaMessage override above and starts actually calling this
+    // would otherwise silently send a malformed Content[] payload to the
+    // Google SDK instead of failing clearly.
+    throw new Error(
+      'ModelHandlerGoogleInteractions.createMediaContent is unreachable — media is built directly in createMediaMessage.',
+    );
   }
 
   /** Build typed Content for media entries (inline ≤20 MB; uploaded uri otherwise). */
@@ -1304,9 +1314,11 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         mime_type: mimeType,
       } satisfies ImageContent;
     } catch (error) {
-      this.logger.warn(
-        `Failed to encode attachment '${attachment.path}' for Interactions function result: ${getSdkErrorMessage(error)}`,
-        { data: error },
+      reportMediaAttachmentFailure(
+        this.logger,
+        'toolAttachment',
+        error,
+        `failed to encode '${attachment.path}' for Interactions function result`,
       );
       return null;
     }
@@ -1344,17 +1356,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       (s): s is UserInputStep => s.type === 'user_input',
     );
     if (!lastUser) return;
-    try {
-      const media = await this.createMediaMessage(mediaFiles);
-      (lastUser.content ??= []).unshift(...media);
-    } catch (err) {
-      logSdkError(
-        this.logger,
-        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
-      );
-    }
+    const media = await this.createMediaForRound(mediaFiles, 'insert');
+    if (media.length === 0) return;
+    (lastUser.content ??= []).unshift(...media);
   }
 
   // ===========================================================================
