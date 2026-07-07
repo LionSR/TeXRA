@@ -54,7 +54,6 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
     const cancelUnscoped = vi.fn();
     const detach = session.useHostInteractions({
       handleProgressEvent: () => false,
-      pending: () => [],
       resolve: () => false,
       cancelForStream: () => {},
       cancelUnscoped,
