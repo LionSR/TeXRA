@@ -1,12 +1,14 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import {
+  type ProjectedProgressEvent,
+  projectRunFactToProgressEvent,
+  projectSessionFactToProgressEvent,
+} from '@agent/runtime/sessionProgressEventProjection';
 import type {
   ProgressEvent,
-  ProgressEventBusLike,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import {
@@ -51,52 +53,23 @@ export interface ProgressBackendOptions {
    * projection of the registry.
    */
   getUnsupportedCommands?: () => readonly string[];
-}
-
-class LocalProgressEventBus implements ProgressEventBusLike {
-  private readonly listeners = new Map<
-    ProgressEvent,
-    Set<(payload: ProgressEventPayloads[ProgressEvent]) => void>
-  >();
-
-  on<K extends ProgressEvent>(
-    event: K,
-    listener: (payload: ProgressEventPayloads[K]) => void,
-    options?: { signal?: AbortSignal },
-  ): () => void {
-    if (options?.signal?.aborted) return () => {};
-    let listeners = this.listeners.get(event);
-    if (!listeners) {
-      listeners = new Set();
-      this.listeners.set(event, listeners);
-    }
-    listeners.add(
-      listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
-    );
-    const cleanup = (): void => {
-      listeners?.delete(
-        listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
-      );
-    };
-    options?.signal?.addEventListener('abort', cleanup, { once: true });
-    return cleanup;
-  }
-
-  emit<K extends ProgressEvent>(
+  /** Host-local side effects for session-originated progress events. */
+  onSessionProgressEvent?<K extends ProgressEvent>(
     event: K,
     payload: ProgressEventPayloads[K],
-  ): void {
-    for (const listener of this.listeners.get(event) ?? []) {
-      listener(payload);
-    }
-  }
+  ): void;
 }
+
+type SessionProgressEventObserver = <K extends ProgressEvent>(
+  event: K,
+  payload: ProgressEventPayloads[K],
+) => void;
 
 /**
  * Host-neutral progress-view backend composition.
  *
  * Hosts provide only storage, transport, and UI callbacks. The state manager,
- * message builders, log bridge, and event bus subscriber are constructed as one
+ * message builders, log bridge, and session event handler are constructed as one
  * graph so extension and desktop can converge on the same backend boundary.
  */
 export class ProgressBackend {
@@ -105,10 +78,12 @@ export class ProgressBackend {
   readonly webviewBridge: WebviewBridge;
   readonly eventHandler: ProgressEventHandler;
   private readonly session: SessionHandle;
-  private readonly localEvents = new LocalProgressEventBus();
+  private readonly onSessionProgressEvent?: SessionProgressEventObserver;
+  private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
     this.session = options.session ?? defaultSession();
+    this.onSessionProgressEvent = options.onSessionProgressEvent;
     this.state = new ProgressViewState(
       options.storage,
       options.snapshots,
@@ -152,35 +127,70 @@ export class ProgressBackend {
     await this.state.load();
   }
 
-  setupEventListeners(
-    bus: ProgressEventBusLike,
-    sessionProjectionTarget: AgentRuntimeHost = bus,
-  ): ProgressEventSubscription {
-    const busSubscription = this.eventHandler.setupEventListeners(bus);
-    const localSubscription = this.eventHandler.setupEventListeners(
-      this.localEvents,
+  setupEventListeners(): ProgressEventSubscription {
+    const eventHandlerSubscription =
+      this.eventHandler.createLocalSubscription();
+    const detachSessionFacts = this.session.events.subscribe(
+      (sessionEvent) => {
+        if (sessionEvent.scope !== 'session') return;
+        this.handleProjectedProgressEvent(
+          projectSessionFactToProgressEvent(sessionEvent.event),
+        );
+      },
+      { scope: 'session' },
     );
-    const detachProjection = attachLegacyProgressEventProjection(
-      this.session.events,
-      sessionProjectionTarget,
+    const detachRunFacts = this.session.events.subscribe(
+      (sessionEvent) => {
+        if (sessionEvent.scope !== 'run') return;
+        const projected = projectRunFactToProgressEvent(
+          sessionEvent.streamId,
+          sessionEvent.event,
+        );
+        if (projected) this.handleProjectedProgressEvent(projected);
+      },
+      {
+        scope: 'run',
+        types: [
+          'domain',
+          'usage',
+          'stage.start',
+          'child.activity',
+          'process.output',
+        ],
+      },
     );
     return {
       dispose: () => {
-        detachProjection();
-        localSubscription.dispose();
-        busSubscription.dispose();
+        detachRunFacts();
+        detachSessionFacts();
+        eventHandlerSubscription.dispose();
       },
     };
+  }
+
+  private handleProjectedProgressEvent(
+    projected: ProjectedProgressEvent,
+  ): void {
+    this.handleProgressEvent(projected.event, projected.payload);
+    this.onSessionProgressEvent?.(projected.event, projected.payload);
   }
 
   handleProgressEvent<K extends ProgressEvent>(
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
-    this.localEvents.emit(event, payload);
+    // A run may still hold the host-channel emit closure that routes here after
+    // this backend is disposed (e.g. a desktop window closed while the run keeps
+    // executing headless). Applying events to a disposed backend would mutate
+    // torn-down state and post messages to a closed window, so the direct
+    // applier no-ops once disposed. Before #7363 the bus-listener teardown made
+    // this path implicitly safe; the direct call needs an explicit guard.
+    if (this.disposed) return;
+    this.eventHandler.handleProgressEvent(event, payload);
   }
 
   dispose(): void {
+    this.disposed = true;
     this.webviewBridge.dispose();
   }
 }

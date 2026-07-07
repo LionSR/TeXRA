@@ -188,6 +188,12 @@ export interface ExecutionKVStore {
   readConfig(): Promise<AgentConfig | null>;
   readReport(): Promise<string | null>;
   readTodos(): Promise<TodoEntry[]>;
+  /**
+   * Last-modified time (ms since epoch) of the legacy `todos.json`, or
+   * `undefined` when it has never been written. Lets callers compare
+   * freshness against a durable sidecar written by a different store.
+   */
+  todosModifiedAt(): Promise<number | undefined>;
   readConversation(): Promise<unknown[] | null>;
   readWorkspaceFiles(): Promise<string[]>;
   readChildren(): Promise<ChildRecord[]>;
@@ -270,6 +276,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   async readTodos(): Promise<TodoEntry[]> {
     return TodoArraySchema.parse(await this.read<unknown[]>(KEYS.TODOS));
+  }
+
+  async todosModifiedAt(): Promise<number | undefined> {
+    return this.modifiedAt(KEYS.TODOS);
   }
 
   async readConversation(): Promise<unknown[] | null> {

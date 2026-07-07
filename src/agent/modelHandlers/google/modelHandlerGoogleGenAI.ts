@@ -26,7 +26,6 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   getSdkErrorMessage,
-  consumeStreamChunks,
   handleStreamingFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -88,6 +87,12 @@ import type {
 
 /**
  * Handler for Google models using the native @google/genai SDK and Chat API.
+ *
+ * Feature-frozen stateless fallback for when `texra.model.useGoogleInteractionsAPI`
+ * is off; {@link ModelHandlerGoogleInteractions} is the default, actively
+ * developed path (see modelHandlers/README.md). This handler no longer tracks
+ * behavioral parity with the Interactions handler — new Google-facing features
+ * land there only, not here.
  */
 export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
@@ -180,16 +185,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   /**
-   * Whether this handler supports native token counting.
-   * Uses Google's countTokens endpoint for exact pre-flight counts.
-   */
-  override get supportsTokenCounting(): boolean {
-    return this.capabilities.supportsTokenCounting;
-  }
-
-  /**
    * Gemini carries thought signatures across parallel function calls, which must
    * be preserved by batching the results into a single follow-up message.
+   * Unconditional (not gated on `capabilities.supportsReasoning`) — see the
+   * base getter's doc comment (#7101 triage).
    */
   override get requiresBatchedParallelToolResults(): boolean {
     return true;
@@ -371,7 +370,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const aggregatedParts: Part[] = [];
         let usageFromChunks: GenerateContentResponseUsageMetadata | undefined;
 
-        await consumeStreamChunks(stream, (chunk) => {
+        for await (const chunk of stream) {
           baseResponse ??= chunk;
           const candidate = chunk.candidates?.[0];
           if (candidate) {
@@ -414,7 +413,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
               baseResponse.responseId = chunk.responseId;
             }
           }
-        });
+        }
 
         if (!baseResponse) {
           throw new Error('Stream produced no response');

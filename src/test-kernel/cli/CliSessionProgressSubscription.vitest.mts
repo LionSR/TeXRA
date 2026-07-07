@@ -2,18 +2,20 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - runtime
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
+import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import type {
   ActiveChildInfo,
   ExecutionId,
+  StorageKey,
   StreamTabId,
 } from '@shared/schemas';
 
-import { createRecordingHost } from '../progressTestUtils';
+import { createRecordingHost } from '../agent/progressTestUtils';
 
-describe('LegacyProgressEventProjection', () => {
-  it('maps Stage 3a session and child/process facts onto legacy progress events', () => {
+describe('attachCliSessionProgressProjection', () => {
+  it('maps session and child/process facts onto retained CLI progress events', () => {
     const hub = new SessionEventHub();
     const host = createRecordingHost();
     const parentStreamId = 'stream:parent' as StreamTabId;
@@ -38,7 +40,7 @@ describe('LegacyProgressEventProjection', () => {
       toolName: 'bash',
     };
 
-    const detach = attachLegacyProgressEventProjection(hub, host.host);
+    const detach = attachCliSessionProgressProjection(hub, host.host);
     try {
       hub.emit({
         scope: 'session',
@@ -121,7 +123,7 @@ describe('LegacyProgressEventProjection', () => {
     const host = createRecordingHost();
     const streamId = 'stream:round' as StreamTabId;
 
-    const detach = attachLegacyProgressEventProjection(hub, host.host);
+    const detach = attachCliSessionProgressProjection(hub, host.host);
     try {
       hub.emit({
         scope: 'run',
@@ -166,6 +168,91 @@ describe('LegacyProgressEventProjection', () => {
         {
           event: 'updateRoundStage',
           payload: { streamId, roundStage: { index: 2 } },
+        },
+      ]);
+    } finally {
+      detach();
+    }
+  });
+
+  it('projects usage and domain run facts onto retained CLI progress events', () => {
+    const hub = new SessionEventHub();
+    const host = createRecordingHost();
+    const streamId = 'stream:domain' as StreamTabId;
+    const storageKey = 'run:usage' as StorageKey;
+    const todos = [
+      {
+        content: 'Project run facts',
+        status: 'pending' as const,
+        activeForm: 'Projecting run facts',
+      },
+    ];
+    const plan = { objective: 'Keep CLI host output compatible.' };
+
+    const detach = attachCliSessionProgressProjection(hub, host.host);
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: { streamId, todos },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updatePlan'),
+          data: { streamId, plan },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('goalPaused'),
+          data: { streamId },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          stats: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          data: {
+            streamId,
+            storageKey,
+            usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          },
+          recordTranscript: false,
+        },
+      });
+
+      expect(host.events).toEqual([
+        {
+          event: 'updateTodos',
+          payload: { streamId, todos },
+        },
+        {
+          event: 'updatePlan',
+          payload: { streamId, plan },
+        },
+        {
+          event: 'goalPaused',
+          payload: { streamId },
+        },
+        {
+          event: 'updateStreamUsage',
+          payload: {
+            streamId,
+            storageKey,
+            usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          },
         },
       ]);
     } finally {

@@ -6,17 +6,11 @@ import {
   AgentCategorySchema,
   AgentNameSchema,
 } from '@shared/schemas/agent';
-import { isNonEmptyString } from '@utils/core';
+import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
 
 export { AgentCategory };
 
 export const AgentSettingBaseSchema = z.strictObject({
-  documentTag: z
-    .string()
-    .trim()
-    .min(1, 'documentTag cannot be empty')
-    .prefault('documents'),
-  endTag: z.string().prefault('</documents>'),
   temperature: z.number().min(0).max(1).prefault(1.0),
   requiredFiles: z.record(z.string(), z.string()).prefault({}),
   requiredFilesInternal: z.record(z.string(), z.string()).prefault({}),
@@ -52,7 +46,15 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
     .prefault(AgentCategory.ToolUse),
 });
 
-/** Drop obsolete settings accepted only for legacy YAML and persisted state. */
+/**
+ * Drop obsolete settings accepted only for legacy YAML and persisted state.
+ * `documentTag`/`endTag` used to configure the per-agent output container;
+ * every bundled and custom agent has converged on the fixed
+ * `<documents><document name="..."></documents>` protocol (see
+ * `@shared/constants/outputProtocol`), so the fields are ignored — with a
+ * warning, since a custom agent that relied on a bespoke tag silently gets
+ * the standard container instead.
+ */
 function stripLegacySettingFields(input: unknown): unknown {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return input;
@@ -60,38 +62,25 @@ function stripLegacySettingFields(input: unknown): unknown {
   const {
     outputExt: _outputExt,
     prefills: _prefills,
+    documentTag,
+    endTag,
     ...rest
   } = input as Record<string, unknown>;
+  if (documentTag !== undefined || endTag !== undefined) {
+    // console.warn, not the structured trace logger: this module is a leaf
+    // schema (`core/definition`, dependency-free by design — see
+    // src/agent/core/README.md) and must not pull in the logger's transitive
+    // `@shared/schemas` barrel just for one deprecation notice. Same pattern
+    // as `src/shared/schemas/streamData.ts`'s `warnDroppedItem`.
+    console.warn(
+      '[AgentDataclass] settings.documentTag/endTag are no longer configurable — every agent emits the fixed <documents><document name="..."> container. Ignoring the value from this agent definition.',
+    );
+  }
   return rest;
 }
 
-/**
- * Derive endTag from documentTag when none is set. `fallbackTag` supplies the
- * tag when documentTag is absent/blank; `null` leaves the input unchanged.
- */
-function deriveEndTagFrom(input: unknown, fallbackTag: string | null): unknown {
-  if (typeof input !== 'object' || input === null) return input;
-  const obj = input as Record<string, unknown>;
-  if (obj.endTag !== undefined) return obj;
-  const docTag = isNonEmptyString(obj.documentTag)
-    ? obj.documentTag.trim()
-    : fallbackTag;
-  if (docTag === null) return input;
-  return { ...obj, endTag: `</${docTag}>` };
-}
-
-/** Derive endTag from documentTag when endTag is not explicitly set. */
-function deriveEndTag(input: unknown): unknown {
-  return deriveEndTagFrom(input, 'documents');
-}
-
-/** Preserve partial child blocks: derive only from explicitly written documentTag. */
-function deriveExplicitEndTag(input: unknown): unknown {
-  return deriveEndTagFrom(input, null);
-}
-
 export const AgentSettingSchema = z.preprocess(
-  (input) => deriveEndTag(stripLegacySettingFields(input)),
+  stripLegacySettingFields,
   z.discriminatedUnion('agentCategory', [
     AgentWorkflowSettingSchema,
     AgentToolUseSettingSchema,
@@ -116,12 +105,6 @@ export type AgentToolUseSetting = Extract<
 /** Partial settings as they appear in YAML before inheritance and defaults. */
 const RawAgentSettingInputSchema = z.strictObject({
   agentCategory: AgentCategorySchema.optional(),
-  documentTag: z
-    .string()
-    .trim()
-    .min(1, 'documentTag cannot be empty')
-    .optional(),
-  endTag: z.string().optional(),
   temperature: z.number().min(0).max(1).optional(),
   requiredFiles: z.record(z.string(), z.string()).optional(),
   requiredFilesInternal: z.record(z.string(), z.string()).optional(),
@@ -146,18 +129,15 @@ const RawAgentSettingInputSchema = z.strictObject({
  * defaults, so inherited child blocks only override fields the author wrote.
  */
 export const AgentSettingInputSchema = z.preprocess(
-  (input) => deriveExplicitEndTag(stripLegacySettingFields(input)),
+  stripLegacySettingFields,
   RawAgentSettingInputSchema,
 );
 
 export type AgentSettingInput = z.infer<typeof AgentSettingInputSchema>;
 
-export function hasEndTag(
-  settings: AgentSetting,
-  fileContent: string,
-): boolean {
-  const endTag = settings.endTag;
-  return endTag !== '' && fileContent.includes(endTag);
+/** Whether `fileContent` already contains the protocol's closing tag. */
+export function hasEndTag(fileContent: string): boolean {
+  return fileContent.includes(OUTPUT_END_TAG);
 }
 
 export const AgentPromptSchema = z.strictObject({

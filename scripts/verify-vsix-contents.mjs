@@ -6,8 +6,10 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
+  CATALOG_DERIVED_CONTRIBUTES,
   extensionManifestSnapshot,
   readJson,
+  withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 
 const rootDir = path.resolve(
@@ -68,11 +70,38 @@ function assertEntryExists(entries, entryPath, failures) {
   assert(entries.has(entryPath), `VSIX is missing ${entryPath}`, failures);
 }
 
+function assertCatalogContributesShipped(manifest, failures) {
+  // Release guard: withoutCatalogDerivedContributes() below deletes these
+  // catalog-derived subtrees before the snapshot comparison, so a build that
+  // shipped them missing or empty would still pass the comparison. release.yml's
+  // publish job runs only this script (not the catalog vitests), so assert the
+  // shipped subtrees are present and non-empty here before trimming them.
+  const contributes = manifest.contributes;
+  for (const key of CATALOG_DERIVED_CONTRIBUTES) {
+    const value = contributes?.[key];
+    const nonEmpty = Array.isArray(value)
+      ? value.length > 0
+      : Boolean(value) &&
+        typeof value === 'object' &&
+        Object.keys(value).length > 0;
+    assert(
+      nonEmpty,
+      `VSIX extension/package.json is missing a non-empty contributes.${key}; the release would ship without it.`,
+      failures,
+    );
+  }
+}
+
 function verifyManifest(vsixPath, snapshot, failures) {
   const manifestBytes = readVsixEntry(vsixPath, 'extension/package.json');
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
+  assertCatalogContributesShipped(manifest, failures);
+  // The built VSIX ships the full contributes (catalog-derived subtrees
+  // included); the committed snapshot omits them, so trim the same subtrees
+  // here before comparing. This only affects the comparison, not the shipped
+  // package.json.
   const manifestSnapshot = extensionManifestSnapshot(
-    manifest,
+    withoutCatalogDerivedContributes(manifest),
     Object.keys(snapshot.manifest),
   );
 

@@ -91,4 +91,4 @@ export type SubagentDeliveryDecision =
  * onto `SessionHandle`: a per-session split would be net-add with zero isolation
  * gain. Revisit only if a cross-session `clearAll`-style sweep is ever added.
  */
-export const subagentDeliveryRegistry = new SubagentDeliveryRegistry();
+export const SharedSubagentDeliveryRegistry = new SubagentDeliveryRegistry();

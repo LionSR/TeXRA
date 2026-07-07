@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
@@ -14,7 +13,6 @@ import {
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
 import { normalizeRunId } from '@common/constants/runIds';
 import type {
   AgentFileLocation,
@@ -26,8 +24,9 @@ import type {
   RoundOutput,
   StreamTabId,
 } from '@shared/schemas';
-import { flexibleFS } from '@utils/files';
+import { FlexibleFS } from '@utils/files';
 import { createRecordingHost, withTestRunContext } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 function createLocation(path: string): FileLocation {
   return { kind: 'external', absolutePath: path };
@@ -91,11 +90,6 @@ const defaultWorkflowOutputPolicy = {
   shouldRejectOnCompileFailure: () => true,
 };
 
-const workflowAgentSetting = {
-  agentCategory: AgentCategory.Workflow,
-  documentTag: 'documents',
-} as ProcessingContext['agentSetting'];
-
 function createRoundDataStore() {
   const roundData = new Map<number, RoundOutput>();
   function ensureRoundData(round: number): RoundOutput {
@@ -141,17 +135,16 @@ function createProjectedRuntime(streamId: string) {
   const detachTrace = logger.subscribe((event) =>
     hub.emit({ scope: 'run', streamId: typedStreamId, event }),
   );
-  const detachProjector = attachSessionRunFactProjector(
+  const detachProjection = attachSessionProgressEventProjectionForTest(
     hub,
     host,
-    typedStreamId,
   );
   return {
     events,
     host,
     logger,
     dispose: () => {
-      detachProjector();
+      detachProjection();
       detachTrace();
     },
   };
@@ -363,7 +356,6 @@ describe('output progress events', () => {
       },
     } as unknown as XmlOutputManager;
     const context: ProcessingContext = {
-      agentSetting: workflowAgentSetting,
       baseFiles: [],
       streamId: 'stream:processor',
       runtimeHost: host,
@@ -404,7 +396,6 @@ describe('output progress events', () => {
       splitScratchpadMultipleOutputXml: async () => [],
     } as unknown as XmlOutputManager;
     const context: ProcessingContext = {
-      agentSetting: workflowAgentSetting,
       baseFiles: [],
       streamId: 'stream:processor',
       runtimeHost: host,
@@ -442,7 +433,7 @@ describe('output progress events', () => {
     // silently with only the raw output. It must now surface a warning. Stub
     // the read so the model output is treated as non-empty.
     const readSpy = vi
-      .spyOn(flexibleFS, 'read')
+      .spyOn(FlexibleFS, 'read')
       .mockResolvedValue('% chunk.tex\n\\section{Untagged content}\n');
     const projected = createProjectedRuntime('stream:processor');
     const { events, host, logger } = projected;
@@ -458,7 +449,6 @@ describe('output progress events', () => {
         splitScratchpadMultipleOutputXml: async () => [],
       } as unknown as XmlOutputManager;
       const context: ProcessingContext = {
-        agentSetting: workflowAgentSetting,
         baseFiles: [],
         streamId: 'stream:processor',
         runtimeHost: host,

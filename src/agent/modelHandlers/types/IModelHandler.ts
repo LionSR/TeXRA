@@ -63,9 +63,6 @@ export type IModelHandler<
   ModelHandler<M, U, T, C, Resp>,
   | 'config'
   | 'capabilities'
-  | 'isOpenai'
-  | 'isAnthropic'
-  | 'isGoogle'
   | 'getStreamingConfig'
   | 'setOutputStreaming'
   | 'isBackgroundModeActive'

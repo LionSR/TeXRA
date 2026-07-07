@@ -1,5 +1,8 @@
 import { useRunContext, type RunCoordinators } from './RunContext';
-import { executionRegistry, type ExecutionRegistry } from './executionRegistry';
+import {
+  SharedExecutionRegistry,
+  type ExecutionRegistry,
+} from './executionRegistry';
 import type {
   ProposalRequestOptions,
   ProposalResult,
@@ -39,7 +42,7 @@ export class RunCoordinatorBridge {
     private readonly registry: Pick<
       ExecutionRegistry,
       'getAgentHandleByStream' | 'getAgentHandles'
-    > = executionRegistry,
+    > = SharedExecutionRegistry,
   ) {}
 
   async waitForPlanApproval(
@@ -53,14 +56,6 @@ export class RunCoordinatorBridge {
     } finally {
       this.planApprovals.delete(options.approvalId);
     }
-  }
-
-  resolvePlanApproval(approvalId: string, result: PlanApprovalResult): boolean {
-    return (
-      this.planApprovals
-        .get(approvalId)
-        ?.coordinators.plan.resolveRequest(approvalId, result) ?? false
-    );
   }
 
   clearPlanApprovalForStream(streamId: string): void {
@@ -85,14 +80,6 @@ export class RunCoordinatorBridge {
     } finally {
       this.proposals.delete(options.proposalId);
     }
-  }
-
-  resolveProposal(proposalId: string, result: ProposalResult): boolean {
-    return (
-      this.proposals
-        .get(proposalId)
-        ?.coordinators.proposal.resolveRequest(proposalId, result) ?? false
-    );
   }
 
   async waitForRetry(
@@ -217,4 +204,4 @@ function matchingRequests(
   );
 }
 
-export const runCoordinatorBridge = new RunCoordinatorBridge();
+export const SharedRunCoordinatorBridge = new RunCoordinatorBridge();

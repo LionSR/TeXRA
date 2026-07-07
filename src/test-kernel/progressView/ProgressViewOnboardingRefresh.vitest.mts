@@ -44,11 +44,7 @@ type ProgressViewProviderFake = ProgressViewProvider & {
 
 type CoordinatorBridgeFake = Pick<
   RunCoordinatorBridge,
-  | 'cancelRetry'
-  | 'clearRetryRequest'
-  | 'resolvePlanApproval'
-  | 'resolveProposal'
-  | 'triggerRetry'
+  'cancelRetry' | 'clearRetryRequest' | 'triggerRetry'
 >;
 
 function createCoordinatorBridge(
@@ -57,8 +53,6 @@ function createCoordinatorBridge(
   return {
     cancelRetry: vi.fn(() => false),
     clearRetryRequest: vi.fn(),
-    resolvePlanApproval: vi.fn(() => false),
-    resolveProposal: vi.fn(() => false),
     triggerRetry: vi.fn(() => true),
     ...overrides,
   };
@@ -358,28 +352,7 @@ describe('progress-view onboarding refresh wiring', () => {
     });
   });
 
-  it('routes agent proposal actions through the injected coordinators', async () => {
-    const { coordinators, handler } = createCoordinatorHandler();
-
-    await handler.handleMessage(
-      {
-        command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-        proposalId: 'proposal-a',
-        action: 'approve',
-        model: 'gemini31p',
-        agent: 'critic',
-      },
-      createWebviewView(),
-    );
-
-    expect(coordinators.resolveProposal).toHaveBeenCalledWith('proposal-a', {
-      action: 'approve',
-      model: 'gemini31p',
-      agent: 'critic',
-    });
-  });
-
-  it('resolves agent proposal actions through host interactions before coordinators', async () => {
+  it('routes agent proposal actions through host interactions', async () => {
     const interactions = createHostInteractions({
       resolve: vi.fn(() => true),
     });
@@ -412,29 +385,9 @@ describe('progress-view onboarding refresh wiring', () => {
         agent: 'critic',
       },
     });
-    expect(coordinators.resolveProposal).not.toHaveBeenCalled();
   });
 
-  it('routes plan approval actions through the injected coordinators', async () => {
-    const { coordinators, handler } = createCoordinatorHandler();
-
-    await handler.handleMessage(
-      {
-        command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-        approvalId: 'plan-a',
-        action: 'reject',
-        feedback: 'state the invariant first',
-      },
-      createWebviewView(),
-    );
-
-    expect(coordinators.resolvePlanApproval).toHaveBeenCalledWith('plan-a', {
-      action: 'reject',
-      feedback: 'state the invariant first',
-    });
-  });
-
-  it('resolves plan approvals through host interactions before coordinators', async () => {
+  it('routes plan approval actions through host interactions', async () => {
     const interactions = createHostInteractions({
       resolve: vi.fn(() => true),
     });
@@ -462,7 +415,6 @@ describe('progress-view onboarding refresh wiring', () => {
       action: 'reject',
       feedback: 'state the invariant first',
     });
-    expect(coordinators.resolvePlanApproval).not.toHaveBeenCalled();
   });
 
   it('delegates onboarding refresh through the main view provider', async () => {

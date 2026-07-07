@@ -12,7 +12,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports
-import { flexibleFS } from './flexibleFS';
+import { FlexibleFS } from './flexibleFS';
 import { getComparablePath } from './taskRunStorage';
 
 /**
@@ -167,7 +167,7 @@ export async function replaceInputCommands(
     const outputPath = getComparablePath(outputLocation);
 
     try {
-      const content = await flexibleFS.read(outputLocation);
+      const content = await FlexibleFS.read(outputLocation);
       const newContent = content.replaceAll(
         /\\input{([^}]+)}/g,
         (match, rawPath) => {
@@ -188,7 +188,7 @@ export async function replaceInputCommands(
       );
 
       if (newContent !== content) {
-        await flexibleFS.write(outputLocation, newContent);
+        await FlexibleFS.write(outputLocation, newContent);
         logger?.debug(`Updated input commands in ${outputPath}`);
       }
     } catch (err) {

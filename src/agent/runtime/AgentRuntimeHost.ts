@@ -20,8 +20,7 @@ import type { HostInteractions } from './HostInteractions';
  * - **Frontend-bound, ignorable** (the `── Frontend-bound events ──` group in
  *   {@link ProgressEventPayloads}: `requestOpenFile`, `requestShowInstruction`,
  *   `showAgentConfigBanner`, `requestShowError`, `requestEnsureProgressView`,
- *   plus the `*SubscriptionsChanged` / `toolAvailabilityChanged` UI-refresh
- *   signals): pure host-UI requests with no effect on the agent loop.
+ *   pure host-UI requests with no effect on the agent loop.
  *
  * {@link noopAgentRuntimeHost} (drop everything) is a valid host — it is used
  * by tests and non-interactive paths.
@@ -38,3 +37,13 @@ export interface AgentRuntimeHost {
 export const noopAgentRuntimeHost: AgentRuntimeHost = {
   emit: () => {},
 };
+
+export type RuntimeHostProvider = () => AgentRuntimeHost;
+export type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
+
+/** Normalize a coordinator's runtime-host constructor arg to a provider function. */
+export function toRuntimeHostProvider(
+  runtimeHost: CoordinatorRuntimeHost,
+): RuntimeHostProvider {
+  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
+}
