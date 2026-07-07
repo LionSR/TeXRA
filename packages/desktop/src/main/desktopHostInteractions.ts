@@ -8,7 +8,6 @@ import type {
   HostPlanApprovalRequest,
   HostRetryRequest,
   HostUserQuestionResult,
-  PendingHostInteraction,
 } from '@agent/runtime/HostInteractions';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
@@ -149,14 +148,6 @@ class DesktopHostInteractions implements HostInteractions {
 
   handleProgressEvent(): boolean {
     return false;
-  }
-
-  pending(): readonly PendingHostInteraction[] {
-    return [...this.pendingRequests.entries()].map(([id, request]) => ({
-      id,
-      kind: request.kind,
-      ...(request.streamId ? { streamId: request.streamId } : {}),
-    }));
   }
 
   resolve(requestId: string, result: HostInteractionResolution): boolean {
