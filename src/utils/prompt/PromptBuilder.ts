@@ -67,16 +67,6 @@ The /memories directory is shared with the orchestrator and other subagents. Che
 </subagent_memory_protocol>`;
 
 /**
- * Notice injected into a delegated subagent's system suffix when its YAML
- * requested delegation tools but the max-delegation-depth gate removed
- * them. Without this, the LLM keeps trying to call delegate_agent /
- * delegate_workflow and fails confusingly.
- */
-const NESTED_DELEGATION_BLOCKED_INSTRUCTIONS = `<delegation_depth_reached>
-You are a delegated subagent. The configured delegation depth does not allow you to delegate further, so the delegation tools (delegate_agent, delegate_workflow, resume_agent, propose_agent, propose_workflow) are unavailable to you. Do not attempt to call them. Complete the task directly using the tools you have, or report back to the orchestrator if the task truly requires further delegation.
-</delegation_depth_reached>`;
-
-/**
  * Combine the base system prompt with optional rules from `.texrarules`.
  *
  * @param systemPrompt Base system prompt template
@@ -196,12 +186,6 @@ export async function buildInitialToolUsePrompts(
     resolvedToolNames?: readonly string[];
     hasDelegationTools?: boolean;
     isSubagent?: boolean;
-    /**
-     * True when the agent's YAML requested delegation tools but they were
-     * filtered out by the nested-delegation gate. Triggers a notice telling
-     * the LLM it cannot delegate further.
-     */
-    nestedDelegationBlocked?: boolean;
   },
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
   const builder = new PromptBuilder(agentPrompt, userVars, logger);
@@ -219,9 +203,6 @@ export async function buildInitialToolUsePrompts(
     } else if (options?.isSubagent) {
       suffixParts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
     }
-  }
-  if (options?.nestedDelegationBlocked) {
-    suffixParts.push(NESTED_DELEGATION_BLOCKED_INSTRUCTIONS);
   }
   suffixParts.push(await buildWorkspaceInfoBlock());
 

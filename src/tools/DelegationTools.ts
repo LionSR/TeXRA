@@ -49,7 +49,6 @@ import {
   requireVisibleAgent,
   selectAvailableDelegationModel,
 } from './delegation/proposalFlow';
-import { depthGateError } from './delegation/subagentExecution';
 import {
   memoriesField,
   workingDirectoryField,
@@ -263,10 +262,6 @@ Git worktree support: resolved from the active workspace at runtime.`,
     instruction: string,
   ): Promise<ToolResult> {
     const parentContext = tryUseRunContext();
-    const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
-    const gated = depthGateError(parentDelegationDepth);
-    if (gated) return gated;
-
     const session = currentSession();
     const handle = session.executions.getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
