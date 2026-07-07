@@ -139,9 +139,11 @@ export async function registerExecution(
  * Persist supplementary metadata fields on an existing execution.
  * Serialized with other meta updates for the same execution to prevent
  * read-modify-write races (e.g. between terminal status and description).
- * Never throws — these are non-critical bookkeeping writes, so storage
- * failures are swallowed and callers' lifecycle logic (registry untrack,
- * follow-up delivery) always runs.
+ * Never throws: storage failures are swallowed and logged so callers'
+ * lifecycle logic (registry untrack, follow-up delivery) always runs — even
+ * for fields like terminal status that are the resumability/status source of
+ * truth, not incidental bookkeeping. Callers must not add their own
+ * `.catch()` around this; it can never reject.
  */
 async function persistMetaField(
   executionId: ExecutionId,
@@ -151,7 +153,7 @@ async function persistMetaField(
   try {
     await enqueueMetaUpdate(executionId, () => fields);
   } catch (err) {
-    // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
+    // Swallow and log — don't let storage I/O errors disrupt execution lifecycle.
     logger.debug(
       'ExecutionLifecycle',
       `Failed to persist ${what} for ${executionId}: ${toErrorMessage(err)}`,
