@@ -1,8 +1,9 @@
 import { Node } from '@agent/node';
+import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 
 import { getFilesForRound } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -94,10 +95,21 @@ export class MediaExtractionNode<C = unknown> extends Node<
   ): Promise<string | undefined> {
     shared.workspaceSnapshot = prepRes.workspaceState.toSnapshot();
 
+    let attachmentKinds: MediaAttachmentKind[] = [];
     if (mediaFiles?.length && shared.context) {
-      await this.services.modelHandler.addMediaToUserMessage(
+      attachmentKinds = await this.services.modelHandler.addMediaToUserMessage(
         shared.context.messages,
         mediaFiles,
+      );
+    }
+    if (
+      prepRes.currentRound === 0 &&
+      this.services.initialUserMessageForTranscript
+    ) {
+      logUserMessage(
+        this.services.logger,
+        this.services.initialUserMessageForTranscript,
+        attachmentKinds,
       );
     }
 

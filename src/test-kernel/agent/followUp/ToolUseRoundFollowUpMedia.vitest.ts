@@ -25,7 +25,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
           { role: 'user', content: userMessage },
         ] as ProviderMessage[],
     );
-    const addMediaToUserMessage = vi.fn(async () => {});
+    const addMediaToUserMessage = vi.fn(async () => []);
 
     const services = {
       checkInterruption: () => false,
@@ -163,7 +163,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       },
       logger: createRunTrace('ToolUseRoundBlankToolResult').trace,
       modelHandler: {
-        addMediaToUserMessage: vi.fn(async () => {}),
+        addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
@@ -349,7 +349,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       },
       logger: createRunTrace('ToolUseRoundSystemPrompt').trace,
       modelHandler: {
-        addMediaToUserMessage: vi.fn(async () => {}),
+        addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
