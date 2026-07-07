@@ -65,50 +65,11 @@ type SessionProgressEventObserver = <K extends ProgressEvent>(
   payload: ProgressEventPayloads[K],
 ) => void;
 
-class LocalProgressEventBus {
-  private readonly listeners = new Map<
-    ProgressEvent,
-    Set<(payload: ProgressEventPayloads[ProgressEvent]) => void>
-  >();
-
-  on<K extends ProgressEvent>(
-    event: K,
-    listener: (payload: ProgressEventPayloads[K]) => void,
-    options?: { signal?: AbortSignal },
-  ): () => void {
-    if (options?.signal?.aborted) return () => {};
-    let listeners = this.listeners.get(event);
-    if (!listeners) {
-      listeners = new Set();
-      this.listeners.set(event, listeners);
-    }
-    listeners.add(
-      listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
-    );
-    const cleanup = (): void => {
-      listeners?.delete(
-        listener as (payload: ProgressEventPayloads[ProgressEvent]) => void,
-      );
-    };
-    options?.signal?.addEventListener('abort', cleanup, { once: true });
-    return cleanup;
-  }
-
-  emit<K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): void {
-    for (const listener of this.listeners.get(event) ?? []) {
-      listener(payload);
-    }
-  }
-}
-
 /**
  * Host-neutral progress-view backend composition.
  *
  * Hosts provide only storage, transport, and UI callbacks. The state manager,
- * message builders, log bridge, and local/session event handler are constructed as one
+ * message builders, log bridge, and session event handler are constructed as one
  * graph so extension and desktop can converge on the same backend boundary.
  */
 export class ProgressBackend {
@@ -117,7 +78,6 @@ export class ProgressBackend {
   readonly webviewBridge: WebviewBridge;
   readonly eventHandler: ProgressEventHandler;
   private readonly session: SessionHandle;
-  private readonly localEvents = new LocalProgressEventBus();
   private readonly onSessionProgressEvent?: SessionProgressEventObserver;
 
   constructor(options: ProgressBackendOptions) {
@@ -167,9 +127,8 @@ export class ProgressBackend {
   }
 
   setupEventListeners(): ProgressEventSubscription {
-    const localSubscription = this.eventHandler.setupEventListeners(
-      this.localEvents,
-    );
+    const eventHandlerSubscription =
+      this.eventHandler.createLocalSubscription();
     const detachSessionFacts = this.session.events.subscribe(
       (sessionEvent) => {
         if (sessionEvent.scope !== 'session') return;
@@ -197,7 +156,7 @@ export class ProgressBackend {
       dispose: () => {
         detachRunFacts();
         detachSessionFacts();
-        localSubscription.dispose();
+        eventHandlerSubscription.dispose();
       },
     };
   }
@@ -213,7 +172,7 @@ export class ProgressBackend {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
-    this.localEvents.emit(event, payload);
+    this.eventHandler.handleProgressEvent(event, payload);
   }
 
   dispose(): void {
