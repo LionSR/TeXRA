@@ -1012,6 +1012,7 @@ export class DesktopProgressBridge {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
+    if (event === 'addOutputFiles') return;
     this.backend.handleProgressEvent(event, payload);
     this.progressEvents.onProgressEvent(event, payload);
   }

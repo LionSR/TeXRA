@@ -6,7 +6,11 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { attachProgressBackendProcessBus } from '@progressView/progressBackendProcessBus';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type OutputFileInfo,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   ProgressBackend,
   type ProgressBackendUiConfig,
@@ -124,6 +128,46 @@ describe('attachProgressBackendProcessBus', () => {
         agentCategory: AgentCategory.Workflow,
       });
       expect(backend.state.activeStream).toBe(first);
+    } finally {
+      busSubscription.dispose();
+      backendSubscription.dispose();
+      backend.dispose();
+    }
+  });
+
+  it('leaves addOutputFiles to the session run-fact path', () => {
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      sendMessage: () => true,
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+    });
+    const processBus = new MemoryProgressBus();
+    const backendSubscription = backend.setupEventListeners();
+    const busSubscription = attachProgressBackendProcessBus(
+      backend,
+      processBus,
+    );
+    const streamId = 'extension:output-files' as StreamTabId;
+    const outputFile: OutputFileInfo = {
+      source: 'paper.tex',
+      location: {
+        kind: 'workspace',
+        absolutePath: '/workspace/paper.tex',
+        relativePath: 'paper.tex',
+      },
+      round: 1,
+      lineage: null,
+      diff: null,
+    };
+
+    try {
+      processBus.emit('addOutputFiles', {
+        streamId,
+        filesByRound: { 1: [outputFile] },
+      });
+
+      expect(backend.state.snapshots.getOutputFiles(streamId).size).toBe(0);
     } finally {
       busSubscription.dispose();
       backendSubscription.dispose();
