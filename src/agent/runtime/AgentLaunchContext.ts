@@ -72,7 +72,6 @@ import {
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { attachConversationProgressHub } from './conversationProgressHub';
-import { attachSessionRunFactProjector } from './SessionRunFactProjector';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -345,11 +344,6 @@ async function assembleAgentLaunchContext(
     rawRunTrace.trace,
     streamId,
   );
-  const detachRunFactProjector = attachSessionRunFactProjector(
-    session.events,
-    runtimeHost,
-    streamId,
-  );
   const detachProgressHub = attachConversationProgressHub(
     session.events,
     runtimeHost,
@@ -359,7 +353,6 @@ async function assembleAgentLaunchContext(
     trace: rawRunTrace.trace,
     dispose: () => {
       detachProgressHub();
-      detachRunFactProjector();
       detachSessionTrace();
       rawRunTrace.dispose();
     },

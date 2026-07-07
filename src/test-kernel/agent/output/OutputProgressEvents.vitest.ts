@@ -13,7 +13,7 @@ import {
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { normalizeRunId } from '@common/constants/runIds';
 import type {
   AgentFileLocation,
@@ -135,17 +135,13 @@ function createProjectedRuntime(streamId: string) {
   const detachTrace = logger.subscribe((event) =>
     hub.emit({ scope: 'run', streamId: typedStreamId, event }),
   );
-  const detachProjector = attachSessionRunFactProjector(
-    hub,
-    host,
-    typedStreamId,
-  );
+  const detachProjection = attachLegacyProgressEventProjection(hub, host);
   return {
     events,
     host,
     logger,
     dispose: () => {
-      detachProjector();
+      detachProjection();
       detachTrace();
     },
   };

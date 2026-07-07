@@ -40,7 +40,13 @@ export function attachLegacyProgressEventProjection(
     },
     {
       scope: 'run',
-      types: ['stage.start', 'child.activity', 'process.output'],
+      types: [
+        'domain',
+        'usage',
+        'stage.start',
+        'child.activity',
+        'process.output',
+      ],
     },
   );
 
