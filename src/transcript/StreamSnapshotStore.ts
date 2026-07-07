@@ -31,7 +31,7 @@ import { KVStore } from '@common/storage/KVStore';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+} from '@agent/runtime/hostProgressEvents';
 import * as logger from '@logger/logUtils';
 import {
   CompileFailureSchema,
