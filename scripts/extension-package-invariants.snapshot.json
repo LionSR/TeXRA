@@ -788,7 +788,7 @@
   ],
   "requiredVscodeIgnoreLines": [
     "src/**",
-    "!resources/**",
+    "resources/traceViewer/**",
     "!src/common/styles/*.css",
     "!src/progressView/*.html",
     "!src/settingsView/*.html",
