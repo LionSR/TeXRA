@@ -62,6 +62,10 @@ type WorkflowResumeData = z.infer<typeof WorkflowResumeDataSchema>;
 
 export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
+export interface SessionResumeRetrievalOptions {
+  readonly parentStreamId?: StreamTabId;
+}
+
 const CurrentToolUseFlowRecordStateSchema = z.looseObject({
   messages: z.array(ProviderMessageSchema),
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
@@ -116,11 +120,17 @@ export async function retrieveSessionResumeData(
   streamId: StreamTabId,
   executionId: ExecutionId,
   state: AgentConfig | TaskState,
+  options: SessionResumeRetrievalOptions = {},
 ): Promise<SessionResumeData | null> {
   const agentConfig = 'agentConfig' in state ? state.agentConfig : state;
 
   if (agentConfig.agentCategory === AgentCategory.ToolUse) {
-    return retrieveToolUseResumeData(streamId, executionId, agentConfig);
+    return retrieveToolUseResumeData(
+      streamId,
+      executionId,
+      agentConfig,
+      options,
+    );
   }
 
   if (agentConfig.agentCategory === AgentCategory.Workflow) {
@@ -138,6 +148,7 @@ async function retrieveToolUseResumeData(
   streamId: StreamTabId,
   executionId: ExecutionId,
   agentConfig: AgentConfig,
+  options: SessionResumeRetrievalOptions,
 ): Promise<ToolUseResumeData | null> {
   try {
     const resumability = await deriveResumability(executionId);
@@ -190,6 +201,9 @@ async function retrieveToolUseResumeData(
       version: TOOL_USE_SNAPSHOT_VERSION,
       executionId,
       streamId,
+      ...(options.parentStreamId !== undefined && {
+        parentStreamId: options.parentStreamId,
+      }),
       agentConfig: currentConfig,
       modelHandlerCompatibilityKey,
       messages,
