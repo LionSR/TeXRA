@@ -254,7 +254,7 @@ export abstract class RetryableInvocationNode<
     error: Error,
   ): Promise<ManualRetryPromptResult> {
     const { logger, streamStatus } = this.services;
-    const { runtimeHost, session, streamId } = useLaunchRunContext();
+    const { session, streamId } = useLaunchRunContext();
     const operationName = this.getOperationName();
     const formatted = normalizeProviderError(error);
 
@@ -265,7 +265,6 @@ export abstract class RetryableInvocationNode<
     logErrorData(logger, `${operationName} failed`, formatted);
 
     streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait', {
-      runtimeHost,
       trace: logger,
     });
     logger.debug('Waiting for manual retry', {
@@ -286,7 +285,6 @@ export abstract class RetryableInvocationNode<
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');
       streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-        runtimeHost,
         trace: logger,
       });
       return { shouldRetry: true, userCancelled: false };
@@ -305,7 +303,6 @@ export abstract class RetryableInvocationNode<
         result.reason ?? 'Retry denied (no human input available)',
       );
       streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-        runtimeHost,
         trace: logger,
       });
       return { shouldRetry: false, userCancelled: false };
@@ -317,7 +314,6 @@ export abstract class RetryableInvocationNode<
         : 'Retry cancelled by user';
     logProgressStatus(logger, message);
     streamStatus.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop', {
-      runtimeHost,
       trace: logger,
     });
     return { shouldRetry: false, userCancelled: true };

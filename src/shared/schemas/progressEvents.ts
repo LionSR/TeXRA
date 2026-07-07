@@ -7,6 +7,7 @@ import type {
   RoundIndexed,
 } from './output';
 import type { ActiveChildInfo, RoundStage } from './streamState';
+import type { StreamPhase, StreamSubstate } from './stream';
 import type { TokenUsageStats } from './usage';
 
 /**
@@ -46,6 +47,17 @@ export interface UpdateStreamDescriptionPayload {
 export interface SetParentStreamPayload {
   childStreamId: StreamTabId;
   parentStreamId: StreamTabId | null;
+}
+
+export interface UpdateStreamStatusPayload {
+  streamId: StreamTabId;
+  status: StreamPhase;
+  /** Diagnostic transition cause retained for legacy host/public output. */
+  cause?: string;
+  /** Previous phase before this update, for detecting transitions. */
+  previousStatus?: StreamPhase;
+  /** Narrower in-flight display state for launch/resume overlays. */
+  substate?: StreamSubstate;
 }
 
 export interface AddOutputFilesPayload extends StreamScopedPayload {
