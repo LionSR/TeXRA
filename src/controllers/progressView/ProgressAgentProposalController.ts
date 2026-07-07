@@ -4,7 +4,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
+import type { ProposalResult } from '@agent/runtime/HostInteractions';
 
 import type { TaskState } from '@agent/core/state/TaskState';
 

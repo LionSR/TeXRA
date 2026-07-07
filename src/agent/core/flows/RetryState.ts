@@ -268,12 +268,20 @@ export abstract class RetryableInvocationNode<
       runtimeHost,
       trace: logger,
     });
-    const result = await session.coordinators.waitForRetry(streamId, {
+    logger.debug('Waiting for manual retry', {
+      data: formatted.message ?? 'unknown error',
+    });
+    // No timeout: the retry panel waits indefinitely for the user's decision.
+    const interaction = session.interactions.requestRetry({
+      streamId,
       operation: operationName,
       errorMessage: formatted.message,
-      logger,
       errorDetails: formatted,
     });
+    if (!interaction) {
+      throw new Error('HostInteractions.requestRetry is required');
+    }
+    const result = await interaction;
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');

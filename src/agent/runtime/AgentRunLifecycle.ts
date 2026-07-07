@@ -190,7 +190,6 @@ export async function runFlowWithLifecycle(
     agentIdentifier,
     category,
     ctx.runtimeHost,
-    ctx.coordinators,
     ctx.logger,
   );
   session.executions.track(handle);

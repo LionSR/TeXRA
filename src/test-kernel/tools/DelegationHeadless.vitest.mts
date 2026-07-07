@@ -4,17 +4,15 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   AgentExecutionHandle,
   SharedExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
 
@@ -65,9 +63,16 @@ function runtimeHost(): AgentRuntimeHost {
     interactions: {
       handleProgressEvent: vi.fn(() => false),
       resolve: vi.fn(() => false),
-      cancelForStream: vi.fn(),
+      cancel: vi.fn(),
     } satisfies HostInteractions,
   };
+}
+
+/** Real session whose interactions slot is the host's fake port. */
+function sessionFor(host: AgentRuntimeHost): SessionHandle {
+  const session = new SessionHandle();
+  if (host.interactions) session.useHostInteractions(host.interactions);
+  return session;
 }
 
 /** The shared delegation call used by nearly every case (agent name varies). */
@@ -402,25 +407,22 @@ describe('headless delegation', () => {
   it('discourages equivalent delegation retries after a no-feedback rejection', async () => {
     mocks.isProposalBypassed.mockReturnValue(false);
     const host = runtimeHost();
-    const coordinators = {
-      plan: new PlanApprovalCoordinator(host),
-      proposal: new AgentProposalCoordinator(host),
-      retry: new RetryRequestCoordinatorImpl(host),
-    };
     host.interactions!.requestAgentProposal = vi
       .fn()
       .mockResolvedValue({ action: 'reject' });
 
+    const session = sessionFor(host);
     const result = await withRunContext(
       createRunContext({
         runtimeHost: host,
         streamId: 'parent-stream',
         executionId: 'parent-exec',
         model: 'deepseekT',
-        coordinators,
+        session,
       }),
       () => callDelegateReview(),
     );
+    session.dispose();
 
     expect(result.summary).toBe("User rejected delegation to 'review'");
     expect(result.status).toBe('error');
@@ -445,25 +447,22 @@ describe('headless delegation', () => {
       },
     ]);
     const host = runtimeHost();
-    const coordinators = {
-      plan: new PlanApprovalCoordinator(host),
-      proposal: new AgentProposalCoordinator(host),
-      retry: new RetryRequestCoordinatorImpl(host),
-    };
     host.interactions!.requestAgentProposal = vi
       .fn()
       .mockResolvedValue({ action: 'approve', model: 'gpt5' });
 
+    const session = sessionFor(host);
     const result = await withRunContext(
       createRunContext({
         runtimeHost: host,
         streamId: 'parent-stream',
         executionId: 'parent-exec',
         model: 'deepseekT',
-        coordinators,
+        session,
       }),
       () => callDelegateReview(),
     );
+    session.dispose();
 
     expect(result.status).toBe('error');
     expect(result.summary).toBe(
@@ -484,25 +483,22 @@ describe('headless delegation', () => {
       { value: 'gpt5', label: 'GPT-5', disabled: false, requiresKey: false },
     ]);
     const host = runtimeHost();
-    const coordinators = {
-      plan: new PlanApprovalCoordinator(host),
-      proposal: new AgentProposalCoordinator(host),
-      retry: new RetryRequestCoordinatorImpl(host),
-    };
     host.interactions!.requestAgentProposal = vi
       .fn()
       .mockResolvedValue({ action: 'approve', model: 'gpt5' });
 
+    const session = sessionFor(host);
     const result = await withRunContext(
       createRunContext({
         runtimeHost: host,
         streamId: 'parent-stream',
         executionId: 'parent-exec',
         model: 'deepseekT',
-        coordinators,
+        session,
       }),
       () => callDelegateReview(),
     );
+    session.dispose();
 
     expect(result.status).toBe('executed');
     expect(result.summary).toBe("Launched 'review' (async)");

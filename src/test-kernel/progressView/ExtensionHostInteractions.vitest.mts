@@ -139,7 +139,7 @@ describe('createExtensionHostInteractions', () => {
       operation: 'Model invocation',
     });
 
-    interactions.cancelForStream('stream-a' as StreamTabId);
+    interactions.cancel({ streamId: 'stream-a' as StreamTabId });
 
     await expect(resultPromise).resolves.toEqual({ action: 'cancel' });
     expect(handlers.retry.resolve).toHaveBeenCalledWith('stream-a');
@@ -154,10 +154,10 @@ describe('createExtensionHostInteractions', () => {
       streamId: 'stream-a' as StreamTabId,
     });
 
-    interactions.cancelForStream(
-      'stream-a' as StreamTabId,
-      'Stream resources released.',
-    );
+    interactions.cancel({
+      streamId: 'stream-a' as StreamTabId,
+      cause: 'Stream resources released.',
+    });
 
     await expect(resultPromise).resolves.toEqual({
       accepted: false,
@@ -190,6 +190,41 @@ describe('createExtensionHostInteractions', () => {
       interactions.resolve(requestId, { kind: 'bash', action: 'approve' }),
     ).toBe(true);
     await expect(resultPromise).resolves.toEqual({ accepted: true });
+  });
+
+  it('a retry-kind cancel clears only the retry, leaving the plan approval pending', async () => {
+    const handlers = createHandlers();
+    const interactions = createInteractions({ handlers });
+
+    const retryPromise = interactions.requestRetry?.({
+      streamId: 'stream-a' as StreamTabId,
+      operation: 'Model invocation',
+    });
+    const planPromise = interactions.requestPlanApproval?.({
+      approvalId: 'plan-a',
+      streamId: 'stream-a' as StreamTabId,
+      goalEnabled: false,
+      plan: { objective: 'Survive a retry-scoped cancel.' },
+    });
+
+    // The stop-stream path: clear the retry panel without disturbing other
+    // pending interactions on the same stream.
+    interactions.cancel({
+      streamId: 'stream-a' as StreamTabId,
+      kind: 'retry',
+      cause: 'Retry request cleared.',
+    });
+
+    await expect(retryPromise).resolves.toEqual({ action: 'cancel' });
+    expect(handlers.retry.resolve).toHaveBeenCalledWith('stream-a');
+
+    // The plan approval on the same stream survives untouched and is still
+    // resolvable first-wins.
+    expect(handlers.planApproval.resolve).not.toHaveBeenCalled();
+    expect(
+      interactions.resolve('plan-a', { kind: 'plan', action: 'approve' }),
+    ).toBe(true);
+    await expect(planPromise).resolves.toEqual({ action: 'approve' });
   });
 
   it('shows external inquiries without waiting for a user decision', async () => {
@@ -239,7 +274,10 @@ describe('createExtensionHostInteractions', () => {
       streamId: '',
     });
 
-    interactions.cancelUnscoped?.('No stream owns this question.');
+    interactions.cancel({
+      streamId: null,
+      cause: 'No stream owns this question.',
+    });
 
     // Cancellation forwards `cause` as agent-visible feedback, matching how
     // a live UI rejection settles (see the desktop host, which does the same).

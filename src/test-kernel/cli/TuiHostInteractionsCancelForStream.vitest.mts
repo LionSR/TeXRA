@@ -1,4 +1,4 @@
-// Regression coverage for #7306 (cancelForStream only cancelled retry routes)
+// Regression coverage for #7306 (per-stream cancel only cancelled retry routes)
 // and #7307 (requestPlanApproval/requestAgentProposal/requestRetry dropped
 // HostInteractionOptions.timeoutMs). Both were flagged by bot review against
 // PR #7303 and left unaddressed at merge.
@@ -63,7 +63,7 @@ afterEach(() => {
   clearApprovals();
 });
 
-describe('createTuiHostInteractions().cancelForStream', () => {
+describe('createTuiHostInteractions().cancel', () => {
   it('cancels a queued plan approval for the target stream, leaving other streams untouched', async () => {
     const interactions = createTuiHostInteractions(host(), context());
     try {
@@ -87,7 +87,7 @@ describe('createTuiHostInteractions().cancelForStream', () => {
         });
       });
 
-      interactions.cancelForStream('stream-a');
+      interactions.cancel({ streamId: 'stream-a' });
 
       await expect(planResult).resolves.toEqual({
         action: 'reject',
@@ -125,7 +125,7 @@ describe('createTuiHostInteractions().cancelForStream', () => {
         });
       });
 
-      interactions.cancelForStream('stream-a');
+      interactions.cancel({ streamId: 'stream-a' });
 
       await expect(proposalResult).resolves.toEqual({
         action: 'reject',
@@ -152,13 +152,85 @@ describe('createTuiHostInteractions().cancelForStream', () => {
         });
       });
 
-      interactions.cancelForStream('stream-a');
+      interactions.cancel({ streamId: 'stream-a' });
 
       await expect(bashResult).resolves.toEqual({
         accepted: false,
         userMessage: 'Session interrupted.',
       });
       expect(currentApproval.get()).toBeUndefined();
+    } finally {
+      interactions.dispose?.();
+    }
+  });
+
+  it('an unfiltered cancel settles active retry routes (pre-fold cleanupAllRequests parity)', async () => {
+    const interactions = createTuiHostInteractions(host(), context());
+    try {
+      // requestRetry registers a route in the retry-route registry before the
+      // modal decision settles; cancel({}) must settle the route (resolving
+      // the pending retry with 'cancel'), not just clear the modal queue.
+      const retryResult = interactions.requestRetry?.({
+        streamId: 'stream-a',
+        operation: 'Model invocation',
+      });
+
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'retry',
+          payload: { streamId: 'stream-a' },
+        });
+      });
+
+      interactions.cancel({ cause: 'All approvals cleared.' });
+
+      await expect(retryResult).resolves.toEqual({ action: 'cancel' });
+      expect(currentApproval.get()).toBeUndefined();
+
+      // The route registry entry is gone: a stale decision on the old route
+      // cannot resurrect the retry (a fresh request gets a fresh route).
+      const second = interactions.requestRetry?.({
+        streamId: 'stream-a',
+        operation: 'Model invocation',
+      });
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'retry',
+        });
+      });
+      interactions.cancel({ streamId: 'stream-a', kind: 'retry' });
+      await expect(second).resolves.toEqual({ action: 'cancel' });
+    } finally {
+      interactions.dispose?.();
+    }
+  });
+
+  it('a retry-kind cancel leaves a queued plan approval on the same stream pending', async () => {
+    const interactions = createTuiHostInteractions(host(), context());
+    try {
+      const planResult = interactions.requestPlanApproval?.({
+        approvalId: 'approval-kind',
+        streamId: 'stream-a',
+        plan,
+        goalEnabled: false,
+      });
+
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'plan',
+          payload: { streamId: 'stream-a' },
+        });
+      });
+
+      interactions.cancel({ streamId: 'stream-a', kind: 'retry' });
+
+      // The plan approval is still the foreground modal and still decidable.
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'plan',
+        payload: { streamId: 'stream-a' },
+      });
+      currentApproval.get()?.decide({ accepted: true });
+      await expect(planResult).resolves.toEqual({ action: 'approve' });
     } finally {
       interactions.dispose?.();
     }

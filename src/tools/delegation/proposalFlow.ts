@@ -2,7 +2,7 @@
  * Proposal/approval handshake and agent/model resolution for delegation tools.
  *
  * If proposal bypass is active for a stream, launches immediately; otherwise
- * waits for user approval via the proposal coordinator before executing.
+ * waits for user approval via `session.interactions` before executing.
  */
 
 // Third-party imports
@@ -15,7 +15,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
+import type { ProposalResult } from '@agent/runtime/HostInteractions';
 
 // Local imports - model
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -140,7 +140,7 @@ function proposalResultToToolResult(
  * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
  *
  * If proposal bypass is active for this stream, skips the proposal and launches immediately.
- * Otherwise, waits for user approval via the proposal coordinator.
+ * Otherwise, waits for user approval via the session's host interactions.
  */
 export async function proposeAndExecute(
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
@@ -156,10 +156,15 @@ export async function proposeAndExecute(
 
   const proposalId = nanoid();
 
-  const result = await currentSession().coordinators.waitForProposal(streamId, {
+  const interaction = currentSession().interactions.requestAgentProposal({
     proposalId,
-    proposal,
+    streamId,
+    ...proposal,
   });
+  if (!interaction) {
+    throw new Error('HostInteractions.requestAgentProposal is required');
+  }
+  const result = await interaction;
 
   const nonApproveResult = proposalResultToToolResult(
     result,

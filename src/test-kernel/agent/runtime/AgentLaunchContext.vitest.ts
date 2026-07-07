@@ -43,7 +43,6 @@ describe('AgentLaunchContext', () => {
       streamId: 'launch-context-stream' as AgentLaunchContext['streamId'],
       executionId:
         'launch-context-execution' as AgentLaunchContext['executionId'],
-      coordinators: {} as AgentLaunchContext['coordinators'],
       config: {
         agent: 'chat',
         model: 'deepseekT',

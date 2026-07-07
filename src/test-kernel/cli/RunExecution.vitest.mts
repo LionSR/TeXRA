@@ -122,7 +122,7 @@ function stubRunExecutionDeps(): void {
     handleProgressEvent: vi.fn(() => false),
     pending: vi.fn(() => []),
     resolve: vi.fn(() => false),
-    cancelForStream: vi.fn(),
+    cancel: vi.fn(),
   });
   mocks.installCliApprovalHandlers.mockReturnValue(vi.fn());
   mocks.createCliRuntimeHost.mockReturnValue({

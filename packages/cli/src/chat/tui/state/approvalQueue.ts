@@ -286,11 +286,9 @@ export function clearApprovalsWhere(
 /**
  * Settle every queued approval/question for a stream, of any kind — bash,
  * tool-edit, plan, proposal, retry, user-question, and external-inquiry
- * alike. Used by `HostInteractions.cancelForStream` so a per-stream
- * interrupt/cleanup can settle whatever happens to be pending on that stream
- * instead of leaving it stuck forever — this is the fallback
- * `PlanApprovalCoordinator`/`AgentProposalCoordinator`/`RetryRequestCoordinator`
- * reach for when `interactions.resolve()` doesn't find a matching request.
+ * alike. Used by `HostInteractions.cancel` so a per-stream interrupt/cleanup
+ * can settle whatever happens to be pending on that stream instead of leaving
+ * it stuck forever.
  */
 export function clearApprovalsForStream(streamId: string): void {
   clearApprovalsWhere(

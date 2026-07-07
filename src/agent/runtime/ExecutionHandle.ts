@@ -16,7 +16,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
-import type { RunCoordinators } from './RunContext';
 
 export interface ExecutionStatusInfo {
   status: string;
@@ -86,7 +85,6 @@ export class AgentExecutionHandle implements ExecutionHandle {
     readonly agentName: string,
     readonly category: AgentCategory,
     readonly runtimeHost: AgentRuntimeHost,
-    readonly coordinators?: RunCoordinators,
     /** The run's discriminated-event channel, for run-scoped subscribers. */
     readonly trace?: AgentTrace,
   ) {

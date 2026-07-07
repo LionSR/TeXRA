@@ -37,13 +37,3 @@ export interface AgentRuntimeHost {
 export const noopAgentRuntimeHost: AgentRuntimeHost = {
   emit: () => {},
 };
-
-export type RuntimeHostProvider = () => AgentRuntimeHost;
-export type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
-
-/** Normalize a coordinator's runtime-host constructor arg to a provider function. */
-export function toRuntimeHostProvider(
-  runtimeHost: CoordinatorRuntimeHost,
-): RuntimeHostProvider {
-  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
-}
