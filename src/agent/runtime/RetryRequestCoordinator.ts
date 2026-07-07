@@ -3,7 +3,12 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  toRuntimeHostProvider,
+  type AgentRuntimeHost,
+  type CoordinatorRuntimeHost,
+  type RuntimeHostProvider,
+} from '@agent/runtime/AgentRuntimeHost';
 import type { ProviderErrorPartial } from '@shared/schemas';
 
 export type RetryResult =
@@ -29,15 +34,6 @@ export interface RetryRequestOptions {
   timeoutMs?: number;
   /** Structured error details for expandable display. */
   errorDetails?: ProviderErrorPartial;
-}
-
-type RuntimeHostProvider = () => AgentRuntimeHost;
-type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
-
-function toRuntimeHostProvider(
-  runtimeHost: CoordinatorRuntimeHost,
-): RuntimeHostProvider {
-  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
 }
 
 export class RetryRequestCoordinatorImpl {

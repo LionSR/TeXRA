@@ -42,7 +42,7 @@ export interface ConversationFormatOptions {
   readonly hideProviderReasoning?: boolean;
 }
 
-function asText(value: unknown): string {
+export function asText(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 

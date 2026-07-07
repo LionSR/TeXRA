@@ -205,7 +205,7 @@ describe('CLI approval queue', () => {
     expect(
       approvalPayloadStreamId({
         kind: 'toolEdit',
-        request: { streamId: 'child-edit' },
+        payload: { streamId: 'child-edit' },
       } as ApprovalPayload),
     ).toBe('child-edit');
     expect(
