@@ -520,7 +520,7 @@ describe('StreamSnapshotStore', () => {
     await store.preload([STREAM]);
 
     store.addOutputFiles(OTHER_STREAM, { 1: [next] });
-    expect(store.getOutputFiles(OTHER_STREAM).get(1)).toEqual([next]);
+    expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
 
     const raw = await StorageFS.readJson(path.join(dir, 'outputFiles.json'));
@@ -528,6 +528,20 @@ describe('StreamSnapshotStore', () => {
       '0': [prior],
       '1': [next],
     });
+  });
+
+  it('returns a deep-enough copy from getOutputFiles so mutating the returned array cannot corrupt internal state', async () => {
+    const first = outputFile('first.tex', 0);
+    const store = new StreamSnapshotStore();
+    store.addOutputFiles(STREAM, { 0: [first] });
+
+    const returned = store.getOutputFiles(STREAM);
+    // Mutate the returned round's array directly (not just reassign the
+    // top-level record) — a shallow `{ ...map }` copy would still share this
+    // array by reference with the store's internal accumulator.
+    returned[0]?.push(outputFile('injected.tex', 0));
+
+    expect(store.getOutputFiles(STREAM)[0]).toEqual([first]);
   });
 
   it('keeps output overlays when flattening legacy output files after preload', async () => {
@@ -544,7 +558,7 @@ describe('StreamSnapshotStore', () => {
     await store.preload([STREAM]);
 
     store.addOutputFiles(OTHER_STREAM, { 1: [next] });
-    expect(store.getOutputFiles(OTHER_STREAM).get(1)).toEqual([next]);
+    expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
 
     const raw = await StorageFS.readJson(path.join(dir, 'outputFiles.json'));

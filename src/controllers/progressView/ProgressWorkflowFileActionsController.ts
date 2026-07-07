@@ -4,7 +4,11 @@ import path from 'node:path';
 import * as logger from '@logger/logUtils';
 
 // Local imports - shared
-import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
+import type {
+  OutputFileInfo,
+  RoundIndexed,
+  StreamTabId,
+} from '@shared/schemas';
 
 // Local imports - utilities
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files';
@@ -21,7 +25,7 @@ export interface AcceptCopyMeta {
 export interface ProgressWorkflowFileActionsState {
   getActiveStream(): StreamTabId | '';
   getExecutionId(stream: StreamTabId): string | undefined;
-  getOutputFiles(stream: StreamTabId): Map<number, OutputFileInfo[]>;
+  getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
   getAgentModel(
     stream: StreamTabId,
   ): { agent: string; model: string } | undefined;
@@ -76,7 +80,7 @@ export class ProgressWorkflowFileActionsController {
           await ensureRunDir(executionId);
           directoryToReveal = getRunDir(executionId);
         }
-      } else if (runOutputs.size > 0) {
+      } else if (Object.keys(runOutputs).length > 0) {
         directoryToReveal = this.findOutputDirectory(runOutputs);
       }
 
@@ -255,7 +259,7 @@ export class ProgressWorkflowFileActionsController {
     // in-place workflows reuse the same workspace path across rounds, so the
     // Map key (and the first match) would mislabel the `r<round>` postfix.
     let round: number | undefined;
-    for (const infos of this.deps.state.getOutputFiles(stream).values()) {
+    for (const infos of Object.values(this.deps.state.getOutputFiles(stream))) {
       for (const info of infos) {
         if (
           info.location.absolutePath === file &&
@@ -271,9 +275,9 @@ export class ProgressWorkflowFileActionsController {
   }
 
   private findOutputDirectory(
-    runOutputs: Map<number, OutputFileInfo[]>,
+    runOutputs: RoundIndexed<OutputFileInfo>,
   ): string | undefined {
-    for (const infos of runOutputs.values()) {
+    for (const infos of Object.values(runOutputs)) {
       for (const info of infos) {
         const kind = info.location.kind;
         if (kind === 'runStorage' || kind === 'workspace') {

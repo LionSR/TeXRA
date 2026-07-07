@@ -35,13 +35,16 @@ import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import {
   CompileFailureSchema,
+  cloneRoundIndexed,
   emptyUsageStats,
   isEmptyUsage,
   OutputFileInfoListSchema,
+  OutputFileInfoSchema,
   PersistedWorkPlanSchema,
   RUN_DESCRIPTOR_SCHEMA_VERSION,
   planSummaryLine,
   RoundKeySchema,
+  roundIndexedRecord,
   StreamTabIdSchema,
   sumUsageStats,
   TokenUsageStatsParsingSchema,
@@ -91,15 +94,15 @@ const SEED_IO_CONCURRENCY = 8;
 
 const AddOutputFilesRunFactSchema = z.looseObject({
   streamId: StreamTabIdSchema,
-  filesByRound: z.record(z.string(), OutputFileInfoListSchema),
+  filesByRound: roundIndexedRecord(OutputFileInfoSchema),
 });
 const UpdateMissingOutputsRunFactSchema = z.looseObject({
   streamId: StreamTabIdSchema,
-  filesByRound: z.record(z.string(), z.array(z.string())),
+  filesByRound: roundIndexedRecord(z.string()),
 });
 const UpdateCompileFailuresRunFactSchema = z.looseObject({
   streamId: StreamTabIdSchema,
-  filesByRound: z.record(z.string(), z.array(CompileFailureSchema)),
+  filesByRound: roundIndexedRecord(CompileFailureSchema),
 });
 const UsageRunEventDataSchema = z.looseObject({
   streamId: StreamTabIdSchema,
@@ -166,17 +169,20 @@ function executionIdFromMeta(
 
 export class StreamSnapshotStore {
   // -- In-memory accumulators (one entry per stream that has emitted) --------
+  // Round-scoped accumulators hold the canonical RoundIndexed record — the
+  // same shape that is persisted and sent over IPC, so no conversion exists
+  // between memory, disk, and the wire.
   private readonly outputFiles = new Map<
     StreamTabId,
-    Map<number, OutputFileInfo[]>
+    RoundIndexed<OutputFileInfo>
   >();
   private readonly missingOutputs = new Map<
     StreamTabId,
-    Map<number, string[]>
+    RoundIndexed<string>
   >();
   private readonly compileFailures = new Map<
     StreamTabId,
-    Map<number, CompileFailure[]>
+    RoundIndexed<CompileFailure>
   >();
   private readonly usage = new Map<StreamTabId, Map<string, TokenUsageStats>>();
   /**
@@ -504,13 +510,13 @@ export class StreamSnapshotStore {
   // Mutators (mirror the consolidated managers)
   // ==========================================================================
 
-  private getOrCreate<V>(
-    map: Map<StreamTabId, Map<number, V>>,
+  private getOrCreate<T>(
+    map: Map<StreamTabId, RoundIndexed<T>>,
     key: StreamTabId,
-  ): Map<number, V> {
+  ): RoundIndexed<T> {
     let inner = map.get(key);
     if (!inner) {
-      inner = new Map();
+      inner = {};
       map.set(key, inner);
     }
     return inner;
@@ -522,19 +528,19 @@ export class StreamSnapshotStore {
    * a round's entry (e.g. once its failure list empties out) or the value to
    * store otherwise.
    */
-  private applyRoundKeyedPatch<V>(
-    map: Map<StreamTabId, Map<number, V>>,
+  private applyRoundKeyedPatch<T>(
+    map: Map<StreamTabId, RoundIndexed<T>>,
     stream: StreamTabId,
     filesByRound: Record<string, unknown>,
-    normalize: (raw: unknown) => V | null,
-  ): Map<number, V> {
+    normalize: (raw: unknown) => T[] | null,
+  ): RoundIndexed<T> {
     const rounds = this.getOrCreate(map, stream);
     for (const [round, raw] of Object.entries(filesByRound)) {
       const key = RoundKeySchema.safeParse(round);
       if (!key.success) continue;
       const value = normalize(raw);
-      if (value === null) rounds.delete(key.data);
-      else rounds.set(key.data, value);
+      if (value === null) delete rounds[key.data];
+      else rounds[key.data] = value;
     }
     return rounds;
   }
@@ -557,11 +563,11 @@ export class StreamSnapshotStore {
   private applyOutputFilesPatch(
     stream: StreamTabId,
     patch: OutputFilesPatch,
-  ): Map<number, OutputFileInfo[]> {
+  ): RoundIndexed<OutputFileInfo> {
     const rounds = this.getOrCreate(this.outputFiles, stream);
     for (const [round, files] of patch) {
-      if (files === null) rounds.delete(round);
-      else rounds.set(round, files);
+      if (files === null) delete rounds[round];
+      else rounds[round] = files;
     }
     return rounds;
   }
@@ -579,11 +585,11 @@ export class StreamSnapshotStore {
   }
 
   private writeOutputFiles(stream: StreamTabId): void {
-    this.write(
-      stream,
-      STREAM_DATA_KEYS.OUTPUT_FILES,
-      mapToRecord(this.outputFiles.get(stream) ?? new Map()),
-    );
+    // Shallow copy: the write is queued, so snapshot the record at call time
+    // rather than letting later round mutations leak into a pending write.
+    this.write(stream, STREAM_DATA_KEYS.OUTPUT_FILES, {
+      ...this.outputFiles.get(stream),
+    });
   }
 
   private applyUsageDeltaMemory(
@@ -653,13 +659,13 @@ export class StreamSnapshotStore {
     filesByRound: RoundIndexed<string>,
   ): void {
     this.mutate(stream, () => {
-      const rounds = this.applyRoundKeyedPatch<string[]>(
+      const rounds = this.applyRoundKeyedPatch<string>(
         this.missingOutputs,
         stream,
         filesByRound,
         (raw) => raw as string[],
       );
-      this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, mapToRecord(rounds));
+      this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, { ...rounds });
     });
   }
 
@@ -668,7 +674,7 @@ export class StreamSnapshotStore {
     filesByRound: RoundIndexed<CompileFailure>,
   ): void {
     this.mutate(stream, () => {
-      const rounds = this.applyRoundKeyedPatch<CompileFailure[]>(
+      const rounds = this.applyRoundKeyedPatch<CompileFailure>(
         this.compileFailures,
         stream,
         filesByRound,
@@ -679,11 +685,7 @@ export class StreamSnapshotStore {
           return normalized.length === 0 ? null : normalized;
         },
       );
-      this.write(
-        stream,
-        STREAM_DATA_KEYS.COMPILE_FAILURES,
-        mapToRecord(rounds),
-      );
+      this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, { ...rounds });
     });
   }
 
@@ -718,16 +720,20 @@ export class StreamSnapshotStore {
   // Read accessors over in-memory accumulated state (replace manager getters)
   // ==========================================================================
 
-  getOutputFiles(stream: StreamTabId): Map<number, OutputFileInfo[]> {
-    return new Map(this.outputFiles.get(stream) ?? []);
+  // Deep-enough copies (fresh record, fresh per-round array): a caller that
+  // mutates the returned value — including pushing into a returned round's
+  // array — can never corrupt these in-memory accumulators. A shallow
+  // `{ ...map }` spread would share the per-round arrays by reference.
+  getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo> {
+    return cloneRoundIndexed(this.outputFiles.get(stream));
   }
 
-  getMissingOutputs(stream: StreamTabId): Map<number, string[]> {
-    return new Map(this.missingOutputs.get(stream) ?? []);
+  getMissingOutputs(stream: StreamTabId): RoundIndexed<string> {
+    return cloneRoundIndexed(this.missingOutputs.get(stream));
   }
 
-  getCompileFailures(stream: StreamTabId): Map<number, CompileFailure[]> {
-    return new Map(this.compileFailures.get(stream) ?? []);
+  getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure> {
+    return cloneRoundIndexed(this.compileFailures.get(stream));
   }
 
   getRunUsage(stream: StreamTabId): Map<string, TokenUsageStats> {
@@ -743,7 +749,7 @@ export class StreamSnapshotStore {
     const rounds = this.outputFiles.get(stream);
     if (!rounds) return paths;
     const workspaceOnly = options.workspaceOnly ?? false;
-    for (const infos of rounds.values()) {
+    for (const infos of Object.values(rounds)) {
       for (const info of infos) {
         if (!workspaceOnly || info.location.kind === 'workspace') {
           paths.add(info.location.absolutePath);
@@ -1163,9 +1169,9 @@ export class StreamSnapshotStore {
   private snapshotFromMemory(streamId: StreamTabId): StreamSnapshot {
     return assembleSnapshot(streamId, {
       meta: this.meta.get(streamId),
-      outputFiles: this.outputFiles.get(streamId) ?? new Map(),
-      missingOutputs: this.missingOutputs.get(streamId) ?? new Map(),
-      compileFailures: this.compileFailures.get(streamId) ?? new Map(),
+      outputFiles: this.outputFiles.get(streamId) ?? {},
+      missingOutputs: this.missingOutputs.get(streamId) ?? {},
+      compileFailures: this.compileFailures.get(streamId) ?? {},
       usage: this.usage.get(streamId) ?? new Map(),
       usageUnparsed: this.usageUnparsed.get(streamId) ?? new Map(),
       workPlan: this.getWorkPlan(streamId),
@@ -1181,7 +1187,7 @@ export class StreamSnapshotStore {
    */
   async readOutputFiles(
     streamId: StreamTabId,
-  ): Promise<Map<number, OutputFileInfo[]>> {
+  ): Promise<RoundIndexed<OutputFileInfo>> {
     const seedChain = this.seedChains.get(streamId);
     if (seedChain) {
       await seedChain;
@@ -1411,13 +1417,13 @@ export class StreamSnapshotStore {
           if (this.usage.has(stream)) this.writeUsage(stream);
           break;
         case STREAM_DATA_KEYS.MISSING_OUTPUTS: {
-          const map = this.missingOutputs.get(stream);
-          if (map) this.write(stream, key, mapToRecord(map));
+          const rounds = this.missingOutputs.get(stream);
+          if (rounds) this.write(stream, key, { ...rounds });
           break;
         }
         case STREAM_DATA_KEYS.COMPILE_FAILURES: {
-          const map = this.compileFailures.get(stream);
-          if (map) this.write(stream, key, mapToRecord(map));
+          const rounds = this.compileFailures.get(stream);
+          if (rounds) this.write(stream, key, { ...rounds });
           break;
         }
       }

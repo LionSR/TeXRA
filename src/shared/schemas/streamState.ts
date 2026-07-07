@@ -2,11 +2,8 @@ import { z } from 'zod';
 
 import { GoalStatusSchema } from './goal';
 import { AgentCategory, AgentCategorySchema } from './agent';
-import {
-  CompileFailureSchema,
-  OutputFileInfoSchema,
-  roundIndexedRecord,
-} from './output';
+import { CompileFailureSchema, OutputFileInfoSchema } from './output';
+import { roundIndexedRecord } from './roundIndexed';
 import {
   STREAM_STATUS,
   StreamLifecycleStatusSchema,
@@ -188,9 +185,9 @@ export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   // the original and resumed runs; sessionUsage is derived as their sum.
   runUsage: RunUsageMapSchema.prefault({}),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
-  files: roundIndexedRecord(OutputFileInfoSchema),
-  missingOutputs: roundIndexedRecord(z.string()),
-  compileFailures: roundIndexedRecord(CompileFailureSchema),
+  files: roundIndexedRecord(OutputFileInfoSchema).prefault({}),
+  missingOutputs: roundIndexedRecord(z.string()).prefault({}),
+  compileFailures: roundIndexedRecord(CompileFailureSchema).prefault({}),
 });
 
 export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;

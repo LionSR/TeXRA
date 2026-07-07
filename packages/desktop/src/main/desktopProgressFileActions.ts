@@ -14,7 +14,11 @@ import type {
   DiffRunOutcome,
   DiffRunResult,
 } from '@latex/latexdiff/types';
-import type { FileLocation, OutputFileInfo } from '@shared/schemas';
+import type {
+  FileLocation,
+  OutputFileInfo,
+  RoundIndexed,
+} from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
   AbsoluteFS,
@@ -51,7 +55,7 @@ export interface DesktopLatexdiffWorkspaceScan {
 }
 
 export interface DesktopLatexdiffRunContext {
-  outputsByRound: Map<number, OutputFileInfo[]>;
+  outputsByRound: RoundIndexed<OutputFileInfo>;
   executionId?: string;
   workspaceScan?: DesktopLatexdiffWorkspaceScan;
 }
@@ -193,8 +197,9 @@ export class DesktopProgressFileActions {
     runContext: DesktopLatexdiffRunContext,
   ): Promise<DiffRunOutcome | undefined> {
     const scan = runContext.workspaceScan;
+    const hasOutputs = Object.keys(runContext.outputsByRound).length > 0;
     // Nothing to diff without either pre-resolved rounds or a scan identity.
-    if (runContext.outputsByRound.size === 0 && !scan) return undefined;
+    if (!hasOutputs && !scan) return undefined;
 
     // Delegate the resolve + dispatch policy (caller metadata → run-id scan →
     // auto-discovery → workspace scan) to the single host-neutral core shared
@@ -208,8 +213,7 @@ export class DesktopProgressFileActions {
         inputFile: scan?.inputFile ?? '',
         outputFiles: scan?.outputFiles,
         runId: runContext.executionId ?? null,
-        outputsByRound:
-          runContext.outputsByRound.size > 0 ? runContext.outputsByRound : null,
+        outputsByRound: hasOutputs ? runContext.outputsByRound : null,
         mathMarkup: DEFAULT_MATH_MARKUP,
         generateBetweenRoundDiffs: true,
         progress,
