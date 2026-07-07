@@ -9,6 +9,7 @@
  * APIs still use GoTrue session tokens.
  */
 
+import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
 import {
@@ -68,29 +69,25 @@ export type RelayTokenStatus =
 /** Settled (non-`unknown`) statuses are cached; `unknown` is always re-probed. */
 type SettledRelayTokenStatus = Exclude<RelayTokenStatus, { state: 'unknown' }>;
 
-let cachedStatus: {
-  token: string;
-  result: SettledRelayTokenStatus;
-  timestamp: number;
-} | null = null;
+// A single slot: setting a new token evicts whatever was cached for the
+// previous one, matching the old "only the last-checked token stays fresh"
+// behavior while letting `lru-cache` own TTL expiry instead of a hand-rolled
+// timestamp comparison.
+const statusCache = new LRUCache<string, SettledRelayTokenStatus>({
+  max: 1,
+  ttl: SERVER_SIDE_CACHE_TTL_MS,
+});
 
 /** Reset the status cache between unit tests. */
 export function resetRelayTokenTierCacheForTests(): void {
-  cachedStatus = null;
+  statusCache.clear();
 }
 
 /** Fresh (within TTL) cached status for `token`, or undefined. */
 function getFreshCachedStatus(
   token: string,
 ): SettledRelayTokenStatus | undefined {
-  if (
-    cachedStatus &&
-    cachedStatus.token === token &&
-    Date.now() - cachedStatus.timestamp < SERVER_SIDE_CACHE_TTL_MS
-  ) {
-    return cachedStatus.result;
-  }
-  return undefined;
+  return statusCache.get(token);
 }
 
 /**
@@ -112,7 +109,7 @@ export function getCachedRelayTokenState(
  * instead of waiting out the cache TTL.
  */
 export function markRelayTokenRejected(token: string): void {
-  cachedStatus = { token, result: { state: 'invalid' }, timestamp: Date.now() };
+  statusCache.set(token, { state: 'invalid' });
 }
 
 /** Check the validity and tier of a CI relay token (settled results cached). */
@@ -124,7 +121,7 @@ export async function fetchRelayTokenStatus(
   if (cached) return cached;
   const result = await probeRelayTokenStatus(token, fetchImpl);
   if (result.state !== 'unknown') {
-    cachedStatus = { token, result, timestamp: Date.now() };
+    statusCache.set(token, result);
   }
   return result;
 }
