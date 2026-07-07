@@ -58,6 +58,10 @@ type TestableBridge = Bridge & {
         streamId: StreamTabId;
         operation: string;
       }) => Promise<unknown>;
+      requestBashApproval?: (request: {
+        command: string;
+        streamId?: StreamTabId;
+      }) => Promise<unknown>;
     };
   };
   handleProgressEvent(event: string, payload: unknown): void;
@@ -1995,6 +1999,62 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('cancels a pending plan approval instead of hanging when its stream is deleted', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'plan-delete-stream',
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      const result = bridge.runtimeHost.interactions?.requestPlanApproval?.({
+        approvalId: 'plan-cancel-on-delete',
+        streamId: 'plan-delete-stream' as StreamTabId,
+        plan: { objective: 'Check cancellation on stream delete.' },
+        goalEnabled: false,
+      });
+
+      await vi.waitFor(() => {
+        expect(
+          progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toContainEqual(
+          expect.objectContaining({
+            action: 'show',
+            permission: expect.objectContaining({
+              kind: PERMISSION_KIND.PLAN_APPROVAL,
+              data: expect.objectContaining({
+                approvalId: 'plan-cancel-on-delete',
+              }),
+            }),
+          }),
+        );
+      });
+
+      await bridge.deleteStream('plan-delete-stream' as StreamTabId);
+
+      // Before the fix, this promise never settled: releaseStreamResources
+      // only cleared the legacy approval registries, not
+      // DesktopHostInteractions' own pendingRequests map.
+      await expect(result).resolves.toEqual({
+        action: 'reject',
+        feedback: 'Stream deleted.',
+      });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+      ).toContainEqual(
+        expect.objectContaining({
+          action: 'resolve',
+          kind: PERMISSION_KIND.PLAN_APPROVAL,
+          id: 'plan-cancel-on-delete',
+        }),
+      );
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('does not resume a stream deleted in this desktop session', async () => {
     const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
     const retrieveSessionResumeData = vi.fn(async () => ({
@@ -2176,6 +2236,48 @@ describe('DesktopProgressBridge', () => {
         streamStates: {},
       });
       expect(cleanupAllRequests).toHaveBeenCalledOnce();
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('cancels a pending bash approval instead of hanging when all streams are deleted', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'bash-delete-all-stream',
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      const result = bridge.runtimeHost.interactions?.requestBashApproval?.({
+        command: 'echo hi',
+        streamId: 'bash-delete-all-stream' as StreamTabId,
+      });
+
+      await vi.waitFor(() => {
+        expect(
+          progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toContainEqual(
+          expect.objectContaining({
+            action: 'show',
+            permission: expect.objectContaining({
+              kind: PERMISSION_KIND.BASH,
+            }),
+          }),
+        );
+      });
+
+      await bridge.deleteAllStreams();
+
+      // Before the fix, this promise never settled: releaseStreamResources
+      // only cleared the legacy approval registries, not
+      // DesktopHostInteractions' own pendingRequests map.
+      await expect(result).resolves.toEqual({
+        accepted: false,
+        userMessage: 'All streams deleted.',
+      });
     } finally {
       bridge.dispose();
     }
