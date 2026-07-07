@@ -22,7 +22,7 @@ function makeBridge() {
     // neither dereferences `state`, and with no snapshot store constructor-time
     // hydration is a no-op, so a cast placeholder is sufficient here.
     state: {} as ProgressViewState,
-    streamStatus: { get: () => undefined, transition: () => undefined },
+    streamStatus: { get: () => undefined, transition: () => false },
     streamSnapshotStore: undefined,
     sendMessage: () => undefined,
     logger: { warn: () => undefined } as unknown as AgentTrace,
