@@ -76,6 +76,7 @@ import {
   CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT,
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
+  estimateTokensFromText,
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
 } from '../contextManagementConstants';
@@ -1091,38 +1092,63 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       },
     });
 
-    const { compactedMessages, didCompact, tokensAfter } =
-      await this.runClientCompaction(
-        messages,
-        tokensBefore,
-        async (conversationMessages) => {
-          const stream = await client.responses.stream(
-            {
-              model: this.config.fullName,
-              instructions: COMPACTION_SYSTEM_PROMPT,
-              input: conversationMessages,
-              max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-              store: this.storesResponsesServerSide,
-              ...(this.capabilities.supportsReasoning && {
-                reasoning: { effort: 'low' },
-              }),
-            },
-            { signal },
-          );
-          const summaryResponse = await stream.finalResponse();
-          return {
-            summaryText: this.extractResponse(summaryResponse, '').text.trim(),
-            outputTokens: summaryResponse.usage?.output_tokens ?? 0,
-          };
-        },
-        (summary): ResponseInputItem => ({
-          type: 'message',
-          role: 'user',
-          content: [
-            createInputText(`[Previous conversation summary]\n\n${summary}`),
-          ],
-        }),
-      );
+    const { compactedMessages, didCompact } = await this.runClientCompaction(
+      messages,
+      tokensBefore,
+      async (conversationMessages) => {
+        const stream = await client.responses.stream(
+          {
+            model: this.config.fullName,
+            instructions: COMPACTION_SYSTEM_PROMPT,
+            input: conversationMessages,
+            max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+            store: this.storesResponsesServerSide,
+            ...(this.capabilities.supportsReasoning && {
+              reasoning: { effort: 'low' },
+            }),
+          },
+          { signal },
+        );
+
+        // The ChatGPT-subscription (Codex) backend strips `max_output_tokens`
+        // at the wire (it answers `400 Unsupported parameter: max_output_tokens`
+        // — see rewriteCodexRequestBody), so the summary cap cannot be enforced
+        // server-side on this path, and this client-side path only ever runs for
+        // that stateless profile. Enforce the cap locally instead: stop
+        // consuming and abort the request once the streamed summary reaches the
+        // cap, bounding both the resent summary size and the summarization
+        // turn's latency. Under a backend that does honor `max_output_tokens`
+        // the stream ends first, so this ceiling is never hit.
+        let streamedText = '';
+        for await (const event of stream) {
+          if (event.type !== 'response.output_text.delta') continue;
+          streamedText += event.delta;
+          if (
+            estimateTokensFromText(streamedText) >=
+            CLIENT_COMPACTION_SUMMARY_MAX_TOKENS
+          ) {
+            stream.abort();
+            return {
+              summaryText: streamedText.trim(),
+              outputTokens: estimateTokensFromText(streamedText),
+            };
+          }
+        }
+
+        const summaryResponse = await stream.finalResponse();
+        return {
+          summaryText: this.extractResponse(summaryResponse, '').text.trim(),
+          outputTokens: summaryResponse.usage?.output_tokens ?? 0,
+        };
+      },
+      (summary): ResponseInputItem => ({
+        type: 'message',
+        role: 'user',
+        content: [
+          createInputText(`[Previous conversation summary]\n\n${summary}`),
+        ],
+      }),
+    );
 
     if (!didCompact) {
       this.compactionResult = undefined;
@@ -1136,9 +1162,46 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.previousResponseId = null;
     this.compactionResult = {
       compactedMessages,
-      tokensAfter: tokensAfter ?? 0,
+      // Bookkeeping must reflect the INPUT cost of resending the compacted
+      // payload next turn (system items + the summary message with its
+      // "[Previous conversation summary]" prefix), not the OUTPUT cost of
+      // generating the summary — mirroring the stateful path, which counts the
+      // compacted items' input tokens. `getBestInputTokenEstimate()` prefers
+      // this value, and on the Codex profile it is load-bearing: token counting
+      // is unavailable and `failWhenFallbackOutputBudgetIsReduced` fails the
+      // request locally when the estimate + budget overflow the context window,
+      // so an output-token underestimate could let through a request the backend
+      // then rejects.
+      tokensAfter: this.estimateResentInputTokens(compactedMessages),
     };
     return compactedMessages;
+  }
+
+  /**
+   * Estimate the input-token cost of resending the compacted payload. The
+   * ChatGPT-subscription (Codex) profile — the only backend that reaches
+   * {@link compactConversationClientSide} — exposes no token-counting endpoint
+   * (`supportsTokenCounting: false`), so {@link estimateTokenCount} throws and
+   * the stateful path's exact API count is unavailable; fall back to a
+   * text-length heuristic over exactly what gets resent.
+   */
+  private estimateResentInputTokens(messages: ResponseInputItem[]): number {
+    const text = messages
+      .map((message) => {
+        // Flatten message content (string or typed parts) to plain text;
+        // non-text items contribute nothing to the estimate.
+        const content = (message as { content?: unknown }).content;
+        if (typeof content === 'string') return content;
+        if (!Array.isArray(content)) return '';
+        return content
+          .map((part) => {
+            const partText = (part as { text?: unknown } | null)?.text;
+            return typeof partText === 'string' ? partText : '';
+          })
+          .join('');
+      })
+      .join('\n');
+    return Math.max(1, estimateTokensFromText(text));
   }
 
   /**

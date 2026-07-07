@@ -973,11 +973,10 @@ export abstract class ModelHandler<
    * and return the summary text plus output-token count) and
    * {@link buildSummaryMessage} (wrap the summary into a provider message).
    *
-   * The result's `tokensAfter` is the same estimate used for the success log
-   * (`Math.max(1, outputTokens)`), surfaced for callers — like
-   * `ModelHandlerOpenAIResponse`'s client-side path — that keep their own
-   * post-compaction token bookkeeping instead of re-deriving it from
-   * `didCompact` alone. It is only present when `didCompact` is true.
+   * Callers that keep their own post-compaction token bookkeeping (like
+   * `ModelHandlerOpenAIResponse`'s client-side path) derive it from the returned
+   * `compactedMessages` — the INPUT cost of the resent payload — rather than the
+   * summarization call's output-token count, which measures a different thing.
    */
   protected async runClientCompaction(
     messages: M[],
@@ -989,7 +988,6 @@ export abstract class ModelHandler<
   ): Promise<{
     compactedMessages: M[];
     didCompact: boolean;
-    tokensAfter?: number;
   }> {
     const contextWindow = this.getEffectiveContextWindow();
 
@@ -1027,11 +1025,12 @@ export abstract class ModelHandler<
         buildSummaryMessage(summaryText),
       ];
 
-      const estimatedTokensAfter = Math.max(1, outputTokens);
       logCompactionEvent({
         logger: this.logger,
         tokensBefore,
-        tokensAfter: estimatedTokensAfter,
+        // Rough post-compaction size for the log only; callers that need exact
+        // bookkeeping recompute it from the resent payload's input cost.
+        tokensAfter: Math.max(1, outputTokens),
         contextWindow,
         details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
         tokensAfterIsEstimate: true,
@@ -1040,7 +1039,6 @@ export abstract class ModelHandler<
       return {
         compactedMessages,
         didCompact: true,
-        tokensAfter: estimatedTokensAfter,
       };
     } catch (err) {
       this.logger.warn(

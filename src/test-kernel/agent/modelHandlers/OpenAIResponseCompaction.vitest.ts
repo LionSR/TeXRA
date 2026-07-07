@@ -8,7 +8,11 @@ import {
 
 // Local imports - agent model handlers
 import type { AgentTrace } from '@agent/trace';
-import { COMPACTION_SYSTEM_PROMPT } from '@agent/modelHandlers/contextManagementConstants';
+import {
+  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  COMPACTION_SYSTEM_PROMPT,
+  estimateTokensFromText,
+} from '@agent/modelHandlers/contextManagementConstants';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import type { ProviderCapabilityProfile } from '@model/providerCapabilities';
 
@@ -77,10 +81,17 @@ function createUnsupportedCompactionHandler(): ModelHandlerOpenAIResponse {
  * the client-side summarize-and-resend fallback instead (#7213).
  */
 class ClientSideCompactionHandler extends ModelHandlerOpenAIResponse {
+  constructor(
+    config: ModelConfig,
+    private readonly profileContextWindow = 1000,
+  ) {
+    super(config);
+  }
+
   protected override getActiveProviderCapabilities(): ProviderCapabilityProfile {
     return {
       authMode: 'chatgpt-subscription',
-      contextWindow: 1000,
+      contextWindow: this.profileContextWindow,
       inputPrice: 0,
       outputPrice: 0,
       openAIResponses: {
@@ -99,8 +110,40 @@ class ClientSideCompactionHandler extends ModelHandlerOpenAIResponse {
   }
 }
 
-function createClientSideCompactionHandler(): ModelHandlerOpenAIResponse {
-  return configureHandler(new ClientSideCompactionHandler(createConfig()));
+function createClientSideCompactionHandler(
+  contextWindow = 1000,
+): ModelHandlerOpenAIResponse {
+  return configureHandler(
+    new ClientSideCompactionHandler(
+      createConfig({ contextWindow }),
+      contextWindow,
+    ),
+  );
+}
+
+/**
+ * An async-iterable stand-in for the SDK's `ResponseStream`: yields
+ * `response.output_text.delta` events, then resolves `finalResponse()`.
+ * Exposes an `abort` spy so tests can assert the handler stops consuming once
+ * the client-side summary cap is reached.
+ */
+function createStreamMock(options: {
+  deltas?: string[];
+  finalResponse?: unknown;
+}) {
+  const { deltas = [], finalResponse } = options;
+  const abort = vi.fn();
+  const finalResponseFn = vi.fn(async () => finalResponse);
+  return {
+    abort,
+    finalResponseFn,
+    async *[Symbol.asyncIterator]() {
+      for (const delta of deltas) {
+        yield { type: 'response.output_text.delta', delta };
+      }
+    },
+    finalResponse: finalResponseFn,
+  };
 }
 
 function createResponse(id: string, inputTokens: number) {
@@ -234,15 +277,17 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
         },
         stream: async (params: any) => {
           streamRequests.push(params);
-          return {
-            finalResponse: async () => ({
+          // Summary finishes under the client-side cap, so the handler drains
+          // the (empty) delta stream and reads the final response.
+          return createStreamMock({
+            finalResponse: {
               id: 'compaction-summary-response',
               status: 'completed',
               output: [],
               output_text: 'concise summary of the prior turns',
               usage: { output_tokens: 42 },
-            }),
-          };
+            },
+          });
         },
         create: async (params: any) => {
           requests.push(params);
@@ -290,5 +335,94 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(requests[1].previous_response_id).toBeUndefined();
     expect(requests[1].input).toEqual(expectedCompactedMessages);
     expect(result.updatedMessages).toEqual(expectedCompactedMessages);
+
+    // Issue 2: post-compaction bookkeeping must reflect the INPUT cost of
+    // resending the compacted payload, not the summarization call's output
+    // tokens (42). The Codex profile disables token counting, so this falls
+    // back to a text-length estimate over exactly what gets resent.
+    const resentText =
+      '[Previous conversation summary]\n\nconcise summary of the prior turns';
+    const compactionResult = (
+      handler as unknown as {
+        compactionResult?: { tokensAfter: number };
+      }
+    ).compactionResult;
+    expect(compactionResult?.tokensAfter).toBe(
+      estimateTokensFromText(resentText),
+    );
+    expect(compactionResult?.tokensAfter).not.toBe(42);
+  });
+
+  it('bounds the summary on Codex by aborting the stream once the client-side cap is reached (#7213)', async () => {
+    // The Codex backend strips `max_output_tokens` at the wire (asserted in
+    // CodexRequestRewrite.vitest.ts), so the summary cap can only be honored
+    // client-side. Window is wide enough to hold the (bounded, ~2000-token)
+    // summary, and prior usage (9000) still crosses the 75% threshold (7500).
+    const handler = createClientSideCompactionHandler(10_000);
+    const requests: any[] = [];
+    // Enough 100-char chunks to blow well past the 2000-token summary cap
+    // (~8000 chars) if the handler failed to stop early.
+    const oversizedDeltas = Array.from({ length: 200 }, () => 'x'.repeat(100));
+    const fullSummaryChars = oversizedDeltas.join('').length;
+    let capturedStream: ReturnType<typeof createStreamMock> | undefined;
+    const client = {
+      responses: {
+        compact: async () => {
+          throw new Error('stateless backend must not call /responses/compact');
+        },
+        stream: async () => {
+          capturedStream = createStreamMock({
+            deltas: oversizedDeltas,
+            finalResponse: {
+              id: 'should-not-be-read',
+              status: 'completed',
+              output: [],
+              output_text: oversizedDeltas.join(''),
+              usage: { output_tokens: 99999 },
+            },
+          });
+          return capturedStream;
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return requests.length === 1
+            ? createResponse('resp-before-threshold', 9000)
+            : createResponse('resp-after-bounded-compaction', 150);
+        },
+      },
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(3),
+      temperature: 0,
+    });
+
+    // The handler aborted the stream instead of draining it to completion, and
+    // never fell back to finalResponse() on the capped path.
+    expect(capturedStream?.abort).toHaveBeenCalledTimes(1);
+    expect(capturedStream?.finalResponseFn).not.toHaveBeenCalled();
+
+    // The resent summary is bounded near the cap — not the full streamed output.
+    const resentInput = requests[1].input as Array<{
+      content: Array<{ text: string }>;
+    }>;
+    const summaryText = resentInput[0].content[0].text;
+    const summaryBody = summaryText.replace(
+      '[Previous conversation summary]\n\n',
+      '',
+    );
+    expect(summaryBody.length).toBeLessThan(fullSummaryChars);
+    expect(estimateTokensFromText(summaryBody)).toBeLessThanOrEqual(
+      CLIENT_COMPACTION_SUMMARY_MAX_TOKENS + 100,
+    );
+    expect(estimateTokensFromText(summaryBody)).toBeGreaterThanOrEqual(
+      CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+    );
   });
 });
