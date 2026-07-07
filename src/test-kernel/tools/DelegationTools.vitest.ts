@@ -1,17 +1,67 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, beforeEach, vi } from 'vitest';
 
 // Node.js built-in imports
 
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 
+const mocks = vi.hoisted(() => ({
+  tryUseRunContext: vi.fn(),
+  currentSession: vi.fn(),
+  sendFollowUp: vi.fn(),
+  wakeQueuedFollowUpStream: vi.fn(),
+  depthGateError: vi.fn(() => null),
+  getNativeSubagentStrategy: vi.fn(),
+}));
+
+vi.mock('@agent/runtime/RunContext', () => ({
+  tryUseRunContext: mocks.tryUseRunContext,
+}));
+
+vi.mock('@agent/runtime/SessionHandle', () => ({
+  currentSession: mocks.currentSession,
+}));
+
+vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
+  sendFollowUp: mocks.sendFollowUp,
+  wakeQueuedFollowUpStream: mocks.wakeQueuedFollowUpStream,
+}));
+
+vi.mock('@tools/delegation/subagentExecution', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@tools/delegation/subagentExecution')
+    >();
+  return { ...actual, depthGateError: mocks.depthGateError };
+});
+
+vi.mock('@tools/delegation/nativeSubagentStrategy', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@tools/delegation/nativeSubagentStrategy')
+    >();
+  return {
+    ...actual,
+    getNativeSubagentStrategy: mocks.getNativeSubagentStrategy,
+  };
+});
+
+// Local imports - agent
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import type { FollowUpWakeResult } from '@agent/followUp/ToolUseFollowUp';
+
+// Local imports - shared
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
+
 // Local imports - tools
 import {
+  DelegateAgentTool,
   rejectOversizedBibAttachments,
   type WorkflowAgentInput,
 } from '@tools/DelegationTools';
+import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
 import { WorkspaceFS } from '@utils/files';
 
 const BASE_INPUT: WorkflowAgentInput = {
@@ -107,5 +157,114 @@ describe('DelegationTools', () => {
 
     assert.strictEqual(result, null);
     assert.strictEqual(statCalled, false);
+  });
+});
+
+// Races the tool call's promise against a short timer so a regression that
+// re-introduces blocking (awaiting the resumed child's full turn) fails fast
+// instead of hanging until the child eventually resolves.
+async function raceAgainstBlockingResume<T>(
+  promise: Promise<T>,
+): Promise<{ settled: true; value: T } | { settled: false }> {
+  const TIMEOUT = Symbol('timeout');
+  const outcome = await Promise.race([
+    promise.then((value) => ({ settled: true as const, value })),
+    new Promise<typeof TIMEOUT>((resolve) =>
+      setTimeout(() => resolve(TIMEOUT), 50),
+    ),
+  ]);
+  return outcome === TIMEOUT ? { settled: false } : outcome;
+}
+
+describe('DelegateAgentTool resume (issue #7289)', () => {
+  const executionId = 'exec-resume-issue-7289';
+  const parentStreamId = 'parent-stream' as StreamTabId;
+  const childStreamId = 'child-stream' as StreamTabId;
+
+  function makeHandle(): AgentExecutionHandle {
+    return new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'review',
+      AgentCategory.ToolUse,
+      { emit: vi.fn() } as never,
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.depthGateError.mockReturnValue(null);
+    mocks.tryUseRunContext.mockReturnValue({
+      delegationDepth: 0,
+      streamId: parentStreamId,
+    } as never);
+    mocks.currentSession.mockReturnValue({
+      executions: { getHandle: () => makeHandle() },
+    } as never);
+    mocks.sendFollowUp.mockResolvedValue({
+      status: 'queued',
+      reason: 'waiting',
+    });
+    subagentDeliveryRegistry.start(executionId);
+  });
+
+  afterEach(() => {
+    subagentDeliveryRegistry.finish(executionId);
+  });
+
+  it('returns once the follow-up is queued, without waiting for a resumed native subagent to reach its next boundary', async () => {
+    let resolveWake: ((value: FollowUpWakeResult) => void) | undefined;
+    const wakeQueuedFollowUp = vi.fn(
+      () =>
+        new Promise<FollowUpWakeResult>((resolve) => {
+          resolveWake = resolve;
+        }),
+    );
+    mocks.getNativeSubagentStrategy.mockReturnValue({ wakeQueuedFollowUp });
+
+    const tool = new DelegateAgentTool();
+    const outcome = await raceAgainstBlockingResume(
+      tool.call({ execution_id: executionId, instruction: 'Keep going.' }),
+    );
+
+    assert.strictEqual(
+      outcome.settled,
+      true,
+      'delegate_agent resume blocked the parent tool call for the full child turn',
+    );
+    if (outcome.settled) {
+      assert.strictEqual(outcome.value.status, 'executed');
+    }
+    assert.strictEqual(wakeQueuedFollowUp.mock.calls.length, 1);
+
+    // Settle the still-pending wake so it doesn't leak into later tests.
+    resolveWake?.({ kind: 'resumed' });
+  });
+
+  it('returns once the follow-up is queued, without waiting for the host resume port when no native strategy is registered', async () => {
+    mocks.getNativeSubagentStrategy.mockReturnValue(undefined);
+    let resolveWake: ((value: FollowUpWakeResult) => void) | undefined;
+    mocks.wakeQueuedFollowUpStream.mockReturnValue(
+      new Promise<FollowUpWakeResult>((resolve) => {
+        resolveWake = resolve;
+      }),
+    );
+
+    const tool = new DelegateAgentTool();
+    const outcome = await raceAgainstBlockingResume(
+      tool.call({ execution_id: executionId, instruction: 'Keep going.' }),
+    );
+
+    assert.strictEqual(
+      outcome.settled,
+      true,
+      'delegate_agent resume blocked the parent tool call on the host resume port',
+    );
+    if (outcome.settled) {
+      assert.strictEqual(outcome.value.status, 'executed');
+    }
+
+    resolveWake?.({ kind: 'resumed' });
   });
 });
