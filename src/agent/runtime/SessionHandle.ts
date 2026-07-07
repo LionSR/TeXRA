@@ -33,7 +33,7 @@ import {
   StreamLogStore,
   unregisterFlushers,
 } from '@transcript';
-import type { AgentTrace, ResultEvent } from '@agent/trace';
+import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
@@ -132,7 +132,12 @@ export class SessionHandle {
     const executions =
       init.executions ??
       new ExecutionRegistry({ interrupts, streamStatus: status, events });
-    executions.attachSessionEvents(events);
+    // Re-attaching on every `SessionHandle` construction — including for the
+    // shared/default-session `ExecutionRegistry` singleton, which predates any
+    // session — rebinds `publishResult` to *this* session's listeners.
+    executions.attachSessionEvents(events, (event, streamId) =>
+      this.publishRunEvent(streamId, event),
+    );
     const coordinators =
       init.coordinators ?? new RunCoordinatorBridge(executions);
 
@@ -189,21 +194,35 @@ export class SessionHandle {
    * run bundles into its trace teardown.
    */
   attachRunTrace(trace: AgentTrace, streamId: StreamTabId): () => void {
-    return trace.subscribe((event) => {
-      this.events.emit({ scope: 'run', streamId, event });
-      if (event.type !== 'result') return;
-      // Guard each listener so one throwing consumer can't starve the rest:
-      // the whole fan-out is a single trace subscriber, so without this a throw
-      // would skip the remaining listeners (TraceEmitter only guards at the
-      // subscriber boundary, not between listeners).
-      for (const listener of this.resultListeners) {
-        try {
-          listener(event);
-        } catch (err) {
-          logger.warn('onResult listener threw', { data: err });
-        }
+    return trace.subscribe((event) => this.publishRunEvent(streamId, event));
+  }
+
+  /**
+   * Forward one run-scoped event to this session's event bus and, for
+   * terminal `result` events, to `onResult` listeners. Shared by
+   * `attachRunTrace` (the live per-run trace subscription above) and by
+   * `ExecutionRegistry`'s injected `publishResult` callback (see
+   * `attachSessionEvents`), which needs the identical forwarding for a
+   * terminal event synthesized *after* the originating run's own trace has
+   * already been disposed — killing a native subagent suspended at WAITING
+   * (`terminateWaitingHandle`) settles `handle.result` and the run's own
+   * (already-torn-down) trace, but has no other way to reach this session's
+   * `onResult` subscribers.
+   */
+  publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
+    this.events.emit({ scope: 'run', streamId, event });
+    if (event.type !== 'result') return;
+    // Guard each listener so one throwing consumer can't starve the rest:
+    // the whole fan-out is a single trace subscriber, so without this a throw
+    // would skip the remaining listeners (TraceEmitter only guards at the
+    // subscriber boundary, not between listeners).
+    for (const listener of this.resultListeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        logger.warn('onResult listener threw', { data: err });
       }
-    });
+    }
   }
 
   /**
