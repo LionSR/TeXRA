@@ -384,13 +384,10 @@ function normalizeAgentOptions(
     throw new Error('agent() options must be a plain object.');
   }
   // Arguments crossed the bridge as JSON text (see sandbox.ts marshalArgs),
-  // so `raw` is already plain, accessor-free host data; the round-trip here
-  // is a cheap defensive copy that also keeps this function safe if it is
-  // ever called with a value that did not come through the bridge.
-  const source = JSON.parse(JSON.stringify(raw ?? {})) as Record<
-    string,
-    unknown
-  >;
+  // so `raw` is already plain, accessor-free host data; the clone here is a
+  // cheap defensive copy that also keeps this function safe if it is ever
+  // called with a value that did not come through the bridge.
+  const source = structuredClone(raw ?? {}) as Record<string, unknown>;
   const options: WorkflowAgentCallOptions = {};
   for (const field of ['label', 'phase', 'agentName'] as const) {
     const value = source[field];
