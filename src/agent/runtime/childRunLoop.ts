@@ -569,7 +569,11 @@ export function startChildRunLoop<TTurn>(
 
         if (turnFailed) {
           sawTurnFailure = true;
-          lastTurnErr = err;
+          lastTurnErr =
+            err ??
+            new Error(
+              `${strategy.stageLabel} reported a failed turn without throwing.`,
+            );
           childStream?.failTurn();
           break;
         }
