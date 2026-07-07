@@ -83,13 +83,6 @@ export function resetRelayTokenTierCacheForTests(): void {
   statusCache.clear();
 }
 
-/** Fresh (within TTL) cached status for `token`, or undefined. */
-function getFreshCachedStatus(
-  token: string,
-): SettledRelayTokenStatus | undefined {
-  return statusCache.get(token);
-}
-
 /**
  * Last settled status of a token, without any network I/O. Lets synchronous
  * credential checks (SupabaseClient.isAuthenticated / getRelayAccessToken)
@@ -99,7 +92,7 @@ function getFreshCachedStatus(
 export function getCachedRelayTokenState(
   token: string,
 ): SettledRelayTokenStatus['state'] | undefined {
-  return getFreshCachedStatus(token)?.state;
+  return statusCache.get(token)?.state;
 }
 
 /**
@@ -117,7 +110,7 @@ export async function fetchRelayTokenStatus(
   token: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<RelayTokenStatus> {
-  const cached = getFreshCachedStatus(token);
+  const cached = statusCache.get(token);
   if (cached) return cached;
   const result = await probeRelayTokenStatus(token, fetchImpl);
   if (result.state !== 'unknown') {

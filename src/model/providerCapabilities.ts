@@ -31,10 +31,6 @@ export interface ProviderCapabilityKey {
   readonly useOpenRouter: boolean;
 }
 
-type ProviderCapabilityResolver = (
-  key: ProviderCapabilityKey,
-) => ProviderCapabilityProfile | null;
-
 /** Context window the ChatGPT-subscription (Codex) backend enforces. */
 export const CODEX_SUBSCRIPTION_CONTEXT_WINDOW = 272_000;
 
@@ -203,10 +199,11 @@ export function isCodexSubscriptionEligible(model: ModelConfig): boolean {
   );
 }
 
-const resolveChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({
+/** Resolve the active ChatGPT-subscription provider profile. */
+export function resolveProviderCapabilities({
   model,
   useOpenRouter,
-}) => {
+}: ProviderCapabilityKey): ProviderCapabilityProfile | null {
   if (useOpenRouter) return null;
   if (model.provider !== ModelProvider.OPENAI) return null;
   if (model.openRouterOnly) return null;
@@ -240,11 +237,4 @@ const resolveChatGptSubscriptionCapabilities: ProviderCapabilityResolver = ({
       failWhenFallbackOutputBudgetIsReduced: true,
     },
   };
-};
-
-/** Resolve the active ChatGPT-subscription provider profile. */
-export function resolveProviderCapabilities(
-  key: ProviderCapabilityKey,
-): ProviderCapabilityProfile | null {
-  return resolveChatGptSubscriptionCapabilities(key);
 }
