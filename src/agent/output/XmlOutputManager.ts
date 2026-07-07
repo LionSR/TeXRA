@@ -13,7 +13,10 @@ import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
-import { OUTPUT_DOCUMENTS_TAG } from '@shared/constants/outputProtocol';
+import {
+  OUTPUT_DOCUMENT_TAG,
+  OUTPUT_DOCUMENTS_TAG,
+} from '@shared/constants/outputProtocol';
 import {
   AbsoluteFS,
   createExternalLocation,
@@ -247,7 +250,7 @@ export class XmlOutputManager {
     // similarity tiers below read the raw response instead.
     const cdataWrapped = addCdataToTagsMultiple(rawOutputContent, [
       thinkingTag,
-      'document',
+      OUTPUT_DOCUMENT_TAG,
     ]);
 
     let documents: Array<{ content: string; name: string }> | null = null;
