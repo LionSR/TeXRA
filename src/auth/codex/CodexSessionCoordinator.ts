@@ -7,6 +7,7 @@
  * network or a real keychain. Stays `vscode`-free; the loopback server,
  * browser-open, and device-code UI live in the host layer and call into here.
  */
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   CODEX_AUTHORIZE_URL,
   CODEX_CLIENT_ID,
@@ -95,14 +96,12 @@ export class CodexSessionCoordinator {
   async loadSession(): Promise<CodexSession | null> {
     const raw = await this.storage.get();
     if (!raw) return null;
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(raw);
-    } catch {
+    const parsedJson = safeParseJson(raw);
+    if (parsedJson.isErr()) {
       this.log?.warn?.('Codex session storage was not valid JSON; ignoring.');
       return null;
     }
-    const result = CodexSessionSchema.safeParse(parsedJson);
+    const result = CodexSessionSchema.safeParse(parsedJson.value);
     if (!result.success) {
       this.log?.warn?.('Codex session bundle failed validation; ignoring.');
       return null;
