@@ -315,7 +315,7 @@ function isWebFetchBlock(
  * giving the archived conversation / chat export meaningful content instead
  * of none.
  */
-export const MAX_WEB_FETCH_CONTENT_CHARS = 20_000;
+const MAX_WEB_FETCH_CONTENT_CHARS = 20_000;
 
 /** Truncate fetched page text to {@link MAX_WEB_FETCH_CONTENT_CHARS}. */
 export function capWebFetchContent(
