@@ -277,16 +277,7 @@ export function clearApprovalsWhere(
   let cleared = 0;
   for (const item of [...pendingItems]) {
     if (!predicate(item.payload)) continue;
-    if (!pendingItems.delete(item)) continue;
-    cleared += 1;
-    const advance = item.advance;
-    item.advance = undefined;
-    item.resolve(decision);
-    if (currentItem === item) {
-      currentItem = undefined;
-      CURRENT.set(undefined);
-      advance?.();
-    }
+    if (settleItem(item, decision)) cleared += 1;
   }
   if (cleared > 0) syncApprovalStatus();
   return cleared;
