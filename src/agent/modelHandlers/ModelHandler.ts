@@ -618,6 +618,21 @@ export abstract class ModelHandler<
    * text into `messages[0]` in `initializeMessages` (OpenAI, OpenRouter),
    * where resupplying it per-call would duplicate it alongside the persisted
    * message.
+   *
+   * Not foldable into a `config.provider` comparison at the call site
+   * (#7101 triage): `ModelHandlerOpenRouterNative` extends this base class
+   * directly rather than `ModelHandlerAnthropic`/`*GoogleGenAI`, but
+   * `ModelFactory` constructs it with `{ ...config }` — an Anthropic- or
+   * Google-provider model routed through OpenRouter keeps
+   * `config.provider === ANTHROPIC/GOOGLE` while embedding the system
+   * prompt into `messages` like OpenAI, not resupplying it per-call. Only
+   * the polymorphic override (which OpenRouterNative doesn't inherit)
+   * distinguishes "this concrete handler resupplies per-call" from
+   * "the underlying model family happens to be Anthropic/Google" — a
+   * `config` field comparison can't reproduce that distinction, since
+   * whether a request routes through OpenRouterNative is decided by
+   * `ModelFactory` from the ambient `useOpenRouter` setting, not persisted
+   * on `config` itself.
    */
   get requiresPerCallSystemPrompt(): boolean {
     return false;
