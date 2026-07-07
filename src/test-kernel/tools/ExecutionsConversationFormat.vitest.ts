@@ -29,6 +29,26 @@ describe('formatConversation', () => {
     expect(output).toContain('[tool_result: done]');
   });
 
+  it('formats media blocks as readable attachment markers', () => {
+    const output = formatConversation([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_image', image_url: 'data:image/png;base64,abc' },
+          {
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf' },
+          },
+          { inlineData: { mimeType: 'image/png', data: 'abc' } },
+        ],
+      },
+    ]);
+
+    expect(output).toContain('[image attachment]');
+    expect(output).toContain('[document attachment]');
+    expect(output).not.toContain('base64');
+  });
+
   it('renders known blocks with missing fields and JSON-stringifies unknown shapes', () => {
     const output = formatConversation([
       {

@@ -96,6 +96,7 @@ export type IModelHandler<
   | 'extractAssistantText'
   | 'prependTextToUserMessage'
   | 'addMediaToUserMessage'
+  | 'consumeInsertedAttachmentKinds'
   | 'dispose'
 > & {
   /**
