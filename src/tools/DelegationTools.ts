@@ -20,6 +20,9 @@ import {
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
 
+// Local imports - logger
+import * as logger from '@logger/logUtils';
+
 // Local imports - tools
 import {
   AgentCategory,
@@ -37,6 +40,7 @@ import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 // Local imports - delegation
@@ -58,6 +62,9 @@ import { getNativeSubagentStrategy } from './delegation/nativeSubagentStrategy';
 
 export { rejectOversizedBibAttachments } from './delegation/inputFields';
 export type { WorkflowAgentInput };
+
+const LOG_CHANNEL = 'delegation';
+logger.initialize(LOG_CHANNEL);
 
 // ============================================================================
 // delegate_workflow tool - for document processing agents
@@ -303,21 +310,34 @@ Git worktree support: resolved from the active workspace at runtime.`,
       deliveryState.markPending();
     }
 
+    // Dispatch the wake without awaiting it: waking a WAITING subagent resumes
+    // its run all the way to the next WAITING/terminal boundary, which can be
+    // an entire child turn. This tool call only hands the follow-up off — the
+    // result (or the wake's own failure) arrives asynchronously via the
+    // follow-up queue, same as the original delegation's async-arrival
+    // contract. Awaiting it here would stall this tool call, and the parent
+    // orchestrator's whole turn with it, for as long as the child keeps
+    // running (see #7289). Neither branch's return value is otherwise
+    // consulted below, so nothing here depends on it settling first.
     const nativeStrategy = getNativeSubagentStrategy(executionId);
-    if (nativeStrategy) {
-      await nativeStrategy.wakeQueuedFollowUp(result, {
-        approvalPromptsUnavailable: parentContext?.approvalPromptsUnavailable,
-        runtimeUnavailableTools: parentContext?.runtimeUnavailableTools,
-        toolEditApprovalHandler: parentContext?.toolEditApprovalHandler,
-      });
-    } else {
-      await wakeQueuedFollowUpStream(
-        handle.childStreamId,
-        result,
-        undefined,
-        session,
+    const wake = nativeStrategy
+      ? nativeStrategy.wakeQueuedFollowUp(result, {
+          approvalPromptsUnavailable: parentContext?.approvalPromptsUnavailable,
+          runtimeUnavailableTools: parentContext?.runtimeUnavailableTools,
+          toolEditApprovalHandler: parentContext?.toolEditApprovalHandler,
+        })
+      : wakeQueuedFollowUpStream(
+          handle.childStreamId,
+          result,
+          undefined,
+          session,
+        );
+    wake.catch((err: unknown) => {
+      logger.warn(
+        LOG_CHANNEL,
+        `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
       );
-    }
+    });
 
     switch (result.status) {
       case 'sent':
