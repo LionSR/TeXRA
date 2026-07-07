@@ -35,7 +35,6 @@ import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -52,6 +51,8 @@ import type { ExecResult } from '@shared/schemas/opResults';
 import { BashTool } from '@tools/bash';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
+
+import { attachSessionProgressEventProjectionForTest } from '../agent/sessionProgressTestUtils';
 import {
   createRecordingHost,
   withTestRunContext,
@@ -418,7 +419,7 @@ describe('BashTool', () => {
     const parentStreamId = 'bash-tool-bg-parent' as StreamTabId;
     const { host } = createRecordingHost();
     const bashTool = new BashTool();
-    const detachProjection = attachLegacyProgressEventProjection(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       defaultSession().events,
       host,
     );
