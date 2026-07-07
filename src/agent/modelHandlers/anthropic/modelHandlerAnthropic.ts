@@ -8,7 +8,6 @@ import {
 } from '@anthropic-ai/sdk';
 
 // Local imports - agent
-import { logSdkError } from '@agent/trace';
 import {
   type AgentSetting,
   hasEndTag,
@@ -797,7 +796,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add media if provided (images and native PDFs)
     if (mediaFiles?.length && this.capabilities.supportsVision) {
-      const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+      const formattedMediaContent = await this.createMediaForRound(
+        mediaFiles,
+        'initial',
+      );
       userMessageContent.push(...formattedMediaContent);
     }
 
@@ -830,17 +832,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add media if provided (images and native PDFs)
     if (mediaFiles?.length && this.capabilities.supportsVision) {
-      try {
-        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-        roundContent.push(...formattedMediaContent);
-      } catch (err) {
-        logSdkError(
-          this.logger,
-          'Error processing media files for follow-up round',
-          err,
-          { operation: 'process media files' },
-        );
-      }
+      const formattedMediaContent = await this.createMediaForRound(
+        mediaFiles,
+        'followUp',
+      );
+      roundContent.push(...formattedMediaContent);
     }
 
     // Add message text with optional caching
@@ -1566,20 +1562,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const lastUserMsg = messages.findLast((m) => m.role === 'user');
     if (!lastUserMsg) return;
 
-    try {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
-      if (typeof lastUserMsg.content === 'string') {
-        lastUserMsg.content = [
-          ...formattedMedia,
-          { type: 'text', text: lastUserMsg.content } as ContentBlockParam,
-        ];
-      } else if (Array.isArray(lastUserMsg.content)) {
-        lastUserMsg.content.unshift(...formattedMedia);
-      }
-    } catch (err) {
-      logSdkError(this.logger, 'Error adding media to user message', err, {
-        operation: 'add media to user message',
-      });
+    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
+    if (formattedMedia.length === 0) return;
+
+    if (typeof lastUserMsg.content === 'string') {
+      lastUserMsg.content = [
+        ...formattedMedia,
+        { type: 'text', text: lastUserMsg.content } as ContentBlockParam,
+      ];
+    } else if (Array.isArray(lastUserMsg.content)) {
+      lastUserMsg.content.unshift(...formattedMedia);
     }
   }
 }
