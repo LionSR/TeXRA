@@ -23,7 +23,8 @@ import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   type CliContext,
@@ -404,6 +405,12 @@ export async function runChat(
   // shared, host-agnostic snapshot store so a `texra resume` restores the full
   // display — the same streamData/{id}/* files the extension/desktop read.
   const snapshotStore = new StreamSnapshotStore();
+  let detachSnapshotEvents: (() => void) | undefined =
+    snapshotStore.attachSessionEvents(defaultSession().events);
+  const detachSnapshotPersistence = (): void => {
+    detachSnapshotEvents?.();
+    detachSnapshotEvents = undefined;
+  };
 
   const disposers: Array<() => void> = [];
   // Ink registers one stdout "resize" listener per mounted useWindowSize()
@@ -437,7 +444,7 @@ export async function runChat(
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
-      executionRegistry.getToolUseFlowContext(session.streamId),
+      SharedExecutionRegistry.getToolUseFlowContext(session.streamId),
     );
   const canSelectCurrentModel = (): boolean =>
     chatTuiCanSelectModel({
@@ -453,7 +460,7 @@ export async function runChat(
       return undefined;
     }
     const activeFlow = session.streamId
-      ? executionRegistry.getToolUseFlowContext(session.streamId)
+      ? SharedExecutionRegistry.getToolUseFlowContext(session.streamId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };
@@ -726,7 +733,7 @@ export async function runChat(
       onSuspend={() => handleSigtstp()}
       onKillExecution={(executionId) => {
         clearApprovals();
-        executionRegistry.kill(executionId, {
+        SharedExecutionRegistry.kill(executionId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
       }}
@@ -810,6 +817,7 @@ export async function runChat(
   // loaded, so this can neither hang nor affect headless paths.
   const drainPersistence = async (): Promise<void> => {
     flushPendingRunTraces();
+    detachSnapshotPersistence();
     await Promise.all([
       getDefaultStreamLogStore().flush(),
       snapshotStore.flush(),

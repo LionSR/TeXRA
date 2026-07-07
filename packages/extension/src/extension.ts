@@ -45,7 +45,8 @@ import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProj
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
-import { bus } from '@eventBus/ProgressEventBus';
+import { appSignals } from '@eventBus/AppSignals';
+import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
@@ -107,9 +108,9 @@ import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
 import {
-  prPollingSource,
-  repoPollingSource,
-  issuePollingSource,
+  SharedPRPollingSource,
+  SharedRepoPollingSource,
+  SharedIssuePollingSource,
 } from '@tools/github';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -280,13 +281,17 @@ export async function activate(context: vscode.ExtensionContext) {
     progressViewProviderInstance?.flushState(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => prPollingSource.disposeAll());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => repoPollingSource.disposeAll());
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    issuePollingSource.disposeAll(),
+    SharedPRPollingSource.disposeAll(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    bus.emit('extensionDeactivating', undefined),
+    SharedRepoPollingSource.disposeAll(),
+  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+    SharedIssuePollingSource.disposeAll(),
+  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+    ProgressEventBus.emit('extensionDeactivating', undefined),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
@@ -619,26 +624,24 @@ export async function activate(context: vscode.ExtensionContext) {
       if (e.key !== SecretManager.GITHUB_TOKEN_KEY) return;
       // Re-probe so any subscribed UI (Tools tab) reflects the new token
       // presence; getGitHubToken() now reads SecretStorage live (no cache).
-      void refreshToolAvailability(extensionAgentRuntimeHost).catch(
-        logRefreshFailure('secret change'),
-      );
+      void refreshToolAvailability().catch(logRefreshFailure('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      void refreshToolAvailability(extensionAgentRuntimeHost).catch(
+      void refreshToolAvailability().catch(
         logRefreshFailure('extension change'),
       );
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
     // gates the GitHub PR subscription tool group.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void refreshToolAvailability(extensionAgentRuntimeHost).catch(
+      void refreshToolAvailability().catch(
         logRefreshFailure('workspace folder change'),
       );
     }),
   );
-  const disposeGitHubAuthListener = bus.on(
+  const disposeGitHubAuthListener = appSignals.on(
     'githubTokenInvalid',
     ({ message }) => {
       logger.error('extension', `GitHub token rejected: ${message}`);
@@ -727,7 +730,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  const disposeStreamStatusListener = bus.on(
+  const disposeStreamStatusListener = ProgressEventBus.on(
     'updateStreamStatus',
     ({
       streamId,
@@ -741,7 +744,7 @@ export async function activate(context: vscode.ExtensionContext) {
       updateStatusBarText();
     },
   );
-  const disposeUsageListener = bus.on(
+  const disposeUsageListener = ProgressEventBus.on(
     'updateStreamUsage',
     ({ streamId, usage }: { streamId: string; usage: TokenUsageStats }) => {
       // UsageMonitor emits per-round deltas; the tracker accumulates them.

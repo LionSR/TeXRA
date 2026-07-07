@@ -9,6 +9,7 @@
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
+import { OUTPUT_DOCUMENT_TAG } from '@shared/constants/outputProtocol';
 import { isObject } from '@utils/core';
 
 // Local imports
@@ -28,7 +29,9 @@ logger.initialize(CHANNEL);
  * is case-insensitive as a safety net but counter should reflect
  * what primary path can extract.
  */
-export const DOCUMENT_NAME_REGEX = /<document[^>]*name="([^"]*)"[^>]*>/;
+export const DOCUMENT_NAME_REGEX = new RegExp(
+  `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>`,
+);
 
 /**
  * Get a string representation of an object's structure without its values.
@@ -55,10 +58,10 @@ function getObjectStructure(obj: unknown): string {
  */
 export function extractTextFromTag(
   inputContent: string,
-  documentTag: string,
+  tagName: string,
 ): string {
   // Find all matches and get the last one using matchAll
-  const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 'gs');
+  const regex = new RegExp(`<${tagName}>(.*?)<\/${tagName}>`, 'gs');
   const matches = [...inputContent.matchAll(regex)];
   const lastContent = matches.at(-1)?.[1] ?? '';
 
@@ -101,8 +104,10 @@ export function extractMultipleTextFromTag(
     content: string,
   ): Array<{ content: string; name: string }> => {
     // Full extraction pattern - case-sensitive to match CDATA wrapping behavior
-    const documentRegex =
-      /<document[^>]*name="([^"]*)"[^>]*>(.*?)<\/document>/gs;
+    const documentRegex = new RegExp(
+      `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>(.*?)<\/${OUTPUT_DOCUMENT_TAG}>`,
+      'gs',
+    );
 
     return [...content.matchAll(documentRegex)].map((match) => ({
       name: match[1] || 'unnamed',
@@ -137,7 +142,7 @@ export function extractMultipleTextFromTag(
  */
 export function extractContentFromXMLbyTagMultiple(
   root: Record<string, unknown>,
-  documentTag: string,
+  containerTag: string,
 ): Array<{ content: string; name: string }> | null {
   if (!isObject(root)) {
     logger.error(
@@ -147,10 +152,10 @@ export function extractContentFromXMLbyTagMultiple(
     return null;
   }
 
-  if (documentTag in root) {
-    const container = root[documentTag];
-    if (isObject(container) && 'document' in container) {
-      const documents = container.document;
+  if (containerTag in root) {
+    const container = root[containerTag];
+    if (isObject(container) && OUTPUT_DOCUMENT_TAG in container) {
+      const documents = container[OUTPUT_DOCUMENT_TAG];
       if (Array.isArray(documents)) {
         return documents.map((doc) => {
           const entry = doc as Record<string, unknown>;
@@ -169,7 +174,7 @@ export function extractContentFromXMLbyTagMultiple(
 
   logger.error(
     CHANNEL,
-    `No ${documentTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
+    `No ${containerTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
   );
   return null;
 }
@@ -207,15 +212,15 @@ export interface MultipleExtractionResult {
  * Tries in order: simple tag -> markdown block -> latex document
  *
  * @param outputContent The raw output content to extract from
- * @param documentTag The XML tag to look for
+ * @param tagName The XML tag to look for
  * @returns Extraction result with content and method used
  */
 function extractDocument(
   outputContent: string,
-  documentTag: string,
+  tagName: string,
 ): ExtractionResult {
   // Try simple tag extraction
-  const fallbackContent = extractTextFromTag(outputContent, documentTag);
+  const fallbackContent = extractTextFromTag(outputContent, tagName);
   if (fallbackContent) {
     return { content: fallbackContent, method: 'simple' };
   }
@@ -247,17 +252,17 @@ function extractDocument(
  * unambiguous destination.
  *
  * @param outputContent The raw output content to extract from
- * @param documentTag The container tag to look for documents within
+ * @param containerTag The container tag to look for documents within
  * @param preferredName Recovery hint — when set, treat single-doc legacy
  *   shapes as a one-document result named after the hint
  * @returns Extraction result with documents array and method used
  */
 export function extractDocuments(
   outputContent: string,
-  documentTag: string,
+  containerTag: string,
   preferredName?: string,
 ): MultipleExtractionResult {
-  const documents = extractMultipleTextFromTag(outputContent, documentTag);
+  const documents = extractMultipleTextFromTag(outputContent, containerTag);
   if (documents && documents.length > 0) {
     return { documents, method: 'simple' };
   }

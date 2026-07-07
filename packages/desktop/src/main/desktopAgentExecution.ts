@@ -47,7 +47,7 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
@@ -79,13 +79,11 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   cleanupUnscopedApprovals,
-  handleProgressViewBashApprovalAction,
   releaseStreamResources,
 } from '@tools/approval';
 import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { GoalStore } from '@tools/goal';
-import { handleUserQuestionAction } from '@tools/userQuestion';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -265,6 +263,9 @@ export class DesktopProgressBridge {
       getStreamControls: getProgressStreamControls,
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
+      onSessionProgressEvent: (event, payload) => {
+        this.progressEvents.onProgressEvent(event, payload);
+      },
       configureUi: ({ webviewUpdater }) => {
         // The desktop renderer is always attached (no sidebar/editor re-target),
         // so every show/resolve reaches the webview.
@@ -326,9 +327,7 @@ export class DesktopProgressBridge {
         void this.options.showErrorMessage?.(message);
       },
     });
-    const backendSubscription = this.backend.setupEventListeners(bus, {
-      emit: (event, payload) => this.handleSessionProgressEvent(event, payload),
-    });
+    const backendSubscription = this.backend.setupEventListeners();
     this.restartRepair = this.repairOrphanedStreamsAfterRestart();
     // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
     // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
@@ -467,14 +466,16 @@ export class DesktopProgressBridge {
         });
         return true;
       },
-      resolveProposal: (proposalId, result) => {
+      settleProposal: (proposalId, result) => {
         const resolved = this.session.interactions.resolve(proposalId, {
           kind: 'proposal',
           action: result.action,
           value: result,
         });
         if (!resolved) {
-          this.session.coordinators.resolveProposal(proposalId, result);
+          this.logger.warn(
+            `No pending desktop host interaction found for proposal: ${proposalId}`,
+          );
         }
       },
       onMissingProposal: (proposalId) => {
@@ -558,44 +559,27 @@ export class DesktopProgressBridge {
           });
         },
         handleBashApprovalAction: (message) =>
-          this.session.interactions.resolve(message.requestId, {
+          void this.session.interactions.resolve(message.requestId, {
             kind: 'bash',
             action: message.action,
             feedback: message.feedback,
-          }) || handleProgressViewBashApprovalAction(message),
+          }),
         handlePlanApprovalAction: (message) => {
-          const resolved = this.session.interactions.resolve(
-            message.approvalId,
-            {
-              kind: 'plan',
-              action: message.action,
-              ...(message.action === 'reject' && {
-                feedback: message.feedback,
-              }),
-            },
-          );
-          if (!resolved) {
-            this.session.coordinators.resolvePlanApproval(message.approvalId, {
-              action: message.action,
-              ...(message.action === 'reject' && {
-                feedback: message.feedback,
-              }),
-            });
-          }
+          this.session.interactions.resolve(message.approvalId, {
+            kind: 'plan',
+            action: message.action,
+            ...(message.action === 'reject' && {
+              feedback: message.feedback,
+            }),
+          });
         },
         handleUserQuestionAction: (message) => {
-          const resolved = this.session.interactions.resolve(
-            message.requestId,
-            {
-              kind: 'userQuestion',
-              action: message.action,
-              value: message.answers,
-              feedback: message.feedback,
-            },
-          );
-          if (!resolved) {
-            return handleUserQuestionAction(message);
-          }
+          this.session.interactions.resolve(message.requestId, {
+            kind: 'userQuestion',
+            action: message.action,
+            value: message.answers,
+            feedback: message.feedback,
+          });
           return undefined;
         },
         handleAgentProposalAction: (message) =>
@@ -1028,14 +1012,7 @@ export class DesktopProgressBridge {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
-    bus.emit(event, payload);
-    this.progressEvents.onProgressEvent(event, payload);
-  }
-
-  private handleSessionProgressEvent<K extends keyof ProgressEventPayloads>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): void {
+    if (event === 'addOutputFiles') return;
     this.backend.handleProgressEvent(event, payload);
     this.progressEvents.onProgressEvent(event, payload);
   }
@@ -1117,7 +1094,7 @@ export class DesktopProgressBridge {
     // empty streamId) — the per-stream loop skips them because they do not
     // equal any StreamTabId. Scope this to THIS window's runtime host so a
     // sibling window's streamless approval is not rejected.
-    cleanupUnscopedApprovals(this.runtimeHost);
+    cleanupUnscopedApprovals(this.runtimeHost, this.session);
     // Child/subagent coordinator requests may be session-owned without a local
     // desktop stream entry, so clear the owning window's coordinator bridge
     // after the visible per-stream sweep. This is session-scoped and does not

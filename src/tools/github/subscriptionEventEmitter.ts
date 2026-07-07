@@ -1,5 +1,4 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';
 
 export type GitHubSubscriptionChangedEvent =
   | 'prSubscriptionsChanged'
@@ -11,22 +10,6 @@ export type GitHubSubscriptionChangedEvent =
 
 export function emitGitHubSubscriptionChanged<
   K extends GitHubSubscriptionChangedEvent,
->(
-  runtimeHost: AgentRuntimeHost,
-  event: K,
-  payload: ProgressEventPayloads[K],
-): void {
-  runtimeHost.emit(event, payload);
-}
-
-export function emitGitHubSubscriptionChangedToHosts<
-  K extends GitHubSubscriptionChangedEvent,
->(
-  runtimeHosts: Iterable<AgentRuntimeHost>,
-  event: K,
-  payload: ProgressEventPayloads[K],
-): void {
-  for (const runtimeHost of new Set(runtimeHosts)) {
-    emitGitHubSubscriptionChanged(runtimeHost, event, payload);
-  }
+>(event: K, payload: AppSignalPayloads[K]): void {
+  appSignals.emit(event, payload);
 }

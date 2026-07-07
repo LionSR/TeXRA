@@ -7,7 +7,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseCycleNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseCycleNode';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import type {
   CyclePrepResult,
   ToolUseRunShared,
@@ -54,7 +54,7 @@ describe('tool-use progress events', () => {
     const detachTrace = logger.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjector = attachSessionRunFactProjector(hub, host, streamId);
+    const detachProjection = attachLegacyProgressEventProjection(hub, host);
     const workspaceState = AgentWorkspaceState.create();
     workspaceState.workPlan.updateTodos([todo]);
     workspaceState.workPlan.updatePlan(plan);
@@ -92,7 +92,7 @@ describe('tool-use progress events', () => {
         },
       ]);
     } finally {
-      detachProjector();
+      detachProjection();
       detachTrace();
     }
   });

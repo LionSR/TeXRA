@@ -24,7 +24,7 @@ import {
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
-import { flexibleFS } from '@utils/files';
+import { FlexibleFS } from '@utils/files';
 
 /** Run agent/model/round used to build the legacy postfixed copy name. */
 type AcceptCopyMeta = { agent: string; model: string; round: number };
@@ -50,7 +50,7 @@ async function validateFilesExist(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
 ): Promise<boolean> {
-  if (!(await flexibleFS.exists(baseLocation))) {
+  if (!(await FlexibleFS.exists(baseLocation))) {
     void showLoggedMessage(
       CHANNEL,
       `Base file not found: ${baseLocation.absolutePath}`,
@@ -58,7 +58,7 @@ async function validateFilesExist(
     return false;
   }
 
-  if (!(await flexibleFS.exists(editedLocation))) {
+  if (!(await FlexibleFS.exists(editedLocation))) {
     void showLoggedMessage(
       CHANNEL,
       `Edited file not found: ${editedLocation.absolutePath}`,
@@ -226,9 +226,9 @@ async function handleAcceptEdited(
     // No run metadata: single-confirm replace flow shared with the desktop host.
     if (!copyMeta) {
       return await acceptEditedFileReplace(fileToUseLocation, editedLocation, {
-        exists: (location) => flexibleFS.exists(location),
-        readFile: (location) => flexibleFS.read(location),
-        writeFile: (location, content) => flexibleFS.write(location, content),
+        exists: (location) => FlexibleFS.exists(location),
+        readFile: (location) => FlexibleFS.read(location),
+        writeFile: (location, content) => FlexibleFS.write(location, content),
         confirm: async (message) => {
           const answer = await vscode.window.showWarningMessage(
             message,
@@ -259,10 +259,10 @@ async function handleAcceptEdited(
     if (!resolved) return false;
 
     const { targetLocation, targetFileName } = resolved;
-    const targetExisted = await flexibleFS.exists(targetLocation);
+    const targetExisted = await FlexibleFS.exists(targetLocation);
 
-    const editedContent = await flexibleFS.read(editedLocation);
-    await flexibleFS.write(targetLocation, editedContent);
+    const editedContent = await FlexibleFS.read(editedLocation);
+    await FlexibleFS.write(targetLocation, editedContent);
 
     if (targetLocation.kind === 'workspace') {
       emitRuntimeEvent('workspaceFilesWritten', {

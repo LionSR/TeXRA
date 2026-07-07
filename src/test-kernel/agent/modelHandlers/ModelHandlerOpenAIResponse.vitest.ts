@@ -34,7 +34,7 @@ import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller'
 import { pathToLocation } from '@utils/files';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-// pathToLocation and flexibleFS resolve through platform services, so this
+// pathToLocation and FlexibleFS resolve through platform services, so this
 // suite needs the real node fs rather than the in-memory default.
 setupPlatform({}, { fs: nodeFilesystem });
 
@@ -957,6 +957,30 @@ describe('ModelHandlerOpenAIResponse.extractResponse', () => {
 
     assert.equal(result.text, 'fallback text');
   });
+
+  it('does not forge a missing end tag onto a completed response', () => {
+    // The Responses API has no `stop` parameter, so a "completed" status
+    // never implies the provider stripped the end tag from the output.
+    // Forging it here would mask genuinely incomplete output as done.
+    const handler = createHandler();
+    const result = handler.extractResponse(
+      {
+        id: 'resp-no-end-tag',
+        status: 'completed',
+        output_text: 'the document body without a closing tag',
+        usage: {
+          input_tokens: 1,
+          output_tokens: 2,
+          total_tokens: 3,
+          input_tokens_details: { cached_tokens: 0 },
+          output_tokens_details: { reasoning_tokens: 0 },
+        },
+      } as any,
+      '</documents>',
+    );
+
+    assert.equal(result.text, 'the document body without a closing tag');
+  });
 });
 
 describe('ModelHandlerOpenAIResponse.extractAssistantText', () => {
@@ -998,8 +1022,6 @@ describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
       const handler = createHandler();
       const agentSetting = AgentSettingSchema.parse({
         agentCategory: AgentCategory.Workflow,
-        documentTag: 'documents',
-        endTag: '</documents>',
       });
       const userMessage: ResponseInputItem = {
         type: 'message',

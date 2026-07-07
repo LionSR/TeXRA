@@ -36,6 +36,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { createRecordingHost } from '../progressTestUtils';
 
 interface TestRetryServices {
   streamId: StreamTabId;
@@ -113,6 +114,7 @@ async function withRetryRunContext<T>(
 async function withSessionRetryRunContext<T>(
   streamId: StreamTabId,
   session: SessionHandle,
+  runtimeHost: AgentRuntimeHost,
   retry: RetryRequestCoordinatorImpl,
   fn: () => T | Promise<T>,
 ): Promise<T> {
@@ -124,7 +126,7 @@ async function withSessionRetryRunContext<T>(
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => undefined,
-    runtimeHost: noopAgentRuntimeHost,
+    runtimeHost,
     streamId,
     executionId: `${streamId}-execution` as ExecutionId,
     agentName: 'retry-test',
@@ -223,14 +225,19 @@ describe('RetryState', () => {
   it('registers manual retries on the session coordinator bridge', async () => {
     const streamId = 'retry-state-session-bridge' as StreamTabId;
     const session = new SessionHandle();
-    const retry = new RetryRequestCoordinatorImpl(noopAgentRuntimeHost);
+    const { host } = createRecordingHost();
+    const retry = new RetryRequestCoordinatorImpl(host);
     const { node, streamStatus } = createRetryNode(streamId);
 
     try {
       seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
 
-      const prompt = withSessionRetryRunContext(streamId, session, retry, () =>
-        node.promptFor(new Error('temporary provider failure')),
+      const prompt = withSessionRetryRunContext(
+        streamId,
+        session,
+        host,
+        retry,
+        () => node.promptFor(new Error('temporary provider failure')),
       );
 
       expect(session.coordinators.triggerRetry(streamId, 'try again')).toBe(
@@ -269,4 +276,41 @@ describe('RetryState', () => {
       }
     },
   );
+
+  it('classifies a policy/headless retry denial as failed, not cancelled (#7331)', async () => {
+    const streamId = 'retry-state-deny' as StreamTabId;
+    const { node, streamStatus, waitForRetry } = createRetryNode(streamId);
+
+    waitForRetry.mockResolvedValueOnce({
+      action: 'deny',
+      reason: 'Denied by CLI approval policy.',
+    });
+    const error = new Error('stream dropped before first token');
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+
+      const shouldRetry = await withRetryRunContext(
+        streamId,
+        waitForRetry,
+        () => node.retryPrompt(undefined, error),
+      );
+
+      // A denial does not retry and — crucially — is NOT a user cancel, so the
+      // stream resumes to RUNNING to let the failure terminalize (a WAITING
+      // stream can't be written to a terminal outcome directly).
+      expect(shouldRetry).toBe(false);
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+
+      // The fallback classifies this as `failed` (→ RUN_OUTCOME.FAILED),
+      // surfacing the underlying error — rather than `cancelled`, which would
+      // let a zero-output run report COMPLETED.
+      expect(node.fallbackFor(error)).toMatchObject({
+        kind: 'failed',
+        message: 'stream dropped before first token',
+      });
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
 });

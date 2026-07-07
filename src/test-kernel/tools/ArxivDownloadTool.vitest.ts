@@ -29,9 +29,9 @@ declare module '@latex/arxivProcessor' {
 }
 
 // Mutable references for stubbing
-const processor = arxivModule.arxivProcessor as {
-  validateId: typeof arxivModule.arxivProcessor.validateId;
-  downloadSource: typeof arxivModule.arxivProcessor.downloadSource;
+const processor = arxivModule.ArxivProcessor as {
+  validateId: typeof arxivModule.ArxivProcessor.validateId;
+  downloadSource: typeof arxivModule.ArxivProcessor.downloadSource;
 };
 const wsFS = WorkspaceFS as unknown as {
   relativePath: typeof WorkspaceFS.relativePath;

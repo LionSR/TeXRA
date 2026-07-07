@@ -24,7 +24,10 @@ import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
-import { installCliApprovalHandlers } from './approvalAdapter';
+import {
+  createHeadlessCliHostInteractions,
+  installCliApprovalHandlers,
+} from './approvalAdapter';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -63,7 +66,7 @@ type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
     ? Extract<ExecuteAgentResult, { category: C }>
     : ExecuteAgentResult;
 
-function persistCliProgressEvents(
+function persistCliMetadataProgressEvents(
   host: CliRuntimeHost,
   snapshotStore: StreamSnapshotStore,
 ): CliRuntimeHost {
@@ -71,7 +74,17 @@ function persistCliProgressEvents(
     event: K,
     payload: ProgressEventPayloads[K],
   ): void => {
-    snapshotStore.handleProgressEvent(event, payload);
+    // Durable run facts enter StreamSnapshotStore from SessionEventHub. Keep
+    // only the legacy metadata events here until they move to typed run facts.
+    switch (event) {
+      case 'setTaskState':
+      case 'updateStreamDescription':
+      case 'setParentStream':
+        snapshotStore.handleProgressEvent(event, payload);
+        break;
+      default:
+        break;
+    }
     host.emit(event, payload);
   };
   return { ...host, emit };
@@ -178,17 +191,32 @@ export async function executeCliRequest(
 ): Promise<{ result: ExecuteAgentResult; terminalStatus: ExecutionStatus }> {
   const baseRuntimeHost = createCliRuntimeHost(runContext);
   const snapshotStore = new StreamSnapshotStore();
-  const runtimeHost = persistCliProgressEvents(baseRuntimeHost, snapshotStore);
+  const detachSnapshotEvents = snapshotStore.attachSessionEvents(
+    defaultSession().events,
+  );
+  const runtimeHost = persistCliMetadataProgressEvents(
+    baseRuntimeHost,
+    snapshotStore,
+  );
+  const detachHostInteractions = defaultSession().useHostInteractions(
+    createHeadlessCliHostInteractions(runContext, {
+      beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
+    }),
+  );
+  const interactionHost: CliRuntimeHost = {
+    ...runtimeHost,
+    interactions: defaultSession().interactions,
+  };
   // Present terminal-error toasts from the run's `result` event through the same
   // runtimeHost path the lifecycle used before (so ndjson / logger output is
   // unchanged); the lifecycle no longer emits them directly.
   const detachResultToast = attachTerminalResultToast(
     defaultSession(),
-    runtimeHost,
+    interactionHost,
   );
   const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
     defaultSession().events,
-    runtimeHost,
+    interactionHost,
   );
   const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
     beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
@@ -208,7 +236,7 @@ export async function executeCliRequest(
     : undefined;
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
-      runtimeHost,
+      runtimeHost: interactionHost,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
       stopAfterCycle: options.stopAfterCycle,
@@ -250,12 +278,17 @@ export async function executeCliRequest(
     }
     detachResultToast();
     detachLegacyProgressProjection();
+    detachHostInteractions();
     uninstallApprovalHandlers();
     try {
-      flushPendingRunTraces();
+      try {
+        flushPendingRunTraces();
+      } finally {
+        detachSnapshotEvents();
+      }
       await Promise.all([streamLogStore.flush(), snapshotStore.flush()]);
     } finally {
-      await runtimeHost.close();
+      await interactionHost.close();
     }
   }
 

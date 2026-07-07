@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
-import { bus } from '@eventBus/ProgressEventBus';
+import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -20,7 +20,7 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
       (event) => sessionSeen.push(event),
       { scope: 'session' },
     );
-    const off = bus.on('goalStateChanged', (p) => seen.push(p));
+    const off = ProgressEventBus.on('goalStateChanged', (p) => seen.push(p));
     try {
       emitRuntimeEvent('goalStateChanged', { streamId: streamId('s:bus') });
       expect(sessionSeen).toEqual([
@@ -42,7 +42,7 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
   it("keeps non-migrated events on the active run's runtimeHost", () => {
     const run = createRecordingHost();
     const busSeen: unknown[] = [];
-    const off = bus.on('requestShowError', (p) => busSeen.push(p));
+    const off = ProgressEventBus.on('requestShowError', (p) => busSeen.push(p));
     try {
       withRunContext(createRunContext({ runtimeHost: run.host }), () => {
         emitRuntimeEvent('requestShowError', { message: 'run error' });
@@ -67,7 +67,7 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
       { scope: 'session' },
     );
     const busSeen: unknown[] = [];
-    const off = bus.on('goalStateChanged', (p) => busSeen.push(p));
+    const off = ProgressEventBus.on('goalStateChanged', (p) => busSeen.push(p));
     try {
       withRunContext(createRunContext({ runtimeHost: run.host }), () => {
         emitRuntimeEvent(

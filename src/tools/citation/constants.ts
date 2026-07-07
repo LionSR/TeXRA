@@ -2,10 +2,10 @@
  * Constants for academic metadata API tools (arXiv, Crossref).
  */
 
-import { CrossrefClient } from '@jamesgopsill/crossref-client';
+import { CrossrefClient as CrossrefApiClient } from '@jamesgopsill/crossref-client';
 
 /** Shared Crossref client instance — use this instead of creating new ones. */
-export const crossrefClient = new CrossrefClient();
+export const CrossrefClient = new CrossrefApiClient();
 
 // arXiv API constants
 export const ARXIV_CONSTANTS = {

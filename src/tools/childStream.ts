@@ -5,7 +5,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
-import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
 import {
   currentSession,
   type SessionHandle,
@@ -95,13 +94,7 @@ export function createChildStream(
     runTrace.trace,
     childStreamId,
   );
-  const detachRunFactProjector = attachSessionRunFactProjector(
-    session.events,
-    runtimeHost,
-    childStreamId,
-  );
   const disposeTrace = () => {
-    detachRunFactProjector();
     detachSessionTrace();
     runTrace.dispose();
   };

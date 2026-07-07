@@ -156,6 +156,7 @@ interface DesktopAgentExecutionModule {
     options?: {
       streamSnapshotStore?: TestDesktopStreamSnapshotStore;
       progressSnapshotStore?: ProgressSnapshotStore;
+      showErrorMessage?: (message: string) => Promise<void> | void;
     },
   ) => Bridge;
   createDesktopAgentExecution(options: {
@@ -181,6 +182,7 @@ type CreateBridgeOptions = {
   configureProgressSnapshotStore?: (store: ProgressSnapshotStore) => void;
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
   activeExecutionIds?: readonly string[] | (() => readonly string[]);
+  showErrorMessage?: (message: string) => Promise<void> | void;
 };
 
 type TestDesktopStreamSnapshotStore = {
@@ -399,6 +401,7 @@ async function createBridge(
   return new DesktopProgressBridge((message) => messages.push(message), {
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore,
+    showErrorMessage: options.showErrorMessage,
   }) as TestableBridge;
 }
 
@@ -572,23 +575,93 @@ describe('DesktopProgressBridge', () => {
     vi.restoreAllMocks();
   });
 
-  it('mirrors runtime events to the shared progress bus', async () => {
+  it('routes runtime events to the desktop backend without the shared progress bus', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
-    const { bus } = await import('@eventBus/ProgressEventBus');
+    const { ProgressEventBus } = await import('@eventBus/ProgressEventBus');
     const seen: unknown[] = [];
-    const off = bus.on('updateTodos', (payload) => {
+    const off = ProgressEventBus.on('setActiveStream', (payload) => {
       seen.push(payload);
     });
 
     try {
-      bridge.handleProgressEvent('updateTodos', {
+      bridge.handleProgressEvent('setActiveStream', {
         streamId: 'parent',
-        todos: [],
+        agentCategory: AgentCategory.Workflow,
       });
-      expect(seen).toEqual([{ streamId: 'parent', todos: [] }]);
+      await settleProgressEvents();
+      bridge.syncFullView();
+
+      expect(seen).toEqual([]);
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+          -1,
+        ),
+      ).toMatchObject({
+        activeStream: 'parent',
+        streams: [expect.objectContaining({ name: 'parent' })],
+      });
     } finally {
       off();
+      bridge.dispose();
+    }
+  });
+
+  it('leaves output-file host events to the session run-fact path', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+    const streamId = 'desktop:output-files' as StreamTabId;
+    const initialFileUpdates = progressMessages(
+      messages,
+      PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+    ).length;
+
+    try {
+      bridge.handleProgressEvent('addOutputFiles', {
+        streamId,
+        filesByRound: {
+          1: [
+            {
+              source: 'paper.tex',
+              location: {
+                kind: 'workspace',
+                absolutePath: '/workspace/paper.tex',
+                relativePath: 'paper.tex',
+              },
+              round: 1,
+              lineage: null,
+              diff: null,
+            },
+          ],
+        },
+      });
+      await settleProgressEvents();
+
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_FILES),
+      ).toHaveLength(initialFileUpdates);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('keeps desktop runtime host app events on the window-local bridge path', async () => {
+    const messages: unknown[] = [];
+    const showErrorMessage = vi.fn();
+    const bridge = await createBridge(messages, { showErrorMessage });
+
+    try {
+      bridge.handleProgressEvent('requestEnsureProgressView', {});
+      bridge.handleProgressEvent('requestShowError', {
+        message: 'Root run failed',
+      });
+
+      expect(messages).toContainEqual({
+        command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+        route: 'progress',
+      });
+      expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
+    } finally {
       bridge.dispose();
     }
   });

@@ -16,7 +16,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
   executeAgent,
   resumeToolUseFromSnapshot,
@@ -63,7 +63,10 @@ import {
   type TuiSession,
 } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
-import { wrapRuntimeHost } from './tui/state/subscribeRuntimeHost';
+import {
+  attachTuiRunFactSubscription,
+  wrapRuntimeHost,
+} from './tui/state/subscribeRuntimeHost';
 import { notify } from './tui/notifications/terminalNotifier';
 import {
   appendLocalErrorTranscript,
@@ -196,7 +199,7 @@ export function createChatSessionController(
   const interruptActiveRun = (): void => {
     clearApprovals();
     if (!session.streamId) return;
-    executionRegistry.stopAgentStream(session.streamId, {
+    SharedExecutionRegistry.stopAgentStream(session.streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
       runtimeHost: session.runtimeHost,
     });
@@ -238,6 +241,9 @@ export function createChatSessionController(
       defaultSession(),
       interactiveHost,
     );
+    const detachTuiRunFacts = attachTuiRunFactSubscription(
+      defaultSession().events,
+    );
     const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
       defaultSession().events,
       interactiveHost,
@@ -247,6 +253,7 @@ export function createChatSessionController(
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
         detachResultToast();
+        detachTuiRunFacts();
         detachLegacyProgressProjection();
         detachHostInteractions();
         if (session.runtimeHost === interactiveHost) {

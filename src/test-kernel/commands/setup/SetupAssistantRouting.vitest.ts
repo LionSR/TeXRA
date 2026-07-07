@@ -37,7 +37,7 @@ vi.mock('@frontend/secretManager', () => ({
 }));
 
 vi.mock('@agent/runtime/executionRegistry', () => ({
-  executionRegistry: {
+  SharedExecutionRegistry: {
     getAgentHandles: () => agentHandles(),
   },
 }));

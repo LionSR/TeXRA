@@ -13,11 +13,6 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
-import {
-  _rejectAllPendingUserQuestions,
-  _rejectPendingUserQuestionsForStream,
-  _rejectUnscopedUserQuestions,
-} from '@tools/userQuestion';
 
 import { bashApprovalController } from './bashApproval';
 import { proposalApprovalState } from './proposalApproval';
@@ -37,10 +32,10 @@ export function cleanupApprovalsForStream(
 ): void {
   toolEditApprovalController.rejectPendingForStream(streamId);
   bashApprovalController.rejectPendingForStream(streamId);
-  _rejectPendingUserQuestionsForStream(streamId);
   toolEditApprovalController.bypass.clearForStream(streamId);
   bashApprovalController.bypass.clearForStream(streamId);
   proposalApprovalState.clearForStream(streamId);
+  session.interactions.cancelForStream(streamId, 'Stream resources released.');
   session.coordinators.cleanupRequestsForStream(streamId);
 }
 
@@ -76,10 +71,13 @@ export function releaseStreamResources(
  * pending with no UI prompt to answer. Multi-session hosts pass their own
  * `runtimeHost` so sibling windows' streamless approvals stay intact.
  */
-export function cleanupUnscopedApprovals(runtimeHost?: AgentRuntimeHost): void {
+export function cleanupUnscopedApprovals(
+  runtimeHost?: AgentRuntimeHost,
+  session: SessionHandle = defaultSession(),
+): void {
   toolEditApprovalController.rejectUnscopedPending(runtimeHost);
   bashApprovalController.rejectUnscopedPending(runtimeHost);
-  _rejectUnscopedUserQuestions(runtimeHost);
+  session.interactions.cancelUnscoped?.('Streamless approval cleanup.');
 }
 
 /**
@@ -99,10 +97,10 @@ export function cleanupAllApprovals(
 ): void {
   toolEditApprovalController.rejectAllPending();
   bashApprovalController.rejectAllPending();
-  _rejectAllPendingUserQuestions();
   toolEditApprovalController.bypass.clearAll();
   bashApprovalController.bypass.clearAll();
   proposalApprovalState.clearAll();
+  session.interactions.cancelAll?.('All approvals cleared.');
   session.coordinators.cleanupAllRequests();
 }
 
@@ -111,7 +109,6 @@ export { enableYoloOnChildStream, inheritBashBypassOnChildStream };
 // Re-export commonly used functions from individual modules
 export {
   // Bash approval
-  handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
   isBashApprovalBypassedForStream,

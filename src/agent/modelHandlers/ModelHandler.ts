@@ -49,15 +49,16 @@ import { isGpt5ModelName } from '@model/modelNames';
 
 // Local imports - logger
 import { MESSAGE_TYPES } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
+import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
 
 // Local imports - tools
-import type { FileLocation } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
 
-import { AbsoluteFS, flexibleFS } from '@utils/files';
+import { AbsoluteFS, FlexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
   getProviderStreaming,
@@ -167,6 +168,18 @@ export abstract class ModelHandler<
   /**
    * Whether the handler supports processing attachments in tool results.
    * Override in handlers that don't support attachments (e.g., DeepSeek).
+   *
+   * Not foldable into a single llm-zoo capability read (#7101 triage):
+   * `capabilities.supportsVision` looks like the natural candidate, but it
+   * doesn't line up — Grok, Kimi, and Qwen models all report
+   * `supportsVision: false` while still relying on this base default of
+   * `true` to include a text attachment summary in tool results (see
+   * `ModelHandlerOpenAI`/`ModelHandlerOpenRouterNative`), and DeepSeek's
+   * override below isn't gating on vision either — DeepSeek's tool-result
+   * format doesn't accommodate attachment content at all. Folding this into
+   * `supportsVision` would silently drop attachment summaries for every
+   * non-vision Grok/Kimi/Qwen model. Stays an overridable getter: genuinely
+   * per-provider behavior, not a foldable predicate.
    */
   protected get canProcessToolResultAttachments(): boolean {
     return true;
@@ -176,6 +189,18 @@ export abstract class ModelHandler<
    * Whether the handler can upload files to the provider's API for tool results.
    * Override in handlers that support provider-specific file upload APIs
    * (e.g., Anthropic Files API, OpenAI Files API).
+   *
+   * Not foldable into a single capability read (#7101 triage): Anthropic's
+   * override is an unconditional `true` — there's no llm-zoo or
+   * `ProviderCapabilityProfile` flag for "has a Files API," it's a
+   * provider-wide fact about the Anthropic SDK, not a per-model capability
+   * (it would coincidentally match `capabilities.supportsVision`, which is
+   * `true` for every current Anthropic model, but that conflates two
+   * unrelated capabilities and would break the moment they diverge).
+   * OpenAIResponse's override already reads the `ProviderCapabilityProfile`
+   * (`getActiveProviderCapabilities()?.openAIResponses`) with a fallback —
+   * that one's the "runtime combinator over profile data" bucket, not
+   * genuine per-provider behavior. Stays an overridable getter.
    */
   protected get supportsToolResultFileUpload(): boolean {
     return false;
@@ -191,7 +216,7 @@ export abstract class ModelHandler<
     this.logger = createChannelTrace('Agent');
     this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
       getCapabilities: () => this.capabilities,
-      isOpenAIProvider: () => this.isOpenai,
+      isOpenAIProvider: () => this.config.provider === ModelProvider.OPENAI,
     });
   }
 
@@ -488,47 +513,42 @@ export abstract class ModelHandler<
     });
   }
 
-  /** Checks if the model is from Anthropic provider. */
-  get isAnthropic(): boolean {
-    return this.config.provider === ModelProvider.ANTHROPIC;
-  }
-
-  /** Checks if the model is from OpenAI provider. */
-  get isOpenai(): boolean {
-    return this.config.provider === ModelProvider.OPENAI;
-  }
-
-  /** Checks if the model is from Google provider. */
-  get isGoogle(): boolean {
-    return this.config.provider === ModelProvider.GOOGLE;
-  }
-
-  // The DeepSeek/Kimi/MiniMax provider checks below are intentionally
-  // `protected`: their only reader is `ModelHandlerOpenRouterNative` (a
-  // subclass), which maps them to capability getters for the providers it
-  // proxies. Keeping them off the public `IModelHandler` port avoids leaking
-  // provider identity into the SDK surface (the behavioral gates were already
-  // converted to capability flags — see the SDK-readiness audit §7/§12).
-
-  /** Checks if the model is from DeepSeek provider. */
-  protected get isDeepSeek(): boolean {
-    return this.config.provider === ModelProvider.DEEPSEEK;
-  }
-
-  /** Checks if the model is from Moonshot/Kimi provider. */
-  protected get isKimi(): boolean {
-    return this.config.provider === ModelProvider.MOONSHOT;
-  }
-
-  /** Checks if the model is from MiniMax provider. */
-  protected get isMiniMax(): boolean {
-    return this.config.provider === ModelProvider.MINIMAX;
-  }
+  // Provider-identity getters (isAnthropic/isOpenai/isGoogle/isDeepSeek/
+  // isKimi/isMiniMax) were removed (#7101): each had exactly one or two call
+  // sites, all of which already had `this.config` (or, for the
+  // `ModelHandlerOpenRouterNative` combinators below, `this.config.provider`)
+  // in scope. `config.provider` — already part of the `IModelHandler` port —
+  // *is* the canonical profile read; a same-shaped getter wrapping it added
+  // no capability-profile value, just base-class surface. Callers now compare
+  // `config.provider` against `ModelProvider` directly. The remaining base
+  // predicates below fall into the other two buckets from the #7101 triage:
+  // runtime combinators over profile data (`shouldUseServerSideKeys`,
+  // `getEffectiveReasoningEffort`) and genuinely per-provider behavior that
+  // stays an overridable method/getter (`supportsManualCompaction`,
+  // `isAutoRetryManagedByProvider`, `isBackgroundModeActive`, etc.).
 
   /**
    * Whether parallel tool calls in a single turn must be batched into one
    * follow-up message to preserve provider-side reasoning / thought signatures.
    * Override in handlers whose APIs require it (Google, DeepSeek, Kimi, MiniMax).
+   *
+   * Not foldable into a single llm-zoo capability read (#7101 triage):
+   * `capabilities.supportsReasoning`/`supportsInterleavedThinking` look like
+   * the natural backing flags, but neither lines up. `ReasoningModelHandlerOpenAI`
+   * (the shared base for DeepSeek/Kimi/MiniMax) overrides this to an
+   * unconditional `true` for every model in those families, including
+   * non-reasoning variants — llm-zoo reports `supportsReasoning: false` for
+   * `dsv3`, `kimi`, and `kimi2`, yet they still batch, because the requirement
+   * is a provider-wire-format fact (there's a reasoning channel to preserve
+   * across the whole family's API), not a per-model reasoning toggle.
+   * `ModelHandlerGLM` overrides it back to `false` even for its
+   * reasoning-capable variants (`glm45`, `glm52`). And Grok reasoning models
+   * (`grok43`, `grok3-`; see {@link isGrokReasoningModel}) never override this
+   * at all, staying at this `false` default, via `ModelHandlerXAI`. Folding
+   * this into `supportsReasoning` would wrongly force batching on
+   * non-reasoning DeepSeek/Kimi/MiniMax variants and wrongly skip it for
+   * reasoning Grok models. Stays an overridable getter: genuinely per-provider
+   * behavior, not a foldable predicate.
    */
   get requiresBatchedParallelToolResults(): boolean {
     return false;
@@ -543,7 +563,16 @@ export abstract class ModelHandler<
     return this.capabilities.supportsReasoningEffort;
   }
 
-  /** Whether this handler supports manual context compaction. Override in subclasses. */
+  /**
+   * Whether this handler supports manual (user-requested) context compaction.
+   * Each override computes this differently — Anthropic combines llm-zoo
+   * model-family eligibility with tool-use mode, OpenAI-family handlers gate
+   * on tool-use mode alone, OpenAIResponse reads the ChatGPT-subscription
+   * profile with an OpenRouter-routing fallback, and GoogleInteractions is
+   * unconditionally true — so no single capability-profile read replaces the
+   * per-handler logic. Stays an overridable getter (#7101 triage: genuinely
+   * per-provider behavior, not a foldable predicate).
+   */
   get supportsManualCompaction(): boolean {
     return false;
   }
@@ -580,6 +609,10 @@ export abstract class ModelHandler<
     return getProviderStreaming(this.config.provider);
   }
 
+  /** Runtime combinator (provider identity × reasoning capability), read by
+   * multiple call sites in `openai/` — kept as a named getter rather than
+   * inlined at each one (#7101 triage: DRY combinator, not per-provider
+   * override). */
   get isOReasoningModel(): boolean {
     return (
       this.config.provider === ModelProvider.OPENAI &&
@@ -587,6 +620,8 @@ export abstract class ModelHandler<
     );
   }
 
+  /** Runtime combinator (provider identity × reasoning capability); see
+   * {@link isOReasoningModel}. */
   get isGrokReasoningModel(): boolean {
     return (
       this.config.provider === ModelProvider.XAI &&
@@ -683,9 +718,7 @@ export abstract class ModelHandler<
 
     // Detect stop markers in model output
     const endTurn = END_TURN_REASONS.includes(stopReason ?? '');
-    const encounterDocumentTag = newResponse.includes(
-      `</${agentSetting.documentTag}>`,
-    );
+    const encounterDocumentTag = newResponse.includes(OUTPUT_END_TAG);
 
     if (maxOutputTokensExceeded) {
       this.logger.warn('Output tokens exceed input token multiplier', {
@@ -718,10 +751,16 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Append the agent's end tag to a natural-stop response when the model did
-   * not already emit it. Shared by the provider handlers that use an
-   * `includes` presence check; each caller supplies its own "natural stop"
-   * predicate because provider stop-reason vocabularies differ.
+   * Restore the agent's end tag when the provider's API stripped it.
+   *
+   * Providers that accept the end tag as an API-level stop sequence
+   * (Anthropic `stop_sequences`, OpenAI/OpenRouter `stop`) omit the matched
+   * stop text from the returned completion by contract — this puts it back
+   * so downstream continuation/extraction logic sees the tag it was told to
+   * watch for. Only call this from a caller whose "natural stop" predicate is
+   * backed by that same configured stop sequence; each caller supplies its
+   * own predicate because provider stop-reason vocabularies differ. Logs
+   * when it actually fires, so there's data on how often it's needed.
    */
   protected appendEndTagIfNeeded(
     text: string,
@@ -729,6 +768,10 @@ export abstract class ModelHandler<
     isNaturalStop: boolean,
   ): string {
     if (isNaturalStop && endTag && !text.includes(endTag)) {
+      this.logger.debug(
+        'appendEndTagIfNeeded: restoring end tag stripped by provider stop sequence',
+        { data: { endTag } },
+      );
       return `${text}\n${endTag}`;
     }
     return text;
@@ -749,11 +792,10 @@ export abstract class ModelHandler<
    */
   protected createContinuationPrompt(
     workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
+    _agentSetting: AgentSetting,
   ): string {
     const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
-    const endTag = agentSetting.endTag;
-    return `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${endTag}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
+    return `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
   }
 
   /** Creates and configures a client instance for the specific model provider. */
@@ -1025,7 +1067,7 @@ export abstract class ModelHandler<
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, M[]]> {
-    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
+    if (!(await FlexibleFS.existsAndNonTrivial(outputLocation))) {
       if (this.capabilities.supportsAssistantPrefill) {
         if (prefill.length === 0) {
           this.logger.debug(
@@ -1037,7 +1079,7 @@ export abstract class ModelHandler<
         this.logger.debug('Adding prefill message', { data: prefill });
         workspaceState.assembly.accumulatedOutput = `${prefill}\n`;
         await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
-        await flexibleFS.write(
+        await FlexibleFS.write(
           outputLocation,
           workspaceState.assembly.accumulatedOutput,
         );
@@ -1072,7 +1114,7 @@ export abstract class ModelHandler<
 
     messages.push(this.createAssistantMessageForPrefillText(fileContent));
 
-    if (hasEndTag(agentSetting, fileContent)) {
+    if (hasEndTag(fileContent)) {
       this.logger.debug(
         'End tag detected - skipping model call (response already added above)',
       );
@@ -1089,7 +1131,7 @@ export abstract class ModelHandler<
       !fileContent.includes(prefill)
     ) {
       workspaceState.assembly.accumulatedOutput = prefill + fileContent;
-      await flexibleFS.write(
+      await FlexibleFS.write(
         outputLocation,
         workspaceState.assembly.accumulatedOutput,
       );
@@ -1165,15 +1207,15 @@ export abstract class ModelHandler<
   shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
-    agentSetting: AgentSetting,
+    _agentSetting: AgentSetting,
   ): boolean {
-    const hasResponseEndTag = hasEndTag(agentSetting, newResponse);
+    const hasResponseEndTag = hasEndTag(newResponse);
     const shouldContinue =
       isTokenLimitStopReason(stopReason) && !hasResponseEndTag;
 
     this.logger.debug(
       shouldContinue
-        ? `Should continue: token limit reached and end tag '${agentSetting.endTag}' is missing.`
+        ? `Should continue: token limit reached and end tag '${OUTPUT_END_TAG}' is missing.`
         : `Should not continue: StopReason='${stopReason}', HasEndTag='${hasResponseEndTag}'.`,
     );
     return shouldContinue;
@@ -1517,10 +1559,16 @@ export abstract class ModelHandler<
 
   /**
    * Whether this handler supports native token counting via API.
-   * Override in subclasses that have token counting capability.
+   *
+   * Defaults to the llm-zoo `supportsTokenCounting` capability flag (#7101:
+   * pure-data predicate, read from the profile rather than overridden per
+   * handler). Override only when the effective value comes from somewhere
+   * other than `this.capabilities` — e.g. a provider-specific capabilities
+   * lookup, or a hardcoded value where the API is universally available
+   * regardless of the model's llm-zoo flag.
    */
   get supportsTokenCounting(): boolean {
-    return false;
+    return this.capabilities.supportsTokenCounting;
   }
 
   /**

@@ -5,8 +5,8 @@
  * Problems panel, like a linter.
  *
  * Two ingest paths:
- *   1. Bus event hook on `addOutputFiles` parses each output `.tex` file.
- *      Universal — any agent that writes the macro participates.
+ *   1. Session run facts keyed by `runFact.addOutputFiles` parse each output
+ *      `.tex` file. Universal — any agent that writes the macro participates.
  *   2. The `diagnostics` tool's `add` command routes through
  *      `pushManualCriticism` here for tool-use agents that want to flag issues
  *      without inserting the macro.
@@ -19,8 +19,11 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { globalSM, GlobalStateKey } from '@common/state';
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo } from '@shared/schemas';
@@ -36,8 +39,9 @@ const CODE_PARSED = 'criticize';
 const CODE_TOOL = 'criticize:tool';
 
 let collection: vscode.DiagnosticCollection | undefined;
-let busUnsubscribe: (() => void) | undefined;
+let runFactUnsubscribe: (() => void) | undefined;
 let extensionContext: vscode.ExtensionContext | undefined;
+let sessionEvents: SessionEventHub | undefined;
 
 /** Criticism severity (0–5) → VS Code DiagnosticSeverity. */
 function mapSeverity(severity: number): vscode.DiagnosticSeverity {
@@ -138,14 +142,17 @@ function enable(context: vscode.ExtensionContext): void {
   if (collection) return;
   collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
   context.subscriptions.push(collection);
-  busUnsubscribe = bus.on('addOutputFiles', handleAddOutputFiles);
+  runFactUnsubscribe = subscribeAddOutputFilesRunFact(
+    sessionEvents ?? defaultSession().events,
+    handleAddOutputFiles,
+  );
   logger.info(CHANNEL, 'Inline criticism diagnostics enabled');
 }
 
 function disable(): void {
-  if (busUnsubscribe) {
-    busUnsubscribe();
-    busUnsubscribe = undefined;
+  if (runFactUnsubscribe) {
+    runFactUnsubscribe();
+    runFactUnsubscribe = undefined;
   }
   if (collection) {
     collection.clear();
@@ -185,8 +192,10 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
 
 export function registerInlineCriticism(
   context: vscode.ExtensionContext,
+  events: SessionEventHub = defaultSession().events,
 ): void {
   extensionContext = context;
+  sessionEvents = events;
   if (isInlineCriticismEnabled()) enable(context);
   context.subscriptions.push({ dispose: disable });
 }
