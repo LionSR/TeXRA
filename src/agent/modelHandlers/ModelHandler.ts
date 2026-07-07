@@ -301,7 +301,14 @@ export abstract class ModelHandler<
 
   /**
    * Returns the effective context window size, accounting for beta overrides.
-   * Subclasses may override (e.g. Anthropic 1M beta).
+   *
+   * Runtime combinator (#7101 triage): the only override is
+   * `ModelHandlerOpenAIResponse`, which reads
+   * `getActiveProviderCapabilities()?.contextWindow` with a fallback to this
+   * base value — same "profile read with fallback" shape as
+   * `supportsToolResultFileUpload`'s OpenAIResponse override. Not reducible
+   * into the base directly since only one subclass implements it, but not
+   * genuine per-provider behavior either.
    */
   public getEffectiveContextWindow(): number {
     return this.config.contextWindow;
@@ -660,6 +667,18 @@ export abstract class ModelHandler<
    * Whether the provider SDK already retries this error internally, so the
    * flow-level auto-retry loop should stand down. Override in subclasses that
    * delegate retries to the provider; the default is no provider-managed retry.
+   *
+   * Not foldable into a single predicate (#7101 triage): Anthropic, OpenAI,
+   * and OpenAIResponse each override to an unconditional `true` — a
+   * provider-wide fact about that SDK's own retry wrapper, not data on
+   * `capabilities`/`config`. `ModelHandlerOpenRouterNative`'s override is
+   * qualitatively different, not just a different boolean: it inspects the
+   * concrete `_error` instance (`OpenRouterConnectionError`/
+   * `OpenRouterRequestTimeoutError`, or an HTTP status code ≥500) rather than
+   * returning a constant, since the OpenRouter SDK's own retry coverage
+   * depends on the failure kind. Each override encodes what that provider's
+   * SDK actually does internally; nothing here is provider-identity data
+   * that a `config` read could reproduce.
    */
   isAutoRetryManagedByProvider(_error: Error): boolean {
     return false;
