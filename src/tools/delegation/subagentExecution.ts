@@ -243,9 +243,20 @@ export async function executeSubagent(
   }
 
   const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
-  const childStreamId = getStreamTabId(agentName, configPayload.model, {
-    executionId,
-  });
+  // Must match the id `buildAgentLaunchContext` actually reserves for this
+  // executionId (see AgentLaunchContext.ts's `reservedStreamId`), or the
+  // loop acquires the wrong follow-up queue/interrupt slot. That reservation
+  // uses the RAW, unparsed `configPayload.agent`/`configPayload.model` — not
+  // `AgentConfigSchema.parse(configPayload).agent` (the later `config.agent`
+  // recomputation never wins; the upfront reservation always does) — and
+  // NOT the `agentName` parameter, which callers may resolve differently
+  // (e.g. an approved agent override's display name vs. its registry name).
+  // Derive from the exact same fields, not a parallel formula.
+  const childStreamId = getStreamTabId(
+    configPayload.agent,
+    configPayload.model,
+    { executionId },
+  );
   const strategyParams = {
     configPayload,
     executionId,

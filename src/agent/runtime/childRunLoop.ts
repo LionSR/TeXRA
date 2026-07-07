@@ -15,9 +15,11 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import { isAbortError } from '@common/errors';
+import { classifyAgentError, isAbortError } from '@common/errors';
+import { deriveRunOutcome } from '@common/constants/streamStatus';
 import type {
   ExecutionId,
   StreamTabId,
@@ -477,7 +479,6 @@ export function startChildRunLoop<TTurn>(
   const sessionStage = childStream
     ? logger.openStage(strategy.stageLabel)
     : undefined;
-  strategy.onSessionStart?.(runSession);
 
   let latestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
@@ -487,6 +488,10 @@ export function startChildRunLoop<TTurn>(
         : parentStreamId;
       if (!targetStreamId) return; // Detached — see deliverTurn for the same guard.
       const msg = formatSubagentProgress(executionId, agentName, update);
+      // No `wake: true` — intentional. A live progress notification should
+      // never wake a WAITING/detached parent stream just to deliver an
+      // interim update; only a turn's own delivery (deliverTurn, below)
+      // wakes the parent.
       void deliverChildRunFollowUp({
         targetStreamId,
         followUp: { text: msg, origin: 'subagent_result' },
@@ -499,10 +504,19 @@ export function startChildRunLoop<TTurn>(
   };
 
   let sawTurnFailure = false;
+  let lastTurnErr: unknown;
   void (async () => {
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
     try {
+      // Runs synchronously before this IIFE's first `await` — i.e. before
+      // `startChildRunLoop` itself returns to its caller — matching
+      // `onSessionStart`'s documented "before the loop starts" contract.
+      // Placed inside this `try` (rather than before the IIFE, as originally
+      // written) so a throw here is covered by the `finally` below and
+      // cannot leak the `activeChildRunLoops` entry or the interrupt/queue
+      // registrations already made above.
+      strategy.onSessionStart?.(runSession);
       while (!loop.isInterrupted()) {
         const startedAt = Date.now();
         const abortController = loop.startTurn();
@@ -515,6 +529,17 @@ export function startChildRunLoop<TTurn>(
           startedAt,
         );
         if (attempt.kind === 'interrupted') break;
+
+        // Re-register the loop's own interruptible IMMEDIATELY once the turn
+        // settles, before any await below (deliverTurn's persist/deliver
+        // chain in particular). A native turn's own flow-owned interruptible
+        // unregisters this exact InterruptRegistry slot in its own `finally`
+        // the instant it returns (see runToolUseFlow), so re-registering
+        // must happen synchronously right here — not after delivery — or a
+        // stop/kill landing during delivery would find no live interruptible
+        // for this stream (the same interruptible-gap class PR-A/#7324
+        // closed for the old drivers).
+        runSession.interrupts.register(childStreamId, loop);
 
         const turn = attempt.kind === 'completed' ? attempt.turn : null;
         const err = attempt.kind === 'failed' ? attempt.err : null;
@@ -544,6 +569,7 @@ export function startChildRunLoop<TTurn>(
 
         if (turnFailed) {
           sawTurnFailure = true;
+          lastTurnErr = err;
           childStream?.failTurn();
           break;
         }
@@ -557,13 +583,10 @@ export function startChildRunLoop<TTurn>(
           break;
         }
 
-        // Interim turn: re-establish this loop's own interruptible
-        // registration (a native turn's own flow-owned interruptible always
-        // unregisters that InterruptRegistry slot on return, WAITING
-        // included — see runToolUseFlow's finally), then drain the next
-        // batch. A follow-up already raced into the queue resumes
-        // immediately instead of genuinely waiting.
-        runSession.interrupts.register(childStreamId, loop);
+        // Interim turn continuing: the loop's interruptible is already
+        // registered (immediately above, the instant this turn settled) —
+        // just drain the next batch. A follow-up already raced into the
+        // queue resumes immediately instead of genuinely waiting.
         childStream?.waitForInput();
         if (loop.isInterrupted()) break;
 
@@ -580,20 +603,58 @@ export function startChildRunLoop<TTurn>(
       runSession.followUps.release(childStreamId);
       strategy.onSessionCleanup?.();
       params.recordCost?.(latestCostUsd);
-      // The shared terminal finalizer (via ChildStream.finalize, for
-      // agent-CLI strategies) owns the single outcome derivation and its
-      // projections: stage end, persisted terminal status (before untrack
-      // notifies waiters), settled result, and terminal stream phase. Native
-      // strategies have no separate stream tab to finalize — every terminal
-      // native turn already ran through `finalizeRunTerminal` inside
-      // `runFlowWithLifecycle` for that turn's own handle.
+      // The shared terminal finalizer owns the single outcome derivation and
+      // its projections: persisted terminal status (before untrack notifies
+      // waiters), settled result, and terminal stream phase.
       if (childStream) {
+        // Agent-CLI: ChildStream.finalize owns this handle for the loop's
+        // whole lifetime (one handle, tracked once by createChildStream).
         await childStream.finalize({
           failed: sawTurnFailure,
           cancelled: loop.isInterrupted(),
           stage: sessionStage,
           persistTerminalStatus: true,
         });
+      } else {
+        // Native: every GENUINE terminal turn already finalized its own
+        // handle inside runFlowWithLifecycle (the handle is untracked by the
+        // time this runs, so the lookup below finds nothing — a safe no-op).
+        // Two paths leave the most recently tracked handle for this stream
+        // dangling, never finalized by its own flow:
+        //   (1) the loop was interrupted between turns — ExecutionRegistry
+        //       .terminate() found this loop's own interruptible, called
+        //       .interrupt(), and transitioned the stream to CANCELLED, but
+        //       assumed a live flow would notice and self-finalize; nothing
+        //       is running here, the loop was just blocked on a queue wait.
+        //   (2) `runTurn` threw before ever reaching a new
+        //       runFlowWithLifecycle call (a resume pre-check failure, or a
+        //       failed resume per #7491) — the prior turn's suspended handle
+        //       was never touched by this attempt.
+        // `finalizeRunTerminal`'s atomic claim makes this call safe even if
+        // it races something else that already finalized the same handle.
+        const handle =
+          runSession.executions.getAgentHandleByStream(childStreamId);
+        if (handle) {
+          const outcome = deriveRunOutcome({
+            failed: sawTurnFailure && !loop.isInterrupted(),
+            cancelled: loop.isInterrupted(),
+          });
+          await finalizeRunTerminal({
+            handle,
+            executions: runSession.executions,
+            streamStatus: runSession.status,
+            outcome,
+            error:
+              sawTurnFailure && lastTurnErr !== undefined
+                ? {
+                    kind: classifyAgentError(lastTurnErr),
+                    message: toErrorMessage(lastTurnErr),
+                  }
+                : undefined,
+            isSubagent: true,
+            persistTerminalStatus: true,
+          });
+        }
       }
     }
   })();

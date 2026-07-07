@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   sendFollowUp: vi.fn(),
   wakeQueuedFollowUpStream: vi.fn(),
   isChildRunLoopActive: vi.fn(),
+  deliverChildRunFollowUp: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/RunContext', () => ({
@@ -30,6 +31,10 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
   isChildRunLoopActive: mocks.isChildRunLoopActive,
+}));
+
+vi.mock('@tools/childRunDelivery', () => ({
+  deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
 // Local imports - agent
@@ -188,6 +193,7 @@ describe('DelegateAgentTool resume (issue #7289)', () => {
       status: 'queued',
       reason: 'waiting',
     });
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
   });
 
   it('does not dispatch a wake when a child-run loop is already listening on the resumed stream', async () => {
@@ -239,5 +245,53 @@ describe('DelegateAgentTool resume (issue #7289)', () => {
     assert.strictEqual(mocks.wakeQueuedFollowUpStream.mock.calls.length, 1);
 
     resolveWake?.({ kind: 'resumed' });
+  });
+
+  it('delivers a terminal error to the parent when the wake resolves as failed (no thrown exception)', async () => {
+    // Regression: the removed NativeSubagentStrategy delivered a terminal
+    // error to the orchestrator on this exact wake failure. Without it, this
+    // tool call returns a normal "queued" success and the parent never
+    // hears back — a silent hang, not a visible error.
+    mocks.isChildRunLoopActive.mockReturnValue(false);
+    mocks.wakeQueuedFollowUpStream.mockResolvedValue({
+      kind: 'queued_resume_failed',
+    });
+
+    const tool = new DelegateAgentTool();
+    const result = await tool.call({
+      execution_id: executionId,
+      instruction: 'Keep going.',
+    });
+    assert.strictEqual(result.status, 'executed');
+
+    await vi.waitFor(() => {
+      assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 1);
+    });
+    const [deliveryArgs] = mocks.deliverChildRunFollowUp.mock.calls;
+    assert.strictEqual(deliveryArgs[0].targetStreamId, parentStreamId);
+    assert.match(deliveryArgs[0].followUp.text, /<subagent-error/);
+    assert.strictEqual(deliveryArgs[0].followUp.origin, 'subagent_result');
+    assert.strictEqual(deliveryArgs[0].wake, true);
+  });
+
+  it('delivers a terminal error to the parent when the wake itself throws', async () => {
+    mocks.isChildRunLoopActive.mockReturnValue(false);
+    mocks.wakeQueuedFollowUpStream.mockRejectedValue(
+      new Error('resume storage unreadable'),
+    );
+
+    const tool = new DelegateAgentTool();
+    const result = await tool.call({
+      execution_id: executionId,
+      instruction: 'Keep going.',
+    });
+    assert.strictEqual(result.status, 'executed');
+
+    await vi.waitFor(() => {
+      assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 1);
+    });
+    const [deliveryArgs] = mocks.deliverChildRunFollowUp.mock.calls;
+    assert.strictEqual(deliveryArgs[0].targetStreamId, parentStreamId);
+    assert.match(deliveryArgs[0].followUp.text, /resume storage unreadable/);
   });
 });
