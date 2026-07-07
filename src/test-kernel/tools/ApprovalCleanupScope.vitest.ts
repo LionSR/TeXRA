@@ -51,12 +51,11 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
     const hostA = host();
     const hostB = host();
     const session = new SessionHandle();
-    const cancelUnscoped = vi.fn();
+    const cancel = vi.fn();
     const detach = session.useHostInteractions({
       handleProgressEvent: () => false,
       resolve: () => false,
-      cancelForStream: () => {},
-      cancelUnscoped,
+      cancel,
     });
     const settled = new Set<string>();
     const createPending = (id: string, runtimeHost: AgentRuntimeHost) => {
@@ -87,9 +86,10 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
       cleanupUnscopedApprovals(hostA, session);
 
       expect(settled).toEqual(new Set(['tool-a', 'bash-a']));
-      expect(cancelUnscoped).toHaveBeenCalledWith(
-        'Streamless approval cleanup.',
-      );
+      expect(cancel).toHaveBeenCalledWith({
+        streamId: null,
+        cause: 'Streamless approval cleanup.',
+      });
 
       cleanupUnscopedApprovals();
 

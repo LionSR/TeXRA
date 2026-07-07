@@ -165,7 +165,6 @@ export class ProgressViewProvider
       this,
       context,
       new VscodePromptHost(),
-      defaultSession().coordinators,
       defaultSession().interactions,
     );
     this.detachHostInteractions = defaultSession().useHostInteractions(

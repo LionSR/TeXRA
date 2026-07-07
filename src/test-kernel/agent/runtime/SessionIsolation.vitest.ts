@@ -12,9 +12,6 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
   SessionHandle,
@@ -111,11 +108,6 @@ function createLifecycleContext(
       dispose: vi.fn(),
     } as unknown as AgentLaunchContext['modelHandler'],
     disposeTrace: vi.fn(),
-    coordinators: {
-      plan: new PlanApprovalCoordinator(explicit.host),
-      proposal: new AgentProposalCoordinator(explicit.host),
-      retry: new RetryRequestCoordinatorImpl(explicit.host),
-    },
     session,
   };
 }

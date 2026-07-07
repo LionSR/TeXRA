@@ -10,15 +10,6 @@ import {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
-import {
-  createRunContext,
-  withRunContext,
-  type RunCoordinators,
-} from '@agent/runtime/RunContext';
 import {
   SessionHandle,
   getAllActiveExecutionIds,
@@ -31,14 +22,6 @@ import { cleanupAllApprovals } from '@tools/approval';
 import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Scope session-owned state.' };
-
-function createCoordinators(host: AgentRuntimeHost): RunCoordinators {
-  return {
-    plan: new PlanApprovalCoordinator(host),
-    proposal: new AgentProposalCoordinator(host),
-    retry: new RetryRequestCoordinatorImpl(host),
-  };
-}
 
 describe('cross-session active executions (SDK Step 7d PR 4)', () => {
   it('aggregates active execution ids across live sessions and drops them on dispose', () => {
@@ -54,7 +37,6 @@ describe('cross-session active executions (SDK Step 7d PR 4)', () => {
           'orchestrator',
           'toolUse',
           host,
-          createCoordinators(host),
         ),
       );
     };
@@ -197,39 +179,35 @@ describe('session-owned transcripts and follow-up queues (Stage 3a)', () => {
 });
 
 describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
-  it("clears only the given session's coordinator requests", async () => {
+  it("clears only the given session's pending interactions", async () => {
     const a = new SessionHandle();
     const b = new SessionHandle();
     const hostA = createRecordingHost();
     const hostB = createRecordingHost();
-    const coordA = createCoordinators(hostA.host);
-    const coordB = createCoordinators(hostB.host);
     const streamId = 'stream:approval-scope' as StreamTabId;
+    a.useHostInteractions(hostA.interactions);
+    b.useHostInteractions(hostB.interactions);
 
     try {
-      const planA = withRunContext(
-        createRunContext({ runtimeHost: hostA.host, coordinators: coordA }),
-        () =>
-          a.coordinators.waitForPlanApproval(streamId, {
-            approvalId: 'approval:a',
-            plan,
-          }),
-      );
-      const planB = withRunContext(
-        createRunContext({ runtimeHost: hostB.host, coordinators: coordB }),
-        () =>
-          b.coordinators.waitForPlanApproval(streamId, {
-            approvalId: 'approval:b',
-            plan,
-          }),
-      );
+      const planA = a.interactions.requestPlanApproval({
+        approvalId: 'approval:a',
+        streamId,
+        plan,
+        goalEnabled: false,
+      });
+      const planB = b.interactions.requestPlanApproval({
+        approvalId: 'approval:b',
+        streamId,
+        plan,
+        goalEnabled: false,
+      });
 
       cleanupAllApprovals(a);
 
       await expect(planA).resolves.toEqual({ action: 'reject' });
       // Session B's request is untouched and still resolvable.
       expect(
-        hostB.host.interactions?.resolve('approval:b', {
+        b.interactions.resolve('approval:b', {
           kind: 'plan',
           action: 'approve',
         }),
@@ -259,7 +237,6 @@ describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
           'orchestrator',
           'toolUse',
           host,
-          createCoordinators(host),
         ),
       );
 

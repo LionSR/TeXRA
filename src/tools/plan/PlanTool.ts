@@ -19,7 +19,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
-import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
+import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   getCurrentToolContexts,
@@ -256,12 +256,16 @@ Best practices:
 
     logger.info('Requesting approval for plan objective');
 
-    const result: PlanApprovalResult =
-      await currentSession().coordinators.waitForPlanApproval(streamId, {
-        approvalId,
-        plan,
-        goalEnabled,
-      });
+    const interaction = currentSession().interactions.requestPlanApproval({
+      approvalId,
+      streamId,
+      plan,
+      goalEnabled,
+    });
+    if (!interaction) {
+      throw new Error('HostInteractions.requestPlanApproval is required');
+    }
+    const result: PlanApprovalResult = await interaction;
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');

@@ -223,7 +223,7 @@ describe('CLI approval queue', () => {
     ).toBeUndefined();
   });
 
-  // Regression coverage for #7306: `cancelForStream` previously only cancelled
+  // Regression coverage for #7306: the per-stream cancel previously only cancelled
   // retry routes, leaving bash/tool-edit/plan/proposal/user-question requests
   // permanently pending on a stream-scoped interrupt.
   it('clears every pending kind for a stream via clearApprovalsForStream, leaving other streams alone', async () => {

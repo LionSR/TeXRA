@@ -15,10 +15,10 @@ import type {
   HostBashApprovalResult,
   HostInteractionResolution,
   HostUserQuestionResult,
+  PlanApprovalResult,
+  ProposalResult,
+  RetryResult,
 } from './HostInteractions';
-import type { PlanApprovalResult } from './PlanApprovalCoordinator';
-import type { ProposalResult } from './AgentProposalCoordinator';
-import type { RetryResult } from './RetryRequestCoordinator';
 
 export function toBashApprovalResult(
   result: HostInteractionResolution,

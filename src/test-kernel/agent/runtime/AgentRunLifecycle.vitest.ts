@@ -16,7 +16,6 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   StreamStatusMachine,
   StreamStatusService,
@@ -28,8 +27,6 @@ import {
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
@@ -144,11 +141,6 @@ function createLifecycleContext({
       dispose: vi.fn(),
     } as unknown as AgentLaunchContext['modelHandler'],
     disposeTrace: vi.fn(),
-    coordinators: {
-      plan: new PlanApprovalCoordinator(explicit.host),
-      proposal: new AgentProposalCoordinator(explicit.host),
-      retry: new RetryRequestCoordinatorImpl(explicit.host),
-    },
   };
   return { ctx, explicit };
 }

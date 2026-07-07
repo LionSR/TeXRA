@@ -8,10 +8,10 @@ import type {
   HostInteractions,
   HostRetryRequest,
   HostUserQuestionResult,
+  PlanApprovalResult,
+  ProposalResult,
+  RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import type { UserQuestionAnswers } from '@shared/schemas';
 
@@ -290,7 +290,9 @@ export function createHeadlessCliHostInteractions(
     },
     handleProgressEvent: () => false,
     resolve: () => false,
-    cancelForStream: () => {},
+    // Headless requests decide inline (policy or prompt hooks) — there is no
+    // pending registry to cancel into.
+    cancel: () => {},
   };
 }
 

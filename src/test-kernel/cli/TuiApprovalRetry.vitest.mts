@@ -7,8 +7,6 @@ const mocks = vi.hoisted(() => ({
   setCliApiMode: vi.fn(async () => undefined),
   setCliCodexSubscription: vi.fn(async () => undefined),
   markApprovalDenied: vi.fn(),
-  triggerRetry: vi.fn(),
-  cancelRetry: vi.fn(),
 }));
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
@@ -26,13 +24,6 @@ vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
 
 vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
   setCliCodexSubscription: mocks.setCliCodexSubscription,
-}));
-
-vi.mock('@agent/runtime/runCoordinators', () => ({
-  SharedRunCoordinatorBridge: {
-    triggerRetry: mocks.triggerRetry,
-    cancelRetry: mocks.cancelRetry,
-  },
 }));
 
 vi.mock('@cli/runtime/approvalAdapter', () => {
@@ -179,8 +170,6 @@ afterEach(() => {
   mocks.setCliApiMode.mockClear();
   mocks.setCliCodexSubscription.mockClear();
   mocks.markApprovalDenied.mockClear();
-  mocks.triggerRetry.mockClear();
-  mocks.cancelRetry.mockClear();
 });
 
 describe('TUI retry approvals', () => {
@@ -240,7 +229,6 @@ describe('TUI retry approvals', () => {
           payload: { streamId: 's2' },
         });
       });
-      expect(mocks.triggerRetry).not.toHaveBeenCalled();
     } finally {
       dispose();
     }
@@ -264,7 +252,6 @@ describe('TUI retry approvals', () => {
         });
       });
       expect(mocks.lookupApiKey).not.toHaveBeenCalled();
-      expect(mocks.triggerRetry).not.toHaveBeenCalled();
     } finally {
       dispose();
     }
@@ -354,8 +341,6 @@ describe('TUI retry approvals', () => {
       await Promise.resolve();
 
       expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-      expect(mocks.triggerRetry).not.toHaveBeenCalled();
-      expect(mocks.cancelRetry).not.toHaveBeenCalled();
       expect(currentApproval.get()).toBeUndefined();
     } finally {
       dispose();
@@ -383,8 +368,6 @@ describe('TUI retry approvals', () => {
     await Promise.resolve();
 
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(mocks.triggerRetry).not.toHaveBeenCalled();
-    expect(mocks.cancelRetry).not.toHaveBeenCalled();
     expect(currentApproval.get()).toBeUndefined();
   });
 
@@ -536,7 +519,6 @@ describe('TUI retry approvals', () => {
       await Promise.resolve();
 
       expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-      expect(mocks.triggerRetry).not.toHaveBeenCalled();
     } finally {
       dispose();
     }
@@ -616,8 +598,6 @@ describe('TUI retry approvals', () => {
           payload: { errorMessage: 'second retry' },
         });
       });
-      expect(mocks.cancelRetry).not.toHaveBeenCalled();
-      expect(mocks.triggerRetry).not.toHaveBeenCalled();
     } finally {
       dispose();
     }
@@ -666,8 +646,6 @@ describe('TUI retry approvals', () => {
       rejectFirstModeSwitch?.(new Error('stale mode switch failed'));
       await Promise.resolve();
       await Promise.resolve();
-
-      expect(mocks.cancelRetry).not.toHaveBeenCalled();
     } finally {
       dispose();
     }

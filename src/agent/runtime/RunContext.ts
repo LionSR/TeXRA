@@ -4,16 +4,7 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
-import type { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
-import type { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 import type { SessionHandle } from './SessionHandle';
-
-export interface RunCoordinators {
-  readonly plan: PlanApprovalCoordinator;
-  readonly proposal: AgentProposalCoordinator;
-  readonly retry: RetryRequestCoordinatorImpl;
-}
 
 interface RunContextCommon {
   readonly runtimeHost: AgentRuntimeHost;
@@ -39,7 +30,6 @@ export interface LaunchRunContext extends RunContextCommon {
   readonly kind: 'launch';
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId;
-  readonly coordinators: RunCoordinators;
   /** Agent name (e.g. "orchestrator", "search-agent"). */
   readonly agentName: string;
   /** Session that owns this run's coordination state. */
@@ -50,7 +40,6 @@ interface BareRunContext extends RunContextCommon {
   readonly kind: 'bare';
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
-  readonly coordinators?: RunCoordinators;
   /** Agent name (e.g. "orchestrator", "search-agent"). */
   readonly agentName?: string;
   /** Session that owns this run's coordination state. */
@@ -76,7 +65,6 @@ interface CreateRunContextBase {
   runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
-  coordinators?: RunCoordinators;
   agentName?: string;
   workingDirectory?: string;
   delegationDepth?: number;
@@ -90,7 +78,7 @@ interface CreateRunContextBase {
 type CreateLaunchRunContextFields = Required<
   Pick<
     CreateRunContextBase,
-    'streamId' | 'executionId' | 'coordinators' | 'agentName' | 'session'
+    'streamId' | 'executionId' | 'agentName' | 'session'
   >
 >;
 
@@ -120,7 +108,6 @@ type CommonRunContextFieldNames =
   | 'runtimeHost'
   | 'streamId'
   | 'executionId'
-  | 'coordinators'
   | 'agentName'
   | 'workingDirectory'
   | 'delegationDepth'
@@ -144,7 +131,6 @@ function commonRunContextFields<T extends CreateRunContextBase>(
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
-    coordinators: options.coordinators,
     agentName: options.agentName,
     workingDirectory: options.workingDirectory,
     delegationDepth: options.delegationDepth,
