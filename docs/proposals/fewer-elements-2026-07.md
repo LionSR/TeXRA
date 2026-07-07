@@ -36,7 +36,7 @@ symptom; element count is the metric. Two corollaries drive everything below:
 ## 2. Measured reality (2026-07-02..07)
 
 All numbers reproducible from
-`git log --since=2026-07-02 --numstat -- . ':(exclude)pnpm-lock.yaml' ':(exclude)**/deno.lock'`
+`git log --since=2026-07-02 --before=2026-07-08 --numstat -- . ':(exclude)pnpm-lock.yaml' ':(exclude)**/deno.lock'`
 and the GitHub record; census methods stated inline.
 
 - **~300 PRs merged; net +44k LoC whole-repo.** Tests +24.7k (55%,
@@ -267,9 +267,10 @@ and security work is always exempt from R3/R4 sequencing.
   their #6981 row, and the row's trigger includes deleting the marked blocks.
   Scaffolding test LoC counts double in R6 accounting. Suites with 4 or more
   structurally identical cases use `test.each`. Immediately foldable: the 8
-  new sub-50-LoC suites. `ProgressBackendProcessBus.vitest.ts` (177 LoC)
-  guards a still-live adapter and dies in the same PR that deletes the adapter
-  (#7446), per #6968's retire-with-the-equivalence gate, not before.
+  new sub-50-LoC suites. (The audit's other immediate candidate,
+  `ProgressBackendProcessBus.vitest.ts`, was retired together with its adapter
+  by #7446 while this doc was in review — the retire-with-the-equivalence gate
+  working as intended.)
 - **R8. Consumer-grep before emitter deletion.** Any PR deleting or re-routing
   an emit path greps all subscribe sites of the affected keys first and states
   the consumer count in the PR body (the #7398 rule, pinned on #6968).
