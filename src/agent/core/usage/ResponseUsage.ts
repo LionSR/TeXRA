@@ -1,9 +1,5 @@
 // Third-party imports
-import type {
-  Usage as AnthropicUsage,
-  CacheCreation,
-  ServerToolUsage,
-} from '@anthropic-ai/sdk/resources/messages';
+import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
 import type {
   GenerateContentResponseUsageMetadata,
   Interactions,
@@ -54,49 +50,3 @@ export type NativeUsagePayload =
  * the provider doesn't return usage data.
  */
 export type ProviderUsage = NativeUsagePayload | null | undefined;
-
-/** Base interface for common response usage metrics. Internal only. */
-interface ResponseUsageBase {
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  percentageCached: number;
-  cost: number;
-  responseTime: number;
-}
-
-/** OpenAI-specific response usage metrics with detailed token breakdowns. */
-export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
-  prompt_tokens: number;
-  completion_tokens: number;
-  cached_tokens: number;
-  cache_miss_tokens?: number;
-  reasoning_tokens: number;
-  accepted_prediction_tokens: number | null;
-  rejected_prediction_tokens: number | null;
-  // Some providers expose tool-use tokens via the OpenAI-compatible interface.
-  tool_use_tokens?: number;
-  prompt_tokens_details?: {
-    cached_tokens?: number;
-  };
-  completion_tokens_details?: {
-    reasoning_tokens?: number;
-    accepted_prediction_tokens?: number | null;
-    rejected_prediction_tokens?: number | null;
-  };
-}
-
-/** Anthropic-specific response usage metrics with cache statistics. */
-export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_input_tokens: number | null;
-  cache_creation_input_tokens: number | null;
-  /** Breakdown of cache creation tokens by TTL (5m vs 1h) */
-  cache_creation: CacheCreation | null;
-  /** Server tool usage statistics (e.g., web search requests) */
-  server_tool_use: ServerToolUsage | null;
-  /** Service tier used for the request (standard, priority, or batch) */
-  service_tier: 'standard' | 'priority' | 'batch' | null;
-  // Optional field surfaced by compatibility layers that expose tool-use costs.
-  tool_use_tokens?: number;
-}

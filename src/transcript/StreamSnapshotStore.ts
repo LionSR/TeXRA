@@ -78,6 +78,7 @@ import {
   assembleSnapshot,
   EMPTY_WORK_PLAN,
   readLegacyInstruction as readLegacyInstructionFromDisk,
+  readMeta,
   readStreamData,
   type StreamData,
 } from './streamSnapshotRead';
@@ -927,12 +928,29 @@ export class StreamSnapshotStore {
       .filter((stream): stream is StreamTabId => stream !== undefined);
   }
 
-  /** Execution id recorded in a stream sidecar, without seeding memory. */
+  /**
+   * Execution id recorded in a stream sidecar's `meta.json`, without seeding
+   * memory or reading the stream's other sidecar files. Callers that scan
+   * every persisted stream (the `executionStreamResolver` meta-match, bulk
+   * admin sweeps in `SessionStores`) only ever need this one field, so this
+   * reads just `meta.json` rather than the full 6-file `readStreamData()`.
+   */
   async readPersistedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
-    const meta = (await readStreamData(this.kv(stream))).meta;
-    return executionIdFromMeta(meta);
+    return executionIdFromMeta(await readMeta(this.kv(stream)));
+  }
+
+  /**
+   * Whether a stream has a persisted `workPlan.json` sidecar — an existence
+   * check only (a single stat via `KVStore.exists`), not a read. Used by the
+   * resolver to disambiguate between multiple persisted streams that share an
+   * `executionId` (e.g. a parent orchestrator tab and a child stream): the
+   * candidate that actually holds durable todo/plan data is preferred over a
+   * bare `meta.json`-only match.
+   */
+  async hasPersistedWorkPlan(stream: StreamTabId): Promise<boolean> {
+    return this.kv(stream).exists(STREAM_DATA_KEYS.WORK_PLAN);
   }
 
   /**

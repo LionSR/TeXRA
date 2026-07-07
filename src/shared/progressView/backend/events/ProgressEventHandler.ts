@@ -217,11 +217,6 @@ export class ProgressEventHandler {
           }
         },
       },
-      extensionDeactivating: {
-        module: 'ProgressEvents',
-        context: 'failed to handle extensionDeactivating',
-        handle: () => this.markAllRunningTasksAsCancelled(),
-      },
       // Output events — workflow tabs hold one run; ignore the storageKey dim.
       addOutputFiles: {
         module: 'ProgressEvents',
@@ -710,7 +705,7 @@ export class ProgressEventHandler {
     };
   }
 
-  private markAllRunningTasksAsCancelled(): void {
+  public markAllRunningTasksAsCancelled(): void {
     for (const [stream, status] of this.state.streamStatus.entries()) {
       if (status === STREAM_PHASE.RUNNING) {
         this.state.streamStatus.transition(

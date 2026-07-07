@@ -215,15 +215,6 @@ export interface ProgressEventPayloads {
    *  back to the UI. */
   goalStateChanged: { streamId: StreamTabId };
 
-  // ── App/session lifecycle + integration signals ──
-  extensionDeactivating: undefined;
-
-  /**
-   * One or more files were written directly to the workspace (e.g. via
-   * accept_run_files). Listened by fileDecorations to badge the files.
-   */
-  workspaceFilesWritten: { absolutePaths: string[] };
-
   // ── Frontend-bound events ──
   // Emitted by agent core/runtime; consumed by frontend listeners.
   // Keeps @agent/ free of @frontend/ imports.

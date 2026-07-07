@@ -94,9 +94,8 @@ function consumeEchoCount(counts: Map<string, number>, key: string): boolean {
 /**
  * Dedupe a fact that reaches this module through two paths that both fire
  * off the *same* underlying `SessionEventHub` event: `attachTuiRunFactSubscription`
- * applying it directly, and the retained legacy progress projection
- * re-emitting it as a legacy `runtimeHost.emit(...)` that `applyToState` also
- * applies.
+ * applying it directly, and the CLI session progress projection re-emitting it
+ * as a legacy `runtimeHost.emit(...)` that `applyToState` also applies.
  *
  * This guard is deliberately **order-independent**: `applyDirect` and
  * `applyLegacy` are symmetric, each first checking whether the *other* side
@@ -104,11 +103,11 @@ function consumeEchoCount(counts: Map<string, number>, key: string): boolean {
  * subscriber the hub happens to invoke first for a given event "wins" the
  * apply; the second one only consumes the marker and skips. Correctness does
  * NOT depend on `attachTuiRunFactSubscription` being registered on the hub
- * before the legacy projection (today it is in `chatSessionController.ts`, but
+ * before the CLI projection (today it is in `chatSessionController.ts`, but
  * nothing requires that and it is not guaranteed to stay true) — see #7388.
  * Regression coverage for both attach orders lives in
  * `TuiStateAndFocus.vitest.mts` ("does not double-count projected usage when
- * the TUI subscriber is first" / "... when the legacy projection is first").
+ * the TUI subscriber is first" / "... when CLI projection is first").
  *
  * Do not replace this with a one-directional variant (remember-on-direct,
  * consume-on-legacy-only) — that reintroduces exactly the order dependency

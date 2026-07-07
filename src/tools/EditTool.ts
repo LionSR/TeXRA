@@ -3,10 +3,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
-import {
-  recordToolFileRead,
-  requireFileReadForEdit,
-} from '@tools/fileInteractions';
+import { requireFileReadForEdit } from '@tools/fileInteractions';
 import {
   assertWritable,
   resolveAndFormat,
@@ -14,9 +11,9 @@ import {
 } from '@tools/pathResolution';
 import { countOccurrences } from '@tools/utils';
 import {
-  formatUnifiedApprovalUserDiff,
+  appendApprovalDiffNote,
   requestApprovedEditContent,
-  writeApprovedContent,
+  writeAndRecordApprovedEdit,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { pluralize } from '@utils/text/stringUtils';
@@ -113,27 +110,23 @@ export class EditFileTool extends defineTool({
     }
     const { approval, finalContent } = outcome;
 
-    const { appliedContent } = await writeApprovedContent(
+    const { appliedContent } = await writeAndRecordApprovedEdit(
       targetPath,
       currentContent,
       finalContent,
     );
-
-    recordToolFileRead(targetPath);
 
     const count = replace_all ? occurrences : 1;
     const occurrenceWord = pluralize(count, 'occurrence');
     const replacementSummary = `Replaced ${count} ${occurrenceWord}.`;
     const summary = `Edited ${displayPath}: replaced ${count} ${occurrenceWord}`;
 
-    const userDiffNote = formatUnifiedApprovalUserDiff(
+    const output = appendApprovalDiffNote(
+      replacementSummary,
       displayPath,
       updatedContent,
       appliedContent,
     );
-    const output = userDiffNote
-      ? `${replacementSummary}\n\n${userDiffNote}`
-      : replacementSummary;
 
     return {
       status: 'executed',
