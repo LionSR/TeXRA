@@ -19,7 +19,6 @@ import {
   type FlowRecord,
 } from '@agent/node/persistedFlow';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -266,11 +265,6 @@ export async function runToolUseFlow<C = unknown>(
       streamId,
       executionId,
       config: services.config,
-    });
-    runtimeHost.emit('setTaskState', {
-      streamId,
-      executionId,
-      taskState: agentConfigToTaskState(services.config),
     });
     input.onModelChanged?.(nextHandler, model);
   };
