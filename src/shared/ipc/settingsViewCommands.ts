@@ -75,7 +75,6 @@ export const SETTINGS_VIEW_CMD = {
   SET_SUPER_YOLO_ENABLED: 'setSuperYoloEnabled',
   SET_ALLOW_ORCHESTRATOR_KILL: 'setAllowOrchestratorKill',
   SET_DETACH_SUBAGENTS_ON_STOP: 'setDetachSubagentsOnStop',
-  SET_NESTED_DELEGATION_MAX_DEPTH: 'setNestedDelegationMaxDepth',
   APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
   SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
   DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
