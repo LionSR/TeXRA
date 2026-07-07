@@ -1,32 +1,38 @@
 import process from 'node:process';
 
 import type { AgentEvent } from '@agent/trace';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import { createChannelTrace } from '@logger';
-import type { StreamTabId } from '@shared/schemas';
+import type {
+  ClearMissingOutputsPayload,
+  GoalStateChangedPayload,
+  InquiryThreadUpdatedEvent,
+  SetActiveStreamPayload,
+  StreamTabId,
+  UpdateQueuedFollowUpsPayload,
+} from '@shared/schemas';
 
 const logger = createChannelTrace('SessionEventHub');
 
 export type SessionFact =
   | {
       readonly type: 'goalStateChanged';
-      readonly payload: ProgressEventPayloads['goalStateChanged'];
+      readonly payload: GoalStateChangedPayload;
     }
   | {
       readonly type: 'inquiryThreadUpdated';
-      readonly payload: ProgressEventPayloads['inquiryThreadUpdated'];
+      readonly payload: InquiryThreadUpdatedEvent;
     }
   | {
       readonly type: 'clearMissingOutputs';
-      readonly payload: ProgressEventPayloads['clearMissingOutputs'];
+      readonly payload: ClearMissingOutputsPayload;
     }
   | {
       readonly type: 'updateQueuedFollowUps';
-      readonly payload: ProgressEventPayloads['updateQueuedFollowUps'];
+      readonly payload: UpdateQueuedFollowUpsPayload;
     }
   | {
       readonly type: 'setActiveStream';
-      readonly payload: ProgressEventPayloads['setActiveStream'];
+      readonly payload: SetActiveStreamPayload;
     };
 
 export type SessionEvent =

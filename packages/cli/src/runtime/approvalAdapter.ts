@@ -12,7 +12,7 @@ import type {
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import type { UserQuestionAnswers } from '@shared/schemas';
 
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';

@@ -41,13 +41,13 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import {
   getFileListConfig,
   loadFileListSettings,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
@@ -293,13 +293,6 @@ export class DesktopProgressBridge {
           handlers: this.approvalHandlers,
           webviewUpdater,
           canSend,
-          // Desktop has no retry panel: decline the affordance so the run takes
-          // the normal cancel path instead of hanging in WAITING for an answer
-          // that can never arrive.
-          showRetryRequest: (payload) => {
-            this.session.coordinators.cancelRetry(payload.streamId);
-          },
-          resolveRetryRequest: () => undefined,
         });
       },
     });

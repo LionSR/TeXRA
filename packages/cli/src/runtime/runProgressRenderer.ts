@@ -5,7 +5,7 @@ import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 // Local imports - progress events
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 
 // Local imports - shared schemas
 import { STREAM_PHASE, STREAM_STATUS, type StreamPhase } from '@shared/schemas';

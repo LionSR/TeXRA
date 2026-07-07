@@ -1,7 +1,7 @@
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+} from '@agent/runtime/hostProgressEvents';
 
 // CLI hosts share the same progress-event names, but not the same handling.
 // Decision approvals can be auto-approved or denied by policy; human-input

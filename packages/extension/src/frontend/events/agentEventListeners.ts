@@ -11,11 +11,6 @@ import * as vscode from 'vscode';
 import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventContract';
-import type {
-  InstructionAction,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -23,13 +18,20 @@ import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgent
 import { extensionPresentationEvents } from '@frontend/events/extensionPresentationEvents';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  INSTRUCTION_ACTION,
+  type InstructionAction,
+  type RequestEnsureProgressViewPayload,
+  type RequestOpenFilePayload,
+  type RequestShowErrorPayload,
+  type RequestShowInstructionPayload,
+  type ShowAgentConfigBannerPayload,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'agentEventListeners';
 
-function handleRequestOpenFile(
-  payload: ProgressEventPayloads['requestOpenFile'],
-): void {
+function handleRequestOpenFile(payload: RequestOpenFilePayload): void {
   openBuildDisplayIfTex(payload.location, {
     preserveFocus: payload.preserveFocus,
   }).catch((err) =>
@@ -66,7 +68,7 @@ const INSTRUCTION_ACTION_VIEW: Record<
 };
 
 function handleRequestShowInstruction(
-  payload: ProgressEventPayloads['requestShowInstruction'],
+  payload: RequestShowInstructionPayload,
 ): void {
   const actions = (payload.actions ?? []).map((token) => {
     const view = INSTRUCTION_ACTION_VIEW[token];
@@ -91,7 +93,7 @@ function handleRequestShowInstruction(
 }
 
 async function handleShowAgentConfigBanner(
-  payload: ProgressEventPayloads['showAgentConfigBanner'],
+  payload: ShowAgentConfigBannerPayload,
 ): Promise<void> {
   const view = await getMainWebview(CHANNEL);
   view?.webview.postMessage({
@@ -101,14 +103,12 @@ async function handleShowAgentConfigBanner(
   });
 }
 
-function handleRequestShowError({
-  message,
-}: ProgressEventPayloads['requestShowError']): void {
+function handleRequestShowError({ message }: RequestShowErrorPayload): void {
   void vscode.window.showErrorMessage(message);
 }
 
 async function handleRequestEnsureProgressView(
-  payload: ProgressEventPayloads['requestEnsureProgressView'],
+  payload: RequestEnsureProgressViewPayload,
 ): Promise<void> {
   await vscode.commands.executeCommand('texra.showProgressView');
 
