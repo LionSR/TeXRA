@@ -283,7 +283,7 @@ export function getApprovedContent(
   return approval.appliedContent ?? fallback;
 }
 
-export function formatUnifiedApprovalUserDiff(
+function formatUnifiedApprovalUserDiff(
   path: string,
   suggestedContent: string,
   appliedContent: string,
