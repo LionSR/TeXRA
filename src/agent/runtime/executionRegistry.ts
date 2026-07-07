@@ -861,10 +861,13 @@ export class ExecutionRegistry {
    * between its own interrupt-unregister and untrack during normal teardown.
    *
    * This path bypasses `runFlowWithLifecycle`'s own terminal handling (the
-   * flow never resumes to produce one), so it settles `handle.result` and
-   * persists the terminal status itself — otherwise a consumer awaiting
-   * `handle.result` (F-2) would hang forever and the execution's history
-   * would keep a non-terminal status.
+   * flow never resumes to produce one), so it emits the terminal `result` on
+   * the run trace, settles `handle.result`, and persists the terminal status
+   * itself — otherwise trace subscribers would miss the stop, a consumer
+   * awaiting `handle.result` (F-2) would hang forever, and the execution's
+   * history would keep a non-terminal status. Unlike `emitRunResult`, no
+   * usage totals ride the event: the flow is suspended, so there is no live
+   * usage monitor to read.
    */
   private terminateWaitingHandle(handle: AgentExecutionHandle): boolean {
     if (!handle.runWaitingCleanup()) return false;
@@ -877,6 +880,7 @@ export class ExecutionRegistry {
       category: handle.category,
       isSubagent: handle.isChildExecution,
     };
+    handle.trace?.emit(cancelledResult);
     handle.settleResult(cancelledResult);
     void writeTerminalStatus(
       handle.executionId,

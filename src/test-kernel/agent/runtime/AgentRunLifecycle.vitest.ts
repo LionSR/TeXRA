@@ -477,6 +477,9 @@ describe('runFlowWithLifecycle', () => {
       expect(SharedExecutionRegistry.getHandle(executionId)).toBeDefined();
       expect(followUpsRelease).not.toHaveBeenCalled();
       expect(storageMocks.deleteFlowRecord).not.toHaveBeenCalled();
+      // The fixture's ctx.logger is noopTrace, and the run handle carries it
+      // as its trace channel.
+      const traceEmit = vi.spyOn(noopTrace, 'emit');
 
       // runToolUseFlow's finally unregisters this stream's interrupt but
       // (post #7286) preserves the follow-up queue for WAITING — it does not
@@ -488,6 +491,18 @@ describe('runFlowWithLifecycle', () => {
       // fall back to the waiting-cleanup registered above and actually tear
       // the execution down.
       expect(SharedExecutionRegistry.kill(executionId)).toBe(true);
+
+      // The bypassed runFlowWithLifecycle can't emit the terminal result, so
+      // terminateWaitingHandle must — trace subscribers would otherwise miss
+      // the stop entirely.
+      expect(traceEmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'result',
+          outcome: 'cancelled',
+          executionId,
+        }),
+      );
+      traceEmit.mockRestore();
 
       expect(SharedExecutionRegistry.getHandle(executionId)).toBeUndefined();
       expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
