@@ -1,5 +1,6 @@
 import type { AgentEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
@@ -115,6 +116,17 @@ export function projectRunFactToProgressEvent(
     return payload ? { event: 'updateStreamUsage', payload } : undefined;
   }
 
+  if (event.type === 'run.config') {
+    return {
+      event: 'setTaskState',
+      payload: {
+        streamId: event.streamId,
+        executionId: event.executionId,
+        taskState: agentConfigToTaskState(event.config),
+      },
+    };
+  }
+
   if (event.type === 'domain') {
     const factName = fromRunFactDomainKey(event.key);
     if (!factName || !isObject(event.data)) return undefined;
@@ -185,6 +197,7 @@ export function projectRunFactToProgressEvent(
 
 const RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
   'domain',
+  'run.config',
   'usage',
   'stage.start',
   'child.activity',
