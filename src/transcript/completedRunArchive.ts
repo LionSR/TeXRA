@@ -22,7 +22,11 @@ export interface CompletedRunTodosReaderOptions {
    * Last-modified time (ms since epoch) of the legacy `todos.json`, if it
    * exists. Used to detect a final `todo_write` that landed after the
    * sidecar's own (asynchronous) write flushed, so the fresher source wins
-   * regardless of which one happens to exist.
+   * regardless of which one happens to exist. Millisecond-resolution mtimes
+   * (the VS Code filesystem adapter's granularity) can tie when both writes
+   * land in the same tick; ties are broken toward the legacy write, since a
+   * genuinely later legacy write is the more likely cause of a tie than a
+   * genuinely later sidecar write racing to complete in the same millisecond.
    */
   readonly legacyModifiedAt?: () => Promise<number | undefined>;
 }
@@ -97,7 +101,7 @@ export async function readCompletedRunTodos(
   }
 
   const legacyMtime = await options.legacyModifiedAt?.();
-  if (legacyMtime !== undefined && legacyMtime > sidecarMtime) {
+  if (legacyMtime !== undefined && legacyMtime >= sidecarMtime) {
     return readLegacyTodos(options.legacyFallback);
   }
 
