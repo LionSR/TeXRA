@@ -63,7 +63,6 @@ import {
 import {
   countMediaFilesNeedingVision,
   formatMediaNeedsVisionWarning,
-  mediaAttachmentKinds,
   shouldWarnMediaNeedsVision,
 } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
@@ -247,10 +246,9 @@ async function beginRunStage(
   agentLogger: AgentTrace,
   label: string,
   instruction: string | undefined,
-  mediaFiles: readonly string[] | undefined,
 ): Promise<StageHandle> {
   if (instruction) {
-    logUserMessage(agentLogger, instruction, mediaAttachmentKinds(mediaFiles));
+    logUserMessage(agentLogger, instruction);
   }
   return agentLogger.openStage(label, { kind: 'run' });
 }
@@ -380,12 +378,17 @@ async function assembleAgentLaunchContext(
     displayInstruction && !input.streamTabIdOverride
       ? displayInstruction
       : undefined;
+  const initialMediaMayBeInserted =
+    config.mediaFiles.length > 0 &&
+    (setting.agentCategory === AgentCategory.ToolUse
+      ? modelHandler.capabilities.supportsVision ||
+        modelHandler.capabilities.supportsNativeAudio
+      : modelHandler.capabilities.supportsVision);
 
   const parentStage = await beginRunStage(
     agentLogger,
     `Run: ${config.agent}`,
-    initialInstruction,
-    config.mediaFiles,
+    initialMediaMayBeInserted ? undefined : initialInstruction,
   );
   const storageKey: StorageKey = parentStage.id
     ? normalizeRunId(parentStage.id)
@@ -460,6 +463,9 @@ async function assembleAgentLaunchContext(
     runtimeHost,
     streamStatus,
     workingDirectory: configPayload.workingDirectory?.trim() || undefined,
+    initialUserMessageForTranscript: initialMediaMayBeInserted
+      ? initialInstruction
+      : undefined,
     session,
     disposeTrace: runTrace.dispose,
   };

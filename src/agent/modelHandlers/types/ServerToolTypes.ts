@@ -322,8 +322,9 @@ export function capWebFetchContent(
   text: string | undefined,
 ): string | undefined {
   if (!text) return undefined;
+  const marker = '...';
   return text.length > MAX_WEB_FETCH_CONTENT_CHARS
-    ? `${text.slice(0, MAX_WEB_FETCH_CONTENT_CHARS)}...`
+    ? `${text.slice(0, MAX_WEB_FETCH_CONTENT_CHARS - marker.length)}${marker}`
     : text;
 }
 

@@ -32,7 +32,7 @@ import {
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -1556,14 +1556,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async addMediaToUserMessage(
     messages: MessageParam[],
     mediaFiles: FileLocation[],
-  ): Promise<void> {
-    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
+  ): Promise<MediaAttachmentKind[]> {
+    if (!mediaFiles.length || !this.capabilities.supportsVision) return [];
 
     const lastUserMsg = messages.findLast((m) => m.role === 'user');
-    if (!lastUserMsg) return;
+    if (!lastUserMsg) return [];
 
     const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
-    if (formattedMedia.length === 0) return;
+    if (formattedMedia.length === 0) return [];
 
     if (typeof lastUserMsg.content === 'string') {
       lastUserMsg.content = [
@@ -1573,5 +1573,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     } else if (Array.isArray(lastUserMsg.content)) {
       lastUserMsg.content.unshift(...formattedMedia);
     }
+    return this.consumeInsertedAttachmentKinds('insert');
   }
 }
