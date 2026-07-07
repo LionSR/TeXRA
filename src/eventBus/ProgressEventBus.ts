@@ -285,7 +285,7 @@ export interface ProgressEventBusLike {
   ): void;
 }
 
-class ProgressEventBus implements ProgressEventBusLike {
+class ProgressEventBusImpl implements ProgressEventBusLike {
   private emitter = new EventEmitter();
   private buffer: {
     event: ProgressEvent;
@@ -333,4 +333,4 @@ class ProgressEventBus implements ProgressEventBusLike {
   }
 }
 
-export const bus = new ProgressEventBus();
+export const ProgressEventBus = new ProgressEventBusImpl();

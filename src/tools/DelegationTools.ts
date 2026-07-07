@@ -31,7 +31,7 @@ import {
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatFollowUpInstruction } from '@tools/subagentResults';
-import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
+import { SharedSubagentDeliveryRegistry } from '@tools/subagentDeliveryState';
 import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
@@ -290,7 +290,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       );
     }
 
-    const deliveryState = subagentDeliveryRegistry.getActive(executionId);
+    const deliveryState = SharedSubagentDeliveryRegistry.getActive(executionId);
     if (!deliveryState) {
       throw new Error(
         `Execution '${executionId}' is no longer tracked for delivery. It may have already completed.`,

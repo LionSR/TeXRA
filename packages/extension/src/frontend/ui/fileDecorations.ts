@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { bus } from '@eventBus/ProgressEventBus';
+import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import type { OutputFileInfo } from '@shared/schemas/output';
 
@@ -81,7 +81,7 @@ export function registerFileDecorations(
     },
   );
 
-  const unsubscribeWritten = bus.on(
+  const unsubscribeWritten = ProgressEventBus.on(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       provider.markTouched(absolutePaths);
