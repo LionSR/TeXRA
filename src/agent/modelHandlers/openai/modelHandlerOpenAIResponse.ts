@@ -2215,11 +2215,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ? OPENAI_CHAT_FINISH.STOP
         : OPENAI_CHAT_FINISH.LENGTH;
 
-    newResponse = this.appendEndTagIfNeeded(
-      newResponse,
-      endTag,
-      stopReason === OPENAI_CHAT_FINISH.STOP,
-    );
+    // Unlike Chat Completions/Anthropic, the Responses API has no `stop`
+    // parameter — this handler never configures the end tag as an API-level
+    // stop sequence, so a "completed" status never implies the provider
+    // stripped it. Forging the tag here would be pure speculation that could
+    // mask genuinely incomplete output as done; the extraction layer already
+    // tolerates a missing end tag.
     newResponse = replacementEngine.applyAll(newResponse);
 
     return { text: newResponse, usage, stopReason };
