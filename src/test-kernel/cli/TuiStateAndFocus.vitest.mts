@@ -2606,16 +2606,30 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     } as unknown as CliRuntimeHost;
   }
 
-  it('feeds runtime events to the snapshot store directly', () => {
+  it('bridges only transitional metadata events to the snapshot store', () => {
     const snapshotStore = {
       handleProgressEvent: vi.fn(),
     } as unknown as StreamSnapshotStore;
     const wrapped = wrapRuntimeHost(makeHost(), snapshotStore);
 
-    wrapped.emit('updateTodos', { streamId: root, todos: [] });
+    const todos: TodoItem[] = [
+      {
+        content: 'Write the introduction',
+        status: TODO_STATUS.IN_PROGRESS,
+        activeForm: 'Writing the introduction',
+      },
+    ];
+    wrapped.emit('updateTodos', { streamId: root, todos });
+    expect(streams.get().get(root)?.todos).toEqual(todos);
+    expect(snapshotStore.handleProgressEvent).not.toHaveBeenCalled();
+
+    wrapped.emit('updateStreamDescription', {
+      streamId: root,
+      description: 'search / kimi26T',
+    });
     expect(snapshotStore.handleProgressEvent).toHaveBeenCalledWith(
-      'updateTodos',
-      { streamId: root, todos: [] },
+      'updateStreamDescription',
+      { streamId: root, description: 'search / kimi26T' },
     );
   });
 

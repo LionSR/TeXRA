@@ -14,6 +14,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import {
   EXECUTION_STATUS,
+  type StorageKey,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -271,10 +272,11 @@ describe('executeCliRequest', () => {
     );
   });
 
-  it('persists headless stream sidecars emitted through the runtime host', async () => {
+  it('persists headless stream sidecars from session events without double-counting legacy host usage', async () => {
     await installStoragePlatform();
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
+    const streamId = 'stream-1' as StreamTabId;
     const todo: TodoItem = {
       content: 'Write the introduction',
       status: 'in_progress',
@@ -282,25 +284,63 @@ describe('executeCliRequest', () => {
     };
 
     mocks.runAgent.mockImplementationOnce(async (_request, options) => {
+      const { defaultSession } = await import('@agent/runtime/SessionHandle');
+      const { toRunFactDomainKey } =
+        await import('@agent/runtime/runFactEvents');
+      defaultSession().events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: {
+            streamId,
+            todos: [todo],
+          },
+        },
+      });
+      defaultSession().events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          stats: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+          data: {
+            streamId,
+            storageKey: 'run-1' as StorageKey,
+            usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+          },
+        },
+      });
+      // This is the legacy projected event still visible on the public host
+      // channel. It must not be persisted a second time by the CLI bridge.
+      options.runtimeHost.emit('updateStreamUsage', {
+        streamId,
+        storageKey: 'run-1' as StorageKey,
+        usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+      });
       options.runtimeHost.emit('updateTodos', {
-        streamId: 'stream-1',
+        streamId,
         todos: [todo],
       });
       return {
         category: 'toolUse',
         executionId: 'exec-1',
         status: 'completed',
-        streamId: 'stream-1',
+        streamId,
       };
     });
 
     await executeCliRequest(request, cliContext());
 
     const { StreamSnapshotStore } = await import('@transcript');
-    const snapshot = await new StreamSnapshotStore().read(
-      'stream-1' as StreamTabId,
-    );
+    const snapshot = await new StreamSnapshotStore().read(streamId);
     expect(snapshot.todos).toEqual([todo]);
+    expect(snapshot.runUsage['run-1']).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 20,
+      cost: 0.5,
+    });
   });
 
   it('loads the stream log store before the run and flushes it after, in order', async () => {
@@ -358,6 +398,8 @@ describe('executeCliRequest', () => {
       return {
         ...actual,
         StreamSnapshotStore: class {
+          attachSessionEvents = vi.fn(() => vi.fn());
+
           handleProgressEvent = vi.fn();
 
           flush = vi.fn(async () => {
