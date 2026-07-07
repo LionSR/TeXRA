@@ -163,9 +163,9 @@ export class UsageMonitor {
         Object.entries(payload).filter(([, v]) => typeof v === 'number'),
       ) as Record<string, number>;
       // One trace event feeds both surfaces: the transcript recorder consumes
-      // `stats` for workflow agents, and the session projector consumes `data`
-      // for sidebar totals. Tool-use agents keep their existing no-stats-row UI
-      // by opting out of transcript recording.
+      // `stats` for workflow agents, and session progress projection consumes
+      // `data` for sidebar totals. Tool-use agents keep their existing
+      // no-stats-row UI by opting out of transcript recording.
       logger.usage(transcriptPayload, {
         data: {
           streamId,

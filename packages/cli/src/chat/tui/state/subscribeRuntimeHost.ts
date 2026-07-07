@@ -4,10 +4,12 @@
 
 import type { AgentEvent } from '@agent/trace';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { projectRunFactToProgressEvent } from '@agent/runtime/sessionProgressEventProjection';
+import {
+  projectRunFactToProgressEvent,
+  toUpdateStreamUsagePayload,
+} from '@agent/runtime/sessionProgressEventProjection';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { toUpdateStreamUsagePayload } from '@agent/runtime/SessionRunFactProjector';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,
@@ -92,8 +94,9 @@ function consumeEchoCount(counts: Map<string, number>, key: string): boolean {
 /**
  * Dedupe a fact that reaches this module through two paths that both fire
  * off the *same* underlying `SessionEventHub` event: `attachTuiRunFactSubscription`
- * applying it directly, and `attachSessionRunFactProjector` re-emitting it as a
- * legacy `runtimeHost.emit(...)` that `applyToState` also applies.
+ * applying it directly, and the retained legacy progress projection
+ * re-emitting it as a legacy `runtimeHost.emit(...)` that `applyToState` also
+ * applies.
  *
  * This guard is deliberately **order-independent**: `applyDirect` and
  * `applyLegacy` are symmetric, each first checking whether the *other* side
@@ -101,12 +104,11 @@ function consumeEchoCount(counts: Map<string, number>, key: string): boolean {
  * subscriber the hub happens to invoke first for a given event "wins" the
  * apply; the second one only consumes the marker and skips. Correctness does
  * NOT depend on `attachTuiRunFactSubscription` being registered on the hub
- * before `attachSessionRunFactProjector` (today it always is, via
- * `chatSessionController.ts` attaching before `AgentLaunchContext.ts`/
- * `childStream.ts`, but nothing requires that and it isn't guaranteed to stay
- * true) — see #7388. Regression coverage for both attach orders lives in
+ * before the legacy projection (today it is in `chatSessionController.ts`, but
+ * nothing requires that and it is not guaranteed to stay true) — see #7388.
+ * Regression coverage for both attach orders lives in
  * `TuiStateAndFocus.vitest.mts` ("does not double-count projected usage when
- * the TUI subscriber is first" / "... when the projector is first").
+ * the TUI subscriber is first" / "... when the legacy projection is first").
  *
  * Do not replace this with a one-directional variant (remember-on-direct,
  * consume-on-legacy-only) — that reintroduces exactly the order dependency
@@ -148,14 +150,11 @@ class EchoGuard<T> {
   }
 }
 
-// Migration lifetime: this module-level handle is the only way `applyToState`
-// (the legacy `updateStreamUsage` projection path, driven by
-// `SessionRunFactProjector`) can reach the guard owned by the direct
-// subscription path in `attachTuiRunFactSubscription`. It exists solely to
+// Migration lifetime: this module-level handle lets the legacy host
+// `updateStreamUsage` projection path reach the guard owned by the direct
+// session subscription in `attachTuiRunFactSubscription`. It exists solely to
 // dedupe the two paths' overlapping usage updates during the migration and
-// must be deleted together with the legacy `updateStreamUsage` projection
-// once `SessionRunFactProjector` reaches its Stage 5 deletion gate (#6968) —
-// do not treat it as permanent architecture.
+// must be deleted together with the legacy `updateStreamUsage` projection.
 type UsageEchoGuard = EchoGuard<UpdateStreamUsagePayload>;
 let activeUsageEchoGuard: UsageEchoGuard | undefined;
 

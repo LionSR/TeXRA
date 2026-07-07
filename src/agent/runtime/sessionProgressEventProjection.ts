@@ -4,8 +4,14 @@ import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  ExtendedTokenUsageStatsSchema,
+  type StorageKey,
+  type StreamTabId,
+} from '@shared/schemas';
+import { isObject } from '@utils/core';
 
+import { fromRunFactDomainKey } from './runFactEvents';
 import type { SessionFact } from './SessionEventHub';
 
 export type ProjectedProgressEvent = {
@@ -20,6 +26,38 @@ export function emitProjectedProgressEvent(
   projected: ProjectedProgressEvent,
 ): void {
   runtimeHost.emit(projected.event, projected.payload);
+}
+
+type UpdateStreamUsagePayload = ProgressEventPayloads['updateStreamUsage'];
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+/**
+ * Parse a raw `usage` session-event `data` payload into the typed
+ * `updateStreamUsage` progress payload. CLI TUI, legacy host projection, and
+ * ProgressBackend all consume this same parser so their accepted usage shapes
+ * cannot silently diverge.
+ */
+export function toUpdateStreamUsagePayload(
+  data: unknown,
+  fallbackStreamId: StreamTabId,
+): UpdateStreamUsagePayload | undefined {
+  if (!isObject(data)) return undefined;
+  const storageKey = asString(data.storageKey);
+  if (!storageKey) return undefined;
+  const usage = ExtendedTokenUsageStatsSchema.safeParse(data.usage);
+  if (!usage.success) return undefined;
+
+  const streamId = asString(data.streamId) ?? fallbackStreamId;
+  const executionId = asString(data.executionId);
+  return {
+    streamId: streamId as StreamTabId,
+    storageKey: storageKey as StorageKey,
+    ...(executionId ? { executionId } : {}),
+    usage: usage.data,
+  };
 }
 
 export function projectSessionFactToProgressEvent(
@@ -43,6 +81,20 @@ export function projectRunFactToProgressEvent(
   streamId: StreamTabId,
   event: AgentEvent,
 ): ProjectedProgressEvent | undefined {
+  if (event.type === 'usage') {
+    const payload = toUpdateStreamUsagePayload(event.data, streamId);
+    return payload ? { event: 'updateStreamUsage', payload } : undefined;
+  }
+
+  if (event.type === 'domain') {
+    const factName = fromRunFactDomainKey(event.key);
+    if (!factName || !isObject(event.data)) return undefined;
+    return {
+      event: factName,
+      payload: event.data as ProgressEventPayloads[typeof factName],
+    } as ProjectedProgressEvent;
+  }
+
   if (event.type === 'stage.start') {
     if (event.kind !== 'round') return undefined;
     return {
