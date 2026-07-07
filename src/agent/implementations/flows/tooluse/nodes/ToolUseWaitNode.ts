@@ -2,6 +2,7 @@ import { maybeBuildGoalContinuation } from '@agent/goal';
 import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { mediaAttachmentKinds } from '@agent/runtime/mediaVisionWarning';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
@@ -221,7 +222,11 @@ export class ToolUseWaitNode<C> extends Node<
       shared.deliveredToOrchestrator = undefined;
       onFollowUpConsumed?.();
       for (const followUp of execRes.followUps) {
-        logUserMessage(logger, followUpDisplayText(followUp));
+        logUserMessage(
+          logger,
+          followUpDisplayText(followUp),
+          mediaAttachmentKinds(followUp.mediaFiles),
+        );
       }
     }
 

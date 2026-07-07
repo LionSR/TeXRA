@@ -93,6 +93,8 @@ export const WebFetchResultSchema = z.object({
   status: z.enum(['completed', 'failed']),
   /** Error code if fetch failed */
   errorCode: z.string().optional(),
+  /** Fetched document text, size-capped via {@link capWebFetchContent} (#7508). */
+  content: z.string().optional(),
 });
 
 /** Unified web fetch result - derived from schema. */
@@ -307,6 +309,38 @@ function isWebFetchBlock(
 }
 
 /**
+ * Cap on the fetched page text stored on a `WebFetchResult` row (#7508): the
+ * transcript sidecar is a completed-run archive fact, not working model
+ * context, so this stays far below a typical context window while still
+ * giving the archived conversation / chat export meaningful content instead
+ * of none.
+ */
+export const MAX_WEB_FETCH_CONTENT_CHARS = 20_000;
+
+/** Truncate fetched page text to {@link MAX_WEB_FETCH_CONTENT_CHARS}. */
+export function capWebFetchContent(
+  text: string | undefined,
+): string | undefined {
+  if (!text) return undefined;
+  return text.length > MAX_WEB_FETCH_CONTENT_CHARS
+    ? `${text.slice(0, MAX_WEB_FETCH_CONTENT_CHARS)}...`
+    : text;
+}
+
+/**
+ * Extract the fetched document's plain text, when the provider returned one
+ * (`PlainTextSource`) rather than binary content (e.g. a fetched PDF's
+ * `Base64PDFSource`, which this deliberately does not surface as text).
+ * Shared by the batch ({@link extractAnthropicWebFetchResults}) and streaming
+ * (`AnthropicStreamHandler`) extraction paths.
+ */
+export function extractWebFetchPageText(
+  content: WebFetchBlock['content'] | undefined,
+): string | undefined {
+  return content?.source?.type === 'text' ? content.source.data : undefined;
+}
+
+/**
  * Extract web fetch results from Anthropic response content.
  * Uses SDK's WebFetchToolResultBlock type.
  * Correlates server_tool_use blocks (which contain the URL) with
@@ -344,6 +378,9 @@ export function extractAnthropicWebFetchResults(
         provider: 'anthropic',
         callId: block.tool_use_id,
         status: 'completed',
+        content: capWebFetchContent(
+          extractWebFetchPageText(block.content.content),
+        ),
       });
     } else {
       // Error result — block.content is narrowed to WebFetchToolResultErrorBlock
