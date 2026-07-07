@@ -19,6 +19,11 @@ All notable changes to this project will be documented in this file.
   until they hit the context ceiling. Both the automatic threshold-based
   compaction and the manual "compact now" action now summarize the
   conversation locally and resend a shorter history instead.
+- **Anthropic/Google tool-use sessions now receive their system prompt** —
+  persona, tool-use instructions, and delegation policy are resupplied on
+  every model call. Previously these providers received no system prompt at
+  all in tool-use mode, since the message-embedding approach used for other
+  providers doesn't apply to them.
 
 #### Improvements
 
