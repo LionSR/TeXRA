@@ -11,7 +11,7 @@ import type { DiffStats } from '@shared/schemas/lineChanges';
 import {
   AbsoluteFS,
   createWorkspaceLocation,
-  flexibleFS,
+  FlexibleFS,
   getComparablePath,
   WorkspaceFS,
 } from '@utils/files';
@@ -37,14 +37,14 @@ async function computeDiffStats(
 ): Promise<DiffStats> {
   try {
     if (!baseLocation) {
-      const outContent = await flexibleFS.read(outputLocation);
+      const outContent = await FlexibleFS.read(outputLocation);
       const added = countLines(outContent);
       return { added };
     }
 
     const [baseContent, outContent] = await Promise.all([
-      flexibleFS.read(baseLocation),
-      flexibleFS.read(outputLocation),
+      FlexibleFS.read(baseLocation),
+      FlexibleFS.read(outputLocation),
     ]);
 
     // Preserve diff-match-patch's omitted-argument default: checkLines=true.

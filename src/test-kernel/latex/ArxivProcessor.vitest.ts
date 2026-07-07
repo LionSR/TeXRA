@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  arxivProcessor,
+  ArxivProcessor,
   resolveArxivPaperDirectoryRelative,
 } from '@latex/arxivProcessor';
 
@@ -59,7 +59,7 @@ describe('arXiv source download filenames', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const downloadedPath = await arxivProcessor.downloadFile(
+    const downloadedPath = await ArxivProcessor.downloadFile(
       'https://arxiv.org/src/2404.12175',
       destBasePath,
       5000,

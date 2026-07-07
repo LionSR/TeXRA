@@ -108,9 +108,9 @@ import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
 import {
-  prPollingSource,
-  repoPollingSource,
-  issuePollingSource,
+  SharedPRPollingSource,
+  SharedRepoPollingSource,
+  SharedIssuePollingSource,
 } from '@tools/github';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -281,10 +281,14 @@ export async function activate(context: vscode.ExtensionContext) {
     progressViewProviderInstance?.flushState(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => prPollingSource.disposeAll());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => repoPollingSource.disposeAll());
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    issuePollingSource.disposeAll(),
+    SharedPRPollingSource.disposeAll(),
+  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+    SharedRepoPollingSource.disposeAll(),
+  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+    SharedIssuePollingSource.disposeAll(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
     bus.emit('extensionDeactivating', undefined),

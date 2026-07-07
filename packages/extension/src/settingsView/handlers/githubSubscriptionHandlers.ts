@@ -22,12 +22,12 @@ import {
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
 import {
-  issuePollingSource,
+  SharedIssuePollingSource,
   listIssueSubscriptionBindings,
   listPRSubscriptionBindings,
   listRepoSubscriptionBindings,
-  prPollingSource,
-  repoPollingSource,
+  SharedPRPollingSource,
+  SharedRepoPollingSource,
   unbindAllForIssue,
   unbindAllForPR,
   unbindAllForRepo,
@@ -106,15 +106,15 @@ export class GitHubSubscriptionHandlers {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
       subscriptions: [
-        ...listPRSubscriptionBindings(prPollingSource.activeKeys()).map(
+        ...listPRSubscriptionBindings(SharedPRPollingSource.activeKeys()).map(
           toEntry,
         ),
-        ...listRepoSubscriptionBindings(repoPollingSource.activeKeys()).map(
-          toEntry,
-        ),
-        ...listIssueSubscriptionBindings(issuePollingSource.activeKeys()).map(
-          toEntry,
-        ),
+        ...listRepoSubscriptionBindings(
+          SharedRepoPollingSource.activeKeys(),
+        ).map(toEntry),
+        ...listIssueSubscriptionBindings(
+          SharedIssuePollingSource.activeKeys(),
+        ).map(toEntry),
       ],
     });
   }

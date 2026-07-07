@@ -208,4 +208,4 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   }
 }
 
-export const issuePollingSource = new IssuePollingSource();
+export const SharedIssuePollingSource = new IssuePollingSource();

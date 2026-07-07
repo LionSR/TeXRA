@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
-  arxivProcessor,
+  ArxivProcessor,
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
 import * as logger from '@logger/logUtils';
@@ -23,14 +23,14 @@ export async function downloadArXivSource(): Promise<void> {
     const arxivId = await vscode.window.showInputBox({
       placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
       prompt: 'Enter arXiv ID or URL',
-      validateInput: arxivProcessor.validateId.bind(arxivProcessor),
+      validateInput: ArxivProcessor.validateId.bind(ArxivProcessor),
     });
 
     if (!arxivId) {
       return;
     }
 
-    const paperId = arxivProcessor.getPaperDirName(arxivId);
+    const paperId = ArxivProcessor.getPaperDirName(arxivId);
 
     const destinationPick = await vscode.window.showQuickPick(
       [
@@ -75,7 +75,7 @@ export async function downloadArXivSource(): Promise<void> {
           logger.info(CHANNEL, 'User cancelled the download');
         });
 
-        const downloadResult = await arxivProcessor.downloadSource(arxivId, {
+        const downloadResult = await ArxivProcessor.downloadSource(arxivId, {
           progressCallback: (message, increment) =>
             progress.report({ message, increment }),
           autoIndent,

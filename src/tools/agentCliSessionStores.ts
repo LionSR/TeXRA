@@ -28,7 +28,7 @@ export interface ActiveClaudeAgentSession {
   additionalDirectories?: string[];
 }
 
-export const codexThreads = new AgentCliSessionRegistry<ActiveCodexThread>(
+export const CodexThreads = new AgentCliSessionRegistry<ActiveCodexThread>(
   'codex_thread_id',
 );
 
