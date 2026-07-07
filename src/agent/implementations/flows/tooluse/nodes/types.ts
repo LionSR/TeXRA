@@ -52,8 +52,6 @@ export interface ToolUseRunShared {
   lastError?: RetryErrorInfo;
   /** Last assembled assistant response, retained without persisting full assembly strings. */
   lastResponse?: string;
-  /** True after a tool-use subagent delivered a cycle result to its parent. */
-  deliveredToOrchestrator?: boolean;
 }
 
 export type WaitExecResult =

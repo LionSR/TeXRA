@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   currentSession: vi.fn(),
   sendFollowUp: vi.fn(),
   wakeQueuedFollowUpStream: vi.fn(),
-  getNativeSubagentStrategy: vi.fn(),
+  isChildRunLoopActive: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/RunContext', () => ({
@@ -28,16 +28,9 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   wakeQueuedFollowUpStream: mocks.wakeQueuedFollowUpStream,
 }));
 
-vi.mock('@tools/delegation/nativeSubagentStrategy', async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import('@tools/delegation/nativeSubagentStrategy')
-    >();
-  return {
-    ...actual,
-    getNativeSubagentStrategy: mocks.getNativeSubagentStrategy,
-  };
-});
+vi.mock('@agent/runtime/childRunLoop', () => ({
+  isChildRunLoopActive: mocks.isChildRunLoopActive,
+}));
 
 // Local imports - agent
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
@@ -52,7 +45,6 @@ import {
   rejectOversizedBibAttachments,
   type WorkflowAgentInput,
 } from '@tools/DelegationTools';
-import { SharedSubagentDeliveryRegistry } from '@tools/subagentDeliveryState';
 import { WorkspaceFS } from '@utils/files';
 
 const BASE_INPUT: WorkflowAgentInput = {
@@ -196,22 +188,15 @@ describe('DelegateAgentTool resume (issue #7289)', () => {
       status: 'queued',
       reason: 'waiting',
     });
-    SharedSubagentDeliveryRegistry.start(executionId);
   });
 
-  afterEach(() => {
-    SharedSubagentDeliveryRegistry.finish(executionId);
-  });
-
-  it('returns once the follow-up is queued, without waiting for a resumed native subagent to reach its next boundary', async () => {
-    let resolveWake: ((value: FollowUpWakeResult) => void) | undefined;
-    const wakeQueuedFollowUp = vi.fn(
-      () =>
-        new Promise<FollowUpWakeResult>((resolve) => {
-          resolveWake = resolve;
-        }),
-    );
-    mocks.getNativeSubagentStrategy.mockReturnValue({ wakeQueuedFollowUp });
+  it('does not dispatch a wake when a child-run loop is already listening on the resumed stream', async () => {
+    // The loop is already blocked in queue.waitAndDrainAll on the same
+    // FollowUpQueue instance sendFollowUp just enqueued into — the enqueue
+    // alone resolves it, so a wake here would race a second, competing
+    // resume through the generic host resume port (see childRunLoop.ts's
+    // isChildRunLoopActive doc comment).
+    mocks.isChildRunLoopActive.mockReturnValue(true);
 
     const tool = new DelegateAgentTool();
     const outcome = await raceAgainstBlockingResume(
@@ -221,19 +206,16 @@ describe('DelegateAgentTool resume (issue #7289)', () => {
     assert.strictEqual(
       outcome.settled,
       true,
-      'delegate_agent resume blocked the parent tool call for the full child turn',
+      'delegate_agent resume blocked the parent tool call',
     );
     if (outcome.settled) {
       assert.strictEqual(outcome.value.status, 'executed');
     }
-    assert.strictEqual(wakeQueuedFollowUp.mock.calls.length, 1);
-
-    // Settle the still-pending wake so it doesn't leak into later tests.
-    resolveWake?.({ kind: 'resumed' });
+    assert.strictEqual(mocks.wakeQueuedFollowUpStream.mock.calls.length, 0);
   });
 
-  it('returns once the follow-up is queued, without waiting for the host resume port when no native strategy is registered', async () => {
-    mocks.getNativeSubagentStrategy.mockReturnValue(undefined);
+  it('returns once the follow-up is queued, without waiting for the host resume port when no loop is listening', async () => {
+    mocks.isChildRunLoopActive.mockReturnValue(false);
     let resolveWake: ((value: FollowUpWakeResult) => void) | undefined;
     mocks.wakeQueuedFollowUpStream.mockReturnValue(
       new Promise<FollowUpWakeResult>((resolve) => {
@@ -254,6 +236,7 @@ describe('DelegateAgentTool resume (issue #7289)', () => {
     if (outcome.settled) {
       assert.strictEqual(outcome.value.status, 'executed');
     }
+    assert.strictEqual(mocks.wakeQueuedFollowUpStream.mock.calls.length, 1);
 
     resolveWake?.({ kind: 'resumed' });
   });

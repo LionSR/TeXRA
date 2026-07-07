@@ -51,6 +51,15 @@ export interface LiveToolUseFlowContext {
   requestImmediateCompaction(): void;
   modelSwitchDisabledReason(model: string): string | undefined;
   switchModel(model: string): Promise<void>;
+  /**
+   * Interrupt the live turn. Native child-run strategies use this to
+   * delegate a child-run-loop-level interrupt into an in-flight tool-use
+   * turn — the loop's own interruptible is registered on `InterruptRegistry`
+   * for the child's whole lifetime, but only a live `flowContext` (attached
+   * via `attachToolUseFlow` for the duration of one turn) knows how to
+   * actually cancel the in-progress model/tool round.
+   */
+  interrupt(): void;
 }
 
 /**
@@ -157,9 +166,9 @@ export class AgentExecutionHandle implements ExecutionHandle {
    * unregisters them unconditionally on return, while the handle itself stays
    * tracked so a later resume can find it). `ExecutionRegistry.terminate()`
    * runs these instead of the (now absent) live interrupt when a stop/kill
-   * targets a suspended subagent. Multiple independent owners (the run
-   * lifecycle, a native subagent delivery strategy) may each register their
-   * own teardown.
+   * targets a suspended subagent that has no loop-level interruptible
+   * covering the gap (see `childRunLoop.ts`'s own whole-lifetime
+   * interruptible, which is the primary path for a loop-driven child).
    */
   registerWaitingCleanup(cleanup: () => void): void {
     (this.waitingCleanups ??= new Set()).add(cleanup);
@@ -167,9 +176,8 @@ export class AgentExecutionHandle implements ExecutionHandle {
 
   /**
    * Drop every registered waiting-cleanup without running it. The run
-   * lifecycle calls this on every non-WAITING terminal path: owners may
-   * pre-register from `onBeforeWaiting` before the suspension is confirmed,
-   * and a flow that continues past the wait (queued follow-up) or errors out
+   * lifecycle calls this on every non-WAITING terminal path: a flow that
+   * continues past the wait (queued follow-up, root mode only) or errors out
    * must not leave a stale cleanup that `ExecutionRegistry.terminate()` could
    * mistake for a suspended handle during normal teardown.
    */

@@ -20,8 +20,9 @@ import { STREAM_STATUS } from '@shared/schemas';
  * - The handle is gone (execution already untracked / completed), OR
  * - The stream left all ACTIVE_STATUSES, OR
  * - The execution is a *tool-use subagent* in WAITING (job done, result
- *   already delivered via onBeforeWaiting). Workflow subagents in WAITING
- *   may still be awaiting retry/user action and should keep blocking.
+ *   already delivered by the child-run loop's per-turn delivery — see
+ *   childRunLoop.ts). Workflow subagents in WAITING may still be awaiting
+ *   retry/user action and should keep blocking.
  *
  * One getHandle + one getStatus per call — no redundant lookups.
  */
@@ -33,7 +34,7 @@ export function shouldSkipWait(executionId: string): boolean {
   const { status } = session.executions.getStatus(handle);
   if (!ACTIVE_STATUSES.has(status)) return true;
 
-  // Tool-use subagent in WAITING = job delivered via onBeforeWaiting, don't block.
+  // Tool-use subagent in WAITING = job delivered by the child-run loop, don't block.
   // Workflow subagent in WAITING = may be waiting for retry/user action. Blocking
   // isn't very useful (only the user can unblock it), but the subagent is still
   // technically active so we don't skip — avoids misreporting it as done.

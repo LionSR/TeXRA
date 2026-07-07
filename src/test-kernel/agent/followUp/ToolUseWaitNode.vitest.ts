@@ -33,33 +33,28 @@ import { withTestRunContext } from '../progressTestUtils';
 import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 describe('ToolUseWaitNode', () => {
-  it('marks a delivered native subagent cycle before suspending at WAITING', async () => {
+  it('always suspends a subagent cycle at WAITING, carrying its turn facts', async () => {
     const shared: ToolUseRunShared = {
       messages: [],
       shouldSkipCycle: false,
       stateSlices: null,
     };
-    let interrupted = false;
-    const onBeforeWaiting = vi.fn(async () => {});
     const memoryMisses: AttachedMemoryMiss[] = [
       { path: '/memories/missing.md', reason: 'not found' },
     ];
     const runtimeHost = { emit: vi.fn() };
+    const waitForFollowUp = vi.fn();
 
     const services = {
       attachedMemoryMisses: memoryMisses,
-      checkInterruption: () => interrupted,
+      checkInterruption: () => false,
       isSubagent: true,
       logger: { emit: vi.fn(), error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
-      onBeforeWaiting,
       runtimeHost,
       session: {
         hasQueuedFollowUp: () => false,
-        waitForFollowUp: async () => {
-          interrupted = true;
-          return null;
-        },
+        waitForFollowUp,
       },
       streamStatus: new StreamStatusMachine(),
       streamId: 'test-stream',
@@ -68,6 +63,12 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     const prep = await node.prep(shared);
+    // No in-flow delivery site anymore — the wait node only carries the turn
+    // facts on `prep`; the child-run loop formats and delivers after
+    // suspension (see childRunLoop.ts).
+    expect(prep.lastResponse).toBeUndefined();
+    expect(prep.touchedFiles).toEqual([]);
+
     const transition = await withTestRunContext(
       runtimeHost,
       'test-stream',
@@ -77,174 +78,35 @@ describe('ToolUseWaitNode', () => {
       },
     );
 
-    expect(onBeforeWaiting).toHaveBeenCalledOnce();
-    expect(onBeforeWaiting).toHaveBeenCalledWith(
-      undefined,
-      [],
-      memoryMisses,
-      undefined,
-    );
     expect(transition).toBe(FlowTransition.WAITING);
-    expect(shared.deliveredToOrchestrator).toBe(true);
+    // The flow never blocks on session.waitForFollowUp in subagent mode —
+    // the loop owns the next-turn wait via its own follow-up queue.
+    expect(waitForFollowUp).not.toHaveBeenCalled();
   });
 
-  it('keeps an already delivered synthetic continuation delivered across interruption', async () => {
+  it('always suspends a subagent cycle even when a follow-up is already queued', async () => {
+    // The key behavior change from the old "skip suspension if a follow-up
+    // already raced in" fast path: subagent mode now suspends unconditionally
+    // and symmetrically. A follow-up already queued is the child-run loop's
+    // concern (it resumes immediately instead of genuinely waiting) — not
+    // something the flow itself should special-case.
     const shared: ToolUseRunShared = {
       messages: [],
       shouldSkipCycle: false,
       stateSlices: null,
     };
-    let interrupted = false;
-    let waitCalls = 0;
-    const onBeforeWaiting = vi
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(true);
     const runtimeHost = { emit: vi.fn() };
-
-    const services = {
-      checkInterruption: () => interrupted,
-      isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
-      modelHandler: {
-        createUserFollowUpMessages: vi.fn(async () => []),
-        extractAssistantText: () => undefined,
-      },
-      onBeforeWaiting,
-      runtimeHost,
-      session: {
-        hasQueuedFollowUp: () => waitCalls === 0,
-        waitForFollowUp: async () => {
-          waitCalls += 1;
-          if (waitCalls === 1) {
-            return {
-              items: [{ text: 'synthetic continuation', origin: 'synthetic' }],
-              synthetic: true,
-            };
-          }
-          interrupted = true;
-          return null;
-        },
-      },
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
-
-    const node = new ToolUseWaitNode().setServices(services);
-
-    const firstPrep = await node.prep(shared);
-    const firstTransition = await withTestRunContext(
-      runtimeHost,
-      'test-stream',
-      async () => {
-        const firstExec = await node.exec(firstPrep);
-        return node.post(shared, firstPrep, firstExec);
-      },
-    );
-    expect(firstTransition).toBe(FlowTransition.CONTINUE);
-    expect(shared.deliveredToOrchestrator).toBe(true);
-
-    const secondPrep = await node.prep(shared);
-    const secondTransition = await withTestRunContext(
-      runtimeHost,
-      'test-stream',
-      async () => {
-        const secondExec = await node.exec(secondPrep);
-        return node.post(shared, secondPrep, secondExec);
-      },
-    );
-
-    // Called on both turns: `onBeforeWaiting` fires on every genuine-suspend
-    // attempt regardless of prior delivery (see the dedicated abandon-hook
-    // regression test below) — the second call's `mockResolvedValueOnce(true)`
-    // exercises that.
-    expect(onBeforeWaiting).toHaveBeenCalledTimes(2);
-    expect(secondTransition).toBe(FlowTransition.WAITING);
-    expect(shared.deliveredToOrchestrator).toBe(true);
-  });
-
-  it('does not redeliver an already delivered wait when replay consumes follow-up', async () => {
-    const shared: ToolUseRunShared = {
-      deliveredToOrchestrator: true,
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
-    const onBeforeWaiting = vi.fn(async () => true);
-    const onFollowUpConsumed = vi.fn();
-    const runtimeHost = { emit: vi.fn() };
+    const waitForFollowUp = vi.fn();
 
     const services = {
       checkInterruption: () => false,
       isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
-      modelHandler: {
-        createUserFollowUpMessages: vi.fn(async () => []),
-        extractAssistantText: () => undefined,
-      },
-      onBeforeWaiting,
-      onFollowUpConsumed,
+      logger: { emit: vi.fn(), error: vi.fn() },
+      modelHandler: { extractAssistantText: () => undefined },
       runtimeHost,
       session: {
         hasQueuedFollowUp: () => true,
-        waitForFollowUp: async () => ({
-          items: [{ text: 'continue the proof', origin: 'user' }],
-        }),
-      },
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
-
-    const node = new ToolUseWaitNode().setServices(services);
-    const prep = await node.prep(shared);
-    const transition = await withTestRunContext(
-      runtimeHost,
-      'test-stream',
-      async () => {
-        const exec = await node.exec(prep);
-        return node.post(shared, prep, exec);
-      },
-    );
-
-    // `onBeforeWaiting` is now called even on an already-delivered turn (see
-    // "still calls onBeforeWaiting ... suspends again" below): it is
-    // idempotent (NativeSubagentStrategy short-circuits redelivery via its
-    // own delivery-state) and registering the strategy's abandon() cleanup on
-    // *this* turn's runHandle must not depend on whether delivery is a no-op.
-    expect(onBeforeWaiting).toHaveBeenCalledOnce();
-    expect(onFollowUpConsumed).toHaveBeenCalledOnce();
-    expect(transition).toBe(FlowTransition.CONTINUE);
-    expect(shared.deliveredToOrchestrator).toBeUndefined();
-  });
-
-  it('still calls onBeforeWaiting (registering waiting-cleanup) when an already-delivered turn suspends again (Bugbot: skipped wait omits abandon hook)', async () => {
-    // Regression: previously, `previouslyDeliveredToOrchestrator` skipped
-    // `onBeforeWaiting` entirely, so a native subagent that resumes
-    // already-delivered and then suspends at WAITING again never registered
-    // this turn's `abandon()` cleanup on its `runHandle` — a later stop/kill
-    // of that second suspension fell through to bare untrack side effects
-    // instead of the strategy's own teardown. `onBeforeWaiting` must fire
-    // (and thus its cleanup-registration side effect run) on every turn that
-    // reaches a genuine WAITING suspend, regardless of prior delivery.
-    const shared: ToolUseRunShared = {
-      deliveredToOrchestrator: true,
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
-    const onBeforeWaiting = vi.fn(async () => true);
-    const runtimeHost = { emit: vi.fn() };
-
-    const services = {
-      checkInterruption: () => false,
-      isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
-      modelHandler: { extractAssistantText: () => undefined },
-      onBeforeWaiting,
-      runtimeHost,
-      session: {
-        hasQueuedFollowUp: () => false,
-        waitForFollowUp: vi.fn(),
+        waitForFollowUp,
       },
       streamStatus: new StreamStatusMachine(),
       streamId: 'test-stream',
@@ -256,31 +118,60 @@ describe('ToolUseWaitNode', () => {
       node.exec(prep),
     );
 
-    expect(onBeforeWaiting).toHaveBeenCalledOnce();
     expect(exec.kind).toBe('waiting');
+    expect(waitForFollowUp).not.toHaveBeenCalled();
   });
 
-  it('preserves delivered state when interruption is already set before waiting', async () => {
+  it('stops instead of suspending when stopAfterCycle is set (headless in-band subagent)', async () => {
     const shared: ToolUseRunShared = {
-      deliveredToOrchestrator: true,
       messages: [],
       shouldSkipCycle: false,
       stateSlices: null,
     };
-    const onBeforeWaiting = vi.fn(async () => true);
+    const runtimeHost = { emit: vi.fn() };
+
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: true,
+      logger: { emit: vi.fn(), error: vi.fn() },
+      modelHandler: { extractAssistantText: () => undefined },
+      runtimeHost,
+      session: { hasQueuedFollowUp: () => false, waitForFollowUp: vi.fn() },
+      stopAfterCycle: true,
+      streamStatus: new StreamStatusMachine(),
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+
+    const node = new ToolUseWaitNode().setServices(services);
+    const prep = await node.prep(shared);
+    const transition = await withTestRunContext(
+      runtimeHost,
+      'test-stream',
+      async () => {
+        const exec = await node.exec(prep);
+        expect(exec.kind).toBe('stop');
+        return node.post(shared, prep, exec);
+      },
+    );
+
+    expect(transition).toBe(FlowTransition.COMPLETE);
+  });
+
+  it('stops immediately on interruption instead of suspending a subagent', async () => {
+    const shared: ToolUseRunShared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
     const runtimeHost = { emit: vi.fn() };
 
     const services = {
       checkInterruption: () => true,
       isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
+      logger: { emit: vi.fn(), error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
-      onBeforeWaiting,
       runtimeHost,
-      session: {
-        hasQueuedFollowUp: () => false,
-        waitForFollowUp: vi.fn(),
-      },
+      session: { hasQueuedFollowUp: () => false, waitForFollowUp: vi.fn() },
       streamStatus: new StreamStatusMachine(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
@@ -297,9 +188,44 @@ describe('ToolUseWaitNode', () => {
       },
     );
 
-    expect(onBeforeWaiting).not.toHaveBeenCalled();
     expect(transition).toBe(FlowTransition.COMPLETE);
-    expect(shared.deliveredToOrchestrator).toBe(true);
+  });
+
+  it('fires the root-only onIdle notification every cycle without suspending', async () => {
+    const shared: ToolUseRunShared = {
+      messages: [{ role: 'assistant', content: 'partial response' } as never],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const onIdle = vi.fn();
+    const runtimeHost = { emit: vi.fn() };
+    let waitCalls = 0;
+
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: false,
+      logger: { emit: vi.fn(), error: vi.fn() },
+      modelHandler: { extractAssistantText: () => 'partial response' },
+      onIdle,
+      runtimeHost,
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp: async () => {
+          waitCalls += 1;
+          return null;
+        },
+      },
+      streamStatus: new StreamStatusMachine(),
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+
+    const node = new ToolUseWaitNode().setServices(services);
+    const prep = await node.prep(shared);
+    await withTestRunContext(runtimeHost, 'test-stream', () => node.exec(prep));
+
+    expect(onIdle).toHaveBeenCalledOnce();
+    expect(onIdle).toHaveBeenCalledWith('partial response');
+    expect(waitCalls).toBe(1);
   });
 
   it('warns when follow-up media cannot be attached to a non-vision model', async () => {
@@ -342,7 +268,6 @@ describe('ToolUseWaitNode', () => {
           {
             afterError: false,
             lastResponse: undefined,
-            previouslyDeliveredToOrchestrator: false,
             touchedFiles: [],
           },
           {
@@ -406,7 +331,6 @@ describe('ToolUseWaitNode', () => {
         {
           afterError: false,
           lastResponse: undefined,
-          previouslyDeliveredToOrchestrator: false,
           touchedFiles: [],
         },
         {
@@ -472,7 +396,6 @@ describe('ToolUseWaitNode', () => {
         node.exec({
           afterError: true,
           lastResponse: undefined,
-          previouslyDeliveredToOrchestrator: false,
           touchedFiles: [],
         }),
       );
@@ -696,7 +619,6 @@ describe('ToolUseWaitNode', () => {
         node.exec({
           afterError: false,
           lastResponse: undefined,
-          previouslyDeliveredToOrchestrator: false,
           touchedFiles: [],
         }),
       );
@@ -713,6 +635,12 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('does not let a subagent drive the parent goal continuation loop', async () => {
+    // A subagent cycle always exits WAITING (never reaches the goal-
+    // continuation code path, which is gated `!isSubagent` and only
+    // reachable after the subagent-suspend branch) — the invariant this test
+    // protects (a subagent must never synthesize a continuation against the
+    // PARENT's goal) is now structural, not conditional on waitForFollowUp
+    // ever being called.
     const streamId = 'wait-node-goal-subagent' as StreamTabId;
     await installPlatform();
 
@@ -740,13 +668,12 @@ describe('ToolUseWaitNode', () => {
         node.exec({
           afterError: false,
           lastResponse: undefined,
-          previouslyDeliveredToOrchestrator: false,
           touchedFiles: [],
         }),
       );
 
-      expect(waitForFollowUp).toHaveBeenCalledOnce();
-      expect(exec.kind).toBe('stop');
+      expect(waitForFollowUp).not.toHaveBeenCalled();
+      expect(exec.kind).toBe('waiting');
       expect(GoalStore.getForStream(streamId)?.status).toBe('active');
     } finally {
       await GoalStore.forget(streamId);
@@ -849,7 +776,6 @@ describe('ToolUseWaitNode', () => {
         node.exec({
           afterError: true,
           lastResponse: undefined,
-          previouslyDeliveredToOrchestrator: false,
           touchedFiles: [],
         }),
       );

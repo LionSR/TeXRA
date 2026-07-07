@@ -303,29 +303,27 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     }
   });
 
-  it('keeps the completed result when the completion hook throws', async () => {
+  it('keeps the failed subagent result when the onError delivery hook throws', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
         runFlowWithLifecycle(
           ctx,
-          async () => ({
-            category: 'toolUse',
-            outcome: RUN_OUTCOME.COMPLETED,
-            executionId: ctx.executionId,
-            streamId: ctx.streamId,
-          }),
+          async () => {
+            throw new Error('model exploded');
+          },
           {
-            onCompleted: () => {
+            isSubagent: true,
+            onError: () => {
               throw new Error('delivery hook boom');
             },
           },
         ),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.FAILED });
 
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({
-        outcome: 'completed',
+        outcome: 'failed',
         executionId: ctx.executionId,
       });
     } finally {

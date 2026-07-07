@@ -60,9 +60,11 @@ import {
   formatChildRunError,
 } from './deliveryEnvelope';
 import {
-  runAgentCliSession,
-  type AgentCliSessionStrategy,
-} from './agentCliSessionLoop';
+  startChildRunLoop,
+  type ChildRunPorts,
+  type ChildRunStrategy,
+} from '@agent/runtime/childRunLoop';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
   buildClaudeToolUseLog,
   buildClaudeUsageStats,
@@ -404,27 +406,45 @@ function startClaudeAgentLoop(params: {
   // turns; it's threaded forward from each turn's result.
   let resumeSessionId: string | undefined;
   const storedSessionIds = new Set<string>();
+  // The joined prompt text for whichever turn is currently in flight —
+  // captured here (rather than threaded through the loop contract) since
+  // `formatDelivery`/`formatError` run strictly after the turn that set it.
+  let lastPrompt = initialPrompt;
 
-  const strategy: AgentCliSessionStrategy<TurnResult> = {
+  const runTurn = async (
+    followUps: readonly FollowUpQueueBatchItem[],
+    _ports: ChildRunPorts,
+    abortController: AbortController,
+  ): Promise<TurnResult> => {
+    lastPrompt = followUps.map((f) => f.text).join('\n\n');
+    const turn = await runStreamedTurn({
+      prompt: lastPrompt,
+      childStreamId,
+      logger,
+      abortController,
+      model: params.model,
+      permissionMode: params.permissionMode,
+      effort: params.effort,
+      cwd: params.cwd,
+      additionalDirectories: params.additionalDirectories,
+      env: params.env,
+      resumeSessionId,
+      pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
+    });
+    if (turn.sessionId) resumeSessionId = turn.sessionId;
+    return turn;
+  };
+
+  const strategy: ChildRunStrategy<TurnResult> = {
     stageLabel: 'Claude Code session',
-    runTurn: async (prompt, abortController) => {
-      const turn = await runStreamedTurn({
-        prompt,
-        childStreamId,
-        logger,
+    launch: (ports, abortController) =>
+      runTurn(
+        [{ text: initialPrompt, origin: 'user' }],
+        ports,
         abortController,
-        model: params.model,
-        permissionMode: params.permissionMode,
-        effort: params.effort,
-        cwd: params.cwd,
-        additionalDirectories: params.additionalDirectories,
-        env: params.env,
-        resumeSessionId,
-        pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
-      });
-      if (turn.sessionId) resumeSessionId = turn.sessionId;
-      return turn;
-    },
+      ),
+    runTurn,
+    isTerminal: () => false,
     getUsage: (turn) => turn.usage,
     isTurnError: (turn) => turn.isError,
     onTurnError: (turn, log) => {
@@ -456,11 +476,11 @@ function startClaudeAgentLoop(params: {
         );
       }
     },
-    formatDelivery: (turn, prompt, wallTimeMs) =>
-      formatClaudeDelivery(executionId, prompt, wallTimeMs, turn),
-    formatError: (turn, prompt, err) =>
+    formatDelivery: (turn, wallTimeMs) =>
+      formatClaudeDelivery(executionId, lastPrompt, wallTimeMs, turn),
+    formatError: (turn, err) =>
       formatChildRunError(
-        { tag: 'claude-agent-error', executionId, prompt },
+        { tag: 'claude-agent-error', executionId, prompt: lastPrompt },
         {
           message: toErrorMessage(
             err ?? turn?.errorMessage ?? turn?.finalResponse,
@@ -472,11 +492,12 @@ function startClaudeAgentLoop(params: {
     },
   };
 
-  runAgentCliSession({
+  startChildRunLoop({
     childStream,
+    childStreamId,
     parentStreamId,
     executionId,
-    initialPrompt,
+    agentName: CLAUDE_AGENT_NAME,
     strategy,
   });
 }
