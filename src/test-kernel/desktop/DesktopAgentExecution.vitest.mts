@@ -676,22 +676,15 @@ describe('DesktopProgressBridge', () => {
     const bridge = (await createBridge(messages, {
       streamSnapshotStore,
     })) as BridgeWithSession;
-    const { emitRuntimeEvent } =
-      await import('@agent/runtime/emitRuntimeEvent');
-    const session = bridge.session as unknown as Parameters<
-      typeof emitRuntimeEvent
-    >[2];
+    const { hostChannel } = bridge.session;
+    expect(hostChannel).toBeDefined();
 
     try {
-      emitRuntimeEvent(
-        'setTaskState',
-        {
-          streamId: 'desktop-host-stream',
-          executionId: 'de57e0',
-          taskState: TaskStateSchema.parse(workflowTaskState()),
-        },
-        session,
-      );
+      hostChannel?.emit('setTaskState', {
+        streamId: 'desktop-host-stream',
+        executionId: 'de57e0',
+        taskState: TaskStateSchema.parse(workflowTaskState()),
+      });
 
       await vi.waitFor(() => {
         expect(streamSnapshotStore.upsert).toHaveBeenCalledWith(

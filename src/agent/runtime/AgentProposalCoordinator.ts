@@ -2,7 +2,12 @@
  * Session-scoped coordinator for workflow and tool-use agent proposals.
  */
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  toRuntimeHostProvider,
+  type AgentRuntimeHost,
+  type CoordinatorRuntimeHost,
+  type RuntimeHostProvider,
+} from '@agent/runtime/AgentRuntimeHost';
 import type { AgentProposal } from '@shared/schemas';
 
 export type ProposalResult =
@@ -16,15 +21,6 @@ export interface ProposalRequestOptions {
   proposal: AgentProposal;
   /** Timeout in milliseconds (default: wait indefinitely). */
   timeoutMs?: number;
-}
-
-type RuntimeHostProvider = () => AgentRuntimeHost;
-type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
-
-function toRuntimeHostProvider(
-  runtimeHost: CoordinatorRuntimeHost,
-): RuntimeHostProvider {
-  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
 }
 
 export class AgentProposalCoordinator {

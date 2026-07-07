@@ -31,7 +31,7 @@ export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 export type ApprovalPayload =
   | { kind: 'bash'; payload: BashPermission }
-  | { kind: 'toolEdit'; request: ToolEditApprovalRequest }
+  | { kind: 'toolEdit'; payload: ToolEditApprovalRequest }
   | { kind: 'plan'; payload: PlanApprovalPermission }
   | { kind: 'proposal'; payload: AgentProposalPermission }
   | { kind: 'retry'; payload: RetryPermission }
@@ -148,9 +148,8 @@ export function approvalPayloadStreamId(
     case 'retry':
     case 'externalInquiry':
     case 'userQuestion':
-      return payload.payload.streamId || undefined;
     case 'toolEdit':
-      return payload.request.streamId || undefined;
+      return payload.payload.streamId || undefined;
     default:
       return assertNever(payload, 'Unhandled approval payload kind');
   }
