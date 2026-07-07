@@ -110,49 +110,56 @@ function legacyStatusLabel(
   return style === 'progressHeader' ? 'Stopped' : 'stopped';
 }
 
+// A child/subagent stream suspended at WAITING is stalled awaiting a
+// reply-or-stop decision from whoever is looking at it — a different
+// situation from the root session's ordinary idle-between-turns WAITING, so
+// the CLI styles ('cli'/'cliCompact', which otherwise fold WAITING into the
+// root's "idle" wording) use this distinct label instead. `progressHeader`
+// already says "Waiting for follow-up" for both root and child, so it needs
+// no such split.
+const CLI_CHILD_WAITING_LABEL = 'waiting for you';
+
+interface FormatStreamStatusLabelOptions {
+  readonly style?: StreamStatusLabelStyle;
+  readonly missingLabel?: string;
+  readonly substate?: StreamSubstate;
+  /** True when `status` belongs to a child/subagent stream rather than the
+   *  root session — see `CLI_CHILD_WAITING_LABEL`. */
+  readonly isChildStream?: boolean;
+}
+
 export function formatStreamStatusLabel(
   status: string | undefined,
-  options: {
-    readonly style?: StreamStatusLabelStyle;
-    readonly missingLabel: string;
-    readonly substate?: StreamSubstate;
-  },
+  options: FormatStreamStatusLabelOptions & { readonly missingLabel: string },
 ): string;
 
 export function formatStreamStatusLabel(
   status: string,
-  options?: {
-    readonly style?: StreamStatusLabelStyle;
-    readonly missingLabel?: string;
-    readonly substate?: StreamSubstate;
-  },
+  options?: FormatStreamStatusLabelOptions,
 ): string;
 
 export function formatStreamStatusLabel(
   status: string | undefined,
-  options?: {
-    readonly style?: StreamStatusLabelStyle;
-    readonly missingLabel?: string;
-    readonly substate?: StreamSubstate;
-  },
+  options?: FormatStreamStatusLabelOptions,
 ): string | undefined;
 
 export function formatStreamStatusLabel(
   status: string | undefined,
-  options: {
-    readonly style?: StreamStatusLabelStyle;
-    readonly missingLabel?: string;
-    readonly substate?: StreamSubstate;
-  } = {},
+  options: FormatStreamStatusLabelOptions = {},
 ): string | undefined {
   if (status == null) return options.missingLabel;
   const state = streamStatusDisplayState(status, options.substate);
-  const legacyLabel = legacyStatusLabel(
-    state.legacyStatus,
-    options.style ?? 'progressHeader',
-  );
+  const style = options.style ?? 'progressHeader';
+  const legacyLabel = legacyStatusLabel(state.legacyStatus, style);
   if (legacyLabel) return legacyLabel;
   const key = state.key;
   if (!key) return status;
-  return STREAM_STATUS_LABELS[options.style ?? 'progressHeader'][key] ?? status;
+  if (
+    options.isChildStream &&
+    key === STREAM_PHASE.WAITING &&
+    (style === 'cli' || style === 'cliCompact')
+  ) {
+    return CLI_CHILD_WAITING_LABEL;
+  }
+  return STREAM_STATUS_LABELS[style][key] ?? status;
 }
