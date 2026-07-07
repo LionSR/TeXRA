@@ -11,7 +11,6 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 
 // Local imports - shared utils
@@ -23,11 +22,6 @@ import {
   AGENT_MODE_PRESETS,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
-import {
-  NESTED_DELEGATION_DEPTH_RANGE,
-  clampNestedDelegationDepth,
-} from '@shared/constants/delegationPolicy';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('multi-agent-tab')
@@ -194,38 +188,12 @@ export class MultiAgentTab extends LitElement {
       .preset-card:hover .preset-delete-btn {
         display: inline-flex;
       }
-
-      .numeric-setting-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-        padding: var(--wa-space-2xs) 0;
-      }
-
-      .numeric-setting-row label {
-        min-width: 140px;
-        font-size: var(--font-size-sm);
-        color: var(--wa-color-text-normal);
-      }
-
-      .numeric-setting-input {
-        width: 80px;
-      }
-
-      .numeric-setting-description {
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-xs);
-        margin: 0;
-        padding-left: calc(140px + var(--wa-space-xs));
-      }
     `,
   ];
 
   @property({ attribute: false }) allowOrchestratorKill = true;
   @property({ attribute: false }) detachSubagentsOnStop = false;
   @property({ attribute: false }) worktreeSupport = false;
-  @property({ attribute: false }) nestedDelegationMaxDepth =
-    NESTED_DELEGATION_DEPTH_RANGE.default;
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
   @property({ attribute: false }) orchestratorAgents: string[] = [];
@@ -235,19 +203,6 @@ export class MultiAgentTab extends LitElement {
     const target = event.target as WaSwitch | null;
     this.dispatchEvent(
       createEvent(eventName, { enabled: Boolean(target?.checked) }),
-    );
-  }
-
-  private handleNestedDelegationMaxDepthChange(input: WaInput): void {
-    const parsed = Number(input.value);
-    if (Number.isNaN(parsed)) {
-      input.value = String(this.nestedDelegationMaxDepth);
-      return;
-    }
-    const clamped = clampNestedDelegationDepth(parsed);
-    if (clamped !== parsed) input.value = String(clamped);
-    this.dispatchEvent(
-      createEvent('nested-delegation-max-depth-change', { value: clamped }),
     );
   }
 
@@ -465,27 +420,6 @@ export class MultiAgentTab extends LitElement {
             When enabled, delegated agents can operate in git worktrees outside
             the main workspace. All tool calls within the subagent automatically
             use the worktree as their root directory.
-          </p>
-        </div>
-
-        <div class="setting-block">
-          <div class="numeric-setting-row">
-            <label>Max delegation depth</label>
-            <wa-input
-              class="numeric-setting-input"
-              type="number"
-              .value=${String(this.nestedDelegationMaxDepth)}
-              min=${NESTED_DELEGATION_DEPTH_RANGE.min}
-              max=${NESTED_DELEGATION_DEPTH_RANGE.max}
-              @change=${(e: Event) =>
-                this.handleNestedDelegationMaxDepthChange(e.target as WaInput)}
-            ></wa-input>
-          </div>
-          <p class="numeric-setting-description">
-            Depth 1 (default): only the top-level orchestrator may delegate;
-            subagents cannot delegate further. Depth 2 lets a sub-orchestrator
-            delegate once more (orchestrator → sub-orchestrator → leaf). Higher
-            values allow deeper chains.
           </p>
         </div>
       </div>

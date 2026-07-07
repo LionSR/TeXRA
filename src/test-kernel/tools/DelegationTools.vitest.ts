@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   currentSession: vi.fn(),
   sendFollowUp: vi.fn(),
   wakeQueuedFollowUpStream: vi.fn(),
-  depthGateError: vi.fn(() => null),
   getNativeSubagentStrategy: vi.fn(),
 }));
 
@@ -28,14 +27,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   sendFollowUp: mocks.sendFollowUp,
   wakeQueuedFollowUpStream: mocks.wakeQueuedFollowUpStream,
 }));
-
-vi.mock('@tools/delegation/subagentExecution', async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import('@tools/delegation/subagentExecution')
-    >();
-  return { ...actual, depthGateError: mocks.depthGateError };
-});
 
 vi.mock('@tools/delegation/nativeSubagentStrategy', async (importOriginal) => {
   const actual =
@@ -194,7 +185,6 @@ describe('DelegateAgentTool resume (issue #7289)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.depthGateError.mockReturnValue(null);
     mocks.tryUseRunContext.mockReturnValue({
       delegationDepth: 0,
       streamId: parentStreamId,

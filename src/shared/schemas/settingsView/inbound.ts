@@ -11,7 +11,6 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolicy';
 
 import { AgentCategorySchema, AgentSourceSchema } from '../agent';
 import { StreamTabIdSchema } from '../identifiers';
@@ -217,14 +216,6 @@ const SetAllowOrchestratorKillMessageSchema = enabledFlag(
 const SetDetachSubagentsOnStopMessageSchema = enabledFlag(
   CMD.SET_DETACH_SUBAGENTS_ON_STOP,
 );
-
-const SetNestedDelegationMaxDepthMessageSchema = z.object({
-  command: z.literal(CMD.SET_NESTED_DELEGATION_MAX_DEPTH),
-  value: z
-    .int()
-    .min(NESTED_DELEGATION_DEPTH_RANGE.min)
-    .max(NESTED_DELEGATION_DEPTH_RANGE.max),
-});
 
 // Agent team inbound messages
 const GetAgentModePresetsMessageSchema = commandOnly(
@@ -525,7 +516,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetSuperYoloEnabledMessageSchema,
     SetAllowOrchestratorKillMessageSchema,
     SetDetachSubagentsOnStopMessageSchema,
-    SetNestedDelegationMaxDepthMessageSchema,
     // Git author settings messages
     GetGitAuthorSettingsMessageSchema,
     SetGitMarkCommitsMessageSchema,
