@@ -28,11 +28,9 @@ setupPlatform({}, { config: fakeConfig });
 
 const baseSetting: AgentSetting = {
   agentCategory: AgentCategory.Workflow,
-  documentTag: 'documents',
   temperature: 1,
   isRewrite: true,
   rounds: 1,
-  endTag: '</documents>',
   requiredFiles: {},
   requiredFilesInternal: {},
   defaultOutputFiles: [],

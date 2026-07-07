@@ -20,8 +20,7 @@ import type { HostInteractions } from './HostInteractions';
  * - **Frontend-bound, ignorable** (the `── Frontend-bound events ──` group in
  *   {@link ProgressEventPayloads}: `requestOpenFile`, `requestShowInstruction`,
  *   `showAgentConfigBanner`, `requestShowError`, `requestEnsureProgressView`,
- *   plus the `*SubscriptionsChanged` / `toolAvailabilityChanged` UI-refresh
- *   signals): pure host-UI requests with no effect on the agent loop.
+ *   pure host-UI requests with no effect on the agent loop.
  *
  * {@link noopAgentRuntimeHost} (drop everything) is a valid host — it is used
  * by tests and non-interactive paths.

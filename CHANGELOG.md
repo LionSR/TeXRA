@@ -30,6 +30,11 @@ All notable changes to this project will be documented in this file.
 - **Faster subagent result delivery** — the orchestrator wakes as soon as a
   subagent finishes instead of waiting for report persistence, and
   consecutive maintenance follow-ups batch into a single turn.
+- **`settings.documentTag`/`endTag` are no longer configurable in custom
+  agents** — every agent now emits the standard unified output container,
+  matching what every bundled agent already used. Custom agent YAMLs that
+  still set a bespoke `documentTag`/`endTag` keep loading; the fields are
+  dropped with a console warning rather than kept as a live setting.
 - **Subagent runs record a structured result manifest** — outputs, line-diff
   references, outcome, and cost are readable as JSON via the executions tool
   (`/executions/{id}/result`), so follow-on agents can chain on data instead

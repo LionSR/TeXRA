@@ -1,8 +1,8 @@
 /**
  * Single emit path for run/host progress events (SDK Step 7d follow-on F-1).
  *
- * Replaces scattered `bus.emit(...)` in `src/tools` so one fact has one emit
- * path and one name, resolving the target in priority order:
+ * Replaces scattered `ProgressEventBus.emit(...)` in `src/tools` so one fact
+ * has one emit path and one name, resolving the target in priority order:
  *
  * 1. migrated Stage 3a facts go to the owning `SessionEventHub` and are
  *    projected to the legacy host surface by `LegacyProgressEventProjection`;
@@ -10,40 +10,26 @@
  *    non-default session, e.g. a desktop window) — when present;
  * 3. otherwise the active run's `runtimeHost`, resolved from the ambient
  *    {@link RunContext} (the in-run case — tools firing inside a run's ALS);
- * 4. otherwise the process {@link bus} — the single-session fallback that keeps
- *    the extension byte-identical (its run `runtimeHost.emit` is `bus.emit`
- *    anyway) and host-path callers that pass no session unchanged.
+ * 4. otherwise the process {@link ProgressEventBus} — the single-session
+ *    fallback that keeps the extension byte-identical (its run
+ *    `runtimeHost.emit` is `ProgressEventBus.emit` anyway) and host-path
+ *    callers that pass no session unchanged.
  *
  * In-run callers pass no `session` (the ALS supplies the run host). Host-path
  * callers — reachable outside any run ALS — MUST pass their owning `session`,
  * or the event resolves to the bus and a non-default session never sees it.
  */
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import {
+  ProgressEventBus,
+  type ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 
 import { tryUseRunContext } from './RunContext';
 import { defaultSession, type SessionHandle } from './SessionHandle';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import type { SessionFact } from './SessionEventHub';
-
-function emitLegacyHostFact(host: AgentRuntimeHost, fact: SessionFact): void {
-  switch (fact.type) {
-    case 'goalStateChanged':
-      host.emit('goalStateChanged', fact.payload);
-      return;
-    case 'inquiryThreadUpdated':
-      host.emit('inquiryThreadUpdated', fact.payload);
-      return;
-    case 'clearMissingOutputs':
-      host.emit('clearMissingOutputs', fact.payload);
-      return;
-    case 'updateQueuedFollowUps':
-      host.emit('updateQueuedFollowUps', fact.payload);
-      return;
-    case 'setActiveStream':
-      host.emit('setActiveStream', fact.payload);
-      return;
-  }
-}
+import {
+  emitLegacySessionFactOnHost,
+  type SessionFact,
+} from './SessionEventHub';
 
 function emitSessionFact(fact: SessionFact, session?: SessionHandle): void {
   const owner = session ?? tryUseRunContext()?.session;
@@ -52,7 +38,7 @@ function emitSessionFact(fact: SessionFact, session?: SessionHandle): void {
     return;
   }
   if (owner?.hostChannel) {
-    emitLegacyHostFact(owner.hostChannel, fact);
+    emitLegacySessionFactOnHost(owner.hostChannel, fact);
     return;
   }
   defaultSession().events.emit({ scope: 'session', event: fact });
@@ -113,5 +99,5 @@ export function emitRuntimeEvent<K extends keyof ProgressEventPayloads>(
 
   const host = session?.hostChannel ?? tryUseRunContext()?.runtimeHost;
   if (host) host.emit(event, payload);
-  else bus.emit(event, payload);
+  else ProgressEventBus.emit(event, payload);
 }

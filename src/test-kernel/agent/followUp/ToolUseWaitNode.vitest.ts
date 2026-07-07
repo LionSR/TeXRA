@@ -20,7 +20,7 @@ import {
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
+import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import {
   MESSAGE_TYPES,
@@ -325,10 +325,9 @@ describe('ToolUseWaitNode', () => {
     const detachTrace = logger.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjector = attachSessionRunFactProjector(
+    const detachProjection = attachLegacyProgressEventProjection(
       hub,
       runtimeHost,
-      streamId,
     );
     const waitForFollowUp = vi.fn();
     const services = {
@@ -373,7 +372,7 @@ describe('ToolUseWaitNode', () => {
         { streamId, bypassActive: false },
       );
     } finally {
-      detachProjector();
+      detachProjection();
       detachTrace();
       await GoalStore.forget(streamId);
       cleanupApprovalsForStream(streamId);

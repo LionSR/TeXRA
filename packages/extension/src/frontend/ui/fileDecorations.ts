@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 
-import { bus } from '@eventBus/ProgressEventBus';
+import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { ProgressEventBus } from '@eventBus/ProgressEventBus';
+import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import type { OutputFileInfo } from '@shared/schemas/output';
 
 // Session-scoped: the touched set is not persisted across window reloads so
@@ -59,11 +62,12 @@ function collectWorkspacePaths(
 
 export function registerFileDecorations(
   context: vscode.ExtensionContext,
+  events: SessionEventHub = defaultSession().events,
 ): void {
   const provider = new TeXRAFileDecorationProvider();
 
-  const unsubscribeOutputFiles = bus.on(
-    'addOutputFiles',
+  const unsubscribeOutputFiles = subscribeAddOutputFilesRunFact(
+    events,
     ({ filesByRound }) => {
       const paths = new Set<string>();
       for (const roundFiles of Object.values(filesByRound)) {
@@ -77,7 +81,7 @@ export function registerFileDecorations(
     },
   );
 
-  const unsubscribeWritten = bus.on(
+  const unsubscribeWritten = ProgressEventBus.on(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       provider.markTouched(absolutePaths);

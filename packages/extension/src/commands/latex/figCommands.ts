@@ -11,7 +11,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
-import { tikzPictureManager } from '@latex/TikzPictureManager';
+import { TikzPictureManager } from '@latex/TikzPictureManager';
 import * as logger from '@logger/logUtils';
 import { pathToLocation } from '@utils/files';
 import { pluralize } from '@utils/text/stringUtils';
@@ -76,7 +76,7 @@ export async function handleExtractTikzFigures(): Promise<void> {
         `Processing LaTeX file for TikZ figures: ${filePath}`,
       );
 
-      const labeledTikzPictures = await tikzPictureManager.extract(
+      const labeledTikzPictures = await TikzPictureManager.extract(
         pathToLocation(filePath),
       );
 
@@ -129,7 +129,7 @@ export async function handleCompileTikzFigures(): Promise<void> {
             message: 'Extracting and compiling TikZ pictures...',
           });
 
-          const compiledFiles = await tikzPictureManager.compile(
+          const compiledFiles = await TikzPictureManager.compile(
             pathToLocation(filePath),
           );
 

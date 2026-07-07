@@ -12,7 +12,7 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - files
 import type { FileLocation } from '@shared/schemas';
-import { flexibleFS } from '@utils/files';
+import { FlexibleFS } from '@utils/files';
 
 // Local imports - xml
 import { extractScratchpad } from '@utils/text/xmlUtils';
@@ -53,7 +53,7 @@ export async function prepareExistingOutputContent(
   logger: AgentTrace,
 ): Promise<PreparedFileContent> {
   // Read and clean the file content
-  let content = await flexibleFS.read(outputLocation);
+  let content = await FlexibleFS.read(outputLocation);
   content = replacementEngine.applyAll(content);
 
   // Extract any existing scratchpad content and log it
@@ -61,7 +61,7 @@ export async function prepareExistingOutputContent(
   if (scratchpad) logger.domain({ key: 'scratchpad', text: scratchpad });
 
   // Write cleaned content back to file
-  await flexibleFS.write(outputLocation, content);
+  await FlexibleFS.write(outputLocation, content);
 
   // Update workspace state - critical for multi-round agents on resume
   // so that subsequent rounds have correct context

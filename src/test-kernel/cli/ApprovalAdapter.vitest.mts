@@ -1,19 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
-const runCoordinatorMocks = vi.hoisted(() => ({
-  cancelRetry: vi.fn(),
-  resolvePlanApproval: vi.fn(),
-  resolveProposal: vi.fn(),
-  triggerRetry: vi.fn(),
-}));
 
 vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
-}));
-
-vi.mock('@agent/runtime/runCoordinators', () => ({
-  runCoordinatorBridge: runCoordinatorMocks,
 }));
 
 import {
@@ -23,6 +13,7 @@ import {
 import {
   appendCliApiSwitchHint,
   approvalPromptAllowed,
+  createHeadlessCliHostInteractions,
   formatAgentProposalApprovalSummary,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
@@ -35,7 +26,12 @@ import {
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import {
+  AgentCategory,
+  DEFAULT_TOOL_CONFIG,
+  type StreamTabId,
+} from '@shared/schemas';
+import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
@@ -81,10 +77,6 @@ beforeEach(async () => {
 afterEach(() => {
   setActiveCliToolEditApprovalHandler(undefined);
   handleExternalInquiryActionMock.mockClear();
-  runCoordinatorMocks.cancelRetry.mockClear();
-  runCoordinatorMocks.resolvePlanApproval.mockClear();
-  runCoordinatorMocks.resolveProposal.mockClear();
-  runCoordinatorMocks.triggerRetry.mockClear();
 });
 
 describe('immediateDecisionForApproval', () => {
@@ -166,9 +158,7 @@ describe('approval prompt hooks', () => {
 
   it('runs the before-prompt hook for interactive approval events', async () => {
     const events: string[] = [];
-    const handled = handleCliApprovalEvent(
-      'showAgentProposal',
-      proposal,
+    const result = await createHeadlessCliHostInteractions(
       context({
         approvalPrompt: async () => {
           events.push('prompt');
@@ -180,50 +170,39 @@ describe('approval prompt hooks', () => {
           events.push('before');
         },
       },
-    );
+    ).requestAgentProposal?.(proposal);
 
-    await new Promise((resolve) => setImmediate(resolve));
-
-    expect(handled).toBe(true);
+    expect(result).toEqual({
+      action: 'reject',
+      feedback: 'no review needed',
+    });
     expect(events).toEqual(['before', 'prompt']);
   });
 
-  it('does not run the before-prompt hook for auto-approved events', () => {
+  it('does not run the before-prompt hook for auto-approved events', async () => {
     const events: string[] = [];
-    const handled = handleCliApprovalEvent(
-      'showAgentProposal',
-      proposal,
+    const result = await createHeadlessCliHostInteractions(
       context({ approvalPolicy: 'yolo' }),
       {
         beforePrompt: () => {
           events.push('before');
         },
       },
-    );
+    ).requestAgentProposal?.(proposal);
 
-    expect(handled).toBe(true);
+    expect(result).toEqual({ action: 'approve' });
     expect(events).toEqual([]);
-    expect(runCoordinatorMocks.resolveProposal).toHaveBeenCalledWith(
-      'proposal-1',
-      { action: 'approve' },
-    );
   });
 
-  it('routes automatic proposal rejection through the shared proposal controller', () => {
-    const handled = handleCliApprovalEvent(
-      'showAgentProposal',
-      proposal,
+  it('routes automatic proposal rejection through the headless interaction port', async () => {
+    const result = await createHeadlessCliHostInteractions(
       context({ approvalPolicy: 'never' }),
-    );
+    ).requestAgentProposal?.(proposal);
 
-    expect(handled).toBe(true);
-    expect(runCoordinatorMocks.resolveProposal).toHaveBeenCalledWith(
-      'proposal-1',
-      {
-        action: 'reject',
-        feedback: 'Denied by CLI approval policy.',
-      },
-    );
+    expect(result).toEqual({
+      action: 'reject',
+      feedback: 'Denied by CLI approval policy.',
+    });
   });
 
   it('does not prompt for external inquiry in non-TUI CLI runs', async () => {
@@ -254,15 +233,43 @@ describe('approval prompt hooks', () => {
       },
     );
 
-    await Promise.resolve();
-
     expect(handled).toBe(true);
     expect(events).toEqual([]);
+    await Promise.resolve();
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_aabbccdd0011',
       feedback: expect.stringContaining('non-TUI CLI runs'),
     });
+  });
+});
+
+describe('requestRetry classification (#7331)', () => {
+  const retryRequest: HostRetryRequest = {
+    streamId: 'root@deepseekT#abc' as StreamTabId,
+    operation: 'Model invocation',
+    errorMessage: 'stream dropped before first token',
+  };
+
+  it('denies (not cancels) a retry when no human input is available', async () => {
+    const result = await createHeadlessCliHostInteractions(
+      context({ approvalPolicy: 'never', mode: 'headless' }),
+    ).requestRetry?.(retryRequest);
+
+    // A policy/headless auto-denial is a distinct failure, not a user cancel,
+    // so a zero-output run reports FAILED rather than COMPLETED.
+    expect(result).toEqual({
+      action: 'deny',
+      reason: 'Denied by CLI approval policy.',
+    });
+  });
+
+  it('cancels a retry the interactive user explicitly rejects', async () => {
+    const result = await createHeadlessCliHostInteractions(
+      context({ approvalPrompt: async () => 'n not now' }),
+    ).requestRetry?.(retryRequest);
+
+    expect(result).toEqual({ action: 'cancel' });
   });
 });
 

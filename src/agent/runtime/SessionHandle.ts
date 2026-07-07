@@ -39,12 +39,21 @@ import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
 import { tryUseRunContext } from './RunContext';
-import { ExecutionRegistry, executionRegistry } from './executionRegistry';
-import { InterruptRegistry, interruptRegistry } from './InterruptRegistry';
-import { RunCoordinatorBridge, runCoordinatorBridge } from './runCoordinators';
+import {
+  ExecutionRegistry,
+  SharedExecutionRegistry,
+} from './executionRegistry';
+import {
+  InterruptRegistry,
+  SharedInterruptRegistry,
+} from './InterruptRegistry';
+import {
+  RunCoordinatorBridge,
+  SharedRunCoordinatorBridge,
+} from './runCoordinators';
 import {
   ExecutionSubscriptionBinder,
-  executionSubscriptionBinder,
+  SharedExecutionSubscriptionBinder,
 } from './ExecutionSubscriptionBinder';
 import {
   StreamStatusMachine,
@@ -295,21 +304,21 @@ let cachedDefaultSession: SessionHandle | undefined;
  * The process-default session. Its members ARE the existing exported singletons
  * — identity is the behavior-neutral compatibility mechanism for the 7d train:
  * unmigrated call sites keep hitting the same objects, and per-call-site
- * migration is `runCoordinatorBridge.x(...)` → `session.coordinators.x(...)`
+ * migration is `SharedRunCoordinatorBridge.x(...)` → `session.coordinators.x(...)`
  * against the identical instance.
  *
  * Constructed lazily on first use rather than at module evaluation: many
  * run-scoped modules import `currentSession`, which pulls this module into
  * their import cycle, and an eager construction here would read the
- * `executionSubscriptionBinder` singleton before its own module finished
+ * `SharedExecutionSubscriptionBinder` singleton before its own module finished
  * initializing (TDZ). Deferring to first call sidesteps that entirely.
  */
 export function defaultSession(): SessionHandle {
   return (cachedDefaultSession ??= new SessionHandle({
-    interrupts: interruptRegistry,
-    executions: executionRegistry,
-    coordinators: runCoordinatorBridge,
-    subscriptions: executionSubscriptionBinder,
+    interrupts: SharedInterruptRegistry,
+    executions: SharedExecutionRegistry,
+    coordinators: SharedRunCoordinatorBridge,
+    subscriptions: SharedExecutionSubscriptionBinder,
     status: StreamStatusService,
     transcripts: getDefaultStreamLogStore(),
     followUps: ToolUseFollowUpQueue.defaultInstance(),

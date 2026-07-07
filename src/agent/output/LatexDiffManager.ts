@@ -20,7 +20,7 @@ import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
-  flexibleFS,
+  FlexibleFS,
   TaskRunFileService,
   WorkspaceFS,
 } from '@utils/files';
@@ -125,7 +125,7 @@ export class LatexDiffManager {
   private async ensureWorkspaceDependency(
     targetLocation: FileLocation | null | undefined,
   ): Promise<void> {
-    if (!targetLocation || !(await flexibleFS.exists(targetLocation))) {
+    if (!targetLocation || !(await FlexibleFS.exists(targetLocation))) {
       return;
     }
 

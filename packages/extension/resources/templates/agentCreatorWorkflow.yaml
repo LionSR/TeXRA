@@ -14,13 +14,14 @@ prompts:
     You are an expert on the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
     When generating workflow agent YAML definitions, follow the schema below exactly.
     Workflow agents process LaTeX documents in fixed rounds (default 2), producing output
-    wrapped in a documentTag. Modern thinking-capable models reason natively before
-    producing the final output --- do not add scratchpad scaffolding by default.
+    wrapped in the standard <documents><document name="..."> container. Modern
+    thinking-capable models reason natively before producing the final output ---
+    do not add scratchpad scaffolding by default.
 
     CRITICAL RULES:
     - agentCategory MUST be "workflow" (not "toolUse"). Workflow agents do NOT call tools.
-    - documentTag SHOULD be "documents" for new workflow agents.
-    - endTag MUST match documentTag as a closing XML tag (e.g. "</documents>").
+    - The output container (<documents><document name="...">) is fixed
+      protocol, not a per-agent setting — do not add settings for it.
     - Infer appropriate settings from the agent's description:
       - isRewrite: true when the agent edits/revises/corrects existing documents, false when it creates new content.
       - temperature: low (0.1) for editing/correction tasks, higher (0.5-0.8) for creative/generation tasks.
@@ -52,8 +53,6 @@ prompts:
     description: <one-line description>
     settings:
       agentCategory: workflow
-      documentTag: documents
-      endTag: </documents>
       isRewrite: <true if editing existing docs, false if creating new>
       temperature: <0.1 for precise editing, 0.5-0.8 for creative>
     prompts:
@@ -80,8 +79,6 @@ prompts:
     description: Improves writing quality and clarity based on your specific instructions.
     settings:
       agentCategory: workflow
-      documentTag: documents
-      endTag: </documents>
     prompts:
       systemPrompt: |
         You are a professional scientist. Your task is to improve a LaTeX research paper
@@ -115,7 +112,8 @@ prompts:
           Output the further enhanced content as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
 
     IMPORTANT REMINDERS:
-    - The documentTag in prompts must match the settings.documentTag.
+    - Wrap the final output in <documents><document name="..."> exactly as shown
+      above — this container is fixed protocol, not a setting to configure.
     - userRequest must be an array with exactly as many entries as rounds (1 or 2).
     - Include {{ INSTRUCTION }} somewhere in the prompts so the user's instructions are passed through.
     - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.

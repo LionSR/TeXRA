@@ -17,6 +17,7 @@ import { ProgressWorkflowFileActionsController } from '@controllers/progressView
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   validateExecutionRequest,
@@ -26,7 +27,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { setPreferCodexSubscription } from '@auth/codex';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
-import { bus } from '@eventBus/ProgressEventBus';
+import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { loadOptions } from '@frontend/agents/optionsLoader';
@@ -45,12 +46,10 @@ import {
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
-import { handleUserQuestionAction } from '@tools/userQuestion';
-import { handleProgressViewBashApprovalAction } from '@tools/approval';
-import { GoalStore } from '@tools/goal';
+import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import {
   createExternalLocation,
-  flexibleFS,
+  FlexibleFS,
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
@@ -67,11 +66,7 @@ type MessageFor<C extends ProgressViewInboundMessage['command']> = Extract<
 
 type ProgressViewCoordinatorBridge = Pick<
   RunCoordinatorBridge,
-  | 'cancelRetry'
-  | 'clearRetryRequest'
-  | 'resolvePlanApproval'
-  | 'resolveProposal'
-  | 'triggerRetry'
+  'cancelRetry' | 'clearRetryRequest' | 'triggerRetry'
 >;
 
 /**
@@ -130,20 +125,26 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.followUpPolishController = new ProgressFollowUpPolishController();
     this.handlerRegistry = this.createHandlerRegistry();
 
-    const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
-      void this.streamLifecycleController.deleteStream(streamId);
-      void GoalStore.forget(streamId);
-    });
+    const unsubscribeRemoveStream = ProgressEventBus.on(
+      'removeStream',
+      ({ streamId }) => {
+        void this.streamLifecycleController.deleteStream(streamId);
+        void GoalStore.forget(streamId);
+      },
+    );
     context.subscriptions.push({ dispose: unsubscribeRemoveStream });
 
-    const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
-      const goal = GoalStore.getForStream(streamId);
-      this.provider.webviewUpdater.updateGoalActive(
-        streamId,
-        isGoalInFlight(goal),
-        { status: goal?.status, objective: goal?.objective },
-      );
-    });
+    const unsubscribeGoal = subscribeGoalStateChanges(
+      defaultSession(),
+      ({ streamId }) => {
+        const goal = GoalStore.getForStream(streamId);
+        this.provider.webviewUpdater.updateGoalActive(
+          streamId,
+          isGoalInFlight(goal),
+          { status: goal?.status, objective: goal?.objective },
+        );
+      },
+    );
     context.subscriptions.push({ dispose: unsubscribeGoal });
   }
 
@@ -553,7 +554,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             )) ?? false
           );
         },
-        readFile: (file) => flexibleFS.read(createExternalLocation(file)),
+        readFile: (file) => FlexibleFS.read(createExternalLocation(file)),
         showInfo: async (message) => {
           await this.host.info(message);
         },
@@ -589,14 +590,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           )) === true
         );
       },
-      resolveProposal: (proposalId, result) => {
+      settleProposal: (proposalId, result) => {
         const resolved = this.interactions.resolve(proposalId, {
           kind: 'proposal',
           action: result.action,
           value: result,
         });
         if (!resolved) {
-          this.coordinators.resolveProposal(proposalId, result);
+          this.logger.warn(
+            this.channel,
+            `No pending host interaction found for proposal: ${proposalId}`,
+          );
         }
       },
       onMissingProposal: (proposalId) => {
@@ -727,33 +731,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private handleBashApprovalAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION>,
-  ): Promise<void> | void {
-    if (
-      this.interactions.resolve(data.requestId, {
-        kind: 'bash',
-        action: data.action,
-        feedback: data.feedback,
-      })
-    ) {
-      return;
-    }
-    return handleProgressViewBashApprovalAction(data);
+  ): void {
+    this.interactions.resolve(data.requestId, {
+      kind: 'bash',
+      action: data.action,
+      feedback: data.feedback,
+    });
   }
 
   private handleUserQuestionAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION>,
-  ): Promise<void> | void {
-    if (
-      this.interactions.resolve(data.requestId, {
-        kind: 'userQuestion',
-        action: data.action,
-        value: data.answers,
-        feedback: data.feedback,
-      })
-    ) {
-      return;
-    }
-    return handleUserQuestionAction(data);
+  ): void {
+    this.interactions.resolve(data.requestId, {
+      kind: 'userQuestion',
+      action: data.action,
+      value: data.answers,
+      feedback: data.feedback,
+    });
   }
 
   private async handleUseOwnApiKey(
@@ -855,33 +849,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION>,
   ): void {
     const { approvalId, action } = data;
-    if (
-      this.interactions.resolve(approvalId, {
-        kind: 'plan',
-        action,
-        feedback: data.feedback,
-      })
-    ) {
-      return;
-    }
-    switch (action) {
-      case 'approve':
-        this.coordinators.resolvePlanApproval(approvalId, {
-          action: 'approve',
-        });
-        break;
-      case 'approve_and_goal':
-        this.coordinators.resolvePlanApproval(approvalId, {
-          action: 'approve_and_goal',
-        });
-        break;
-      case 'reject':
-        this.coordinators.resolvePlanApproval(approvalId, {
-          action: 'reject',
-          feedback: data.feedback,
-        });
-        break;
-    }
+    this.interactions.resolve(approvalId, {
+      kind: 'plan',
+      action,
+      feedback: data.feedback,
+    });
   }
 
   // ============================================================

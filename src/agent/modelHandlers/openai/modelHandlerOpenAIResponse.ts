@@ -22,7 +22,6 @@ import {
   isContextWindowError,
   isPreviousResponseIdError,
   isUserAbort,
-  consumeStreamChunks,
   handleStreamingFailure,
   attachFlowAutoRetryRequired,
   trackStreamConnect,
@@ -293,7 +292,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * OpenAI Response API supports file uploads.
+   * OpenAI Response API supports file uploads. Reads the ChatGPT-subscription
+   * profile when active (that backend disables tool-result file upload);
+   * otherwise defaults to true for the base Responses API (#7101 triage:
+   * runtime combinator over profile data, not a per-provider override).
    */
   protected override get supportsToolResultFileUpload(): boolean {
     return (
@@ -372,6 +374,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   protected override backgroundModeSupported = true;
 
+  /**
+   * Reads the ChatGPT-subscription profile when active (that backend doesn't
+   * support manual compaction); otherwise falls back to whether this request
+   * is routed through OpenRouter, which implements its own compaction path via
+   * `ModelHandlerOpenRouterNative` instead.
+   */
   override get supportsManualCompaction(): boolean {
     return (
       this.getOpenAIResponseCapabilities()?.supportsManualCompaction ??
@@ -1949,7 +1957,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       let response: Response | undefined;
       try {
-        await consumeStreamChunks(stream, (event) => {
+        for await (const event of stream) {
           streamEventObserved = true;
           if (event.type === 'response.created') {
             responseId = event.response.id;
@@ -1960,7 +1968,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           } else if (event.type === 'response.output_item.done') {
             streamedItems.push(event.item);
           }
-        });
+        }
       } catch (streamError) {
         response = await retrieveAfterUnhandledStreamEvent(streamError);
       }
@@ -2216,11 +2224,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ? OPENAI_CHAT_FINISH.STOP
         : OPENAI_CHAT_FINISH.LENGTH;
 
-    newResponse = this.appendEndTagIfNeeded(
-      newResponse,
-      endTag,
-      stopReason === OPENAI_CHAT_FINISH.STOP,
-    );
+    // Unlike Chat Completions/Anthropic, the Responses API has no `stop`
+    // parameter — this handler never configures the end tag as an API-level
+    // stop sequence, so a "completed" status never implies the provider
+    // stripped it. Forging the tag here would be pure speculation that could
+    // mask genuinely incomplete output as done; the extraction layer already
+    // tolerates a missing end tag.
     newResponse = replacementEngine.applyAll(newResponse);
 
     return { text: newResponse, usage, stopReason };

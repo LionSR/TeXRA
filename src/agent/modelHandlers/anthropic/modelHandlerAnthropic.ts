@@ -230,6 +230,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return getAnthropicMaxPdfPages(this.getEffectiveContextWindow());
   }
 
+  /**
+   * Client-side compaction is available for tool-use sessions on models whose
+   * llm-zoo family is compaction-eligible. `isCompactionEligibleModel` is a
+   * `startsWith`-style model-family gate in `anthropicThinking.ts`; moving it
+   * to an llm-zoo capability flag is #7080's scope, not this predicate's own
+   * #7101 triage.
+   */
   override get supportsManualCompaction(): boolean {
     return (
       isCompactionEligibleModel(this.config.fullName) && this.isToolUseMode()
@@ -237,7 +244,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
-   * Anthropic supports file uploads via their Files API.
+   * Anthropic supports file uploads via their Files API. Unconditionally
+   * true rather than a capability read: this is a provider-wide fact about
+   * the Anthropic SDK, not a per-model llm-zoo flag or `ProviderCapabilityProfile`
+   * entry (#7101 triage: see the base getter's doc comment for why this
+   * stays a per-provider override rather than folding into a capability read).
    */
   protected override get supportsToolResultFileUpload(): boolean {
     return true;
@@ -257,14 +268,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   override isAutoRetryManagedByProvider(_error: Error): boolean {
     return true;
-  }
-
-  /**
-   * Whether this handler supports native token counting via API.
-   * Uses Anthropic's countTokens endpoint for exact pre-flight counts.
-   */
-  override get supportsTokenCounting(): boolean {
-    return this.capabilities.supportsTokenCounting;
   }
 
   /**
@@ -1167,7 +1170,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
-    agentSetting: AgentSetting,
+    _agentSetting: AgentSetting,
   ): boolean {
     // DEBUG: Log the stop reason to help diagnose continuation issues
     this.logger.debug(
@@ -1186,7 +1189,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const shouldContinue =
       (stopReason === ANTHROPIC_STOP.MAX_TOKENS ||
         stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) &&
-      !hasEndTag(agentSetting, newResponse);
+      !hasEndTag(newResponse);
 
     if (!shouldContinue && stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) {
       this.logger.debug('Response complete (end tag found)');

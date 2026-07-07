@@ -1,16 +1,9 @@
 /**
- * Promise-based coordinator for plan approval gates.
- *
- * 1. PlanTool calls `waitForApproval()` → returns Promise, emits 'showPlanApproval'.
- * 2. User approves/rejects → resolves Promise with the corresponding action.
- * 3. On resolution → emits 'resolvePlanApproval' to dismiss UI.
+ * Session-scoped coordinator for plan approval gates.
  */
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { Plan } from '@shared/schemas';
-import {
-  BasePromiseCoordinator,
-  type CoordinatorConfig,
-} from './BasePromiseCoordinator';
 
 export type PlanApprovalResult =
   | { action: 'approve' }
@@ -27,29 +20,28 @@ export interface PlanApprovalRequestOptions {
   timeoutMs?: number;
 }
 
-interface PlanApprovalShowPayload extends Record<string, unknown> {
-  approvalId: string;
-  streamId: string;
-  plan: Plan;
-  goalEnabled: boolean;
+type RuntimeHostProvider = () => AgentRuntimeHost;
+type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
+
+function toRuntimeHostProvider(
+  runtimeHost: CoordinatorRuntimeHost,
+): RuntimeHostProvider {
+  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
 }
 
-export class PlanApprovalCoordinator extends BasePromiseCoordinator<
-  PlanApprovalResult,
-  PlanApprovalShowPayload
-> {
-  protected readonly config: CoordinatorConfig = {
-    showEventName: 'showPlanApproval',
-    resolveEventName: 'resolvePlanApproval',
-    idFieldName: 'approvalId',
-  };
+export class PlanApprovalCoordinator {
+  private readonly getRuntimeHost: RuntimeHostProvider;
 
   /** Bidirectional maps for stream ↔ approval ID lookup. */
   private readonly streamApprovalMap = new Map<string, string>();
   private readonly approvalStreamMap = new Map<string, string>();
 
-  protected getDefaultCancelResult(): PlanApprovalResult {
-    return { action: 'reject' };
+  constructor(runtimeHost: CoordinatorRuntimeHost) {
+    this.getRuntimeHost = toRuntimeHostProvider(runtimeHost);
+  }
+
+  private get runtimeHost(): AgentRuntimeHost {
+    return this.getRuntimeHost();
   }
 
   waitForApproval(
@@ -58,6 +50,9 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
   ): Promise<PlanApprovalResult> {
     const { approvalId, plan, goalEnabled = false, timeoutMs } = options;
 
+    if (this.approvalStreamMap.has(approvalId)) {
+      this.rejectRequest(approvalId);
+    }
     this.streamApprovalMap.set(streamId, approvalId);
     this.approvalStreamMap.set(approvalId, streamId);
 
@@ -68,13 +63,12 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
       { approvalId, streamId, plan, goalEnabled },
       { timeoutMs },
     );
-    if (interaction) return interaction;
+    if (!interaction) {
+      this.dropMappingByApprovalId(approvalId);
+      throw new Error('HostInteractions.requestPlanApproval is required');
+    }
 
-    return this.waitForUserAction(
-      approvalId,
-      { approvalId, streamId, plan, goalEnabled },
-      { timeoutMs },
-    );
+    return interaction.finally(() => this.dropMappingByApprovalId(approvalId));
   }
 
   private dropMappingByApprovalId(approvalId: string): void {
@@ -84,19 +78,38 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
     this.approvalStreamMap.delete(approvalId);
   }
 
-  override resolveRequest(id: string, result: PlanApprovalResult): boolean {
-    this.dropMappingByApprovalId(id);
-    return super.resolveRequest(id, result);
+  clearRequest(approvalId: string): void {
+    this.rejectRequest(approvalId);
   }
 
-  override clearRequest(id: string): void {
-    this.dropMappingByApprovalId(id);
-    super.clearRequest(id);
+  private rejectRequest(approvalId: string): void {
+    const streamId = this.approvalStreamMap.get(approvalId);
+    this.dropMappingByApprovalId(approvalId);
+    if (streamId) {
+      const resolved =
+        this.runtimeHost.interactions?.resolve(approvalId, {
+          kind: 'plan',
+          action: 'reject',
+        }) ?? false;
+      if (!resolved) {
+        this.runtimeHost.interactions?.cancelForStream(
+          streamId,
+          'Plan approval cleared.',
+        );
+      }
+    }
   }
 
   /** Clear any pending plan approval for the given stream. */
   clearForStream(streamId: string): void {
     const approvalId = this.streamApprovalMap.get(streamId);
     if (approvalId) this.clearRequest(approvalId);
+  }
+
+  clearAll(): void {
+    const approvalIds = [...this.approvalStreamMap.keys()];
+    for (const approvalId of approvalIds) {
+      this.clearRequest(approvalId);
+    }
   }
 }

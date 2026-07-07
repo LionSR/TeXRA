@@ -15,10 +15,10 @@
 import { nanoid } from 'nanoid';
 
 import { platform } from '@platform/platform';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import type {
   HostBashApprovalRequest,
   HostBashApprovalResult,
+  HostInteractionOptions,
   HostInteractions,
   HostRetryRequest,
 } from '@agent/runtime/HostInteractions';
@@ -28,7 +28,6 @@ import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   approvalPromptAllowed,
-  handleCliAgentProposalDecision,
   humanInputDenialFeedback,
   immediateDecision,
   immediateDecisionForApproval,
@@ -36,11 +35,6 @@ import {
   isCliChatGptSubscriptionRetry,
   markApprovalDenied,
 } from '@cli/runtime/approvalAdapter';
-import {
-  cliApprovalEventKind,
-  isCliApprovalEvent,
-  type CliApprovalEvent,
-} from '@cli/runtime/approvalEvents';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -52,19 +46,17 @@ import {
 } from '@model/apiProviders';
 import { isUpstreamCreditDepletedError } from '@shared/schemas';
 import {
-  handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
-import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
-import { assertNever } from '@utils/core';
 import { notify } from '../notifications/terminalNotifier';
 import { patchSessionMeta } from './cliState/sessionSlice';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
+  clearApprovalsWhere,
   clearRetryApprovalsForStream,
   enqueueApproval,
   onApprovalsCleared,
@@ -166,14 +158,46 @@ export function createTuiHostInteractions(
     requestBashApproval(request) {
       return requestBashInteraction(request, context, host);
     },
-    requestPlanApproval(request) {
-      return requestPlanInteraction(request, context, host);
+    requestPlanApproval(request, options) {
+      return withInteractionTimeout(
+        requestPlanInteraction(request, context, host),
+        options,
+        { action: 'timeout' },
+        () =>
+          clearApprovalsWhere(
+            (payload) =>
+              payload.kind === 'plan' &&
+              payload.payload.approvalId === request.approvalId,
+            NEUTRAL_TIMEOUT_DECISION,
+          ),
+      );
     },
-    requestAgentProposal(request) {
-      return requestProposalInteraction(request, context, host);
+    requestAgentProposal(request, options) {
+      return withInteractionTimeout(
+        requestProposalInteraction(request, context, host),
+        options,
+        { action: 'timeout' },
+        () =>
+          clearApprovalsWhere(
+            (payload) =>
+              payload.kind === 'proposal' &&
+              payload.payload.proposalId === request.proposalId,
+            NEUTRAL_TIMEOUT_DECISION,
+          ),
+      );
     },
-    requestRetry(request) {
-      return requestRetryInteraction(request, context, host, retryRoutes);
+    requestRetry(request, options) {
+      return withInteractionTimeout(
+        requestRetryInteraction(request, context, host, retryRoutes),
+        options,
+        { action: 'timeout' },
+        () => {
+          settleRetryRoute(retryRoutes, request.streamId, {
+            action: 'timeout',
+          });
+          clearRetryApprovalsForStream(request.streamId);
+        },
+      );
     },
     askUserQuestion(request) {
       return requestUserQuestionInteraction(request, context, host);
@@ -181,17 +205,7 @@ export function createTuiHostInteractions(
     openExternalInquiry(request) {
       return openExternalInquiryInteraction(request, context, host);
     },
-    handleProgressEvent(event, payload) {
-      if (!isCliApprovalEvent(event)) return false;
-      routeApproval(
-        event,
-        payload as ProgressEventPayloads[CliApprovalEvent],
-        context,
-        host,
-        retryRoutes,
-      );
-      return true;
-    },
+    handleProgressEvent: () => false,
     pending: () => [],
     resolve: () => false,
     cancelForStream(streamId) {
@@ -203,79 +217,6 @@ export function createTuiHostInteractions(
       disposeApprovalClearListener();
     },
   };
-}
-
-function routeApproval(
-  event: CliApprovalEvent,
-  payload: ProgressEventPayloads[CliApprovalEvent],
-  context: CliContext,
-  host: CliRuntimeHost,
-  retryRoutes: RetryRouteState,
-): void {
-  switch (event) {
-    case 'showBashPermission':
-      routeWithPolicy(
-        context,
-        host,
-        cliApprovalEventKind(event),
-        payload as ProgressEventPayloads['showBashPermission'],
-        (bashPayload, decision) => {
-          if (
-            decision.accepted &&
-            decision.bypass === 'bash' &&
-            bashPayload.streamId
-          ) {
-            setBashApprovalSessionBypass(bashPayload.streamId, true, host);
-          }
-          dispatchBash(bashPayload, decision);
-        },
-      );
-      return;
-    case 'showPlanApproval':
-      routeWithPolicy(
-        context,
-        host,
-        cliApprovalEventKind(event),
-        payload as ProgressEventPayloads['showPlanApproval'],
-        dispatchPlan,
-      );
-      return;
-    case 'showAgentProposal':
-      routeWithPolicy(
-        context,
-        host,
-        cliApprovalEventKind(event),
-        payload as ProgressEventPayloads['showAgentProposal'],
-        dispatchProposal,
-      );
-      return;
-    case 'showRetryRequest':
-      routeRetry(
-        context,
-        host,
-        payload as ProgressEventPayloads['showRetryRequest'],
-        retryRoutes,
-      );
-      return;
-    case 'showExternalInquiry':
-      // Human-input requests cannot be auto-answered in yolo mode, so they
-      // share a policy helper with the non-TUI approval path.
-      handleExternalInquiry(
-        payload as ProgressEventPayloads['showExternalInquiry'],
-        context,
-        host,
-      );
-      return;
-    case 'showUserQuestion':
-      handleUserQuestion(
-        payload as ProgressEventPayloads['showUserQuestion'],
-        context,
-        host,
-      );
-      return;
-    default:
-      assertNever(event, 'Unhandled TUI approval event');
-  }
 }
 
 /**
@@ -292,6 +233,53 @@ interface RetryRouteState {
   readonly activeRetryRoutes: Map<string, ActiveRetryRoute>;
 }
 
+const NEUTRAL_TIMEOUT_DECISION: ApprovalDecision = {
+  accepted: true,
+  userMessage: 'Approval request timed out.',
+};
+
+function validTimeoutMs(timeoutMs: number | undefined): number | undefined {
+  if (timeoutMs == null || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return undefined;
+  }
+  return Math.floor(timeoutMs);
+}
+
+function withInteractionTimeout<T>(
+  promise: Promise<T>,
+  options: HostInteractionOptions | undefined,
+  timeoutResult: T,
+  onTimeout: () => void,
+): Promise<T> {
+  const timeoutMs = validTimeoutMs(options?.timeoutMs);
+  if (timeoutMs == null) return promise;
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      onTimeout();
+      resolve(timeoutResult);
+    }, timeoutMs);
+
+    promise.then(
+      (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function createRetryRouteState(): RetryRouteState {
   return { activeRetryRoutes: new Map() };
 }
@@ -305,10 +293,18 @@ function isActiveRetryRoute(
 }
 
 function cancelRetryRoute(state: RetryRouteState, streamId: string): void {
+  settleRetryRoute(state, streamId, { action: 'cancel' });
+}
+
+function settleRetryRoute(
+  state: RetryRouteState,
+  streamId: string,
+  result: RetryResult,
+): void {
   const route = state.activeRetryRoutes.get(streamId);
   if (!route) return;
   state.activeRetryRoutes.delete(streamId);
-  route.settle?.({ action: 'cancel' });
+  route.settle?.(result);
 }
 
 function invalidateRetryRoutes(
@@ -325,105 +321,9 @@ function invalidateRetryRoutes(
   }
 }
 
-function routeRetry(
-  context: CliContext,
-  host: CliRuntimeHost,
-  payload: ProgressEventPayloads['showRetryRequest'],
-  retryRoutes: RetryRouteState,
-): void {
-  const routeId = Symbol(payload.streamId);
-  retryRoutes.activeRetryRoutes.set(payload.streamId, { routeId });
-  clearRetryApprovalsForStream(payload.streamId);
-  const isCurrent = () =>
-    isActiveRetryRoute(retryRoutes, payload.streamId, routeId);
-  const finish = () => {
-    if (isCurrent()) retryRoutes.activeRetryRoutes.delete(payload.streamId);
-  };
-
-  routeWithPolicy(
-    context,
-    host,
-    'retry',
-    payload,
-    (retryPayload, decision) => {
-      if (!isCurrent()) return;
-      if (
-        decision.accepted &&
-        (decision.apiMode || decision.disableChatGptSubscription)
-      ) {
-        clearRetryApprovalsForStream(retryPayload.streamId);
-      }
-      dispatchRetry(retryPayload, decision, { isCurrent, onComplete: finish });
-    },
-    {
-      beforeQueue: maybeAutoSwitchRetry,
-      isCurrent,
-    },
-  );
-}
-
 interface RouteWithPolicyOptions<P> {
   beforeQueue?: (payload: P) => Promise<ApprovalDecision | undefined>;
   isCurrent?: () => boolean;
-}
-
-function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
-  context: CliContext,
-  host: CliRuntimeHost,
-  kind: K,
-  payload: P,
-  dispatch: (payload: P, decision: ApprovalDecision) => void,
-  options: RouteWithPolicyOptions<P> = {},
-): void {
-  const policy =
-    kind === 'retry'
-      ? immediateDecisionForApproval(
-          'showRetryRequest',
-          payload as ProgressEventPayloads['showRetryRequest'],
-          context,
-        )
-      : immediateDecision(context);
-  if (policy) {
-    dispatch(payload, policy);
-    return;
-  }
-  // The Extract<...> cast narrows the queue payload to the kind we picked;
-  // each dispatcher already trusts its payload shape via its own signature.
-  const queuePayload = { kind, payload } as Extract<
-    ApprovalPayload,
-    { kind: K }
-  >;
-  void (async () => {
-    try {
-      let autoDecision: ApprovalDecision | undefined;
-      if (options.beforeQueue) {
-        try {
-          autoDecision = await options.beforeQueue(payload);
-        } catch {
-          // The lookup is speculative; falling back to the retry modal is safe.
-          autoDecision = undefined;
-        }
-        if (options.isCurrent && !options.isCurrent()) return;
-        if (autoDecision) {
-          dispatch(payload, autoDecision);
-          return;
-        }
-      }
-
-      const decision = await enqueueTuiApproval(queuePayload, host);
-      if (options.isCurrent && !options.isCurrent()) return;
-      markIfRejected(context, decision);
-      dispatch(payload, decision);
-    } catch {
-      if (options.isCurrent && !options.isCurrent()) return;
-      const decision: ApprovalDecision = {
-        accepted: false,
-        userMessage: 'CLI approval prompt failed.',
-      };
-      markIfRejected(context, decision);
-      dispatch(payload, decision);
-    }
-  })();
 }
 
 async function decideWithPolicy<
@@ -639,66 +539,6 @@ function markIfRejected(context: CliContext, decision: ApprovalDecision): void {
   if (!decision.accepted) markApprovalDenied(context);
 }
 
-function dispatchBash(
-  payload: ProgressEventPayloads['showBashPermission'],
-  decision: ApprovalDecision,
-): void {
-  void handleProgressViewBashApprovalAction({
-    requestId: payload.requestId,
-    action: decision.accepted ? 'approve' : 'reject',
-    feedback: feedbackOnReject(decision),
-  });
-}
-
-function dispatchPlan(
-  payload: ProgressEventPayloads['showPlanApproval'],
-  decision: ApprovalDecision,
-): void {
-  const feedback = feedbackOnReject(decision);
-  runCoordinatorBridge.resolvePlanApproval(payload.approvalId, {
-    action: decision.accepted ? (decision.planAction ?? 'approve') : 'reject',
-    ...(feedback ? { feedback } : {}),
-  });
-}
-
-function dispatchProposal(
-  payload: ProgressEventPayloads['showAgentProposal'],
-  decision: ApprovalDecision,
-): void {
-  void handleCliAgentProposalDecision(payload.proposalId, decision);
-}
-
-function dispatchRetry(
-  payload: ProgressEventPayloads['showRetryRequest'],
-  decision: ApprovalDecision,
-  options: { isCurrent?: () => boolean; onComplete?: () => void } = {},
-): void {
-  if (decision.accepted) {
-    void applyRetryDecision(payload, decision, options)
-      .catch(() => {
-        if (options.isCurrent?.() ?? true) {
-          runCoordinatorBridge.cancelRetry(payload.streamId);
-        }
-      })
-      .finally(() => {
-        options.onComplete?.();
-      });
-  } else {
-    options.onComplete?.();
-    runCoordinatorBridge.cancelRetry(payload.streamId);
-  }
-}
-
-async function applyRetryDecision(
-  payload: ProgressEventPayloads['showRetryRequest'],
-  decision: ApprovalDecision,
-  options: { isCurrent?: () => boolean } = {},
-): Promise<void> {
-  await applyRetrySideEffects(payload, decision, options);
-  if (options.isCurrent?.() === false) return;
-  runCoordinatorBridge.triggerRetry(payload.streamId, decision.userMessage);
-}
-
 async function applyRetrySideEffects(
   payload: Pick<ProgressEventPayloads['showRetryRequest'], 'streamId'>,
   decision: ApprovalDecision,
@@ -750,44 +590,6 @@ function handleExternalInquiry(
         action: 'drop',
         threadId,
         feedback: decision.userMessage || 'No answer provided.',
-      });
-    },
-  );
-}
-
-function handleUserQuestion(
-  payload: ProgressEventPayloads['showUserQuestion'],
-  context: CliContext,
-  host: CliRuntimeHost,
-): void {
-  if (!approvalPromptAllowed(context)) {
-    const feedback = humanInputDenialFeedback(
-      context,
-      'User question requires human input; yolo mode cannot synthesize an answer.',
-    );
-    void handleUserQuestionAction({
-      requestId: payload.requestId,
-      action: 'skip',
-      feedback,
-    });
-    return;
-  }
-
-  void enqueueTuiApproval({ kind: 'userQuestion', payload }, host).then(
-    (decision) => {
-      markIfRejected(context, decision);
-      if (decision.accepted && decision.userQuestionAnswers) {
-        void handleUserQuestionAction({
-          requestId: payload.requestId,
-          action: 'submit',
-          answers: decision.userQuestionAnswers,
-        });
-        return;
-      }
-      void handleUserQuestionAction({
-        requestId: payload.requestId,
-        action: 'skip',
-        feedback: decision.userMessage || 'User question skipped by user.',
       });
     },
   );

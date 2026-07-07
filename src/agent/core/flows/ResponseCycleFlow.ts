@@ -22,8 +22,9 @@ import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUti
 import { K_SLICE } from '@agent/core/constants';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
+import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
-import { AbsoluteFS, flexibleFS } from '@utils/files';
+import { AbsoluteFS, FlexibleFS } from '@utils/files';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extractScratchpad } from '@utils/text/xmlUtils';
@@ -111,7 +112,7 @@ class ResponsePrepNode<C> extends BaseNode<
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
     const { prompt, userVarChannels, checkInterruption } = this.services;
     const interrupted = checkInterruption();
-    const exists = await flexibleFS.exists(shared.outputLocation!);
+    const exists = await FlexibleFS.exists(shared.outputLocation!);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(prompt.systemPrompt, {
@@ -273,7 +274,7 @@ class ResponseProcessNode<C> extends BaseNode<
       } = extractModelResponse(
         prepRes.responseObject,
         prepRes.responseTimeMs,
-        this.services.setting.endTag,
+        OUTPUT_END_TAG,
         this.services,
         { normalizeNullUsage: true },
       );
@@ -393,7 +394,7 @@ class ResponseProcessNode<C> extends BaseNode<
       logger.debug(
         `Appending to existing file: ${outputLocation.absolutePath}`,
       );
-      await flexibleFS.appendFile(
+      await FlexibleFS.appendFile(
         outputLocation,
         connector + result.processedResponse,
       );
@@ -605,7 +606,7 @@ export function createResponseCycleFlow<C>(): Flow<
     streaming: false,
     backgroundModeAware: true,
     getSystemPrompt: (shared) => shared.systemPrompt,
-    getEndTag: (services) => services.setting.endTag,
+    getEndTag: () => OUTPUT_END_TAG,
     getTools: responseCycleToolsForModel,
     storeResponse: (shared, response) => {
       shared.responseObject = response;

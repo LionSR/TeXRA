@@ -36,7 +36,7 @@ vi.mock('@tools/childRunDelivery', () => ({
   persistChildRunReport: mocks.persistChildRunReport,
 }));
 
-import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
+import { SharedSubagentDeliveryRegistry } from '@tools/subagentDeliveryState';
 import {
   getNativeSubagentStrategy,
   NativeSubagentStrategy,
@@ -55,7 +55,7 @@ describe('NativeSubagentStrategy', () => {
   });
 
   afterEach(() => {
-    subagentDeliveryRegistry.finish(executionId);
+    SharedSubagentDeliveryRegistry.finish(executionId);
   });
 
   it('persists the result manifest before waking the parent', async () => {
@@ -283,7 +283,7 @@ describe('NativeSubagentStrategy', () => {
 
     expect(addListener).toHaveBeenCalledWith(executionId, expect.any(Function));
     expect(getNativeSubagentStrategy(executionId)).toBe(strategy);
-    expect(subagentDeliveryRegistry.getActive(executionId)).toBeDefined();
+    expect(SharedSubagentDeliveryRegistry.getActive(executionId)).toBeDefined();
 
     // A native subagent that suspends into WAITING and is never resumed and
     // never errors has no other terminal event to drive `finish()`. Simulate
@@ -292,7 +292,7 @@ describe('NativeSubagentStrategy', () => {
     abandonListener?.(undefined);
 
     expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
-    expect(subagentDeliveryRegistry.getActive(executionId)).toBeUndefined();
+    expect(SharedSubagentDeliveryRegistry.getActive(executionId)).toBeUndefined();
   });
 
   it('cleans up registry entries even when a resumed completion hook throws', async () => {
@@ -352,6 +352,6 @@ describe('NativeSubagentStrategy', () => {
     // a later `delegate_agent` call doesn't find stale delivery state for a
     // run that has already exited its lifecycle.
     expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
-    expect(subagentDeliveryRegistry.getActive(executionId)).toBeUndefined();
+    expect(SharedSubagentDeliveryRegistry.getActive(executionId)).toBeUndefined();
   });
 });
