@@ -1,4 +1,4 @@
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
