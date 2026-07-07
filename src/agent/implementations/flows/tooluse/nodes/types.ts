@@ -40,6 +40,13 @@ export interface ToolUseRunShared {
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey;
   shouldSkipCycle: boolean;
   stateSlices: StateSlicesSnapshot | null;
+  /**
+   * System prompt for providers that pass `system` per-call (Anthropic,
+   * Google) instead of embedding it into `messages`. Set once by
+   * `ToolUsePrepareNode`; threaded into every `ToolUseRoundShared` by
+   * `ToolUseCycleNode` so it reaches `createResponse` on every round.
+   */
+  systemPrompt?: string;
   userCancelledRetry?: boolean;
   /** Distinguishes failure from cancellation during resume. */
   lastError?: RetryErrorInfo;
@@ -76,6 +83,7 @@ export interface CyclePrepResult {
   userChannels: UserVariableChannels;
   messages: ProviderMessage[];
   shouldSkipCycle: boolean;
+  systemPrompt?: string;
 }
 
 export type PreparedShared = ToolUseRunShared & {
