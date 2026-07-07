@@ -3,8 +3,6 @@ description: Removes LLM stylistic tells from research prose. Phase 1 annotates 
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   outputExt: tex
 
 prompts:

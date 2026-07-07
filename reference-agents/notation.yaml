@@ -3,8 +3,6 @@ description: Notation consistency checker for research papers. Ensures consisten
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   outputExt: tex
 
 prompts:
