@@ -878,6 +878,23 @@ export class ExecutionRegistry {
    * a waiting-cleanup — i.e. it isn't actually suspended, just momentarily
    * between its own interrupt-unregister and untrack during normal teardown.
    *
+   * A registered waiting-cleanup alone does not prove the run is genuinely
+   * suspended: `NativeSubagentStrategy.onBeforeWaiting` speculatively
+   * registers its `abandon()` cleanup on every delivered turn, including one
+   * where `ToolUseWaitNode` finds a follow-up already queued and keeps the
+   * flow running in-process instead of exiting via `{ kind: 'waiting' }` (see
+   * its doc comment). `runFlowWithLifecycle` clears that speculative
+   * registration (`handle.clearWaitingCleanup()`) on both of its non-WAITING
+   * terminal arms, so in practice a stale cleanup is gone well before this
+   * method could ever see it — but this method does not rely on every
+   * non-waiting exit remembering to call that: `streamStatus` only reaches
+   * `WAITING` on the genuine suspend path (`transitionToWaiting` is gated on
+   * `!session.hasQueuedFollowUp()` in `ToolUseWaitNode`, the same condition
+   * that decides whether the flow actually exits), so checking it here is an
+   * independent, authoritative confirmation that this handle is really
+   * parked, not mid-flight — belt and suspenders against a future non-waiting
+   * exit that forgets the clear (see #7324 review discussion).
+   *
    * This path bypasses `runFlowWithLifecycle`'s own terminal handling (the
    * flow never resumes to produce one), so it publishes the terminal
    * `result`, settles `handle.result`, and persists the terminal status
@@ -897,6 +914,9 @@ export class ExecutionRegistry {
    * though the turn's own trace is already gone.
    */
   private terminateWaitingHandle(handle: AgentExecutionHandle): boolean {
+    if (this.streamStatus.get(handle.childStreamId) !== STREAM_PHASE.WAITING) {
+      return false;
+    }
     if (!handle.runWaitingCleanup()) return false;
     const cancelledResult: ResultEvent = {
       type: 'result',

@@ -404,7 +404,12 @@ export class NativeSubagentStrategy {
     // only once on the initial launch promise, is what makes a stop/kill
     // during a *second* (or later) suspended turn still run this strategy's
     // own teardown instead of leaving `activeNativeSubagents`/the delivery
-    // registry pointing at a removed execution (see `abandon()`).
+    // registry pointing at a removed execution (see `abandon()`). Belt and
+    // suspenders: `ExecutionRegistry.terminateWaitingHandle` independently
+    // requires `streamStatus` to actually be WAITING before treating a
+    // registered cleanup as safe to run, so even a stale registration this
+    // clearing missed (a future non-waiting exit that forgets to call
+    // `clearWaitingCleanup`) can't cause an incorrect abandon.
     this.runHandle?.registerWaitingCleanup(() => this.abandon());
 
     const deliveryDecision = this.deliveryState.resolveBeforeWaiting(
