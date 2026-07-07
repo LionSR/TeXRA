@@ -21,11 +21,14 @@ import {
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
 import {
+  AgentExecutionHandle,
   SharedExecutionRegistry,
-  type AgentExecutionHandle,
 } from '@agent/runtime/executionRegistry';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import {
+  finalizeRunTerminal,
+  runFlowWithLifecycle,
+} from '@agent/runtime/AgentRunLifecycle';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
@@ -731,6 +734,84 @@ describe('runFlowWithLifecycle', () => {
       );
     } finally {
       SharedExecutionRegistry.untrack(executionId);
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+});
+
+describe('finalizeRunTerminal', () => {
+  // The exactly-once guard must be an atomic, synchronous claim — not a
+  // check-then-await on the settled flag. Two finalizers racing across the
+  // persist await (e.g. a lifecycle arm vs a concurrent finalize of the same
+  // handle) would otherwise both pass the check before the first settles and
+  // double-publish persist/emit/settle/untrack.
+  it('finalizes exactly once when two callers race across the persist await', async () => {
+    const executionId = 'exec-finalize-race';
+    const streamId = 'stream-finalize-race' as StreamTabId;
+    const streamStatus = new StreamStatusMachine();
+    const explicit = createRecordingHost();
+    const handle = new AgentExecutionHandle(
+      executionId,
+      streamId,
+      streamId,
+      'test-agent',
+      'toolUse',
+      explicit.host,
+      noopTrace,
+    );
+    const untrack = vi.fn();
+    const traceEmit = vi.spyOn(noopTrace, 'emit');
+    storageMocks.writeTerminalStatus.mockClear();
+    // Park the first caller at its persist await so the second caller arrives
+    // while the first has not yet emitted or settled anything.
+    let releasePersist: (() => void) | undefined;
+    storageMocks.writeTerminalStatus.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releasePersist = resolve;
+        }),
+    );
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
+      const params = {
+        handle,
+        executions: { untrack },
+        streamStatus,
+        outcome: RUN_OUTCOME.COMPLETED,
+        isSubagent: false,
+        trace: noopTrace,
+        persistTerminalStatus: true,
+      };
+
+      const first = finalizeRunTerminal(params);
+      const second = finalizeRunTerminal(params);
+
+      // The loser no-ops without waiting on (or duplicating) the persist.
+      await expect(second).resolves.toBeUndefined();
+      expect(releasePersist).toBeDefined();
+      releasePersist?.();
+      const event = await first;
+
+      expect(event).toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.COMPLETED,
+        executionId,
+        streamId,
+      });
+      expect(storageMocks.writeTerminalStatus).toHaveBeenCalledTimes(1);
+      // The stream-status transition also emits on the trace; the terminal
+      // `result` event itself must be published exactly once.
+      expect(
+        traceEmit.mock.calls.filter(
+          ([emitted]) => (emitted as { type: string }).type === 'result',
+        ),
+      ).toHaveLength(1);
+      expect(untrack).toHaveBeenCalledTimes(1);
+      await expect(handle.result).resolves.toBe(event);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+    } finally {
+      traceEmit.mockRestore();
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });

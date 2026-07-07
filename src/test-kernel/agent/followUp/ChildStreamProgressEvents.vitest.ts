@@ -125,7 +125,7 @@ describe('child stream progress events', () => {
           toolName: 'bash',
         }),
       );
-      childStream.finalize({ autoClose: true });
+      void childStream.finalize({ autoClose: true });
 
       expect(assertSpy).toHaveBeenCalledWith(orderingChildStreamId);
       expect(sequence.slice(0, 2)).toEqual([
@@ -137,7 +137,7 @@ describe('child stream progress events', () => {
     }
   });
 
-  it('publishes child stream lifecycle events through the explicit runtime host', () => {
+  it('publishes child stream lifecycle events through the explicit runtime host', async () => {
     const active = createRecordingHost();
 
     const childStream = withSessionProgressProjection(active.host, () =>
@@ -154,7 +154,7 @@ describe('child stream progress events', () => {
 
     expect(childStream.childStreamId).toBe(childStreamId);
 
-    withSessionProgressProjection(active.host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({ autoClose: true }),
     );
 
@@ -236,7 +236,7 @@ describe('child stream progress events', () => {
     });
   });
 
-  it('uses host interactions for child stream auto-close when available', () => {
+  it('uses host interactions for child stream auto-close when available', async () => {
     const active = createRecordingHost();
     const removedStreams: StreamTabId[] = [];
     const host: AgentRuntimeHost = {
@@ -265,7 +265,7 @@ describe('child stream progress events', () => {
       }),
     );
 
-    withSessionProgressProjection(host, () =>
+    await withSessionProgressProjection(host, () =>
       childStream.finalize({ autoClose: true }),
     );
 
@@ -293,8 +293,8 @@ describe('child stream progress events', () => {
     childStream.waitForInput();
     childStream.beginTurn();
     childStream.failTurn();
-    withSessionProgressProjection(active.host, () =>
-      childStream.finalize({ status: STREAM_STATUS.ERROR }),
+    await withSessionProgressProjection(active.host, () =>
+      childStream.finalize({ failed: true }),
     );
 
     const statusEvents = active.events.filter(
@@ -348,8 +348,8 @@ describe('child stream progress events', () => {
     childStream.waitForInput();
     childStream.beginTurn();
     childStream.failTurn();
-    withSessionProgressProjection(active.host, () =>
-      childStream.finalize({ status: STREAM_STATUS.ERROR }),
+    await withSessionProgressProjection(active.host, () =>
+      childStream.finalize({ failed: true }),
     );
 
     expect(StreamStatusService.get(stoppedChildStreamId)).toBe(
@@ -381,8 +381,8 @@ describe('child stream progress events', () => {
     );
     expect(handle).toBeDefined();
 
-    withSessionProgressProjection(active.host, () =>
-      childStream.finalize({ status: STREAM_STATUS.STOPPED }),
+    await withSessionProgressProjection(active.host, () =>
+      childStream.finalize({ cancelled: true }),
     );
 
     await expect(handle?.result).resolves.toMatchObject({
@@ -407,7 +407,7 @@ describe('child stream progress events', () => {
       defaultSession().executions.getAgentHandleByStream(failedChildStreamId);
     expect(handle).toBeDefined();
 
-    withSessionProgressProjection(active.host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({ errorMessage: 'child process exited 1' }),
     );
 
@@ -423,7 +423,7 @@ describe('child stream progress events', () => {
     });
   });
 
-  it('normalizes explicit non-error status when child finalization has an error', async () => {
+  it('normalizes clean loop facts to failed when child finalization has an error', async () => {
     const active = createRecordingHost();
 
     const childStream = withSessionProgressProjection(active.host, () =>
@@ -438,9 +438,10 @@ describe('child stream progress events', () => {
     );
     expect(handle).toBeDefined();
 
-    withSessionProgressProjection(active.host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({
-        status: STREAM_STATUS.READY,
+        failed: false,
+        cancelled: false,
         errorMessage: 'tool failed after reporting ready',
       }),
     );

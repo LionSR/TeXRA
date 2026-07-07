@@ -89,10 +89,6 @@ export interface TrackAgentExecutionOptions {
   readonly status?: StreamPhase;
 }
 
-export interface FinishAgentExecutionOptions {
-  readonly status: StreamPhase;
-}
-
 interface TerminateOptions {
   readonly cascadeChildren?: boolean;
 }
@@ -335,39 +331,6 @@ export class ExecutionRegistry {
       } else {
         finalize();
       }
-    }
-  }
-
-  /**
-   * Finalize an agent execution from its owning handle while preserving
-   * explicit user stops.
-   */
-  finishAgentExecution(
-    handle: AgentExecutionHandle,
-    options: FinishAgentExecutionOptions,
-  ): void {
-    if (this.handles.get(handle.executionId) === handle) {
-      this.untrackHandle(handle);
-    } else {
-      this.notifyWaiters(handle.executionId);
-    }
-
-    const emitOptions = {
-      runtimeHost: handle.runtimeHost,
-      trace: handle.trace,
-    };
-    const terminalized = this.streamStatus.transitionToTerminal(
-      handle.childStreamId,
-      options.status,
-      emitOptions,
-    );
-    if (!terminalized) {
-      handle.trace?.warn('Failed to finalize waiting stream status', {
-        data: {
-          streamId: handle.childStreamId,
-          status: options.status,
-        },
-      });
     }
   }
 
@@ -912,8 +875,8 @@ export class ExecutionRegistry {
    * itself — otherwise trace/session subscribers would miss the stop, a
    * consumer awaiting `handle.result` (F-2) would hang forever, and the
    * execution's history would keep a non-terminal status. Unlike
-   * `emitRunResult`, no usage totals ride the event: the flow is suspended,
-   * so there is no live usage monitor to read.
+   * `finalizeRunTerminal`, no usage totals ride the event: the flow is
+   * suspended, so there is no live usage monitor to read.
    *
    * `handle.trace` belongs to the turn that suspended this handle at WAITING,
    * and `runFlowWithLifecycle`'s own `finally` already disposed it (channel +
