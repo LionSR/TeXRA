@@ -53,10 +53,7 @@ import {
 } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
-import type {
-  ToolUseBeforeWaitingCallback,
-  ToolUseServices,
-} from './ToolUseServices';
+import type { ToolUseServices } from './ToolUseServices';
 
 export interface RunToolUseFlowInput<
   C = unknown,
@@ -64,16 +61,19 @@ export interface RunToolUseFlowInput<
   setting: AgentToolUseSetting;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
   onFollowUpConsumed?: () => void;
-  /** When true, delegation tools are filtered out to prevent nesting. */
+  /** When true, delegation tools are filtered out to prevent nesting, and
+   *  every cycle suspends at WAITING (see `ToolUseWaitNode`) instead of
+   *  blocking in-flow for the next follow-up — the child-run loop owns
+   *  delivery and turn-to-turn continuation. */
   isSubagent?: boolean;
   /** Tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
-  /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
-  onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Stop after one cycle instead of waiting for a conversational follow-up. */
   stopAfterCycle?: boolean;
+  /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
+  onIdle?: (lastResponse: string | undefined) => void;
   /** Fires after a running tool-use chat changes its model. */
   onModelChanged?: (
     modelHandler: ToolUseServices['modelHandler'],
@@ -411,22 +411,16 @@ export async function runToolUseFlow<C = unknown>(
       ? extractedTouchedFiles
       : undefined;
 
-    if (
-      finalAction === FlowTransition.WAITING &&
-      input.isSubagent === true &&
-      input.onBeforeWaiting !== undefined &&
-      shared.deliveredToOrchestrator === true
-    ) {
+    // `FlowTransition.WAITING` is only ever produced by `ToolUseWaitNode`
+    // suspending a subagent cycle (see its doc comment) — no further gating
+    // needed here; the wait node's own `isSubagent`/`stopAfterCycle` check is
+    // the single source of truth for whether a suspension is legitimate.
+    if (finalAction === FlowTransition.WAITING) {
       outcome = STREAM_PHASE.WAITING;
     } else {
-      const isInterrupted = input.checkInterruption();
-      const interruptedAfterDeliveredSubagentResult =
-        input.isSubagent &&
-        shared.deliveredToOrchestrator === true &&
-        isInterrupted;
       outcome = deriveRunOutcome({
         failed: Boolean(shared.lastError),
-        cancelled: isInterrupted && !interruptedAfterDeliveredSubagentResult,
+        cancelled: input.checkInterruption(),
       });
     }
     if (shared.lastError) {
