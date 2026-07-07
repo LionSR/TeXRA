@@ -2,7 +2,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 import {
   emitProjectedProgressEvent,
-  projectRunFactToProgressEvent,
+  subscribeRunFactsAsProgressEvents,
 } from './sessionProgressEventProjection';
 import {
   emitLegacySessionFactOnHost,
@@ -28,26 +28,9 @@ export function attachLegacyProgressEventProjection(
     },
     { scope: 'session' },
   );
-  const detachRunFacts = events.subscribe(
-    (sessionEvent) => {
-      if (sessionEvent.scope !== 'run') return;
-      const projected = projectRunFactToProgressEvent(
-        sessionEvent.streamId,
-        sessionEvent.event,
-      );
-      if (!projected) return;
-      emitProjectedProgressEvent(runtimeHost, projected);
-    },
-    {
-      scope: 'run',
-      types: [
-        'domain',
-        'usage',
-        'stage.start',
-        'child.activity',
-        'process.output',
-      ],
-    },
+  const detachRunFacts = subscribeRunFactsAsProgressEvents(
+    events,
+    (projected) => emitProjectedProgressEvent(runtimeHost, projected),
   );
 
   return () => {
