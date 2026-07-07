@@ -25,7 +25,6 @@ export enum WorkspaceStateKey {
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
   DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
-  NESTED_DELEGATION_MAX_DEPTH = 'texra.nestedDelegationMaxDepth',
   CUSTOM_AGENT_PRESETS = 'texra.customAgentPresets',
 
   // Codex settings

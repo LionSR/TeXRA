@@ -9,7 +9,6 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolicy';
 import {
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
@@ -231,11 +230,6 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
   reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
   allowOrchestratorKill: z.boolean().prefault(true),
   detachSubagentsOnStop: z.boolean().prefault(false),
-  nestedDelegationMaxDepth: z
-    .int()
-    .min(NESTED_DELEGATION_DEPTH_RANGE.min)
-    .max(NESTED_DELEGATION_DEPTH_RANGE.max)
-    .prefault(NESTED_DELEGATION_DEPTH_RANGE.default),
 });
 export type UpdateSuperYoloEnabledMessage = z.infer<
   typeof UpdateSuperYoloEnabledMessageSchema

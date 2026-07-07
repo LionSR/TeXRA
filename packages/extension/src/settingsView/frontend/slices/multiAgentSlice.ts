@@ -6,7 +6,6 @@ import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 import {
   allowOrchestratorKill,
   detachSubagentsOnStop,
-  nestedDelegationMaxDepth,
   reliabilitySettings,
 } from '../settingsState';
 
@@ -21,6 +20,5 @@ export const multiAgentHandlers = {
     reliabilitySettings.set(data.reliabilitySettings);
     allowOrchestratorKill.set(data.allowOrchestratorKill);
     detachSubagentsOnStop.set(data.detachSubagentsOnStop);
-    nestedDelegationMaxDepth.set(data.nestedDelegationMaxDepth);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;
