@@ -36,7 +36,6 @@
       "@types/*": ["src/types/*"],
       "@eventBus/*": ["src/eventBus/*"],
       "@auth/*": ["src/auth/*"],
-      "@platform": ["src/platform"],
       "@platform/*": ["src/platform/*"],
       "turndown-plugin-gfm": ["src/types/turndown-plugin-gfm.d.ts"],
       "vscode-jsonrpc/node": ["node_modules/vscode-jsonrpc/lib/node/main"],
