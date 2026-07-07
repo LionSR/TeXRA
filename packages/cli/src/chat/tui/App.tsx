@@ -101,7 +101,14 @@ const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // conversation or push the input bar off-screen.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 const COMPACT_STATIC_TRANSCRIPT_MAX_ROWS = 14;
-const ESC_META_CHORD_INTERRUPT_DELAY_MS = 125;
+// A bare Esc and the second key of an `Esc s` / `Esc p` chord are two
+// separate keystrokes on terminals without true Meta-key detection (macOS
+// Terminal.app). 125ms was too tight for a deliberate but unhurried chord
+// (issue #7496: a ~400ms pause between Esc and `s` fired the bare-Esc
+// interrupt and stopped a suspended WAITING subagent); widen to a
+// tmux-style chord window so a human-paced chord still resolves before we
+// commit to interrupting.
+const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
 const COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS = 2;
 
 const PINNED_CHROME_ROWS = {
@@ -367,19 +374,25 @@ export function appEscapeInterruptActive({
   );
 }
 
+// The footer advertises `[Esc s]subagents` / `[Esc p]tasks` any time these
+// controls are available, regardless of which stream is currently focused
+// or whether it's still in-flight (e.g. WAITING). Bare Esc must therefore
+// give a chord a chance to resolve any time that binding is on screen —
+// gating on the focused child's own input-disabled state (as this used to)
+// left the WAITING-child case with no defer window at all, so a slow
+// `Esc s` fired an immediate interrupt instead. `Alt`-chord platforms are
+// unaffected: their Esc+key sequences arrive as one burst, resolved
+// synchronously by `metaChordInput`.
 export function shouldDeferEscapeInterruptForMetaChord({
-  childInputDisabled,
   shortcutModifierLabel,
   subagentControlsAvailable,
   taskControlsAvailable,
 }: {
-  readonly childInputDisabled: boolean;
   readonly shortcutModifierLabel: string;
   readonly subagentControlsAvailable: boolean;
   readonly taskControlsAvailable: boolean;
 }): boolean {
   return (
-    childInputDisabled &&
     shortcutModifierLabel === 'Esc' &&
     (subagentControlsAvailable || taskControlsAvailable)
   );
@@ -967,7 +980,6 @@ export function App(props: AppProps): React.JSX.Element {
     ) {
       if (
         shouldDeferEscapeInterruptForMetaChord({
-          childInputDisabled: childInputDisabledMessage !== undefined,
           shortcutModifierLabel: defaultShortcutModifierLabel(),
           subagentControlsAvailable,
           taskControlsAvailable,
