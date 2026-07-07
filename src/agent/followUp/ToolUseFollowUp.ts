@@ -10,7 +10,7 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
-import { platform } from '@platform';
+import { platform } from '@platform/platform';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
 import {
   currentSession,
