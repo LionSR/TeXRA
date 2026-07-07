@@ -68,7 +68,6 @@ import {
 } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
-import { attachConversationProgressHub } from './conversationProgressHub';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { ToolEditApprovalPort } from '@platform/interfaces';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -352,15 +351,9 @@ async function assembleAgentLaunchContext(
     rawRunTrace.trace,
     streamId,
   );
-  const detachProgressHub = attachConversationProgressHub(
-    session.events,
-    runtimeHost,
-    streamId,
-  );
   const runTrace: RunTrace = {
     trace: rawRunTrace.trace,
     dispose: () => {
-      detachProgressHub();
       detachSessionTrace();
       rawRunTrace.dispose();
     },
