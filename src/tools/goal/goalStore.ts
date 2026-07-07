@@ -65,7 +65,10 @@ function parseIndex(raw: unknown): StreamTabId[] {
 function readIndex(): StreamTabId[] {
   const state = tryWorkspaceState();
   if (!state) return [];
-  return parseIndex(state.get<unknown>(INDEX_KEY));
+  // Dedupe defensively — a corrupt or hand-edited workspaceState could
+  // contain duplicate entries, which would otherwise surface as duplicate
+  // goals in list() and cause redundant readRaw() calls.
+  return unique(parseIndex(state.get<unknown>(INDEX_KEY)));
 }
 
 async function addToIndex(streamId: StreamTabId): Promise<void> {
@@ -75,9 +78,18 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
 }
 
 async function removeFromIndex(streamId: StreamTabId): Promise<void> {
-  await mutateIndex((index) => index.filter((id) => id !== streamId));
+  await mutateIndex((index) => {
+    const next = index.filter((id) => id !== streamId);
+    return next.length === index.length ? index : next;
+  });
 }
 
+/**
+ * Mutate callbacks must return the same array reference (`index`, unchanged)
+ * when nothing actually changed, so this can skip the write via reference
+ * equality — both current callers (`addToIndex`, `removeFromIndex`) already
+ * follow this contract.
+ */
 async function mutateIndex(
   mutate: (index: StreamTabId[]) => StreamTabId[],
 ): Promise<void> {
@@ -86,7 +98,7 @@ async function mutateIndex(
     if (!state) return;
     const index = readIndex();
     const next = mutate(index);
-    if (next.length !== index.length) {
+    if (next !== index) {
       await state.update(INDEX_KEY, next);
     }
   });
