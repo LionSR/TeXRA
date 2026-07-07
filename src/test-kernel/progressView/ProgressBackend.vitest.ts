@@ -454,6 +454,26 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('no-ops the direct applier after dispose', () => {
+    const { backend } = createIsolatedRecordingBackend();
+    const applier = vi.spyOn(backend.eventHandler, 'handleProgressEvent');
+    const streamId = 'desktop-post-close-stream' as StreamTabId;
+
+    backend.dispose();
+
+    // A run that kept executing headless after a desktop window closed still
+    // holds the host-channel emit closure that routes to handleProgressEvent.
+    expect(() =>
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      }),
+    ).not.toThrow();
+
+    expect(applier).not.toHaveBeenCalled();
+    expect(backend.state.activeStream).not.toBe(streamId);
+  });
+
   it('notifies host observers for session-originated progress events', async () => {
     const messages: ProgressViewOutboundMessage[] = [];
     const observed: Array<{

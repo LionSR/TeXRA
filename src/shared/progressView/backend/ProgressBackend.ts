@@ -79,6 +79,7 @@ export class ProgressBackend {
   readonly eventHandler: ProgressEventHandler;
   private readonly session: SessionHandle;
   private readonly onSessionProgressEvent?: SessionProgressEventObserver;
+  private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
     this.session = options.session ?? defaultSession();
@@ -172,10 +173,18 @@ export class ProgressBackend {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
+    // A run may still hold the host-channel emit closure that routes here after
+    // this backend is disposed (e.g. a desktop window closed while the run keeps
+    // executing headless). Applying events to a disposed backend would mutate
+    // torn-down state and post messages to a closed window, so the direct
+    // applier no-ops once disposed. Before #7363 the bus-listener teardown made
+    // this path implicitly safe; the direct call needs an explicit guard.
+    if (this.disposed) return;
     this.eventHandler.handleProgressEvent(event, payload);
   }
 
   dispose(): void {
+    this.disposed = true;
     this.webviewBridge.dispose();
   }
 }
