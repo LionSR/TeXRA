@@ -2,7 +2,9 @@
 // still flowing through the original emitter. Approvals are intentionally
 // not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
 
+import type { AgentEvent } from '@agent/trace';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { projectRunFactToProgressEvent } from '@agent/runtime/sessionProgressEventProjection';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/SessionRunFactProjector';
@@ -15,6 +17,7 @@ import {
   ExtendedTokenUsageStatsSchema,
   UpdatePlanPayloadSchema,
   UpdateTodosPayloadSchema,
+  type ActiveChildInfo,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
@@ -44,6 +47,9 @@ type Emit = <K extends ProgressEvent>(
 
 type UpdateStreamUsagePayload = ProgressEventPayloads['updateStreamUsage'];
 type GoalPausedPayload = ProgressEventPayloads['goalPaused'];
+type UpdateActiveProcessesPayload =
+  ProgressEventPayloads['updateActiveProcesses'];
+type UpdateProcessOutputPayload = ProgressEventPayloads['updateProcessOutput'];
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
@@ -134,8 +140,37 @@ function goalPausedEchoKey(payload: GoalPausedPayload): string {
   return payload.streamId;
 }
 
+function processOutputEchoKey(payload: UpdateProcessOutputPayload): string {
+  return JSON.stringify({
+    parentStreamId: payload.parentStreamId,
+    executionId: payload.executionId,
+    stdout: payload.stdout,
+    stderr: payload.stderr,
+  });
+}
+
+function activeProcessesEchoKey(payload: UpdateActiveProcessesPayload): string {
+  return JSON.stringify({
+    parentStreamId: payload.parentStreamId,
+    processes: payload.processes.map((process) => ({
+      kind: process.kind,
+      executionId: process.executionId,
+      agentName: process.agentName,
+      status: process.status ?? null,
+      startedAt: process.startedAt ?? null,
+      elapsed: process.elapsed ?? null,
+      toolName: process.toolName ?? null,
+      childStreamId: process.kind === 'subagent' ? process.childStreamId : null,
+    })),
+  });
+}
+
 type GoalPausedNoticeEchoGuard = EchoGuard<GoalPausedPayload>;
 let activeGoalPausedNoticeEchoGuard: GoalPausedNoticeEchoGuard | undefined;
+type ActiveProcessesEchoGuard = EchoGuard<UpdateActiveProcessesPayload>;
+let activeProcessesEchoGuard: ActiveProcessesEchoGuard | undefined;
+type ProcessOutputEchoGuard = EchoGuard<UpdateProcessOutputPayload>;
+let activeProcessOutputEchoGuard: ProcessOutputEchoGuard | undefined;
 
 function appendGoalPausedTranscriptNotice(payload: GoalPausedPayload): void {
   // Without a transcript line, an auto-paused goal is indistinguishable
@@ -164,6 +199,127 @@ function sameQueuedFollowUps(
     left.length === right.length &&
     left.every((item, index) => item === right[index])
   );
+}
+
+function applyRoundStage(
+  payload: ProgressEventPayloads['updateRoundStage'],
+): void {
+  patchStream(payload.streamId, (s) => {
+    if (
+      s.roundStage?.index === payload.roundStage.index &&
+      s.roundStage?.total === payload.roundStage.total
+    ) {
+      return s;
+    }
+    return {
+      ...s,
+      roundStage: payload.roundStage,
+    };
+  });
+}
+
+function sameActiveChildren(
+  left: readonly ActiveChildInfo[],
+  right: readonly ActiveChildInfo[],
+): boolean {
+  return (
+    left.length === right.length && left.every((item, i) => item === right[i])
+  );
+}
+
+function applyActiveSubagents(
+  payload: ProgressEventPayloads['updateActiveSubagents'],
+): void {
+  registerChildStreams(payload.parentStreamId, payload.children);
+  patchStream(payload.parentStreamId, (s) => {
+    const childStreams = mergeChildStreams(s.childStreams, payload.children);
+    if (
+      sameActiveChildren(s.activeSubagents, payload.children) &&
+      sameActiveChildren(s.childStreams, childStreams)
+    ) {
+      return s;
+    }
+    return {
+      ...s,
+      activeSubagents: payload.children,
+      childStreams,
+    };
+  });
+}
+
+function applyActiveProcesses(payload: UpdateActiveProcessesPayload): void {
+  // The shared reducer drops tails for executions that left the active
+  // list; the CLI also persists a bounded transcript for each finished
+  // process before its tail is pruned (a CLI-only side effect).
+  patchStream(payload.parentStreamId, (s) => {
+    const vanishedIds = diffActiveChildren(
+      s.activeProcesses,
+      payload.processes,
+    );
+    const entries = appendCompletedProcessEntries(
+      payload.parentStreamId,
+      s,
+      vanishedIds,
+    );
+    const meta = applyStreamMeta(s, {
+      kind: 'activeProcesses',
+      processes: payload.processes,
+    });
+    return {
+      ...s,
+      activeProcesses: meta.activeProcesses,
+      entries,
+      processOutput: meta.processOutput,
+    };
+  });
+}
+
+function applyProcessOutput(payload: UpdateProcessOutputPayload): void {
+  patchStream(payload.parentStreamId, (s) => ({
+    ...s,
+    processOutput: applyStreamMeta(s, {
+      kind: 'processOutput',
+      executionId: payload.executionId,
+      stdout: payload.stdout,
+      stderr: payload.stderr,
+    }).processOutput,
+  }));
+}
+
+function applyParentStream(
+  payload: ProgressEventPayloads['setParentStream'],
+): void {
+  setParentStream(payload.childStreamId, payload.parentStreamId);
+}
+
+function applyDirectTuiRunEvent(
+  event: AgentEvent,
+  fallbackStreamId: ProgressEventPayloads['updateRoundStage']['streamId'],
+  activeProcessesGuard: ActiveProcessesEchoGuard,
+  processOutputGuard: ProcessOutputEchoGuard,
+): boolean {
+  const projected = projectRunFactToProgressEvent(fallbackStreamId, event);
+  if (!projected) return false;
+
+  switch (projected.event) {
+    case 'updateRoundStage':
+      applyRoundStage(projected.payload);
+      return true;
+    case 'updateActiveSubagents':
+      applyActiveSubagents(projected.payload);
+      return true;
+    case 'updateActiveProcesses':
+      activeProcessesGuard.applyDirect(projected.payload);
+      return true;
+    case 'setParentStream':
+      applyParentStream(projected.payload);
+      return true;
+    case 'updateProcessOutput':
+      processOutputGuard.applyDirect(projected.payload);
+      return true;
+    default:
+      return false;
+  }
 }
 
 function refreshQueuedFollowUps(
@@ -239,12 +395,33 @@ export function attachTuiRunFactSubscription(
     goalPausedEchoKey,
     appendGoalPausedTranscriptNotice,
   );
+  const activeProcessesGuard = new EchoGuard(
+    activeProcessesEchoKey,
+    applyActiveProcesses,
+  );
+  const processOutputGuard = new EchoGuard(
+    processOutputEchoKey,
+    applyProcessOutput,
+  );
   activeUsageEchoGuard = usageEchoGuard;
   activeGoalPausedNoticeEchoGuard = goalPausedNoticeEchoGuard;
+  activeProcessesEchoGuard = activeProcessesGuard;
+  activeProcessOutputEchoGuard = processOutputGuard;
   const detach = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
       const { event } = sessionEvent;
+      if (
+        applyDirectTuiRunEvent(
+          event,
+          sessionEvent.streamId,
+          activeProcessesGuard,
+          processOutputGuard,
+        )
+      ) {
+        return;
+      }
+
       if (event.type === 'usage') {
         const payload = toUpdateStreamUsagePayload(
           event.data,
@@ -292,17 +469,34 @@ export function attachTuiRunFactSubscription(
           return;
       }
     },
-    { scope: 'run', types: ['domain', 'usage'] },
+    {
+      scope: 'run',
+      types: [
+        'domain',
+        'usage',
+        'stage.start',
+        'child.activity',
+        'process.output',
+      ],
+    },
   );
   return () => {
     detach();
     usageEchoGuard.clear();
     goalPausedNoticeEchoGuard.clear();
+    activeProcessesGuard.clear();
+    processOutputGuard.clear();
     if (activeUsageEchoGuard === usageEchoGuard) {
       activeUsageEchoGuard = undefined;
     }
     if (activeGoalPausedNoticeEchoGuard === goalPausedNoticeEchoGuard) {
       activeGoalPausedNoticeEchoGuard = undefined;
+    }
+    if (activeProcessesEchoGuard === activeProcessesGuard) {
+      activeProcessesEchoGuard = undefined;
+    }
+    if (activeProcessOutputEchoGuard === processOutputGuard) {
+      activeProcessOutputEchoGuard = undefined;
     }
   };
 }
@@ -352,7 +546,7 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'setParentStream': {
       const p = payload as ProgressEventPayloads['setParentStream'];
-      setParentStream(p.childStreamId, p.parentStreamId);
+      applyParentStream(p);
       return;
     }
     case 'removeStream':
@@ -377,10 +571,7 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'updateRoundStage': {
       const p = payload as ProgressEventPayloads['updateRoundStage'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        roundStage: p.roundStage,
-      }));
+      applyRoundStage(p);
       return;
     }
     case 'updateStreamDescription': {
@@ -393,50 +584,25 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'updateActiveSubagents': {
       const p = payload as ProgressEventPayloads['updateActiveSubagents'];
-      registerChildStreams(p.parentStreamId, p.children);
-      patchStream(p.parentStreamId, (s) => ({
-        ...s,
-        activeSubagents: p.children,
-        childStreams: mergeChildStreams(s.childStreams, p.children),
-      }));
+      applyActiveSubagents(p);
       return;
     }
     case 'updateActiveProcesses': {
       const p = payload as ProgressEventPayloads['updateActiveProcesses'];
-      // The shared reducer drops tails for executions that left the active
-      // list; the CLI also persists a bounded transcript for each finished
-      // process before its tail is pruned (a CLI-only side effect).
-      patchStream(p.parentStreamId, (s) => {
-        const vanishedIds = diffActiveChildren(s.activeProcesses, p.processes);
-        const entries = appendCompletedProcessEntries(
-          p.parentStreamId,
-          s,
-          vanishedIds,
-        );
-        const meta = applyStreamMeta(s, {
-          kind: 'activeProcesses',
-          processes: p.processes,
-        });
-        return {
-          ...s,
-          activeProcesses: meta.activeProcesses,
-          entries,
-          processOutput: meta.processOutput,
-        };
-      });
+      if (activeProcessesEchoGuard) {
+        activeProcessesEchoGuard.applyLegacy(p);
+      } else {
+        applyActiveProcesses(p);
+      }
       return;
     }
     case 'updateProcessOutput': {
       const p = payload as ProgressEventPayloads['updateProcessOutput'];
-      patchStream(p.parentStreamId, (s) => ({
-        ...s,
-        processOutput: applyStreamMeta(s, {
-          kind: 'processOutput',
-          executionId: p.executionId,
-          stdout: p.stdout,
-          stderr: p.stderr,
-        }).processOutput,
-      }));
+      if (activeProcessOutputEchoGuard) {
+        activeProcessOutputEchoGuard.applyLegacy(p);
+      } else {
+        applyProcessOutput(p);
+      }
       return;
     }
     case 'updateTodos': {
