@@ -19,10 +19,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   wakeQueuedFollowUpStream: wakeQueuedFollowUpStreamMock,
 }));
 
-vi.mock('@eventBus/ProgressEventBus', () => ({
-  ProgressEventBus: { emit: vi.fn() },
-}));
-
 vi.mock('@platform/platform', () => ({
   platform: () => ({
     agentResume: { tryResumeStream: vi.fn(async () => false) },
