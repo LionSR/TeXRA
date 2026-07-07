@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   ExternalInquiryPermissionSchema,
+  type ExternalInquiryThreadId,
   type StreamTabId,
 } from '@shared/schemas';
 import { ToolError } from '@shared/schemas/toolResult';
@@ -279,6 +280,63 @@ describe('InquiryStorage', () => {
       ).toString('utf8'),
     ) as { turns: Array<{ answer?: string }> };
     expect(persisted.turns[0]?.answer).toBe('Legacy A');
+  });
+
+  it('stamps schemaVersion on newly written manifests', async () => {
+    const t = await recordOpenQuestion({
+      parentStreamId: STREAM_A,
+      question: 'Q1',
+    });
+
+    const platform = (await import('@platform/platform')).platform();
+    const manifestPath = `${platform.storage.getGlobalStoragePath()}/ei_threads/${t.threadId}/manifest.json`;
+    const persisted = JSON.parse(
+      Buffer.from(await platform.fs.readFile(manifestPath)).toString('utf8'),
+    ) as { schemaVersion?: number };
+    expect(persisted.schemaVersion).toBe(1);
+  });
+
+  it('treats a corrupt manifest as missing (loud read) without clobbering it', async () => {
+    const platform = (await import('@platform/platform')).platform();
+    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0033`;
+    const manifestPath = `${threadDir}/manifest.json`;
+    await platform.fs.createDirectory(threadDir);
+    await platform.fs.writeFile(
+      manifestPath,
+      Buffer.from('{ not valid json', 'utf8'),
+    );
+
+    await expect(
+      readExternalInquiryThread('ei_aabbccdd0033'),
+    ).resolves.toBeNull();
+
+    // A follow-up dispatch addressed at the corrupt thread reports
+    // not-found instead of silently overwriting the on-disk file.
+    await expect(
+      recordOpenQuestion({
+        threadId: 'ei_aabbccdd0033' as ExternalInquiryThreadId,
+        parentStreamId: STREAM_A,
+        question: 'Q?',
+      }),
+    ).rejects.toBeInstanceOf(ToolError);
+    const stillOnDisk = Buffer.from(
+      await platform.fs.readFile(manifestPath),
+    ).toString('utf8');
+    expect(stillOnDisk).toBe('{ not valid json');
+  });
+
+  it('treats a schema-invalid manifest as missing (loud read)', async () => {
+    const platform = (await import('@platform/platform')).platform();
+    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0044`;
+    await platform.fs.createDirectory(threadDir);
+    await platform.fs.writeFile(
+      `${threadDir}/manifest.json`,
+      Buffer.from(JSON.stringify({ threadId: 42, turns: 'nope' }), 'utf8'),
+    );
+
+    await expect(
+      readExternalInquiryThread('ei_aabbccdd0044'),
+    ).resolves.toBeNull();
   });
 
   it('returns a hydrated legacy manifest when write-back fails', async () => {
