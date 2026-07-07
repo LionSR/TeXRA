@@ -1,7 +1,7 @@
 import process from 'node:process';
 
 import type { AgentEvent } from '@agent/trace';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 

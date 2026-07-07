@@ -1,7 +1,7 @@
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+} from '@eventBus/ProgressEventContract';
 import type {
   AgentProposal,
   Plan,
