@@ -212,6 +212,37 @@ describe('SessionEventHub', () => {
     detachProjection();
   });
 
+  it('projects parent-stream links from session facts to the runtime host', () => {
+    const hub = new SessionEventHub();
+    const host = createRecordingHost();
+    const detachProjection = attachSessionProgressEventProjectionForTest(
+      hub,
+      host.host,
+    );
+
+    hub.emit({
+      scope: 'session',
+      event: {
+        type: 'setParentStream',
+        payload: {
+          childStreamId: otherStreamId,
+          parentStreamId: streamId,
+        },
+      },
+    });
+
+    expect(host.events).toEqual([
+      {
+        event: 'setParentStream',
+        payload: {
+          childStreamId: otherStreamId,
+          parentStreamId: streamId,
+        },
+      },
+    ]);
+    detachProjection();
+  });
+
   it('detaches test projection subscriptions cleanly', () => {
     const trace = new TraceEmitter();
     const hub = new SessionEventHub();
