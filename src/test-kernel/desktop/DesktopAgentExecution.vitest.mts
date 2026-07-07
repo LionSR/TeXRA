@@ -3011,7 +3011,8 @@ describe('DesktopProgressBridge', () => {
         ) as TestableBridge;
         const session = (bridge as unknown as { session: SessionHandle })
           .session;
-        const { hostChannel } = (bridge as BridgeWithSession).session;
+        const { hostChannel } =
+          session as unknown as BridgeWithSession['session'];
         if (!hostChannel) throw new Error('desktop window has no host channel');
         return {
           bridge,
@@ -3047,9 +3048,15 @@ describe('DesktopProgressBridge', () => {
       messages: unknown[],
       needle: string,
     ): unknown[] {
-      return messages.filter((message) =>
-        JSON.stringify(message).includes(needle),
-      );
+      return messages.filter((message) => {
+        let serialized: string | undefined;
+        try {
+          serialized = JSON.stringify(message);
+        } catch {
+          return false;
+        }
+        return serialized?.includes(needle) ?? false;
+      });
     }
 
     /** Bridge a fake run trace into a session, as `runAgent` does. */
