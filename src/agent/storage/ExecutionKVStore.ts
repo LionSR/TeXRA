@@ -69,8 +69,8 @@ const ExecutionMetaBaseSchema = z.object({
   /**
    * Delegation depth at launch time: 0 for user-initiated, N for an agent
    * N levels deep. Optional so pre-feature snapshots don't fail validation.
-   * Read on resume to enforce the nested-delegation cap without having to
-   * walk a potentially broken parent chain.
+   * Read on resume (for observability and `isSubagent` detection) without
+   * having to walk a potentially broken parent chain.
    */
   delegationDepth: z.int().nonnegative().optional(),
 });
