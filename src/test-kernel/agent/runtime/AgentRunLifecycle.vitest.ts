@@ -9,7 +9,7 @@ import {
 } from '@test/helpers/streamStatusTestUtils';
 import { platform } from '@platform/platform';
 import { installPlatform } from '@test/support/setupPlatform';
-import { noopTrace } from '@agent/trace';
+import { noopTrace, TraceEmitter } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -48,6 +48,7 @@ import { agentKey } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { createRecordingHost } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   writeTerminalStatus: vi.fn().mockResolvedValue(undefined),
@@ -247,9 +248,17 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('emits run config before the RUNNING status projection', async () => {
+  it('projects run config before the RUNNING status projection', async () => {
     const { executionId, streamId, streamStatus, ctx, explicit } =
       lifecycleFixture('lifecycle-run-config-before-running');
+    const trace = new TraceEmitter();
+    const detachTrace = ctx.session.attachRunTrace(trace, streamId);
+    const detachProjection = attachSessionProgressEventProjectionForTest(
+      ctx.session.events,
+      explicit.host,
+    );
+    ctx.logger = trace;
+    ctx.disposeTrace = detachTrace;
 
     try {
       await runFlowWithLifecycle(ctx, async () => ({
@@ -278,6 +287,8 @@ describe('runFlowWithLifecycle', () => {
       expect(runningIndex).toBeGreaterThanOrEqual(0);
       expect(setTaskStateIndex).toBeLessThan(runningIndex);
     } finally {
+      detachProjection();
+      detachTrace();
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
