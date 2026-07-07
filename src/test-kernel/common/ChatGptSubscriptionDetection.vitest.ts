@@ -47,6 +47,17 @@ describe('parseChatGptSubscriptionLimit', () => {
     expect(text).toContain('Resets in 1d 20h');
     expect(text).toContain('OpenAI API key');
   });
+
+  it('drops minutes once the reset window reaches a day, even with a zero hour component', () => {
+    // 1 day + 58 minutes, 0 whole hours — regression case for the pretty-ms
+    // swap: without flooring to the hour once days >= 1, pretty-ms back-fills
+    // the zero hour unit with minutes ("1d 58m") instead of "1d".
+    const text = describeChatGptSubscriptionLimit({
+      resetsInSeconds: 86_400 + 58 * 60,
+    });
+    expect(text).toContain('Resets in 1d.');
+    expect(text).not.toContain('58m');
+  });
 });
 
 describe('formatProviderHttpError for ChatGPT subscription limits', () => {
