@@ -1,20 +1,19 @@
-// Standard library imports
+// Suites for @latex/texTools (compile wrapper + TEXINPUTS env builders).
+
 import * as path from 'node:path';
-
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-// Local imports - test support
 import { installPlatform } from '@test/support/setupPlatform';
-
-// Local imports - latex
-import { compileLatex2Pdf } from '@latex/texTools';
-
-// Local imports - shared
+import {
+  buildLatexInputEnv,
+  buildLatexSearchParts,
+  compileLatex2Pdf,
+} from '@latex/texTools';
 import type { ExecResult } from '@shared/schemas/opResults';
-
-// Local imports - file utilities
 import { FlexibleFS, pathToLocation } from '@utils/files';
+
+// ---------------------------------------------------------------------------
+// TexTools
+// ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => ({
   runToolWithCheck: vi.fn(),
@@ -132,5 +131,87 @@ describe('compileLatex2Pdf structured return', () => {
 
     if (result.ok) throw new Error('expected a failed compile');
     expect(result.logTail).toContain('boom: pdflatex crashed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TexInputEnv
+// ---------------------------------------------------------------------------
+
+const D = path.delimiter;
+
+describe('buildLatexInputEnv', () => {
+  it('omits TEXINPUTS when only the implicit "." part is present and none inherited', () => {
+    const env = buildLatexInputEnv(['.'], [], {});
+    expect(env.TEXINPUTS).toBeUndefined();
+    expect(env.BIBINPUTS).toBeUndefined();
+    expect(env.BSTINPUTS).toBeUndefined();
+  });
+
+  it('prepends workspace and TikZ dirs onto inherited TEXINPUTS', () => {
+    const env = buildLatexInputEnv(['.', '/ws', '/tikz'], ['/ws'], {
+      TEXINPUTS: '/inherited',
+      BIBINPUTS: '/bib',
+      BSTINPUTS: '/bst',
+    });
+    expect(env.TEXINPUTS).toBe(`.${D}/ws${D}/tikz${D}/inherited${D}`);
+    expect(env.BIBINPUTS).toBe(`/ws${D}/bib${D}`);
+    expect(env.BSTINPUTS).toBe(`/ws${D}/bst${D}`);
+  });
+
+  it('emits TEXINPUTS from inherited value alone even without extra parts', () => {
+    const env = buildLatexInputEnv(['.'], [], { TEXINPUTS: '/inherited' });
+    expect(env.TEXINPUTS).toBe(`.${D}/inherited${D}`);
+  });
+
+  it('does not read the ambient process environment when env is injected', () => {
+    const env = buildLatexInputEnv(['.', '/ws'], ['/ws'], {});
+    expect(env.TEXINPUTS).toBe(`.${D}/ws${D}`);
+    expect(env.BIBINPUTS).toBe(`/ws${D}`);
+  });
+});
+
+describe('buildLatexSearchParts', () => {
+  it('ranks document + extra source dirs ahead of cwd, workspace, and tikz', () => {
+    const { texInputParts, bibSearchParts } = buildLatexSearchParts({
+      documentDir: '/run/diff/r1',
+      extraInputDirs: ['/ws/Draft/LeanMPSPaper'],
+      workspacePath: '/ws',
+      tikzInputDirectory: '/tikz',
+    });
+    // Source dirs precede "." (cwd = workspace root) so a subfolder document's
+    // relative \input resolves against its own tree; the document dir precedes
+    // the extra source dir so a revised sibling beats the original fallback.
+    expect(texInputParts).toEqual([
+      '/run/diff/r1',
+      '/ws/Draft/LeanMPSPaper',
+      '.',
+      '/ws',
+      '/tikz',
+    ]);
+    // Bibliography search drops "." and the TikZ dir.
+    expect(bibSearchParts).toEqual([
+      '/run/diff/r1',
+      '/ws/Draft/LeanMPSPaper',
+      '/ws',
+    ]);
+  });
+
+  it('still emits the document dir when no workspace, tikz, or extras are given', () => {
+    const { texInputParts, bibSearchParts } = buildLatexSearchParts({
+      documentDir: '/run/r0/Draft/LeanMPSPaper',
+      workspacePath: null,
+    });
+    expect(texInputParts).toEqual(['/run/r0/Draft/LeanMPSPaper', '.']);
+    expect(bibSearchParts).toEqual(['/run/r0/Draft/LeanMPSPaper']);
+  });
+
+  it('ignores blank tikz dirs', () => {
+    const { texInputParts } = buildLatexSearchParts({
+      documentDir: '/doc',
+      workspacePath: '/ws',
+      tikzInputDirectory: '   ',
+    });
+    expect(texInputParts).toEqual(['/doc', '.', '/ws']);
   });
 });

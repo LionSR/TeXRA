@@ -1,13 +1,16 @@
-// Standard library imports
+// Suites for @progressView/frontend utils (composed-path, state rounds,
+// bounded id set).
+
 import { strict as assert } from 'node:assert';
-
-// Third-party imports
 import { JSDOM } from 'jsdom';
-import { describe, it } from 'vitest';
-
-// Local imports
+import { describe, expect, it } from 'vitest';
 import { getComposedPathElement } from '@progressView/frontend/utils';
 import { updateRounds } from '@progressView/frontend/stateUtils';
+import { createBoundedIdSet } from '@progressView/frontend/utils/boundedIdSet';
+
+// ---------------------------------------------------------------------------
+// utils
+// ---------------------------------------------------------------------------
 
 type RoundItems = Record<string, string[]>;
 
@@ -93,5 +96,24 @@ describe('updateRounds', () => {
     },
   ])('$title', ({ current, update, expected }) => {
     assert.deepEqual(updateRounds(current, update), expected);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BoundedIdSet
+// ---------------------------------------------------------------------------
+
+describe('createBoundedIdSet', () => {
+  it('refreshes recency on repeated add', () => {
+    const ids = createBoundedIdSet(2);
+
+    ids.add('a');
+    ids.add('b');
+    ids.add('a');
+    ids.add('c');
+
+    expect(ids.has('a')).toBe(true);
+    expect(ids.has('b')).toBe(false);
+    expect(ids.has('c')).toBe(true);
   });
 });
