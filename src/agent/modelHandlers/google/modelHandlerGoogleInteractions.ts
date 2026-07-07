@@ -577,7 +577,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * `call_id` would reference a call absent from the local transcript and the
    * thought signature would be lost (spec §6.1). These steps are appended to the
    * transcript in both modes; stateless resends them, chained mode leaves them
-   * server-side once sent.
+   * server-side once sent. Unconditional (not gated on
+   * `capabilities.supportsReasoning`) — see the base getter's doc comment
+   * (#7101 triage).
    */
   override get requiresBatchedParallelToolResults(): boolean {
     return true;

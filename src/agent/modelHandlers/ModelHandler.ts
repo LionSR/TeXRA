@@ -531,6 +531,24 @@ export abstract class ModelHandler<
    * Whether parallel tool calls in a single turn must be batched into one
    * follow-up message to preserve provider-side reasoning / thought signatures.
    * Override in handlers whose APIs require it (Google, DeepSeek, Kimi, MiniMax).
+   *
+   * Not foldable into a single llm-zoo capability read (#7101 triage):
+   * `capabilities.supportsReasoning`/`supportsInterleavedThinking` look like
+   * the natural backing flags, but neither lines up. `ReasoningModelHandlerOpenAI`
+   * (the shared base for DeepSeek/Kimi/MiniMax) overrides this to an
+   * unconditional `true` for every model in those families, including
+   * non-reasoning variants — llm-zoo reports `supportsReasoning: false` for
+   * `dsv3`, `kimi`, and `kimi2`, yet they still batch, because the requirement
+   * is a provider-wire-format fact (there's a reasoning channel to preserve
+   * across the whole family's API), not a per-model reasoning toggle.
+   * `ModelHandlerGLM` overrides it back to `false` even for its
+   * reasoning-capable variants (`glm45`, `glm52`). And Grok reasoning models
+   * (`grok43`, `grok3-`; see {@link isGrokReasoningModel}) never override this
+   * at all, staying at this `false` default, via `ModelHandlerXAI`. Folding
+   * this into `supportsReasoning` would wrongly force batching on
+   * non-reasoning DeepSeek/Kimi/MiniMax variants and wrongly skip it for
+   * reasoning Grok models. Stays an overridable getter: genuinely per-provider
+   * behavior, not a foldable predicate.
    */
   get requiresBatchedParallelToolResults(): boolean {
     return false;
