@@ -1,6 +1,9 @@
 import { ModelProvider } from 'llm-zoo';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import {
+  shouldRouteModelThroughOpenRouter,
+  type OpenRouterRoutingConfig,
+} from '@model/openRouterRouting';
 import { tryParseUrl } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import {
@@ -63,11 +66,37 @@ interface ProxyConfig {
  * Determines whether OpenRouter should be used for API routing.
  * Models with requiresResponsesAPI bypass OpenRouter even if globally enabled.
  */
-export function shouldUseOpenRouter(config: {
-  requiresResponsesAPI?: boolean;
-  openRouterOnly: boolean;
-}): boolean {
+export function shouldUseOpenRouter(config: OpenRouterRoutingConfig): boolean {
   return shouldRouteModelThroughOpenRouter(config, getUseOpenRouter());
+}
+
+/**
+ * Determines whether server-side (relay) API keys should be used for a model:
+ * the OpenRouter-routing gate (relay is a direct-provider path, never an
+ * OpenRouter path) combined with the server-side key service's synchronous
+ * tier/access check.
+ *
+ * Centralized here (#7101 triage — "runtime combinator over profile data")
+ * so callers that only have a plain `ModelConfig`-shaped value, not a full
+ * `ModelHandler` instance — e.g. `UsageMonitor`, which deliberately avoids
+ * holding an `IModelHandler` reference (see `UsageMonitorModelInfo`'s doc
+ * comment) — read the same combinator `ModelHandler.shouldUseServerSideKeys()`
+ * delegates to, instead of re-deriving the `!openRouter && relaySync` formula
+ * independently and risking drift.
+ */
+export function usesServerSideKeysRoute(
+  config: OpenRouterRoutingConfig & {
+    provider: ModelProvider;
+    name: string;
+  },
+): boolean {
+  if (shouldUseOpenRouter(config)) {
+    return false;
+  }
+  return getServerSideKeyService().shouldUseServerSideKeysSync(
+    config.provider,
+    config.name,
+  );
 }
 
 /**
