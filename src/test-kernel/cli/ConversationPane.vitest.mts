@@ -31,16 +31,14 @@ import {
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
-import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
 import {
+  resetCliState,
   patchStream,
   streams,
-} from '@cli/chat/tui/state/cliState/streamsSlice';
-import {
   thinkingIndicatorVisible,
   type ConversationEntry,
   type StreamSlice,
-} from '@cli/chat/tui/state/cliState/types';
+} from '@cli/chat/tui/state/cliState';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import {
   CLI_LOCAL_STREAM_ID,

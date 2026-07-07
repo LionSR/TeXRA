@@ -28,12 +28,12 @@ import { ModelListForm } from '../forms/ModelListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
-import { activeForm } from '../state/cliState/foregroundOverlaySlice';
 import {
+  activeForm,
   patchSessionMeta,
   sessionMeta,
   setCliSessionModelOverride,
-} from '../state/cliState/sessionSlice';
+} from '../state/cliState';
 import { loginFromChat } from './handlers/loginCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';

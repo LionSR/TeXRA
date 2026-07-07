@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - schemas
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewInboundMessageSchema } from '@shared/schemas/mainView';
 
 describe('MainView housekeeping messages', () => {

@@ -11,7 +11,7 @@ import {
 } from '@shared/utils/dispatcher';
 
 // Local file imports
-import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
+import { COMMON_COMMANDS } from '@shared/ipc';
 
 type CommandMessage = { command: string };
 

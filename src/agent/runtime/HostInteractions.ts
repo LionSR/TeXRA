@@ -14,7 +14,7 @@ import type {
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
-} from '@platform/interfaces/toolEditApproval';
+} from '@platform/interfaces';
 
 export interface HostInteractionOptions {
   readonly timeoutMs?: number;

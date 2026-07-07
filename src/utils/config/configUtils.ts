@@ -4,8 +4,7 @@ import * as logger from '@logger/logUtils';
 import { ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ZodType } from 'zod';
-import type { ConfigTarget } from '@platform/interfaces/config';
-import type { Disposable } from '@platform/interfaces/disposable';
+import type { ConfigTarget, Disposable } from '@platform/interfaces';
 
 const CHANNEL = 'configUtils';
 

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Platform imports
-import { FileType, type FileStat } from '@platform/interfaces/filesystem';
+import { FileType, type FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { isFile, isDirectory } from './fsEntryType';

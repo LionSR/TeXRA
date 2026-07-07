@@ -2,8 +2,7 @@
 import type { MainViewInboundMessage, MainViewMessage } from '@shared/schemas';
 
 // Local imports - IPC contracts
-import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 export interface MainViewCommandPlan {
   command: string;

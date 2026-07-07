@@ -21,8 +21,7 @@ import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
-import { isNonEmptyString } from '@utils/core';
-import { createSemaphore } from '@utils/core/semaphore';
+import { isNonEmptyString, createSemaphore } from '@utils/core';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';

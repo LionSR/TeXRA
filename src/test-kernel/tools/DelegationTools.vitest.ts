@@ -5,7 +5,7 @@ import { describe, it, afterEach, beforeEach, vi } from 'vitest';
 // Node.js built-in imports
 
 // Platform imports
-import { FileType, type FileStat } from '@platform/interfaces/filesystem';
+import { FileType, type FileStat } from '@platform/interfaces';
 
 const mocks = vi.hoisted(() => ({
   tryUseRunContext: vi.fn(),

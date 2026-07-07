@@ -21,7 +21,7 @@ import {
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { isGoalInFlight, type GoalStatus } from '@shared/schemas/goal';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import { GoalStore } from '@tools/goal';

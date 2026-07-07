@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
-import { delay } from '@utils/core/async';
+import { delay } from '@utils/core';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
 const FAKE_LAKE = `#!/usr/bin/env node

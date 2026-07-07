@@ -6,7 +6,7 @@ import {
 } from '@controllers/settingsView/SettingsProfileController';
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 const providerVscodeSettings = {
   openai: [

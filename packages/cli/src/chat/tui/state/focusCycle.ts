@@ -14,10 +14,12 @@ import { type StreamTabId } from '@shared/schemas';
 import { unique } from '@utils/core';
 
 import { visibleSubagentRows } from './childExecutions';
-import { activeStreamId } from './cliState/focusSlice';
-import { parentStream } from './cliState/parentStreamSlice';
-import { streams as streamsSignal } from './cliState/streamsSlice';
-import type { StreamSlice } from './cliState/types';
+import {
+  activeStreamId,
+  parentStream,
+  streams as streamsSignal,
+  type StreamSlice,
+} from './cliState';
 
 function orderedDescendantsFromSlice(
   slice:

@@ -24,7 +24,7 @@ import type { StreamTabId } from '@shared/schemas';
 
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
-import type { Disposable } from '@platform/interfaces/disposable';
+import type { Disposable } from '@platform/interfaces';
 
 export interface SubscriptionBinding<K extends string> {
   key: K;

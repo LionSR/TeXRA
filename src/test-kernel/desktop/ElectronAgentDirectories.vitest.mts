@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
+import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -19,7 +19,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
-import type { StorageProvider } from '@platform/interfaces/storage';
+import type { StorageProvider } from '@platform/interfaces';
 
 interface JsonStore {
   get<T>(key: string, defaultValue?: T): T;

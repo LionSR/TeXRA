@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { ToolError } from '@shared/schemas/toolResult';
-import { abandonOnAbort } from '@tools/cancellation';
+import { abandonOnAbort } from '@tools/citation/rateLimiter';
 
 const delay = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));

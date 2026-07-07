@@ -67,7 +67,7 @@ import {
 } from './prTypes';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
-import type { Disposable } from '@platform/interfaces/disposable';
+import type { Disposable } from '@platform/interfaces';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
 // catch transitions even after a brief network outage. GitHub caps these

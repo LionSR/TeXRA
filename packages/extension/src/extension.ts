@@ -9,18 +9,15 @@ import dotenv from 'dotenv';
 import { initPlatform, platform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import {
-  SHUTDOWN_PHASE,
-  type LifecycleHost,
-} from '@platform/interfaces/lifecycle';
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
+import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { backfillFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
-import { initializeGoalPrompts } from '@agent/goal';
+import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { initializePolishModel } from '@agent/runtime/polishModel';

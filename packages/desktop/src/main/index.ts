@@ -13,10 +13,7 @@ import {
 } from 'electron';
 
 import { platform } from '@platform/platform';
-import {
-  SHUTDOWN_PHASE,
-  type LifecycleHost,
-} from '@platform/interfaces/lifecycle';
+import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import {
   backfillFirstRunDone,
   hasAnyProviderApiKey,
@@ -28,7 +25,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, agentKeyOf } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';

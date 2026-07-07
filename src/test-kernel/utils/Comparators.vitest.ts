@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { toNewestFirstByTimestamp } from '@utils/core/comparators';
+import { toNewestFirstByTimestamp } from '@utils/core';
 
 describe('toNewestFirstByTimestamp', () => {
   it('orders values by newest timestamp first', () => {

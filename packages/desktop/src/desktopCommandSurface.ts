@@ -1,6 +1,5 @@
 import type { StreamTabId } from '@shared/schemas';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { type AgentCategory } from '@shared/schemas/agent';
 import {
   SETTINGS_TAB,

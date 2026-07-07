@@ -4,8 +4,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latex';
 import {

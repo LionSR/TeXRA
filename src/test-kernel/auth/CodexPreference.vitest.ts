@@ -17,8 +17,8 @@ import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
-} from '@platform/interfaces/config';
-import type { Disposable } from '@platform/interfaces/disposable';
+  Disposable,
+} from '@platform/interfaces';
 
 class FolderOverrideConfigProvider implements ConfigProvider {
   private readonly globalValues = new Map<string, unknown>();

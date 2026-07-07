@@ -37,7 +37,7 @@ import {
 } from '../runtime/runModel';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { withUsageSections } from './_helpers/dispatch/usage';
+import { withUsageSections } from './_helpers/dispatch';
 import { formatMultiAgentRunInstruction } from './_helpers/multiAgentInstruction';
 import { emitCliResult } from './_helpers/output';
 import {

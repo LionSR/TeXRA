@@ -3,8 +3,11 @@ import type {
   SettingStore,
   StateSettingEntry,
 } from '@shared/schemas/stateSettings';
-import type { ConfigProvider, ConfigTarget } from '@platform/interfaces/config';
-import type { StateStore } from '@platform/interfaces/state';
+import type {
+  ConfigProvider,
+  ConfigTarget,
+  StateStore,
+} from '@platform/interfaces';
 
 /**
  * Host-aware read/write for {@link StateSettingEntry} rows.

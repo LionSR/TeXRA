@@ -48,13 +48,16 @@ import {
   sumUsageStats,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { generateExecutionId } from '@utils/core/executionId';
+import { generateExecutionId } from '@utils/core';
 
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
-import { activeStreamId, rootStreamId } from './tui/state/cliState/focusSlice';
-import { patchSessionMeta } from './tui/state/cliState/sessionSlice';
-import { patchStream } from './tui/state/cliState/streamsSlice';
+import {
+  activeStreamId,
+  rootStreamId,
+  patchSessionMeta,
+  patchStream,
+} from './tui/state/cliState';
 import {
   chatTuiCanStartRootRun,
   markChatTuiRunCompleted,

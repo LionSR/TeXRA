@@ -6,10 +6,7 @@ import * as path from 'node:path';
 import { describe, it } from 'vitest';
 
 // Local imports - platform
-import {
-  FileType,
-  type FileSystemProvider,
-} from '@platform/interfaces/filesystem';
+import { FileType, type FileSystemProvider } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform } from '@platform/platform';
 

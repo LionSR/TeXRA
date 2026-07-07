@@ -2,7 +2,7 @@ import escapeRegExp from 'escape-string-regexp';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { unique } from '@utils/core';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 export const DESKTOP_CRASH_REPORTING_DSN_SECRET =
   'texra.desktop.crashReporting.dsn';

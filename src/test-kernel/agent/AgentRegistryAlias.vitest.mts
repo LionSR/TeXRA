@@ -22,7 +22,7 @@ import {
   refresh,
 } from '@agent/index/agentRegistry';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { AgentDirectoriesPort } from '@platform/interfaces/agentDirectories';
+import type { AgentDirectoriesPort } from '@platform/interfaces';
 
 vi.mock('@agent/remote/RemoteAgentLoader', () => ({
   RemoteAgentLoader: {

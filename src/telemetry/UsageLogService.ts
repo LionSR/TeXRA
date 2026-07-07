@@ -6,7 +6,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { delay } from '@utils/core/async';
+import { delay } from '@utils/core';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
 import type {

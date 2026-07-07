@@ -15,10 +15,10 @@ import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
-} from '@cli/commands/_helpers/dispatch/reorderFlags';
-import { hasUsageNoColorFlag } from '@cli/commands/_helpers/dispatch/usage';
-import { formatUnknownCliCommand } from '@cli/commands/_helpers/dispatch/unknownCommand';
-import { formatUnknownCliFlag } from '@cli/commands/_helpers/dispatch/unknownFlag';
+  hasUsageNoColorFlag,
+  formatUnknownCliCommand,
+  formatUnknownCliFlag,
+} from '@cli/commands/_helpers/dispatch';
 import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
 import { resolveLoginProvider } from '@cli/runtime/loginOptions';
 import {

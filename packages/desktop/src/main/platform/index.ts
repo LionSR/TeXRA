@@ -12,7 +12,7 @@ import {
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { StreamSnapshotStore } from '@transcript';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
@@ -31,8 +31,7 @@ import {
 } from '../desktopAgentResume.js';
 
 // Type imports - platform
-import type { LifecycleHost } from '@platform/interfaces/lifecycle';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
+import type { LifecycleHost, ToolEditApprovalPort } from '@platform/interfaces';
 
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;

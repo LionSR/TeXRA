@@ -13,7 +13,7 @@ import {
   visibleSubagentRows,
 } from './childExecutions';
 import { orderedDescendantsFromTree } from './focusCycle';
-import type { StreamSlice } from './cliState/types';
+import type { StreamSlice } from './cliState';
 
 export interface StreamView {
   readonly id: StreamTabId;

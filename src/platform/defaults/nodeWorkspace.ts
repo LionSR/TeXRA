@@ -6,7 +6,7 @@ import * as path from 'node:path';
 
 import { normalizeFilePath } from '@shared/utils/path';
 
-import type { WorkspaceProvider } from '../interfaces/workspace';
+import type { WorkspaceProvider } from '../interfaces';
 
 export function createNodeWorkspace(
   getRoot: () => string | undefined = () => process.cwd(),

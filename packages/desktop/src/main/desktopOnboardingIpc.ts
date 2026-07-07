@@ -6,7 +6,7 @@ import {
   setOnboardingDeclined,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   buildDesktopOnboardingSetStateMessage,
   DESKTOP_ONBOARDING_COMMANDS,
@@ -17,7 +17,7 @@ import {
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 export interface DesktopOnboardingIpcOptions {
   state?: StateStore;

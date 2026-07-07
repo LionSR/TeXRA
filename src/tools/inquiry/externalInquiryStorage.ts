@@ -20,9 +20,8 @@ import {
 } from '@shared/schemas';
 import { normalizeFilePath } from '@shared/utils/path';
 import { ToolError } from '@shared/schemas/toolResult';
-import { toNewestFirstByTimestamp } from '@utils/core';
+import { toNewestFirstByTimestamp, hexId12 } from '@utils/core';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
-import { hexId12 } from '@utils/core/executionId';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 const THREADS_DIR = 'ei_threads';

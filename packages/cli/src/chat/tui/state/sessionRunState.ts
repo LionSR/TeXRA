@@ -7,7 +7,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
-import { rootRunStartAvailable } from './cliState/focusSlice';
+import { rootRunStartAvailable } from './cliState';
 
 export interface ClearableTuiSessionState {
   streamId: StreamTabId | undefined;

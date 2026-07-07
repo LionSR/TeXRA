@@ -15,7 +15,7 @@ import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
 
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
-import { delay } from '@utils/core/async';
+import { delay } from '@utils/core';
 
 const tmpDirs: string[] = [];
 let poller: ProcessOutputPoller;
