@@ -64,18 +64,6 @@ async function readLegacyTodos(
   };
 }
 
-async function readSidecarTodos(
-  snapshotStore: StreamSnapshotStore,
-  streamId: StreamTabId,
-): Promise<CompletedRunTodosReadResult> {
-  const snapshot = await snapshotStore.read(streamId);
-  return {
-    todos: snapshot.todos.map(todoItemToEntry),
-    source: 'streamData',
-    streamId,
-  };
-}
-
 /**
  * Read the archived task list for a completed run, preferring the durable
  * stream sidecar (`streamData/{stream}/workPlan.json`) but falling back to
@@ -105,5 +93,10 @@ export async function readCompletedRunTodos(
     return readLegacyTodos(options.legacyFallback);
   }
 
-  return readSidecarTodos(snapshotStore, resolved.streamId);
+  const snapshot = await snapshotStore.read(resolved.streamId);
+  return {
+    todos: snapshot.todos.map(todoItemToEntry),
+    source: 'streamData',
+    streamId: resolved.streamId,
+  };
 }
