@@ -43,6 +43,7 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
+import { createChannelTrace } from '@logger';
 import { INSTRUCTION_ACTION } from '@shared/schemas';
 import {
   STREAM_PHASE,
@@ -71,6 +72,8 @@ import { attachConversationProgressHub } from './conversationProgressHub';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
+
+const logger = createChannelTrace('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore, AgentRunIdentity {
   usageMonitor: UsageMonitor;
@@ -222,7 +225,16 @@ async function inferLaunchModelHandlerCompatibilityKey(
       model,
       flowRecord?.shared,
     );
-  } catch {
+  } catch (error) {
+    // A failed read here silently falls through to the default model-handler
+    // route, which can resume with the wrong provider message format. Warn
+    // loudly instead of swallowing it so a bad resume is diagnosable.
+    logger.warn(
+      'Failed to read flow record for launch, using default model-handler route',
+      {
+        data: { executionId, error: toErrorMessage(error) },
+      },
+    );
     return undefined;
   }
 }
