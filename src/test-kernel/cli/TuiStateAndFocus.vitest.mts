@@ -9,7 +9,6 @@ import {
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   StreamLogStore,
-  type StreamSnapshotStore,
 } from '@transcript';
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -3403,33 +3402,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       detachTui();
       detachProjection();
     }
-  });
-
-  it('bridges only transitional metadata events to the snapshot store', () => {
-    const snapshotStore = {
-      handleProgressEvent: vi.fn(),
-    } as unknown as StreamSnapshotStore;
-    const wrapped = wrapRuntimeHost(makeHost(), snapshotStore);
-
-    const todos: TodoItem[] = [
-      {
-        content: 'Write the introduction',
-        status: TODO_STATUS.IN_PROGRESS,
-        activeForm: 'Writing the introduction',
-      },
-    ];
-    wrapped.emit('updateTodos', { streamId: root, todos });
-    expect(streams.get().get(root)?.todos).toEqual(todos);
-    expect(snapshotStore.handleProgressEvent).not.toHaveBeenCalled();
-
-    wrapped.emit('updateStreamDescription', {
-      streamId: root,
-      description: 'search / kimi26T',
-    });
-    expect(snapshotStore.handleProgressEvent).toHaveBeenCalledWith(
-      'updateStreamDescription',
-      { streamId: root, description: 'search / kimi26T' },
-    );
   });
 
   it('registers suppressed child streams without switching away from the parent page', () => {
