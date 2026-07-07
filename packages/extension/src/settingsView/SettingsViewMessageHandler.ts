@@ -69,10 +69,7 @@ import {
   setBashApprovalEnabled as setBashApprovalEnabledShared,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
-import {
-  buildSuperYoloMessage,
-  setNestedDelegationMaxDepth,
-} from '@shared/settingsView/handlers/superYoloHandlers';
+import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -354,8 +351,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
             StateKeys.DETACH_SUBAGENTS_ON_STOP,
             data,
           ),
-        setNestedDelegationMaxDepth: (data) =>
-          this.handleSetNestedDelegationMaxDepth(data),
       },
       ...{
         getAgentSelection: () =>
@@ -674,16 +669,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: { enabled: boolean },
   ): Promise<void> {
     await workspaceSM.update(key, data.enabled);
-    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
-  }
-
-  private async handleSetNestedDelegationMaxDepth(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_NESTED_DELEGATION_MAX_DEPTH>,
-  ): Promise<void> {
-    await setNestedDelegationMaxDepth(
-      { workspaceState: workspaceSM, globalState: globalSM },
-      data.value,
-    );
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
 

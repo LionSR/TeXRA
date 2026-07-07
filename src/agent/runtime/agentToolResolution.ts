@@ -3,16 +3,15 @@
  *
  * The pipeline, in order:
  *   1. Start with the tool names declared in the agent YAML.
- *   2. Strip delegation tools when the nesting depth limit is reached.
- *   3. Strip approval-gated tools when approval prompts are unavailable
+ *   2. Strip approval-gated tools when approval prompts are unavailable
  *      (e.g. a subagent running without an interactive approval channel).
- *   4. Strip user-disabled tools (settings dashboard toggle).
- *   5. Strip tools whose external dependency is unavailable (probed at startup).
- *   6. Auto-inject conditional tools (memory, goal, etc.) registered at startup;
- *      injected tools are subject to delegation and approval gates but bypass
- *      the disabled/unavailable filters (they are runtime infrastructure, not
+ *   3. Strip user-disabled tools (settings dashboard toggle).
+ *   4. Strip tools whose external dependency is unavailable (probed at startup).
+ *   5. Auto-inject conditional tools (memory, goal, etc.) registered at startup;
+ *      injected tools are subject to the approval gate but bypass the
+ *      disabled/unavailable filters (they are runtime infrastructure, not
  *      user-selectable tools).
- *   7. Annotate delegation tools with the models and agents currently available
+ *   6. Annotate delegation tools with the models and agents currently available
  *      for delegation, so the model sees an accurate "Available models:" line
  *      and an "Available agents:" roster instead of a snapshot frozen when the
  *      tool registry was first constructed.
@@ -29,7 +28,6 @@ import * as logUtils from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
-  DELEGATION_TOOLS,
   DELEGATION_TOOL_CATEGORY,
   hasDelegationTool,
 } from '@shared/constants/delegationTools';
@@ -63,8 +61,6 @@ export interface ResolveAgentToolsInput {
   /** Registry to resolve tool definitions from. Defaults to the global registry. */
   registry?: IToolRegistry;
   logger: { warn: (msg: string) => void };
-  /** When true, delegation tools (delegate_workflow, delegate_agent) are excluded. */
-  delegationBlocked: boolean;
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
   /** Tools unavailable because the current host/runtime cannot support them. */
@@ -75,8 +71,6 @@ export interface ResolveAgentToolsInput {
 
 export interface ResolvedAgentTools {
   tools: ToolDefinition[];
-  /** True if at least one delegation tool was removed due to depth limits. */
-  delegationTrimmed: boolean;
 }
 
 /**
@@ -133,7 +127,6 @@ export async function resolveAgentTools({
   tools,
   registry,
   logger,
-  delegationBlocked,
   approvalPromptsUnavailable,
   runtimeUnavailableTools,
   toolInjections = SharedToolInjectionRegistry,
@@ -148,14 +141,9 @@ export async function resolveAgentTools({
   const missingDependency: string[] = [];
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
-  let delegationTrimmed = false;
 
-  /** Delegation-depth and approval gates shared by declared and injected tools. */
+  /** Runtime-availability and approval gates shared by declared and injected tools. */
   const passesRuntimeGates = (name: string): boolean => {
-    if (DELEGATION_TOOLS.has(name) && delegationBlocked) {
-      delegationTrimmed = true;
-      return false;
-    }
     if (runtimeUnavailable.has(name)) return false;
     return (
       approvalPromptsUnavailable !== true || !isApprovalGatedToolName(name)
@@ -201,7 +189,6 @@ export async function resolveAgentTools({
     tools: resolved.map((tool) =>
       annotateDelegationTool(tool, availableModelNames),
     ),
-    delegationTrimmed,
   };
 }
 
