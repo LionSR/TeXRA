@@ -317,8 +317,6 @@ export class TextEditorTool extends defineTool({
         await WorkspaceFS.ensureDir(dirPath);
       }
 
-      // writeAndRecordApprovedEdit marks the file "read" after creation so
-      // subsequent edits don't require an explicit read first.
       const { appliedContent } = await writeAndRecordApprovedEdit(
         filePath,
         '',
