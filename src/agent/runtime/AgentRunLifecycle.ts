@@ -235,6 +235,12 @@ export async function runFlowWithLifecycle(
       const parentStageId = ctx.parentStage.id;
       handle.registerWaitingCleanup(() => {
         ctx.session.followUps.release(streamId);
+        // Best-effort: this deletes the persisted flow-record for a run that
+        // is already being torn down and has no caller left awaiting this
+        // closure (it only fires from a later kill, well after the original
+        // request context is gone) — a failed delete just leaves a stale
+        // record on disk, not a correctness gap, so there is nothing useful
+        // to propagate an error to.
         void getExecutionStore(ctx.executionId)
           .delete(flowKey(ctx.executionId))
           .catch(() => {});
