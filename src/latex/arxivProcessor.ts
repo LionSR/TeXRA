@@ -72,7 +72,7 @@ export function resolveArxivPaperDirectoryRelative(
 }
 
 class ArxivSourceProcessor {
-  constructor(private readonly channel: string = 'arxivProcessor') {
+  constructor(private readonly channel: string = 'ArxivProcessor') {
     logger.initialize(this.channel);
   }
 
@@ -487,4 +487,4 @@ class ArxivSourceProcessor {
   }
 }
 
-export const arxivProcessor = new ArxivSourceProcessor();
+export const ArxivProcessor = new ArxivSourceProcessor();

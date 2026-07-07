@@ -3,12 +3,12 @@ import * as assert from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Internal imports
-import { flexibleFS } from '@utils/files/flexibleFS';
+import { FlexibleFS } from '@utils/files/flexibleFS';
 import { pathToLocation } from '@utils/files/taskRunStorage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
-describe('flexibleFS.write', () => {
+describe('FlexibleFS.write', () => {
   it('retries the write after clearing symlink loops', async () => {
     const originalWrite = AbsoluteFS.write;
     const originalDelete = AbsoluteFS.delete;
@@ -46,7 +46,7 @@ describe('flexibleFS.write', () => {
 
       const location = pathToLocation('file.tex');
       const expectedPath = WorkspaceFS.toAbsolute('file.tex');
-      await flexibleFS.write(location, 'content');
+      await FlexibleFS.write(location, 'content');
 
       assert.deepEqual(writes, [expectedPath, expectedPath]);
       assert.strictEqual(deleteTarget, expectedPath);

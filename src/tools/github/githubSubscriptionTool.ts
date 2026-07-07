@@ -45,9 +45,9 @@ import {
   unbindPRSubscription,
   unbindRepoSubscription,
 } from './subscriptionBindings';
-import { issuePollingSource } from './IssuePollingSource';
-import { prPollingSource } from './PRPollingSource';
-import { repoPollingSource } from './RepoPollingSource';
+import { SharedIssuePollingSource } from './IssuePollingSource';
+import { SharedPRPollingSource } from './PRPollingSource';
+import { SharedRepoPollingSource } from './RepoPollingSource';
 import type { GhIssue, GhPullRequest } from './prTypes';
 
 const GitHubSubscriptionInputSchema = z.strictObject({
@@ -205,8 +205,8 @@ async function execSubscribe(
   // own /issues/N → /pull/N redirect behavior on github.com.
   const issueSlug = `${target.owner}/${target.repo}/issues/${target.issueNumber}`;
   const prSlug = `${target.owner}/${target.repo}/pulls/${target.issueNumber}`;
-  const knownPR = prPollingSource.has(prSlug);
-  const knownIssue = !knownPR && issuePollingSource.has(issueSlug);
+  const knownPR = SharedPRPollingSource.has(prSlug);
+  const knownIssue = !knownPR && SharedIssuePollingSource.has(issueSlug);
   const isPR =
     knownPR ||
     (!knownIssue &&
@@ -309,14 +309,16 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
 
 function execList(): ToolResult {
   const { streamId } = requireRunStream('github_subscription');
-  const prKeys = listPRSubscriptionBindings(prPollingSource.activeKeys())
+  const prKeys = listPRSubscriptionBindings(SharedPRPollingSource.activeKeys())
     .filter((b) => b.streamIds.includes(streamId))
     .map((b) => b.key);
-  const repoKeys = listRepoSubscriptionBindings(repoPollingSource.activeKeys())
+  const repoKeys = listRepoSubscriptionBindings(
+    SharedRepoPollingSource.activeKeys(),
+  )
     .filter((b) => b.streamIds.includes(streamId))
     .map((b) => b.key);
   const issueKeys = listIssueSubscriptionBindings(
-    issuePollingSource.activeKeys(),
+    SharedIssuePollingSource.activeKeys(),
   )
     .filter((b) => b.streamIds.includes(streamId))
     .map((b) => b.key);

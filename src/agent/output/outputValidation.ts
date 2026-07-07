@@ -11,7 +11,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import type { FileLocation, StorageKey } from '@shared/schemas';
-import { flexibleFS } from '@utils/files';
+import { FlexibleFS } from '@utils/files';
 
 import {
   getStorageKey,
@@ -61,11 +61,11 @@ export async function checkExpectedOutputs(
 
       const checks = expected.map(async (file) => ({
         file,
-        exists: await flexibleFS.exists(deps.fileService.createLocation(file)),
+        exists: await FlexibleFS.exists(deps.fileService.createLocation(file)),
       }));
       const results = await Promise.all(checks);
       const missing = results.filter((r) => !r.exists).map((r) => r.file);
-      const xmlExists = await flexibleFS.exists(outputLocation);
+      const xmlExists = await FlexibleFS.exists(outputLocation);
 
       if (missing.length > 0) {
         logMissingOutputs(deps.logger, {
