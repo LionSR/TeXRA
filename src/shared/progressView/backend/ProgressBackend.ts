@@ -167,8 +167,10 @@ export class ProgressBackend {
     await this.state.load();
   }
 
-  setupEventListeners(bus: ProgressEventBusLike): ProgressEventSubscription {
-    const busSubscription = this.eventHandler.setupEventListeners(bus);
+  setupEventListeners(bus?: ProgressEventBusLike): ProgressEventSubscription {
+    const busSubscription = bus
+      ? this.eventHandler.setupEventListeners(bus)
+      : undefined;
     const localSubscription = this.eventHandler.setupEventListeners(
       this.localEvents,
     );
@@ -200,7 +202,7 @@ export class ProgressBackend {
         detachRunFacts();
         detachSessionFacts();
         localSubscription.dispose();
-        busSubscription.dispose();
+        busSubscription?.dispose();
       },
     };
   }
