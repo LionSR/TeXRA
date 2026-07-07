@@ -71,6 +71,35 @@ export function shouldUseOpenRouter(config: {
 }
 
 /**
+ * Determines whether server-side (relay) API keys should be used for a model:
+ * the OpenRouter-routing gate (relay is a direct-provider path, never an
+ * OpenRouter path) combined with the server-side key service's synchronous
+ * tier/access check.
+ *
+ * Centralized here (#7101 triage — "runtime combinator over profile data")
+ * so callers that only have a plain `ModelConfig`-shaped value, not a full
+ * `ModelHandler` instance — e.g. `UsageMonitor`, which deliberately avoids
+ * holding an `IModelHandler` reference (see `UsageMonitorModelInfo`'s doc
+ * comment) — read the same combinator `ModelHandler.shouldUseServerSideKeys()`
+ * delegates to, instead of re-deriving the `!openRouter && relaySync` formula
+ * independently and risking drift.
+ */
+export function usesServerSideKeysRoute(config: {
+  provider: ModelProvider;
+  name: string;
+  requiresResponsesAPI?: boolean;
+  openRouterOnly: boolean;
+}): boolean {
+  if (shouldUseOpenRouter(config)) {
+    return false;
+  }
+  return getServerSideKeyService().shouldUseServerSideKeysSync(
+    config.provider,
+    config.name,
+  );
+}
+
+/**
  * Resolves the base URL for API requests.
  *
  * Priority order (mutually exclusive):
