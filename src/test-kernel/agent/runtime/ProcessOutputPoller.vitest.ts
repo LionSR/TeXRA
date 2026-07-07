@@ -11,7 +11,10 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
+import {
+  ProcessOutputPoller,
+  type ProcessOutputEmitter,
+} from '@agent/runtime/ProcessOutputPoller';
 
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
@@ -23,10 +26,14 @@ let poller: ProcessOutputPoller;
 function createRuntimeHost(): {
   host: AgentRuntimeHost;
   events: Array<{ event: string; payload: unknown }>;
+  emitOutput: (emitOutput: ProcessOutputEmitter) => void;
 } {
   const events: Array<{ event: string; payload: unknown }> = [];
   return {
     events,
+    emitOutput: (emitOutput) => {
+      poller.setOutputEmitter(emitOutput);
+    },
     host: {
       emit: vi.fn((event: string, payload: unknown) => {
         events.push({ event, payload });
@@ -37,7 +44,7 @@ function createRuntimeHost(): {
 
 function outputEvent(stdout: string, stderr: string) {
   return {
-    event: 'updateProcessOutput',
+    event: 'process.output',
     payload: {
       parentStreamId: 'parent-stream',
       executionId: 'exec-1',
@@ -95,13 +102,14 @@ describe('ProcessOutputPoller', () => {
   });
 
   it('flushes only new process output bytes', async () => {
-    const { host, events } = createRuntimeHost();
+    const { host, events, emitOutput } = createRuntimeHost();
+    emitOutput((payload) => events.push({ event: 'process.output', payload }));
     const { handle, stdoutPath, stderrPath } = await makeProcessHandle(host);
 
-    await poller.flush(handle, host);
+    await poller.flush(handle);
     await fs.appendFile(stdoutPath, 'out-2');
     await fs.appendFile(stderrPath, 'err-2');
-    await poller.flush(handle, host);
+    await poller.flush(handle);
 
     expect(events).toEqual([
       outputEvent('out-1', 'err-1'),
@@ -110,12 +118,13 @@ describe('ProcessOutputPoller', () => {
   });
 
   it('polls handles whose output paths are assigned after registration', async () => {
-    const { host, events } = createRuntimeHost();
+    const { host, events, emitOutput } = createRuntimeHost();
+    emitOutput((payload) => events.push({ event: 'process.output', payload }));
     const { handle, stdoutPath, stderrPath } = await makeProcessHandle(host, {
       assignOutputPaths: false,
     });
 
-    poller.register(handle, host);
+    poller.register(handle);
     handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
 
     await delay(550);
@@ -130,13 +139,17 @@ describe('ProcessOutputPoller', () => {
   });
 
   it('keeps output offsets per instance', async () => {
-    const { host, events } = createRuntimeHost();
+    const { host, events, emitOutput } = createRuntimeHost();
+    emitOutput((payload) => events.push({ event: 'process.output', payload }));
     const { handle } = await makeProcessHandle(host);
     const otherPoller = new ProcessOutputPoller();
+    otherPoller.setOutputEmitter((payload) =>
+      events.push({ event: 'process.output', payload }),
+    );
 
     try {
-      await poller.flush(handle, host);
-      await otherPoller.flush(handle, host);
+      await poller.flush(handle);
+      await otherPoller.flush(handle);
     } finally {
       otherPoller.dispose();
     }
@@ -148,14 +161,15 @@ describe('ProcessOutputPoller', () => {
   });
 
   it('flushes buffered incomplete UTF-8 when process output ends', async () => {
-    const { host, events } = createRuntimeHost();
+    const { host, events, emitOutput } = createRuntimeHost();
+    emitOutput((payload) => events.push({ event: 'process.output', payload }));
     const incompleteEmoji = Buffer.from('🙂').subarray(0, 2);
     const { handle } = await makeProcessHandle(host, {
       stdout: incompleteEmoji,
       stderr: '',
     });
 
-    await poller.flush(handle, host);
+    await poller.flush(handle);
 
     expect(events).toEqual([outputEvent('\uFFFD', '')]);
   });
