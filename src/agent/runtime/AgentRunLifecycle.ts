@@ -55,7 +55,6 @@ const logger = createChannelTrace('agentRunLifecycle');
 export interface RunFlowLifecycleOptions {
   isSubagent?: boolean;
   parentStreamId?: StreamTabId;
-  onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   /**
    * Fires once with the live per-run handle, right after it is tracked (F-2) —
@@ -95,9 +94,9 @@ export interface FinalizeRunTerminalParams {
    */
   readonly persistTerminalStatus: boolean;
   /**
-   * Delivery hook (subagent onCompleted/onError) run after the result settles
-   * and before untrack, so the parent still sees this child as active while
-   * the delivery routes. Guarded: a throwing hook cannot abort finalization.
+   * Delivery hook (subagent onError) run after the result settles and before
+   * untrack, so the parent still sees this child as active while the
+   * delivery routes. Guarded: a throwing hook cannot abort finalization.
    */
   readonly deliver?: () => void | Promise<void>;
 }
@@ -119,11 +118,14 @@ export async function finalizeRunTerminal(
 ): Promise<ResultEvent | undefined> {
   const { handle, outcome } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
-  // This run is terminating, not suspending: drop any speculative
-  // waiting-cleanup (pre-registered via onBeforeWaiting on a turn that then
-  // continued past the wait) before teardown unregisters the interrupt —
+  // This run is terminating, not suspending: drop any waiting-cleanup
+  // registered on this handle before teardown unregisters the interrupt —
   // otherwise ExecutionRegistry.terminate() could mistake this handle for a
   // suspended one in the window between interrupt-unregister and untrack.
+  // Defensive: this function's own WAITING branch never reaches
+  // finalizeRunTerminal on the same call (it returns early), so there is no
+  // live registration to clear in the common case — this guards a future
+  // caller that registers one outside that branch.
   handle.clearWaitingCleanup();
   if (params.persistTerminalStatus) {
     await writeTerminalStatus(
@@ -389,13 +391,12 @@ export async function runFlowWithLifecycle(
     }
 
     // The flow's outcome is the canonical terminal fact; the finalizer owns
-    // every projection of it. No other layer may re-derive these.
-    await finalizeTerminal({
-      outcome: result.outcome,
-      deliver: options?.onCompleted
-        ? () => options.onCompleted?.(result)
-        : undefined,
-    });
+    // every projection of it. No other layer may re-derive these. Success
+    // has no delivery hook: a native subagent's own turn value IS the
+    // strategy's returned result (see childRunLoop.ts), so there is nothing
+    // left to deliver here — only a subagent failure needs the caller to
+    // format and route an error (see the catch arm's `onError` below).
+    await finalizeTerminal({ outcome: result.outcome });
     logger.debug(`Task completed with outcome: ${result.outcome}`);
     return result;
   } catch (err) {

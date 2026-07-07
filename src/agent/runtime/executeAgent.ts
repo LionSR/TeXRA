@@ -9,7 +9,6 @@ import {
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
-import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import {
   runReflectionFlow,
   type RunReflectionFlowResult,
@@ -147,7 +146,7 @@ async function runToolUseAgent(
   setting: AgentToolUseSetting,
   options: Pick<
     ExecuteAgentOptions,
-    'isSubagent' | 'onBeforeWaiting' | 'onFollowUpConsumed' | 'onProgress'
+    'isSubagent' | 'onFollowUpConsumed' | 'onProgress' | 'onIdle'
   >,
 ): Promise<AgentRuntimeFlowResult> {
   const { streamId } = ctx;
@@ -160,7 +159,7 @@ async function runToolUseAgent(
         onRoundFinalized,
         setting,
         isSubagent: options.isSubagent,
-        onBeforeWaiting: options.onBeforeWaiting,
+        onIdle: options.onIdle,
         onProgress: (update) => {
           if (update.kind === 'overview') {
             logConversationProgress(ctx.logger, {
@@ -283,12 +282,12 @@ export interface ExecuteAgentOptions {
   delegationDepth?: number;
   /** Fires with the real streamId before the stream is activated (before UI sync). */
   onStreamResolved?: (streamId: StreamTabId) => void;
-  /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
-  onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   /** Fires when a tool-use session consumes queued follow-up instructions. */
   onFollowUpConsumed?: () => void;
   /** Fires on meaningful progress: todo changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
+  /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
+  onIdle?: (lastResponse: string | undefined) => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /**
@@ -312,8 +311,6 @@ export interface ExecuteAgentOptions {
   toolEditApprovalHandler?: ToolEditApprovalPort;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
-  /** Fires after flow completes but before SharedExecutionRegistry.untrack, so follow-ups are enqueued before waiters resolve. */
-  onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
@@ -408,7 +405,6 @@ export async function executeAgent(
       {
         isSubagent,
         parentStreamId: options.parentStreamId,
-        onCompleted: options.onCompleted,
         onError: options.onError,
         onRun: options.onRun,
       },
@@ -432,10 +428,8 @@ export interface ResumeToolUseFromSnapshotOptions {
   /** Per-run override for the host's tool-edit approval UI — see `ExecuteAgentOptions.toolEditApprovalHandler`. */
   readonly toolEditApprovalHandler?: ToolEditApprovalPort;
   readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
-  readonly onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   readonly onFollowUpConsumed?: () => void;
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  readonly onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   readonly onError?: (
     error: unknown,
     result: AgentFlowResult,
@@ -503,7 +497,6 @@ export async function resumeToolUseFromSnapshot(
             // would drop subagent-specific instructions (e.g. the shared
             // /memories protocol) that the fresh run had included.
             isSubagent,
-            onBeforeWaiting: options.onBeforeWaiting,
             onProgress: options.onProgress,
             onFollowUpConsumed: wrapOnFollowUpConsumed(
               ctx,
@@ -527,7 +520,6 @@ export async function resumeToolUseFromSnapshot(
       {
         isSubagent,
         parentStreamId: options.parentStreamId,
-        onCompleted: options.onCompleted,
         onError: options.onError,
         onRun: options.onRun,
       },

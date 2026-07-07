@@ -9,7 +9,6 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import type { RunContext } from '@agent/runtime/RunContext';
-import { isAbortError } from '@common/errors';
 import type {
   ExecutionId,
   StorageKey,
@@ -21,23 +20,11 @@ import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
-import { formatDuration, generateExecutionId } from '@utils/core';
+import { generateExecutionId } from '@utils/core';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createChildStream, type ChildStream } from './childStream';
-
-/**
- * True when an error/abort represents a clean, caller-initiated interruption
- * rather than a genuine failure.
- */
-export function isCleanInterruption(
-  err: unknown,
-  signal: AbortSignal,
-  session: { isInterrupted(): boolean },
-): boolean {
-  return signal.aborted || session.isInterrupted() || isAbortError(err);
-}
 
 /**
  * Publish a turn's token usage to the progress UI for an agent-CLI child stream.
@@ -61,23 +48,6 @@ export function publishAgentCliStreamUsage(
     },
     recordTranscript: false,
   });
-}
-
-/** Log a turn summary (duration + token usage) to the child stream. */
-export function logTurnSummary(
-  logger: AgentTrace,
-  wallTimeMs: number,
-  usage: { input_tokens?: number; output_tokens?: number } | null | undefined,
-): void {
-  logger.info(`Turn completed in ${formatDuration(wallTimeMs)}`);
-  if (usage) {
-    logger.info('Tokens', {
-      data: {
-        input: usage.input_tokens ?? 0,
-        output: usage.output_tokens ?? 0,
-      },
-    });
-  }
 }
 
 interface ResumableAgentCliStore {
