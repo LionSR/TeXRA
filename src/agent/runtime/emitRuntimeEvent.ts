@@ -1,9 +1,8 @@
 /**
  * Single emit path for session-scoped runtime facts.
  *
- * Replaces scattered `ProgressEventBus.emit(...)` in `src/tools` so one
- * session fact has one emit path and one name, resolving the target in priority
- * order:
+ * Keeps migrated runtime facts on one emit path and one name, resolving the
+ * target in priority order:
  *
  * 1. a host-path caller's explicit `session`;
  * 2. the active run's `RunContext.session`;
@@ -12,7 +11,7 @@
  * Host/RPC events should use the owning `AgentRuntimeHost.emit` directly. This
  * helper deliberately has no broad process-bus fallback.
  */
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 
 import { tryUseRunContext } from './RunContext';
 import { defaultSession, type SessionHandle } from './SessionHandle';

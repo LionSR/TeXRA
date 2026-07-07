@@ -239,8 +239,13 @@ export async function executeSubagent(
     },
     onProgress: (update) => nativeStrategy.onProgress(update),
     onFollowUpConsumed: () => nativeStrategy.onFollowUpConsumed(),
-    onBeforeWaiting: (lastResponse, touchedFiles, memoryMisses) =>
-      nativeStrategy.onBeforeWaiting(lastResponse, touchedFiles, memoryMisses),
+    onBeforeWaiting: (lastResponse, touchedFiles, memoryMisses, totalCostUsd) =>
+      nativeStrategy.onBeforeWaiting(
+        lastResponse,
+        touchedFiles,
+        memoryMisses,
+        totalCostUsd,
+      ),
     onCompleted: (result) => nativeStrategy.onCompleted(result),
     onError: (err, result) => nativeStrategy.onError(err, result),
     onRun: (handle) => nativeStrategy.setRunHandle(handle),

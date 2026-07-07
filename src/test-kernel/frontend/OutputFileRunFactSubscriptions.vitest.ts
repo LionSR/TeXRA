@@ -3,7 +3,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 import type * as VSCode from 'vscode';
 
@@ -113,7 +113,6 @@ vi.mock('vscode', () => {
 const { SessionEventHub } = await import('@agent/runtime/SessionEventHub');
 const { toRunFactDomainKey } = await import('@agent/runtime/runFactEvents');
 const { appSignals } = await import('@eventBus/AppSignals');
-const { ProgressEventBus } = await import('@eventBus/ProgressEventBus');
 const { registerInlineCriticism, setInlineCriticismEnabled } =
   await import('@frontend/latex/inlineCriticism');
 const { registerFileDecorations } =
@@ -175,11 +174,6 @@ function disposeContext(context: {
   }
 }
 
-function drainBufferedAddOutputFilesBusEvents(): void {
-  const unsubscribe = ProgressEventBus.on('addOutputFiles', () => undefined);
-  unsubscribe();
-}
-
 async function waitFor(
   predicate: () => boolean,
   message: string,
@@ -201,7 +195,6 @@ describe('output-file run fact frontend subscriptions', () => {
   });
 
   afterEach(async () => {
-    drainBufferedAddOutputFilesBusEvents();
     if (tempDir) {
       await AbsoluteFS.delete(tempDir, { recursive: true });
       tempDir = undefined;
@@ -215,13 +208,6 @@ describe('output-file run fact frontend subscriptions', () => {
     const provider = mocks.registeredProviders.at(-1) as {
       provideFileDecoration(uri: { scheme: string; fsPath: string }): unknown;
     };
-
-    const legacyPath = '/tmp/texra-legacy-output.tex';
-    ProgressEventBus.emit('addOutputFiles', addOutputFilesPayload(legacyPath));
-    expect(provider.provideFileDecoration(vscode.Uri.file(legacyPath))).toBe(
-      undefined,
-    );
-    drainBufferedAddOutputFilesBusEvents();
 
     const runFactPath = '/tmp/texra-run-fact-output.tex';
     emitAddOutputFilesRunFact(hub, addOutputFilesPayload(runFactPath));
@@ -258,13 +244,6 @@ describe('output-file run fact frontend subscriptions', () => {
     expect(mocks.diagnosticCollections.at(-1)?.items.get(outputPath)).toBe(
       undefined,
     );
-
-    ProgressEventBus.emit('addOutputFiles', addOutputFilesPayload(outputPath));
-    await sleep(20);
-    expect(mocks.diagnosticCollections.at(-1)?.items.get(outputPath)).toBe(
-      undefined,
-    );
-    drainBufferedAddOutputFilesBusEvents();
 
     emitAddOutputFilesRunFact(hub, addOutputFilesPayload(outputPath));
     await waitFor(

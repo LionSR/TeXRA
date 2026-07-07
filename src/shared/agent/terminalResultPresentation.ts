@@ -15,7 +15,7 @@ import type { ResultEvent } from '@agent/trace';
 import {
   INSTRUCTION_ACTION,
   type ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+} from '@eventBus/ProgressEventContract';
 
 export type TerminalResultToast =
   | {

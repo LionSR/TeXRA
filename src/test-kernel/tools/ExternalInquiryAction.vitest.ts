@@ -47,7 +47,6 @@ describe('handleExternalInquiryAction', () => {
     >(() => true);
     const interactions: HostInteractions = {
       handleProgressEvent: () => false,
-      pending: () => [],
       resolve,
       cancelForStream: () => {},
     };

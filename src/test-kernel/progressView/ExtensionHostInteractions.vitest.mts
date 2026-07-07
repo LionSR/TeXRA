@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
-import type { StreamTabId } from '@shared/schemas';
+import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
 
 const mocks = vi.hoisted(() => ({
@@ -58,11 +58,15 @@ function createInteractions(options?: {
   runtimeHost?: ReturnType<typeof createRuntimeHost>;
   handlers?: ApprovalRequestHandlerSet;
   removeStream?: (streamId: StreamTabId) => void;
+  handleProgressEvent?: (event: unknown, payload: unknown) => void;
 }) {
+  const handleProgressEvent = options?.handleProgressEvent ?? (() => undefined);
   return createExtensionHostInteractions({
     runtimeHost: options?.runtimeHost ?? createRuntimeHost(),
     getApprovalHandlers: () => options?.handlers ?? createHandlers(),
     removeStream: options?.removeStream ?? (() => {}),
+    handleProgressEvent: (event, payload) =>
+      handleProgressEvent(event, payload),
   });
 }
 
@@ -96,10 +100,6 @@ describe('createExtensionHostInteractions', () => {
       goalEnabled: true,
       plan: { objective: 'Prove the compactness lemma.' },
     });
-    expect(interactions.pending()).toEqual([
-      { id: 'plan-a', kind: 'plan', streamId: 'stream-a' },
-    ]);
-
     expect(
       interactions.resolve('plan-a', {
         kind: 'plan',
@@ -111,7 +111,10 @@ describe('createExtensionHostInteractions', () => {
       action: 'approve_and_goal',
     });
     expect(handlers.planApproval.resolve).toHaveBeenCalledWith('plan-a');
-    expect(interactions.pending()).toEqual([]);
+    // The request was settled first-wins: a second resolution finds nothing.
+    expect(
+      interactions.resolve('plan-a', { kind: 'plan', action: 'approve' }),
+    ).toBe(false);
   });
 
   it('cancels pending retry requests for a removed stream', async () => {
@@ -160,7 +163,6 @@ describe('createExtensionHostInteractions', () => {
       streamId: 'stream-a',
       mode: 'new',
     });
-    expect(interactions.pending()).toEqual([]);
   });
 
   it('cancels streamless user questions during unscoped cleanup', async () => {
@@ -185,7 +187,13 @@ describe('createExtensionHostInteractions', () => {
 
     await expect(resultPromise).resolves.toEqual({ submitted: false });
     expect(handlers.userQuestion.resolve).toHaveBeenCalledWith('question-a');
-    expect(interactions.pending()).toEqual([]);
+    // The cancelled question was released: a later resolution finds nothing.
+    expect(
+      interactions.resolve('question-a', {
+        kind: 'userQuestion',
+        action: 'submit',
+      }),
+    ).toBe(false);
   });
 
   it('delegates tool edit approval to the native VS Code port', async () => {
@@ -218,5 +226,49 @@ describe('createExtensionHostInteractions', () => {
       }),
     ).toBe(true);
     expect(removed).toEqual(['child-a']);
+  });
+
+  it('routes backend progress events through the supplied callback', () => {
+    const handleProgressEvent = vi.fn(
+      (_event: unknown, _payload: unknown) => undefined,
+    );
+    const interactions = createInteractions({ handleProgressEvent });
+
+    expect(
+      interactions.handleProgressEvent('setActiveStream', {
+        streamId: 'stream-a' as StreamTabId,
+      }),
+    ).toBe(true);
+
+    expect(handleProgressEvent).toHaveBeenCalledWith('setActiveStream', {
+      streamId: 'stream-a',
+    });
+  });
+
+  it('leaves addOutputFiles to the session run-fact path', () => {
+    const handleProgressEvent = vi.fn(
+      (_event: unknown, _payload: unknown) => undefined,
+    );
+    const interactions = createInteractions({ handleProgressEvent });
+    const outputFile: OutputFileInfo = {
+      source: 'paper.tex',
+      location: {
+        kind: 'workspace',
+        absolutePath: '/workspace/paper.tex',
+        relativePath: 'paper.tex',
+      },
+      round: 1,
+      lineage: null,
+      diff: null,
+    };
+
+    expect(
+      interactions.handleProgressEvent('addOutputFiles', {
+        streamId: 'stream-a' as StreamTabId,
+        filesByRound: { 1: [outputFile] },
+      }),
+    ).toBe(true);
+
+    expect(handleProgressEvent).not.toHaveBeenCalled();
   });
 });

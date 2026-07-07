@@ -9,12 +9,14 @@ import type {
   HostPlanApprovalRequest,
   HostRetryRequest,
   HostUserQuestionResult,
-  PendingHostInteraction,
 } from '@agent/runtime/HostInteractions';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type {
+  ProgressEvent,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventContract';
 import { nativeRequestApproval } from '@frontend/approval/nativeToolEditApproval';
 import type {
   AgentProposalPermission,
@@ -31,12 +33,18 @@ export interface ExtensionHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   removeStream(streamId: StreamTabId): void;
+  handleProgressEvent<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void;
 }
 
 type PendingKind = 'bash' | 'plan' | 'proposal' | 'retry' | 'userQuestion';
 
-interface PendingExtensionInteraction<T> extends PendingHostInteraction {
+interface PendingExtensionInteraction<T> {
+  readonly id: string;
   readonly kind: PendingKind;
+  readonly streamId?: StreamTabId;
   readonly settle: (value: T) => void;
 }
 
@@ -206,18 +214,14 @@ export function createExtensionHostInteractions(
     },
 
     handleProgressEvent(event, payload): boolean {
-      if (event !== 'removeStream') return false;
-      const data = payload as ProgressEventPayloads['removeStream'];
-      options.removeStream(data.streamId);
+      if (event === 'addOutputFiles') return true;
+      if (event === 'removeStream') {
+        const data = payload as ProgressEventPayloads['removeStream'];
+        options.removeStream(data.streamId);
+        return true;
+      }
+      options.handleProgressEvent(event, payload);
       return true;
-    },
-
-    pending(): readonly PendingHostInteraction[] {
-      return [...pendingRequests.values()].map(({ id, kind, streamId }) => ({
-        id,
-        kind,
-        streamId,
-      }));
     },
 
     resolve(requestId: string, result: HostInteractionResolution): boolean {

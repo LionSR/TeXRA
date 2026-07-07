@@ -45,8 +45,6 @@ type BridgeOptions = Parameters<
 >[0];
 type SnapshotStore = NonNullable<BridgeOptions['streamSnapshotStore']>;
 
-const mockProgressBusOn = vi.fn();
-
 function createSnapshotStore(
   overrides: Partial<SnapshotStore> = {},
 ): SnapshotStore {
@@ -119,7 +117,6 @@ async function loadBridgeModule(): Promise<
   typeof import('@desktop/main/desktopProgressEventBridge')
 > {
   vi.resetModules();
-  mockProgressBusOn.mockClear();
   vi.doMock('@logger', () => ({
     createChannelTrace: () => makeLogger(),
     setDefaultStreamLogStore: () => {},
@@ -129,12 +126,6 @@ async function loadBridgeModule(): Promise<
       transition: vi.fn(),
       get: vi.fn(() => STREAM_PHASE.CANCELLED),
       isActiveOrResuming: vi.fn(() => false),
-    },
-  }));
-  vi.doMock('@eventBus/ProgressEventBus', () => ({
-    ProgressEventBus: {
-      on: mockProgressBusOn,
-      emit: vi.fn(),
     },
   }));
   vi.doMock('@tools/goal', () => ({
@@ -551,8 +542,6 @@ describe('DesktopProgressEventBridge', () => {
       });
 
       try {
-        expect(mockProgressBusOn).not.toHaveBeenCalled();
-
         bridge.onProgressEvent('requestEnsureProgressView', {});
         bridge.onProgressEvent('requestShowError', {
           message: 'Root run failed',
@@ -562,7 +551,6 @@ describe('DesktopProgressEventBridge', () => {
         expect(onShowError).toHaveBeenCalledWith('Root run failed');
 
         bridge.dispose();
-        expect(mockProgressBusOn).not.toHaveBeenCalled();
       } finally {
         bridge.dispose();
       }

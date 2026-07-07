@@ -36,7 +36,13 @@ function setActiveStreamRecording(
 // Handlers
 // ============================================================
 
-export const followUpHandlers: HandlerRegistry = {
+// `HandlerRegistry` is now exhaustive (every ProgressView outbound command
+// needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
+// This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
+// subset rather than the full registry; `messageDispatcher.ts` spreads all
+// slices together and is the actual exhaustiveness checkpoint TypeScript
+// enforces.
+export const followUpHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT]: (data, ctx) => {
     const streamId =
       data.stream ??
@@ -92,4 +98,4 @@ export const followUpHandlers: HandlerRegistry = {
       }),
     );
   },
-};
+} satisfies Partial<HandlerRegistry>;
