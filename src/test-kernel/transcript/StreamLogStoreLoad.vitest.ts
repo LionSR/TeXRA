@@ -12,6 +12,7 @@ import {
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
 } from '@transcript';
+import * as logUtils from '@logger/logUtils';
 import {
   END_GROUP_STATUS,
   LOG_LEVELS,
@@ -777,6 +778,7 @@ describe('StreamLogStore load', () => {
         },
       },
     });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     const store = new StreamLogStore();
     await store.load();
     await store.ensureLoaded('alpha');
@@ -787,6 +789,14 @@ describe('StreamLogStore load', () => {
         ?.getRange(0)
         .map((entry) => entry.id),
     ).toEqual(['alpha-1', 'alpha-3']);
+    // Loud read (#7464): the preserved rows are invisible to the typed view,
+    // so the load says they exist rather than silently hiding them.
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining(
+        'Stream alpha: 2 persisted transcript entries did not parse',
+      ),
+    );
 
     store.append('alpha', {
       id: 'alpha-new',

@@ -44,6 +44,7 @@ const STREAM = 'stream:desktop-parent' as StreamTabId;
 
 function answeredManifest(): ExternalInquiryThreadManifest {
   return {
+    schemaVersion: 1,
     threadId: THREAD,
     parentStreamId: STREAM,
     status: 'answered',
