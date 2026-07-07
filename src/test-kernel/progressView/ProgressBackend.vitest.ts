@@ -420,6 +420,254 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('isolates same-stream run facts across simultaneous backend sessions', async () => {
+    const first = createIsolatedRecordingBackend();
+    const second = createIsolatedRecordingBackend();
+    const firstSubscription = first.backend.setupEventListeners();
+    const secondSubscription = second.backend.setupEventListeners();
+    const streamId = 'window:shared-stream-id' as StreamTabId;
+    const firstTodo: TodoItem = {
+      content: 'from first window',
+      status: 'pending',
+      activeForm: 'Writing from first window',
+    };
+    const secondTodo: TodoItem = {
+      content: 'from second window',
+      status: 'completed',
+      activeForm: 'Writing from second window',
+    };
+    const firstOutput: OutputFileInfo = {
+      source: 'first.tex',
+      location: {
+        kind: 'workspace',
+        absolutePath: '/workspace/first.pdf',
+        relativePath: 'first.pdf',
+      },
+      round: 1,
+      lineage: null,
+      diff: null,
+    };
+
+    try {
+      await first.backend.state.snapshots.load([]);
+      await second.backend.state.snapshots.load([]);
+
+      first.session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: {
+            streamId,
+            todos: [firstTodo],
+          } satisfies ProgressEventPayloads['updateTodos'],
+        },
+      });
+      first.session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('addOutputFiles'),
+          data: {
+            streamId,
+            filesByRound: { 1: [firstOutput] },
+          } satisfies ProgressEventPayloads['addOutputFiles'],
+        },
+      });
+
+      expect(first.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual(
+        [firstTodo],
+      );
+      expect(first.backend.state.snapshots.getOutputFiles(streamId)).toEqual(
+        new Map([[1, [firstOutput]]]),
+      );
+      expect(
+        second.backend.state.snapshots.getWorkPlan(streamId).todos,
+      ).toEqual([]);
+      expect(second.backend.state.snapshots.getOutputFiles(streamId)).toEqual(
+        new Map(),
+      );
+      expect(JSON.stringify(second.messages)).not.toContain(
+        'from first window',
+      );
+      expect(JSON.stringify(second.messages)).not.toContain('first.pdf');
+
+      second.session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: {
+            streamId,
+            todos: [secondTodo],
+          } satisfies ProgressEventPayloads['updateTodos'],
+        },
+      });
+
+      expect(first.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual(
+        [firstTodo],
+      );
+      expect(
+        second.backend.state.snapshots.getWorkPlan(streamId).todos,
+      ).toEqual([secondTodo]);
+      expect(JSON.stringify(first.messages)).not.toContain(
+        'from second window',
+      );
+    } finally {
+      firstSubscription.dispose();
+      secondSubscription.dispose();
+      first.backend.dispose();
+      second.backend.dispose();
+      first.session.dispose();
+      second.session.dispose();
+    }
+  });
+
+  it('isolates simultaneous window sessions across view state, status, snapshots, and transcripts', async () => {
+    const first = createIsolatedRecordingBackend();
+    const second = createIsolatedRecordingBackend();
+    const firstSubscription = first.backend.setupEventListeners();
+    const secondSubscription = second.backend.setupEventListeners();
+    const firstStream = 'window:first' as StreamTabId;
+    const secondStream = 'window:second' as StreamTabId;
+    const firstExecution = 'f41111' as ExecutionId;
+    const secondExecution = 'f42222' as ExecutionId;
+
+    try {
+      await first.backend.state.snapshots.load([]);
+      await second.backend.state.snapshots.load([]);
+
+      first.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: firstStream,
+            agentCategory: AgentCategory.ToolUse,
+          },
+        },
+      });
+      second.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: secondStream,
+            agentCategory: AgentCategory.Workflow,
+          },
+        },
+      });
+
+      first.backend.handleProgressEvent('setTaskState', {
+        streamId: firstStream,
+        executionId: firstExecution,
+        taskState: toolUseTaskState('search', 'deepseekproT'),
+      });
+      second.backend.handleProgressEvent('setTaskState', {
+        streamId: secondStream,
+        executionId: secondExecution,
+        taskState: toolUseTaskState('revise', 'gpt-4o'),
+      });
+      first.session.status.transition(
+        firstStream,
+        STREAM_PHASE.RUNNING,
+        'lifecycle',
+      );
+      second.session.status.transition(
+        secondStream,
+        STREAM_PHASE.RUNNING,
+        'lifecycle',
+      );
+      second.session.status.transitionToWaiting(secondStream, 'wait');
+      first.backend.handleProgressEvent('updateStreamDescription', {
+        streamId: firstStream,
+        description: 'first window run',
+      });
+      second.backend.handleProgressEvent('updateStreamDescription', {
+        streamId: secondStream,
+        description: 'second window run',
+      });
+      first.backend.state.streamLogs.append(firstStream, {
+        id: 'first-window-log',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 1_700_000_000_001,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'first transcript entry',
+      });
+      second.backend.state.streamLogs.append(secondStream, {
+        id: 'second-window-log',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 1_700_000_000_002,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'second transcript entry',
+      });
+
+      await vi.waitFor(() =>
+        expect(first.backend.state.activeStream).toBe(firstStream),
+      );
+      await vi.waitFor(() =>
+        expect(second.backend.state.activeStream).toBe(secondStream),
+      );
+
+      expect(first.backend.state.streamStatus.get(firstStream)).toBe(
+        STREAM_PHASE.RUNNING,
+      );
+      expect(
+        first.backend.state.streamStatus.get(secondStream),
+      ).toBeUndefined();
+      expect(second.backend.state.streamStatus.get(secondStream)).toBe(
+        STREAM_PHASE.WAITING,
+      );
+      expect(
+        second.backend.state.streamStatus.get(firstStream),
+      ).toBeUndefined();
+
+      expect(first.backend.state.snapshots.getExecutionId(firstStream)).toBe(
+        firstExecution,
+      );
+      expect(
+        first.backend.state.snapshots.getExecutionId(secondStream),
+      ).toBeUndefined();
+      expect(second.backend.state.snapshots.getExecutionId(secondStream)).toBe(
+        secondExecution,
+      );
+      expect(
+        second.backend.state.snapshots.getExecutionId(firstStream),
+      ).toBeUndefined();
+      expect(first.backend.state.snapshots.getDescription(firstStream)).toBe(
+        'first window run',
+      );
+      expect(
+        first.backend.state.snapshots.getDescription(secondStream),
+      ).toBeUndefined();
+      expect(second.backend.state.snapshots.getDescription(secondStream)).toBe(
+        'second window run',
+      );
+      expect(
+        second.backend.state.snapshots.getDescription(firstStream),
+      ).toBeUndefined();
+
+      expect(first.backend.state.streamLogs.get(firstStream)?.size).toBe(1);
+      expect(first.backend.state.streamLogs.get(secondStream)).toBeUndefined();
+      expect(second.backend.state.streamLogs.get(secondStream)?.size).toBe(1);
+      expect(second.backend.state.streamLogs.get(firstStream)).toBeUndefined();
+      expect(JSON.stringify(first.messages)).not.toContain(secondStream);
+      expect(JSON.stringify(second.messages)).not.toContain(firstStream);
+    } finally {
+      firstSubscription.dispose();
+      secondSubscription.dispose();
+      first.backend.dispose();
+      second.backend.dispose();
+      first.session.dispose();
+      second.session.dispose();
+    }
+  });
+
   it('applies session-originated progress events exactly once', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
