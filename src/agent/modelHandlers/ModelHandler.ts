@@ -1212,12 +1212,51 @@ export abstract class ModelHandler<
     return `Organize your response with xml tags. Start your response with:\n${prefill}`;
   }
 
-  /** Whether pseudo-prefill should seed accumulated output before the model call. */
+  /**
+   * Whether pseudo-prefill should seed accumulated output before the model call.
+   * Only consulted on a fresh generation (no existing output file) when the
+   * model lacks native assistant-prefill support (`capabilities.supportsAssistantPrefill`
+   * is false) — the prefill text is only ever sent as a *user*-turn instruction
+   * (see {@link createPseudoPrefillPrompt}), never as an actual assistant-turn
+   * prefix, so this getter decides whether `workspaceState.assembly.accumulatedOutput`
+   * should be seeded with it anyway ahead of the first response.
+   *
+   * Not foldable into a single capability read (#7101 triage): overridden `true`
+   * only by the two Google handlers (`ModelHandlerGoogleGenAI`,
+   * `ModelHandlerGoogleInteractions`). Every other provider that reaches this
+   * branch — the OpenAI-wire-format family via `ModelHandlerOpenAI`,
+   * `ModelHandlerOpenRouterNative`, and Anthropic's
+   * `supportsAssistantPrefill: false` thinking variants — leaves this at the
+   * `false` default and instead either resolves the analogous resume-time need
+   * via {@link shouldPrependPrefillOnResumeWithoutAssistantPrefill} (OpenAI
+   * family, OpenRouterNative) or needs neither (Anthropic thinking variants).
+   * The two getters gate two different lifecycle points (fresh start vs.
+   * resume) and no provider needs both, so no single llm-zoo /
+   * `ProviderCapabilityProfile` flag produces the right value on both axes
+   * across all three provider shapes. Stays an overridable getter: genuinely
+   * per-provider behavior, not a foldable predicate.
+   */
   protected get shouldStorePseudoPrefillAsOutput(): boolean {
     return false;
   }
 
-  /** Whether resume should rewrite missing prefill into existing output files. */
+  /**
+   * Whether resume should rewrite missing prefill into existing output files.
+   * Only consulted when resuming a truncated generation (an existing output
+   * file with no end tag) on a model that lacks native assistant-prefill
+   * support, in case the on-disk content is missing the intended prefix.
+   *
+   * Not foldable into a single capability read (#7101 triage): overridden
+   * `true` by `ModelHandlerOpenAI` — inherited by every OpenAI-wire-format
+   * subclass (XAI, DashScope, and the `ReasoningModelHandlerOpenAI` family:
+   * DeepSeek/Kimi/GLM/MiniMax) — and independently by
+   * `ModelHandlerOpenAIResponse` (inherited by Codex) and
+   * `ModelHandlerOpenRouterNative`. The two Google handlers and Anthropic's
+   * thinking-variant models leave this at the `false` default; see
+   * {@link shouldStorePseudoPrefillAsOutput} for why the split can't collapse
+   * into one flag. Stays an overridable getter: genuinely per-provider
+   * behavior, not a foldable predicate.
+   */
   protected get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
     return false;
   }
