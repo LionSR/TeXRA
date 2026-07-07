@@ -15,7 +15,7 @@ import type { TaskState } from '@agent/core/state/TaskState';
 import {
   type ProgressEvent,
   type ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+} from '@agent/runtime/hostProgressEvents';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -68,22 +68,10 @@ class MemoryMementoStorage implements MementoStorage {
 function createUiConfig(): ProgressBackendUiConfig {
   return {
     callbacks: {
-      showRetryRequest: vi.fn(),
-      resolveRetryRequest: vi.fn(),
       showToolEditPermission: vi.fn(),
       resolveToolEditPermission: vi.fn(),
       updateToolEditApprovalBypassState: vi.fn(),
       updateSuperYoloBypassState: vi.fn(),
-      showBashPermission: vi.fn(),
-      resolveBashPermission: vi.fn(),
-      showAgentProposal: vi.fn(),
-      resolveAgentProposal: vi.fn(),
-      showPlanApproval: vi.fn(),
-      resolvePlanApproval: vi.fn(),
-      showExternalInquiry: vi.fn(),
-      resolveExternalInquiry: vi.fn(),
-      showUserQuestion: vi.fn(),
-      resolveUserQuestion: vi.fn(),
     },
     hasPendingPermissions: vi.fn(() => false),
   };
@@ -167,7 +155,7 @@ describe('ProgressBackend', () => {
     backend.dispose();
   });
 
-  it('handles local progress events without an external process bus', () => {
+  it('handles progress events through its local subscription', () => {
     const { backend } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
     const streamId = 'desktop-local-stream' as StreamTabId;

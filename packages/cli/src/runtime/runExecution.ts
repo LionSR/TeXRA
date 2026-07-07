@@ -18,7 +18,7 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+} from '@agent/runtime/hostProgressEvents';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 

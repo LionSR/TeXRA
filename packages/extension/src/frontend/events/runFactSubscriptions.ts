@@ -1,10 +1,8 @@
 // Local imports
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
+import type { AddOutputFilesPayload } from '@shared/schemas';
 import { isObject } from '@utils/core';
-
-type AddOutputFilesPayload = ProgressEventPayloads['addOutputFiles'];
 
 function isAddOutputFilesPayload(data: unknown): data is AddOutputFilesPayload {
   return isObject(data) && isObject(data.filesByRound);

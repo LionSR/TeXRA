@@ -10,11 +10,11 @@ import {
 } from '@agent/runtime/sessionProgressEventProjection';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-} from '@eventBus/ProgressEventContract';
+} from '@agent/runtime/hostProgressEvents';
+import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
   ExtendedTokenUsageStatsSchema,
   UpdatePlanPayloadSchema,

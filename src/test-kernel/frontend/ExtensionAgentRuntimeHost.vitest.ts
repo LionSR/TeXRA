@@ -6,7 +6,7 @@ import { extensionPresentationEvents } from '@frontend/events/extensionPresentat
 import type { StreamTabId } from '@shared/schemas';
 
 describe('extensionAgentRuntimeHost', () => {
-  it('routes extension presentation events through the presentation channel', () => {
+  it('routes extension presentation events to the presentation channel', () => {
     const presentationPayloads: unknown[] = [];
     const disposePresentation = extensionPresentationEvents.on(
       'requestShowError',
@@ -55,6 +55,7 @@ describe('extensionAgentRuntimeHost', () => {
         streamId: 'extension:after-detach' as StreamTabId,
       });
 
+      // A detached host-interactions implementation no longer receives events.
       expect(interactionEvents).toEqual([
         {
           event: 'setActiveStream',

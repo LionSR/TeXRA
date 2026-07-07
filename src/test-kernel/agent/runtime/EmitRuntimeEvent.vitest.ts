@@ -13,7 +13,7 @@ import { createRecordingHost } from '../progressTestUtils';
 const streamId = (s: string): StreamTabId => s as StreamTabId;
 
 describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
-  it('routes migrated facts to the default session instead of the process bus', () => {
+  it('routes session facts to the default session', () => {
     const sessionSeen: unknown[] = [];
     const detachSession = defaultSession().events.subscribe(
       (event) => sessionSeen.push(event),
@@ -66,29 +66,7 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
     }
   });
 
-  it('rejects non-session events instead of falling back to the process bus', () => {
-    expect(() => {
-      // @ts-expect-error requestShowError is host interaction, not a session fact.
-      emitRuntimeEvent('requestShowError', { message: 'run error' });
-    }).toThrow(
-      'emitRuntimeEvent only supports session facts; use the owning runtime host for requestShowError',
-    );
-  });
-
-  it('rejects non-session events instead of using the active run host', () => {
-    const run = createRecordingHost();
-    withRunContext(createRunContext({ runtimeHost: run.host }), () => {
-      expect(() => {
-        // @ts-expect-error requestShowError is host interaction, not a session fact.
-        emitRuntimeEvent('requestShowError', { message: 'run error' });
-      }).toThrow(
-        'emitRuntimeEvent only supports session facts; use the owning runtime host for requestShowError',
-      );
-    });
-    expect(run.events).toEqual([]);
-  });
-
-  it('prefers an explicit session event hub over the run context and bus for migrated facts', () => {
+  it('prefers an explicit session event hub over the run context for session facts', () => {
     const channel = createRecordingHost();
     const run = createRecordingHost();
     const session = new SessionHandle({ hostChannel: channel.host });
