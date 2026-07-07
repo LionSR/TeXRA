@@ -1510,10 +1510,16 @@ export abstract class ModelHandler<
 
   /**
    * Whether this handler supports native token counting via API.
-   * Override in subclasses that have token counting capability.
+   *
+   * Defaults to the llm-zoo `supportsTokenCounting` capability flag (#7101:
+   * pure-data predicate, read from the profile rather than overridden per
+   * handler). Override only when the effective value comes from somewhere
+   * other than `this.capabilities` — e.g. a provider-specific capabilities
+   * lookup, or a hardcoded value where the API is universally available
+   * regardless of the model's llm-zoo flag.
    */
   get supportsTokenCounting(): boolean {
-    return false;
+    return this.capabilities.supportsTokenCounting;
   }
 
   /**

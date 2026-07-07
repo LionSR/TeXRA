@@ -260,14 +260,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
-   * Whether this handler supports native token counting via API.
-   * Uses Anthropic's countTokens endpoint for exact pre-flight counts.
-   */
-  override get supportsTokenCounting(): boolean {
-    return this.capabilities.supportsTokenCounting;
-  }
-
-  /**
    * Estimates token count using Anthropic's native countTokens API.
    *
    * Note: countTokens does not support file-based document sources (file_id).
