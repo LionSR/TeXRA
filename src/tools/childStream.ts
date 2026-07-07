@@ -4,6 +4,7 @@ import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   currentSession,
@@ -122,10 +123,14 @@ export function createChildStream(
     executionId,
     taskState: agentConfigToTaskState(options.config),
   });
-  runtimeHost.emit('updateStreamDescription', {
-    streamId: childStreamId,
-    description: truncateWithEllipsis(options.description, 80),
-  });
+  emitRuntimeEvent(
+    'updateStreamDescription',
+    {
+      streamId: childStreamId,
+      description: truncateWithEllipsis(options.description, 80),
+    },
+    session,
+  );
 
   const handle = new AgentExecutionHandle(
     executionId,
