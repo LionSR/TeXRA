@@ -307,7 +307,7 @@ For good separation of concerns and platform independence, core business logic s
 
 - Route logging through `@logger/logUtils`. Agent flows should use `AgentTrace` (`@agent/trace`) to get grouped output and tool-use aware channels.
 - Always pass structured payloads via the `data` argument (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
-- Publish progress updates with the event bus (`bus.emit`/`bus.on` from `src/eventBus/ProgressEventBus.ts`) and keep non-agent logs on the shared `TeXRA` output channel.
+- Publish runtime progress through session events and `AgentRuntimeHost.emit`; keep non-agent logs on the shared `TeXRA` output channel.
 
 **Agent execution and tool-use**
 

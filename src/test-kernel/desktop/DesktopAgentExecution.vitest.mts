@@ -579,14 +579,9 @@ describe('DesktopProgressBridge', () => {
     vi.restoreAllMocks();
   });
 
-  it('routes runtime events to the desktop backend without the shared progress bus', async () => {
+  it('routes runtime events to the desktop backend through the bridge', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
-    const { ProgressEventBus } = await import('@eventBus/ProgressEventBus');
-    const seen: unknown[] = [];
-    const off = ProgressEventBus.on('setActiveStream', (payload) => {
-      seen.push(payload);
-    });
 
     try {
       bridge.handleProgressEvent('setActiveStream', {
@@ -596,7 +591,6 @@ describe('DesktopProgressBridge', () => {
       await settleProgressEvents();
       bridge.syncFullView();
 
-      expect(seen).toEqual([]);
       expect(
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
           -1,
@@ -606,7 +600,6 @@ describe('DesktopProgressBridge', () => {
         streams: [expect.objectContaining({ name: 'parent' })],
       });
     } finally {
-      off();
       bridge.dispose();
     }
   });

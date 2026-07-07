@@ -1,5 +1,3 @@
-import { EventEmitter } from 'node:events';
-
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { TaskState } from '@agent/core/state/TaskState';
 import type {
@@ -60,8 +58,6 @@ interface SetTaskStatePayload {
   taskState: TaskState;
 }
 
-const MAX_BUFFER_SIZE = 1000;
-
 /**
  * Host-agnostic action tokens for {@link ProgressEventPayloads.requestShowInstruction}.
  * The agent core emits a token; each host maps it to its own UI affordance
@@ -79,16 +75,14 @@ export type InstructionAction =
   (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
 
 /**
- * Every payload this bus carries, grouped below by what it actually reports —
- * not one channel with one owner. It mixes run/stream progress facts, approval
+ * Shared progress-event payload vocabulary, grouped below by what each event
+ * actually reports. It still mixes run/stream progress facts, approval
  * request/resolve RPC pairs, app-lifecycle and integration signals, and
- * host-presentation requests, with delivery depending on which host
- * re-published a given event rather than on what kind of event it is. This is
- * a known, tracked shape, not an oversight: see `docs/proposals/
- * error-pipeline-and-ownership.md` (Map 3) for the audit and the planned
- * run-scoped/app-scoped split gated on SDK Step 7d. Until that split lands,
- * treat the section comments below as the de facto ownership boundaries when
- * deciding where a new event belongs.
+ * host-presentation requests. This is a known, tracked shape, not an oversight:
+ * see `docs/proposals/error-pipeline-and-ownership.md` (Map 3) for the audit
+ * and the planned run-scoped/app-scoped split gated on SDK Step 7d. Until that
+ * split lands, treat the section comments below as the de facto ownership
+ * boundaries when deciding where a new event belongs.
  */
 export interface ProgressEventPayloads {
   // ── Run/stream progress (part 1) ──
@@ -211,7 +205,7 @@ export interface ProgressEventPayloads {
   /** Emitted whenever a Goal record mutates (start/pause/resume/
    *  complete/abandon/edit-objective/cap-reached) so UI surfaces (header
    *  chip, settings tab, progress board) can refresh. The agent owns state
-   *  transitions through the plan tool; the bus event is how those flow
+   *  transitions through the plan tool; the session fact is how those flow
    *  back to the UI. */
   goalStateChanged: { streamId: StreamTabId };
 
@@ -258,54 +252,11 @@ export interface ProgressEventPayloads {
   };
 }
 
+/**
+ * Contract-only progress event vocabulary.
+ *
+ * This module no longer exports a process-wide event bus. Runtime facts are
+ * emitted through session handles; host interactions are emitted through the
+ * owning runtime host.
+ */
 export type ProgressEvent = keyof ProgressEventPayloads;
-
-class ProgressEventBusImpl {
-  private emitter = new EventEmitter();
-  private buffer: {
-    event: ProgressEvent;
-    payload: ProgressEventPayloads[ProgressEvent];
-  }[] = [];
-
-  emit<K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): void {
-    if (this.emitter.listenerCount(event) === 0) {
-      this.buffer.push({ event, payload });
-      if (this.buffer.length > MAX_BUFFER_SIZE) {
-        this.buffer.shift();
-      }
-    } else {
-      this.emitter.emit(event, payload);
-    }
-  }
-
-  on<K extends ProgressEvent>(
-    event: K,
-    listener: (payload: ProgressEventPayloads[K]) => void,
-    options?: { signal?: AbortSignal },
-  ): () => void {
-    if (options?.signal?.aborted) return () => {};
-
-    this.emitter.on(event, listener);
-    const cleanup = (): void => {
-      this.emitter.off(event, listener);
-    };
-    options?.signal?.addEventListener('abort', cleanup, { once: true });
-
-    const remaining: typeof this.buffer = [];
-    for (const item of this.buffer) {
-      if (item.event === event) {
-        listener(item.payload as ProgressEventPayloads[K]);
-      } else {
-        remaining.push(item);
-      }
-    }
-    this.buffer = remaining;
-
-    return cleanup;
-  }
-}
-
-export const ProgressEventBus = new ProgressEventBusImpl();
