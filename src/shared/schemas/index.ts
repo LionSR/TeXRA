@@ -28,6 +28,7 @@ export * from './onboarding';
 
 // Layer 2: Depends on layer 1 only
 export * from './stream';
+export * from './roundIndexed';
 export * from './output';
 export * from './progressEvents';
 

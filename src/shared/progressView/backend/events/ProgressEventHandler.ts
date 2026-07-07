@@ -221,7 +221,7 @@ export class ProgressEventHandler {
           this.sendIfActive(streamId, () => {
             const rounds = this.state.snapshots.getMissingOutputs(streamId);
             this.webviewUpdater.updateMissingOutputs(streamId, {
-              rounds: rounds.size ? mapToRecord(rounds) : undefined,
+              rounds: Object.keys(rounds).length ? rounds : undefined,
             });
           });
         },
@@ -232,7 +232,7 @@ export class ProgressEventHandler {
           this.sendIfActive(streamId, () => {
             const rounds = this.state.snapshots.getCompileFailures(streamId);
             this.webviewUpdater.updateCompileFailures(streamId, {
-              rounds: rounds.size ? mapToRecord(rounds) : undefined,
+              rounds: Object.keys(rounds).length ? rounds : undefined,
               reset: true,
             });
           });
@@ -369,7 +369,7 @@ export class ProgressEventHandler {
     this.sendIfActive(streamId, () => {
       const rounds = this.state.snapshots.getOutputFiles(streamId);
       this.webviewUpdater.updateFiles(streamId, {
-        rounds: rounds.size ? mapToRecord(rounds) : undefined,
+        rounds: Object.keys(rounds).length ? rounds : undefined,
       });
     });
   }
@@ -676,29 +676,16 @@ export class ProgressEventHandler {
   }
 
   private buildStreamSyncExtras(stream: StreamTabId): LogContentExtras {
-    // Workflow files/missing outputs are flat (one run per tab).
-    const workflowFiles = mapToRecord(
-      this.state.snapshots.getOutputFiles(stream),
-    );
-    const workflowMissingOutputs = mapToRecord(
-      this.state.snapshots.getMissingOutputs(stream),
-    );
-    const workflowCompileFailures = mapToRecord(
-      this.state.snapshots.getCompileFailures(stream),
-    );
-
-    // Per-run usage map — shared by workflow and tool-use. Frontend derives
-    // sessionUsage as the sum so cumulative totals survive resume.
-    const runUsage = mapToRecord(this.state.snapshots.getRunUsage(stream));
-
-    const contextState = this.state.getContextState(stream);
-
     return {
-      workflowFiles,
-      workflowMissingOutputs,
-      workflowCompileFailures,
-      runUsage,
-      contextState,
+      // Workflow files/missing outputs are flat (one run per tab), already in
+      // the canonical round-indexed record shape the webview consumes.
+      workflowFiles: this.state.snapshots.getOutputFiles(stream),
+      workflowMissingOutputs: this.state.snapshots.getMissingOutputs(stream),
+      workflowCompileFailures: this.state.snapshots.getCompileFailures(stream),
+      // Per-run usage map — shared by workflow and tool-use. Frontend derives
+      // sessionUsage as the sum so cumulative totals survive resume.
+      runUsage: mapToRecord(this.state.snapshots.getRunUsage(stream)),
+      contextState: this.state.getContextState(stream),
     };
   }
 

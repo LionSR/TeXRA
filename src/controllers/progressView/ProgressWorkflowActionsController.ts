@@ -8,7 +8,11 @@ import {
 } from '@agent/core/state/TaskState';
 
 // Local imports - shared
-import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
+import type {
+  OutputFileInfo,
+  RoundIndexed,
+  StreamTabId,
+} from '@shared/schemas';
 
 export interface WorkflowDiffRequest {
   agent: string;
@@ -18,7 +22,7 @@ export interface WorkflowDiffRequest {
   outputFilesActive: boolean;
   streamId: StreamTabId;
   runId?: string;
-  outputsByRound?: [round: number, files: OutputFileInfo[]][];
+  outputsByRound?: RoundIndexed<OutputFileInfo>;
 }
 
 export type WorkflowFileOperation = 'pack' | 'clean';
@@ -36,7 +40,7 @@ export interface WorkflowFileOperationRequest {
 export interface ProgressWorkflowActionsState {
   getTaskState(stream: StreamTabId): TaskState | undefined;
   getExecutionId(stream: StreamTabId): string | undefined;
-  getOutputFiles(stream: StreamTabId): Map<number, OutputFileInfo[]>;
+  getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
   getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
 }
 
@@ -77,8 +81,8 @@ export class ProgressWorkflowActionsController {
   async diffStream(stream: StreamTabId): Promise<void> {
     await this.withWorkflowTaskState(stream, async (taskState) => {
       const runOutputs = this.deps.state.getOutputFiles(stream);
-      const outputsByRound = runOutputs.size
-        ? [...runOutputs.entries()].sort((a, b) => a[0] - b[0])
+      const outputsByRound = Object.keys(runOutputs).length
+        ? runOutputs
         : undefined;
 
       await this.deps.runDiff({

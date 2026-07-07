@@ -520,7 +520,7 @@ describe('StreamSnapshotStore', () => {
     await store.preload([STREAM]);
 
     store.addOutputFiles(OTHER_STREAM, { 1: [next] });
-    expect(store.getOutputFiles(OTHER_STREAM).get(1)).toEqual([next]);
+    expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
 
     const raw = await StorageFS.readJson(path.join(dir, 'outputFiles.json'));
@@ -544,7 +544,7 @@ describe('StreamSnapshotStore', () => {
     await store.preload([STREAM]);
 
     store.addOutputFiles(OTHER_STREAM, { 1: [next] });
-    expect(store.getOutputFiles(OTHER_STREAM).get(1)).toEqual([next]);
+    expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
 
     const raw = await StorageFS.readJson(path.join(dir, 'outputFiles.json'));

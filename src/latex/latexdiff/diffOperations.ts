@@ -15,8 +15,12 @@ import {
 } from '@agent/output/workflowOutputLayout';
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
-import { getEffectiveDiffBase, RoundKeySchema } from '@shared/schemas';
-import type { OutputFileInfo } from '@shared/schemas';
+import {
+  getEffectiveDiffBase,
+  roundIndexedEntries,
+  RoundKeySchema,
+} from '@shared/schemas';
+import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 import {
   WorkspaceFS,
   FlexibleFS,
@@ -99,7 +103,7 @@ export async function executeDiffOperations(
 }
 
 export async function runLatexdiffFromMetadata(params: {
-  rounds: Map<number, OutputFileInfo[]>;
+  rounds: RoundIndexed<OutputFileInfo>;
   mathMarkup?: MathMarkupOption;
   generateBetweenRoundDiffs: boolean;
   progress: DiffProgressReporter;
@@ -114,7 +118,7 @@ export async function runLatexdiffFromMetadata(params: {
     Array<{ round: number; info: OutputFileInfo }>
   >();
 
-  for (const [round, infos] of rounds.entries()) {
+  for (const [round, infos] of roundIndexedEntries(rounds)) {
     for (const info of infos) {
       const base = getEffectiveDiffBase(info.lineage);
       const description = `${getFileLabel(info)} (r${round})`;

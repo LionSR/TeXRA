@@ -23,6 +23,7 @@ import type {
   CompileFailure,
   FileLocation,
   OutputFileInfo,
+  RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
 import { pluralize } from '@utils/text/stringUtils';
@@ -50,8 +51,8 @@ export interface ProgressFollowUpControllerDeps {
 
 export interface ProgressFollowUpState {
   getTaskState(stream: StreamTabId): TaskState | undefined;
-  getOutputFiles(stream: StreamTabId): Map<number, OutputFileInfo[]>;
-  getCompileFailures(stream: StreamTabId): Map<number, CompileFailure[]>;
+  getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
+  getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure>;
   getExecutionId(stream: StreamTabId): string | undefined;
 }
 
@@ -93,7 +94,7 @@ export interface CompileFixerInput {
   streamId: StreamTabId;
   taskState: TaskState | undefined;
   compileFailures: CompileFailure[];
-  runOutputs: Map<number, OutputFileInfo[]>;
+  runOutputs: RoundIndexed<OutputFileInfo>;
   modelOptions: readonly ProgressFollowUpModelOption[];
   executionId?: string;
 }
@@ -110,9 +111,9 @@ export class ProgressFollowUpController {
     input: StreamToolUseFollowUpInput,
   ): Promise<ProgressFollowUpPlan> {
     const modelOptions = await this.deps.loadModelOptions();
-    const outputFiles = [
-      ...this.deps.state.getOutputFiles(input.streamId).values(),
-    ].flat();
+    const outputFiles = Object.values(
+      this.deps.state.getOutputFiles(input.streamId),
+    ).flat();
 
     return this.planToolUseFollowUp({
       ...input,
@@ -127,9 +128,9 @@ export class ProgressFollowUpController {
     streamId: StreamTabId,
   ): Promise<ProgressFollowUpPlan> {
     const modelOptions = await this.deps.loadModelOptions();
-    const compileFailures = [
-      ...this.deps.state.getCompileFailures(streamId).values(),
-    ].flat();
+    const compileFailures = Object.values(
+      this.deps.state.getCompileFailures(streamId),
+    ).flat();
 
     return this.planCompileFixer({
       streamId,
@@ -381,7 +382,7 @@ export class ProgressFollowUpController {
   private async compileFixerTargets(
     originalConfig: AgentConfig,
     compileFailures: CompileFailure[],
-    runOutputs: Map<number, OutputFileInfo[]>,
+    runOutputs: RoundIndexed<OutputFileInfo>,
   ): Promise<CompileFixerTarget[]> {
     const preferred = this.compileFixerInputCandidates(
       originalConfig,
@@ -455,10 +456,10 @@ export class ProgressFollowUpController {
   private compileFixerInputCandidates(
     originalConfig: AgentConfig,
     compileFailures: CompileFailure[],
-    runOutputs: Map<number, OutputFileInfo[]>,
+    runOutputs: RoundIndexed<OutputFileInfo>,
   ): string[] {
     const outputByPath = new Map<string, OutputFileInfo>();
-    for (const output of [...runOutputs.values()].flat()) {
+    for (const output of Object.values(runOutputs).flat()) {
       outputByPath.set(output.location.absolutePath, output);
     }
 
