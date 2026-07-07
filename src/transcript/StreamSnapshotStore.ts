@@ -179,6 +179,12 @@ export class StreamSnapshotStore {
     Map<number, CompileFailure[]>
   >();
   private readonly usage = new Map<StreamTabId, Map<string, TokenUsageStats>>();
+  /**
+   * Per-run usage values read from disk that failed to parse, preserved
+   * verbatim so `writeUsage` can round-trip them back unchanged instead of a
+   * lossy read permanently deleting them on the next save (#7464).
+   */
+  private readonly usageUnparsed = new Map<StreamTabId, Map<string, unknown>>();
   private readonly workPlan = new Map<StreamTabId, WorkPlanSnapshot>();
   private readonly meta = new Map<StreamTabId, StreamTabMeta>();
   /** Immutable run descriptors parsed/emitted once per execution stream. */
@@ -575,11 +581,16 @@ export class StreamSnapshotStore {
   }
 
   private writeUsage(stream: StreamTabId): void {
-    this.write(
-      stream,
-      STREAM_DATA_KEYS.USAGE_STATS,
-      mapToRecord(this.usage.get(stream) ?? new Map()),
-    );
+    const parsed = mapToRecord(this.usage.get(stream) ?? new Map());
+    const unparsed = this.usageUnparsed.get(stream);
+    // Reinsert raw entries this store couldn't interpret so the write never
+    // deletes them; a run that has since parsed successfully (`parsed`) wins
+    // over its own stale raw fallback via spread order (#7464).
+    const record =
+      unparsed && unparsed.size > 0
+        ? { ...Object.fromEntries(unparsed), ...parsed }
+        : parsed;
+    this.write(stream, STREAM_DATA_KEYS.USAGE_STATS, record);
   }
 
   addOutputFiles(
@@ -725,6 +736,7 @@ export class StreamSnapshotStore {
       ...this.missingOutputs.keys(),
       ...this.compileFailures.keys(),
       ...this.usage.keys(),
+      ...this.usageUnparsed.keys(),
       ...this.workPlan.keys(),
       ...this.meta.keys(),
       ...this.runDescriptors.keys(),
@@ -744,6 +756,7 @@ export class StreamSnapshotStore {
     this.missingOutputs.delete(stream);
     this.compileFailures.delete(stream);
     this.usage.delete(stream);
+    this.usageUnparsed.delete(stream);
     this.workPlan.delete(stream);
     this.meta.delete(stream);
     this.runDescriptors.delete(stream);
@@ -765,6 +778,7 @@ export class StreamSnapshotStore {
     this.missingOutputs.clear();
     this.compileFailures.clear();
     this.usage.clear();
+    this.usageUnparsed.clear();
     this.workPlan.clear();
     this.meta.clear();
     this.runDescriptors.clear();
@@ -1117,6 +1131,7 @@ export class StreamSnapshotStore {
       missingOutputs: this.missingOutputs.get(streamId) ?? new Map(),
       compileFailures: this.compileFailures.get(streamId) ?? new Map(),
       usage: this.usage.get(streamId) ?? new Map(),
+      usageUnparsed: this.usageUnparsed.get(streamId) ?? new Map(),
       workPlan: this.getWorkPlan(streamId),
       legacyKeys: [],
     });
@@ -1288,6 +1303,7 @@ export class StreamSnapshotStore {
       stream,
       new Map([...data.usage].filter(([, v]) => !isEmptyUsage(v))),
     );
+    this.usageUnparsed.set(stream, new Map(data.usageUnparsed));
     this.workPlan.set(stream, data.workPlan);
     this.runDescriptors.delete(stream);
     this.runConfigs.delete(stream);

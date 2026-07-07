@@ -332,6 +332,44 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('preserves an unparseable persisted usage entry across a save instead of deleting it', async () => {
+    // Regression test for #7464: a run entry that fails to parse (e.g. a
+    // corrupted or future-shaped value) must be logged loudly and carried
+    // through unchanged, rather than silently zeroed and then permanently
+    // deleted from disk by the next writeUsage().
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({
+        [RUN]: usage(100, 20, 0.5),
+        'run-corrupt': 'this-is-not-a-usage-object',
+      }),
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const store = new StreamSnapshotStore();
+    // Force a seed + a write for an unrelated run so writeUsage() actually
+    // rewrites usageStats.json from the in-memory accumulators.
+    const pending = store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
+    await Promise.resolve(pending);
+    await store.flush();
+
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    expect(raw).toMatchObject({
+      [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+      [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+      'run-corrupt': 'this-is-not-a-usage-object',
+    });
+
+    // The corrupted entry is preserved on disk for round-tripping but is
+    // never surfaced through the typed in-memory usage view.
+    expect(store.getRunUsage(STREAM).has('run-corrupt')).toBe(false);
+  });
+
   it('resolves pre-seed usage after merging existing disk usage', async () => {
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
