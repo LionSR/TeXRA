@@ -150,32 +150,24 @@ export const workingDirectoryField = z
     'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support is enabled on the Multi-Agent settings tab.',
   )
   .transform((value, ctx): string | undefined => {
+    const fail = (message: string): typeof z.NEVER => {
+      ctx.addIssue({ code: 'custom', message });
+      return z.NEVER;
+    };
     let trimmed: string | undefined;
     try {
       trimmed = parseWorkingDirectory(value);
     } catch (e) {
-      ctx.addIssue({
-        code: 'custom',
-        message: toErrorMessage(e),
-      });
-      return z.NEVER;
+      return fail(toErrorMessage(e));
     }
     if (!trimmed) return trimmed;
     if (!isWorktreeSupportEnabled()) {
-      ctx.addIssue({
-        code: 'custom',
-        message: WORKTREE_DISABLED_MESSAGE,
-      });
-      return z.NEVER;
+      return fail(WORKTREE_DISABLED_MESSAGE);
     }
     try {
       ensureWorkingDirectoryExists(trimmed);
     } catch (e) {
-      ctx.addIssue({
-        code: 'custom',
-        message: toErrorMessage(e),
-      });
-      return z.NEVER;
+      return fail(toErrorMessage(e));
     }
     return trimmed;
   });

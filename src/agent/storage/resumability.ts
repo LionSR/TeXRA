@@ -128,14 +128,14 @@ export async function deriveResumability(
     };
   }
 
+  const metaFields = {
+    terminalStatus: meta?.terminalStatus,
+    outcome: meta?.outcome,
+  };
+
   const terminalCause = terminalBlockCause(meta);
   if (terminalCause !== undefined) {
-    return {
-      resumable: false,
-      cause: terminalCause,
-      terminalStatus: meta?.terminalStatus,
-      outcome: meta?.outcome,
-    };
+    return { resumable: false, cause: terminalCause, ...metaFields };
   }
 
   let rawFlowRecord: unknown;
@@ -149,8 +149,7 @@ export async function deriveResumability(
     return {
       resumable: false,
       cause: RESUMABILITY_CAUSE.UNREADABLE_FLOW,
-      terminalStatus: meta?.terminalStatus,
-      outcome: meta?.outcome,
+      ...metaFields,
     };
   }
 
@@ -158,8 +157,7 @@ export async function deriveResumability(
     return {
       resumable: false,
       cause: RESUMABILITY_CAUSE.MISSING_FLOW,
-      terminalStatus: meta?.terminalStatus,
-      outcome: meta?.outcome,
+      ...metaFields,
     };
   }
 
@@ -168,8 +166,7 @@ export async function deriveResumability(
     return {
       resumable: false,
       cause: RESUMABILITY_CAUSE.INVALID_FLOW,
-      terminalStatus: meta?.terminalStatus,
-      outcome: meta?.outcome,
+      ...metaFields,
     };
   }
 
@@ -181,7 +178,6 @@ export async function deriveResumability(
         ? RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW
         : RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
     flowRecord: flowResult.data as FlowRecord,
-    terminalStatus: meta?.terminalStatus,
-    outcome: meta?.outcome,
+    ...metaFields,
   };
 }
