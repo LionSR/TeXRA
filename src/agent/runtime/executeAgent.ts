@@ -111,7 +111,6 @@ function createUsageRecordingCallback(
   };
 }
 
-/** Notify the progress view of a consumed follow-up, then run the caller's own callback. */
 function wrapOnFollowUpConsumed(
   ctx: AgentLaunchContext,
   onFollowUpConsumed?: () => void,
@@ -122,10 +121,6 @@ function wrapOnFollowUpConsumed(
   };
 }
 
-/**
- * Guard against a non-terminal WAITING result escaping to a caller that
- * didn't opt into it via `allowWaitingResult`.
- */
 function assertAllowedWaitingResult(
   result: AgentRuntimeFlowResult,
   allowWaitingResult: boolean | undefined,
