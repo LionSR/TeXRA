@@ -13,7 +13,6 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import type {
@@ -28,6 +27,7 @@ import {
   createHeadlessCliHostInteractions,
   installCliApprovalHandlers,
 } from './approvalAdapter';
+import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -214,7 +214,7 @@ export async function executeCliRequest(
     defaultSession(),
     interactionHost,
   );
-  const detachLegacyProgressProjection = attachLegacyProgressEventProjection(
+  const detachSessionProgressProjection = attachCliSessionProgressProjection(
     defaultSession().events,
     interactionHost,
   );
@@ -277,7 +277,7 @@ export async function executeCliRequest(
       await writeTerminalStatus(ownedExecutionId, EXECUTION_STATUS.INTERRUPTED);
     }
     detachResultToast();
-    detachLegacyProgressProjection();
+    detachSessionProgressProjection();
     detachHostInteractions();
     uninstallApprovalHandlers();
     try {
