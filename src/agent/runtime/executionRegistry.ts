@@ -810,21 +810,22 @@ export class ExecutionRegistry {
    * normal teardown — or when `streamStatus` shows neither state (see below).
    *
    * A registered waiting-cleanup alone does not prove the run is genuinely
-   * suspended: `NativeSubagentStrategy.onBeforeWaiting` speculatively
-   * registers its `abandon()` cleanup on every delivered turn, including one
-   * where `ToolUseWaitNode` finds a follow-up already queued and keeps the
-   * flow running in-process instead of exiting via `{ kind: 'waiting' }` (see
-   * its doc comment). `runFlowWithLifecycle` clears that speculative
-   * registration (`handle.clearWaitingCleanup()`) on both of its non-WAITING
-   * terminal arms, so in practice a stale cleanup is gone well before this
-   * method could ever see it — but this method does not rely on every
-   * non-waiting exit remembering to call that: `streamStatus` only reaches
-   * `WAITING` on the genuine suspend path (`transitionToWaiting` is gated on
-   * `!session.hasQueuedFollowUp()` in `ToolUseWaitNode`, the same condition
-   * that decides whether the flow actually exits), so checking it here is an
-   * independent, authoritative confirmation that this handle is really
-   * parked, not mid-flight — belt and suspenders against a future non-waiting
-   * exit that forgets the clear (see #7324 review discussion).
+   * suspended: `runFlowWithLifecycle`'s own WAITING branch is the only
+   * registrant today (native subagent turns are loop-driven — see
+   * `childRunLoop.ts` — with delivery choreography owned entirely by the
+   * loop's single site, so there is no more per-strategy speculative
+   * registration on every delivered turn). `runFlowWithLifecycle` clears
+   * this registration (`handle.clearWaitingCleanup()`) on both of its
+   * non-WAITING terminal arms, so in practice a stale cleanup is gone well
+   * before this method could ever see it — but this method does not rely on
+   * every non-waiting exit remembering to call that: `streamStatus` only
+   * reaches `WAITING` on the genuine suspend path (`ToolUseWaitNode` only
+   * transitions to WAITING when it is actually suspending — unconditionally
+   * for a subagent cycle, or after the queue is confirmed empty for a root
+   * cycle), so checking it here is an independent, authoritative
+   * confirmation that this handle is really parked, not mid-flight — belt
+   * and suspenders against a future non-waiting exit that forgets the clear
+   * (see #7324 review discussion).
    *
    * `resumeQueuedToolUseSnapshot` flips `streamStatus` to RUNNING with a
    * RESUMING substate *before* the resumed run installs its own interrupt

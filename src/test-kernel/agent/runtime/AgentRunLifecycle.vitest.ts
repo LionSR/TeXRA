@@ -430,7 +430,6 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-subagent-waiting',
     );
-    const onCompleted = vi.fn();
     const onError = vi.fn();
     storageMocks.writeTerminalStatus.mockClear();
 
@@ -449,12 +448,11 @@ describe('runFlowWithLifecycle', () => {
             streamId,
           };
         },
-        { isSubagent: true, onCompleted, onError },
+        { isSubagent: true, onError },
       );
 
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
       expect(storageMocks.writeTerminalStatus).not.toHaveBeenCalled();
-      expect(onCompleted).not.toHaveBeenCalled();
       expect(onError).not.toHaveBeenCalled();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
       expect(SharedExecutionRegistry.getHandle(executionId)).toBeDefined();
@@ -472,8 +470,8 @@ describe('runFlowWithLifecycle', () => {
     let captured: AgentExecutionHandle | undefined;
 
     try {
-      // Simulate onBeforeWaiting pre-registering on a turn that then
-      // continues past the wait (queued follow-up) and completes normally.
+      // Simulate a waiting-cleanup registered on this handle by some
+      // caller, then the run completing normally without ever suspending.
       const result = await runFlowWithLifecycle(
         ctx,
         async () => ({

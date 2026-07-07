@@ -2,11 +2,13 @@
  * Subagent execution and async delivery lifecycle for delegation tools.
  *
  * Interactive subagents execute asynchronously — result delivered via follow-up
- * queue. One-shot/headless parent runs execute subagents in-band because there
- * is no later interactive follow-up turn to consume async delivery.
+ * queue, driven by the shared `childRunLoop` over a native strategy. One-shot/
+ * headless parent runs execute subagents in-band because there is no later
+ * interactive follow-up turn to consume async delivery.
  */
 
 // Local imports - agent
+import type { ResultMeta } from '@agent/storage';
 import { registerExecution } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -19,12 +21,18 @@ import {
 } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { getStreamTabId } from '@agent/runtime/streamTab';
+import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
 // Local imports - tools
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import {
   enableYoloOnChildStream,
@@ -34,16 +42,22 @@ import {
   buildSubagentFailureResultMeta,
   formatSubagentError,
 } from '@tools/subagentResults';
+import {
+  persistChildRunReport,
+  persistChildRunResultMeta,
+} from '@tools/childRunDelivery';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
 import { generateExecutionId } from '@utils/core';
-import {
-  NativeSubagentStrategy,
-  subagentDeliveryMessage,
-  writeSubagentReport,
-  writeSubagentResultMeta,
-} from './nativeSubagentStrategy';
+import { subagentDeliveryMessage } from './subagentDeliveryFormat';
+// `createNativeToolUseStrategy`/`createNativeWorkflowStrategy` are lazy-
+// imported below, alongside `executeAgent` — both strategy modules import
+// `@agent/runtime/executeAgent` (directly, or transitively via
+// `resumeQueuedToolUseSnapshot`), which pulls in `runToolUseFlow.ts` ->
+// `@tools/registry`. An eager import here would close the same
+// registry -> DelegationTools -> proposalFlow -> subagentExecution cycle
+// the existing `executeAgent` lazy import already avoids.
 
 // ============================================================================
 // Shared utilities
@@ -61,15 +75,37 @@ interface ApprovalMeta {
   requestedAgent?: string;
 }
 
+/** Persist a subagent's report and result manifest, logging (not throwing) on failure. */
+async function persistSubagentDeliveryBestEffort(
+  executionId: ExecutionId,
+  msg: string,
+  resultMeta: ResultMeta,
+): Promise<void> {
+  const [reportResult, metaResult] = await Promise.all([
+    persistChildRunReport(executionId, msg),
+    persistChildRunResultMeta(executionId, resultMeta),
+  ]);
+  if (reportResult.kind === 'failed') {
+    logger.warn(
+      LOG_CHANNEL,
+      `Failed to persist subagent report for ${executionId}: ${toErrorMessage(reportResult.err)}`,
+    );
+  }
+  if (metaResult.kind === 'failed') {
+    logger.warn(
+      LOG_CHANNEL,
+      `Failed to persist subagent result manifest for ${executionId}: ${toErrorMessage(metaResult.err)}`,
+    );
+  }
+}
+
 /**
  * Execute a subagent asynchronously.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
  * are consistent and usable with the executions tool.
  *
- * Result is delivered via FollowUpQueue. For tool-use subagents, the result
- * is delivered early via onBeforeWaiting (before the subagent enters WAITING),
- * so the orchestrator gets the response without waiting for flow exit.
- * For workflow subagents, delivery happens when the promise resolves.
+ * Result is delivered via the shared child-run loop's follow-up queue
+ * delivery — the same choreography every child-run type shares.
  */
 export async function executeSubagent(
   configPayload: AgentConfigPayload,
@@ -99,15 +135,15 @@ export async function executeSubagent(
   const runtimeHost = parentContext.runtimeHost;
   const parentSession = currentSession();
   // Captured now (while the launching tool call's ALS frame is live) so the
-  // async completion callbacks below can still roll the child's cost into the
-  // parent run after this tool call has returned. Subagents count toward
-  // parent usage totals only — they never drive the loop.
+  // child-run loop can still roll the child's cost into the parent run after
+  // this tool call has returned. Subagents count toward parent usage totals
+  // only — they never drive the loop.
   const recordSubagentCost = getCurrentToolCallContext()?.recordSubagentCost;
   let subagentCostSettled = false;
-  function settleSubagentCost(result?: AgentFlowResult): void {
+  function settleSubagentCost(totalCostUsd: number | undefined): void {
     if (subagentCostSettled) return;
     subagentCostSettled = true;
-    recordSubagentCost?.(result?.totalCostUsd ?? 0);
+    recordSubagentCost?.(totalCostUsd ?? 0);
   }
 
   const executionId = generateExecutionId();
@@ -144,15 +180,13 @@ export async function executeSubagent(
         workingDirectory,
         memoryMisses: result?.memoryMisses,
       });
-      await Promise.all([
-        writeSubagentReport(executionId, msg),
-        writeSubagentResultMeta(
-          executionId,
-          // Keep the failed run's data (partial outputs, category, cost)
-          // in the manifest, matching the async error path.
-          buildSubagentFailureResultMeta(agentName, result, wallTimeMs),
-        ),
-      ]);
+      // Keep the failed run's data (partial outputs, category, cost) in the
+      // manifest, matching the async error path.
+      await persistSubagentDeliveryBestEffort(
+        executionId,
+        msg,
+        buildSubagentFailureResultMeta(agentName, result, wallTimeMs),
+      );
       return {
         status: 'error',
         summary: `Subagent '${agentName}' failed`,
@@ -177,7 +211,7 @@ export async function executeSubagent(
           subagentError = err;
         },
       });
-      settleSubagentCost(result);
+      settleSubagentCost(result.totalCostUsd);
       if (result.outcome === 'failed') {
         return failureResult(
           subagentError ?? 'Subagent ended with failed outcome.',
@@ -190,10 +224,7 @@ export async function executeSubagent(
         result,
         { startedAt, workingDirectory },
       );
-      await Promise.all([
-        writeSubagentReport(executionId, msg),
-        writeSubagentResultMeta(executionId, resultMeta),
-      ]);
+      await persistSubagentDeliveryBestEffort(executionId, msg, resultMeta);
       return {
         status: 'executed',
         summary:
@@ -206,52 +237,55 @@ export async function executeSubagent(
       // AgentFlowError carries the failed run's result — keep its category,
       // partial outputs, and cost in the failure manifest for chaining.
       const errorResult = getAgentFlowErrorResult(err);
-      settleSubagentCost(errorResult);
+      settleSubagentCost(errorResult?.totalCostUsd);
       return failureResult(err, errorResult);
     }
   }
 
-  const nativeStrategy = new NativeSubagentStrategy({
+  const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
+  const childStreamId = getStreamTabId(agentName, configPayload.model, {
+    executionId,
+  });
+  const strategyParams = {
+    configPayload,
     executionId,
     agentName,
     orchestratorStreamId,
     parentSession,
     runtimeHost,
     startedAt,
-    workingDirectory,
-    settleSubagentCost,
-  });
-
-  const promise = executeAgent(configPayload, executionId, {
-    runtimeHost,
-    session: parentSession,
-    isSubagent: true,
-    enforceCategory: true,
-    parentStreamId: orchestratorStreamId,
     delegationDepth: parentDelegationDepth + 1,
+    workingDirectory,
     approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
     runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
     toolEditApprovalHandler: parentContext.toolEditApprovalHandler,
-    allowWaitingResult: true,
-    onStreamResolved: (resolvedStreamId) => {
-      nativeStrategy.setChildStreamId(resolvedStreamId);
-      inheritChildStreamApprovals(resolvedStreamId);
-    },
-    onProgress: (update) => nativeStrategy.onProgress(update),
-    onFollowUpConsumed: () => nativeStrategy.onFollowUpConsumed(),
-    onBeforeWaiting: (lastResponse, touchedFiles, memoryMisses, totalCostUsd) =>
-      nativeStrategy.onBeforeWaiting(
-        lastResponse,
-        touchedFiles,
-        memoryMisses,
-        totalCostUsd,
-      ),
-    onCompleted: (result) => nativeStrategy.onCompleted(result),
-    onError: (err, result) => nativeStrategy.onError(err, result),
-    onRun: (handle) => nativeStrategy.setRunHandle(handle),
-  });
-  nativeStrategy.attachPromise(promise);
-  const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
+    onStreamResolved: inheritChildStreamApprovals,
+  };
+
+  if (isToolUse) {
+    const { createNativeToolUseStrategy } =
+      await import('./nativeToolUseStrategy');
+    startChildRunLoop({
+      childStreamId,
+      parentStreamId: orchestratorStreamId,
+      executionId,
+      agentName,
+      strategy: createNativeToolUseStrategy(strategyParams),
+      recordCost: settleSubagentCost,
+    });
+  } else {
+    const { createNativeWorkflowStrategy } =
+      await import('./nativeWorkflowStrategy');
+    startChildRunLoop({
+      childStreamId,
+      parentStreamId: orchestratorStreamId,
+      executionId,
+      agentName,
+      strategy: createNativeWorkflowStrategy(strategyParams),
+      recordCost: settleSubagentCost,
+    });
+  }
+
   const meta = options?.approvalMeta;
   const metaLines: string[] = [];
   if (meta) {
