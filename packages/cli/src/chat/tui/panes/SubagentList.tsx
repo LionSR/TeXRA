@@ -38,7 +38,9 @@ export interface ChildRow {
 const TAIL_LINES = 4;
 
 function childStatusLabel(status: string | undefined): string | undefined {
-  return formatStreamStatusLabel(status, { style: 'cli' });
+  // Every row in this panel is a child/subagent stream, never the root
+  // session, so WAITING always gets the distinct child-waiting wording.
+  return formatStreamStatusLabel(status, { style: 'cli', isChildStream: true });
 }
 
 export function compactChildRowText({

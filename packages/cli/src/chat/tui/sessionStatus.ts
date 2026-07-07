@@ -41,11 +41,13 @@ export interface CliSessionStatusInput {
 export function formatCliStatusLabel(
   status: string | undefined,
   substate?: StreamSubstate,
+  isChildStream?: boolean,
 ): string {
   return formatStreamStatusLabel(status, {
     style: 'cli',
     missingLabel: '—',
     ...(substate ? { substate } : {}),
+    ...(isChildStream ? { isChildStream } : {}),
   });
 }
 

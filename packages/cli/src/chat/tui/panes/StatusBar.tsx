@@ -123,6 +123,9 @@ export interface StatusBarDisplayInput {
    *  colliding with durable left-side status segments. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
+  /** True when `status` belongs to a focused child/subagent stream rather
+   *  than the root session — see `statusBarStreamTarget`. */
+  readonly isChildStream?: boolean;
   /** False while a foreground surface (approval, picker, form, transcript,
    *  slash palette, or reverse search) owns input and global chat shortcuts are
    *  intentionally inactive. */
@@ -628,6 +631,11 @@ interface StatusBarVisibleStream {
 interface StatusBarStreamTarget {
   readonly ctrlCAction: CtrlCAction;
   readonly displaySlice: StreamSlice | undefined;
+  /** True when `displaySlice` belongs to a child/subagent stream rather than
+   *  the root session (the live-ancestor fallback can surface an ancestor
+   *  other than the nominally "active" id, so this is derived from whichever
+   *  stream is actually displayed, not from `activeStreamId` alone). */
+  readonly isChildStream: boolean;
 }
 
 export function statusBarStreamTarget({
@@ -654,6 +662,7 @@ export function statusBarStreamTarget({
   const canStopVisibleRun =
     canStopActiveRun &&
     (canStopPendingRunWithoutStream || hasPendingOrLiveStream(streams));
+  const displayStreamId = activeSlice ? activeStreamId : liveAncestor?.streamId;
   return {
     ctrlCAction: ctrlCActionForFocus({
       activeStreamId,
@@ -661,6 +670,9 @@ export function statusBarStreamTarget({
       parentStream,
     }),
     displaySlice: activeSlice ?? liveAncestor?.value,
+    isChildStream:
+      displayStreamId !== undefined &&
+      parentStream.get(displayStreamId) !== undefined,
   };
 }
 
@@ -697,7 +709,11 @@ export function buildStatusBarDisplay(
     }
   } else {
     left.push({
-      text: formatCliStatusLabel(input.status, input.substate),
+      text: formatCliStatusLabel(
+        input.status,
+        input.substate,
+        input.isChildStream,
+      ),
       color: 'dim',
     });
     if (
@@ -921,6 +937,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     transcriptAvailable: props.transcriptAvailable,
     width: columns,
     ctrlCAction: target.ctrlCAction,
+    isChildStream: target.isChildStream,
     foregroundEscapeAction: props.foregroundEscapeAction,
     shortcutsActive: props.shortcutsActive,
   });
