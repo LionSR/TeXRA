@@ -215,9 +215,6 @@ export interface ProgressEventPayloads {
    *  back to the UI. */
   goalStateChanged: { streamId: StreamTabId };
 
-  // ── App/session lifecycle + integration signals ──
-  extensionDeactivating: undefined;
-
   // ── Frontend-bound events ──
   // Emitted by agent core/runtime; consumed by frontend listeners.
   // Keeps @agent/ free of @frontend/ imports.
