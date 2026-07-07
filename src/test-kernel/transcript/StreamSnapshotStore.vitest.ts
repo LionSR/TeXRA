@@ -332,6 +332,42 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('preserves malformed persisted usage when writing new usage', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    const malformedUsage = {
+      inputTokens: 'not-a-number',
+      outputTokens: 10,
+      cost: 0.25,
+    };
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({
+        'run-valid': usage(100, 20, 0.5),
+        'run-malformed': malformedUsage,
+      }),
+    );
+
+    const store = new StreamSnapshotStore();
+    store.handleProgressEvent('updateStreamUsage', {
+      streamId: STREAM,
+      storageKey: 'run-new' as StorageKey,
+      usage: usage(50, 10, 0.25),
+    });
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    expect(raw).toMatchObject({
+      'run-valid': { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+      'run-malformed': malformedUsage,
+      'run-new': { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Dropping malformed TokenUsageStats'),
+    );
+  });
+
   it('resolves pre-seed usage after merging existing disk usage', async () => {
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);

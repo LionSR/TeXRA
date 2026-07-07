@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   emptyUsageStats,
@@ -26,16 +26,45 @@ describe('stream data usage parsing', () => {
     });
   });
 
-  it('drops usage entries that parse to empty defaults', () => {
+  it('drops malformed persisted usage entries instead of zeroing them', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     const usage = UsageDataSchema.parse({
-      run: {
+      nonFinite: {
         inputTokens: 'not-a-number',
         outputTokens: Number.POSITIVE_INFINITY,
         cost: Number.NaN,
       },
+      negative: {
+        inputTokens: -1,
+        outputTokens: 2,
+        cost: 0,
+      },
+      missingRequired: {
+        inputTokens: 1,
+        cost: 0,
+      },
+      unknownRoute: {
+        inputTokens: 1,
+        outputTokens: 2,
+        cost: 0,
+        usageRoute: 'future-route',
+      },
     });
 
     expect(usage.size).toBe(0);
+    expect(warn).toHaveBeenCalledTimes(4);
+    warn.mockRestore();
+  });
+
+  it('warns and drops a malformed usage map', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const usage = UsageDataSchema.parse(['not', 'a', 'record']);
+
+    expect(usage.size).toBe(0);
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
   });
 
   it('parses numeric usage fields from the canonical usage schema shape', () => {

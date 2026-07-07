@@ -310,23 +310,70 @@ void (null as unknown as z.infer<
   typeof TokenUsageStatsParsingSchema
 > satisfies TokenUsageStats);
 
+const PersistedUsageNumber = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? value : Number(trimmed);
+}, z.number().finite().nonnegative());
+
+const PersistedTokenCount = PersistedUsageNumber.pipe(z.int());
+
+const PersistedTokenUsageStatsSchema = z
+  .looseObject({
+    inputTokens: PersistedTokenCount,
+    outputTokens: PersistedTokenCount,
+    cost: PersistedUsageNumber,
+    cacheReadInputTokens: PersistedTokenCount.optional().prefault(0),
+    cacheMissInputTokens: PersistedTokenCount.optional().prefault(0),
+    cacheCreationInputTokens: PersistedTokenCount.optional().prefault(0),
+    viaChatGptSubscription: z.boolean().optional().prefault(false),
+    usageRoute: UsageRouteSchema.optional(),
+  })
+  .transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats => {
+    const usageRoute =
+      usage.usageRoute ??
+      (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
+    return usageRoute == null ? usage : { ...usage, usageRoute };
+  }) as z.ZodType<TokenUsageStats>;
+
+export interface ParsedUsageData {
+  usage: Map<string, TokenUsageStats>;
+  preservedRawEntries: Map<string, unknown>;
+}
+
+export function parseUsageData(raw: unknown): ParsedUsageData {
+  const result = z.record(z.string(), z.unknown()).safeParse(raw);
+  if (!result.success) {
+    warnDroppedItem('TokenUsageStatsMap', result.error);
+    return {
+      usage: new Map(),
+      preservedRawEntries: new Map(),
+    };
+  }
+
+  const usage = new Map<string, TokenUsageStats>();
+  const preservedRawEntries = new Map<string, unknown>();
+  for (const [runId, rawStats] of Object.entries(result.data)) {
+    const parsed = PersistedTokenUsageStatsSchema.safeParse(rawStats);
+    if (!parsed.success) {
+      warnDroppedItem(`TokenUsageStats(${runId})`, parsed.error);
+      preservedRawEntries.set(runId, rawStats);
+      continue;
+    }
+    const stats = parsed.data;
+    if (!isEmptyUsage(stats)) usage.set(runId, stats);
+  }
+
+  return { usage, preservedRawEntries };
+}
+
 /**
  * Per-run usage map: { runId: TokenUsageStats } → Map<runId, stats>.
  * Used by both workflow and tool-use streams. Workflow has one entry per
  * run (= one entry per tab); tool-use can accumulate multiple via resume.
  */
 export const UsageDataSchema = z
-  .record(z.string(), TokenUsageStatsParsingSchema)
-  .transform((record): Map<string, TokenUsageStats> => {
-    const map = new Map<string, TokenUsageStats>();
-    for (const [runId, stats] of Object.entries(record)) {
-      if (!isEmptyUsage(stats)) map.set(runId, stats);
-    }
-    return map;
-  })
-  // `() => new Map()` (not a literal) for the same reason as `roundMapSchema`:
-  // a fresh fallback per failed parse. The current consumer copies this map
-  // (StreamSnapshotStore.applyStreamData) so a shared instance is safe today,
-  // but the factory keeps the file consistent and guards a future by-reference
-  // reader from leaking usage across streams with malformed sidecar JSON.
-  .catch(() => new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
+  .unknown()
+  .transform(
+    (raw): Map<string, TokenUsageStats> => parseUsageData(raw).usage,
+  ) as z.ZodType<Map<string, TokenUsageStats>>;

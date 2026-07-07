@@ -22,9 +22,9 @@ import {
   STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
   StreamTabMetaSchema,
-  UsageDataSchema,
   flattenLegacyRuns,
   isLegacyNested,
+  parseUsageData,
   selectPreferredLegacyInstruction,
   type CompileFailure,
   type LegacyInstructionEntry,
@@ -59,6 +59,7 @@ export interface StreamData {
   missingOutputs: Map<number, string[]>;
   compileFailures: Map<number, CompileFailure[]>;
   usage: Map<string, TokenUsageStats>;
+  usageRawEntries: Map<string, unknown>;
   workPlan: WorkPlanSnapshot;
   /** Category keys whose on-disk file was legacy-nested (need a one-time flat rewrite). */
   legacyKeys: string[];
@@ -193,7 +194,7 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
   ]);
 
   const usageRaw = await tryRead(kv, STREAM_DATA_KEYS.USAGE_STATS);
-  const usage = UsageDataSchema.catch(new Map()).parse(usageRaw);
+  const usageData = parseUsageData(usageRaw);
 
   const workPlan = readPersistedWorkPlan(
     await tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN),
@@ -204,7 +205,8 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
     outputFiles,
     missingOutputs,
     compileFailures,
-    usage,
+    usage: usageData.usage,
+    usageRawEntries: usageData.preservedRawEntries,
     workPlan,
     legacyKeys,
   };

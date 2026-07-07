@@ -179,6 +179,10 @@ export class StreamSnapshotStore {
     Map<number, CompileFailure[]>
   >();
   private readonly usage = new Map<StreamTabId, Map<string, TokenUsageStats>>();
+  private readonly usageRawEntries = new Map<
+    StreamTabId,
+    Map<string, unknown>
+  >();
   private readonly workPlan = new Map<StreamTabId, WorkPlanSnapshot>();
   private readonly meta = new Map<StreamTabId, StreamTabMeta>();
   /** Immutable run descriptors parsed/emitted once per execution stream. */
@@ -556,6 +560,7 @@ export class StreamSnapshotStore {
     const accumulated = sumUsageStats([existing, delta]);
     current.set(storageKey, accumulated);
     this.usage.set(stream, current);
+    this.usageRawEntries.get(stream)?.delete(storageKey);
     return accumulated;
   }
 
@@ -575,11 +580,13 @@ export class StreamSnapshotStore {
   }
 
   private writeUsage(stream: StreamTabId): void {
-    this.write(
-      stream,
-      STREAM_DATA_KEYS.USAGE_STATS,
-      mapToRecord(this.usage.get(stream) ?? new Map()),
-    );
+    const usage = this.usage.get(stream) ?? new Map();
+    const record: Record<string, unknown> = {};
+    for (const [storageKey, raw] of this.usageRawEntries.get(stream) ?? []) {
+      if (!usage.has(storageKey)) record[storageKey] = raw;
+    }
+    Object.assign(record, mapToRecord(usage));
+    this.write(stream, STREAM_DATA_KEYS.USAGE_STATS, record);
   }
 
   addOutputFiles(
@@ -725,6 +732,7 @@ export class StreamSnapshotStore {
       ...this.missingOutputs.keys(),
       ...this.compileFailures.keys(),
       ...this.usage.keys(),
+      ...this.usageRawEntries.keys(),
       ...this.workPlan.keys(),
       ...this.meta.keys(),
       ...this.runDescriptors.keys(),
@@ -744,6 +752,7 @@ export class StreamSnapshotStore {
     this.missingOutputs.delete(stream);
     this.compileFailures.delete(stream);
     this.usage.delete(stream);
+    this.usageRawEntries.delete(stream);
     this.workPlan.delete(stream);
     this.meta.delete(stream);
     this.runDescriptors.delete(stream);
@@ -765,6 +774,7 @@ export class StreamSnapshotStore {
     this.missingOutputs.clear();
     this.compileFailures.clear();
     this.usage.clear();
+    this.usageRawEntries.clear();
     this.workPlan.clear();
     this.meta.clear();
     this.runDescriptors.clear();
@@ -1117,6 +1127,7 @@ export class StreamSnapshotStore {
       missingOutputs: this.missingOutputs.get(streamId) ?? new Map(),
       compileFailures: this.compileFailures.get(streamId) ?? new Map(),
       usage: this.usage.get(streamId) ?? new Map(),
+      usageRawEntries: new Map(),
       workPlan: this.getWorkPlan(streamId),
       legacyKeys: [],
     });
@@ -1288,6 +1299,7 @@ export class StreamSnapshotStore {
       stream,
       new Map([...data.usage].filter(([, v]) => !isEmptyUsage(v))),
     );
+    this.usageRawEntries.set(stream, new Map(data.usageRawEntries));
     this.workPlan.set(stream, data.workPlan);
     this.runDescriptors.delete(stream);
     this.runConfigs.delete(stream);
