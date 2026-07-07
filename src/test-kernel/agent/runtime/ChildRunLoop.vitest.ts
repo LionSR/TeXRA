@@ -478,6 +478,51 @@ describe('childRunLoop E2E fixtures', () => {
     );
   });
 
+  it('finalizes a dangling native handle with non-null error metadata after a non-throwing turn failure', async () => {
+    const childStreamId = uniqueStreamId('turn-error-finalize');
+    const parentStreamId = 'parent' as StreamTabId;
+    const executionId = 'exec-turn-error-finalize' as ExecutionId;
+    const { strategy, resolveTurn } = createFakeStrategy();
+
+    startChildRunLoop({
+      childStreamId,
+      parentStreamId,
+      executionId,
+      agentName: 'fake',
+      strategy,
+    });
+
+    await vi.waitFor(() =>
+      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+    );
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'fake',
+      'toolUse',
+      { emit: vi.fn() } as never,
+    );
+    session.executions.trackAgentExecution(handle, {
+      status: STREAM_PHASE.WAITING,
+    });
+
+    await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
+
+    await vi.waitFor(() =>
+      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+    );
+    await expect(handle.result).resolves.toMatchObject({
+      outcome: 'failed',
+      executionId,
+      error: expect.objectContaining({
+        message: expect.stringContaining('reported a failed turn'),
+      }),
+    });
+    expect(session.executions.getHandle(executionId)).toBeUndefined();
+  });
+
   it('recordCost commits exactly once, with the last observed value, when the run ends', async () => {
     const childStreamId = uniqueStreamId('record-cost');
     const parentStreamId = 'parent' as StreamTabId;
