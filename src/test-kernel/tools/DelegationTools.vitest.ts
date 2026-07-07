@@ -61,7 +61,7 @@ import {
   rejectOversizedBibAttachments,
   type WorkflowAgentInput,
 } from '@tools/DelegationTools';
-import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
+import { SharedSubagentDeliveryRegistry } from '@tools/subagentDeliveryState';
 import { WorkspaceFS } from '@utils/files';
 
 const BASE_INPUT: WorkflowAgentInput = {
@@ -206,11 +206,11 @@ describe('DelegateAgentTool resume (issue #7289)', () => {
       status: 'queued',
       reason: 'waiting',
     });
-    subagentDeliveryRegistry.start(executionId);
+    SharedSubagentDeliveryRegistry.start(executionId);
   });
 
   afterEach(() => {
-    subagentDeliveryRegistry.finish(executionId);
+    SharedSubagentDeliveryRegistry.finish(executionId);
   });
 
   it('returns once the follow-up is queued, without waiting for a resumed native subagent to reach its next boundary', async () => {
