@@ -43,25 +43,26 @@ function createHandler(): ModelHandlerOpenAIResponse {
   return handler;
 }
 
-type BackgroundInternals = {
+type BackgroundLifecycleInternals = {
   backgroundPoller: BackgroundPoller<{
     id?: string;
     status?: string | null;
   }>;
-  pendingBackgroundResponseId: string | null;
-  tryResumeBackgroundResponse(
-    client: OpenAI,
-    signal?: AbortSignal,
-  ): Promise<unknown>;
-  waitForBackgroundCompletion(
+  pendingResponseId: string | null;
+  tryResume(client: OpenAI, signal?: AbortSignal): Promise<unknown>;
+  waitForCompletion(
     client: OpenAI,
     initialResponse: { id?: string; status?: string | null },
     signal?: AbortSignal,
   ): Promise<unknown>;
 };
 
-function internals(handler: ModelHandlerOpenAIResponse): BackgroundInternals {
-  return handler as unknown as BackgroundInternals;
+function internals(
+  handler: ModelHandlerOpenAIResponse,
+): BackgroundLifecycleInternals {
+  return (
+    handler as unknown as { backgroundLifecycle: BackgroundLifecycleInternals }
+  ).backgroundLifecycle;
 }
 
 function createRetrieveThrowingClient(error: unknown): OpenAI {
@@ -94,36 +95,32 @@ describe('OpenAI Responses background abort handling', () => {
   it('clears the pending background ID on abort during resume retrieve', async () => {
     const handler = createHandler();
     const target = internals(handler);
-    target.pendingBackgroundResponseId = 'resp_pending_abort';
+    target.pendingResponseId = 'resp_pending_abort';
 
     const abortError = new APIUserAbortError();
     const client = createRetrieveThrowingClient(abortError);
 
-    await expect(target.tryResumeBackgroundResponse(client)).rejects.toThrow(
-      APIUserAbortError,
-    );
+    await expect(target.tryResume(client)).rejects.toThrow(APIUserAbortError);
 
     // Ghost-resume regression (#error-pipeline T1-1): an aborted resume must
     // not retain the pending ID, or the next run silently resumes a response
     // the user cancelled.
-    expect(target.pendingBackgroundResponseId).toBeNull();
+    expect(target.pendingResponseId).toBeNull();
   });
 
   it('retains the pending background ID on transient retrieve failures', async () => {
     const handler = createHandler();
     const target = internals(handler);
-    target.pendingBackgroundResponseId = 'resp_pending_transient';
+    target.pendingResponseId = 'resp_pending_transient';
 
     const transient = new Error('socket hang up');
     const client = createRetrieveThrowingClient(transient);
 
-    await expect(target.tryResumeBackgroundResponse(client)).rejects.toThrow(
-      'socket hang up',
-    );
+    await expect(target.tryResume(client)).rejects.toThrow('socket hang up');
 
     // No status code → likely still alive server-side → keep the ID so the
     // outer retry resumes the same response.
-    expect(target.pendingBackgroundResponseId).toBe('resp_pending_transient');
+    expect(target.pendingResponseId).toBe('resp_pending_transient');
     expect(requiresFlowAutoRetry(transient)).toBe(true);
   });
 
@@ -144,7 +141,7 @@ describe('OpenAI Responses background abort handling', () => {
     });
 
     const thrown = await target
-      .waitForBackgroundCompletion(
+      .waitForCompletion(
         { responses: { retrieve: vi.fn() } } as unknown as OpenAI,
         { id: 'resp_timeout', status: 'in_progress' },
       )
