@@ -15,8 +15,11 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import type {
+  CompileFailure,
   ExecutionId,
   OutputFileInfo,
   Plan,
@@ -84,6 +87,24 @@ function outputFile(relativePath: string, round: number): OutputFileInfo {
     round,
     lineage: null,
     diff: null,
+  };
+}
+
+function compileFailure(relativePath: string, round: number): CompileFailure {
+  return {
+    round,
+    displayName: relativePath,
+    output: {
+      kind: 'workspace',
+      absolutePath: `/workspace/${relativePath}.pdf`,
+      relativePath: `${relativePath}.pdf`,
+    },
+    log: {
+      kind: 'workspace',
+      absolutePath: `/workspace/${relativePath}.log`,
+      relativePath: `${relativePath}.log`,
+    },
+    logRelativePath: `${relativePath}.log`,
   };
 }
 
@@ -155,6 +176,102 @@ describe('StreamSnapshotStore', () => {
     expect(await StorageFS.exists(path.join(dir, 'usageStats.json'))).toBe(
       true,
     );
+  });
+
+  it('persists durable run facts directly from session events and ignores goalPaused', async () => {
+    const events = new SessionEventHub();
+    const writer = new StreamSnapshotStore();
+    const detach = writer.attachSessionEvents(events);
+    const output = outputFile('paper.tex', 1);
+    const failure = compileFailure('paper.tex', 1);
+
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'domain',
+        key: toRunFactDomainKey('updateTodos'),
+        data: { streamId: STREAM, todos: [TODO] },
+      },
+    });
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'domain',
+        key: toRunFactDomainKey('updatePlan'),
+        data: { streamId: STREAM, plan: PLAN },
+      },
+    });
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'domain',
+        key: toRunFactDomainKey('addOutputFiles'),
+        data: { streamId: STREAM, filesByRound: { 1: [output] } },
+      },
+    });
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'domain',
+        key: toRunFactDomainKey('updateMissingOutputs'),
+        data: { streamId: STREAM, filesByRound: { 1: ['paper.pdf'] } },
+      },
+    });
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'domain',
+        key: toRunFactDomainKey('updateCompileFailures'),
+        data: { streamId: STREAM, filesByRound: { 1: [failure] } },
+      },
+    });
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'usage',
+        stats: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+        data: {
+          streamId: STREAM,
+          storageKey: RUN,
+          usage: usage(100, 20, 0.5),
+        },
+      },
+    });
+    events.emit({
+      scope: 'run',
+      streamId: OTHER_STREAM,
+      event: {
+        type: 'domain',
+        key: toRunFactDomainKey('goalPaused'),
+        data: { streamId: OTHER_STREAM },
+      },
+    });
+
+    detach();
+    await writer.flush();
+
+    const snap = await new StreamSnapshotStore().read(STREAM);
+    expect(snap.todos).toEqual([TODO]);
+    expect(snap.plan).toEqual(PLAN);
+    expect(snap.outputFilesByRound).toEqual({ '1': [output] });
+    expect(snap.missingOutputsByRound).toEqual({ '1': ['paper.pdf'] });
+    expect(snap.compileFailuresByRound).toEqual({ '1': [failure] });
+    expect(snap.runUsage[RUN]).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 20,
+      cost: 0.5,
+    });
+
+    const goalPausedOnly = await new StreamSnapshotStore().read(OTHER_STREAM);
+    expect(goalPausedOnly.todos).toEqual([]);
+    expect(goalPausedOnly.plan).toBeNull();
+    expect(goalPausedOnly.runUsage).toEqual({});
   });
 
   it('returns an empty (valid) snapshot for a stream with no sidecar', async () => {
