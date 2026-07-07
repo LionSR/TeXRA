@@ -74,6 +74,9 @@ import { ModelHandler } from '../ModelHandler';
 import {
   CHAINED_RESPONSE_MAX_OUTPUT_FACTOR,
   CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT,
+  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  COMPACTION_SYSTEM_PROMPT,
+  estimateTokensFromText,
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
 } from '../contextManagementConstants';
@@ -375,9 +378,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   protected override backgroundModeSupported = true;
 
   /**
-   * Reads the ChatGPT-subscription profile when active (that backend doesn't
-   * support manual compaction); otherwise falls back to whether this request
-   * is routed through OpenRouter, which implements its own compaction path via
+   * Reads the ChatGPT-subscription profile when active (that backend does
+   * support compaction, just not via the stateful endpoint — see
+   * {@link storesResponsesServerSide} and `compactConversationClientSide`);
+   * otherwise falls back to whether this request is routed through
+   * OpenRouter, which implements its own compaction path via
    * `ModelHandlerOpenRouterNative` instead.
    */
   override get supportsManualCompaction(): boolean {
@@ -917,9 +922,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Compact the conversation to reduce context size.
-   * Uses OpenAI's `/responses/compact` endpoint to replace prior assistant messages,
+   * Compact the conversation to reduce context size via OpenAI's stateful
+   * `/responses/compact` endpoint, which replaces prior assistant messages,
    * tool calls, and results with a single encrypted compaction item.
+   *
+   * Only usable when {@link storesResponsesServerSide} is true — the compact
+   * endpoint acts on a stored server-side response, which a `store: false`
+   * backend (the ChatGPT-subscription/Codex profile) never has. That backend
+   * is compacted via {@link compactConversationClientSide} instead, a
+   * distinct code path that never calls this endpoint.
    *
    * State updates are stored in compactionResult but NOT applied immediately.
    * The caller must apply them only after successful API call to prevent
@@ -1034,6 +1045,174 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.compactionResult = undefined;
       return messages;
     }
+  }
+
+  /**
+   * Client-side compaction fallback for backends that cannot use the
+   * stateful `/responses/compact` endpoint (see {@link compactConversation})
+   * because they don't store responses server-side — the ChatGPT-subscription
+   * (Codex) backend forces `store: false` on every request, so there is no
+   * stored response for the compact endpoint to act on (#7213). Summarizes
+   * the conversation locally via a throwaway system-prompt-swap call to the
+   * same Responses API, then resends a single summary message instead of the
+   * full history. Reuses the {@link ModelHandler.runClientCompaction} scaffold
+   * already shared by the Chat Completions, OpenRouter-native, and Google
+   * Interactions handlers.
+   *
+   * The summarization call always streams: this path only ever runs under a
+   * profile that also forces `streaming: 'forced'` (see
+   * `getStreamingConfig`), and a non-streaming request would receive an SSE
+   * body it can't parse.
+   *
+   * State updates are stored in compactionResult but NOT applied immediately,
+   * mirroring {@link compactConversation} — the caller applies them only
+   * after a successful API call so a failed retry doesn't see stale state.
+   *
+   * @param client - OpenAI client instance
+   * @param messages - Current conversation messages
+   * @param signal - Optional abort signal
+   * @returns The compacted messages array, or original messages if compaction fails
+   */
+  private async compactConversationClientSide(
+    client: OpenAI,
+    messages: ResponseInputItem[],
+    signal?: AbortSignal,
+  ): Promise<ResponseInputItem[]> {
+    const tokensBefore = this.conversationState.cumulativeInputTokens;
+    const contextWindow = this.getEffectiveContextWindow();
+
+    this.logger.debug('Compacting conversation (client-side)', {
+      data: {
+        inputTokens: tokensBefore,
+        utilizationPercent: computeUtilizationPercent(
+          tokensBefore,
+          contextWindow,
+        ),
+        contextWindow,
+      },
+    });
+
+    const { compactedMessages, didCompact } = await this.runClientCompaction(
+      messages,
+      tokensBefore,
+      async (conversationMessages) => {
+        const stream = await client.responses.stream(
+          {
+            model: this.config.fullName,
+            instructions: COMPACTION_SYSTEM_PROMPT,
+            input: conversationMessages,
+            max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+            store: this.storesResponsesServerSide,
+            ...(this.capabilities.supportsReasoning && {
+              reasoning: { effort: 'low' },
+            }),
+          },
+          { signal },
+        );
+
+        // The ChatGPT-subscription (Codex) backend strips `max_output_tokens`
+        // at the wire (it answers `400 Unsupported parameter: max_output_tokens`
+        // — see rewriteCodexRequestBody), so the summary cap cannot be enforced
+        // server-side on this path, and this client-side path only ever runs for
+        // that stateless profile. Enforce the cap locally instead: stop
+        // consuming and abort the request once the streamed summary reaches the
+        // cap, bounding both the resent summary size and the summarization
+        // turn's latency. Under a backend that does honor `max_output_tokens`
+        // the stream ends first, so this ceiling is never hit.
+        let streamedText = '';
+        for await (const event of stream) {
+          if (event.type !== 'response.output_text.delta') continue;
+          streamedText += event.delta;
+          if (
+            estimateTokensFromText(streamedText) >=
+            CLIENT_COMPACTION_SUMMARY_MAX_TOKENS
+          ) {
+            stream.abort();
+            return {
+              summaryText: streamedText.trim(),
+              outputTokens: estimateTokensFromText(streamedText),
+            };
+          }
+        }
+
+        // Prefer the text accumulated from the deltas above: the Codex backend
+        // leaves the completed response's `output`/`output_text` empty (the same
+        // reason executeStreamingPath rebuilds from `output_text.delta`), so
+        // extracting only from finalResponse() would yield an empty summary and
+        // silently skip compaction. Fall back to finalResponse() extraction only
+        // when no text was streamed.
+        const summaryResponse = await stream.finalResponse();
+        const summaryText =
+          streamedText.trim() ||
+          this.extractResponse(summaryResponse, '').text.trim();
+        return {
+          summaryText,
+          outputTokens:
+            summaryResponse.usage?.output_tokens ??
+            estimateTokensFromText(summaryText),
+        };
+      },
+      (summary): ResponseInputItem => ({
+        type: 'message',
+        role: 'user',
+        content: [
+          createInputText(`[Previous conversation summary]\n\n${summary}`),
+        ],
+      }),
+    );
+
+    if (!didCompact) {
+      this.compactionResult = undefined;
+      return compactedMessages;
+    }
+
+    // CRITICAL: clear now, before this handler builds the next request —
+    // the compacted messages replace the discarded history, so a stale
+    // previousResponseId must never be resent alongside them (same reason as
+    // compactConversation()'s stateful path).
+    this.previousResponseId = null;
+    this.compactionResult = {
+      compactedMessages,
+      // Bookkeeping must reflect the INPUT cost of resending the compacted
+      // payload next turn (system items + the summary message with its
+      // "[Previous conversation summary]" prefix), not the OUTPUT cost of
+      // generating the summary — mirroring the stateful path, which counts the
+      // compacted items' input tokens. `getBestInputTokenEstimate()` prefers
+      // this value, and on the Codex profile it is load-bearing: token counting
+      // is unavailable and `failWhenFallbackOutputBudgetIsReduced` fails the
+      // request locally when the estimate + budget overflow the context window,
+      // so an output-token underestimate could let through a request the backend
+      // then rejects.
+      tokensAfter: this.estimateResentInputTokens(compactedMessages),
+    };
+    return compactedMessages;
+  }
+
+  /**
+   * Estimate the input-token cost of resending the compacted payload. The
+   * ChatGPT-subscription (Codex) profile — the only backend that reaches
+   * {@link compactConversationClientSide} — exposes no token-counting endpoint
+   * (`supportsTokenCounting: false`), so {@link estimateTokenCount} throws and
+   * the stateful path's exact API count is unavailable; fall back to a
+   * text-length heuristic over exactly what gets resent.
+   */
+  private estimateResentInputTokens(messages: ResponseInputItem[]): number {
+    const text = messages
+      .map((message) => {
+        // Flatten message content (string or typed parts) to plain text;
+        // non-text items contribute nothing to the estimate.
+        const content = (message as { content?: unknown }).content;
+        if (typeof content === 'string') return content;
+        if (!Array.isArray(content)) return '';
+        return content
+          .map((part) => {
+            const partText = (part as { text?: unknown } | null)?.text;
+            return typeof partText === 'string' ? partText : '';
+          })
+          .join('');
+      })
+      .join('\n');
+    return Math.max(1, estimateTokensFromText(text));
   }
 
   /**
@@ -1501,13 +1680,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
         );
       }
-      effectiveMessages = await this.compactConversation(
-        client,
-        messages,
-        systemPrompt,
-        signal,
-        convertedTools,
-      );
+      // A backend that keeps no server-side response state (the ChatGPT-
+      // subscription/Codex profile) has nothing for the stateful compact
+      // endpoint to act on, so it always goes through the client-side
+      // summarize-and-resend fallback instead (#7213).
+      effectiveMessages = this.storesResponsesServerSide
+        ? await this.compactConversation(
+            client,
+            messages,
+            systemPrompt,
+            signal,
+            convertedTools,
+          )
+        : await this.compactConversationClientSide(client, messages, signal);
       // compactionResult is set if compaction succeeded
       compactedThisCall = this.compactionResult !== undefined;
       if (compactedThisCall) {

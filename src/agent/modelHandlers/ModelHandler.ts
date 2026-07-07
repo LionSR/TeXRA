@@ -12,11 +12,7 @@ import {
 // Local imports - agent
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
-import {
-  logWebFetch,
-  logWebSearch,
-  logContextManagementEvent,
-} from '@agent/trace';
+import { logWebSearch, logContextManagementEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -104,7 +100,6 @@ import type {
 } from './types/ModelHandlerContracts';
 import type {
   ServerToolExtractionResult,
-  WebFetchResult,
   WebSearchResult,
 } from './types/ServerToolTypes';
 
@@ -332,17 +327,6 @@ export abstract class ModelHandler<
   protected emitWebSearchResult(result: WebSearchResult): void {
     if (this.progressViewEnabled) {
       logWebSearch(this.logger, result);
-    }
-  }
-
-  /**
-   * Emit web fetch result to progress view during streaming.
-   * This allows fetch results to appear in correct order based on when
-   * they occurred in the response, rather than being logged after streaming.
-   */
-  protected emitWebFetchResult(result: WebFetchResult): void {
-    if (this.progressViewEnabled) {
-      logWebFetch(this.logger, result);
     }
   }
 
@@ -990,6 +974,11 @@ export abstract class ModelHandler<
    * The provider supplies {@link summarize} (build the request, call the SDK,
    * and return the summary text plus output-token count) and
    * {@link buildSummaryMessage} (wrap the summary into a provider message).
+   *
+   * Callers that keep their own post-compaction token bookkeeping (like
+   * `ModelHandlerOpenAIResponse`'s client-side path) derive it from the returned
+   * `compactedMessages` — the INPUT cost of the resent payload — rather than the
+   * summarization call's output-token count, which measures a different thing.
    */
   protected async runClientCompaction(
     messages: M[],
@@ -998,8 +987,11 @@ export abstract class ModelHandler<
       conversationMessages: M[],
     ) => Promise<{ summaryText: string; outputTokens: number }>,
     buildSummaryMessage: (summary: string) => M,
-  ): Promise<{ compactedMessages: M[]; didCompact: boolean }> {
-    const contextWindow = this.config.contextWindow;
+  ): Promise<{
+    compactedMessages: M[];
+    didCompact: boolean;
+  }> {
+    const contextWindow = this.getEffectiveContextWindow();
 
     // Separate leading system/developer messages from the conversation body.
     const systemMessages: M[] = [];
@@ -1035,17 +1027,21 @@ export abstract class ModelHandler<
         buildSummaryMessage(summaryText),
       ];
 
-      const estimatedTokensAfter = Math.max(1, outputTokens);
       logCompactionEvent({
         logger: this.logger,
         tokensBefore,
-        tokensAfter: estimatedTokensAfter,
+        // Rough post-compaction size for the log only; callers that need exact
+        // bookkeeping recompute it from the resent payload's input cost.
+        tokensAfter: Math.max(1, outputTokens),
         contextWindow,
         details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
         tokensAfterIsEstimate: true,
       });
 
-      return { compactedMessages, didCompact: true };
+      return {
+        compactedMessages,
+        didCompact: true,
+      };
     } catch (err) {
       this.logger.warn(
         `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,

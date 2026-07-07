@@ -112,6 +112,7 @@ vi.mock('vscode', () => {
 
 const { SessionEventHub } = await import('@agent/runtime/SessionEventHub');
 const { toRunFactDomainKey } = await import('@agent/runtime/runFactEvents');
+const { appSignals } = await import('@eventBus/AppSignals');
 const { ProgressEventBus } = await import('@eventBus/ProgressEventBus');
 const { registerInlineCriticism, setInlineCriticismEnabled } =
   await import('@frontend/latex/inlineCriticism');
@@ -207,7 +208,7 @@ describe('output-file run fact frontend subscriptions', () => {
     }
   });
 
-  it('badges run-fact output files and keeps workspaceFilesWritten on the bus', () => {
+  it('badges run-fact output files and app-scoped workspace writes', () => {
     const hub = new SessionEventHub();
     const context = makeContext();
     registerFileDecorations(context as unknown as VSCode.ExtensionContext, hub);
@@ -229,7 +230,7 @@ describe('output-file run fact frontend subscriptions', () => {
     ).toMatchObject({ badge: 'T', tooltip: 'Modified by TeXRA' });
 
     const writtenPath = '/tmp/texra-workspace-written.tex';
-    ProgressEventBus.emit('workspaceFilesWritten', {
+    appSignals.emit('workspaceFilesWritten', {
       absolutePaths: [writtenPath],
     });
     expect(

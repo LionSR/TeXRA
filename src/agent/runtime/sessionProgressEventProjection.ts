@@ -28,6 +28,53 @@ export function emitProjectedProgressEvent(
   runtimeHost.emit(projected.event, projected.payload);
 }
 
+/**
+ * Subscribe a host-owned progress surface to the session fact plane and
+ * re-emit the retained progress events that have not yet moved to a native
+ * host/session projection.
+ */
+export function attachSessionProgressEventProjection(
+  events: SessionEventHub,
+  runtimeHost: AgentRuntimeHost,
+): () => void {
+  const detachSessionFacts = events.subscribe(
+    (sessionEvent) => {
+      if (sessionEvent.scope !== 'session') return;
+      emitProjectedProgressEvent(
+        runtimeHost,
+        projectSessionFactToProgressEvent(sessionEvent.event),
+      );
+    },
+    { scope: 'session' },
+  );
+  const detachRunFacts = events.subscribe(
+    (sessionEvent) => {
+      if (sessionEvent.scope !== 'run') return;
+      const projected = projectRunFactToProgressEvent(
+        sessionEvent.streamId,
+        sessionEvent.event,
+      );
+      if (!projected) return;
+      emitProjectedProgressEvent(runtimeHost, projected);
+    },
+    {
+      scope: 'run',
+      types: [
+        'domain',
+        'usage',
+        'stage.start',
+        'child.activity',
+        'process.output',
+      ],
+    },
+  );
+
+  return () => {
+    detachRunFacts();
+    detachSessionFacts();
+  };
+}
+
 type UpdateStreamUsagePayload = ProgressEventPayloads['updateStreamUsage'];
 
 function asString(value: unknown): string | undefined {
@@ -165,8 +212,8 @@ const RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
 /**
  * Subscribe to the run-scoped facts that project onto legacy progress
  * events, forwarding each successfully projected event to `onProjected`.
- * Shared by `LegacyProgressEventProjection` and `ProgressBackend` so their
- * run-fact filter and projection can't silently diverge.
+ * Used by `ProgressBackend` so its run-fact filter and projection can't
+ * silently diverge from `attachSessionProgressEventProjection`'s.
  */
 export function subscribeRunFactsAsProgressEvents(
   events: SessionEventHub,
