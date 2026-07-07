@@ -5,6 +5,8 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
+import { writeTerminalStatus } from '@agent/storage';
+import type { ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   StreamStatusService,
@@ -17,8 +19,10 @@ import {
 import {
   isInFlightStatus,
   isLiveElapsedStatus,
+  projectRunOutcome,
 } from '@common/constants/streamStatus';
 import {
+  RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_SUBSTATE,
@@ -140,6 +144,15 @@ export class ExecutionRegistry {
   private readonly streamStatus: StreamStatusMachine;
   private readonly interrupts: InterruptRegistry;
   private events: SessionEventHub | undefined;
+  /**
+   * Publishes a synthesized terminal `result` event to the owning session's
+   * `onResult` channel — the same forwarding `SessionHandle.attachRunTrace`
+   * does for a live run's own trace, injected here because
+   * `terminateWaitingHandle` produces its `result` event *after* the
+   * suspended run's own trace has already been disposed (see there).
+   */
+  private publishResult:
+    ((event: ResultEvent, streamId: StreamTabId) => void) | undefined;
   // Persistent listeners stay attached across notifications (unlike one-shot
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
   private readonly persistentListeners = new Map<
@@ -152,16 +165,21 @@ export class ExecutionRegistry {
     processOutput = new ProcessOutputPoller(),
     streamStatus = StreamStatusService,
     events,
+    publishResult,
   }: {
     readonly interrupts?: InterruptRegistry;
     readonly processOutput?: ProcessOutputPoller;
     readonly streamStatus?: StreamStatusMachine;
     readonly events?: SessionEventHub;
+    readonly publishResult?: (
+      event: ResultEvent,
+      streamId: StreamTabId,
+    ) => void;
   } = {}) {
     this.interrupts = interrupts;
     this.processOutput = processOutput;
     this.streamStatus = streamStatus;
-    if (events) this.attachSessionEvents(events);
+    if (events) this.attachSessionEvents(events, publishResult);
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). Without this, waitForChange only resolves
     // on progress/kill/untrack, and the background-tasks panel shows stale badges.
@@ -186,8 +204,12 @@ export class ExecutionRegistry {
     );
   }
 
-  attachSessionEvents(events: SessionEventHub): void {
+  attachSessionEvents(
+    events: SessionEventHub,
+    publishResult?: (event: ResultEvent, streamId: StreamTabId) => void,
+  ): void {
     this.events = events;
+    if (publishResult) this.publishResult = publishResult;
     this.processOutput.setOutputEmitter((payload) => {
       events.emit({
         scope: 'run',
@@ -822,18 +844,25 @@ export class ExecutionRegistry {
         this.interruptActiveChildren(handle.childStreamId, visited, options);
       }
       const interruptible = this.interrupts.get(handle.childStreamId);
-      if (!interruptible) return false;
-      interruptible.interrupt();
-      this.streamStatus.transition(
-        handle.childStreamId,
-        STREAM_PHASE.CANCELLED,
-        'user-stop',
-        {
-          runtimeHost: handle.runtimeHost,
-          trace: handle.trace,
-        },
-      );
-      return true;
+      if (interruptible) {
+        interruptible.interrupt();
+        this.streamStatus.transition(
+          handle.childStreamId,
+          STREAM_PHASE.CANCELLED,
+          'user-stop',
+          {
+            runtimeHost: handle.runtimeHost,
+            trace: handle.trace,
+          },
+        );
+        return true;
+      }
+      // No live interrupt context: a native subagent suspended at WAITING has
+      // already had its tool-use session disposed and interrupt unregistered
+      // (runToolUseFlow's finally), while the handle stays tracked for resume
+      // (runFlowWithLifecycle). Run its registered waiting-cleanup instead of
+      // silently no-oping the kill.
+      return this.terminateWaitingHandle(handle);
     }
 
     if (handle instanceof ProcessExecutionHandle) {
@@ -841,6 +870,61 @@ export class ExecutionRegistry {
     }
 
     return false;
+  }
+
+  /**
+   * Tear down an `AgentExecutionHandle` suspended at WAITING with no live
+   * interrupt context. Returns false (no-op) when the handle never registered
+   * a waiting-cleanup — i.e. it isn't actually suspended, just momentarily
+   * between its own interrupt-unregister and untrack during normal teardown.
+   *
+   * This path bypasses `runFlowWithLifecycle`'s own terminal handling (the
+   * flow never resumes to produce one), so it publishes the terminal
+   * `result`, settles `handle.result`, and persists the terminal status
+   * itself — otherwise trace/session subscribers would miss the stop, a
+   * consumer awaiting `handle.result` (F-2) would hang forever, and the
+   * execution's history would keep a non-terminal status. Unlike
+   * `emitRunResult`, no usage totals ride the event: the flow is suspended,
+   * so there is no live usage monitor to read.
+   *
+   * `handle.trace` belongs to the turn that suspended this handle at WAITING,
+   * and `runFlowWithLifecycle`'s own `finally` already disposed it (channel +
+   * transcript + session bridge) the moment that turn returned — emitting on
+   * it is a harmless best effort, not the real fix. `publishResult` (wired
+   * from `SessionHandle.publishRunEvent`) reaches this session's
+   * `onResult`/event-bus subscribers directly instead, so a user-initiated
+   * stop of a suspended native subagent still surfaces a terminal event even
+   * though the turn's own trace is already gone.
+   */
+  private terminateWaitingHandle(handle: AgentExecutionHandle): boolean {
+    if (!handle.runWaitingCleanup()) return false;
+    const cancelledResult: ResultEvent = {
+      type: 'result',
+      outcome: RUN_OUTCOME.CANCELLED,
+      executionId: handle.executionId,
+      streamId: handle.childStreamId,
+      agentName: handle.agentName,
+      category: handle.category,
+      isSubagent: handle.isChildExecution,
+    };
+    handle.trace?.emit(cancelledResult);
+    this.publishResult?.(cancelledResult, handle.childStreamId);
+    handle.settleResult(cancelledResult);
+    void writeTerminalStatus(
+      handle.executionId,
+      projectRunOutcome(RUN_OUTCOME.CANCELLED).executionStatus,
+    ).catch(() => {});
+    this.untrackHandle(handle);
+    this.streamStatus.transition(
+      handle.childStreamId,
+      STREAM_PHASE.CANCELLED,
+      'user-stop',
+      {
+        runtimeHost: handle.runtimeHost,
+        trace: handle.trace,
+      },
+    );
+    return true;
   }
 
   private interruptRegisteredStream(
