@@ -60,6 +60,7 @@ export function createToolUseRoundFlow<C>(): Flow<
   >({
     operationName: 'Tool-use call',
     streaming: true,
+    getSystemPrompt: (shared) => shared.systemPrompt,
     storeResponse: (shared, response) => {
       shared.response = response;
     },
