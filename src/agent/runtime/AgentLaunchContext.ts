@@ -55,14 +55,10 @@ import type { AgentSource } from '@shared/schemas/agent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { generateExecutionId } from '@utils/core/executionId';
 
-import { AgentProposalCoordinator } from './AgentProposalCoordinator';
-import { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 import {
   createRunContext,
   withRunContext,
   type CreateRunContextOptions,
-  type RunCoordinators,
 } from './RunContext';
 import {
   countMediaFilesNeedingVision,
@@ -81,7 +77,6 @@ export interface AgentLaunchContext extends AgentCore, AgentRunIdentity {
   storageKey: StorageKey;
   parentStage: StageHandle;
   streamStatus: StreamStatusMachine;
-  coordinators: RunCoordinators;
   attachedMemoryMisses: AttachedMemoryMiss[];
   /** Whether this tool-use run exits after one cycle instead of idling. */
   stopAfterCycle?: boolean;
@@ -159,7 +154,6 @@ function agentContextToRunContext(
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
     executionId: ctx.executionId,
-    coordinators: ctx.coordinators,
     modelSource: 'live' as const,
     getModel: () => ctx.config.model,
     agentName: ctx.config.agent,
@@ -461,11 +455,6 @@ async function assembleAgentLaunchContext(
     runtimeHost,
     streamStatus,
     workingDirectory: configPayload.workingDirectory?.trim() || undefined,
-    coordinators: {
-      plan: new PlanApprovalCoordinator(runtimeHost),
-      proposal: new AgentProposalCoordinator(runtimeHost),
-      retry: new RetryRequestCoordinatorImpl(runtimeHost),
-    },
     session,
     disposeTrace: runTrace.dispose,
   };

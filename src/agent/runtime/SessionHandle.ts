@@ -3,11 +3,11 @@
  *
  * SDK Step 7d composition root. It is a **composition record**, not a facade:
  * it re-exposes no per-concern methods, so callers keep the existing instance
- * vocabulary they already use after 7a–c landed (`session.coordinators.x(...)`,
- * `session.executions.y(...)`). It composes the four landed runtime owners —
- * {@link InterruptRegistry}, {@link ExecutionRegistry}, {@link RunCoordinatorBridge},
- * {@link ExecutionSubscriptionBinder} — plus the trace flusher set and an
- * optional session-scoped host channel.
+ * vocabulary they already use after 7a–c landed (`session.interactions.x(...)`,
+ * `session.executions.y(...)`). It composes the landed runtime owners —
+ * {@link InterruptRegistry}, {@link ExecutionRegistry},
+ * {@link ExecutionSubscriptionBinder}, {@link SessionHostInteractions} — plus
+ * the trace flusher set and an optional session-scoped host channel.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop `BrowserWindow`. The default instance,
@@ -48,10 +48,6 @@ import {
   SharedInterruptRegistry,
 } from './InterruptRegistry';
 import {
-  RunCoordinatorBridge,
-  SharedRunCoordinatorBridge,
-} from './runCoordinators';
-import {
   ExecutionSubscriptionBinder,
   SharedExecutionSubscriptionBinder,
 } from './ExecutionSubscriptionBinder';
@@ -74,7 +70,6 @@ export type SessionHandleInit = Partial<
     SessionHandle,
     | 'interrupts'
     | 'executions'
-    | 'coordinators'
     | 'subscriptions'
     | 'events'
     | 'status'
@@ -99,8 +94,6 @@ export class SessionHandle {
   readonly interrupts: InterruptRegistry;
   /** Per-run execution handles; owns the process-output poller + status sub. */
   readonly executions: ExecutionRegistry;
-  /** Resolve-side request index bridging host decisions to run coordinators. */
-  readonly coordinators: RunCoordinatorBridge;
   /** Execution-status subscriptions bound to agent stream lifecycles. */
   readonly subscriptions: ExecutionSubscriptionBinder;
   /** Session-scoped one-way fact plane. */
@@ -138,12 +131,9 @@ export class SessionHandle {
     executions.attachSessionEvents(events, (event, streamId) =>
       this.publishRunEvent(streamId, event),
     );
-    const coordinators =
-      init.coordinators ?? new RunCoordinatorBridge(executions);
 
     this.interrupts = interrupts;
     this.executions = executions;
-    this.coordinators = coordinators;
     const subscriptions =
       init.subscriptions ??
       new ExecutionSubscriptionBinder({
@@ -228,10 +218,11 @@ export class SessionHandle {
   /**
    * Tear down everything this session owns. Order matters: drain this session's
    * pending trace writes, then either defer teardown while active executions
-   * must remain visible for process-wide guards, or resolve pending coordinator
-   * requests, drop subscription disposers, dispose the execution registry, clear
-   * interrupt entries (`InterruptRegistry` has no `clear()`; `retainOnly` with
-   * the empty set is the existing precedent), and drop result listeners. Finally
+   * must remain visible for process-wide guards, or drop subscription
+   * disposers, dispose the execution registry, clear interrupt entries
+   * (`InterruptRegistry` has no `clear()`; `retainOnly` with the empty set is
+   * the existing precedent), settle pending host interactions via
+   * `interactions.dispose()`, and drop result listeners. Finally
    * unregister this session's flusher set from the process-wide drain and
    * deregister from `liveSessions` once no active executions remain — both in
    * `finally` so a teardown throw can't strand a fully disposed session in the
@@ -278,9 +269,8 @@ export class SessionHandle {
     }
   }
 
-  /** Dispose the four runtime owners and drop result listeners. */
+  /** Dispose the runtime owners and drop result listeners. */
   private teardownOwners(): void {
-    this.coordinators.cleanupAllRequests();
     this.subscriptions.dispose();
     this.executions.dispose();
     this.interrupts.retainOnly(new Set());
@@ -323,7 +313,7 @@ let cachedDefaultSession: SessionHandle | undefined;
  * The process-default session. Its members ARE the existing exported singletons
  * — identity is the behavior-neutral compatibility mechanism for the 7d train:
  * unmigrated call sites keep hitting the same objects, and per-call-site
- * migration is `SharedRunCoordinatorBridge.x(...)` → `session.coordinators.x(...)`
+ * migration is `SharedExecutionRegistry.x(...)` → `session.executions.x(...)`
  * against the identical instance.
  *
  * Constructed lazily on first use rather than at module evaluation: many
@@ -336,7 +326,6 @@ export function defaultSession(): SessionHandle {
   return (cachedDefaultSession ??= new SessionHandle({
     interrupts: SharedInterruptRegistry,
     executions: SharedExecutionRegistry,
-    coordinators: SharedRunCoordinatorBridge,
     subscriptions: SharedExecutionSubscriptionBinder,
     status: StreamStatusService,
     transcripts: getDefaultStreamLogStore(),

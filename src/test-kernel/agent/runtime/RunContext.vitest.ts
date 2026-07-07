@@ -6,7 +6,6 @@ import {
   createRunContext,
   useRunContext,
   withRunContext,
-  type RunCoordinators,
 } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -52,7 +51,6 @@ describe('RunContext', () => {
       runtimeHost: createRuntimeHost(),
       streamId: 'live-model-stream' as StreamTabId,
       executionId: 'live-model-execution' as ExecutionId,
-      coordinators: {} as RunCoordinators,
       modelSource: 'live',
       model: 'fallback-model',
       getModel: () => currentModel,
