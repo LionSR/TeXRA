@@ -118,6 +118,14 @@ class EchoGuard<T> {
   }
 }
 
+// Migration lifetime: this module-level handle is the only way `applyToState`
+// (the legacy `updateStreamUsage` projection path, driven by
+// `SessionRunFactProjector`) can reach the guard owned by the direct
+// subscription path in `attachTuiRunFactSubscription`. It exists solely to
+// dedupe the two paths' overlapping usage updates during the migration and
+// must be deleted together with the legacy `updateStreamUsage` projection
+// once `SessionRunFactProjector` reaches its Stage 5 deletion gate (#6968) —
+// do not treat it as permanent architecture.
 type UsageEchoGuard = EchoGuard<UpdateStreamUsagePayload>;
 let activeUsageEchoGuard: UsageEchoGuard | undefined;
 
