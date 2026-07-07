@@ -620,6 +620,63 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
+  it('labels a focused WAITING child distinctly from the root idle wording', () => {
+    const rootDisplay = buildStatusBarDisplay(
+      statusInput({ status: STREAM_STATUS.WAITING, isChildStream: false }),
+    );
+    expect(rootDisplay.left.map(statusBarSegmentText)).toContain('idle');
+
+    const childDisplay = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_STATUS.WAITING,
+        isChildStream: true,
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        ctrlCAction: 'stop root',
+      }),
+    );
+    expect(childDisplay.left.map(statusBarSegmentText)).toContain(
+      'waiting for you',
+    );
+    expect(childDisplay.left.map(statusBarSegmentText)).not.toContain('idle');
+  });
+
+  it('derives isChildStream for statusBarStreamTarget from whichever stream is actually displayed', () => {
+    const root = 'root';
+    const child = 'child';
+    const waitingChildSlice = {
+      streamId: child,
+      status: STREAM_STATUS.WAITING,
+    } as StreamSlice;
+    const streams = new Map<StreamSlice['streamId'], StreamSlice>([
+      [child, waitingChildSlice],
+    ]);
+
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: child,
+        canStopActiveRun: true,
+        parentStream: new Map([[child, root]]),
+        streams,
+      }),
+    ).toMatchObject({
+      displaySlice: waitingChildSlice,
+      isChildStream: true,
+    });
+
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: root,
+        canStopActiveRun: true,
+        parentStream: new Map([[child, root]]),
+        streams,
+      }),
+    ).toMatchObject({
+      displaySlice: undefined,
+      isChildStream: false,
+    });
+  });
+
   it('projects focused status while keeping stop capability host-owned', () => {
     const root = 'root';
     const child = 'child';

@@ -165,6 +165,6 @@ describe('CLI SubagentList display model', () => {
         },
         nowMs: Date.now(),
       }),
-    ).toBe('review idle');
+    ).toBe('review waiting for you');
   });
 });

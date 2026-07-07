@@ -28,6 +28,46 @@ describe('stream status display labels', () => {
     },
   );
 
+  it.each(['cli', 'cliCompact'] as const)(
+    'labels a child stream WAITING distinctly from the root idle wording (%s)',
+    (style) => {
+      expect(
+        formatStreamStatusLabel(STREAM_STATUS.WAITING, {
+          style,
+          isChildStream: true,
+        }),
+      ).toBe('waiting for you');
+      // Unset (or false) isChildStream keeps the root's plain "idle" wording.
+      expect(formatStreamStatusLabel(STREAM_STATUS.WAITING, { style })).toBe(
+        'idle',
+      );
+      expect(
+        formatStreamStatusLabel(STREAM_STATUS.WAITING, {
+          style,
+          isChildStream: false,
+        }),
+      ).toBe('idle');
+    },
+  );
+
+  it('ignores isChildStream for the progressHeader style, which already says "Waiting for follow-up"', () => {
+    expect(
+      formatStreamStatusLabel(STREAM_STATUS.WAITING, {
+        style: 'progressHeader',
+        isChildStream: true,
+      }),
+    ).toBe('Waiting for follow-up');
+  });
+
+  it('ignores isChildStream for statuses other than WAITING', () => {
+    expect(
+      formatStreamStatusLabel(STREAM_PHASE.COMPLETED, {
+        style: 'cli',
+        isChildStream: true,
+      }),
+    ).toBe('completed');
+  });
+
   it('passes through unknown statuses and supports an explicit missing label', () => {
     expect(formatStreamStatusLabel('custom')).toBe('custom');
     expect(formatStreamStatusLabel('')).toBe('');
