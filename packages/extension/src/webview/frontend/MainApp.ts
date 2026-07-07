@@ -333,9 +333,7 @@ export class MainApp extends MainAppBase {
   };
 
   private readonly onBrowseAllAgents = (): void => {
-    postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS, {
-      sessionType: sessionType$.get(),
-    });
+    runAgentConfigAction('edit');
   };
 
   private readonly onModelSettings = this.commandHandler(
