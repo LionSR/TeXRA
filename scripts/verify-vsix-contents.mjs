@@ -129,9 +129,22 @@ function verifyRequiredPaths(entries, snapshot, failures) {
   }
 }
 
+// resources/traceViewer is the multi-file, external-assets trace-viewer
+// build (shared-assets/site-hosting export mode) — CLI-only
+// (packages/cli/src/runtime/history.ts), never referenced by the extension
+// host. It's built straight into the extension's resources/ as a staging
+// spot for packages/cli/scripts/copy-resources.mjs to copy from, and
+// .vscodeignore deliberately excludes it from the packaged VSIX (see
+// resources/traceViewer/** there) to avoid ~3.4MB of dead weight. Only
+// resources/traceViewerStandalone (the single-file build historyHandlers.ts
+// actually loads) ships.
+const RESOURCE_HASH_EXCLUDED_PREFIX = 'traceViewer/';
+
 function verifyResourceHashes(vsixPath, entries, failures) {
   const resourcesDir = path.join(extensionDir, 'resources');
-  const sourceFiles = walkFiles(resourcesDir);
+  const sourceFiles = walkFiles(resourcesDir).filter(
+    (file) => !file.startsWith(RESOURCE_HASH_EXCLUDED_PREFIX),
+  );
   const sourceFileSet = new Set(sourceFiles);
 
   for (const sourceFile of sourceFiles) {
