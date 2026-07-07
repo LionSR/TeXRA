@@ -18,11 +18,11 @@ import {
   LegacyInstructionsDataSchema,
   MissingOutputsDataSchema,
   OutputFilesDataSchema,
+  parseUsageData,
   PersistedWorkPlanSchema,
   STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
   StreamTabMetaSchema,
-  UsageDataSchema,
   flattenLegacyRuns,
   isLegacyNested,
   selectPreferredLegacyInstruction,
@@ -59,6 +59,13 @@ export interface StreamData {
   missingOutputs: Map<number, string[]>;
   compileFailures: Map<number, CompileFailure[]>;
   usage: Map<string, TokenUsageStats>;
+  /**
+   * Raw per-run usage values that failed to parse, keyed by runId and
+   * preserved verbatim (see {@link parseUsageData}). `StreamSnapshotStore`
+   * round-trips these back into `usageStats.json` on the next write instead
+   * of a lossy read silently deleting them (#7464).
+   */
+  usageUnparsed: Map<string, unknown>;
   workPlan: WorkPlanSnapshot;
   /** Category keys whose on-disk file was legacy-nested (need a one-time flat rewrite). */
   legacyKeys: string[];
@@ -193,7 +200,7 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
   ]);
 
   const usageRaw = await tryRead(kv, STREAM_DATA_KEYS.USAGE_STATS);
-  const usage = UsageDataSchema.catch(new Map()).parse(usageRaw);
+  const { usage, unparsedRuns: usageUnparsed } = parseUsageData(usageRaw);
 
   const workPlan = readPersistedWorkPlan(
     await tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN),
@@ -205,6 +212,7 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
     missingOutputs,
     compileFailures,
     usage,
+    usageUnparsed,
     workPlan,
     legacyKeys,
   };
