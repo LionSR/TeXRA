@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   readMeta: vi.fn(),
   readChildren: vi.fn(),
   readTodos: vi.fn(),
+  todosModifiedAt: vi.fn(),
   readReport: vi.fn(),
   readWorkspaceFiles: vi.fn(),
   listExecutions: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock('@agent/storage', async () => {
       readMeta: mocks.readMeta,
       readChildren: mocks.readChildren,
       readTodos: mocks.readTodos,
+      todosModifiedAt: mocks.todosModifiedAt,
       readReport: mocks.readReport,
       readWorkspaceFiles: mocks.readWorkspaceFiles,
     })),
@@ -122,6 +124,7 @@ describe('ExecutionsTool', () => {
     mocks.readMeta.mockResolvedValue(null);
     mocks.readChildren.mockResolvedValue([]);
     mocks.readTodos.mockResolvedValue([]);
+    mocks.todosModifiedAt.mockResolvedValue(undefined);
     mocks.readReport.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
@@ -314,6 +317,69 @@ describe('ExecutionsTool', () => {
 
       expect(result.output).toContain('Read the old KV todo');
       expect(mocks.readTodos).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Regression for #7300: the advertised /executions/{id}/todos endpoint used
+  // to read legacy KV directly, so it could disagree with the completed
+  // summary above once a run's task list only lived in the sidecar.
+  it('agrees with the completed summary when reading /executions/{id}/todos', async () => {
+    await withTempStorage(async () => {
+      const executionId = 'abc123' as ExecutionId;
+      const streamId = `codex#${executionId}` as StreamTabId;
+      await writeSidecarTodos(streamId, executionId, [
+        {
+          content: 'Read the sidecar work plan',
+          status: 'in_progress',
+          activeForm: 'Reading the sidecar work plan',
+        },
+      ]);
+      mocks.readTodos.mockResolvedValue([
+        { content: 'Read the old KV todo', status: 'pending' },
+      ]);
+
+      const result = await new ExecutionsTool().call({
+        path: `/executions/${executionId}/todos`,
+      });
+
+      expect(result.output).toContain('Read the sidecar work plan');
+      expect(result.output).not.toContain('Read the old KV todo');
+      expect(mocks.readTodos).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression for #7301: a stale-but-present sidecar used to be treated as
+  // authoritative even when a final todo_write had already landed a fresher
+  // legacy write, hiding completed tasks as still pending.
+  it('prefers a fresher legacy KV write over a stale sidecar in the completed summary', async () => {
+    await withTempStorage(async () => {
+      const executionId = 'abc123' as ExecutionId;
+      const streamId = `codex#${executionId}` as StreamTabId;
+      await writeSidecarTodos(streamId, executionId, [
+        {
+          content: 'Stale sidecar todo',
+          status: 'pending',
+          activeForm: 'Doing the stale sidecar todo',
+        },
+      ]);
+      mocks.readMeta.mockResolvedValue({
+        timestamp: '2026-06-15T09:36:02.345Z',
+        category: 'toolUse',
+      });
+      mocks.readConfig.mockResolvedValue(config);
+      mocks.readTodos.mockResolvedValue([
+        { content: 'Fresher legacy todo', status: 'completed' },
+      ]);
+      // Simulate a final todo_write flushing to legacy KV after the sidecar's
+      // own asynchronous write already landed.
+      mocks.todosModifiedAt.mockResolvedValue(Date.now() + 60_000);
+
+      const result = await new ExecutionsTool().call({
+        path: `/executions/${executionId}`,
+      });
+
+      expect(result.output).toContain('Fresher legacy todo');
+      expect(result.output).not.toContain('Stale sidecar todo');
     });
   });
 

@@ -19,6 +19,7 @@ export function createFakeKv(executionId = 'test-exec-0001'): ExecutionKVStore {
     readConfig: async () => null,
     readReport: async () => null,
     readTodos: async () => [],
+    todosModifiedAt: async () => undefined,
     readConversation: async () => null,
     readWorkspaceFiles: async () => [],
     readChildren: async () => [],

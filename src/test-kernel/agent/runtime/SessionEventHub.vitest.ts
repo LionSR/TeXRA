@@ -5,11 +5,11 @@ import {
   SessionEventHub,
   type SessionEvent,
 } from '@agent/runtime/SessionEventHub';
-import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 const streamId = 'stream:hub' as StreamTabId;
 const otherStreamId = 'stream:other' as StreamTabId;
@@ -101,7 +101,7 @@ describe('SessionEventHub', () => {
     const detachTrace = trace.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjection = attachLegacyProgressEventProjection(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       hub,
       host.host,
     );
@@ -181,14 +181,14 @@ describe('SessionEventHub', () => {
     detachTrace();
   });
 
-  it('detaches legacy projection subscriptions cleanly', () => {
+  it('detaches test projection subscriptions cleanly', () => {
     const trace = new TraceEmitter();
     const hub = new SessionEventHub();
     const host = createRecordingHost();
     const detachTrace = trace.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjection = attachLegacyProgressEventProjection(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       hub,
       host.host,
     );
