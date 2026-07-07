@@ -244,6 +244,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
+   * Anthropic passes `system` per-call rather than storing it in `messages`
+   * (see `initializeMessages` below) — the round flow must resupply it on
+   * every invocation.
+   */
+  override get requiresPerCallSystemPrompt(): boolean {
+    return true;
+  }
+
+  /**
    * Anthropic supports file uploads via their Files API. Unconditionally
    * true rather than a capability read: this is a provider-wide fact about
    * the Anthropic SDK, not a per-model llm-zoo flag or `ProviderCapabilityProfile`
