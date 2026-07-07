@@ -53,7 +53,10 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const registry = new ExecutionRegistry({
+      interrupts,
+      streamStatus,
+    });
     const executionId = 'exec-injected-interrupt-test';
     const parentStreamId = 'parent-injected-interrupt-test' as StreamTabId;
     const childStreamId = 'child-injected-interrupt-test' as StreamTabId;
@@ -443,7 +446,16 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const events = new SessionEventHub();
+    const detachProjection = attachSessionProgressEventProjection(
+      events,
+      explicit.host,
+    );
+    const registry = new ExecutionRegistry({
+      interrupts,
+      streamStatus,
+      events,
+    });
     const rootStreamId = 'root-detach-kill-test' as StreamTabId;
     const childStreamId = 'child-detach-kill-test' as StreamTabId;
     const grandchildStreamId = 'grandchild-detach-kill-test' as StreamTabId;
@@ -498,6 +510,7 @@ describe('executionRegistry', () => {
       });
     } finally {
       registry.dispose();
+      detachProjection();
       interrupts.unregister(childStreamId);
       interrupts.unregister(grandchildStreamId);
     }
@@ -507,7 +520,16 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const events = new SessionEventHub();
+    const detachProjection = attachSessionProgressEventProjection(
+      events,
+      explicit.host,
+    );
+    const registry = new ExecutionRegistry({
+      interrupts,
+      streamStatus,
+      events,
+    });
     const rootStreamId = 'root-detach-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-detach-stop-policy-test' as StreamTabId;
     const grandchildStreamId =
@@ -591,6 +613,7 @@ describe('executionRegistry', () => {
       });
     } finally {
       registry.dispose();
+      detachProjection();
     }
   });
 
@@ -818,9 +841,14 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('publishes handle updates through the handle runtime host', () => {
+  it('projects handle updates from session events', () => {
     const explicit = createRecordingHost();
-    const registry = new ExecutionRegistry();
+    const events = new SessionEventHub();
+    const detachProjection = attachSessionProgressEventProjection(
+      events,
+      explicit.host,
+    );
+    const registry = new ExecutionRegistry({ events });
     const executionId = 'exec-handle-runtime-host-test';
     const parentStreamId = 'parent-handle-runtime-host-test' as StreamTabId;
     const childStreamId = 'child-handle-runtime-host-test' as StreamTabId;
@@ -859,6 +887,7 @@ describe('executionRegistry', () => {
       });
     } finally {
       registry.dispose();
+      detachProjection();
     }
   });
 
@@ -1119,9 +1148,14 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('publishes detach updates through the caller runtime host', () => {
+  it('projects detach updates from session events', () => {
     const explicit = createRecordingHost();
-    const registry = new ExecutionRegistry();
+    const events = new SessionEventHub();
+    const detachProjection = attachSessionProgressEventProjection(
+      events,
+      explicit.host,
+    );
+    const registry = new ExecutionRegistry({ events });
     const executionId = 'exec-detach-runtime-host-test';
     const parentStreamId = 'parent-detach-runtime-host-test' as StreamTabId;
     const childStreamId = 'child-detach-runtime-host-test' as StreamTabId;
@@ -1157,6 +1191,7 @@ describe('executionRegistry', () => {
       });
     } finally {
       registry.dispose();
+      detachProjection();
     }
   });
 
