@@ -15,8 +15,7 @@ import {
   type Goal,
   type GoalStatus,
 } from '@shared/schemas/goal';
-import { filterNotNull, unique } from '@utils/core';
-import { hexId12 } from '@utils/core/executionId';
+import { filterNotNull, unique, hexId12 } from '@utils/core';
 
 const STREAM_KEY_PREFIX = 'goals:byStream:';
 const INDEX_KEY = 'goals:index';

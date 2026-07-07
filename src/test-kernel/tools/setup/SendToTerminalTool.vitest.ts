@@ -15,7 +15,7 @@ import {
 } from '@tools/setup/platform';
 
 import { createFakeSetupPlatform } from './fixtures';
-import type { ConfigProvider } from '@platform/interfaces/config';
+import type { ConfigProvider } from '@platform/interfaces';
 
 /**
  * `requestBashApproval` reads `texra.toolUse.requireBashApproval` via

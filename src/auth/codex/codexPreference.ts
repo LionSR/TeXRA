@@ -11,7 +11,7 @@ import {
   CODEX_PREFER_SUBSCRIPTION_KEY,
   CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
 } from './codexConstants';
-import type { ConfigTarget } from '@platform/interfaces/config';
+import type { ConfigTarget } from '@platform/interfaces';
 
 export interface CodexSubscriptionPreferenceUpdate {
   readonly effective: boolean;

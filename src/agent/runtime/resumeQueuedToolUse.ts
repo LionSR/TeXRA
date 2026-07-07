@@ -12,7 +12,7 @@ import {
 import { resumeToolUseFromSnapshot } from './executeAgent';
 import { emitRuntimeEvent } from './emitRuntimeEvent';
 import { defaultSession, type SessionHandle } from './SessionHandle';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
+import type { ToolEditApprovalPort } from '@platform/interfaces';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 

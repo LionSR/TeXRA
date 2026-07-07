@@ -2,9 +2,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview command constants
-import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import {
+  COMMON_COMMANDS,
+  MAIN_VIEW_COMMANDS,
+  SETTINGS_VIEW_COMMANDS,
+} from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';

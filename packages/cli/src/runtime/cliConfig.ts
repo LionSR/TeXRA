@@ -8,7 +8,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { configKeyVariants } from '@shared/config/configKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isObject } from '@utils/core/typeGuards';
+import { isObject } from '@utils/core';
 
 import {
   CLI_APPROVAL_POLICIES,

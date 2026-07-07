@@ -7,23 +7,21 @@ import { createFsFromVolume, Volume, type IFs } from 'memfs';
 // Local imports - platform
 import {
   FileType,
+  NO_TOOL_AVAILABILITY_HOST,
   type FileStat,
   type FileSystemProvider,
-} from '@platform/interfaces/filesystem';
+  type ConfigInspection,
+  type ConfigProvider,
+  type ConfigTarget,
+  type Disposable,
+  type StateStore,
+  type StorageProvider,
+  type WorkspaceProvider,
+  type AgentDirectoriesPort,
+} from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
-import type {
-  ConfigInspection,
-  ConfigProvider,
-  ConfigTarget,
-} from '@platform/interfaces/config';
-import type { Disposable } from '@platform/interfaces/disposable';
-import type { StateStore } from '@platform/interfaces/state';
-import type { StorageProvider } from '@platform/interfaces/storage';
-import type { WorkspaceProvider } from '@platform/interfaces/workspace';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { AgentDirectoriesPort } from '@platform/interfaces/agentDirectories';
 
 export type RecordingLogLevel = 'debug' | 'info' | 'warn' | 'error';
 

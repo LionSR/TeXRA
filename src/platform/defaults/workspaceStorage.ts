@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, isAbsolute, join, normalize, relative } from 'node:path';
 
 // Local imports - platform
-import type { StorageProvider } from '../interfaces/storage';
+import type { StorageProvider } from '../interfaces';
 
 const STORAGE_LAYOUT = {
   global: 'global-storage',

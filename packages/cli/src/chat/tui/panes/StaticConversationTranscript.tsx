@@ -13,9 +13,14 @@ import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
 import { safeHomedir } from '@utils/system/platformPaths';
 
-import { parentStream as parentStreamSignal } from '../state/cliState/parentStreamSlice';
-import { sessionMeta as sessionMetaSignal } from '../state/cliState/sessionSlice';
-import { streams as streamsSignal } from '../state/cliState/streamsSlice';
+import {
+  parentStream as parentStreamSignal,
+  sessionMeta as sessionMetaSignal,
+  streams as streamsSignal,
+  type ConversationEntry,
+  type SessionMeta,
+  type StreamSlice,
+} from '../state/cliState';
 import { streamViewForId } from '../state/streamViews';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
@@ -33,11 +38,6 @@ import {
   USER_ENTRY_MARGIN_BOTTOM_ROWS,
   USER_ENTRY_MARGIN_TOP_ROWS,
 } from './TranscriptEntry';
-import type {
-  ConversationEntry,
-  SessionMeta,
-  StreamSlice,
-} from '../state/cliState/types';
 
 export type StaticTranscriptItem =
   | {

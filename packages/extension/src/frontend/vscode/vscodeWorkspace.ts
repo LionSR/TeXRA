@@ -5,7 +5,7 @@
  */
 import * as vscode from 'vscode';
 
-import type { WorkspaceProvider } from '@platform/interfaces/workspace';
+import type { WorkspaceProvider } from '@platform/interfaces';
 
 export class VscodeWorkspace implements WorkspaceProvider {
   getWorkspacePath(): string | undefined {

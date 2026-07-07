@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/commandConfig';
+import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
 
 import { createOutputFile } from '../support/ProgressControllerHarnesses';
 

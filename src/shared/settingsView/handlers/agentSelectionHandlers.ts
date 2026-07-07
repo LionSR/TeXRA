@@ -8,7 +8,7 @@
  * the controller classes themselves) so this file stays free of `@controllers/*`
  * imports, per `SharedSettingsViewBoundary.vitest.ts`.
  */
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import type {
   AgentSelectionItem,

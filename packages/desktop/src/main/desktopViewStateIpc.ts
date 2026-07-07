@@ -1,7 +1,6 @@
 import { nativeTheme } from 'electron';
 
-import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   DESKTOP_THEME_KIND,
   type DesktopThemeKind,

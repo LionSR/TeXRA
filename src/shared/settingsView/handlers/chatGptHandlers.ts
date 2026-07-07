@@ -6,7 +6,7 @@
  * `SharedSettingsViewBoundary.vitest.ts`) so only the wire-message shape is
  * centralized here.
  */
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ChatGptAuthStatus,
   UpdateChatGptAuthStatusMessage,

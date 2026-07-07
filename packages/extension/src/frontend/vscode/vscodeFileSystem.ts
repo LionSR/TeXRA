@@ -10,10 +10,7 @@ import * as vscode from 'vscode';
 import * as nodeFsOps from '@platform/defaults/nodeFsOps';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import type {
-  FileSystemProvider,
-  FileStat,
-} from '@platform/interfaces/filesystem';
+import type { FileSystemProvider, FileStat } from '@platform/interfaces';
 
 const CHANNEL = 'VscodeFileSystem';
 

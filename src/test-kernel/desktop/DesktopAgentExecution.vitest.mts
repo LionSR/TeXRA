@@ -27,8 +27,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
-import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
+import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { assertSupported } from '@shared/utils/dispatcher';

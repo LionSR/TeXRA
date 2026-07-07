@@ -16,10 +16,10 @@ import { createDesktopSettingsIpc } from '@desktop/main/desktopSettingsIpc';
 import { apiKeySecretName } from '@model/apiProviders';
 
 // Local imports - shared
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - platform
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 
 class MemoryStateStore implements StateStore {

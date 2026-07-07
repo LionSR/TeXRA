@@ -3,7 +3,7 @@ import {
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
 
-import type { ConfigProvider } from '@platform/interfaces/config';
+import type { ConfigProvider } from '@platform/interfaces';
 
 /**
  * Mirror the extension's git-author marking for the CLI: by default, commits

@@ -1,0 +1,359 @@
+/**
+ * Platform port contracts — the host-neutral interfaces a host wires into
+ * `initPlatform()`. Formerly one file per port under `interfaces/`.
+ */
+import type { StreamTabId } from '@shared/schemas';
+import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+
+// ---------------------------------------------------------------------------
+// Disposable
+// ---------------------------------------------------------------------------
+
+/**
+ * Host-neutral disposable resource.
+ *
+ * Structurally compatible with VS Code's Disposable and the unsubscribe
+ * callbacks used by Electron-side adapters.
+ */
+export interface Disposable {
+  dispose(): void;
+}
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+export type ConfigTarget = 'global' | 'workspace';
+
+export interface ConfigInspection<T = unknown> {
+  defaultValue?: T;
+  globalValue?: T;
+  workspaceValue?: T;
+  workspaceFolderValue?: T;
+  effectiveValue?: T;
+}
+
+/**
+ * Platform configuration provider interface.
+ */
+export interface ConfigProvider {
+  get<T>(key: string, defaultValue?: T): T;
+  update<T>(key: string, value: T, target?: ConfigTarget): Promise<void>;
+  inspect<T = unknown>(key: string): ConfigInspection<T> | undefined;
+  isExplicitlySet(key: string): boolean;
+  watch(
+    key: string | readonly string[] | RegExp,
+    listener: () => void,
+  ): Disposable;
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
+/**
+ * Platform key-value state store interface.
+ * Matches the vscode.Memento surface for compatibility.
+ */
+export interface StateStore {
+  get<T>(key: string, defaultValue?: T): T;
+  update(key: string, value: unknown): PromiseLike<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Filesystem
+// ---------------------------------------------------------------------------
+
+/**
+ * Platform filesystem provider interface.
+ *
+ * All paths are absolute strings. Implementations convert to
+ * platform-specific representations (e.g. vscode.Uri) internally.
+ */
+
+/**
+ * File type enum (bitmask-compatible with vscode.FileType).
+ */
+export const FileType = {
+  Unknown: 0,
+  File: 1,
+  Directory: 2,
+  SymbolicLink: 64,
+} as const;
+
+export type FileType = (typeof FileType)[keyof typeof FileType];
+
+/**
+ * File stat result (matches vscode.FileStat shape).
+ */
+export interface FileStat {
+  type: number;
+  ctime: number;
+  mtime: number;
+  size: number;
+}
+
+export interface FileSystemProvider {
+  stat(path: string): Promise<FileStat>;
+  /**
+   * Returns true when `path` is a symbolic link (does NOT follow the link).
+   * Prefer this over checking the `SymbolicLink` bit from `readDirectory`
+   * entries; some `vscode.workspace.fs` implementations do not set that bit.
+   */
+  isSymlink(path: string): Promise<boolean>;
+  realPath(path: string): Promise<string>;
+  readFile(path: string): Promise<Uint8Array>;
+  readFileChunk(
+    path: string,
+    offset: number,
+    length: number,
+  ): Promise<Uint8Array>;
+  writeFile(path: string, content: Uint8Array): Promise<void>;
+  /**
+   * Crash-safe write: stage to a temp file and atomically rename over the
+   * target so a torn/partial file is never observable after an unclean exit.
+   * Used for durable run/flow state; plain `writeFile` remains for workspace
+   * files (where atomic rename would replace a user's symlink).
+   */
+  writeFileAtomic(path: string, content: Uint8Array): Promise<void>;
+  appendFile(path: string, content: Uint8Array): Promise<void>;
+  delete(path: string, options?: { recursive?: boolean }): Promise<void>;
+  createDirectory(path: string): Promise<void>;
+  readDirectory(path: string): Promise<[string, number][]>;
+  copy(
+    source: string,
+    dest: string,
+    options?: { overwrite?: boolean; dereference?: boolean },
+  ): Promise<void>;
+  rename(
+    source: string,
+    dest: string,
+    options?: { overwrite?: boolean },
+  ): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Workspace
+// ---------------------------------------------------------------------------
+
+/**
+ * Platform workspace provider interface.
+ */
+export interface WorkspaceProvider {
+  /** The workspace root path, or undefined if none is open. */
+  getWorkspacePath(): string | undefined;
+
+  /**
+   * Convert an absolute path to a workspace-relative path.
+   * Should be symlink-aware where possible.
+   * Returns the original path if it is outside the workspace.
+   */
+  asRelativePath(filePath: string): string;
+}
+
+// ---------------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------------
+
+/**
+ * Platform storage path provider interface.
+ */
+export interface StorageProvider {
+  /** Per-workspace storage root path. */
+  getStoragePath(): string;
+
+  /** Cross-workspace global storage root path. */
+  getGlobalStoragePath(): string;
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+export const SHUTDOWN_PHASE = {
+  BEFORE: 'beforeShutdown',
+  ON: 'onShutdown',
+} as const;
+
+export type ShutdownPhase =
+  (typeof SHUTDOWN_PHASE)[keyof typeof SHUTDOWN_PHASE];
+
+export interface LifecycleHost {
+  onShutdown(
+    phase: ShutdownPhase,
+    callback: () => void | Promise<void>,
+  ): Disposable;
+  runShutdown(): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Tool availability
+// ---------------------------------------------------------------------------
+
+/**
+ * Host-owned availability checks for integrations that cannot be detected from
+ * host-agnostic core code alone.
+ */
+export interface ToolAvailabilityHost {
+  /** True when a VS Code extension is installed in the active extension host. */
+  isVscodeExtensionInstalled(extensionId: string): boolean;
+
+  /** True when the current process already is the TeXRA CLI entrypoint. */
+  isTexraCliEntrypoint(): boolean;
+}
+
+export const NO_TOOL_AVAILABILITY_HOST: ToolAvailabilityHost = Object.freeze({
+  isVscodeExtensionInstalled: () => false,
+  isTexraCliEntrypoint: () => false,
+});
+
+// ---------------------------------------------------------------------------
+// Tool-edit approval
+// ---------------------------------------------------------------------------
+
+/**
+ * Tool-edit approval handler, wired at `initPlatform` once per process and
+ * consumed by the shared `requestToolEditApproval` entry point.
+ *
+ * The handler receives the proposed edit (already carrying a `streamId` for
+ * session routing, and enough content context to let the host surface the
+ * change before returning a decision).  It replaces the prior
+ * `setToolEditApprovalHandler` module-global singleton.
+ *
+ * Request / result shapes are defined here as the single Platform contract;
+ * `@tools/approval/toolEditApproval` re-exports these types for existing
+ * approval call sites.
+ */
+
+/** Platform-level contract for a tool-edit approval request. */
+export interface ToolEditApprovalRequest {
+  readonly path: string;
+  readonly originalContent: string;
+  readonly proposedContent: string;
+  readonly sourceTool: string;
+  readonly streamId?: string | null;
+}
+
+/** Platform-level contract for a tool-edit approval result. */
+export interface ToolEditApprovalResult {
+  readonly accepted: boolean;
+  readonly userMessage?: string;
+  readonly appliedContent?: string;
+  readonly userPatch?: string;
+  readonly lineChanges?: { readonly added: number; readonly removed: number };
+  readonly startLine?: number;
+}
+
+export type ToolEditApprovalPort = (
+  request: ToolEditApprovalRequest,
+) => Promise<ToolEditApprovalResult>;
+
+// ---------------------------------------------------------------------------
+// Tool notifications
+// ---------------------------------------------------------------------------
+
+/**
+ * Pluggable handler for surfacing tool-missing errors to the user. Hosts
+ * without a UI for this (CLI, desktop) no-op.
+ */
+export type ToolMissingHandler = (
+  message: string,
+  openDocsCommand?: string,
+) => void | Promise<void>;
+
+/**
+ * Pluggable notification handler for tool groups excluded due to missing
+ * dependencies. `actionCommand`/`actionLabel` let a notification funnel the
+ * user to the right tab. Hosts without a UI for this (CLI, desktop) no-op.
+ */
+export type ToolNotificationHandler = (
+  message: string,
+  actionCommand?: string,
+  actionLabel?: string,
+) => void;
+
+// ---------------------------------------------------------------------------
+// Linter
+// ---------------------------------------------------------------------------
+
+/**
+ * Host-injected linter diagnostics provider, consumed by the diagnostics
+ * tool's `list`/`count` commands. Hosts without a linter integration (CLI,
+ * desktop) return an empty array.
+ */
+export type LinterProvider = (path: string) => Promise<GenericDiagnostic[]>;
+
+// ---------------------------------------------------------------------------
+// Criticism
+// ---------------------------------------------------------------------------
+
+/**
+ * Host-resolved shape for a single criticism entry pushed by the diagnostics
+ * tool's `add` command. The tool resolves the input `path` against the
+ * active working directory before handing the entry to the host as
+ * `absolutePath`.
+ */
+export interface ManualCriticismEntry {
+  /** Absolute path resolved by the tool. */
+  absolutePath: string;
+  /** 1-based line number. */
+  line: number;
+  message: string;
+  /** 0–5; mapped to DiagnosticSeverity by the host. */
+  severity: number;
+  /** 1–5; appended to the message as `(S/C)`. */
+  confidence: number;
+}
+
+/**
+ * Sink injected by the extension host for the `add` command. Returns
+ * `accepted: false` when the experimental setting is disabled (or the host
+ * has no inline-criticism surface, e.g. CLI/desktop) so the tool can surface
+ * that to the agent.
+ */
+export type AddCriticismSink = (input: ManualCriticismEntry) => {
+  accepted: boolean;
+  resolvedPath: string;
+};
+
+// ---------------------------------------------------------------------------
+// Agent directories
+// ---------------------------------------------------------------------------
+
+/** Host-provided agent directory paths. */
+export interface AgentDirectoriesPort {
+  custom(): Promise<string>;
+  builtIn(): Promise<string>;
+  builtInToolUse(): Promise<string>;
+}
+
+// ---------------------------------------------------------------------------
+// Agent resume
+// ---------------------------------------------------------------------------
+
+/**
+ * Host capability for resuming an agent stream from its persisted snapshot.
+ *
+ * Implemented by the VS Code host (and any other host) so VS Code-free code
+ * (e.g. the inquiry continuation injector) can trigger auto-resume without
+ * importing the host-level command pipeline.
+ */
+export interface AgentResumePort {
+  /**
+   * Attempt to resume a WAITING / children-running stream from its
+   * persisted snapshot. Returns true if the host accepted the request
+   * (i.e. the resume command dispatched successfully).
+   *
+   * Returns false if the stream cannot be resumed (no snapshot found,
+   * already active/resuming, etc.) — callers should fall back to leaving
+   * the message queued for the next manual resume.
+   */
+  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+
+  /**
+   * Whether the host has already accepted a resume for this stream and is
+   * still preparing it. A queued-delivery wake uses this to avoid releasing a
+   * force-reopened queue while a host-initiated resume is about to drain it.
+   */
+  isResumeInFlight?(streamId: StreamTabId): boolean;
+}

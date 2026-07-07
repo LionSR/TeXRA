@@ -21,17 +21,13 @@ import {
   activeStreamId,
   rootRunStartAvailable,
   rootStreamId,
-} from '@cli/chat/tui/state/cliState/focusSlice';
-import {
   parentStream,
   setParentStream,
-} from '@cli/chat/tui/state/cliState/parentStreamSlice';
-import { removeStream } from '@cli/chat/tui/state/cliState/removeStream';
-import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
-import {
+  removeStream,
+  resetCliState,
   patchStream,
   streams,
-} from '@cli/chat/tui/state/cliState/streamsSlice';
+} from '@cli/chat/tui/state/cliState';
 import {
   allocateMiddleRows,
   allocateSidePanelRows,

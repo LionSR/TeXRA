@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendHead } from '@utils/strings/appendHead';
+import { appendHead } from '@utils/strings/appendTail';
 
 describe('appendHead', () => {
   it('returns the current string when the chunk is empty', () => {
@@ -37,5 +37,11 @@ describe('appendHead', () => {
     // backs off before the whole codepoint.
     const out = appendHead('', 'Y𐍈', 2);
     expect(out).toBe('Y');
+  });
+
+  it('returns an empty head at maxChars=0 even for a leading low surrogate', () => {
+    // A lone low surrogate at index 0 must not push the surrogate-aware cut
+    // below 0 — slice(0, -1) would return everything but the last character.
+    expect(appendHead('\udc00abc', 'x', 0)).toBe('');
   });
 });

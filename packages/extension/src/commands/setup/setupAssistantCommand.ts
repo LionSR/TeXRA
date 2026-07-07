@@ -32,7 +32,7 @@ import {
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { generateExecutionId } from '@utils/core/executionId';
+import { generateExecutionId } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'SetupAssistant';

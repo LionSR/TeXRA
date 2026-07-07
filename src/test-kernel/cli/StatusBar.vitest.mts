@@ -10,10 +10,7 @@ import {
 } from '@cli/chat/tui/panes/StatusBar';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
-import {
-  NO_BYPASS,
-  type StreamSlice,
-} from '@cli/chat/tui/state/cliState/types';
+import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { STREAM_PHASE, STREAM_STATUS } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');

@@ -23,7 +23,7 @@ import {
   type LatexdiffPackResult,
 } from '@housekeeping';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
-import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/commandConfig';
+
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
@@ -31,7 +31,10 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { CHANNEL, LaTeXdiffService } from '@latex/latexdiff/service';
-import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
+import {
+  normalizeRunLatexdiffOutputsByRound,
+  runLatexdiffForExecution,
+} from '@latex/latexdiff/runLatexdiff';
 import type { RunLatexdiffCommandConfig } from '@latex/latexdiff/types';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';

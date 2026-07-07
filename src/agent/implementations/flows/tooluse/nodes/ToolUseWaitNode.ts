@@ -1,4 +1,4 @@
-import { maybeBuildGoalContinuation } from '@agent/goal';
+import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';

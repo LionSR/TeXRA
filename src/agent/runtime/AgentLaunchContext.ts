@@ -54,7 +54,7 @@ import {
 } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas/agent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { generateExecutionId } from '@utils/core/executionId';
+import { generateExecutionId } from '@utils/core';
 
 import {
   createRunContext,
@@ -70,7 +70,7 @@ import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { attachConversationProgressHub } from './conversationProgressHub';
 import type { StreamStatusMachine } from './StreamStatusService';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
+import type { ToolEditApprovalPort } from '@platform/interfaces';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('AgentLaunchContext');

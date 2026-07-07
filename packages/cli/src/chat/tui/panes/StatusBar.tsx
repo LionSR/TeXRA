@@ -42,21 +42,19 @@ import {
 } from '../state/approvalQueue';
 import { formatResumeCommand } from '../state/resumeHint';
 import { terminalCapabilities } from '../state/terminalCapabilities';
-import { codexPreferenceVersion as codexPreferenceVersionSignal } from '../state/cliState/codexPreferenceSlice';
 import {
+  codexPreferenceVersion as codexPreferenceVersionSignal,
   pendingExitHint as pendingExitHintSignal,
   pendingExitResumeId as pendingExitResumeIdSignal,
-} from '../state/cliState/exitHintSlice';
-import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
-import { parentStream as parentStreamSignal } from '../state/cliState/parentStreamSlice';
-import { sessionMeta as sessionMetaSignal } from '../state/cliState/sessionSlice';
-import { streams as streamsSignal } from '../state/cliState/streamsSlice';
-import {
+  activeStreamId as activeStreamIdSignal,
+  parentStream as parentStreamSignal,
+  sessionMeta as sessionMetaSignal,
+  streams as streamsSignal,
   NO_BYPASS,
   thinkingIndicatorVisible,
   type BypassState,
   type StreamSlice,
-} from '../state/cliState/types';
+} from '../state/cliState';
 import {
   activeStreamScope,
   nearestActiveStreamAncestor,

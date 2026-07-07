@@ -59,21 +59,15 @@ import {
   activeStreamId as activeStreamIdSignal,
   rootRunStartAvailable,
   rootStreamId,
-} from '../src/chat/tui/state/cliState/focusSlice';
-import {
   parentStream,
   setParentStream,
-} from '../src/chat/tui/state/cliState/parentStreamSlice';
-import { resetCliState } from '../src/chat/tui/state/cliState/reset';
-import {
+  resetCliState,
   sessionMeta,
   setCliSessionModelOverride,
-} from '../src/chat/tui/state/cliState/sessionSlice';
-import {
   patchStream,
   streams,
-} from '../src/chat/tui/state/cliState/streamsSlice';
-import type { ConversationEntry } from '../src/chat/tui/state/cliState/types';
+  type ConversationEntry,
+} from '../src/chat/tui/state/cliState';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage,

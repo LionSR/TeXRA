@@ -15,7 +15,7 @@ import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { withUsageSections } from './_helpers/dispatch/usage';
+import { withUsageSections } from './_helpers/dispatch';
 import {
   collectStringFlagValues,
   GLOBAL_ARGS,

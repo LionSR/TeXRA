@@ -37,7 +37,7 @@ import {
   type GhIssueComment,
 } from './prTypes';
 
-import type { Disposable } from '@platform/interfaces/disposable';
+import type { Disposable } from '@platform/interfaces';
 
 const MAX_SEEN_IDS = 1000;
 

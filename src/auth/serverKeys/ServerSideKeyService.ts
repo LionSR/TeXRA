@@ -26,7 +26,7 @@ import {
   NOOP_AUTH_SERVICE_LOGGER,
   type AuthServiceLogger,
 } from '../serviceLogger';
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 import type { TierService } from '../tier/TierService';
 import type { ServerSideProvider } from './types';
 

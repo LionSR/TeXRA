@@ -1,4 +1,4 @@
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchProgressViewInbound,
   ProgressViewInboundMessageSchema,

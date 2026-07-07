@@ -11,7 +11,7 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { normalizeFilePath } from '@shared/utils/path';
 import { getConfig } from '@utils/config/configUtils';
 

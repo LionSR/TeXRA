@@ -16,7 +16,7 @@ import {
   type DesktopAuthCallbackState,
   type DesktopOAuthClient,
 } from '@desktop/main/desktopSupabaseAuth';
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 function createCoordinator() {
   const storedSession: { current: SupabaseSession | null } = { current: null };

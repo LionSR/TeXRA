@@ -5,7 +5,7 @@
  * desktop (Electron) can share the per-domain logic without coupling to a
  * particular transport or UI surface.
  */
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 /** Sends a single message to the settings webview. */
 export type SettingsRespond = (message: unknown) => void | PromiseLike<unknown>;

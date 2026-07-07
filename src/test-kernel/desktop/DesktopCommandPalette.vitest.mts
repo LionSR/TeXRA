@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - shared schemas
 import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
-import { delay } from '@utils/core/async';
+import { delay } from '@utils/core';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';

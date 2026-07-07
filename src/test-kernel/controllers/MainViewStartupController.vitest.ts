@@ -6,7 +6,7 @@ import { describe, it } from 'vitest';
 
 // Local imports - common
 import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - controllers
 
