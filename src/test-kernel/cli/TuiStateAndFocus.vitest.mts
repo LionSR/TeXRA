@@ -3023,6 +3023,11 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       emit: hostEmit,
       close: async () => {},
     } as unknown as CliRuntimeHost);
+    // Regression coverage for #7388: `attachTuiRunFactSubscription` is
+    // registered on the hub before `attachSessionRunFactProjector` here (the
+    // order `chatSessionController.ts` uses today), and two distinct usage
+    // events are emitted so the guard's dedupe is proven across a sequence,
+    // not just a single isolated pairing.
     const detachTui = attachTuiRunFactSubscription(hub);
     const detachProjector = attachSessionRunFactProjector(hub, wrapped, root);
     const storageKey = 'root-echo-run' as StorageKey;
@@ -3040,6 +3045,20 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         reasoningTokens: 7,
       },
     };
+    const secondPayload = {
+      streamId: root,
+      storageKey,
+      executionId: 'exec-echo',
+      usage: {
+        inputTokens: 50,
+        outputTokens: 10,
+        cost: 0.5,
+        cacheReadInputTokens: 5,
+        elapsedTime: 0.8,
+        percentageCached: 10,
+        reasoningTokens: 3,
+      },
+    };
 
     try {
       hub.emit({
@@ -3051,18 +3070,32 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           data: payload,
         },
       });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'usage',
+          stats: secondPayload.usage,
+          data: secondPayload,
+        },
+      });
 
-      expect(streams.get().get(root)?.usage).toEqual(payload.usage);
+      expect(streams.get().get(root)?.usage).toEqual(secondPayload.usage);
       expect(streams.get().get(root)?.cumulativeUsage).toEqual({
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 1,
-        cacheReadInputTokens: 30,
+        inputTokens: 150,
+        outputTokens: 30,
+        cost: 1.5,
+        cacheReadInputTokens: 35,
         cacheMissInputTokens: 0,
         cacheCreationInputTokens: 0,
-        reasoningTokens: 7,
+        reasoningTokens: 10,
       });
-      expect(hostEmit).toHaveBeenCalledWith('updateStreamUsage', payload);
+      expect(hostEmit).toHaveBeenNthCalledWith(1, 'updateStreamUsage', payload);
+      expect(hostEmit).toHaveBeenNthCalledWith(
+        2,
+        'updateStreamUsage',
+        secondPayload,
+      );
     } finally {
       detachProjector();
       detachTui();
@@ -3076,6 +3109,12 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       emit: hostEmit,
       close: async () => {},
     } as unknown as CliRuntimeHost);
+    // Regression coverage for #7388: the projector is registered on the hub
+    // before the TUI subscription here — the reverse of what
+    // `chatSessionController.ts` does today — to prove the echo guard's
+    // dedupe does not depend on that registration order. Two distinct usage
+    // events are emitted so the guard is proven across a sequence, not just a
+    // single isolated pairing.
     const detachProjector = attachSessionRunFactProjector(hub, wrapped, root);
     const detachTui = attachTuiRunFactSubscription(hub);
     const storageKey = 'root-projector-first-run' as StorageKey;
@@ -3093,6 +3132,20 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         reasoningTokens: 7,
       },
     };
+    const secondPayload = {
+      streamId: root,
+      storageKey,
+      executionId: 'exec-projector-first',
+      usage: {
+        inputTokens: 50,
+        outputTokens: 10,
+        cost: 0.5,
+        cacheReadInputTokens: 5,
+        elapsedTime: 0.8,
+        percentageCached: 10,
+        reasoningTokens: 3,
+      },
+    };
 
     try {
       hub.emit({
@@ -3104,18 +3157,32 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           data: payload,
         },
       });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'usage',
+          stats: secondPayload.usage,
+          data: secondPayload,
+        },
+      });
 
-      expect(streams.get().get(root)?.usage).toEqual(payload.usage);
+      expect(streams.get().get(root)?.usage).toEqual(secondPayload.usage);
       expect(streams.get().get(root)?.cumulativeUsage).toEqual({
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 1,
-        cacheReadInputTokens: 30,
+        inputTokens: 150,
+        outputTokens: 30,
+        cost: 1.5,
+        cacheReadInputTokens: 35,
         cacheMissInputTokens: 0,
         cacheCreationInputTokens: 0,
-        reasoningTokens: 7,
+        reasoningTokens: 10,
       });
-      expect(hostEmit).toHaveBeenCalledWith('updateStreamUsage', payload);
+      expect(hostEmit).toHaveBeenNthCalledWith(1, 'updateStreamUsage', payload);
+      expect(hostEmit).toHaveBeenNthCalledWith(
+        2,
+        'updateStreamUsage',
+        secondPayload,
+      );
     } finally {
       detachTui();
       detachProjector();
