@@ -34,7 +34,6 @@ describe('extensionAgentRuntimeHost', () => {
         interactionEvents.push({ event, payload });
         return true;
       },
-      pending: () => [],
       resolve: () => false,
       cancelForStream: () => {},
     });
