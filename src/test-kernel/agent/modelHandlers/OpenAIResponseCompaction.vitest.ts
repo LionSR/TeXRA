@@ -425,4 +425,68 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
       CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
     );
   });
+
+  it('uses the streamed deltas as the summary when the Codex finalResponse is empty (under cap, #7213)', async () => {
+    // The Codex backend leaves the completed response's output empty, so the
+    // summary must come from the accumulated `output_text.delta` stream. Here
+    // the summary finishes under the cap and finalResponse() carries an empty
+    // output — the handler must still return the streamed text and compact,
+    // rather than treating the empty finalResponse as an empty summary (which
+    // would skip compaction and let the Codex run grow unbounded).
+    const handler = createClientSideCompactionHandler();
+    const requests: any[] = [];
+    const client = {
+      responses: {
+        compact: async () => {
+          throw new Error('stateless backend must not call /responses/compact');
+        },
+        stream: async () =>
+          createStreamMock({
+            deltas: ['streamed summary ', 'from the deltas'],
+            finalResponse: {
+              id: 'codex-empty-final-response',
+              status: 'completed',
+              output: [],
+              output_text: '',
+              usage: { output_tokens: 7 },
+            },
+          }),
+        create: async (params: any) => {
+          requests.push(params);
+          return requests.length === 1
+            ? createResponse('resp-before-threshold', 800)
+            : createResponse('resp-after-client-side-compaction', 150);
+        },
+      },
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: createMessages(3),
+      temperature: 0,
+    });
+
+    // Compaction happened (not skipped) and the resent summary is the streamed
+    // text, not the empty finalResponse extraction.
+    const expectedCompactedMessages = [
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: '[Previous conversation summary]\n\nstreamed summary from the deltas',
+          },
+        ],
+      },
+    ];
+    expect(requests).toHaveLength(2);
+    expect(requests[1].input).toEqual(expectedCompactedMessages);
+    expect(result.updatedMessages).toEqual(expectedCompactedMessages);
+  });
 });

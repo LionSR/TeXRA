@@ -1135,10 +1135,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           }
         }
 
+        // Prefer the text accumulated from the deltas above: the Codex backend
+        // leaves the completed response's `output`/`output_text` empty (the same
+        // reason executeStreamingPath rebuilds from `output_text.delta`), so
+        // extracting only from finalResponse() would yield an empty summary and
+        // silently skip compaction. Fall back to finalResponse() extraction only
+        // when no text was streamed.
         const summaryResponse = await stream.finalResponse();
+        const summaryText =
+          streamedText.trim() ||
+          this.extractResponse(summaryResponse, '').text.trim();
         return {
-          summaryText: this.extractResponse(summaryResponse, '').text.trim(),
-          outputTokens: summaryResponse.usage?.output_tokens ?? 0,
+          summaryText,
+          outputTokens:
+            summaryResponse.usage?.output_tokens ??
+            estimateTokensFromText(summaryText),
         };
       },
       (summary): ResponseInputItem => ({
