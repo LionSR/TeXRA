@@ -24,7 +24,8 @@ import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
 
 interface MockStorageOptions {
-  logs: Record<string, unknown[]>;
+  /** Values are usually arrays; non-array values simulate corrupt logs. */
+  logs: Record<string, unknown>;
   summaries: Record<string, unknown>;
   logMtimes?: Record<string, number>;
   summaryMtimes?: Record<string, number>;
@@ -853,5 +854,64 @@ describe('StreamLogStore load', () => {
       unknownEntry,
       expect.objectContaining({ id: 'beta-new', seqNo: 1 }),
     ]);
+  });
+
+  it('fails the load for a non-array persisted log and refuses to overwrite it', async () => {
+    const storage = mockStorage({
+      logs: { gamma: { corrupted: 'not an array' } },
+      summaries: {
+        gamma: {
+          firstTimestamp: 100,
+          lastTimestamp: 200,
+          hasRunningGroup: false,
+        },
+      },
+    });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const store = new StreamLogStore();
+    await store.load();
+    await store.ensureLoaded('gamma');
+
+    // Parses-but-not-an-array is corrupt, not an empty log: the load fails
+    // loudly, exactly like unparseable JSON.
+    expect(store.get('gamma')).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining('Failed to reload stream gamma from disk'),
+    );
+
+    // New appends stay in memory, but save() refuses to destructively
+    // rewrite the corrupt on-disk file with a fresh array (#7464).
+    store.append('gamma', {
+      id: 'gamma-new',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 400,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'new entry',
+    });
+    await store.flush();
+
+    expect(
+      storage.writes.get(storageFile(STREAM_LOGS_DIR, 'gamma')),
+    ).toBeUndefined();
+    expect(storage.writes.size).toBe(0);
+  });
+
+  it('skips a non-array persisted log at startup with a warning', async () => {
+    const storage = mockStorage({
+      logs: { delta: 'not an array at all' },
+      summaries: {},
+    });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const store = new StreamLogStore();
+    await store.load();
+
+    expect(store.keys()).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining('Skipping corrupt stream log: delta'),
+    );
+    expect(storage.writes.size).toBe(0);
   });
 });
