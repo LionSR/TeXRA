@@ -13,6 +13,12 @@ import type {
 
 const logger = createChannelTrace('SessionEventHub');
 
+/**
+ * Session-scoped fact vocabulary. Each arm's payload is a fact-native named
+ * type from `@shared/schemas`; the frozen legacy progress-event map
+ * (`hostProgressEvents.ts`) derives its key payloads from those names, never
+ * the reverse. Run-scoped facts live on `AgentEvent` (trace), not here.
+ */
 export type SessionFact =
   | {
       readonly type: 'goalStateChanged';

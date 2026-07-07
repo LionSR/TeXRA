@@ -1,6 +1,5 @@
 import type { TaskState } from '@agent/core/state/TaskState';
 import type {
-  ActiveChildInfo,
   AddOutputFilesPayload,
   AgentProposalPermission,
   BashPermission,
@@ -17,17 +16,20 @@ import type {
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
   RetryPermission,
-  RoundStage,
   SetActiveStreamPayload,
   ShowAgentConfigBannerPayload,
   StreamPhase,
   StreamSubstate,
   StreamTabId,
   ToolEditPermission,
+  UpdateActiveProcessesPayload,
+  UpdateActiveSubagentsPayload,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
+  UpdateProcessOutputPayload,
   UpdateQueuedFollowUpsPayload,
+  UpdateRoundStagePayload,
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
   UserQuestionPermission,
@@ -47,6 +49,10 @@ import type {
  * carried these keys is deleted; this map survives only so the retained host
  * rails keep one shared key/payload table while they are migrated to typed
  * session/host surfaces.
+ * Every fact-plane key below references its named vocabulary type — this map
+ * projects the vocabulary, it does not define it. Keys still typed inline are
+ * not facts: host-rail status/RPC keys plus the Stage-5 residue trio
+ * (`setTaskState`, `updateStreamDescription`, `setParentStream`).
  */
 export interface ProgressEventPayloads {
   // ── Run/stream progress ──
@@ -102,26 +108,12 @@ export interface ProgressEventPayloads {
     streamId: StreamTabId;
     progress: ConversationProgress;
   };
-  updateRoundStage: {
-    streamId: StreamTabId;
-    roundStage: RoundStage;
-  };
+  updateRoundStage: UpdateRoundStagePayload;
   updateQueuedFollowUps: UpdateQueuedFollowUpsPayload;
   goalPaused: GoalPausedPayload;
-  updateActiveSubagents: {
-    parentStreamId: StreamTabId;
-    children: ActiveChildInfo[];
-  };
-  updateActiveProcesses: {
-    parentStreamId: StreamTabId;
-    processes: ActiveChildInfo[];
-  };
-  updateProcessOutput: {
-    parentStreamId: StreamTabId;
-    executionId: ExecutionId;
-    stdout: string;
-    stderr: string;
-  };
+  updateActiveSubagents: UpdateActiveSubagentsPayload;
+  updateActiveProcesses: UpdateActiveProcessesPayload;
+  updateProcessOutput: UpdateProcessOutputPayload;
   updateStreamDescription: {
     streamId: StreamTabId;
     description: string;
