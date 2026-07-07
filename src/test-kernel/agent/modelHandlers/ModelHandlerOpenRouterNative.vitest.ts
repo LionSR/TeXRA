@@ -93,6 +93,23 @@ describe('ModelHandlerOpenRouterNative routing precedence', () => {
   );
 });
 
+describe('ModelHandlerOpenRouterNative system prompt placement', () => {
+  it.each([
+    ModelProvider.ANTHROPIC,
+    ModelProvider.GOOGLE,
+    ModelProvider.OPENAI,
+  ])(
+    'never resupplies the system prompt per-call, even when the underlying provider is %s',
+    (provider) => {
+      const handler = new ModelHandlerOpenRouterNative(
+        buildConfig({ provider }),
+      );
+
+      assert.equal(handler.requiresPerCallSystemPrompt, false);
+    },
+  );
+});
+
 describe('ModelHandlerOpenRouterNative retry ownership', () => {
   it('matches the OpenRouter SDK retry boundary', () => {
     const handler = new ModelHandlerOpenRouterNative(buildConfig());
