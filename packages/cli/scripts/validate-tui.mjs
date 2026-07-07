@@ -1877,7 +1877,7 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     expect: [
       'strategy running',
-      'leanSolver idle',
+      'leanSolver waiting for you',
       'reviewer error',
       '2 sub',
       '[Tab]streams',
@@ -2746,7 +2746,7 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p', 'k', ESC + 's', 'f', { input: ESC, delayMs: 40 }, '\t'],
     frame: 'tail',
-    expect: ['[2:leanSolver]', '◆ idle', 'root active'],
+    expect: ['[2:leanSolver]', '◆ waiting for you', 'root active'],
     unexpect: [
       'Harness interrupt requested.',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,

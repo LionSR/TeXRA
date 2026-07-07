@@ -193,6 +193,10 @@ export function streamTabsDisplayItems(init: {
     const slice = view.slice;
     const status = formatStreamStatusLabel(slice?.status, {
       style: 'cliCompact',
+      // A tab with a parent is a child/subagent stream; the root tab has no
+      // parentId. WAITING reads differently for each (see
+      // CLI_CHILD_WAITING_LABEL), so the two must not share one label here.
+      isChildStream: view.parentId !== undefined,
       ...(slice?.substate ? { substate: slice.substate } : {}),
     });
     return {

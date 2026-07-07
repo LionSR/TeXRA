@@ -109,7 +109,12 @@ function compactParts(parts: readonly (string | null | undefined)[]): string {
 function childStatusDescription(
   status: string | undefined,
 ): string | undefined {
-  return formatStreamStatusLabel(status, { style: 'cliCompact' });
+  // Every picker/detail row here is a child/subagent stream, never the root
+  // session, so WAITING always gets the distinct child-waiting wording.
+  return formatStreamStatusLabel(status, {
+    style: 'cliCompact',
+    isChildStream: true,
+  });
 }
 
 function hasLiveChildElapsed(

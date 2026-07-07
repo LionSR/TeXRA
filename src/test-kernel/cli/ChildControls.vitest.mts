@@ -378,20 +378,20 @@ describe('CLI child execution controls', () => {
     expect(buildChildControlItems(state, 'subagents')).toMatchObject([
       {
         executionId: 'agent-1',
-        description: 'idle · 20s',
-        statusLabel: 'idle',
+        description: 'waiting for you · 20s',
+        statusLabel: 'waiting for you',
       },
     ]);
     expect(buildChildControlItems(state, 'tasks')).toMatchObject([
       {
         executionId: 'agent-1',
-        description: 'idle · 20s',
-        statusLabel: 'idle',
+        description: 'waiting for you · 20s',
+        statusLabel: 'waiting for you',
       },
       {
         executionId: 'proc-1',
-        description: 'idle · 3s · last line',
-        statusLabel: 'idle',
+        description: 'waiting for you · 3s · last line',
+        statusLabel: 'waiting for you',
       },
     ]);
   });
