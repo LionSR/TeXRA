@@ -21,12 +21,19 @@ export type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
 const BashApprovalResultSchema = z.object({
   accepted: z.boolean(),
   userMessage: z.string().optional(),
+  /** Distinguishes a host-side interaction timeout from an explicit reject. */
+  timedOut: z.boolean().optional(),
 });
 export type BashApprovalResult = z.infer<typeof BashApprovalResultSchema>;
 
 const DEFAULT_BASH_REJECTION_INSTRUCTION =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
   'Continue without running it, use a non-shell method, or explain what approval would be needed.';
+
+const DEFAULT_BASH_TIMEOUT_INSTRUCTION =
+  'The approval request was not answered in time — this is not an explicit ' +
+  'rejection. You may retry the command later if it is still needed, use a ' +
+  'non-shell method, or continue without it.';
 
 export const bashApprovalController =
   createStreamApprovalController<BashApprovalResult>({
@@ -106,14 +113,21 @@ async function showApprovalPrompt(
 export function buildBashApprovalRejectedResult(
   command: string,
   userMessage?: string,
+  timedOut?: boolean,
 ): ToolResult {
   const preview = truncateWithEllipsis(command, 60);
-  const message = `User rejected bash command: ${preview}`;
+  const message = timedOut
+    ? `Bash command approval timed out: ${preview}`
+    : `User rejected bash command: ${preview}`;
   const feedback = userMessage?.trim();
   return {
     status: 'error',
     summary: message,
     error: message,
-    userInstruction: feedback || DEFAULT_BASH_REJECTION_INSTRUCTION,
+    userInstruction:
+      feedback ||
+      (timedOut
+        ? DEFAULT_BASH_TIMEOUT_INSTRUCTION
+        : DEFAULT_BASH_REJECTION_INSTRUCTION),
   };
 }

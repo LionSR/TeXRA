@@ -39,6 +39,15 @@ export interface HostBashApprovalRequest {
 export interface HostBashApprovalResult {
   readonly accepted: boolean;
   readonly userMessage?: string;
+  /**
+   * Set when `accepted: false` came from the host-side interaction timeout
+   * rather than an explicit user rejection — mirrors the distinct
+   * `{ action: 'timeout' }` shape `PlanApprovalResult`/`ProposalResult`/
+   * `RetryResult` already use (see #7327), kept as a flag here since
+   * restructuring this result to a discriminated union isn't worth it for a
+   * single boolean. Consumers must not report a timeout as a user rejection.
+   */
+  readonly timedOut?: boolean;
 }
 
 export type HostAgentProposalRequest = AgentProposal & {

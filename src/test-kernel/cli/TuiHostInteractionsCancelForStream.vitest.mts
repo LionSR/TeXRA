@@ -224,9 +224,12 @@ describe('HostInteractionOptions.timeoutMs threading', () => {
         { timeoutMs: 15 },
       );
 
+      // #7444: the timeout carries a distinct `timedOut: true` flag so it
+      // doesn't collapse into the same shape as an explicit user rejection.
       await expect(result).resolves.toEqual({
         accepted: false,
         userMessage: 'Approval request timed out.',
+        timedOut: true,
       });
       expect(currentApproval.get()).toBeUndefined();
     } finally {
