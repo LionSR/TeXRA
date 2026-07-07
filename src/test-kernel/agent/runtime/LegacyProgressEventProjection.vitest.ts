@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest';
 // Local imports - runtime
 import { attachLegacyProgressEventProjection } from '@agent/runtime/LegacyProgressEventProjection';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import type {
   ActiveChildInfo,
   ExecutionId,
+  StorageKey,
   StreamTabId,
 } from '@shared/schemas';
 
@@ -166,6 +168,91 @@ describe('LegacyProgressEventProjection', () => {
         {
           event: 'updateRoundStage',
           payload: { streamId, roundStage: { index: 2 } },
+        },
+      ]);
+    } finally {
+      detach();
+    }
+  });
+
+  it('projects usage and domain run facts onto legacy progress events', () => {
+    const hub = new SessionEventHub();
+    const host = createRecordingHost();
+    const streamId = 'stream:domain' as StreamTabId;
+    const storageKey = 'run:usage' as StorageKey;
+    const todos = [
+      {
+        content: 'Project run facts',
+        status: 'pending' as const,
+        activeForm: 'Projecting run facts',
+      },
+    ];
+    const plan = { objective: 'Keep legacy host output compatible.' };
+
+    const detach = attachLegacyProgressEventProjection(hub, host.host);
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: { streamId, todos },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updatePlan'),
+          data: { streamId, plan },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('goalPaused'),
+          data: { streamId },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          stats: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          data: {
+            streamId,
+            storageKey,
+            usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          },
+          recordTranscript: false,
+        },
+      });
+
+      expect(host.events).toEqual([
+        {
+          event: 'updateTodos',
+          payload: { streamId, todos },
+        },
+        {
+          event: 'updatePlan',
+          payload: { streamId, plan },
+        },
+        {
+          event: 'goalPaused',
+          payload: { streamId },
+        },
+        {
+          event: 'updateStreamUsage',
+          payload: {
+            streamId,
+            storageKey,
+            usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          },
         },
       ]);
     } finally {
