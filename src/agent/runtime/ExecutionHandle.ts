@@ -150,6 +150,18 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 
   /**
+   * Drop every registered waiting-cleanup without running it. The run
+   * lifecycle calls this on every non-WAITING terminal path: owners may
+   * pre-register from `onBeforeWaiting` before the suspension is confirmed,
+   * and a flow that continues past the wait (queued follow-up) or errors out
+   * must not leave a stale cleanup that `ExecutionRegistry.terminate()` could
+   * mistake for a suspended handle during normal teardown.
+   */
+  clearWaitingCleanup(): void {
+    this.waitingCleanups = undefined;
+  }
+
+  /**
    * Run and clear every registered waiting-cleanup callback.
    * Returns whether any callback was registered (and thus ran).
    */

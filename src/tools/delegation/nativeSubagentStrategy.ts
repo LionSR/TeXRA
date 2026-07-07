@@ -394,14 +394,17 @@ export class NativeSubagentStrategy {
     if (totalCostUsd !== undefined) {
       this.lastKnownCostUsd = totalCostUsd;
     }
-    // `onBeforeWaiting` fires immediately before every genuine WAITING
-    // suspension of a native subagent — the initial launch and every later
-    // resume alike, each with its own `runHandle` (see `setRunHandle` /
-    // `resumeStream`). Registering here, rather than only once on the
-    // initial launch promise, is what makes a stop/kill during a *second*
-    // (or later) suspended turn still run this strategy's own teardown
-    // instead of leaving `activeNativeSubagents`/the delivery registry
-    // pointing at a removed execution (see `abandon()`).
+    // `onBeforeWaiting` fires before every *potential* WAITING suspension of
+    // a native subagent — the initial launch and every later resume alike,
+    // each with its own `runHandle` (see `setRunHandle` / `resumeStream`).
+    // The flow may still continue past the wait (a follow-up raced into the
+    // queue), in which case the run lifecycle clears this pre-registration on
+    // its terminal path (`clearWaitingCleanup`), so a non-suspended run never
+    // carries a stale abandon into teardown. Registering here, rather than
+    // only once on the initial launch promise, is what makes a stop/kill
+    // during a *second* (or later) suspended turn still run this strategy's
+    // own teardown instead of leaving `activeNativeSubagents`/the delivery
+    // registry pointing at a removed execution (see `abandon()`).
     this.runHandle?.registerWaitingCleanup(() => this.abandon());
 
     const deliveryDecision = this.deliveryState.resolveBeforeWaiting(
