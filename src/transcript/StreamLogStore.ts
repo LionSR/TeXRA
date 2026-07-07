@@ -17,6 +17,7 @@ import {
   isRunningGroupEntry,
   StreamLog,
   type StreamLogAppendInput,
+  type StreamLogPreservedRawEntry,
   type StreamLogUpdatePatch,
 } from './StreamLog';
 
@@ -38,6 +39,11 @@ type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 interface StreamLoadResult {
   streamId: StreamTabId;
   summary: StreamLogSummary;
+}
+
+interface ParsedPersistedEntries {
+  entries: StreamLogEntry[];
+  preservedRawEntries: StreamLogPreservedRawEntry[];
 }
 
 function summaryOf(logInstance: StreamLog): StreamLogSummary {
@@ -209,14 +215,20 @@ export class StreamLogStore {
           // the union instead of clobbering the authoritative disk copy
           // with just the new entries. StreamLog's constructor re-numbers
           // seqNos so the merged view stays contiguous.
-          const merged = new StreamLog([...diskEntries, ...live.toJSON()]);
+          const merged = new StreamLog(
+            [...diskEntries.entries, ...live.toJSON()],
+            diskEntries.preservedRawEntries,
+          );
           this.logs.set(streamId, merged);
           this.refreshSummary(streamId, merged);
           this.markDirty(streamId);
           void this.save();
           this.notify(streamId);
         } else {
-          const logInstance = new StreamLog(diskEntries);
+          const logInstance = new StreamLog(
+            diskEntries.entries,
+            diskEntries.preservedRawEntries,
+          );
           this.logs.set(streamId, logInstance);
           this.refreshSummary(streamId, logInstance);
           // A `releaseEntries` that arrived while the load was in flight gets
@@ -582,9 +594,14 @@ export class StreamLogStore {
     try {
       const raw = await this.kv.read<unknown[]>(streamId);
       const entries = this.parsePersistedEntries(raw);
-      if (entries.length === 0) return null;
+      if (
+        entries.entries.length === 0 &&
+        entries.preservedRawEntries.length === 0
+      ) {
+        return null;
+      }
 
-      const summary = this.summarizeEntries(entries);
+      const summary = this.summarizeEntries(entries.entries);
       await this.writeSummary(streamId, summary).catch(() => {
         log.warn(LOG_TAG, `Failed to write stream summary: ${streamId}`);
       });
@@ -729,12 +746,26 @@ export class StreamLogStore {
     for (const resolve of awaiters) resolve();
   }
 
-  private parsePersistedEntries(rawEntries: unknown): StreamLogEntry[] {
-    if (!Array.isArray(rawEntries)) return [];
-    return rawEntries.flatMap((raw) => {
+  private parsePersistedEntries(rawEntries: unknown): ParsedPersistedEntries {
+    const parsed: ParsedPersistedEntries = {
+      entries: [],
+      preservedRawEntries: [],
+    };
+    if (!Array.isArray(rawEntries)) return parsed;
+
+    for (const raw of rawEntries) {
       const result = PersistedStreamLogEntrySchema.safeParse(raw);
-      return result.success ? [result.data] : [];
-    });
+      if (result.success) {
+        parsed.entries.push(result.data);
+      } else {
+        parsed.preservedRawEntries.push({
+          beforeTypedIndex: parsed.entries.length,
+          raw,
+        });
+      }
+    }
+
+    return parsed;
   }
 
   private executeWrite(): Promise<void> {
