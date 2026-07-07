@@ -3,9 +3,10 @@
  * dropped path, follow-up turn semantics, legacy manifest migration,
  * and listing filters.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
+import * as logUtils from '@logger/logUtils';
 import {
   ExternalInquiryPermissionSchema,
   type ExternalInquiryThreadId,
@@ -28,11 +29,31 @@ import {
 const STREAM_A = 'stream:a' as StreamTabId;
 const STREAM_B = 'stream:b' as StreamTabId;
 
+/**
+ * Capture per-channel log lines. The storage module logs through a channel
+ * trace that binds `logUtils.warn` at module init, so a `vi.spyOn` installed
+ * inside a test can't intercept it — observe the output sink instead (same
+ * pattern as ChannelTrace.vitest.ts).
+ */
+function captureLogLines(): string[] {
+  const lines: string[] = [];
+  logUtils.setOutputChannelFactory(() => ({
+    appendLine(message: string) {
+      lines.push(message);
+    },
+  }));
+  return lines;
+}
+
 describe('InquiryStorage', () => {
   // Each test seeds threads against a fresh platform: state must not leak
   // between tests in this file, so this installs (and resets) per test
   // rather than once for the whole file.
   setupPlatform();
+
+  afterEach(() => {
+    logUtils.setOutputChannelFactory(null);
+  });
 
   it('opens, answers, and resolves a thread end-to-end', async () => {
     const opened = await recordOpenQuestion({
@@ -305,10 +326,14 @@ describe('InquiryStorage', () => {
       manifestPath,
       Buffer.from('{ not valid json', 'utf8'),
     );
+    const logLines = captureLogLines();
 
     await expect(
       readExternalInquiryThread('ei_aabbccdd0033'),
     ).resolves.toBeNull();
+    expect(logLines.join('\n')).toContain(
+      'Unreadable external-inquiry manifest for ei_aabbccdd0033',
+    );
 
     // A follow-up dispatch addressed at the corrupt thread reports
     // not-found instead of silently overwriting the on-disk file.
@@ -333,10 +358,87 @@ describe('InquiryStorage', () => {
       `${threadDir}/manifest.json`,
       Buffer.from(JSON.stringify({ threadId: 42, turns: 'nope' }), 'utf8'),
     );
+    const logLines = captureLogLines();
 
     await expect(
       readExternalInquiryThread('ei_aabbccdd0044'),
     ).resolves.toBeNull();
+    expect(logLines.join('\n')).toContain(
+      'Failed to parse external-inquiry manifest for ei_aabbccdd0044',
+    );
+  });
+
+  it('treats an unknown schemaVersion as unreadable, never as legacy data', async () => {
+    const platform = (await import('@platform/platform')).platform();
+    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0055`;
+    const manifestPath = `${threadDir}/manifest.json`;
+    // Legacy-shaped body stamped with a future version: without the version
+    // gate this would fail the canonical arm and silently parse as a legacy
+    // thread (status rewritten to 'answered', parentStreamId to null).
+    const futureManifest = JSON.stringify({
+      schemaVersion: 2,
+      threadId: 'ei_aabbccdd0055',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-02T00:00:00.000Z',
+      turns: [
+        {
+          turnIndex: 1,
+          timestamp: '2025-01-01T00:00:00.000Z',
+          question: 'Future Q',
+          questionRelativePath: 't1/question.txt',
+          answerRelativePath: 't1/answer.txt',
+        },
+      ],
+    });
+    await platform.fs.createDirectory(threadDir);
+    await platform.fs.writeFile(
+      manifestPath,
+      Buffer.from(futureManifest, 'utf8'),
+    );
+    const logLines = captureLogLines();
+
+    await expect(
+      readExternalInquiryThread('ei_aabbccdd0055'),
+    ).resolves.toBeNull();
+    expect(logLines.join('\n')).toContain(
+      'Unsupported external-inquiry manifest schemaVersion 2 for ei_aabbccdd0055',
+    );
+
+    // The on-disk file is preserved byte-for-byte for the newer writer.
+    const stillOnDisk = Buffer.from(
+      await platform.fs.readFile(manifestPath),
+    ).toString('utf8');
+    expect(stillOnDisk).toBe(futureManifest);
+  });
+
+  it('never legacy-parses a version-stamped manifest whose canonical shape is invalid', async () => {
+    const platform = (await import('@platform/platform')).platform();
+    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0077`;
+    // schemaVersion present (current) but `status`/`parentStreamId` missing:
+    // the canonical arm rejects it, and the legacy arm must too — legacy is
+    // reserved for version-ABSENT manifests.
+    await platform.fs.createDirectory(threadDir);
+    await platform.fs.writeFile(
+      `${threadDir}/manifest.json`,
+      Buffer.from(
+        JSON.stringify({
+          schemaVersion: 1,
+          threadId: 'ei_aabbccdd0077',
+          createdAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-01-02T00:00:00.000Z',
+          turns: [],
+        }),
+        'utf8',
+      ),
+    );
+    const logLines = captureLogLines();
+
+    await expect(
+      readExternalInquiryThread('ei_aabbccdd0077'),
+    ).resolves.toBeNull();
+    expect(logLines.join('\n')).toContain(
+      'Failed to parse external-inquiry manifest for ei_aabbccdd0077',
+    );
   });
 
   it('returns a hydrated legacy manifest when write-back fails', async () => {
