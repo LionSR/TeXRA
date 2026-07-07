@@ -54,13 +54,25 @@ function createRuntimeHost() {
   return { emit: vi.fn() };
 }
 
+function createInteractions(options?: {
+  runtimeHost?: ReturnType<typeof createRuntimeHost>;
+  handlers?: ApprovalRequestHandlerSet;
+  removeStream?: (streamId: StreamTabId) => void;
+}) {
+  return createExtensionHostInteractions({
+    runtimeHost: options?.runtimeHost ?? createRuntimeHost(),
+    getApprovalHandlers: () => options?.handlers ?? createHandlers(),
+    removeStream: options?.removeStream ?? (() => {}),
+  });
+}
+
 describe('createExtensionHostInteractions', () => {
   it('shows and resolves plan approvals through existing handlers', async () => {
     const runtimeHost = createRuntimeHost();
     const handlers = createHandlers();
-    const interactions = createExtensionHostInteractions({
+    const interactions = createInteractions({
       runtimeHost,
-      getApprovalHandlers: () => handlers,
+      handlers,
     });
 
     const resultPromise = interactions.requestPlanApproval?.({
@@ -105,9 +117,9 @@ describe('createExtensionHostInteractions', () => {
   it('cancels pending retry requests for a removed stream', async () => {
     const runtimeHost = createRuntimeHost();
     const handlers = createHandlers();
-    const interactions = createExtensionHostInteractions({
+    const interactions = createInteractions({
       runtimeHost,
-      getApprovalHandlers: () => handlers,
+      handlers,
     });
 
     const resultPromise = interactions.requestRetry?.({
@@ -124,9 +136,9 @@ describe('createExtensionHostInteractions', () => {
   it('shows external inquiries without waiting for a user decision', async () => {
     const runtimeHost = createRuntimeHost();
     const handlers = createHandlers();
-    const interactions = createExtensionHostInteractions({
+    const interactions = createInteractions({
       runtimeHost,
-      getApprovalHandlers: () => handlers,
+      handlers,
     });
 
     await expect(
@@ -153,9 +165,8 @@ describe('createExtensionHostInteractions', () => {
 
   it('cancels streamless user questions during unscoped cleanup', async () => {
     const handlers = createHandlers();
-    const interactions = createExtensionHostInteractions({
-      runtimeHost: createRuntimeHost(),
-      getApprovalHandlers: () => handlers,
+    const interactions = createInteractions({
+      handlers,
     });
 
     const resultPromise = interactions.askUserQuestion?.({
@@ -180,10 +191,7 @@ describe('createExtensionHostInteractions', () => {
   it('delegates tool edit approval to the native VS Code port', async () => {
     const nativeResult = { accepted: true };
     mocks.nativeRequestApproval.mockResolvedValue(nativeResult);
-    const interactions = createExtensionHostInteractions({
-      runtimeHost: createRuntimeHost(),
-      getApprovalHandlers: createHandlers,
-    });
+    const interactions = createInteractions();
     const request = {
       path: 'paper.tex',
       originalContent: 'A',
@@ -196,5 +204,19 @@ describe('createExtensionHostInteractions', () => {
       nativeResult,
     );
     expect(mocks.nativeRequestApproval).toHaveBeenCalledWith(request);
+  });
+
+  it('handles extension removeStream requests through the progress lifecycle callback', () => {
+    const removed: StreamTabId[] = [];
+    const interactions = createInteractions({
+      removeStream: (streamId) => removed.push(streamId),
+    });
+
+    expect(
+      interactions.handleProgressEvent('removeStream', {
+        streamId: 'child-a' as StreamTabId,
+      }),
+    ).toBe(true);
+    expect(removed).toEqual(['child-a']);
   });
 });

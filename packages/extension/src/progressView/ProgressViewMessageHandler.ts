@@ -27,7 +27,6 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { setPreferCodexSubscription } from '@auth/codex';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
-import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { loadOptions } from '@frontend/agents/optionsLoader';
@@ -125,15 +124,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.followUpPolishController = new ProgressFollowUpPolishController();
     this.handlerRegistry = this.createHandlerRegistry();
 
-    const unsubscribeRemoveStream = ProgressEventBus.on(
-      'removeStream',
-      ({ streamId }) => {
-        void this.streamLifecycleController.deleteStream(streamId);
-        void GoalStore.forget(streamId);
-      },
-    );
-    context.subscriptions.push({ dispose: unsubscribeRemoveStream });
-
     const unsubscribeGoal = subscribeGoalStateChanges(
       defaultSession(),
       ({ streamId }) => {
@@ -146,6 +136,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
     );
     context.subscriptions.push({ dispose: unsubscribeGoal });
+  }
+
+  public removeStreamFromHost(streamId: StreamTabId): void {
+    void this.streamLifecycleController.deleteStream(streamId);
+    void GoalStore.forget(streamId);
   }
 
   /**
