@@ -473,7 +473,7 @@ export class ProgressEventHandler {
     );
   }
 
-  handleAddOutputFiles({
+  private handleAddOutputFiles({
     streamId,
     filesByRound,
   }: ProgressEventPayloads['addOutputFiles']): void {

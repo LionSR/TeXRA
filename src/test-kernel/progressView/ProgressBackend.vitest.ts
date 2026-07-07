@@ -477,7 +477,7 @@ describe('ProgressBackend', () => {
     expect(backend.state.activeStream).not.toBe(streamId);
   });
 
-  it('applies session output-file run facts directly without duplicate legacy delivery', async () => {
+  it('routes session output-file run facts through the guarded handler exactly once', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
     const handleProgressEvent = vi.spyOn(
@@ -521,7 +521,14 @@ describe('ProgressBackend', () => {
         },
       });
 
-      expect(handleProgressEvent).not.toHaveBeenCalled();
+      // Goes through handleProgressEvent (restoring the disposed guard and
+      // withEventErrorHandling wrapper — see issue #7381) exactly once, not
+      // the direct eventHandler.handleAddOutputFiles bypass.
+      expect(handleProgressEvent).toHaveBeenCalledTimes(1);
+      expect(handleProgressEvent).toHaveBeenCalledWith('addOutputFiles', {
+        streamId,
+        filesByRound: { 1: [outputFile] },
+      });
       expect(updateFiles).toHaveBeenCalledTimes(1);
       expect(updateFiles).toHaveBeenCalledWith(streamId, {
         rounds: { 1: [outputFile] },
@@ -533,6 +540,60 @@ describe('ProgressBackend', () => {
       subscription.dispose();
       await backend.state.clearAll();
       backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('drops output-file run facts delivered after dispose without mutating state', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
+    const streamId = 'session:output-files-post-dispose' as StreamTabId;
+    const location: FileLocation = {
+      kind: 'workspace',
+      absolutePath: '/workspace/paper.tex',
+      relativePath: 'paper.tex',
+    };
+    const outputFile: OutputFileInfo = {
+      source: 'paper.tex',
+      location,
+      round: 1,
+      lineage: null,
+      diff: null,
+    };
+
+    try {
+      await backend.state.snapshots.load([]);
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      // A run may still hold the session-event delivery path after
+      // backend.dispose() (e.g. a desktop window closed while the run keeps
+      // executing headless). The disposed backend must not mutate its
+      // torn-down snapshot store or push a stale webview update.
+      backend.dispose();
+
+      expect(() =>
+        session.events.emit({
+          scope: 'run',
+          streamId,
+          event: {
+            type: 'domain',
+            key: toRunFactDomainKey('addOutputFiles'),
+            data: {
+              streamId,
+              filesByRound: { 1: [outputFile] },
+            } satisfies ProgressEventPayloads['addOutputFiles'],
+          },
+        }),
+      ).not.toThrow();
+
+      expect(updateFiles).not.toHaveBeenCalled();
+      expect(backend.state.snapshots.getOutputFiles(streamId).size).toBe(0);
+    } finally {
+      subscription.dispose();
       session.dispose();
     }
   });
