@@ -474,28 +474,29 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-      expect(executionRegistry.getHandle(executionId)).toBeDefined();
+      expect(SharedExecutionRegistry.getHandle(executionId)).toBeDefined();
       expect(followUpsRelease).not.toHaveBeenCalled();
       expect(storageMocks.deleteFlowRecord).not.toHaveBeenCalled();
 
-      // runToolUseFlow's finally has already disposed the live session and
-      // unregistered this stream's interrupt by the time a native subagent
-      // suspends at WAITING (not reproduced by this fake runner, but true in
-      // production — see runToolUseFlow.ts). Before the fix,
-      // executionRegistry.kill() found no interruptible context for a
-      // suspended handle and silently no-opped, leaving the handle stuck
-      // registered forever. It must now fall back to the waiting-cleanup
-      // registered above and actually tear the execution down.
-      expect(executionRegistry.kill(executionId)).toBe(true);
+      // runToolUseFlow's finally unregisters this stream's interrupt but
+      // (post #7286) preserves the follow-up queue for WAITING — it does not
+      // dispose the session — by the time a native subagent suspends at
+      // WAITING (not reproduced by this fake runner, but true in production —
+      // see runToolUseFlow.ts). Before the fix, SharedExecutionRegistry.kill()
+      // found no interruptible context for a suspended handle and silently
+      // no-opped, leaving the handle stuck registered forever. It must now
+      // fall back to the waiting-cleanup registered above and actually tear
+      // the execution down.
+      expect(SharedExecutionRegistry.kill(executionId)).toBe(true);
 
-      expect(executionRegistry.getHandle(executionId)).toBeUndefined();
+      expect(SharedExecutionRegistry.getHandle(executionId)).toBeUndefined();
       expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(followUpsRelease).toHaveBeenCalledWith(streamId);
       expect(storageMocks.deleteFlowRecord).toHaveBeenCalledWith(
         `flow_${executionId}`,
       );
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       clearStreamStatusForTest(StreamStatusService, streamId);
     }
   });

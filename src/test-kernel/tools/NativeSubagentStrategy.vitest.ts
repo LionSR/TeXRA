@@ -369,8 +369,11 @@ describe('NativeSubagentStrategy', () => {
     // strategy's private finish() for it. Without a waiting-cleanup hook,
     // killing the suspended child left `activeNativeSubagents` (and the
     // delivery registry) pointing at a gone execution forever.
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     const handleParent = 'handle-parent-waiting' as StreamTabId;
     const childStream = 'child-stream-waiting' as StreamTabId;
+    const settleSubagentCost = vi.fn();
     const strategy = new NativeSubagentStrategy({
       executionId,
       agentName: 'review',
@@ -378,7 +381,7 @@ describe('NativeSubagentStrategy', () => {
       parentSession: ownerSession,
       runtimeHost: { emit: vi.fn() },
       startedAt: 0,
-      settleSubagentCost: vi.fn(),
+      settleSubagentCost,
     });
     const handle = new AgentExecutionHandle(
       executionId,
@@ -389,8 +392,14 @@ describe('NativeSubagentStrategy', () => {
       {} as never,
     );
     strategy.setRunHandle(handle);
+    strategy.setChildStreamId(childStream);
     expect(getNativeSubagentStrategy(executionId)).toBe(strategy);
 
+    // Production calls `onBeforeWaiting` (from inside the flow) before the
+    // top-level promise ever resolves — that's what registers the
+    // waiting-cleanup on the *current* `runHandle` (see `resumeStream`'s
+    // analogous second-suspension test below for the resumed case).
+    await strategy.onBeforeWaiting('done for now', [], [], 0.02);
     strategy.attachPromise(
       Promise.resolve({
         category: 'toolUse',
@@ -407,6 +416,82 @@ describe('NativeSubagentStrategy', () => {
 
     // Simulate ExecutionRegistry.terminate()'s waiting-cleanup fallback.
     expect(handle.runWaitingCleanup()).toBe(true);
+
+    expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
+    expect(
+      SharedSubagentDeliveryRegistry.getActive(executionId),
+    ).toBeUndefined();
+    // abandon() settles the cost snapshot captured by the last onBeforeWaiting.
+    expect(settleSubagentCost).toHaveBeenCalledWith(
+      expect.objectContaining({ totalCostUsd: 0.02 }),
+    );
+  });
+
+  it('registers a waiting-cleanup on the resumed handle when a resumed subagent suspends at WAITING a second time (issue #7286/#7287)', async () => {
+    // Regression: `resumeStream()` replaces `runHandle` with a new handle for
+    // the resumed turn. Before the fix, the strategy's WAITING-cleanup was
+    // only ever attached to the *initial* launch promise (`attachPromise`),
+    // so stopping the child during a second (or later) suspended turn ran no
+    // strategy teardown at all — the fallback below would have found nothing
+    // registered on the new handle and returned `false`.
+    const childStream = 'child-stream-resume-waiting' as StreamTabId;
+    const runtimeHost = { emit: vi.fn() };
+    const config = { agentCategory: 'toolUse' };
+    const snapshot = {
+      agentConfig: config,
+      executionId,
+      messages: [],
+      streamId: childStream,
+    };
+    mocks.readConfig.mockResolvedValue(config);
+    mocks.retrieveSessionResumeData.mockResolvedValue({
+      type: 'toolUse',
+      snapshot,
+    });
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      runtimeHost,
+      startedAt: 0,
+      settleSubagentCost: vi.fn(),
+    });
+    strategy.setChildStreamId(childStream);
+
+    const resumedHandle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStream,
+      'review',
+      'toolUse',
+      {} as never,
+    );
+    // Simulate the resumed run's own lifecycle: it hands the strategy a
+    // brand-new handle (`onRun`), processes the queued follow-up, and then
+    // suspends at WAITING again (`onBeforeWaiting`) before resolving.
+    mocks.resumeQueuedToolUseSnapshot.mockImplementation(
+      async (_streamId, _snapshot, _host, options) => {
+        options.onRun(resumedHandle);
+        await options.onBeforeWaiting('resumed then waited again', [], []);
+        return true;
+      },
+    );
+
+    await expect(
+      strategy.wakeQueuedFollowUp({ status: 'queued', reason: 'waiting' }, {}),
+    ).resolves.toEqual({ kind: 'resumed' });
+
+    // The strategy is still tracked — this second suspension hasn't been
+    // torn down yet, only observed.
+    expect(getNativeSubagentStrategy(executionId)).toBe(strategy);
+
+    // The core fix: the *new* (resumed) handle — not the original launch
+    // handle — has its own waiting-cleanup registered.
+    expect(resumedHandle.runWaitingCleanup()).toBe(true);
 
     expect(getNativeSubagentStrategy(executionId)).toBeUndefined();
     expect(

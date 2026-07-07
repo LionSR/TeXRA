@@ -25,6 +25,9 @@ interface WaitPrepResult {
   previouslyDeliveredToOrchestrator: boolean;
   /** Set after the current cycle has been delivered to an orchestrator. */
   deliveredToOrchestrator?: boolean;
+  /** Run cost accumulated so far — forwarded to `onBeforeWaiting` so a
+   *  suspended-then-abandoned native subagent can still settle its cost. */
+  totalCostUsd?: number;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -48,6 +51,8 @@ export class ToolUseWaitNode<C> extends Node<
             modelHandler.extractAssistantText(m),
           )
         : undefined,
+      totalCostUsd:
+        shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost,
     };
   }
 
@@ -94,6 +99,7 @@ export class ToolUseWaitNode<C> extends Node<
         prepRes.lastResponse,
         prepRes.touchedFiles,
         this.services.attachedMemoryMisses ?? [],
+        prepRes.totalCostUsd,
       );
       prepRes.deliveredToOrchestrator =
         onBeforeWaiting !== undefined && delivered !== false;

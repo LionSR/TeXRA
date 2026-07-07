@@ -78,7 +78,12 @@ describe('ToolUseWaitNode', () => {
     );
 
     expect(onBeforeWaiting).toHaveBeenCalledOnce();
-    expect(onBeforeWaiting).toHaveBeenCalledWith(undefined, [], memoryMisses);
+    expect(onBeforeWaiting).toHaveBeenCalledWith(
+      undefined,
+      [],
+      memoryMisses,
+      undefined,
+    );
     expect(transition).toBe(FlowTransition.WAITING);
     expect(shared.deliveredToOrchestrator).toBe(true);
   });

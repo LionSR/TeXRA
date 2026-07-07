@@ -189,7 +189,7 @@ describe('ToolUseFollowUp', () => {
       );
       assert.equal(resumedSessionLifecycle.hasQueuedFollowUp(), true);
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       sessionLifecycle.dispose();
     }
   });

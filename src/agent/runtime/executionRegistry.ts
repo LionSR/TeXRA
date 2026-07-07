@@ -5,6 +5,8 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
+import { writeTerminalStatus } from '@agent/storage';
+import type { ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   StreamStatusService,
@@ -17,8 +19,10 @@ import {
 import {
   isInFlightStatus,
   isLiveElapsedStatus,
+  projectRunOutcome,
 } from '@common/constants/streamStatus';
 import {
+  RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_SUBSTATE,
@@ -855,9 +859,29 @@ export class ExecutionRegistry {
    * interrupt context. Returns false (no-op) when the handle never registered
    * a waiting-cleanup — i.e. it isn't actually suspended, just momentarily
    * between its own interrupt-unregister and untrack during normal teardown.
+   *
+   * This path bypasses `runFlowWithLifecycle`'s own terminal handling (the
+   * flow never resumes to produce one), so it settles `handle.result` and
+   * persists the terminal status itself — otherwise a consumer awaiting
+   * `handle.result` (F-2) would hang forever and the execution's history
+   * would keep a non-terminal status.
    */
   private terminateWaitingHandle(handle: AgentExecutionHandle): boolean {
     if (!handle.runWaitingCleanup()) return false;
+    const cancelledResult: ResultEvent = {
+      type: 'result',
+      outcome: RUN_OUTCOME.CANCELLED,
+      executionId: handle.executionId,
+      streamId: handle.childStreamId,
+      agentName: handle.agentName,
+      category: handle.category,
+      isSubagent: handle.isChildExecution,
+    };
+    handle.settleResult(cancelledResult);
+    void writeTerminalStatus(
+      handle.executionId,
+      projectRunOutcome(RUN_OUTCOME.CANCELLED).executionStatus,
+    ).catch(() => {});
     this.untrackHandle(handle);
     this.streamStatus.transition(
       handle.childStreamId,
