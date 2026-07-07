@@ -242,7 +242,6 @@ export class ExecutionRegistry {
       if (handle.isChildExecution) {
         this.emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
         this.emitParentStreamUpdate(runtimeHost, {
-          parentScopeStreamId: handle.parentStreamId,
           childStreamId: handle.childStreamId,
           parentStreamId: handle.parentStreamId,
         });
@@ -570,7 +569,6 @@ export class ExecutionRegistry {
       if (handle instanceof AgentExecutionHandle) {
         handle.detach();
         this.emitParentStreamUpdate(runtimeHost, {
-          parentScopeStreamId: parentStreamId,
           childStreamId: handle.childStreamId,
           parentStreamId: null,
         });
@@ -732,20 +730,19 @@ export class ExecutionRegistry {
   private emitParentStreamUpdate(
     runtimeHost: AgentRuntimeHost,
     payload: {
-      readonly parentScopeStreamId: StreamTabId;
       readonly childStreamId: StreamTabId;
       readonly parentStreamId: StreamTabId | null;
     },
   ): void {
     if (this.events) {
       this.events.emit({
-        scope: 'run',
-        streamId: payload.parentScopeStreamId,
+        scope: 'session',
         event: {
-          type: 'child.activity',
-          kind: 'parent',
-          childStreamId: payload.childStreamId,
-          parentStreamId: payload.parentStreamId,
+          type: 'setParentStream',
+          payload: {
+            childStreamId: payload.childStreamId,
+            parentStreamId: payload.parentStreamId,
+          },
         },
       });
       return;

@@ -12,7 +12,10 @@ import {
 } from '@agent/runtime/executionRegistry';
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import {
+  SessionEventHub,
+  type SessionEvent,
+} from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   RUN_OUTCOME,
@@ -844,6 +847,45 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('publishes parent links through the attached session event hub', () => {
+    const explicit = createRecordingHost();
+    const events = new SessionEventHub();
+    const seen: SessionEvent[] = [];
+    const detach = events.subscribe((event) => seen.push(event));
+    const registry = new ExecutionRegistry({ events });
+    const executionId = 'exec-session-parent-link-test';
+    const parentStreamId = 'parent-session-parent-link-test' as StreamTabId;
+    const childStreamId = 'child-session-parent-link-test' as StreamTabId;
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
+      );
+
+      registry.track(handle);
+
+      expect(explicit.events).toEqual([]);
+      expect(seen).toContainEqual({
+        scope: 'session',
+        event: {
+          type: 'setParentStream',
+          payload: {
+            childStreamId,
+            parentStreamId,
+          },
+        },
+      });
+    } finally {
+      detach();
+      registry.dispose();
+    }
+  });
+
   it('clears live tool-use context while the handle remains tracked', () => {
     const explicit = createRecordingHost();
     const registry = new ExecutionRegistry();
@@ -1099,6 +1141,48 @@ describe('executionRegistry', () => {
         children: [],
       });
     } finally {
+      registry.dispose();
+    }
+  });
+
+  it('publishes detach parent links through the attached session event hub', () => {
+    const explicit = createRecordingHost();
+    const events = new SessionEventHub();
+    const seen: SessionEvent[] = [];
+    const detach = events.subscribe((event) => seen.push(event));
+    const registry = new ExecutionRegistry({ events });
+    const executionId = 'exec-detach-session-parent-link-test';
+    const parentStreamId =
+      'parent-detach-session-parent-link-test' as StreamTabId;
+    const childStreamId =
+      'child-detach-session-parent-link-test' as StreamTabId;
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
+      );
+
+      registry.track(handle);
+      registry.detachActiveChildren(parentStreamId, explicit.host);
+
+      expect(explicit.events).toEqual([]);
+      expect(seen).toContainEqual({
+        scope: 'session',
+        event: {
+          type: 'setParentStream',
+          payload: {
+            childStreamId,
+            parentStreamId: null,
+          },
+        },
+      });
+    } finally {
+      detach();
       registry.dispose();
     }
   });
