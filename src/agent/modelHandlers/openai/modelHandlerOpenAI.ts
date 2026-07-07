@@ -15,7 +15,6 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   buildErrorLogData,
-  getSdkErrorMessage,
   isMissingFinishReasonError,
   handleStreamingFailure,
   trackStreamConnect,
@@ -1212,19 +1211,13 @@ export class ModelHandlerOpenAI<
       return [];
     }
 
-    // #7467: a malformed tool_calls payload used to be swallowed here (log +
-    // return []), which makes the round look like "no tool calls" and lets
-    // the run finalize as a successful completion on a corrupted provider
-    // response. Throw instead so this reaches the L4 `classifyAgentError`
-    // boundary (`AgentRunLifecycle.ts`) and fails the run loudly/retryably,
-    // matching every other genuine model-response failure.
-    try {
-      assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls);
-    } catch (err) {
-      throw new Error(
-        `Malformed OpenAI tool_calls payload: ${getSdkErrorMessage(err)}`,
-      );
-    }
+    // Let a malformed payload throw: swallowing it here would return an
+    // empty tool-call list, which the caller reads as "the model made no
+    // tool calls" and finalizes the run as a successful completion instead
+    // of surfacing the corrupted provider response. The thrown error
+    // propagates to the existing classifyAgentError boundary
+    // (AgentRunLifecycle.ts), which fails the run loudly and retryably.
+    assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls);
 
     return toolCalls.map((call) => ({
       provider: this.toolCallProvider,

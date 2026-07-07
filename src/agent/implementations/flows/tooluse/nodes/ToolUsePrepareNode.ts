@@ -42,22 +42,26 @@ export class ToolUsePrepareNode<C> extends Node<
 
     if (snapshot) {
       logger.debug('Resuming tool-use session from saved state.');
-      // Rebuild the current system text and swap it into the persisted
-      // first-message slot that holds the systemPrompt. For providers that
-      // pass `system` per-call
-      // (Anthropic) this is a no-op: the systemPrompt was never stored in
-      // messages to begin with.
+      // Rebuild the current system text: for providers that embed it into
+      // `messages` (OpenAI, OpenRouter), swap it into the persisted
+      // first-message slot. For providers that pass `system` per-call
+      // instead (Anthropic, Google), it's returned as `systemPrompt` so the
+      // round flow can resupply it on every subsequent model call.
       const supportsSystemPrompt =
         this.services.modelHandler.capabilities?.supportsSystemPrompt !== false;
-      const messages = await refreshPersistedSystemMessage(
+      const rebuiltPrompts = await buildInitialToolUsePrompts(
+        this.services.prompt,
+        userVarChannels.transient,
+        logger,
+        promptOptions,
+      );
+      const systemMessage = buildSystemText(
+        rebuiltPrompts.systemPrompt,
+        rebuiltPrompts.instructionSuffix,
+      );
+      const messages = refreshPersistedSystemMessage(
         snapshot.messages,
-        () =>
-          buildInitialToolUsePrompts(
-            this.services.prompt,
-            userVarChannels.transient,
-            logger,
-            promptOptions,
-          ),
+        systemMessage,
         supportsSystemPrompt,
       );
       return {
@@ -71,6 +75,7 @@ export class ToolUsePrepareNode<C> extends Node<
             transient: { ...snapshot.user.transient },
           },
           shouldSkipCycle: true,
+          systemPrompt: systemMessage,
         },
       };
     }
@@ -108,6 +113,7 @@ export class ToolUsePrepareNode<C> extends Node<
         workspaceState,
         userChannels: userVarChannels,
         shouldSkipCycle: false,
+        systemPrompt: systemMessage,
       },
     };
   }
@@ -134,9 +140,11 @@ export class ToolUsePrepareNode<C> extends Node<
       workspaceState,
       userChannels,
       shouldSkipCycle,
+      systemPrompt,
     } = execRes.result;
     shared.messages = [...messages];
     shared.shouldSkipCycle = shouldSkipCycle;
+    shared.systemPrompt = systemPrompt;
     shared.stateSlices = {
       runStateSnapshot: runState,
       workspaceSnapshot: workspaceState.toSnapshot(),
@@ -184,23 +192,22 @@ function buildSystemText(
  *   role='user'. We replace only that block's text and leave any
  *   subsequent blocks (userPrefix, userRequest) untouched.
  *
- * Providers that pass `system` per-call (Anthropic) never store the
- * systemPrompt in `messages`, so both branches are a no-op there.
+ * Providers that pass `system` per-call (Anthropic, Google) never store the
+ * systemPrompt in `messages`, so both branches are a no-op there — those
+ * providers get the rebuilt text via the returned `systemPrompt` field
+ * instead (see caller).
  */
-async function refreshPersistedSystemMessage(
+function refreshPersistedSystemMessage(
   persisted: ProviderMessage[],
-  rebuild: () => Promise<{ systemPrompt: string; instructionSuffix: string }>,
+  systemText: string,
   supportsSystemPrompt: boolean,
-): Promise<ProviderMessage[]> {
+): ProviderMessage[] {
   const first = persisted[0];
   if (!first || typeof first !== 'object') return persisted;
 
   const role = (first as { role?: unknown }).role;
   const expectedRole = supportsSystemPrompt ? 'system' : 'user';
   if (role !== expectedRole) return persisted;
-
-  const { systemPrompt, instructionSuffix } = await rebuild();
-  const systemText = buildSystemText(systemPrompt, instructionSuffix);
 
   const existing = first as Record<string, unknown>;
   const updated = [...persisted];
