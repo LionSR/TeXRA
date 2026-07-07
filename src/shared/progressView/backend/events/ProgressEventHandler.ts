@@ -56,8 +56,10 @@ export type GetProgressStreamControls = (
 ) => ProgressStreamControls;
 
 type ProgressEventRegistration<K extends ProgressEvent> = {
-  readonly module: string;
-  readonly context: string;
+  /** Defaults to 'ProgressEvents' when omitted. */
+  readonly module?: string;
+  /** Defaults to `failed to handle ${event}` when omitted. */
+  readonly context?: string;
   readonly handle: (payload: ProgressEventPayloads[K]) => void | Promise<void>;
 };
 
@@ -124,34 +126,22 @@ export class ProgressEventHandler {
   private createEventRegistrations(): ProgressEventRegistrationMap {
     return {
       setActiveStream: {
-        module: 'ProgressEvents',
-        context: 'failed to handle setActiveStream',
         handle: (payload) => this.handleSetActiveStream(payload),
       },
       updateStreamStatus: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateStreamStatus',
         handle: ({ streamId, status, previousStatus, substate }) =>
           this.setStreamStatus(streamId, status, previousStatus, substate),
       },
       setTaskState: {
-        module: 'ProgressEvents',
-        context: 'failed to handle setTaskState',
         handle: (data) => this.handleSetTaskState(data),
       },
       updateConversationProgress: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateConversationProgress',
         handle: (data) => this.handleUpdateConversationProgress(data),
       },
       updateRoundStage: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateRoundStage',
         handle: (data) => this.handleUpdateRoundStage(data),
       },
       updateActiveSubagents: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateActiveSubagents',
         handle: (data) =>
           this.updateActiveChildren(data.parentStreamId, {
             activeField: 'activeSubagents',
@@ -160,8 +150,6 @@ export class ProgressEventHandler {
           }),
       },
       updateActiveProcesses: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateActiveProcesses',
         handle: (data) =>
           this.updateActiveChildren(data.parentStreamId, {
             activeField: 'activeProcesses',
@@ -170,8 +158,6 @@ export class ProgressEventHandler {
           }),
       },
       updateProcessOutput: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateProcessOutput',
         handle: (data) => {
           // Always send — output accumulates in frontend state per-stream,
           // so it must not be dropped when the stream is inactive.
@@ -186,8 +172,6 @@ export class ProgressEventHandler {
         },
       },
       inquiryThreadUpdated: {
-        module: 'ProgressEvents',
-        context: 'failed to handle inquiryThreadUpdated',
         handle: (thread) => {
           if (this.webviewUpdater.isAvailable()) {
             this.webviewUpdater.updateInquiryThread(thread);
@@ -195,8 +179,6 @@ export class ProgressEventHandler {
         },
       },
       updateStreamDescription: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateStreamDescription',
         handle: ({ streamId, description }) => {
           this.state.snapshots.setDescription(streamId, description);
           if (this.webviewUpdater.isAvailable()) {
@@ -205,8 +187,6 @@ export class ProgressEventHandler {
         },
       },
       setParentStream: {
-        module: 'ProgressEvents',
-        context: 'failed to handle setParentStream',
         handle: ({ childStreamId, parentStreamId }) => {
           this.state.snapshots.setParentStream(childStreamId, parentStreamId);
           if (this.webviewUpdater.isAvailable()) {
@@ -218,19 +198,13 @@ export class ProgressEventHandler {
         },
       },
       extensionDeactivating: {
-        module: 'ProgressEvents',
-        context: 'failed to handle extensionDeactivating',
         handle: () => this.markAllRunningTasksAsCancelled(),
       },
       // Output events — workflow tabs hold one run; ignore the storageKey dim.
       addOutputFiles: {
-        module: 'ProgressEvents',
-        context: 'failed to handle addOutputFiles',
         handle: (payload) => this.handleAddOutputFiles(payload),
       },
       updateMissingOutputs: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateMissingOutputs',
         handle: ({ streamId, filesByRound }) => {
           this.state.snapshots.updateMissingOutputs(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
@@ -242,8 +216,6 @@ export class ProgressEventHandler {
         },
       },
       updateCompileFailures: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateCompileFailures',
         handle: ({ streamId, filesByRound }) => {
           this.state.snapshots.updateCompileFailures(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
@@ -256,8 +228,6 @@ export class ProgressEventHandler {
         },
       },
       clearMissingOutputs: {
-        module: 'ProgressEvents',
-        context: 'failed to handle clearMissingOutputs',
         handle: (payload) => {
           const targets: StreamTabId[] = payload.streamId
             ? [payload.streamId]
@@ -279,8 +249,6 @@ export class ProgressEventHandler {
       // Usage events — workflow tabs collapse to a single accumulated value;
       // tool-use tabs keep per-run accumulation (resume produces multiple runs).
       updateStreamUsage: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateStreamUsage',
         handle: ({ streamId, usage, storageKey }) => {
           void Promise.resolve(
             this.state.snapshots.addUsage(streamId, storageKey, usage),
@@ -297,8 +265,6 @@ export class ProgressEventHandler {
         },
       },
       updateTodos: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateTodos',
         handle: ({ streamId, todos }) => {
           this.state.snapshots.setTodos(streamId, todos);
           this.sendIfActive(streamId, () =>
@@ -309,8 +275,6 @@ export class ProgressEventHandler {
       // Plan events are rare and critical for the approval UX, so send them
       // whenever the webview is available rather than only for the active tab.
       updatePlan: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updatePlan',
         handle: ({ streamId, plan }) => {
           this.state.snapshots.setPlan(streamId, plan);
           if (this.webviewUpdater.isAvailable()) {
@@ -319,8 +283,6 @@ export class ProgressEventHandler {
         },
       },
       updateQueuedFollowUps: {
-        module: 'ProgressEvents',
-        context: 'failed to handle updateQueuedFollowUps',
         handle: ({ streamId }) => {
           this.sendIfActive(streamId, () => {
             const messages = this.state.followUps.getAll(streamId);
@@ -468,8 +430,10 @@ export class ProgressEventHandler {
       ProgressEventRegistration<K> | undefined;
     if (!registration) return;
 
-    withEventErrorHandling(registration.module, registration.context, () =>
-      registration.handle(payload),
+    withEventErrorHandling(
+      registration.module ?? 'ProgressEvents',
+      registration.context ?? `failed to handle ${event}`,
+      () => registration.handle(payload),
     );
   }
 
