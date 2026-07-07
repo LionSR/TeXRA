@@ -127,6 +127,9 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
   /** Streams that became live in this bridge and must not be restored as ghosts. */
   private readonly liveStreams = new Set<StreamTabId>();
 
+  /** True once `dispose()` has torn down this bridge. */
+  private disposed = false;
+
   private readonly unsubscribe: () => void;
 
   constructor(private readonly opts: DesktopProgressEventBridgeOptions) {
@@ -214,6 +217,14 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
+    // A headless run may still hold the owning bridge's `hostChannel.emit`
+    // closure that routes here after the desktop window closed and this bridge
+    // was disposed. Applying events post-dispose would repopulate the ghost /
+    // live stream maps that `dispose()` just cleared, re-persist snapshots, and
+    // route/show-error into a closed renderer. Mirror the ProgressBackend guard
+    // from #7372 (its sibling caller reached from the same fan-out point) so
+    // this second route also no-ops once disposed.
+    if (this.disposed) return;
     switch (event) {
       case 'setActiveStream': {
         const data = payload as ProgressEventPayloads['setActiveStream'];
@@ -390,6 +401,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
   // ── Dispose ──────────────────────────────────────────────────────────────
 
   dispose(): void {
+    this.disposed = true;
     this.unsubscribe();
     this.restoredStreams.clear();
     this.restoredDisplaySent.clear();
