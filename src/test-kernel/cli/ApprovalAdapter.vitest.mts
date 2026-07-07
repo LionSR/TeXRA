@@ -6,6 +6,8 @@ vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
 }));
 
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
 import {
   setActiveCliToolEditApprovalHandler,
   createCliToolEditApprovalPort,
@@ -25,13 +27,11 @@ import {
   isCliApiSwitchableRetry,
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
   type StreamTabId,
 } from '@shared/schemas';
-import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
