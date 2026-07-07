@@ -13,6 +13,12 @@ All notable changes to this project will be documented in this file.
   `javascript:`/`data:`/`vbscript:`/`file:` URL to become a live,
   script-executing link; only `http:`, `https:`, and `mailto:` links render
   as clickable, in both the Progress View and exported HTML chats.
+- **ChatGPT-subscription (Codex) models now compact long conversations** —
+  this backend requires `store: false`, so OpenAI's stateful compaction
+  endpoint never had a stored response to act on and long runs just grew
+  until they hit the context ceiling. Both the automatic threshold-based
+  compaction and the manual "compact now" action now summarize the
+  conversation locally and resend a shorter history instead.
 
 #### Improvements
 
