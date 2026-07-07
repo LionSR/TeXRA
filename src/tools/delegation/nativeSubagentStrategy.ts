@@ -170,12 +170,28 @@ export class NativeSubagentStrategy {
   private readonly deliveryState;
   private childStreamId: StreamTabId | undefined;
   private runHandle: AgentRunHandle | undefined;
+  private readonly detachAbandonListener: () => void;
 
   constructor(private readonly params: NativeSubagentStrategyParams) {
     this.deliveryState = SharedSubagentDeliveryRegistry.start(
       params.executionId,
     );
     activeNativeSubagents.set(params.executionId, this);
+    // Backstop for an abandoned WAITING session: a native subagent that
+    // suspends and is never resumed and never errors has no other terminal
+    // event to drive `finish()`. Piggyback on the execution registry's own
+    // abandonment signal — the same "handle goes undefined" terminal
+    // notification `ExecutionRegistry.addListener` already fires on untrack
+    // (explicit stop, cascade from a stopped orchestrator, or session
+    // teardown/dispose) — rather than inventing a second, time-based
+    // channel that could fire while the execution is still legitimately
+    // resumable.
+    this.detachAbandonListener = params.parentSession.executions.addListener(
+      params.executionId,
+      (handle) => {
+        if (handle === undefined) this.finish();
+      },
+    );
   }
 
   setChildStreamId(streamId: StreamTabId): void {
@@ -320,17 +336,32 @@ export class NativeSubagentStrategy {
         onFollowUpConsumed: () => this.onFollowUpConsumed(),
         onBeforeWaiting: (lastResponse, touchedFiles, memoryMisses) =>
           this.onBeforeWaiting(lastResponse, touchedFiles, memoryMisses),
+        // `finish()` runs in `finally` in each hook below: `resumeQueuedToolUseSnapshot`
+        // and `runFlowWithLifecycle` only log and swallow a throw from these
+        // callbacks (they never propagate it back here), so a `this.finish()`
+        // placed after the `await` would silently never run on failure,
+        // stranding this strategy's registry entries for a run that
+        // `runFlowWithLifecycle` already considers untracked.
         onCompleted: async (result) => {
-          await this.onCompleted(result);
-          this.finish();
+          try {
+            await this.onCompleted(result);
+          } finally {
+            this.finish();
+          }
         },
         onRunError: async (err, result) => {
-          await this.onError(err, result);
-          this.finish();
+          try {
+            await this.onError(err, result);
+          } finally {
+            this.finish();
+          }
         },
         onError: async (err) => {
-          await this.deliverSubagentError(err);
-          this.finish();
+          try {
+            await this.deliverSubagentError(err);
+          } finally {
+            this.finish();
+          }
         },
         onRun: (handle) => this.setRunHandle(handle),
       },
@@ -418,6 +449,7 @@ export class NativeSubagentStrategy {
   }
 
   private finish(): void {
+    this.detachAbandonListener();
     SharedSubagentDeliveryRegistry.finish(this.params.executionId);
     activeNativeSubagents.delete(this.params.executionId);
   }

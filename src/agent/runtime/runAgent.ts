@@ -4,27 +4,28 @@ import type { ValidatedExecutionRequest } from '@agent/core/state/executionReque
 import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { applyHelperModelPreference } from './helperModelPreference';
-import { executeAgent } from './executeAgent';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
-import type { AgentRunHandle } from './executionRegistry';
-import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
-import type { SessionHandle } from './SessionHandle';
 
-export interface RunAgentOptions {
-  runtimeHost: AgentRuntimeHost;
+/**
+ * Options for `runAgent`. Fields shared with the lower-level `executeAgent`
+ * are picked from `ExecuteAgentOptions` (and forwarded as-is) so the two
+ * option types can't drift apart silently; see that interface for their docs.
+ */
+export interface RunAgentOptions extends Pick<
+  ExecuteAgentOptions,
+  | 'runtimeHost'
+  | 'enforceCategory'
+  | 'stopAfterCycle'
+  | 'approvalPromptsUnavailable'
+  | 'runtimeUnavailableTools'
+  | 'toolEditApprovalHandler'
+  | 'session'
+  | 'modelHandlerCompatibilityKey'
+  | 'onRun'
+> {
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
-  enforceCategory?: boolean;
   registerExecution?: boolean;
-  stopAfterCycle?: boolean;
-  approvalPromptsUnavailable?: boolean;
-  runtimeUnavailableTools?: readonly string[];
-  /**
-   * Per-run override for the host's tool-edit approval UI — see
-   * `ExecuteAgentOptions.toolEditApprovalHandler`.
-   */
-  toolEditApprovalHandler?: ToolEditApprovalPort;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
    * progress-view compile fixer): run the launched agent on the configured
@@ -32,17 +33,6 @@ export interface RunAgentOptions {
    * the CLI, and orchestrator delegations, which all keep the chosen model.
    */
   preferHelperModel?: boolean;
-  /** Session owning this run's coordination state. Defaults to the process session. */
-  session?: SessionHandle;
-  /** Resume using this persisted provider-message format instead of today's default route. */
-  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
-  /**
-   * Fires once with the live per-run handle right after it is tracked (F-2):
-   * `handle.result` settles with the terminal outcome, `handle.trace` is the
-   * run's event channel, and the handle can interrupt via the session. The
-   * returned promise is unchanged — this is additive, post-launch exposure.
-   */
-  onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
 /**

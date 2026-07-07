@@ -553,8 +553,10 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
     handler.getStreamingConfig = () => true;
     (
-      handler as unknown as { backgroundPoller: BackgroundPoller<any> }
-    ).backgroundPoller = new BackgroundPoller({
+      handler as unknown as {
+        backgroundLifecycle: { backgroundPoller: BackgroundPoller<any> };
+      }
+    ).backgroundLifecycle.backgroundPoller = new BackgroundPoller({
       pollIntervalMs: 0,
       maxDurationMs: 1000,
       isPending: (response: { status?: string | null }) =>
@@ -710,8 +712,10 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
     handler.getStreamingConfig = () => true;
     (
-      handler as unknown as { backgroundPoller: BackgroundPoller<any> }
-    ).backgroundPoller = new BackgroundPoller({
+      handler as unknown as {
+        backgroundLifecycle: { backgroundPoller: BackgroundPoller<any> };
+      }
+    ).backgroundLifecycle.backgroundPoller = new BackgroundPoller({
       pollIntervalMs: 0,
       maxDurationMs: 1000,
       isPending: (response: { status?: string | null }) =>

@@ -47,26 +47,9 @@ export function attachSessionProgressEventProjection(
     },
     { scope: 'session' },
   );
-  const detachRunFacts = events.subscribe(
-    (sessionEvent) => {
-      if (sessionEvent.scope !== 'run') return;
-      const projected = projectRunFactToProgressEvent(
-        sessionEvent.streamId,
-        sessionEvent.event,
-      );
-      if (!projected) return;
-      emitProjectedProgressEvent(runtimeHost, projected);
-    },
-    {
-      scope: 'run',
-      types: [
-        'domain',
-        'usage',
-        'stage.start',
-        'child.activity',
-        'process.output',
-      ],
-    },
+  const detachRunFacts = subscribeRunFactsAsProgressEvents(
+    events,
+    (projected) => emitProjectedProgressEvent(runtimeHost, projected),
   );
 
   return () => {
@@ -199,4 +182,35 @@ export function projectRunFactToProgressEvent(
   }
 
   return undefined;
+}
+
+const RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
+  'domain',
+  'usage',
+  'stage.start',
+  'child.activity',
+  'process.output',
+];
+
+/**
+ * Subscribe to the run-scoped facts that project onto legacy progress
+ * events, forwarding each successfully projected event to `onProjected`.
+ * Shared by `attachSessionProgressEventProjection` and `ProgressBackend` so
+ * their run-fact filter and projection can't silently diverge.
+ */
+export function subscribeRunFactsAsProgressEvents(
+  events: SessionEventHub,
+  onProjected: (projected: ProjectedProgressEvent) => void,
+): () => void {
+  return events.subscribe(
+    (sessionEvent) => {
+      if (sessionEvent.scope !== 'run') return;
+      const projected = projectRunFactToProgressEvent(
+        sessionEvent.streamId,
+        sessionEvent.event,
+      );
+      if (projected) onProjected(projected);
+    },
+    { scope: 'run', types: RUN_FACT_PROGRESS_EVENT_TYPES },
+  );
 }
