@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
-import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type OutputFileInfo,
+  type StreamTabId,
+} from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
 
 const mocks = vi.hoisted(() => ({
@@ -136,6 +140,57 @@ describe('createExtensionHostInteractions', () => {
     expect(handlers.retry.resolve).toHaveBeenCalledWith('stream-a');
   });
 
+  it('passes cancellation causes into stream-scoped approval results', async () => {
+    const handlers = createHandlers();
+    const interactions = createInteractions({ handlers });
+    const streamId = 'stream-cause' as StreamTabId;
+
+    const bash = interactions.requestBashApproval?.({
+      command: 'echo hi',
+      streamId,
+    });
+    const plan = interactions.requestPlanApproval?.({
+      approvalId: 'plan-cause',
+      streamId,
+      goalEnabled: false,
+      plan: { objective: 'Check cancellation feedback.' },
+    });
+    const proposal = interactions.requestAgentProposal?.({
+      proposalId: 'proposal-cause',
+      streamId,
+      agent: 'assistant',
+      model: 'test-model',
+      instruction: 'Use a helper agent.',
+      memories: [],
+      agentCategory: AgentCategory.ToolUse,
+    });
+    const question = interactions.askUserQuestion?.({
+      requestId: 'question-cause',
+      questions: [{ question: 'Continue?', options: [] }],
+      allowBypass: false,
+      streamId,
+    });
+
+    interactions.cancelForStream(streamId, 'Stream resources released.');
+
+    await expect(bash).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Stream resources released.',
+    });
+    await expect(plan).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Stream resources released.',
+    });
+    await expect(proposal).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Stream resources released.',
+    });
+    await expect(question).resolves.toEqual({
+      submitted: false,
+      feedback: 'Stream resources released.',
+    });
+  });
+
   it('shows external inquiries without waiting for a user decision', async () => {
     const runtimeHost = createRuntimeHost();
     const handlers = createHandlers();
@@ -185,7 +240,10 @@ describe('createExtensionHostInteractions', () => {
 
     interactions.cancelUnscoped?.('No stream owns this question.');
 
-    await expect(resultPromise).resolves.toEqual({ submitted: false });
+    await expect(resultPromise).resolves.toEqual({
+      submitted: false,
+      feedback: 'No stream owns this question.',
+    });
     expect(handlers.userQuestion.resolve).toHaveBeenCalledWith('question-a');
     // The cancelled question was released: a later resolution finds nothing.
     expect(

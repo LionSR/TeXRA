@@ -12,11 +12,13 @@ import type {
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
-import type {
-  AgentProposalPermission,
-  StreamTabId,
-  UserQuestionAnswers,
-} from '@shared/schemas';
+import {
+  toBashApprovalResult,
+  toPlanApprovalResult,
+  toProposalResult,
+  toUserQuestionResult,
+} from '@agent/runtime/hostInteractionResults';
+import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
 import type {
   ToolEditApprovalRequest,
@@ -157,26 +159,16 @@ class DesktopHostInteractions implements HostInteractions {
     }
 
     const request = this.pendingRequests.get(requestId);
-    if (!request) return false;
+    if (!request || request.kind !== result.kind) return false;
     this.pendingRequests.delete(requestId);
 
     switch (request.kind) {
       case 'bash':
-        request.settle({
-          accepted: result.action === 'approve',
-          ...(result.feedback ? { userMessage: result.feedback } : {}),
-        });
+        request.settle(toBashApprovalResult(result));
         this.options.getApprovalHandlers().bash.resolve(requestId);
         return true;
       case 'plan':
-        request.settle(
-          result.action === 'approve' || result.action === 'approve_and_goal'
-            ? { action: result.action }
-            : {
-                action: 'reject',
-                ...(result.feedback ? { feedback: result.feedback } : {}),
-              },
-        );
+        request.settle(toPlanApprovalResult(result));
         this.options.getApprovalHandlers().planApproval.resolve(requestId);
         return true;
       case 'proposal':
@@ -184,13 +176,7 @@ class DesktopHostInteractions implements HostInteractions {
         this.options.getApprovalHandlers().agentProposal.resolve(requestId);
         return true;
       case 'userQuestion':
-        request.settle({
-          submitted: result.action === 'submit',
-          ...(result.value
-            ? { answers: result.value as UserQuestionAnswers }
-            : {}),
-          ...(result.feedback ? { feedback: result.feedback } : {}),
-        });
+        request.settle(toUserQuestionResult(result));
         this.options.getApprovalHandlers().userQuestion.resolve(requestId);
         return true;
     }
@@ -223,13 +209,7 @@ class DesktopHostInteractions implements HostInteractions {
   }
 
   dispose(): void {
-    for (const requestId of [...this.pendingRequests.keys()]) {
-      this.resolve(requestId, {
-        kind: 'dispose',
-        action: 'reject',
-        feedback: 'Desktop session disposed.',
-      });
-    }
+    this.cancelAll('Desktop session disposed.');
   }
 
   private showPending<TResult, TEntry extends PendingDesktopInteraction>(
@@ -238,7 +218,8 @@ class DesktopHostInteractions implements HostInteractions {
     show: (settle: TEntry['settle']) => TEntry['settle'],
   ): Promise<TResult> {
     return new Promise<TResult>((resolve) => {
-      const settle = show((result) => resolve(result as TResult));
+      const settle = show(((result: unknown) =>
+        resolve(result as TResult)) as TEntry['settle']);
       this.pendingRequests.set(requestId, {
         ...entry,
         settle,
@@ -251,17 +232,4 @@ class DesktopHostInteractions implements HostInteractions {
     if (streamId)
       this.options.runtimeHost.emit('setActiveStream', { streamId });
   }
-}
-
-function toProposalResult(result: HostInteractionResolution): ProposalResult {
-  if (result.value && typeof result.value === 'object') {
-    const value = result.value as ProposalResult;
-    if ('action' in value) return value;
-  }
-  return result.action === 'approve' || result.action === 'setup'
-    ? { action: result.action }
-    : {
-        action: 'reject',
-        ...(result.feedback ? { feedback: result.feedback } : {}),
-      };
 }
