@@ -55,9 +55,13 @@ export class ToolUsePrepareNode<C> extends Node<
         logger,
         promptOptions,
       );
+      const systemMessage = buildSystemText(
+        rebuiltPrompts.systemPrompt,
+        rebuiltPrompts.instructionSuffix,
+      );
       const messages = refreshPersistedSystemMessage(
         snapshot.messages,
-        rebuiltPrompts,
+        systemMessage,
         supportsSystemPrompt,
       );
       return {
@@ -71,10 +75,7 @@ export class ToolUsePrepareNode<C> extends Node<
             transient: { ...snapshot.user.transient },
           },
           shouldSkipCycle: true,
-          systemPrompt: buildSystemText(
-            rebuiltPrompts.systemPrompt,
-            rebuiltPrompts.instructionSuffix,
-          ),
+          systemPrompt: systemMessage,
         },
       };
     }
@@ -198,7 +199,7 @@ function buildSystemText(
  */
 function refreshPersistedSystemMessage(
   persisted: ProviderMessage[],
-  rebuilt: { systemPrompt: string; instructionSuffix: string },
+  systemText: string,
   supportsSystemPrompt: boolean,
 ): ProviderMessage[] {
   const first = persisted[0];
@@ -207,11 +208,6 @@ function refreshPersistedSystemMessage(
   const role = (first as { role?: unknown }).role;
   const expectedRole = supportsSystemPrompt ? 'system' : 'user';
   if (role !== expectedRole) return persisted;
-
-  const systemText = buildSystemText(
-    rebuilt.systemPrompt,
-    rebuilt.instructionSuffix,
-  );
 
   const existing = first as Record<string, unknown>;
   const updated = [...persisted];
