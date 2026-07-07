@@ -15,9 +15,9 @@ import {
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
 import {
-  formatUnifiedApprovalUserDiff,
+  appendApprovalDiffNote,
   requestApprovedEditContent,
-  writeApprovedContent,
+  writeAndRecordApprovedEdit,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { assertNever } from '@utils/core';
@@ -317,24 +317,20 @@ export class TextEditorTool extends defineTool({
         await WorkspaceFS.ensureDir(dirPath);
       }
 
-      const { appliedContent } = await writeApprovedContent(
+      // writeAndRecordApprovedEdit marks the file "read" after creation so
+      // subsequent edits don't require an explicit read first.
+      const { appliedContent } = await writeAndRecordApprovedEdit(
         filePath,
         '',
         finalContent,
       );
 
-      // Record file as "read" after creation so subsequent edits don't require
-      // an explicit read - this is essential for newly created files.
-      recordToolFileRead(filePath);
-
-      const userDiffNote = formatUnifiedApprovalUserDiff(
+      const output = appendApprovalDiffNote(
+        `File created successfully at: ${displayPath}`,
         displayPath,
         proposedContent,
         appliedContent,
       );
-      const output = userDiffNote
-        ? `File created successfully at: ${displayPath}\n\n${userDiffNote}`
-        : `File created successfully at: ${displayPath}`;
 
       return {
         status: 'executed',
@@ -398,7 +394,7 @@ export class TextEditorTool extends defineTool({
       return { rejected: outcome.rejected };
     }
 
-    const { appliedContent, baseContent } = await writeApprovedContent(
+    const { appliedContent, baseContent } = await writeAndRecordApprovedEdit(
       filePath,
       fileContent,
       outcome.finalContent,
@@ -406,8 +402,6 @@ export class TextEditorTool extends defineTool({
     if (appliedContent !== baseContent) {
       this.addToHistory(filePath, baseContent);
     }
-
-    recordToolFileRead(filePath);
 
     return { approval: outcome.approval, appliedContent };
   }
@@ -614,28 +608,25 @@ export class TextEditorTool extends defineTool({
       }
       const { approval, finalContent } = outcome;
 
-      const { appliedContent } = await writeApprovedContent(
+      const { appliedContent } = await writeAndRecordApprovedEdit(
         filePath,
         currentContent,
         finalContent,
       );
       history.pop();
 
-      recordToolFileRead(filePath);
-
       if (history.length === 0) {
         this.fileHistory.delete(key);
       }
 
-      const userDiffNote = formatUnifiedApprovalUserDiff(
+      const baseOutput = `Last edit to ${displayPath} undone successfully. ${this.makeOutput(appliedContent)}`;
+      const output = appendApprovalDiffNote(
+        baseOutput,
         displayPath,
         previousContent,
         appliedContent,
+        '\n',
       );
-      const baseOutput = `Last edit to ${displayPath} undone successfully. ${this.makeOutput(appliedContent)}`;
-      const output = userDiffNote
-        ? `${baseOutput}\n${userDiffNote}`
-        : baseOutput;
 
       return {
         status: 'executed',
@@ -660,13 +651,13 @@ export class TextEditorTool extends defineTool({
   ): string {
     const successIntro = `The file ${filePath} has been edited.`;
     const snippetOutput = this.makeOutput(snippetText, startLine);
-    const userDiffNote = formatUnifiedApprovalUserDiff(
+    const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
+    return appendApprovalDiffNote(
+      baseMsg,
       filePath,
       proposedContent,
       appliedContent,
     );
-    const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
-    return userDiffNote ? `${baseMsg}\n\n${userDiffNote}` : baseMsg;
   }
 
   /**
