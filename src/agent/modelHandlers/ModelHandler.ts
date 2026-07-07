@@ -168,6 +168,18 @@ export abstract class ModelHandler<
   /**
    * Whether the handler supports processing attachments in tool results.
    * Override in handlers that don't support attachments (e.g., DeepSeek).
+   *
+   * Not foldable into a single llm-zoo capability read (#7101 triage):
+   * `capabilities.supportsVision` looks like the natural candidate, but it
+   * doesn't line up — Grok, Kimi, and Qwen models all report
+   * `supportsVision: false` while still relying on this base default of
+   * `true` to include a text attachment summary in tool results (see
+   * `ModelHandlerOpenAI`/`ModelHandlerOpenRouterNative`), and DeepSeek's
+   * override below isn't gating on vision either — DeepSeek's tool-result
+   * format doesn't accommodate attachment content at all. Folding this into
+   * `supportsVision` would silently drop attachment summaries for every
+   * non-vision Grok/Kimi/Qwen model. Stays an overridable getter: genuinely
+   * per-provider behavior, not a foldable predicate.
    */
   protected get canProcessToolResultAttachments(): boolean {
     return true;
@@ -177,6 +189,18 @@ export abstract class ModelHandler<
    * Whether the handler can upload files to the provider's API for tool results.
    * Override in handlers that support provider-specific file upload APIs
    * (e.g., Anthropic Files API, OpenAI Files API).
+   *
+   * Not foldable into a single capability read (#7101 triage): Anthropic's
+   * override is an unconditional `true` — there's no llm-zoo or
+   * `ProviderCapabilityProfile` flag for "has a Files API," it's a
+   * provider-wide fact about the Anthropic SDK, not a per-model capability
+   * (it would coincidentally match `capabilities.supportsVision`, which is
+   * `true` for every current Anthropic model, but that conflates two
+   * unrelated capabilities and would break the moment they diverge).
+   * OpenAIResponse's override already reads the `ProviderCapabilityProfile`
+   * (`getActiveProviderCapabilities()?.openAIResponses`) with a fallback —
+   * that one's the "runtime combinator over profile data" bucket, not
+   * genuine per-provider behavior. Stays an overridable getter.
    */
   protected get supportsToolResultFileUpload(): boolean {
     return false;
