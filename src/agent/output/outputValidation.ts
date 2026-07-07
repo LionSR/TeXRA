@@ -71,7 +71,6 @@ export async function checkExpectedOutputs(
         logMissingOutputs(deps.logger, {
           missing,
           xmlFile: xmlExists ? outputLocation.absolutePath : null,
-          documentTag: deps.setting.documentTag,
         });
         deps.logger.debug(`Missing expected outputs for round ${currRound}`, {
           data: missing,

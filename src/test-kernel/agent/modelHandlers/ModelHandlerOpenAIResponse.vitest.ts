@@ -1022,8 +1022,6 @@ describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
       const handler = createHandler();
       const agentSetting = AgentSettingSchema.parse({
         agentCategory: AgentCategory.Workflow,
-        documentTag: 'documents',
-        endTag: '</documents>',
       });
       const userMessage: ResponseInputItem = {
         type: 'message',

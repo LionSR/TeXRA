@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
 import { OutputFileProcessor } from '@agent/output/OutputFileProcessor';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
@@ -27,28 +26,7 @@ function initFakePlatform(files: Record<string, string> = {}) {
   return installPlatform({ files, workspacePath: '/workspace' });
 }
 
-function createWorkflowAgentSetting(
-  documentTag: string,
-  overrides: { rounds?: number; defaultOutputFiles?: string[] } = {},
-) {
-  return {
-    agentCategory: AgentCategory.Workflow,
-    documentTag,
-    endTag: '</documents>',
-    temperature: 0,
-    requiredFiles: {},
-    requiredFilesInternal: {},
-    defaultOutputFiles: [],
-    filePatternsContain: [],
-    tools: [],
-    isRewrite: true,
-    rounds: 1,
-    ...overrides,
-  };
-}
-
 function createXmlManager(
-  documentTag = 'document',
   inputFiles: string[] = ['paper.tex'],
   options: {
     outputFiles?: string[];
@@ -56,7 +34,6 @@ function createXmlManager(
   } = {},
 ): XmlOutputManager {
   return new XmlOutputManager(
-    createWorkflowAgentSetting(documentTag),
     {
       inputFiles,
       outputFiles: options.outputFiles ?? [],
@@ -76,7 +53,6 @@ function splitDocuments(
 ): ReturnType<XmlOutputManager['splitScratchpadMultipleOutputXml']> {
   return manager.splitScratchpadMultipleOutputXml(
     createExternalLocation('/tmp/run/output.xml'),
-    'documents',
     0,
   );
 }
@@ -151,7 +127,7 @@ describe('XmlOutputManager', () => {
         'Appendix text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -180,7 +156,7 @@ describe('XmlOutputManager', () => {
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -209,7 +185,7 @@ describe('XmlOutputManager', () => {
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -238,7 +214,7 @@ describe('XmlOutputManager', () => {
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -267,7 +243,7 @@ describe('XmlOutputManager', () => {
         '\\end{document}',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -299,7 +275,7 @@ describe('XmlOutputManager', () => {
         '</document>',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -327,7 +303,7 @@ describe('XmlOutputManager', () => {
         '\\end{document}',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -354,7 +330,7 @@ describe('XmlOutputManager', () => {
         'Appendix text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -380,7 +356,7 @@ describe('XmlOutputManager', () => {
         'Part text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -406,7 +382,7 @@ describe('XmlOutputManager', () => {
         'Generated text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -427,7 +403,7 @@ describe('XmlOutputManager', () => {
       '/tmp/run/output.xml',
       ['% sections\\intro.tex', 'Intro text.'].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -453,7 +429,7 @@ describe('XmlOutputManager', () => {
         'Appendix text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -490,7 +466,7 @@ describe('XmlOutputManager', () => {
         'Appendix text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -528,7 +504,7 @@ describe('XmlOutputManager', () => {
         'Appendix text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -563,7 +539,7 @@ describe('XmlOutputManager', () => {
         '\\end{document}',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -592,7 +568,7 @@ describe('XmlOutputManager', () => {
         'Still the same fragment.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -620,7 +596,7 @@ describe('XmlOutputManager', () => {
         '\n',
       ),
     );
-    const manager = createXmlManager('documents', ['main.tex', 'appendix.tex']);
+    const manager = createXmlManager(['main.tex', 'appendix.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -640,7 +616,7 @@ describe('XmlOutputManager', () => {
         '\\section{Intro}',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -669,7 +645,7 @@ describe('XmlOutputManager', () => {
         '\\end{document}',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -706,7 +682,7 @@ describe('XmlOutputManager', () => {
         'Appendix text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -742,7 +718,7 @@ describe('XmlOutputManager', () => {
         'Done.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -764,7 +740,7 @@ describe('XmlOutputManager', () => {
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -789,7 +765,7 @@ describe('XmlOutputManager', () => {
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -816,7 +792,7 @@ describe('XmlOutputManager', () => {
         'Done.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -847,7 +823,7 @@ describe('XmlOutputManager', () => {
         'Appendix text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -875,7 +851,7 @@ describe('XmlOutputManager', () => {
         'Actual output.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -891,7 +867,7 @@ describe('XmlOutputManager', () => {
       '/tmp/run/output.xml',
       ['% chunk.tex', 'First.', '% chunk.tex', 'Second.'].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -919,7 +895,7 @@ describe('XmlOutputManager', () => {
         'Second duplicate.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -944,7 +920,7 @@ describe('XmlOutputManager', () => {
       '/tmp/run/output.xml',
       ['% chunk.tex', '% chunk.tex', 'Actual content.'].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -964,7 +940,7 @@ describe('XmlOutputManager', () => {
         'Equivalent safe path.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -990,7 +966,7 @@ describe('XmlOutputManager', () => {
         'Explicit extracted fallback.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
 
     const outputs = await splitDocuments(manager);
 
@@ -1017,7 +993,7 @@ describe('XmlOutputManager', () => {
 Appendix.
 </document></documents>`,
     );
-    const manager = createXmlManager('documents');
+    const manager = createXmlManager();
     let roundOutputs: OutputFileInfo[] = [];
     const roundData: RoundOutput = {
       round: 0,
@@ -1032,7 +1008,6 @@ Appendix.
       },
     };
     const processor = new OutputFileProcessor({
-      agentSetting: createWorkflowAgentSetting('documents'),
       baseFiles: [],
       streamId: 'stream',
       runtimeHost: { emit: vi.fn() } as unknown as AgentRuntimeHost,
@@ -1079,7 +1054,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', [
+    const manager = createXmlManager([
       'Draft/LeanMPSPaper/Draft3.tex',
       'Draft/LeanMPSPaper/endmatter.tex',
     ]);
@@ -1105,9 +1080,7 @@ Appendix.
       '/tmp/run/output.xml',
       ['Draft3.tex:', '```latex', 'Recovered by basename.', '```'].join('\n'),
     );
-    const manager = createXmlManager('documents', [
-      'Draft/LeanMPSPaper/Draft3.tex',
-    ]);
+    const manager = createXmlManager(['Draft/LeanMPSPaper/Draft3.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1131,7 +1104,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', [
+    const manager = createXmlManager([
       'Draft/LeanMPSPaper/Draft3.tex',
       'Draft/LeanMPSPaper/endmatter.tex',
     ]);
@@ -1156,7 +1129,7 @@ Appendix.
         'Final text.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['paper.tex']);
+    const manager = createXmlManager(['paper.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1183,10 +1156,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', [
-      '_macros.tex',
-      '_helpers.tex',
-    ]);
+    const manager = createXmlManager(['_macros.tex', '_helpers.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1210,7 +1180,7 @@ Appendix.
         'Appendix content.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex', 'appendix.tex']);
+    const manager = createXmlManager(['main.tex', 'appendix.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1242,7 +1212,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex']);
+    const manager = createXmlManager(['main.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1268,7 +1238,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex']);
+    const manager = createXmlManager(['main.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1292,7 +1262,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex', 'appendix.tex']);
+    const manager = createXmlManager(['main.tex', 'appendix.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1319,7 +1289,7 @@ Appendix.
         'Real body.',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex']);
+    const manager = createXmlManager(['main.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1342,7 +1312,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex', 'appendix.tex']);
+    const manager = createXmlManager(['main.tex', 'appendix.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1369,7 +1339,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex']);
+    const manager = createXmlManager(['main.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1392,7 +1362,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex']);
+    const manager = createXmlManager(['main.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1409,7 +1379,7 @@ Appendix.
         '\n',
       ),
     );
-    const manager = createXmlManager('documents', ['main.tex']);
+    const manager = createXmlManager(['main.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1431,7 +1401,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex']);
+    const manager = createXmlManager(['main.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1441,23 +1411,16 @@ Appendix.
     );
   });
 
-  it('strips the configured outer wrapper before filename-label recovery', async () => {
+  it('strips the outer <documents> wrapper before filename-label recovery', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
-      [
-        '<latex_documents>',
-        'main.tex:',
-        'Recovered body.',
-        '</latex_documents>',
-      ].join('\n'),
+      ['<documents>', 'main.tex:', 'Recovered body.', '</documents>'].join(
+        '\n',
+      ),
     );
-    const manager = createXmlManager('latex_documents', ['main.tex']);
+    const manager = createXmlManager(['main.tex']);
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'latex_documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -1470,7 +1433,7 @@ Appendix.
       '/tmp/run/output.xml',
       ['\\section{Intro}', 'Text.', 'paper.tex:', 'More text.'].join('\n'),
     );
-    const manager = createXmlManager('documents', ['paper.tex']);
+    const manager = createXmlManager(['paper.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1496,7 +1459,7 @@ Appendix.
         '\\end{document}',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['main.tex', 'body.tex']);
+    const manager = createXmlManager(['main.tex', 'body.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1543,14 +1506,10 @@ Appendix.
       ].join('\n'),
     );
 
-    const manager = createXmlManager('documents', [
-      'appendices.tex',
-      'cost_section.tex',
-    ]);
+    const manager = createXmlManager(['appendices.tex', 'cost_section.tex']);
 
     const outputs = await manager.splitScratchpadMultipleOutputXml(
       createExternalLocation('/tmp/run/output.xml'),
-      'documents',
       0,
       'scratchpad',
       [
@@ -1579,9 +1538,6 @@ Appendix.
     inputFiles: string[] = ['page1.png', 'page2.png'],
   ): XmlOutputManager {
     return new XmlOutputManager(
-      createWorkflowAgentSetting('documents', {
-        defaultOutputFiles: ['ocr_result.tex'],
-      }),
       {
         inputFiles,
         outputFiles: ['ocr_result.tex'],
@@ -1609,7 +1565,6 @@ Appendix.
     const outputs =
       await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
         createExternalLocation('/tmp/run/output.xml'),
-        'documents',
         0,
         'scratchpad',
         [createExternalLocation('/tmp/run/ocr_result.tex')],
@@ -1634,7 +1589,6 @@ Appendix.
     const outputs =
       await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
         createExternalLocation('/tmp/run/output.xml'),
-        'documents',
         0,
         'scratchpad',
         [createExternalLocation('/tmp/run/ocr_result.tex')],
@@ -1658,7 +1612,6 @@ Appendix.
       'paper.tex',
     ]).splitScratchpadMultipleOutputXml(
       createExternalLocation('/tmp/run/output.xml'),
-      'documents',
       0,
       'scratchpad',
       [createExternalLocation('/tmp/run/ocr_result.tex')],
@@ -1679,7 +1632,6 @@ Appendix.
     const outputs =
       await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
         createExternalLocation('/tmp/run/output.xml'),
-        'documents',
         0,
         'scratchpad',
         [createExternalLocation('/tmp/run/ocr_result.tex')],
@@ -1710,7 +1662,6 @@ Appendix.
     const outputs =
       await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
         createExternalLocation('/tmp/run/output.xml'),
-        'documents',
         0,
         'scratchpad',
         [createExternalLocation('/tmp/run/ocr_result.tex')],
@@ -1744,7 +1695,6 @@ Appendix.
     const outputs =
       await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
         createExternalLocation('/tmp/run/output.xml'),
-        'documents',
         0,
         'scratchpad',
         [createExternalLocation('/tmp/run/ocr_result.tex')],
@@ -1775,7 +1725,6 @@ Appendix.
     const outputs =
       await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
         createExternalLocation('/tmp/run/output.xml'),
-        'documents',
         0,
         'scratchpad',
         [createExternalLocation('/tmp/run/ocr_result.tex')],
@@ -1801,7 +1750,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['paper.tex']);
+    const manager = createXmlManager(['paper.tex']);
 
     const outputs = await splitDocuments(manager);
 
@@ -1830,7 +1779,6 @@ Appendix.
     const outputs =
       await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
         createExternalLocation('/tmp/run/output.xml'),
-        'documents',
         0,
         'scratchpad',
         [createExternalLocation('/tmp/run/ocr_result.tex')],
@@ -1855,11 +1803,10 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['a.tex', 'b.tex']);
+    const manager = createXmlManager(['a.tex', 'b.tex']);
 
     const outputs = await manager.splitScratchpadMultipleOutputXml(
       createExternalLocation('/tmp/run/output.xml'),
-      'documents',
       0,
       'scratchpad',
       [
@@ -1902,11 +1849,10 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['cost.tex', 'arch.tex']);
+    const manager = createXmlManager(['cost.tex', 'arch.tex']);
 
     const outputs = await manager.splitScratchpadMultipleOutputXml(
       createExternalLocation('/tmp/run/output.xml'),
-      'documents',
       0,
       'scratchpad',
       [
@@ -1958,10 +1904,7 @@ Appendix.
       ].join('\n'),
     );
 
-    const manager = createXmlManager('documents', [
-      'appendices.tex',
-      'cost_section.tex',
-    ]);
+    const manager = createXmlManager(['appendices.tex', 'cost_section.tex']);
     const roundDataByRound = new Map<number, RoundOutput>();
     const ensureRound = (round: number): RoundOutput => {
       const existing = roundDataByRound.get(round);
@@ -1999,7 +1942,6 @@ Appendix.
     ];
     let roundOutputs: OutputFileInfo[] = [];
     const processor = new OutputFileProcessor({
-      agentSetting: createWorkflowAgentSetting('documents', { rounds: 2 }),
       baseFiles: [
         createExternalLocation('/tmp/run/appendices.tex'),
         createExternalLocation('/tmp/run/cost_section.tex'),
@@ -2050,11 +1992,10 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager('documents', ['cost.tex', 'arch.tex']);
+    const manager = createXmlManager(['cost.tex', 'arch.tex']);
 
     const outputs = await manager.splitScratchpadMultipleOutputXml(
       createExternalLocation('/tmp/run/output.xml'),
-      'documents',
       0,
       'scratchpad',
       [
@@ -2085,11 +2026,7 @@ Appendix.
         '```',
       ].join('\n'),
     );
-    const manager = createXmlManager(
-      'documents',
-      ['main.tex', 'appendix.tex'],
-      { logger },
-    );
+    const manager = createXmlManager(['main.tex', 'appendix.tex'], { logger });
 
     const outputs = await splitDocuments(manager);
 
@@ -2114,13 +2051,12 @@ Appendix.
       '/tmp/run/output.xml',
       ['```latex', 'Unclosed revised content.'].join('\n'),
     );
-    const manager = createXmlManager('documents', ['a.tex', 'b.tex'], {
+    const manager = createXmlManager(['a.tex', 'b.tex'], {
       logger,
     });
 
     const outputs = await manager.splitScratchpadMultipleOutputXml(
       createExternalLocation('/tmp/run/output.xml'),
-      'documents',
       0,
       'scratchpad',
       [
