@@ -179,9 +179,9 @@ export function logFileCategory(
 
 /**
  * Report conversation-progress counters (tool-call count).
- * The single producer emission for `updateConversationProgress` — a per-run
- * hub subscriber ({@link attachConversationProgressHub}) derives the host UI
- * event from this instead of flow code calling `runtimeHost.emit` directly,
+ * The retained `updateConversationProgress` host event is projected from this
+ * run fact by the session progress projector instead of flow code calling
+ * `runtimeHost.emit` directly.
  * Never rendered as a transcript row (suppressed in `TexraTranscriptRecorder`)
  * — it is a UI-only signal, not a log line. Round labels come from typed
  * `stage.start` metadata with `kind: "round"`.
