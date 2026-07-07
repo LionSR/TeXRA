@@ -4,9 +4,9 @@
  * Covers ghost-stream hydration, snapshot persistence, restored-display
  * sending, progress-event handling, and stream-lifecycle callbacks.
  *
- * Event-bus wiring (requestEnsureProgressView, requestShowError) and
- * session-progress handling are tested indirectly through the bridge's
- * public API and the callbacks it invokes.
+ * Desktop presentation routing (requestEnsureProgressView, requestShowError)
+ * and session-progress handling are tested through the bridge's public API and
+ * the callbacks it invokes.
  */
 
 // Third-party imports
@@ -44,9 +44,8 @@ type BridgeOptions = Parameters<
   typeof import('@desktop/main/desktopProgressEventBridge').createDesktopProgressEventBridge
 >[0];
 type SnapshotStore = NonNullable<BridgeOptions['streamSnapshotStore']>;
-type MockBusHandler = (payload: any) => void;
 
-const mockBusHandlers = new Map<string, MockBusHandler>();
+const mockProgressBusOn = vi.fn();
 
 function createSnapshotStore(
   overrides: Partial<SnapshotStore> = {},
@@ -120,7 +119,7 @@ async function loadBridgeModule(): Promise<
   typeof import('@desktop/main/desktopProgressEventBridge')
 > {
   vi.resetModules();
-  mockBusHandlers.clear();
+  mockProgressBusOn.mockClear();
   vi.doMock('@logger', () => ({
     createChannelTrace: () => makeLogger(),
     setDefaultStreamLogStore: () => {},
@@ -134,14 +133,7 @@ async function loadBridgeModule(): Promise<
   }));
   vi.doMock('@eventBus/ProgressEventBus', () => ({
     ProgressEventBus: {
-      on: vi.fn((event: string, handler: MockBusHandler) => {
-        mockBusHandlers.set(event, handler);
-        return () => {
-          if (mockBusHandlers.get(event) === handler) {
-            mockBusHandlers.delete(event);
-          }
-        };
-      }),
+      on: mockProgressBusOn,
       emit: vi.fn(),
     },
   }));
@@ -547,33 +539,30 @@ describe('DesktopProgressEventBridge', () => {
     });
   });
 
-  // ── Process-bus events ──────────────────────────────────────────────────
+  // ── Desktop presentation events ─────────────────────────────────────────
 
-  describe('process-bus events', () => {
-    it('subscribes to desktop-wide routing and root-error events only', () => {
+  describe('desktop presentation events', () => {
+    it('keeps routing and root-error events on the explicit runtime-host path', () => {
       const routeToProgress = vi.fn();
-      const onGoalStateChanged = vi.fn();
       const onShowError = vi.fn();
       const bridge = createBridge({
         routeToProgress,
-        onGoalStateChanged,
         onShowError,
       });
 
       try {
-        mockBusHandlers.get('requestEnsureProgressView')?.({});
-        mockBusHandlers.get('requestShowError')?.({
+        expect(mockProgressBusOn).not.toHaveBeenCalled();
+
+        bridge.onProgressEvent('requestEnsureProgressView', {});
+        bridge.onProgressEvent('requestShowError', {
           message: 'Root run failed',
         });
 
-        expect(mockBusHandlers.has('goalStateChanged')).toBe(false);
-        expect(onGoalStateChanged).not.toHaveBeenCalled();
         expect(routeToProgress).toHaveBeenCalledTimes(1);
         expect(onShowError).toHaveBeenCalledWith('Root run failed');
 
         bridge.dispose();
-        expect(mockBusHandlers.has('requestEnsureProgressView')).toBe(false);
-        expect(mockBusHandlers.has('requestShowError')).toBe(false);
+        expect(mockProgressBusOn).not.toHaveBeenCalled();
       } finally {
         bridge.dispose();
       }
