@@ -4,8 +4,8 @@
  * Replaces scattered `ProgressEventBus.emit(...)` in `src/tools` so one fact
  * has one emit path and one name, resolving the target in priority order:
  *
- * 1. migrated Stage 3a facts go to the owning `SessionEventHub` and are
- *    projected to the legacy host surface by `LegacyProgressEventProjection`;
+ * 1. migrated Stage 3a facts go to the owning `SessionEventHub`, where
+ *    host-owned subscribers can project them with `sessionProgressEventProjection`;
  * 2. a host-path caller's `session.hostChannel` (set only by hosts that own a
  *    non-default session, e.g. a desktop window) — when present;
  * 3. otherwise the active run's `runtimeHost`, resolved from the ambient
