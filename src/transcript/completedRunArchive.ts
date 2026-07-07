@@ -8,6 +8,8 @@
  * — each fact keeps exactly ONE legacy read arm, here, tracked for D3
  * retirement in the #6981 ledger.
  */
+import pMap from 'p-map';
+
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 import { isFileNotFoundError } from '@common/errors';
@@ -311,24 +313,120 @@ export function streamLogEntriesToConversation(
   );
 }
 
-async function readLegacyConversation(
+/** Legacy `conversation.json` read; `null` when missing or empty. */
+async function readLegacyConversationMessages(
   executionId: ExecutionId,
-): Promise<CompletedRunConversationReadResult> {
-  const conversation = await getExecutionStore(executionId).readConversation();
-  return {
-    conversation,
-    source: conversation ? 'legacyKV' : 'none',
-  };
+): Promise<unknown[] | null> {
+  return getExecutionStore(executionId).readConversation();
+}
+
+/** Reconstruct one stream's conversation; `[]` when the log is absent/empty. */
+async function conversationFromStream(
+  streamLogStore: StreamLogStore,
+  streamId: StreamTabId,
+): Promise<unknown[]> {
+  await streamLogStore.ensureLoaded(streamId);
+  const log = streamLogStore.get(streamId);
+  return log ? streamLogEntriesToConversation(log.toJSON()) : [];
+}
+
+/** Bounded fan-out for the sibling meta scan (mirrors the resolver's). */
+const CONVERSATION_CANDIDATE_SCAN_CONCURRENCY = 8;
+
+/**
+ * Sibling sidecar streams for the same execution, tried only when the
+ * resolver's pick reconstructs empty (cold path). #7433's resolver ranking
+ * (log-backed > workPlan-only > bare, scan order within a rank) stays the
+ * primary criteria — this layers the has-content preference on top without
+ * teaching the generic resolver (also used by the todos reader and the
+ * trace assembler) what "conversation content" means. Only log-backed
+ * siblings can yield content, so the rest are skipped.
+ */
+async function siblingConversationStreams(
+  executionId: ExecutionId,
+  primary: StreamTabId,
+  snapshotStore: StreamSnapshotStore,
+  streamLogStore: StreamLogStore,
+): Promise<StreamTabId[]> {
+  const persisted = await snapshotStore.listPersistedStreams();
+  const metaMatched = (
+    await pMap(
+      persisted,
+      async (streamId) => ({
+        streamId,
+        executionId: await snapshotStore.readPersistedExecutionId(streamId),
+      }),
+      { concurrency: CONVERSATION_CANDIDATE_SCAN_CONCURRENCY },
+    )
+  )
+    .filter((candidate) => candidate.executionId === executionId)
+    .map((candidate) => candidate.streamId);
+
+  const suffix = `#${executionId}`;
+  const suffixMatched = [...persisted, ...streamLogStore.keys()].filter((id) =>
+    id.endsWith(suffix),
+  );
+
+  const seen = new Set<StreamTabId>([primary]);
+  const siblings: StreamTabId[] = [];
+  for (const streamId of [...metaMatched, ...suffixMatched]) {
+    if (seen.has(streamId) || !streamLogStore.has(streamId)) continue;
+    seen.add(streamId);
+    siblings.push(streamId);
+  }
+  return siblings;
+}
+
+/**
+ * Sidecar arm of the non-empty rule: the resolver's pick first, then —
+ * only if it reconstructs empty — every other log-backed sibling stream
+ * sharing this executionId, in the same deterministic enumeration order the
+ * resolver scans. Returns `null` when no candidate yields content.
+ */
+async function readSidecarConversation(
+  executionId: ExecutionId,
+  primary: StreamTabId,
+  snapshotStore: StreamSnapshotStore,
+  streamLogStore: StreamLogStore,
+): Promise<CompletedRunConversationReadResult | null> {
+  const primaryConversation = await conversationFromStream(
+    streamLogStore,
+    primary,
+  );
+  if (primaryConversation.length > 0) {
+    return {
+      conversation: primaryConversation,
+      source: 'streamLog',
+      streamId: primary,
+    };
+  }
+  for (const streamId of await siblingConversationStreams(
+    executionId,
+    primary,
+    snapshotStore,
+    streamLogStore,
+  )) {
+    const conversation = await conversationFromStream(streamLogStore, streamId);
+    if (conversation.length > 0) {
+      return { conversation, source: 'streamLog', streamId };
+    }
+  }
+  return null;
 }
 
 /**
  * Read the archived conversation for a completed run from the transcript
  * sidecar (`streamLogs/{stream}.json`), reconstructed into provider-agnostic
- * messages. Falls back to the legacy `executions/{id}/conversation.json`
- * projection when the run predates the sidecars, when the transcript holds
- * no conversation-shaped rows (pre-`messageType` legacy streams), or when
- * the legacy write is fresher than the sidecar — the same mtime arbitration
- * (ties toward legacy) as {@link readCompletedRunTodos}.
+ * messages, with the legacy `executions/{id}/conversation.json` projection
+ * as the fallback arm.
+ *
+ * Arbitration protocol: the mtime comparison (ties toward legacy, same as
+ * {@link readCompletedRunTodos}) decides the ORDER the two sources are
+ * tried in — but **an empty result never wins**. A source that reads or
+ * reconstructs empty (a present-but-empty legacy file, a resolver pick
+ * whose log holds no conversation-shaped rows) falls through to the next
+ * source, symmetrically in both directions, until one yields content or
+ * all are empty.
  */
 export async function readCompletedRunConversation(
   executionId: ExecutionId,
@@ -343,25 +441,47 @@ export async function readCompletedRunConversation(
     streamLogStore = new StreamLogStore();
     await streamLogStore.load();
   }
+  const loadedStreamLogStore = streamLogStore;
 
   const resolved = await resolvePersistedStreamIdForExecution(executionId, {
     snapshotStore,
     streamLogStore,
   });
-  if (!resolved) return readLegacyConversation(executionId);
 
-  const sidecarMtime = await streamLogModifiedAt(resolved.streamId);
-  if (sidecarMtime === undefined) return readLegacyConversation(executionId);
+  const tryLegacy =
+    async (): Promise<CompletedRunConversationReadResult | null> => {
+      const conversation = await readLegacyConversationMessages(executionId);
+      return conversation ? { conversation, source: 'legacyKV' } : null;
+    };
+  const trySidecar =
+    async (): Promise<CompletedRunConversationReadResult | null> =>
+      resolved
+        ? readSidecarConversation(
+            executionId,
+            resolved.streamId,
+            snapshotStore,
+            loadedStreamLogStore,
+          )
+        : null;
 
-  const legacyMtime =
-    await getExecutionStore(executionId).conversationModifiedAt();
-  if (legacyMtime !== undefined && legacyMtime >= sidecarMtime) {
-    return readLegacyConversation(executionId);
+  // Freshness decides order only. The resolver pick's streamLogs mtime
+  // stands in for "the sidecar's" — an absent log file orders legacy first
+  // (without even statting the legacy file), and the sidecar arm still gets
+  // its turn if legacy is empty.
+  const sidecarMtime = resolved
+    ? await streamLogModifiedAt(resolved.streamId)
+    : undefined;
+  let legacyFirst = true;
+  if (sidecarMtime !== undefined) {
+    const legacyMtime =
+      await getExecutionStore(executionId).conversationModifiedAt();
+    legacyFirst = legacyMtime !== undefined && legacyMtime >= sidecarMtime;
   }
 
-  await streamLogStore.ensureLoaded(resolved.streamId);
-  const log = streamLogStore.get(resolved.streamId);
-  const conversation = log ? streamLogEntriesToConversation(log.toJSON()) : [];
-  if (conversation.length === 0) return readLegacyConversation(executionId);
-  return { conversation, source: 'streamLog', streamId: resolved.streamId };
+  const arms = legacyFirst ? [tryLegacy, trySidecar] : [trySidecar, tryLegacy];
+  for (const arm of arms) {
+    const result = await arm();
+    if (result) return result;
+  }
+  return { conversation: null, source: 'none' };
 }
