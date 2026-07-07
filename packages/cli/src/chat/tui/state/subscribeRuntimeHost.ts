@@ -83,6 +83,29 @@ function consumeEchoCount(counts: Map<string, number>, key: string): boolean {
   return true;
 }
 
+/**
+ * Dedupe a fact that reaches this module through two paths that both fire
+ * off the *same* underlying `SessionEventHub` event: `attachTuiRunFactSubscription`
+ * applying it directly, and `attachSessionRunFactProjector` re-emitting it as a
+ * legacy `runtimeHost.emit(...)` that `applyToState` also applies.
+ *
+ * This guard is deliberately **order-independent**: `applyDirect` and
+ * `applyLegacy` are symmetric, each first checking whether the *other* side
+ * already recorded this key before applying anything itself. Whichever path's
+ * subscriber the hub happens to invoke first for a given event "wins" the
+ * apply; the second one only consumes the marker and skips. Correctness does
+ * NOT depend on `attachTuiRunFactSubscription` being registered on the hub
+ * before `attachSessionRunFactProjector` (today it always is, via
+ * `chatSessionController.ts` attaching before `AgentLaunchContext.ts`/
+ * `childStream.ts`, but nothing requires that and it isn't guaranteed to stay
+ * true) — see #7388. Regression coverage for both attach orders lives in
+ * `TuiStateAndFocus.vitest.mts` ("does not double-count projected usage when
+ * the TUI subscriber is first" / "... when the projector is first").
+ *
+ * Do not replace this with a one-directional variant (remember-on-direct,
+ * consume-on-legacy-only) — that reintroduces exactly the order dependency
+ * this comment rules out.
+ */
 class EchoGuard<T> {
   private readonly directAppliedCounts = new Map<string, number>();
   private readonly legacyAppliedCounts = new Map<string, number>();
