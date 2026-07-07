@@ -45,7 +45,6 @@
       "@types/*": ["src/types/*"],
       "@eventBus/*": ["src/eventBus/*"],
       "@auth/*": ["src/auth/*"],
-      "@platform": ["src/platform"],
       "@platform/*": ["src/platform/*"],
       "turndown-plugin-gfm": ["src/types/turndown-plugin-gfm.d.ts"],
       "@openrouter/sdk": ["node_modules/@openrouter/sdk/esm/index.d.ts"],
