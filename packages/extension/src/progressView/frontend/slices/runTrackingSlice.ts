@@ -16,7 +16,13 @@ import { isToolUseState, isWorkflowState } from '../store';
 import { updateWorkflowState, updateRounds } from '../stateUtils';
 import type { HandlerRegistry } from '../messageHandlerTypes';
 
-export const runTrackingHandlers: HandlerRegistry = {
+// `HandlerRegistry` is now exhaustive (every ProgressView outbound command
+// needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
+// This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
+// subset rather than the full registry; `messageDispatcher.ts` spreads all
+// slices together and is the actual exhaustiveness checkpoint TypeScript
+// enforces.
+export const runTrackingHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_FILES]: (data, ctx) => {
     const { stream, rounds, reset } = data;
     updateWorkflowState(ctx, stream, (prev) =>
@@ -62,4 +68,4 @@ export const runTrackingHandlers: HandlerRegistry = {
       return prev;
     });
   },
-};
+} satisfies Partial<HandlerRegistry>;

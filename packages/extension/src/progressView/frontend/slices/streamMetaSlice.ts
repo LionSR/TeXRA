@@ -74,7 +74,13 @@ function upsertSortedStreamInfo(
   return new Map(ordered.map((stream) => [stream.name, stream]));
 }
 
-export const streamMetaHandlers: HandlerRegistry = {
+// `HandlerRegistry` is now exhaustive (every ProgressView outbound command
+// needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
+// This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
+// subset rather than the full registry; `messageDispatcher.ts` spreads all
+// slices together and is the actual exhaustiveness checkpoint TypeScript
+// enforces.
+export const streamMetaHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA]: (data, ctx) => {
     const name = data.streamInfo.name;
     const pending = takePendingDescription(name);
@@ -236,4 +242,4 @@ export const streamMetaHandlers: HandlerRegistry = {
       });
     });
   },
-};
+} satisfies Partial<HandlerRegistry>;
