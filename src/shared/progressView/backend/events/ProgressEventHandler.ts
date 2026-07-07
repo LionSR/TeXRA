@@ -33,7 +33,6 @@ import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 
 import { withEventErrorHandling } from './errorHandling';
 import type { UICallbacks } from './UIEvents';
-import type { EventHandlerContext } from './EventHandlerContext';
 
 export type { UICallbacks };
 
@@ -77,7 +76,6 @@ function getDefaultProgressStreamControls(): ProgressStreamControls {
 /** Handles progress event bus subscriptions for the progress view. */
 export class ProgressEventHandler {
   private readonly logger: AgentTrace;
-  private readonly ctx: EventHandlerContext;
   private readonly eventRegistrations: ProgressEventRegistrationMap;
   private progressThrottleTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingProgressUpdates = new Map<StreamTabId, ConversationProgress>();
@@ -91,7 +89,6 @@ export class ProgressEventHandler {
     private readonly getStreamControls: GetProgressStreamControls = getDefaultProgressStreamControls,
   ) {
     this.logger = createChannelTrace('ProgressEventHandler');
-    this.ctx = { state: this.state, webviewUpdater: this.webviewUpdater };
     this.eventRegistrations = this.createEventRegistrations();
   }
 
@@ -125,8 +122,6 @@ export class ProgressEventHandler {
   }
 
   private createEventRegistrations(): ProgressEventRegistrationMap {
-    const ctx = this.ctx;
-
     return {
       setActiveStream: {
         module: 'ProgressEvents',
@@ -232,10 +227,10 @@ export class ProgressEventHandler {
         module: 'ProgressEvents',
         context: 'failed to handle addOutputFiles',
         handle: ({ streamId, filesByRound }) => {
-          ctx.state.snapshots.addOutputFiles(streamId, filesByRound);
+          this.state.snapshots.addOutputFiles(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const rounds = ctx.state.snapshots.getOutputFiles(streamId);
-            ctx.webviewUpdater.updateFiles(streamId, {
+            const rounds = this.state.snapshots.getOutputFiles(streamId);
+            this.webviewUpdater.updateFiles(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
             });
           });
@@ -245,10 +240,10 @@ export class ProgressEventHandler {
         module: 'ProgressEvents',
         context: 'failed to handle updateMissingOutputs',
         handle: ({ streamId, filesByRound }) => {
-          ctx.state.snapshots.updateMissingOutputs(streamId, filesByRound);
+          this.state.snapshots.updateMissingOutputs(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const rounds = ctx.state.snapshots.getMissingOutputs(streamId);
-            ctx.webviewUpdater.updateMissingOutputs(streamId, {
+            const rounds = this.state.snapshots.getMissingOutputs(streamId);
+            this.webviewUpdater.updateMissingOutputs(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
             });
           });
@@ -258,10 +253,10 @@ export class ProgressEventHandler {
         module: 'ProgressEvents',
         context: 'failed to handle updateCompileFailures',
         handle: ({ streamId, filesByRound }) => {
-          ctx.state.snapshots.updateCompileFailures(streamId, filesByRound);
+          this.state.snapshots.updateCompileFailures(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const rounds = ctx.state.snapshots.getCompileFailures(streamId);
-            ctx.webviewUpdater.updateCompileFailures(streamId, {
+            const rounds = this.state.snapshots.getCompileFailures(streamId);
+            this.webviewUpdater.updateCompileFailures(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
               reset: true,
             });
@@ -275,14 +270,14 @@ export class ProgressEventHandler {
           const targets: StreamTabId[] = payload.streamId
             ? [payload.streamId]
             : payload.streamConfig
-              ? ctx.state.snapshots.findWorkflowStreamsMatching(
+              ? this.state.snapshots.findWorkflowStreamsMatching(
                   payload.streamConfig,
                 )
               : [];
           for (const streamId of targets) {
-            ctx.state.snapshots.clearMissingOutputs(streamId);
+            this.state.snapshots.clearMissingOutputs(streamId);
             this.sendIfActive(streamId, () =>
-              ctx.webviewUpdater.updateMissingOutputs(streamId, {
+              this.webviewUpdater.updateMissingOutputs(streamId, {
                 reset: true,
               }),
             );
@@ -296,11 +291,11 @@ export class ProgressEventHandler {
         context: 'failed to handle updateStreamUsage',
         handle: ({ streamId, usage, storageKey }) => {
           void Promise.resolve(
-            ctx.state.snapshots.addUsage(streamId, storageKey, usage),
+            this.state.snapshots.addUsage(streamId, storageKey, usage),
           ).then((accumulated) => {
             if (!accumulated) return;
             this.sendIfActive(streamId, () =>
-              ctx.webviewUpdater.updateRunUsage(
+              this.webviewUpdater.updateRunUsage(
                 streamId,
                 storageKey,
                 accumulated,
@@ -313,9 +308,9 @@ export class ProgressEventHandler {
         module: 'ProgressEvents',
         context: 'failed to handle updateTodos',
         handle: ({ streamId, todos }) => {
-          ctx.state.snapshots.setTodos(streamId, todos);
+          this.state.snapshots.setTodos(streamId, todos);
           this.sendIfActive(streamId, () =>
-            ctx.webviewUpdater.updateTodos(streamId, todos),
+            this.webviewUpdater.updateTodos(streamId, todos),
           );
         },
       },
@@ -325,9 +320,9 @@ export class ProgressEventHandler {
         module: 'ProgressEvents',
         context: 'failed to handle updatePlan',
         handle: ({ streamId, plan }) => {
-          ctx.state.snapshots.setPlan(streamId, plan);
+          this.state.snapshots.setPlan(streamId, plan);
           if (this.webviewUpdater.isAvailable()) {
-            ctx.webviewUpdater.updatePlan(streamId, plan);
+            this.webviewUpdater.updatePlan(streamId, plan);
           }
         },
       },
@@ -336,8 +331,8 @@ export class ProgressEventHandler {
         context: 'failed to handle updateQueuedFollowUps',
         handle: ({ streamId }) => {
           this.sendIfActive(streamId, () => {
-            const messages = ctx.state.followUps.getAll(streamId);
-            ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
+            const messages = this.state.followUps.getAll(streamId);
+            this.webviewUpdater.updateQueuedFollowUps(streamId, messages);
           });
         },
       },
