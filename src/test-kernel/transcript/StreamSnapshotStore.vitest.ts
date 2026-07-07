@@ -184,7 +184,21 @@ describe('StreamSnapshotStore', () => {
     const detach = writer.attachSessionEvents(events);
     const output = outputFile('paper.tex', 1);
     const failure = compileFailure('paper.tex', 1);
+    const executionId = 'a1b2c3d4' as ExecutionId;
+    const taskState = toolUseTaskState('session-search', 'kimi26T');
 
+    await getExecutionStore(executionId).writeConfig(taskState.agentConfig);
+
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'run.config',
+        streamId: STREAM,
+        executionId,
+        config: taskState.agentConfig,
+      },
+    });
     events.emit({
       scope: 'run',
       streamId: STREAM,
@@ -252,11 +266,33 @@ describe('StreamSnapshotStore', () => {
         data: { streamId: OTHER_STREAM },
       },
     });
+    events.emit({
+      scope: 'session',
+      event: {
+        type: 'updateStreamDescription',
+        payload: {
+          streamId: STREAM,
+          description: 'session-search / kimi26T',
+        },
+      },
+    });
+    events.emit({
+      scope: 'session',
+      event: {
+        type: 'setParentStream',
+        payload: {
+          childStreamId: STREAM,
+          parentStreamId: OTHER_STREAM,
+        },
+      },
+    });
 
     detach();
     await writer.flush();
 
-    const snap = await new StreamSnapshotStore().read(STREAM);
+    const reader = new StreamSnapshotStore();
+    await reader.load([STREAM]);
+    const snap = await reader.read(STREAM);
     expect(snap.todos).toEqual([TODO]);
     expect(snap.plan).toEqual(PLAN);
     expect(snap.outputFilesByRound).toEqual({ '1': [output] });
@@ -266,6 +302,16 @@ describe('StreamSnapshotStore', () => {
       inputTokens: 100,
       outputTokens: 20,
       cost: 0.5,
+    });
+    expect(snap.executionId).toBe(executionId);
+    expect(snap.description).toBe('session-search / kimi26T');
+    expect(snap.parentStreamId).toBe(OTHER_STREAM);
+    expect(reader.getTaskState(STREAM)).toEqual(taskState);
+    expect(reader.getRunDescriptor(STREAM)).toMatchObject({
+      streamId: STREAM,
+      executionId,
+      agent: 'session-search',
+      category: AgentCategory.ToolUse,
     });
 
     const goalPausedOnly = await new StreamSnapshotStore().read(OTHER_STREAM);

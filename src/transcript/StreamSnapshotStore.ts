@@ -317,15 +317,24 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Persist already-migrated durable run facts directly from the session event
+   * Persist already-migrated durable facts directly from the session event
    * plane. The legacy progress-event entry point remains for extension/desktop
-   * consumers and for CLI metadata that has not moved to run-scoped facts.
+   * consumers.
    */
   attachSessionEvents(events: SessionEventHub): () => void {
-    return events.subscribe(
+    const detachRunEvents = events.subscribe(
       (sessionEvent) => {
         if (sessionEvent.scope !== 'run') return;
         const { event } = sessionEvent;
+
+        if (event.type === 'run.config') {
+          this.setTaskState(
+            event.streamId,
+            agentConfigToTaskState(event.config),
+            event.executionId,
+          );
+          return;
+        }
 
         if (event.type === 'usage') {
           this.handleSessionUsageEvent(event.data);
@@ -389,8 +398,35 @@ export class StreamSnapshotStore {
             return;
         }
       },
-      { scope: 'run', types: ['domain', 'usage'] },
+      { scope: 'run', types: ['domain', 'run.config', 'usage'] },
     );
+    const detachSessionEvents = events.subscribe(
+      (sessionEvent) => {
+        if (sessionEvent.scope !== 'session') return;
+        switch (sessionEvent.event.type) {
+          case 'updateStreamDescription':
+            this.setDescription(
+              sessionEvent.event.payload.streamId,
+              sessionEvent.event.payload.description,
+            );
+            return;
+          case 'setParentStream':
+            this.setParentStream(
+              sessionEvent.event.payload.childStreamId,
+              sessionEvent.event.payload.parentStreamId,
+            );
+            return;
+          default:
+            return;
+        }
+      },
+      { scope: 'session' },
+    );
+
+    return () => {
+      detachSessionEvents();
+      detachRunEvents();
+    };
   }
 
   private handleSessionUsageEvent(data: unknown): void {
