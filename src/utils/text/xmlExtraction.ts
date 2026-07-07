@@ -9,6 +9,7 @@
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
+import { OUTPUT_DOCUMENT_TAG } from '@shared/constants/outputProtocol';
 import { isObject } from '@utils/core';
 
 // Local imports
@@ -149,8 +150,8 @@ export function extractContentFromXMLbyTagMultiple(
 
   if (containerTag in root) {
     const container = root[containerTag];
-    if (isObject(container) && 'document' in container) {
-      const documents = container.document;
+    if (isObject(container) && OUTPUT_DOCUMENT_TAG in container) {
+      const documents = container[OUTPUT_DOCUMENT_TAG];
       if (Array.isArray(documents)) {
         return documents.map((doc) => {
           const entry = doc as Record<string, unknown>;
