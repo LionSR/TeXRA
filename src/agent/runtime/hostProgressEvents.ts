@@ -43,10 +43,10 @@ import type {
  * Do NOT add keys. The payload vocabulary lives as fact-native named types in
  * `@shared/schemas` (`progressEvents.ts` and friends); new run-scoped facts
  * extend `AgentEvent` (trace), and new session-scoped facts extend
- * `SessionFact` (`SessionEventHub`). The process-wide `ProgressEventBus` that
- * originally carried these keys is deleted; this map survives only so the
- * retained host rails keep one shared key/payload table while they are
- * migrated to typed session/host surfaces.
+ * `SessionFact` (`SessionEventHub`). The process-wide carrier that originally
+ * carried these keys is deleted; this map survives only so the retained host
+ * rails keep one shared key/payload table while they are migrated to typed
+ * session/host surfaces.
  */
 export interface ProgressEventPayloads {
   // ── Run/stream progress ──
