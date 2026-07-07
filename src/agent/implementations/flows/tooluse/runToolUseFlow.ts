@@ -459,7 +459,17 @@ export async function runToolUseFlow<C = unknown>(
       }
     }
 
-    sessionLifecycle.dispose();
+    // WAITING outcome: leave the follow-up queue live, matching the flow
+    // record preserved above. A delegate_agent follow-up can race into it via
+    // sendFollowUp's 'active' branch between the WAITING transition inside
+    // ToolUseWaitNode and this teardown — the tool-use flow context detaches
+    // above, but the stream doesn't leave WAITING until resume, so the same
+    // live queue instance is what a genuine kill (see ExecutionRegistry.
+    // terminate's waiting-cleanup path) or resume drains instead of a
+    // `dispose()` here silently discarding it.
+    if (outcome !== STREAM_PHASE.WAITING) {
+      sessionLifecycle.dispose();
+    }
     runSession.coordinators.cleanupRequestsForStream(streamId);
     runSession.interrupts.unregister(streamId);
     for (const handler of switchedHandlers) {

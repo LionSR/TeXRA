@@ -1,22 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { ProgressEventBus } from '@eventBus/ProgressEventBus';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { extensionPresentationEvents } from '@frontend/events/extensionPresentationEvents';
 import type { StreamTabId } from '@shared/schemas';
 
 describe('extensionAgentRuntimeHost', () => {
-  it('routes extension presentation events away from ProgressEventBus', () => {
-    const busPayloads: unknown[] = [];
+  it('routes extension presentation events through the presentation channel', () => {
     const presentationPayloads: unknown[] = [];
-    const disposeBus = ProgressEventBus.on('requestShowError', (payload) =>
-      busPayloads.push(payload),
-    );
     const disposePresentation = extensionPresentationEvents.on(
       'requestShowError',
       (payload) => presentationPayloads.push(payload),
     );
-    busPayloads.length = 0;
     presentationPayloads.length = 0;
 
     try {
@@ -24,33 +19,50 @@ describe('extensionAgentRuntimeHost', () => {
         message: 'The model invocation failed.',
       });
 
-      expect(busPayloads).toEqual([]);
       expect(presentationPayloads).toEqual([
         { message: 'The model invocation failed.' },
       ]);
     } finally {
       disposePresentation();
-      disposeBus();
     }
   });
 
-  it('keeps run progress events on ProgressEventBus', () => {
-    const busPayloads: unknown[] = [];
-    const disposeBus = ProgressEventBus.on('setActiveStream', (payload) =>
-      busPayloads.push(payload),
-    );
-    busPayloads.length = 0;
+  it('routes run progress events through extension host interactions', () => {
+    const interactionEvents: unknown[] = [];
+    const disposeInteractions = defaultSession().useHostInteractions({
+      handleProgressEvent: (event, payload) => {
+        interactionEvents.push({ event, payload });
+        return true;
+      },
+      resolve: () => false,
+      cancelForStream: () => {},
+    });
 
     try {
       extensionAgentRuntimeHost.emit('setActiveStream', {
         streamId: 'extension:progress' as StreamTabId,
       });
 
-      expect(busPayloads).toEqual([
-        { streamId: 'extension:progress' as StreamTabId },
+      expect(interactionEvents).toEqual([
+        {
+          event: 'setActiveStream',
+          payload: { streamId: 'extension:progress' as StreamTabId },
+        },
+      ]);
+
+      disposeInteractions();
+      extensionAgentRuntimeHost.emit('setActiveStream', {
+        streamId: 'extension:after-detach' as StreamTabId,
+      });
+
+      expect(interactionEvents).toEqual([
+        {
+          event: 'setActiveStream',
+          payload: { streamId: 'extension:progress' as StreamTabId },
+        },
       ]);
     } finally {
-      disposeBus();
+      disposeInteractions();
     }
   });
 });

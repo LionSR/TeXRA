@@ -31,6 +31,7 @@ import {
   wakeOrReleaseQueuedStream,
 } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { ToolUseSessionLifecycle } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
@@ -145,6 +146,52 @@ describe('ToolUseFollowUp', () => {
     assert.deepEqual(calls, [
       { text: 'subagent result', origin: 'subagent_result' },
     ]);
+  });
+
+  it('does not drop a follow-up that races into the live queue before a WAITING teardown (issue #7286)', async () => {
+    // Regression: runToolUseFlow's finally called sessionLifecycle.dispose()
+    // unconditionally, even on the WAITING branch. While the tool-use flow
+    // context is still attached (teardownSetup/detach runs earlier in that
+    // same finally, but after a follow-up can land here), a delegate_agent
+    // follow-up can reach the live queue via sendFollowUp's 'active' branch
+    // -- dispose() then released that same queue, silently discarding the
+    // item before the native wake path (which only handles 'queued' results)
+    // ever saw it. Fixed by skipping dispose() when the outcome is WAITING.
+    const waitingStreamId = 'stream-waiting-race-follow-up' as StreamTabId;
+    const sessionLifecycle = new ToolUseSessionLifecycle(
+      waitingStreamId,
+      ToolUseFollowUpQueue.defaultInstance(),
+    );
+    const executionId = trackToolUseFlow(waitingStreamId, (followUp) =>
+      sessionLifecycle.appendFollowUp(followUp),
+    );
+
+    try {
+      // Simulate the race: a delegate_agent follow-up lands in the live
+      // session while the tool-use flow context is still attached.
+      const result = await sendFollowUp(waitingStreamId, 'keep going');
+      assert.deepEqual(result, { status: 'sent' });
+      assert.equal(sessionLifecycle.hasQueuedFollowUp(), true);
+
+      // runToolUseFlow's finally, on the WAITING branch, now skips
+      // sessionLifecycle.dispose() -- the follow-up survives instead of
+      // being dropped when the queue would otherwise have been released.
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(waitingStreamId), [
+        'keep going',
+      ]);
+
+      // A subsequent resume constructs a new ToolUseSessionLifecycle for the
+      // same stream; since the queue was never released, acquire() hands
+      // back the same live instance with the raced-in follow-up intact.
+      const resumedSessionLifecycle = new ToolUseSessionLifecycle(
+        waitingStreamId,
+        ToolUseFollowUpQueue.defaultInstance(),
+      );
+      assert.equal(resumedSessionLifecycle.hasQueuedFollowUp(), true);
+    } finally {
+      SharedExecutionRegistry.untrack(executionId);
+      sessionLifecycle.dispose();
+    }
   });
 
   it('reports unknown streams as no session', async () => {

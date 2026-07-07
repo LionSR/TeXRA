@@ -12,7 +12,7 @@
 
 import type { AgentTrace } from '@agent/trace';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import {
   STREAM_PHASE,
   type ProgressViewOutboundMessage,

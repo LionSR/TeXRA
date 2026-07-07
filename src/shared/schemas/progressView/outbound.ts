@@ -1,10 +1,15 @@
 /**
  * ProgressView outbound message schemas (backend -> frontend): UPDATE_*, SYNC_*,
- * permission/bypass updates, and the discriminated union they compose into.
+ * permission/bypass updates, and the discriminated union + dispatcher they
+ * compose into.
  */
 import { z } from 'zod';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 import { GoalStatusSchema } from '../goal';
 
 import { StreamTabIdSchema } from '../identifiers';
@@ -391,3 +396,10 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
 export type ProgressViewOutboundMessage = z.infer<
   typeof ProgressViewOutboundMessageSchema
 >;
+
+export type ProgressViewOutboundHandlerRegistry =
+  HandlerRegistry<ProgressViewOutboundMessage>;
+
+export const dispatchProgressViewOutbound = createDispatcher(
+  ProgressViewOutboundMessageSchema,
+);

@@ -30,6 +30,7 @@ import {
   type ProgressViewOutboundMessage,
   type StreamTabId,
 } from '@shared/schemas';
+import { assertSupported } from '@shared/utils/dispatcher';
 
 function createContext(initialState: ProgressState): {
   ctx: MessageHandlerContext;
@@ -89,13 +90,13 @@ function createProcessState(streamId: StreamTabId): ProgressState {
 }
 
 function dispatch(
-  handlers: HandlerRegistry,
+  handlers: Partial<HandlerRegistry>,
   message: ProgressViewOutboundMessage,
   ctx: MessageHandlerContext,
 ) {
   const handler = handlers[message.command];
   expect(handler).toBeDefined();
-  handler?.(message as never, ctx);
+  assertSupported(handler!)(message as never, ctx);
 }
 
 function registerWorkflowStream(

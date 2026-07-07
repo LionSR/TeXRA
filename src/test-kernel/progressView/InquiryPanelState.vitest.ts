@@ -11,16 +11,20 @@ import {
   type ProgressState,
   type StreamLogs,
 } from '@progressView/frontend/store';
-import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
+import type {
+  HandlerRegistry,
+  MessageHandlerContext,
+} from '@progressView/frontend/messageHandlerTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-
-// Local imports - shared schemas
 import type {
   ExternalInquiryThreadId,
   InquiryThreadUpdatedEvent,
   ProgressViewOutboundMessage,
   StreamTabId,
 } from '@shared/schemas';
+import { assertSupported } from '@shared/utils/dispatcher';
+
+// Local imports - shared schemas
 
 function createContext(initialState: ProgressState): {
   ctx: MessageHandlerContext;
@@ -72,9 +76,11 @@ function dispatch(
   message: ProgressViewOutboundMessage,
   ctx: MessageHandlerContext,
 ) {
-  const handler = inquiryHandlers[message.command];
+  const handler = (inquiryHandlers as Partial<HandlerRegistry>)[
+    message.command
+  ];
   expect(handler).toBeDefined();
-  handler?.(message as never, ctx);
+  assertSupported(handler!)(message as never, ctx);
 }
 
 describe('inquiry panel frontend state', () => {

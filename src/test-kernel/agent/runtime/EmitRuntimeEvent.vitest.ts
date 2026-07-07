@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
-import { ProgressEventBus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 
 import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
@@ -16,12 +15,10 @@ const streamId = (s: string): StreamTabId => s as StreamTabId;
 describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
   it('routes migrated facts to the default session instead of the process bus', () => {
     const sessionSeen: unknown[] = [];
-    const seen: unknown[] = [];
     const detachSession = defaultSession().events.subscribe(
       (event) => sessionSeen.push(event),
       { scope: 'session' },
     );
-    const off = ProgressEventBus.on('goalStateChanged', (p) => seen.push(p));
     try {
       emitRuntimeEvent('goalStateChanged', { streamId: streamId('s:bus') });
       expect(sessionSeen).toEqual([
@@ -33,10 +30,8 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
           },
         },
       ]);
-      expect(seen).toEqual([]);
     } finally {
       detachSession();
-      off();
     }
   });
 
@@ -46,10 +41,6 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
     const detachProjection = attachSessionProgressEventProjectionForTest(
       session.events,
       run.host,
-    );
-    const busSeen: unknown[] = [];
-    const off = ProgressEventBus.on('updateQueuedFollowUps', (p) =>
-      busSeen.push(p),
     );
     try {
       withRunContext(
@@ -69,28 +60,19 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
           payload: { streamId: 's:run' },
         },
       ]);
-      expect(busSeen).toEqual([]);
     } finally {
-      off();
       detachProjection();
       session.dispose();
     }
   });
 
   it('rejects non-session events instead of falling back to the process bus', () => {
-    const busSeen: unknown[] = [];
-    const off = ProgressEventBus.on('requestShowError', (p) => busSeen.push(p));
-    try {
-      expect(() => {
-        // @ts-expect-error requestShowError is host interaction, not a session fact.
-        emitRuntimeEvent('requestShowError', { message: 'run error' });
-      }).toThrow(
-        'emitRuntimeEvent only supports session facts; use the owning runtime host for requestShowError',
-      );
-      expect(busSeen).toEqual([]);
-    } finally {
-      off();
-    }
+    expect(() => {
+      // @ts-expect-error requestShowError is host interaction, not a session fact.
+      emitRuntimeEvent('requestShowError', { message: 'run error' });
+    }).toThrow(
+      'emitRuntimeEvent only supports session facts; use the owning runtime host for requestShowError',
+    );
   });
 
   it('rejects non-session events instead of using the active run host', () => {
@@ -115,8 +97,6 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
       (event) => sessionSeen.push(event),
       { scope: 'session' },
     );
-    const busSeen: unknown[] = [];
-    const off = ProgressEventBus.on('goalStateChanged', (p) => busSeen.push(p));
     try {
       withRunContext(createRunContext({ runtimeHost: run.host }), () => {
         emitRuntimeEvent(
@@ -136,10 +116,8 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
       ]);
       expect(channel.events).toEqual([]);
       expect(run.events).toEqual([]);
-      expect(busSeen).toEqual([]);
     } finally {
       detachSession();
-      off();
       session.dispose();
     }
   });
