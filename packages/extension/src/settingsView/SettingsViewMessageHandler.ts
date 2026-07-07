@@ -18,6 +18,10 @@ import {
   buildToolDashboardItems,
   buildToolDashboardTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
+import {
+  createSettingsViewCommandHandlers,
+  type SettingsViewCommandActions,
+} from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
@@ -234,33 +238,44 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const setAgent = (key: WorkspaceStateKey, value: string) =>
       this.updateAgentSetting(key, value);
 
-    return {
-      ...{
+    const actions: SettingsViewCommandActions = {
+      lifecycle: {
         webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
         openVscodeSettings: () => this.openVscodeSettings(),
       },
-      ...{
-        getMemoryData: () =>
-          this.withActiveWebview((w) => this.sendMemoryData(w)),
-        getMemoryPreview: (data) => this.handleGetMemoryPreview(data),
-        openMemoryFile: (data) => this.handleOpenMemoryFile(data),
-        openMemoryFolder: () => this.handleOpenMemoryFolder(),
-        deleteMemory: (data) => this.handleDeleteMemory(data),
-        getMemoryEnabled: () =>
+      memory: {
+        getData: () => this.withActiveWebview((w) => this.sendMemoryData(w)),
+        getPreview: (storagePath) =>
+          this.handleGetMemoryPreview({
+            command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
+            storagePath,
+          }),
+        openFile: (data) => this.handleOpenMemoryFile(data),
+        openFolder: () => this.handleOpenMemoryFolder(),
+        delete: (data) => this.handleDeleteMemory(data),
+        getEnabled: () =>
           this.withActiveWebview((w) => this.sendMemoryEnabled(w)),
-        setMemoryEnabled: (data) => this.handleSetMemoryEnabled(data),
-        pinMemory: (data) => this.setMemoryPinned(data.storagePath, true),
-        unpinMemory: (data) => this.setMemoryPinned(data.storagePath, false),
+        setEnabled: (enabled) =>
+          this.handleSetMemoryEnabled({
+            command: SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
+            enabled,
+          }),
+        pin: (storagePath) => this.setMemoryPinned(storagePath, true),
+        unpin: (storagePath) => this.setMemoryPinned(storagePath, false),
       },
-      ...{
-        getHistoryData: () =>
+      history: {
+        getData: () =>
           this.withActiveWebview((w) =>
             this.historyHandlers.sendHistoryData(w),
           ),
         rerunAgent: (data) => this.historyHandlers.handleRerunAgent(data),
         restoreAgent: (data) => this.historyHandlers.handleRestoreAgent(data),
-        deleteAgent: (data) => this.historyHandlers.handleDeleteAgent(data),
-        clearHistory: () => this.historyHandlers.handleClearHistory(),
+        deleteAgent: (historyId) =>
+          this.historyHandlers.handleDeleteAgent({
+            command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+            historyId,
+          }),
+        clear: () => this.historyHandlers.handleClearHistory(),
         exportChatMd: (data) =>
           this.historyHandlers.handleExportChat(data, 'md'),
         exportChatTex: (data) =>
@@ -268,11 +283,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         exportChatHtml: (data) =>
           this.historyHandlers.handleExportChat(data, 'html'),
       },
-      ...{
-        getProfileData: () =>
-          this.withActiveWebview((w) => this.sendProfileData(w)),
-        selectAgent: async (data) => {
-          await selectAgentInMainView(data.agentName, {
+      profile: {
+        getData: () => this.withActiveWebview((w) => this.sendProfileData(w)),
+        selectAgent: async (agentName) => {
+          await selectAgentInMainView(agentName, {
             showSuccessMessage: true,
             copyToClipboardOnFailure: false,
           });
@@ -281,230 +295,263 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
         signOut: () =>
           safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
-        setApiAccessMode: (data) => this.handleSetApiAccessMode(data),
-        setProviderKey: (data) =>
-          this.runProviderKeyAction(data.provider, 'set', (targetProvider) =>
+        setApiAccessMode: (mode) =>
+          this.handleSetApiAccessMode({
+            command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+            mode,
+          }),
+        setProviderKey: (provider) =>
+          this.runProviderKeyAction(provider, 'set', (targetProvider) =>
             this.profileKeyController.setProviderKey(targetProvider),
           ),
-        removeProviderKey: (data) =>
-          this.runProviderKeyAction(data.provider, 'remove', (targetProvider) =>
+        removeProviderKey: (provider) =>
+          this.runProviderKeyAction(provider, 'remove', (targetProvider) =>
             this.profileKeyController.removeProviderKey(targetProvider),
           ),
-        openProviderKeyUrl: (data) =>
-          this.profileKeyController.openProviderKeyUrl(data.provider),
-        setProviderStreaming: (data) =>
+        openProviderKeyUrl: (provider) =>
+          this.profileKeyController.openProviderKeyUrl(provider),
+        setProviderStreaming: (provider, enabled) =>
           this.updateProfileSetting(() =>
-            setProviderStreaming(data.provider, data.enabled),
+            setProviderStreaming(provider, enabled),
           ),
-        setProviderEndpoint: (data) =>
+        setProviderEndpoint: (provider, endpoint) =>
           this.updateProfileSetting(() =>
-            setProviderEndpoint(data.provider, data.endpoint),
+            setProviderEndpoint(provider, endpoint),
           ),
-        setGlobalStreaming: (data) =>
-          this.updateProfileSetting(() => setGlobalStreaming(data.enabled)),
+        setGlobalStreaming: (enabled) =>
+          this.updateProfileSetting(() => setGlobalStreaming(enabled)),
         setProviderVscodeSetting: (data) =>
           this.handleSetProviderVscodeSetting(data),
-        openExternalUrl: (data) => this.openExternalUrl(data.url),
+        openExternalUrl: (url) => this.openExternalUrl(url),
       },
-      ...{
-        getModelSelection: () =>
+      modelSelection: {
+        getData: () =>
           this.withActiveWebview((w) => this.sendModelSelectionData(w)),
-        setModelEnabled: (data) =>
+        setEnabled: (modelName, enabled) =>
           this.updateModelSelection(
             () =>
               this.modelSelectionController.setModelEnabled({
-                modelName: data.modelName,
-                enabled: data.enabled,
+                modelName,
+                enabled,
               }),
             { invalidateCache: true, refreshMainOptions: true },
           ),
-        setPolishModel: (data) =>
+        setHelperModel: (modelName) =>
           this.updateModelSelection(() =>
-            this.modelSelectionController.setHelperModel(data.modelName),
+            this.modelSelectionController.setHelperModel(modelName),
           ),
-        setModelReasoningLevel: (data) =>
+        setReasoningLevel: (modelName, level) =>
           this.updateModelSelection(() =>
             this.modelSelectionController.setReasoningLevel({
-              modelName: data.modelName,
-              level: data.level,
+              modelName,
+              level,
             }),
           ),
-        setPreferShortModelNames: (data) =>
+        setPreferShortModelNames: (enabled) =>
           this.updateModelSelection(() =>
-            this.modelSelectionController.setPreferShortModelNames(
-              data.enabled,
-            ),
+            this.modelSelectionController.setPreferShortModelNames(enabled),
           ),
       },
-      ...{
+      orchestration: {
         getSuperYoloEnabled: () =>
           this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
         setSuperYoloEnabled: () =>
           this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
-        setAllowOrchestratorKill: (data) =>
+        setAllowOrchestratorKill: (enabled) =>
           this.updateBooleanAndSendSuperYolo(
             StateKeys.ALLOW_ORCHESTRATOR_KILL,
-            data,
+            { enabled },
           ),
-        setDetachSubagentsOnStop: (data) =>
+        setDetachSubagentsOnStop: (enabled) =>
           this.updateBooleanAndSendSuperYolo(
             StateKeys.DETACH_SUBAGENTS_ON_STOP,
-            data,
+            { enabled },
           ),
       },
-      ...{
-        getAgentSelection: () =>
+      agentSelection: {
+        getData: () =>
           this.withActiveWebview((w) =>
             this.agentHandlers.sendAgentSelectionData(w),
           ),
-        openAgentYaml: (data) => this.agentHandlers.handleOpenAgentYaml(data),
-        setAgentEnabled: (data) =>
-          this.agentHandlers.handleSetAgentEnabled(data),
-        setAllAgentsEnabled: (data) =>
-          this.agentHandlers.handleSetAllAgentsEnabled(data),
-        openAgentFolder: (data) =>
-          this.agentHandlers.handleOpenAgentFolder(data),
-        createAgent: (data) => this.agentHandlers.handleCreateAgent(data),
-        customizeAgent: (data) => this.agentHandlers.handleCustomizeAgent(data),
-        deleteCustomAgent: (data) =>
+        openYaml: ({ source, name }) =>
+          this.agentHandlers.handleOpenAgentYaml({
+            command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
+            agentSource: source,
+            agentName: name,
+          }),
+        setEnabled: ({ category, source, name, enabled }) =>
+          this.agentHandlers.handleSetAgentEnabled({
+            command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
+            category,
+            agentSource: source,
+            agentName: name,
+            enabled,
+          }),
+        setAllEnabled: ({ category, source, enabled }) =>
+          this.agentHandlers.handleSetAllAgentsEnabled({
+            command: SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED,
+            category,
+            source,
+            enabled,
+          }),
+        openFolder: (data) => this.agentHandlers.handleOpenAgentFolder(data),
+        create: (data) => this.agentHandlers.handleCreateAgent(data),
+        customize: (data) => this.agentHandlers.handleCustomizeAgent(data),
+        deleteCustom: (data) =>
           this.agentHandlers.handleDeleteCustomAgent(data),
-        revealAgentFile: (data) =>
-          this.agentHandlers.handleRevealAgentFile(data),
-        viewRemoteAgentPrompt: (data) =>
+        revealFile: ({ source, name }) =>
+          this.agentHandlers.handleRevealAgentFile({
+            command: SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
+            agentSource: source,
+            agentName: name,
+          }),
+        viewRemotePrompt: (data) =>
           this.agentHandlers.handleViewRemoteAgentPrompt(data),
-        getCustomAgentDir: () =>
+        getCustomDir: () =>
           this.withActiveWebview((w) =>
             this.agentHandlers.sendCustomAgentDir(w),
           ),
-        setCustomAgentDir: () => this.agentHandlers.handleSetCustomAgentDir(),
-        resetCustomAgentDir: () =>
-          this.agentHandlers.handleResetCustomAgentDir(),
-        getAgentModePresets: () =>
+        setCustomDir: () => this.agentHandlers.handleSetCustomAgentDir(),
+        resetCustomDir: () => this.agentHandlers.handleResetCustomAgentDir(),
+        getModePresets: () =>
           this.withActiveWebview((w) =>
             this.agentHandlers.sendAgentModePresets(w),
           ),
-        applyAgentModePreset: (data) =>
-          this.agentHandlers.handleApplyAgentModePreset(data),
-        saveAgentModePreset: () =>
+        applyModePreset: (presetId) =>
+          this.agentHandlers.handleApplyAgentModePreset({
+            command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
+            presetId,
+          }),
+        saveModePreset: () =>
           this.agentHandlers.handleSaveAgentModePreset({
             command: SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
           }),
-        deleteAgentModePreset: (data) =>
-          this.agentHandlers.handleDeleteAgentModePreset(data),
+        deleteModePreset: (presetId) =>
+          this.agentHandlers.handleDeleteAgentModePreset({
+            command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
+            presetId,
+          }),
       },
-      ...{
-        getGitAuthorSettings: () =>
+      gitAuthor: {
+        getSettings: () =>
           this.withActiveWebview((w) => this.sendGitAuthorSettings(w)),
-        setGitMarkCommits: (data) =>
-          setGitAuthor(StateKeys.GIT_MARK_COMMITS, data.enabled),
-        setGitAuthorName: (data) =>
-          setGitAuthor(StateKeys.GIT_AUTHOR_NAME, data.name),
-        setGitAuthorEmail: (data) =>
-          setGitAuthor(StateKeys.GIT_AUTHOR_EMAIL, data.email),
-        setGitWorktreeSupport: (data) =>
-          setGitAuthor(StateKeys.GIT_WORKTREE_SUPPORT, data.enabled),
+        setMarkCommits: (enabled) =>
+          setGitAuthor(StateKeys.GIT_MARK_COMMITS, enabled),
+        setName: (name) => setGitAuthor(StateKeys.GIT_AUTHOR_NAME, name),
+        setEmail: (email) => setGitAuthor(StateKeys.GIT_AUTHOR_EMAIL, email),
+        setWorktreeSupport: (enabled) =>
+          setGitAuthor(StateKeys.GIT_WORKTREE_SUPPORT, enabled),
       },
-      ...{
-        getGitHubTokenStatus: () =>
+      githubSubscriptions: {
+        getTokenStatus: () =>
           this.withActiveWebview((w) =>
             this.githubHandlers.sendGitHubTokenStatus(w),
           ),
-        setGitHubToken: () => this.githubHandlers.handleSetGitHubToken(),
-        removeGitHubToken: () => this.githubHandlers.handleRemoveGitHubToken(),
-        openGitHubTokenUrl: () => this.githubHandlers.openGitHubTokenUrl(),
-        getPRSubscriptions: () =>
+        setToken: () => this.githubHandlers.handleSetGitHubToken(),
+        removeToken: () => this.githubHandlers.handleRemoveGitHubToken(),
+        openTokenUrl: () => this.githubHandlers.openGitHubTokenUrl(),
+        getSubscriptions: () =>
           this.withActiveWebview((w) =>
             this.githubHandlers.sendPRSubscriptions(w),
           ),
-        unsubscribePR: (data) => this.githubHandlers.handleUnsubscribePR(data),
-        openPRSubscriptionStream: (data) =>
+        unsubscribe: (data) => this.githubHandlers.handleUnsubscribePR(data),
+        openSubscriptionStream: (data) =>
           this.githubHandlers.handleOpenPRSubscriptionStream(data),
       },
-      ...{
-        getChatGptAuthStatus: () =>
+      chatGpt: {
+        getAuthStatus: () =>
           this.withActiveWebview((w) =>
             this.chatgptHandlers.sendChatGptAuthStatus(w),
           ),
-        signInChatGpt: () => this.chatgptHandlers.handleSignInChatGpt(),
-        signOutChatGpt: () => this.chatgptHandlers.handleSignOutChatGpt(),
-        setChatGptPreferSubscription: (data) =>
-          this.chatgptHandlers.handleSetPreferSubscription(data.enabled),
-        setChatGptSubscriptionToolUseOnly: (data) =>
-          this.chatgptHandlers.handleSetSubscriptionToolUseOnly(data.enabled),
+        signIn: () => this.chatgptHandlers.handleSignInChatGpt(),
+        signOut: () => this.chatgptHandlers.handleSignOutChatGpt(),
+        setPreferSubscription: (enabled) =>
+          this.chatgptHandlers.handleSetPreferSubscription(enabled),
+        setSubscriptionToolUseOnly: (enabled) =>
+          this.chatgptHandlers.handleSetSubscriptionToolUseOnly(enabled),
       },
-      ...{
-        getApprovalSettings: () =>
+      approval: {
+        getSettings: () =>
           this.withActiveWebview((w) => this.sendApprovalSettings(w)),
-        setBashApprovalEnabled: (data) =>
-          this.handleSetApprovalEnabled(data.enabled),
-        setCodexSandboxMode: (data) =>
-          setAgent(StateKeys.CODEX_SANDBOX_MODE, data.mode),
-        setCodexReasoningEffort: (data) =>
-          setAgent(StateKeys.CODEX_REASONING_EFFORT, data.effort),
-        setCodexApprovalPolicy: (data) =>
-          setAgent(StateKeys.CODEX_APPROVAL_POLICY, data.policy),
-        setClaudeAgentModel: (data) =>
-          setAgent(StateKeys.CLAUDE_AGENT_MODEL, data.model),
-        setClaudeAgentPermissionMode: (data) =>
-          setAgent(StateKeys.CLAUDE_AGENT_PERMISSION_MODE, data.mode),
-        setClaudeAgentEffort: (data) =>
-          setAgent(StateKeys.CLAUDE_AGENT_EFFORT, data.effort),
+        setBashApprovalEnabled: (enabled) =>
+          this.handleSetApprovalEnabled(enabled),
+        setCodexSandboxMode: (mode) =>
+          setAgent(StateKeys.CODEX_SANDBOX_MODE, mode),
+        setCodexReasoningEffort: (effort) =>
+          setAgent(StateKeys.CODEX_REASONING_EFFORT, effort),
+        setCodexApprovalPolicy: (policy) =>
+          setAgent(StateKeys.CODEX_APPROVAL_POLICY, policy),
+        setClaudeAgentModel: (model) =>
+          setAgent(StateKeys.CLAUDE_AGENT_MODEL, model),
+        setClaudeAgentPermissionMode: (mode) =>
+          setAgent(StateKeys.CLAUDE_AGENT_PERMISSION_MODE, mode),
+        setClaudeAgentEffort: (effort) =>
+          setAgent(StateKeys.CLAUDE_AGENT_EFFORT, effort),
       },
-      ...{
-        getToolDashboardData: () =>
+      tools: {
+        getDashboardData: () =>
           this.withActiveWebview((w) => this.sendToolDashboardData(w)),
-        openToolInstallUrl: (data) => this.openExternalUrl(data.url),
-        installToolExtension: (data) =>
-          this.latexHandlers.installExtension(data.extensionId),
-        recheckToolStatus: () => refreshToolAvailability(),
-        toggleTool: async (data) => {
-          await setToolEnabled(data.toolId, data.enabled);
+        openInstallUrl: (url) => this.openExternalUrl(url),
+        installExtension: (extensionId) =>
+          this.latexHandlers.installExtension(extensionId),
+        recheckStatus: () => refreshToolAvailability(),
+        toggle: async (toolId, enabled) => {
+          await setToolEnabled(toolId, enabled);
           refreshDisabledToolCache();
           await this.withActiveWebview((w) =>
             this.sendToolDashboardData(w, { skipChecks: true }),
           );
         },
-        runToolCommand: (data) => this.handleRunToolCommand(data),
+        runCommand: (data) =>
+          this.handleRunToolCommand({
+            command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
+            ...data,
+          }),
       },
-      ...{
-        getLatexSettingsStatus: () =>
+      latex: {
+        getSettingsStatus: () =>
           this.withActiveWebview((w) =>
             this.latexHandlers.sendLatexSettingsStatus(w),
           ),
-        applyLatexSettings: (data) =>
+        applySettings: (data) =>
           this.latexHandlers.handleApplyLatexSettings(data),
         installLatexWorkshop: () =>
           this.latexHandlers.handleInstallLatexWorkshop(),
-        runInstallCommand: (data) =>
-          this.latexHandlers.handleRunInstallCommand(data),
-        getLatexConfigValues: () =>
+        runInstallCommand: (installCommand) =>
+          this.latexHandlers.handleRunInstallCommand({
+            command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+            installCommand,
+          }),
+        getConfigValues: () =>
           this.withActiveWebview((w) =>
             this.latexHandlers.sendLatexConfigValues(w),
           ),
-        setLatexConfigValue: (data) =>
-          this.latexHandlers.handleSetLatexConfigValue(data),
-        getInlineCriticismEnabled: () =>
-          this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
-        setInlineCriticismEnabled: (data) =>
-          this.handleSetInlineCriticismEnabled(data.enabled),
+        setConfigValue: ({ field, value }) =>
+          this.latexHandlers.handleSetLatexConfigValue({
+            command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
+            field,
+            value,
+          }),
       },
-      ...{
-        getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
-        revealGoalStream: async (data) => {
-          await revealProgressStream(data.streamId);
+      inlineCriticism: {
+        getEnabled: () =>
+          this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
+        setEnabled: (enabled) => this.handleSetInlineCriticismEnabled(enabled),
+      },
+      goals: {
+        getList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
+        revealStream: async (streamId) => {
+          await revealProgressStream(streamId);
         },
       },
-      // Electron crash-reporter settings have no VS Code equivalent.
-      getDesktopCrashReporting: unsupported(
-        'Crash reporting is a desktop-app setting.',
-      ),
-      setDesktopCrashReportingEnabled: unsupported(
-        'Crash reporting is a desktop-app setting.',
-      ),
-      setDesktopCrashReportingDsn: unsupported(
-        'Crash reporting is a desktop-app setting.',
-      ),
+      desktopCrashReporting: {
+        get: unsupported('Crash reporting is a desktop-app setting.'),
+        setEnabled: unsupported('Crash reporting is a desktop-app setting.'),
+        setDsn: unsupported('Crash reporting is a desktop-app setting.'),
+      },
     };
+
+    return createSettingsViewCommandHandlers(actions);
   }
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
