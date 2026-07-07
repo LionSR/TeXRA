@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { platform } from '@platform';
+import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   API_PROVIDERS,
