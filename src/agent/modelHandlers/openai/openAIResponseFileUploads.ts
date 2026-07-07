@@ -15,15 +15,13 @@ import OpenAI, {
 } from 'openai';
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  buildErrorLogData,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
+import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 
 import { loadAttachmentBuffer, wipeBuffer } from '../utils/toolAttachmentUtils';
+import { reportMediaAttachmentFailure } from '../support/mediaAttachmentPolicy';
 import { isInputFileContent, isMessageItem } from './openAIResponseContent';
 import type {
   ResponseFunctionCallOutputItemList,
@@ -170,12 +168,11 @@ export async function uploadToolAttachments(
     try {
       buffer = await loadAttachmentBuffer(attachment);
     } catch (err) {
-      const attachmentPath = attachment.path ?? 'attachment';
-      logger.warn(
-        `Unable to read attachment ${attachmentPath}: ${getSdkErrorMessage(err)}`,
-        {
-          data: buildErrorLogData(err, { operation: 'read attachment' }),
-        },
+      reportMediaAttachmentFailure(
+        logger,
+        'toolAttachment',
+        err,
+        `unable to read ${attachment.path ?? 'attachment'}`,
       );
       continue;
     }
@@ -197,12 +194,11 @@ export async function uploadToolAttachments(
         isImage: mimeType.startsWith('image/'),
       });
     } catch (err) {
-      const attachmentPath = attachment.path ?? 'attachment';
-      logger.warn(
-        `Failed to upload attachment ${attachmentPath} to OpenAI: ${getSdkErrorMessage(err)}`,
-        {
-          data: buildErrorLogData(err, { operation: 'upload attachment' }),
-        },
+      reportMediaAttachmentFailure(
+        logger,
+        'toolAttachment',
+        err,
+        `failed to upload ${attachment.path ?? 'attachment'} to OpenAI`,
       );
     } finally {
       buffer = wipeBuffer(buffer);

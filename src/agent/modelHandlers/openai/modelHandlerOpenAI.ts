@@ -7,7 +7,6 @@ import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
 // Local imports - agent components
-import { logSdkError } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -16,7 +15,6 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   buildErrorLogData,
-  getSdkErrorMessage,
   isMissingFinishReasonError,
   handleStreamingFailure,
   trackStreamConnect,
@@ -739,7 +737,10 @@ export class ModelHandlerOpenAI<
         this.capabilities.supportsNativeAudio)
     ) {
       // createMediaMessage returns an array of objects formatted by createMediaContent
-      const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+      const formattedMediaContent = await this.createMediaForRound(
+        mediaFiles,
+        'initial',
+      );
       userMessageContent.push(...formattedMediaContent);
     }
 
@@ -786,17 +787,11 @@ export class ModelHandlerOpenAI<
       (this.capabilities.supportsVision ||
         this.capabilities.supportsNativeAudio)
     ) {
-      try {
-        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-        roundContent.push(...formattedMediaContent);
-      } catch (err) {
-        logSdkError(
-          this.logger,
-          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          err,
-          { operation: 'process media files' },
-        );
-      }
+      const formattedMediaContent = await this.createMediaForRound(
+        mediaFiles,
+        'followUp',
+      );
+      roundContent.push(...formattedMediaContent);
     }
     // Only add text content if non-empty to avoid API "text content is empty" errors
     if (userMessage) {
@@ -1407,16 +1402,8 @@ export class ModelHandlerOpenAI<
     const lastUserMsg = messages.findLast((m) => m.role === 'user');
     if (!lastUserMsg || !('content' in lastUserMsg)) return;
 
-    try {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
-      insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
-    } catch (err) {
-      logSdkError(
-        this.logger,
-        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
-      );
-    }
+    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
+    if (formattedMedia.length === 0) return;
+    insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
   }
 }
