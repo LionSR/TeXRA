@@ -674,7 +674,7 @@ export abstract class ModelHandler<
    * `capabilities`/`config`. `ModelHandlerOpenRouterNative`'s override is
    * qualitatively different, not just a different boolean: it inspects the
    * concrete `_error` instance (`OpenRouterConnectionError`/
-   * `RequestTimeoutError`, or an HTTP status code ≥500) rather than
+   * `OpenRouterRequestTimeoutError`, or an HTTP status code ≥500) rather than
    * returning a constant, since the OpenRouter SDK's own retry coverage
    * depends on the failure kind. Each override encodes what that provider's
    * SDK actually does internally; nothing here is provider-identity data
