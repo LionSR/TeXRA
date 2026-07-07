@@ -39,7 +39,10 @@ import {
 } from '@shared/schemas';
 import {
   deliverChildRunFollowUp,
+  deliverTerminalChildRun,
   persistChildRunReport,
+  persistChildRunResultMeta,
+  type ChildRunTerminalDeliveryResult,
 } from '@tools/childRunDelivery';
 import {
   buildSubagentFailureResultMeta,
@@ -157,12 +160,11 @@ export async function writeSubagentResultMeta(
   executionId: ExecutionId,
   resultMeta: ResultMeta,
 ): Promise<void> {
-  try {
-    await getExecutionStore(executionId).writeResultMeta(resultMeta);
-  } catch (err) {
+  const result = await persistChildRunResultMeta(executionId, resultMeta);
+  if (result.kind === 'failed') {
     logger.warn(
       'subagentDelivery',
-      `Failed to persist subagent result manifest for ${executionId}: ${toErrorMessage(err)}`,
+      `Failed to persist subagent result manifest for ${executionId}: ${toErrorMessage(result.err)}`,
     );
   }
 }
@@ -243,24 +245,6 @@ export class NativeSubagentStrategy {
     return true;
   }
 
-  async deliverTerminalFollowUp(
-    followUp: FollowUpQueueInput,
-  ): Promise<boolean> {
-    if (!this.deliveryState.beginDelivery()) return false;
-    try {
-      const delivered = await this.deliverFollowUp(followUp, { wake: true });
-      if (delivered) {
-        this.deliveryState.completeDelivery();
-      } else {
-        this.deliveryState.failDelivery();
-      }
-      return delivered;
-    } catch (err) {
-      this.deliveryState.failDelivery();
-      throw err;
-    }
-  }
-
   /**
    * Deliver a terminal result and persist its report and manifest. The manifest
    * lands before wake because the parent can immediately read
@@ -270,15 +254,54 @@ export class NativeSubagentStrategy {
     msg: string,
     resultMeta?: ResultMeta,
   ): Promise<boolean> {
+    const { executionId, parentSession } = this.params;
+    const targetStreamId = this.runHandle
+      ? this.runHandle.deliveryTargetStreamId
+      : this.params.orchestratorStreamId;
+    const result = await deliverTerminalChildRun({
+      executionId,
+      message: msg,
+      resultMeta,
+      targetStreamId,
+      session: parentSession,
+      gate: this.deliveryState,
+    });
+    this.warnTerminalDeliveryResult(result, targetStreamId);
+    return result.kind === 'delivered';
+  }
+
+  private warnTerminalDeliveryResult(
+    result: ChildRunTerminalDeliveryResult,
+    targetStreamId: StreamTabId | undefined,
+  ): void {
     const { executionId } = this.params;
-    if (resultMeta) {
-      await writeSubagentResultMeta(executionId, resultMeta);
+    if (result.resultMeta.kind === 'failed') {
+      logger.warn(
+        'subagentDelivery',
+        `Failed to persist subagent result manifest for ${executionId}: ${toErrorMessage(result.resultMeta.err)}`,
+      );
     }
-    const [delivered] = await Promise.all([
-      this.deliverTerminalFollowUp({ text: msg, origin: 'subagent_result' }),
-      writeSubagentReport(executionId, msg),
-    ]);
-    return delivered;
+    if (result.report.kind === 'failed') {
+      // Non-fatal, but the report is the only durable copy of the result when
+      // delivery later fails.
+      logger.warn(
+        'subagentDelivery',
+        `Failed to persist subagent report for ${executionId}: ${toErrorMessage(result.report.err)}`,
+      );
+    }
+    if (result.kind === 'no_session') {
+      logger.warn(
+        'subagentDelivery',
+        `Unable to deliver subagent result for ${executionId}: parent stream ${targetStreamId ?? 'unknown'} has no active session (status: ${result.streamStatus ?? 'unknown'}).`,
+      );
+      return;
+    }
+    if (result.kind === 'dropped') {
+      logger.warn(
+        'subagentDelivery',
+        `Dropped subagent result for ${executionId}: parent stream ${targetStreamId ?? 'unknown'} is gone and could not be resumed. The result remains in the execution report.`,
+      );
+    }
   }
 
   onProgress(update: SubagentProgressUpdate): void {
