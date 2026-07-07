@@ -44,7 +44,6 @@ import { mergeChildStreams } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
-import type { StreamSnapshotStore } from '@transcript';
 
 type Emit = <K extends ProgressEvent>(
   event: K,
@@ -385,22 +384,10 @@ function applyStreamMeta(
   );
 }
 
-export function wrapRuntimeHost(
-  host: CliRuntimeHost,
-  snapshotStore?: StreamSnapshotStore,
-): CliRuntimeHost {
+export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;
   const emit: Emit = (event, payload) => {
     applyToState(event, payload);
-    switch (event) {
-      case 'setTaskState':
-      case 'updateStreamDescription':
-      case 'setParentStream':
-        snapshotStore?.handleProgressEvent(event, payload);
-        break;
-      default:
-        break;
-    }
     return original(event, payload);
   };
   return { ...host, emit };

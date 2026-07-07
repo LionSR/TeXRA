@@ -47,8 +47,8 @@ import {
   type ExecutionId,
   sumUsageStats,
 } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { generateExecutionId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
@@ -231,7 +231,7 @@ export function createChatSessionController(
     readonly finalize: () => void;
   } => {
     const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost, snapshotStore);
+    const wrapped = wrapRuntimeHost(runtimeHost);
     const detachHostInteractions = defaultSession().useHostInteractions(
       createTuiHostInteractions(wrapped, sessionContext),
     );
