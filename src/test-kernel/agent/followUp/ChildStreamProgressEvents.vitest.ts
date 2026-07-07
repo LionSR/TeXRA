@@ -190,6 +190,13 @@ describe('child stream progress events', () => {
         },
       },
     });
+    expect(events[2]).toEqual({
+      event: 'updateStreamDescription',
+      payload: {
+        streamId: childStreamId,
+        description: 'Run a background bash command',
+      },
+    });
     expect(events[3]).toEqual({
       event: 'updateStreamStatus',
       payload: {

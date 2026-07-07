@@ -9,6 +9,7 @@ import type {
   SetActiveStreamPayload,
   StreamTabId,
   UpdateQueuedFollowUpsPayload,
+  UpdateStreamDescriptionPayload,
 } from '@shared/schemas';
 
 const logger = createChannelTrace('SessionEventHub');
@@ -39,6 +40,10 @@ export type SessionFact =
   | {
       readonly type: 'setActiveStream';
       readonly payload: SetActiveStreamPayload;
+    }
+  | {
+      readonly type: 'updateStreamDescription';
+      readonly payload: UpdateStreamDescriptionPayload;
     };
 
 export type SessionEvent =
