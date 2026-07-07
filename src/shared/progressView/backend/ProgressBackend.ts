@@ -171,7 +171,7 @@ export class ProgressBackend {
 
         const payload =
           event.data as unknown as ProgressEventPayloads['addOutputFiles'];
-        this.eventHandler.handleAddOutputFiles(payload);
+        this.handleProgressEvent('addOutputFiles', payload);
         this.onSessionProgressEvent?.('addOutputFiles', payload);
       },
       { scope: 'run', types: ['domain'] },

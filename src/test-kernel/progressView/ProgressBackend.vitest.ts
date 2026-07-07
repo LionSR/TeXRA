@@ -477,7 +477,7 @@ describe('ProgressBackend', () => {
     expect(backend.state.activeStream).not.toBe(streamId);
   });
 
-  it('applies session output-file run facts directly without duplicate legacy delivery', async () => {
+  it('applies session output-file run facts through the guarded applier', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
     const handleProgressEvent = vi.spyOn(
@@ -521,13 +521,75 @@ describe('ProgressBackend', () => {
         },
       });
 
-      expect(handleProgressEvent).not.toHaveBeenCalled();
+      expect(handleProgressEvent).toHaveBeenCalledTimes(1);
+      expect(handleProgressEvent).toHaveBeenCalledWith('addOutputFiles', {
+        streamId,
+        filesByRound: { 1: [outputFile] },
+      });
       expect(updateFiles).toHaveBeenCalledTimes(1);
       expect(updateFiles).toHaveBeenCalledWith(streamId, {
         rounds: { 1: [outputFile] },
       });
       expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual(
         new Map([[1, [outputFile]]]),
+      );
+    } finally {
+      subscription.dispose();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('no-ops session output-file run facts after dispose', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const handleProgressEvent = vi.spyOn(
+      backend.eventHandler,
+      'handleProgressEvent',
+    );
+    const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
+    const streamId = 'session:output-files-after-dispose' as StreamTabId;
+    const location: FileLocation = {
+      kind: 'workspace',
+      absolutePath: '/workspace/paper.tex',
+      relativePath: 'paper.tex',
+    };
+    const outputFile: OutputFileInfo = {
+      source: 'paper.tex',
+      location,
+      round: 1,
+      lineage: null,
+      diff: null,
+    };
+
+    try {
+      await backend.state.snapshots.load([]);
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
+      handleProgressEvent.mockClear();
+      updateFiles.mockClear();
+      backend.dispose();
+
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('addOutputFiles'),
+          data: {
+            streamId,
+            filesByRound: { 1: [outputFile] },
+          } satisfies ProgressEventPayloads['addOutputFiles'],
+        },
+      });
+
+      expect(handleProgressEvent).not.toHaveBeenCalled();
+      expect(updateFiles).not.toHaveBeenCalled();
+      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual(
+        new Map(),
       );
     } finally {
       subscription.dispose();
