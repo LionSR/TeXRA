@@ -3,8 +3,6 @@ description: Merges partial edits back into the full original document.
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   rounds: 1
 
 prompts:

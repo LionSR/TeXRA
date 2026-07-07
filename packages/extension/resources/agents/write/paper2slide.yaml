@@ -3,8 +3,6 @@ description: Converts a research paper into a LaTeX Beamer slide deck using a pr
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   defaultOutputFiles:
     - slides.tex
   requiredFilesInternal:

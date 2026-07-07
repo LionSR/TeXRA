@@ -19,6 +19,7 @@ import {
   type ExtendedTokenUsageStats,
   type LogMessageData,
 } from '@shared/schemas';
+import { OUTPUT_DOCUMENTS_TAG } from '@shared/constants/outputProtocol';
 import { getBasename } from '@shared/utils/path';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { formatCompactTokenCount } from '@utils/core';
@@ -60,10 +61,10 @@ export function formatFileListTemplate(
 }
 
 /** Render XML link template. */
-function renderXmlLink(xmlFile: string, documentTag: string | null) {
+function renderXmlLink(xmlFile: string) {
   const xmlFileName = getBasename(xmlFile);
   // prettier-ignore
-  return html`<div class="xml-link-container"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file-code" aria-hidden="true"></wa-icon> <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile} role="button" tabindex="0">${xmlFileName}</span>${documentTag ? html` <span class="document-tag">(Expected &lt;${documentTag}&gt; block)</span>` : ''}</div>`;
+  return html`<div class="xml-link-container"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file-code" aria-hidden="true"></wa-icon> <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile} role="button" tabindex="0">${xmlFileName}</span> <span class="document-tag">(Expected &lt;${OUTPUT_DOCUMENTS_TAG}&gt; block)</span></div>`;
 }
 
 /** Format missing outputs entry as TemplateResult. */
@@ -78,12 +79,12 @@ export function formatMissingOutputsTemplate(
     return null;
   }
 
-  const { missing, xmlFile, documentTag } = parseResult.data;
+  const { missing, xmlFile } = parseResult.data;
   const shouldOpen = options?.defaultOpen ?? false;
 
   // Special case: only XML link, no missing files
   if (missing.length === 0 && xmlFile) {
-    return renderXmlLink(xmlFile, documentTag);
+    return renderXmlLink(xmlFile);
   }
 
   // prettier-ignore
@@ -97,7 +98,7 @@ export function formatMissingOutputsTemplate(
     iconName: 'warning',
     label: `Missing outputs (${missing.length})`,
     labelClass: 'summary-text',
-  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile, documentTag) : ''}</details>`;
+  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile) : ''}</details>`;
 }
 
 // =============================================================================

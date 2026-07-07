@@ -1292,12 +1292,10 @@ async function withTempOutputPath(
   }
 }
 
-/** Build the workflow AgentSetting shared by the latex_document prefill tests. */
-function createLatexAgentSetting(): AgentSetting {
+/** Build the workflow AgentSetting shared by the prefill tests. */
+function createPrefillAgentSetting(): AgentSetting {
   return AgentSettingSchema.parse({
     agentCategory: AgentCategory.Workflow,
-    documentTag: 'latex_document',
-    endTag: '</latex_document>',
   });
 }
 
@@ -1309,7 +1307,7 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
       });
       stubHandlerForTest(handler);
 
-      const agentSetting = createLatexAgentSetting();
+      const agentSetting = createPrefillAgentSetting();
       const messages: MessageParam[] = [
         {
           role: 'user',
@@ -1346,7 +1344,7 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
       });
       stubHandlerForTest(handler);
 
-      const agentSetting = createLatexAgentSetting();
+      const agentSetting = createPrefillAgentSetting();
       const userMessage: MessageParam = {
         role: 'user',
         content: [{ type: 'text', text: 'revise the document' }],
@@ -1379,7 +1377,7 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
       });
       stubHandlerForTest(handler);
 
-      const agentSetting = createLatexAgentSetting();
+      const agentSetting = createPrefillAgentSetting();
       const userText = 'revise the document';
       const messages: MessageParam[] = [
         {
