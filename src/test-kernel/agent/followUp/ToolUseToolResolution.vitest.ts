@@ -54,17 +54,15 @@ describe('tool-use tool resolution', () => {
     ];
     const registry = registryFor(names);
 
-    const { tools, delegationTrimmed } = await resolveAgentTools({
+    const { tools } = await resolveAgentTools({
       tools: toolDefs(names),
       registry,
       logger,
       toolInjections,
       approvalPromptsUnavailable: true,
-      delegationBlocked: false,
     });
 
     expect(tools.map((tool) => tool.name)).toEqual(['grep']);
-    expect(delegationTrimmed).toBe(false);
   });
 
   it('keeps approval-gated tools when approval prompts are available', async () => {
@@ -86,7 +84,6 @@ describe('tool-use tool resolution', () => {
       logger,
       toolInjections,
       approvalPromptsUnavailable: false,
-      delegationBlocked: false,
     });
 
     expect(tools.map((tool) => tool.name)).toEqual([
@@ -118,7 +115,6 @@ describe('tool-use tool resolution', () => {
       toolInjections,
       approvalPromptsUnavailable: false,
       runtimeUnavailableTools: ['inquiry'],
-      delegationBlocked: false,
     });
 
     expect(tools.map((tool) => tool.name)).toEqual([
@@ -140,7 +136,6 @@ describe('tool-use tool resolution', () => {
       toolInjections,
       runtimeUnavailableTools: [DIAGNOSTICS_ADD_RUNTIME_CAPABILITY],
       approvalPromptsUnavailable: false,
-      delegationBlocked: false,
     });
 
     const [tool] = tools;
@@ -161,58 +156,6 @@ describe('tool-use tool resolution', () => {
     ).toBe(false);
   });
 
-  it('still reports delegation tools trimmed by delegation depth separately', async () => {
-    const registry = registryFor(['delegate_agent', 'grep']);
-
-    const { tools, delegationTrimmed } = await resolveAgentTools({
-      tools: toolDefs(['delegate_agent', 'grep']),
-      registry,
-      logger,
-      toolInjections,
-      approvalPromptsUnavailable: false,
-      delegationBlocked: true,
-    });
-
-    expect(tools.map((tool) => tool.name)).toEqual(['grep']);
-    expect(delegationTrimmed).toBe(true);
-  });
-
-  it('keeps delegation trimming when approval filtering is also active', async () => {
-    const registry = registryFor(['bash', 'delegate_agent', 'grep']);
-
-    const { tools, delegationTrimmed } = await resolveAgentTools({
-      tools: toolDefs(['bash', 'delegate_agent', 'grep']),
-      registry,
-      logger,
-      toolInjections,
-      approvalPromptsUnavailable: true,
-      delegationBlocked: true,
-    });
-
-    expect(tools.map((tool) => tool.name)).toEqual(['grep']);
-    expect(delegationTrimmed).toBe(true);
-  });
-
-  it('also trims injected delegation tools by delegation depth', async () => {
-    const registry = registryFor(['delegate_agent', 'grep']);
-    toolInjections.register({
-      toolName: 'delegate_agent',
-      shouldInject: () => true,
-    });
-
-    const { tools, delegationTrimmed } = await resolveAgentTools({
-      tools: toolDefs(['grep']),
-      registry,
-      logger,
-      toolInjections,
-      approvalPromptsUnavailable: false,
-      delegationBlocked: true,
-    });
-
-    expect(tools.map((tool) => tool.name)).toEqual(['grep']);
-    expect(delegationTrimmed).toBe(true);
-  });
-
   it('filters injected approval-gated tools when approval prompts are unavailable', async () => {
     const registry = registryFor(['grep', 'update_config']);
     toolInjections.register({
@@ -220,16 +163,14 @@ describe('tool-use tool resolution', () => {
       shouldInject: () => true,
     });
 
-    const { tools, delegationTrimmed } = await resolveAgentTools({
+    const { tools } = await resolveAgentTools({
       tools: toolDefs(['grep']),
       registry,
       logger,
       toolInjections,
       approvalPromptsUnavailable: true,
-      delegationBlocked: false,
     });
 
     expect(tools.map((tool) => tool.name)).toEqual(['grep']);
-    expect(delegationTrimmed).toBe(false);
   });
 });

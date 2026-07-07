@@ -12,7 +12,6 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   getAgentFlowErrorResult,
@@ -63,54 +62,6 @@ interface ApprovalMeta {
 }
 
 /**
- * Runtime depth gate shared by fresh delegations and resumes.
- * Evaluates against the current workspace delegation policy.
- */
-export function depthGateError(
-  parentDelegationDepth: number,
-): ToolResult | null {
-  const gate = evaluateCurrentDelegationGate(parentDelegationDepth);
-  if (gate.allowed) return null;
-
-  const unknownDepth = gate.blockReason === 'unknown_depth';
-  const reason = unknownDepth
-    ? [
-        'The current session was resumed from saved state,',
-        'but its delegation lineage could not be verified.',
-      ].join(' ')
-    : [
-        `This agent is already at delegation depth ${gate.depth},`,
-        'and agents may delegate only when their current depth is less than',
-        'the configured max depth.',
-      ].join(' ');
-  const remediation = unknownDepth
-    ? [
-        'Resume or restart from a valid parent session,',
-        'or complete this task directly without delegating.',
-      ].join(' ')
-    : [
-        'Raise Settings → Multi-Agent → Max delegation depth,',
-        'or complete this task directly without delegating.',
-      ].join(' ');
-  return {
-    status: 'error',
-    error: [
-      `Delegation depth cap reached (current depth ${gate.depth},`,
-      `max depth ${gate.maxDepth}).`,
-      reason,
-      remediation,
-    ].join(' '),
-    diagnostics: {
-      type: 'delegation_depth_cap',
-      currentDepth: gate.depth,
-      currentDepthKnown: !unknownDepth,
-      maxDepth: gate.maxDepth,
-      blockReason: gate.blockReason,
-    },
-  };
-}
-
-/**
  * Execute a subagent asynchronously.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
  * are consistent and usable with the executions tool.
@@ -158,9 +109,6 @@ export async function executeSubagent(
     subagentCostSettled = true;
     recordSubagentCost?.(result?.totalCostUsd ?? 0);
   }
-
-  const gated = depthGateError(parentDelegationDepth);
-  if (gated) return gated;
 
   const executionId = generateExecutionId();
   const startedAt = Date.now();

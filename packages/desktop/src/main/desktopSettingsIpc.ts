@@ -73,10 +73,7 @@ import {
   setBashApprovalEnabled,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
-import {
-  buildSuperYoloMessage,
-  setNestedDelegationMaxDepth,
-} from '@shared/settingsView/handlers/superYoloHandlers';
+import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
@@ -931,11 +928,6 @@ export function createDesktopSettingsIpc(
     postSuperYoloEnabled();
   }
 
-  async function updateNestedDelegationMaxDepth(value: number): Promise<void> {
-    await setNestedDelegationMaxDepth({ workspaceState, globalState }, value);
-    postSuperYoloEnabled();
-  }
-
   async function setToolEnabled(
     toolId: string,
     enabled: boolean,
@@ -1245,8 +1237,6 @@ export function createDesktopSettingsIpc(
           StateKeys.DETACH_SUBAGENTS_ON_STOP,
           data.enabled,
         ),
-      setNestedDelegationMaxDepth: (data) =>
-        updateNestedDelegationMaxDepth(data.value),
     },
     ...{
       getAgentSelection: () => postAgentSelectionData(),

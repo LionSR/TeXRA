@@ -135,7 +135,6 @@ describe('resolveAgentTools worktree annotation', () => {
         },
       }),
       logger: { warn: () => {} },
-      delegationBlocked: false,
       toolInjections: new ToolInjectionRegistry(),
     });
     return tools.find((t) => t.name === 'delegate_agent')?.description;

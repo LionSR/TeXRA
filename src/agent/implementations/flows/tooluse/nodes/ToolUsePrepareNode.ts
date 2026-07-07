@@ -38,15 +38,13 @@ export class ToolUsePrepareNode<C> extends Node<
       resolvedToolNames,
       hasDelegationTools,
       isSubagent: this.services.isSubagent,
-      nestedDelegationBlocked: this.services.delegationTrimmed === true,
     };
 
     if (snapshot) {
       logger.debug('Resuming tool-use session from saved state.');
-      // The persisted system message may reflect stale policy (e.g. the user
-      // changed Max delegation depth between sessions). Rebuild the current
-      // system text and swap it into the persisted first-message slot that
-      // holds the systemPrompt. For providers that pass `system` per-call
+      // Rebuild the current system text and swap it into the persisted
+      // first-message slot that holds the systemPrompt. For providers that
+      // pass `system` per-call
       // (Anthropic) this is a no-op: the systemPrompt was never stored in
       // messages to begin with.
       const supportsSystemPrompt =
@@ -169,9 +167,8 @@ function buildSystemText(
 }
 
 /**
- * Rebuild the persisted system message on resume so it reflects the current
- * policy (e.g. Max delegation depth) rather than whatever was frozen at
- * snapshot time.
+ * Rebuild the persisted system message on resume so it reflects current
+ * workspace/tool state rather than whatever was frozen at snapshot time.
  *
  * Two message-shape conventions are handled, keyed on the model's
  * supportsSystemPrompt capability:
