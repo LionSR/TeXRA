@@ -313,6 +313,50 @@ describe('NativeSubagentStrategy', () => {
     ).toBeUndefined();
   });
 
+  it('settles the parent usage totals with the last known cost when a wake failure has nothing else to settle from (Bugbot: wake failure locks zero cost)', async () => {
+    const childStream = 'child-stream' as StreamTabId;
+    mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
+    mocks.retrieveSessionResumeData.mockRejectedValue(
+      new Error('resume storage unreadable'),
+    );
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+    const settleSubagentCost = vi.fn();
+
+    const strategy = new NativeSubagentStrategy({
+      executionId,
+      agentName: 'review',
+      orchestratorStreamId: parentStreamId,
+      parentSession: ownerSession,
+      runtimeHost: { emit: vi.fn() },
+      startedAt: 0,
+      settleSubagentCost,
+    });
+    strategy.setChildStreamId(childStream);
+    // Captures a cost snapshot on the suspended turn before the wake fails —
+    // mirrors the same real-world sequence as the #7287 abandon() test above
+    // (onBeforeWaiting always runs before a turn can suspend and later be
+    // resumed/abandoned/wake-failed).
+    await strategy.onBeforeWaiting('done for now', [], [], 0.0042);
+
+    await strategy.wakeQueuedFollowUp(
+      { status: 'queued', reason: 'waiting' },
+      {},
+    );
+
+    // deliverSubagentError's own settle call (below, second call) carries no
+    // result (the wake never reached a real turn), so without the fallback
+    // the parent would only ever see a 0-cost settle. The real
+    // `subagentExecution.ts` wrapper this strategy is constructed with in
+    // production is itself idempotent (first call wins), so it's this first
+    // call — not the second — that determines what the parent's usage totals
+    // actually record.
+    expect(settleSubagentCost).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ totalCostUsd: 0.0042 }),
+    );
+  });
+
   it('cleans up registry entries when the underlying execution is untracked while abandoned in WAITING', () => {
     let abandonListener: ((handle: unknown) => void) | undefined;
     const addListener = vi.fn((_id: string, cb: (handle: unknown) => void) => {
