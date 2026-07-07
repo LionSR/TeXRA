@@ -585,6 +585,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return true;
   }
 
+  /**
+   * Google passes `system_instruction` per-call rather than storing it in
+   * `messages` (see `initializeMessages` below) — the round flow must
+   * resupply it on every invocation.
+   */
+  override get requiresPerCallSystemPrompt(): boolean {
+    return true;
+  }
+
   protected override get sdkErrorTagger() {
     return tagGoogleSdkError;
   }
