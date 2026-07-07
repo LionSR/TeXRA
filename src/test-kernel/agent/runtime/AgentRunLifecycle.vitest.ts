@@ -21,7 +21,7 @@ import {
   StreamStatusMachine,
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
@@ -392,7 +392,7 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-subagent-error-registered',
     );
     const onError = vi.fn(() => {
-      expect(executionRegistry.getHandle(executionId)).toBeDefined();
+      expect(SharedExecutionRegistry.getHandle(executionId)).toBeDefined();
     });
 
     try {
@@ -407,9 +407,9 @@ describe('runFlowWithLifecycle', () => {
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
       expect(onError).toHaveBeenCalledOnce();
-      expect(executionRegistry.getHandle(executionId)).toBeUndefined();
+      expect(SharedExecutionRegistry.getHandle(executionId)).toBeUndefined();
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -445,9 +445,9 @@ describe('runFlowWithLifecycle', () => {
       expect(onCompleted).not.toHaveBeenCalled();
       expect(onError).not.toHaveBeenCalled();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-      expect(executionRegistry.getHandle(executionId)).toBeDefined();
+      expect(SharedExecutionRegistry.getHandle(executionId)).toBeDefined();
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -606,7 +606,7 @@ describe('runFlowWithLifecycle', () => {
         carriedResult,
       );
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });

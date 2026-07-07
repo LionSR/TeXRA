@@ -75,8 +75,6 @@ function buildConfig(
 
 const agentSetting = AgentSettingSchema.parse({
   agentCategory: AgentCategory.Workflow,
-  documentTag: 'documents',
-  endTag: '</documents>',
 });
 
 function createWorkspaceState(): AgentWorkspaceState {

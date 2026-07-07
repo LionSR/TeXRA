@@ -16,8 +16,6 @@ settings:
   isRewrite: true # true = editing existing docs, false = creating new
   rounds: 2 # 1 or 2 (default 2)
   temperature: 0.1 # 0.1 for editing, 0.5-0.8 for creative tasks
-  documentTag: documents
-  endTag: '</documents>'
 
 prompts:
   systemPrompt: |
@@ -81,8 +79,8 @@ for model-specific instructions.
 All workflow agents use the same unified output protocol regardless of whether
 they produce one file or many. No separate `_multiple` variant is needed.
 
-- Use `documentTag: documents` (the default). Omit it unless you need a custom
-  tag for a legacy single-output agent.
+- The `<documents><document name="...">` container is fixed protocol, not a
+  setting — every agent emits it; there is nothing to configure.
 - For editing agents, iterate over `INPUT_FILES` to emit one
   `<document name="filename.tex">` block per selected input file inside
   `<documents>`.
@@ -115,8 +113,6 @@ description: Improves writing quality and clarity based on your instructions.
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: '</documents>'
 
 prompts:
   systemPrompt: |

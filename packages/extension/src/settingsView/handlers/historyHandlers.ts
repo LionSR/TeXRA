@@ -27,7 +27,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
@@ -99,7 +99,7 @@ export class HistoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT>,
   ): Promise<void> {
     try {
-      const activeIds = executionRegistry.getActiveIds();
+      const activeIds = SharedExecutionRegistry.getActiveIds();
       if (activeIds.includes(data.historyId)) {
         await vscode.window.showWarningMessage(
           'Cannot delete a running execution',
@@ -125,7 +125,9 @@ export class HistoryHandlers {
 
   async handleClearHistory(): Promise<void> {
     try {
-      await deleteAllExecutions(new Set(executionRegistry.getActiveIds()));
+      await deleteAllExecutions(
+        new Set(SharedExecutionRegistry.getActiveIds()),
+      );
       await vscode.window.showInformationMessage('Agent history cleared');
       await this.ctx.withActiveWebview(async (w) => {
         await w.postMessage({

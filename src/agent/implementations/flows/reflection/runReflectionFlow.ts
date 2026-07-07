@@ -115,7 +115,7 @@ export async function runReflectionFlow<C = unknown>(
   });
 
   const outputState = createOutputState();
-  const xmlManager = new XmlOutputManager(setting, config, logger, fileService);
+  const xmlManager = new XmlOutputManager(config, logger, fileService);
   const diffManager = new LatexDiffManager(
     setting,
     () => getOutputFilesByRound(outputState),

@@ -126,7 +126,6 @@ async function loadFileActions(mocks: {
       showErrorMessage,
     },
     {
-      runtimeHost: { emit: vi.fn() },
       runExecution: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(async () => []),
     },

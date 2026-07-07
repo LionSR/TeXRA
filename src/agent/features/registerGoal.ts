@@ -1,4 +1,4 @@
-import { toolInjectionRegistry } from '@agent/runtime/toolInjection';
+import { SharedToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { isGoalEnabled } from '@tools/goal';
 
 /**
@@ -14,7 +14,7 @@ import { isGoalEnabled } from '@tools/goal';
  * idle-continuation registry — goal was its only consumer.
  */
 export function registerGoalFeature(): void {
-  toolInjectionRegistry.register({
+  SharedToolInjectionRegistry.register({
     toolName: 'plan',
     shouldInject: () => isGoalEnabled(),
   });

@@ -180,14 +180,16 @@ function modelRequiresInteractionsAPI(config: ModelConfig): boolean {
 /**
  * Check if the Google Interactions API should be used for this config.
  *
- * Additive sibling to the chat/`generateContent` Google route, gated behind
- * `texra.model.useGoogleInteractionsAPI` (default on). OpenRouter can NOT proxy
- * Interactions, so an active OpenRouter proxy always returns false — the chat
- * handler (or OpenRouter) remains the fallback. This is a PURE predicate (never
- * throws): the unsupported Interactions-only + OpenRouter combination is failed
- * loudly at handler creation (`assertGoogleInteractionsRoutable`), not here, so
- * key-derivation callers (history restore, `modelSwitchDisabledReason`) stay
- * exception-free — matching `requiresOpenAIResponsesAPI`'s contract.
+ * Routes to the default, actively-developed Interactions handler unless
+ * `texra.model.useGoogleInteractionsAPI` (default on) is off; the chat/
+ * `generateContent` GenAI handler is the feature-frozen fallback (#7097).
+ * OpenRouter can NOT proxy Interactions, so an active OpenRouter proxy always
+ * returns false — the GenAI handler (or OpenRouter) remains the fallback in
+ * that case too. This is a PURE predicate (never throws): the unsupported
+ * Interactions-only + OpenRouter combination is failed loudly at handler
+ * creation (`assertGoogleInteractionsRoutable`), not here, so key-derivation
+ * callers (history restore, `modelSwitchDisabledReason`) stay exception-free —
+ * matching `requiresOpenAIResponsesAPI`'s contract.
  */
 export function shouldUseGoogleInteractionsAPI(
   config: ModelConfig,

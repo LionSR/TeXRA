@@ -284,6 +284,25 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: true, userCancelled: false };
     }
 
+    if (result.action === 'deny') {
+      // Policy/headless auto-denial: no human was available to approve the
+      // retry (e.g. `--approval-policy never --no-input`). This is a failure,
+      // not a user cancel — leaving `userCancelled` false routes it to the
+      // `failed` fallback so a zero-output run reports FAILED (surfacing the
+      // underlying error), not COMPLETED. Resume to RUNNING first because a
+      // WAITING stream can't terminalize directly: the propagating failure is
+      // written as the terminal outcome by the run lifecycle. See #7331.
+      logProgressStatus(
+        logger,
+        result.reason ?? 'Retry denied (no human input available)',
+      );
+      streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
+        runtimeHost,
+        trace: logger,
+      });
+      return { shouldRetry: false, userCancelled: false };
+    }
+
     const message =
       result.action === 'timeout'
         ? 'Retry timed out (no response)'

@@ -10,8 +10,12 @@ import { streamDataDir, StreamSnapshotStore } from '@transcript';
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import type { TaskState } from '@agent/core/state/TaskState';
-import { bus } from '@eventBus/ProgressEventBus';
+import {
+  type ProgressEvent,
+  type ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -20,13 +24,20 @@ import * as logger from '@logger/logUtils';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
+  type ActiveChildInfo,
+  type CompileFailure,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type ExecutionId,
+  type FileLocation,
+  type OutputFileInfo,
+  type Plan,
   type ProgressViewOutboundMessage,
+  type StorageKey,
   type StreamTabId,
+  type TodoItem,
 } from '@shared/schemas';
 import {
   ProgressBackend,
@@ -156,6 +167,25 @@ describe('ProgressBackend', () => {
     backend.dispose();
   });
 
+  it('handles local progress events without an external process bus', () => {
+    const { backend } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const streamId = 'desktop-local-stream' as StreamTabId;
+
+    try {
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      expect(backend.state.activeStream).toBe(streamId);
+      expect(backend.state.streamLogs.has(streamId)).toBe(true);
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+    }
+  });
+
   it('uses the injected target predicate before sending messages', () => {
     const sent = vi.fn(() => true);
     let hasTarget = false;
@@ -246,14 +276,14 @@ describe('ProgressBackend', () => {
 
   it('patches one stream for subagent registration and run-start metadata', async () => {
     const { backend, messages } = createRecordingBackend();
-    const subscription = backend.setupEventListeners(bus);
+    const subscription = backend.setupEventListeners();
 
     try {
       for (let i = 0; i < 20; i += 1) {
         backend.state.streamLogs.ensureStream(`history-${i}`);
       }
 
-      bus.emit('setActiveStream', {
+      backend.handleProgressEvent('setActiveStream', {
         streamId: 'root',
         agentCategory: AgentCategory.Workflow,
       });
@@ -267,7 +297,7 @@ describe('ProgressBackend', () => {
       );
       messages.length = 0;
 
-      bus.emit('setActiveStream', {
+      backend.handleProgressEvent('setActiveStream', {
         streamId: 'child',
         agentCategory: AgentCategory.ToolUse,
         suppressViewSwitch: true,
@@ -290,7 +320,7 @@ describe('ProgressBackend', () => {
       ).toBe(false);
       messages.length = 0;
 
-      bus.emit('setTaskState', {
+      backend.handleProgressEvent('setTaskState', {
         streamId: 'child',
         executionId: 'c41111',
         taskState: toolUseTaskState('search', 'deepseekproT'),
@@ -347,6 +377,696 @@ describe('ProgressBackend', () => {
     } finally {
       subscription.dispose();
       backend.dispose();
+    }
+  });
+
+  it('scopes direct session events to each backend session', async () => {
+    const first = createIsolatedRecordingBackend();
+    const second = createIsolatedRecordingBackend();
+    const firstSubscription = first.backend.setupEventListeners();
+    const secondSubscription = second.backend.setupEventListeners();
+    const firstStream = 'session:first' as StreamTabId;
+    const secondStream = 'session:second' as StreamTabId;
+
+    try {
+      first.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: firstStream,
+            agentCategory: AgentCategory.Workflow,
+          },
+        },
+      });
+
+      await vi.waitFor(() =>
+        expect(first.backend.state.activeStream).toBe(firstStream),
+      );
+      expect(second.backend.state.activeStream).not.toBe(firstStream);
+      expect(JSON.stringify(second.messages)).not.toContain(firstStream);
+
+      second.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: secondStream,
+            agentCategory: AgentCategory.ToolUse,
+          },
+        },
+      });
+
+      await vi.waitFor(() =>
+        expect(second.backend.state.activeStream).toBe(secondStream),
+      );
+      expect(first.backend.state.activeStream).toBe(firstStream);
+      expect(JSON.stringify(first.messages)).not.toContain(secondStream);
+    } finally {
+      firstSubscription.dispose();
+      secondSubscription.dispose();
+      first.backend.dispose();
+      second.backend.dispose();
+      first.session.dispose();
+      second.session.dispose();
+    }
+  });
+
+  it('applies session-originated progress events exactly once', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const applier = vi.spyOn(backend.eventHandler, 'handleProgressEvent');
+    const streamId = 'session:single-applier' as StreamTabId;
+    const payload: ProgressEventPayloads['setActiveStream'] = {
+      streamId,
+      agentCategory: AgentCategory.Workflow,
+    };
+
+    try {
+      session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload,
+        },
+      });
+
+      await vi.waitFor(() => expect(backend.state.activeStream).toBe(streamId));
+      expect(applier).toHaveBeenCalledTimes(1);
+      expect(applier).toHaveBeenCalledWith('setActiveStream', payload);
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('no-ops the direct applier after dispose', () => {
+    const { backend } = createIsolatedRecordingBackend();
+    const applier = vi.spyOn(backend.eventHandler, 'handleProgressEvent');
+    const streamId = 'desktop-post-close-stream' as StreamTabId;
+
+    backend.dispose();
+
+    // A run that kept executing headless after a desktop window closed still
+    // holds the host-channel emit closure that routes to handleProgressEvent.
+    expect(() =>
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      }),
+    ).not.toThrow();
+
+    expect(applier).not.toHaveBeenCalled();
+    expect(backend.state.activeStream).not.toBe(streamId);
+  });
+
+  it('applies session run facts through the guarded applier', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const handleProgressEvent = vi.spyOn(
+      backend.eventHandler,
+      'handleProgressEvent',
+    );
+    const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
+    const updateMissingOutputs = vi.spyOn(
+      backend.webviewUpdater,
+      'updateMissingOutputs',
+    );
+    const updateCompileFailures = vi.spyOn(
+      backend.webviewUpdater,
+      'updateCompileFailures',
+    );
+    const updateRunUsage = vi.spyOn(backend.webviewUpdater, 'updateRunUsage');
+    const updateTodos = vi.spyOn(backend.webviewUpdater, 'updateTodos');
+    const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
+    const streamId = 'session:output-files' as StreamTabId;
+    const storageKey = 'run:session-usage' as StorageKey;
+    const location: FileLocation = {
+      kind: 'workspace',
+      absolutePath: '/workspace/paper.tex',
+      relativePath: 'paper.tex',
+    };
+    const outputFile: OutputFileInfo = {
+      source: 'paper.tex',
+      location,
+      round: 1,
+      lineage: null,
+      diff: null,
+    };
+    const compileFailure: CompileFailure = {
+      round: 1,
+      displayName: 'paper.tex',
+      output: {
+        kind: 'workspace',
+        absolutePath: '/workspace/paper.pdf',
+        relativePath: 'paper.pdf',
+      },
+      log: {
+        kind: 'workspace',
+        absolutePath: '/workspace/paper.log',
+        relativePath: 'paper.log',
+      },
+      logRelativePath: 'paper.log',
+    };
+    const todos: TodoItem[] = [
+      {
+        content: 'Preserve session fact projection',
+        status: 'pending',
+        activeForm: 'Preserving session fact projection',
+      },
+    ];
+    const plan: Plan = {
+      objective: 'Route session facts directly through ProgressBackend.',
+    };
+
+    try {
+      await backend.state.snapshots.load([]);
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
+      handleProgressEvent.mockClear();
+      updateFiles.mockClear();
+      updateMissingOutputs.mockClear();
+      updateCompileFailures.mockClear();
+      updateRunUsage.mockClear();
+      updateTodos.mockClear();
+      updatePlan.mockClear();
+
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('addOutputFiles'),
+          data: {
+            streamId,
+            filesByRound: { 1: [outputFile] },
+          } satisfies ProgressEventPayloads['addOutputFiles'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateMissingOutputs'),
+          data: {
+            streamId,
+            filesByRound: { 1: ['paper.pdf'] },
+          } satisfies ProgressEventPayloads['updateMissingOutputs'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateCompileFailures'),
+          data: {
+            streamId,
+            filesByRound: { 1: [compileFailure] },
+          } satisfies ProgressEventPayloads['updateCompileFailures'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: {
+            streamId,
+            todos,
+          } satisfies ProgressEventPayloads['updateTodos'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updatePlan'),
+          data: {
+            streamId,
+            plan,
+          } satisfies ProgressEventPayloads['updatePlan'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          stats: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          data: {
+            streamId,
+            storageKey,
+            usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+          },
+          recordTranscript: false,
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('goalPaused'),
+          data: { streamId } satisfies ProgressEventPayloads['goalPaused'],
+        },
+      });
+
+      expect(handleProgressEvent).toHaveBeenCalledTimes(7);
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(1, 'addOutputFiles', {
+        streamId,
+        filesByRound: { 1: [outputFile] },
+      });
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(
+        2,
+        'updateMissingOutputs',
+        {
+          streamId,
+          filesByRound: { 1: ['paper.pdf'] },
+        },
+      );
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(
+        3,
+        'updateCompileFailures',
+        {
+          streamId,
+          filesByRound: { 1: [compileFailure] },
+        },
+      );
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(4, 'updateTodos', {
+        streamId,
+        todos,
+      });
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(5, 'updatePlan', {
+        streamId,
+        plan,
+      });
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(
+        6,
+        'updateStreamUsage',
+        {
+          streamId,
+          storageKey,
+          usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+        },
+      );
+      expect(handleProgressEvent).toHaveBeenNthCalledWith(7, 'goalPaused', {
+        streamId,
+      });
+      expect(updateFiles).toHaveBeenCalledTimes(1);
+      expect(updateFiles).toHaveBeenCalledWith(streamId, {
+        rounds: { 1: [outputFile] },
+      });
+      expect(updateMissingOutputs).toHaveBeenCalledWith(streamId, {
+        rounds: { 1: ['paper.pdf'] },
+      });
+      expect(updateCompileFailures).toHaveBeenCalledWith(streamId, {
+        rounds: { 1: [compileFailure] },
+        reset: true,
+      });
+      expect(updateTodos).toHaveBeenCalledWith(streamId, todos);
+      expect(updatePlan).toHaveBeenCalledWith(streamId, plan);
+      await vi.waitFor(() =>
+        expect(updateRunUsage).toHaveBeenCalledWith(streamId, storageKey, {
+          inputTokens: 10,
+          outputTokens: 5,
+          cost: 0.01,
+          cacheReadInputTokens: 0,
+          cacheMissInputTokens: 0,
+          cacheCreationInputTokens: 0,
+        }),
+      );
+      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual(
+        new Map([[1, [outputFile]]]),
+      );
+      expect(backend.state.snapshots.getMissingOutputs(streamId)).toEqual(
+        new Map([[1, ['paper.pdf']]]),
+      );
+      expect(backend.state.snapshots.getCompileFailures(streamId)).toEqual(
+        new Map([[1, [compileFailure]]]),
+      );
+      expect(backend.state.snapshots.getWorkPlan(streamId)).toMatchObject({
+        todos,
+        plan,
+      });
+      expect(backend.state.snapshots.getRunUsage(streamId)).toEqual(
+        new Map([
+          [
+            storageKey,
+            {
+              inputTokens: 10,
+              outputTokens: 5,
+              cost: 0.01,
+              cacheReadInputTokens: 0,
+              cacheMissInputTokens: 0,
+              cacheCreationInputTokens: 0,
+            },
+          ],
+        ]),
+      );
+    } finally {
+      subscription.dispose();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('no-ops session output-file run facts after dispose', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const handleProgressEvent = vi.spyOn(
+      backend.eventHandler,
+      'handleProgressEvent',
+    );
+    const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
+    const streamId = 'session:output-files-after-dispose' as StreamTabId;
+    const location: FileLocation = {
+      kind: 'workspace',
+      absolutePath: '/workspace/paper.tex',
+      relativePath: 'paper.tex',
+    };
+    const outputFile: OutputFileInfo = {
+      source: 'paper.tex',
+      location,
+      round: 1,
+      lineage: null,
+      diff: null,
+    };
+
+    try {
+      await backend.state.snapshots.load([]);
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
+      handleProgressEvent.mockClear();
+      updateFiles.mockClear();
+      backend.dispose();
+
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('addOutputFiles'),
+          data: {
+            streamId,
+            filesByRound: { 1: [outputFile] },
+          } satisfies ProgressEventPayloads['addOutputFiles'],
+        },
+      });
+
+      expect(handleProgressEvent).not.toHaveBeenCalled();
+      expect(updateFiles).not.toHaveBeenCalled();
+      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual(
+        new Map(),
+      );
+    } finally {
+      subscription.dispose();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('notifies host observers for session-originated progress events', async () => {
+    const messages: ProgressViewOutboundMessage[] = [];
+    const observed: Array<{
+      event: ProgressEvent;
+      payload: ProgressEventPayloads[ProgressEvent];
+    }> = [];
+    const session = new SessionHandle();
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      snapshots: new StreamSnapshotStore(),
+      session,
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+      onSessionProgressEvent: (event, payload) => {
+        observed.push({ event, payload });
+      },
+    });
+    const subscription = backend.setupEventListeners();
+    const streamId = 'session:observer' as StreamTabId;
+    const todos: TodoItem[] = [
+      {
+        content: 'Notify desktop bridge',
+        status: 'pending',
+        activeForm: 'Notifying desktop bridge',
+      },
+    ];
+
+    try {
+      session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'goalStateChanged',
+          payload: { streamId },
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: {
+            streamId,
+            todos,
+          } satisfies ProgressEventPayloads['updateTodos'],
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('goalPaused'),
+          data: { streamId } satisfies ProgressEventPayloads['goalPaused'],
+        },
+      });
+
+      expect(observed).toEqual([
+        { event: 'goalStateChanged', payload: { streamId } },
+        { event: 'updateTodos', payload: { streamId, todos } },
+        { event: 'goalPaused', payload: { streamId } },
+      ]);
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('handles direct session events with the same backend effects as host projection', async () => {
+    const direct = createIsolatedRecordingBackend();
+    const legacyEquivalent = createIsolatedRecordingBackend();
+    const directSubscription = direct.backend.setupEventListeners();
+    const legacySubscription = legacyEquivalent.backend.setupEventListeners();
+    const parentStreamId = 'session:parent' as StreamTabId;
+    const childStreamId = 'session:child' as StreamTabId;
+    const executionId = 'exec:direct-session' as ExecutionId;
+    const child: ActiveChildInfo = {
+      kind: 'subagent',
+      executionId: 'exec:child' as ExecutionId,
+      childStreamId,
+      agentName: 'orchestrator',
+      status: 'running',
+      startedAt: 1,
+      elapsed: null,
+    };
+    const process: ActiveChildInfo = {
+      kind: 'process',
+      executionId,
+      agentName: 'bash',
+      status: 'running',
+      startedAt: 2,
+      elapsed: '1s',
+      toolName: 'bash',
+    };
+    const inquiryThread = {
+      threadId: 'ei_123456789abc',
+      parentStreamId,
+      status: 'open',
+      lastQuestionPreview: 'Can you check this estimate?',
+      lastActivityIso: '2026-07-06T12:00:00.000Z',
+      turnCount: 1,
+      resumeOutcome: null,
+    } satisfies ProgressEventPayloads['inquiryThreadUpdated'];
+
+    try {
+      for (const target of [direct, legacyEquivalent]) {
+        await target.backend.state.snapshots.load([]);
+        target.backend.handleProgressEvent('setActiveStream', {
+          streamId: parentStreamId,
+          agentCategory: AgentCategory.ToolUse,
+        });
+        target.session.followUps.enqueue(
+          parentStreamId,
+          { text: 'continue with the local calculation' },
+          { force: true },
+        );
+        target.backend.handleProgressEvent('updateMissingOutputs', {
+          streamId: parentStreamId,
+          filesByRound: { 0: ['missing-output.tex'] },
+        });
+      }
+      await vi.waitFor(() =>
+        expect(direct.backend.state.activeStream).toBe(parentStreamId),
+      );
+      await vi.waitFor(() =>
+        expect(legacyEquivalent.backend.state.activeStream).toBe(
+          parentStreamId,
+        ),
+      );
+      direct.messages.length = 0;
+      legacyEquivalent.messages.length = 0;
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'stage.start',
+          id: 'round-2',
+          label: 'round 2',
+          kind: 'round',
+          index: 2,
+          total: 4,
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateRoundStage', {
+        streamId: parentStreamId,
+        roundStage: { index: 2, total: 4 },
+      });
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'child.activity',
+          kind: 'subagents',
+          parentStreamId,
+          children: [child],
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateActiveSubagents', {
+        parentStreamId,
+        children: [child],
+      });
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'child.activity',
+          kind: 'processes',
+          parentStreamId,
+          processes: [process],
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateActiveProcesses', {
+        parentStreamId,
+        processes: [process],
+      });
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'child.activity',
+          kind: 'parent',
+          childStreamId,
+          parentStreamId,
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('setParentStream', {
+        childStreamId,
+        parentStreamId,
+      });
+
+      direct.session.events.emit({
+        scope: 'run',
+        streamId: parentStreamId,
+        event: {
+          type: 'process.output',
+          parentStreamId,
+          executionId,
+          stdout: 'hello',
+          stderr: '',
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateProcessOutput', {
+        parentStreamId,
+        executionId,
+        stdout: 'hello',
+        stderr: '',
+      });
+
+      direct.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateQueuedFollowUps',
+          payload: { streamId: parentStreamId },
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('updateQueuedFollowUps', {
+        streamId: parentStreamId,
+      });
+
+      direct.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'clearMissingOutputs',
+          payload: { streamId: parentStreamId },
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent('clearMissingOutputs', {
+        streamId: parentStreamId,
+      });
+
+      direct.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'inquiryThreadUpdated',
+          payload: inquiryThread,
+        },
+      });
+      legacyEquivalent.backend.handleProgressEvent(
+        'inquiryThreadUpdated',
+        inquiryThread,
+      );
+
+      expect(direct.backend.eventHandler.getAllStreamStates()).toEqual(
+        legacyEquivalent.backend.eventHandler.getAllStreamStates(),
+      );
+      expect(
+        direct.backend.state.snapshots.getMissingOutputs(parentStreamId),
+      ).toEqual(
+        legacyEquivalent.backend.state.snapshots.getMissingOutputs(
+          parentStreamId,
+        ),
+      );
+      expect(direct.messages).toEqual(legacyEquivalent.messages);
+    } finally {
+      directSubscription.dispose();
+      legacySubscription.dispose();
+      await direct.backend.state.clearAll();
+      await legacyEquivalent.backend.state.clearAll();
+      direct.backend.dispose();
+      legacyEquivalent.backend.dispose();
+      direct.session.dispose();
+      legacyEquivalent.session.dispose();
     }
   });
 
@@ -455,7 +1175,7 @@ describe('ProgressBackend', () => {
   it('drops buffered conversation progress when an existing stream re-enters running', async () => {
     vi.useFakeTimers();
     const { backend, messages } = createRecordingBackend();
-    const subscription = backend.setupEventListeners(bus);
+    const subscription = backend.setupEventListeners();
     const stream = 'tool-stream' as StreamTabId;
 
     try {
@@ -472,7 +1192,7 @@ describe('ProgressBackend', () => {
       });
       backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
 
-      bus.emit('updateConversationProgress', {
+      backend.handleProgressEvent('updateConversationProgress', {
         streamId: stream,
         progress: { toolCallCount: 7 },
       });

@@ -160,6 +160,11 @@ class DesktopHostInteractions implements HostInteractions {
   }
 
   resolve(requestId: string, result: HostInteractionResolution): boolean {
+    if (result.kind === 'externalInquiry') {
+      this.options.getApprovalHandlers().externalInquiry.resolve(requestId);
+      return true;
+    }
+
     const request = this.pendingRequests.get(requestId);
     if (!request) return false;
     this.pendingRequests.delete(requestId);
@@ -203,6 +208,27 @@ class DesktopHostInteractions implements HostInteractions {
   cancelForStream(streamId: StreamTabId, cause?: string): void {
     for (const [requestId, request] of [...this.pendingRequests.entries()]) {
       if (request.streamId !== streamId) continue;
+      this.resolve(requestId, {
+        kind: request.kind,
+        action: 'reject',
+        feedback: cause,
+      });
+    }
+  }
+
+  cancelUnscoped(cause?: string): void {
+    for (const [requestId, request] of [...this.pendingRequests.entries()]) {
+      if (request.streamId) continue;
+      this.resolve(requestId, {
+        kind: request.kind,
+        action: 'reject',
+        feedback: cause,
+      });
+    }
+  }
+
+  cancelAll(cause?: string): void {
+    for (const [requestId, request] of [...this.pendingRequests.entries()]) {
       this.resolve(requestId, {
         kind: request.kind,
         action: 'reject',

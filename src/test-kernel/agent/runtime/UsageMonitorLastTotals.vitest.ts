@@ -8,7 +8,6 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
 import {
   AgentCategory,
   type StorageKey,
@@ -16,6 +15,7 @@ import {
 } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 const modelInfo = {
   capabilities: {
@@ -43,7 +43,10 @@ function createMonitorWithEvents() {
   const detachTrace = logger.subscribe((event) =>
     hub.emit({ scope: 'run', streamId, event }),
   );
-  const detachProjector = attachSessionRunFactProjector(hub, host, streamId);
+  const detachProjection = attachSessionProgressEventProjectionForTest(
+    hub,
+    host,
+  );
   const monitor = new UsageMonitor(
     modelInfo,
     { logger, runtimeHost: host, storageKey, streamId },
@@ -53,7 +56,7 @@ function createMonitorWithEvents() {
     monitor,
     events,
     dispose: () => {
-      detachProjector();
+      detachProjection();
       detachTrace();
     },
   };

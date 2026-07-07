@@ -1,8 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
+import { appSignals } from '@eventBus/AppSignals';
 import type { DiffViewHost } from '@hosts/uiHosts';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
@@ -38,7 +38,6 @@ export interface DesktopProgressFileActionOptions {
  * full progress bridge.
  */
 export interface DesktopProgressFileActionHost {
-  runtimeHost: AgentRuntimeHost;
   runExecution(request: ValidatedExecutionRequest): Promise<void>;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
@@ -132,7 +131,7 @@ export class DesktopProgressFileActions {
             ? this.options.confirmAcceptFile(message)
             : Promise.resolve(true),
         emitWritten: (absolutePath) =>
-          this.host.runtimeHost.emit('workspaceFilesWritten', {
+          appSignals.emit('workspaceFilesWritten', {
             absolutePaths: [absolutePath],
           }),
         showInfo: (message) => this.options.showInfoMessage?.(message),

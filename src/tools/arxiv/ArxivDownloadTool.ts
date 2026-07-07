@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { arxivProcessor } from '@latex/arxivProcessor';
+import { ArxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { getGitignoreMatcher } from '@tools/gitignore';
@@ -65,14 +65,14 @@ export class ArxivDownloadTool extends defineTool({
 }) {
   protected async execute(input: ArxivDownloadInput): Promise<ToolResult> {
     const arxivId = input.id.trim();
-    const validationError = arxivProcessor.validateId(arxivId);
+    const validationError = ArxivProcessor.validateId(arxivId);
     if (validationError) {
       throw new ToolError(validationError);
     }
 
     let downloadResult: { path: string; alreadyExisted: boolean };
     try {
-      downloadResult = await arxivProcessor.downloadSource(arxivId, {
+      downloadResult = await ArxivProcessor.downloadSource(arxivId, {
         autoIndent: input.autoIndent,
         destination: input.destination,
       });
