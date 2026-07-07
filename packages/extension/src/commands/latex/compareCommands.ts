@@ -6,9 +6,9 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { legacyWorkflowOutputStem } from '@agent/output/workflowOutputLayout';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { registerCommands } from '@commands/_shared/registerCommands';
+import { appSignals } from '@eventBus/AppSignals';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -239,7 +239,7 @@ async function handleAcceptEdited(
           return answer === 'Yes';
         },
         emitWritten: (absolutePath) =>
-          emitRuntimeEvent('workspaceFilesWritten', {
+          appSignals.emit('workspaceFilesWritten', {
             absolutePaths: [absolutePath],
           }),
         showInfo: (message) => {
@@ -265,7 +265,7 @@ async function handleAcceptEdited(
     await FlexibleFS.write(targetLocation, editedContent);
 
     if (targetLocation.kind === 'workspace') {
-      emitRuntimeEvent('workspaceFilesWritten', {
+      appSignals.emit('workspaceFilesWritten', {
         absolutePaths: [targetLocation.absolutePath],
       });
     }
