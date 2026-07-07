@@ -207,7 +207,7 @@ export class StreamLogStore {
         ) {
           return;
         }
-        const diskEntries = this.parsePersistedEntries(raw);
+        const diskEntries = this.parsePersistedEntries(streamId, raw);
         const live = this.logs.get(streamId);
         if (live && live.size > 0) {
           // A concurrent `append` populated `logs` during the disk read.
@@ -593,7 +593,7 @@ export class StreamLogStore {
 
     try {
       const raw = await this.kv.read<unknown[]>(streamId);
-      const entries = this.parsePersistedEntries(raw);
+      const entries = this.parsePersistedEntries(streamId, raw);
       if (
         entries.entries.length === 0 &&
         entries.preservedRawEntries.length === 0
@@ -746,7 +746,10 @@ export class StreamLogStore {
     for (const resolve of awaiters) resolve();
   }
 
-  private parsePersistedEntries(rawEntries: unknown): ParsedPersistedEntries {
+  private parsePersistedEntries(
+    streamId: StreamTabId,
+    rawEntries: unknown,
+  ): ParsedPersistedEntries {
     const parsed: ParsedPersistedEntries = {
       entries: [],
       preservedRawEntries: [],
@@ -763,6 +766,19 @@ export class StreamLogStore {
           raw,
         });
       }
+    }
+
+    // Loud read (#7464): unparseable rows are invisible to the typed view,
+    // so say they exist — but they are preserved verbatim and reinserted on
+    // save, never silently deleted from disk.
+    if (parsed.preservedRawEntries.length > 0) {
+      const count = parsed.preservedRawEntries.length;
+      log.warn(
+        LOG_TAG,
+        `Stream ${streamId}: ${count} persisted transcript ` +
+          `entr${count === 1 ? 'y' : 'ies'} did not parse; ` +
+          `preserving raw for round-trip on save.`,
+      );
     }
 
     return parsed;
