@@ -3,8 +3,6 @@ description: Logical flow analyzer for research papers. Improves argument struct
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   outputExt: tex
 
 prompts:
