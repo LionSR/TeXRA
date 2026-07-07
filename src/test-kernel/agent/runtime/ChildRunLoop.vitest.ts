@@ -28,7 +28,12 @@ import {
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import {
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 
 const session = defaultSession();
 
@@ -278,6 +283,128 @@ describe('childRunLoop E2E fixtures', () => {
     expect(session.interrupts.get(childStreamId)).toBeUndefined();
     // Only the one interim delivery — the kill did not spawn another turn.
     expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('stop between turns (native, no ChildStream) settles and untracks the dangling handle — no ghost subagent', async () => {
+    // Regression: for a native strategy (no ChildStream — each turn owns its
+    // own AgentExecutionHandle via runFlowWithLifecycle, not the loop), a
+    // stop landing BETWEEN turns finds the loop's own interruptible in
+    // ExecutionRegistry, calls .interrupt(), and transitions the stream to
+    // CANCELLED — but assumes a live flow will notice and self-finalize.
+    // Nothing is running here (the loop is just blocked on a queue wait), so
+    // without the loop's own finalize-on-interrupt fallback, the most
+    // recently tracked handle for this stream — still WAITING, still
+    // resumable-looking — would never settle or untrack.
+    const childStreamId = uniqueStreamId('ghost-handle-stop');
+    const parentStreamId = 'parent' as StreamTabId;
+    const executionId = 'exec-ghost-handle-stop' as ExecutionId;
+    const { strategy, resolveTurn } = createFakeStrategy();
+
+    startChildRunLoop({
+      childStreamId,
+      parentStreamId,
+      executionId,
+      agentName: 'fake',
+      strategy,
+    });
+
+    await vi.waitFor(() =>
+      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+    );
+
+    // Mirrors what a real native turn's runFlowWithLifecycle does: track a
+    // fresh handle for this executionId/childStreamId, WAITING, once the
+    // turn suspends.
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'fake',
+      'toolUse',
+      { emit: vi.fn() } as never,
+    );
+    session.executions.trackAgentExecution(handle, {
+      status: STREAM_PHASE.WAITING,
+    });
+
+    await resolveTurn(1, { kind: 'interim', value: 'first' });
+    await vi.waitFor(() =>
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
+    );
+
+    // Loop is now between turns. Interrupt it — simulating
+    // ExecutionRegistry.terminate() finding the loop's own interruptible.
+    const interruptible = session.interrupts.get(childStreamId);
+    expect(interruptible).toBeDefined();
+    interruptible?.interrupt();
+
+    await vi.waitFor(() =>
+      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+    );
+
+    // Settled: handle.result resolves instead of hanging forever.
+    await expect(handle.result).resolves.toMatchObject({
+      outcome: 'cancelled',
+      executionId,
+    });
+    // Untracked: no longer resumable — a later delegate_agent(execution_id=…)
+    // would correctly report "not found" instead of finding a ghost handle.
+    expect(session.executions.getHandle(executionId)).toBeUndefined();
+  });
+
+  it('re-registers the loop interruptible immediately when a turn settles, before delivery (Copilot review: no interruptible-gap during delivery)', async () => {
+    // Regression: a native turn's own flow-owned interruptible registers on
+    // the SAME InterruptRegistry slot while it runs, then unregisters it in
+    // its own `finally` the instant it returns (mirroring runToolUseFlow).
+    // If the loop re-registered its own interruptible only AFTER awaiting
+    // deliverTurn (persist report / persist manifest / deliver follow-up),
+    // a stop/kill landing during that delivery window would find nothing
+    // live. This strategy clobbers-then-unregisters the slot inside its own
+    // `launch`, exactly like a real native turn, and the test inspects the
+    // registry WHILE delivery is deliberately held open.
+    const childStreamId = uniqueStreamId('reregister-before-delivery');
+    const parentStreamId = 'parent' as StreamTabId;
+    let deliveryGate: DeferredPromise<void> | undefined;
+    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
+      deliveryGate = pDefer<void>();
+      await deliveryGate.promise;
+      return { kind: 'delivered' };
+    });
+
+    const strategy: ChildRunStrategy<FakeTurn> = {
+      stageLabel: 'Reregister test',
+      launch: async () => {
+        // Simulates runToolUseFlow's own register-on-start,
+        // unregister-in-finally choreography on the identical stream id.
+        session.interrupts.register(childStreamId, { interrupt: () => {} });
+        session.interrupts.unregister(childStreamId);
+        return { kind: 'terminal', value: 'done' };
+      },
+      isTerminal: () => true,
+      formatDelivery: (turn) => `delivered:${turn.value}`,
+      formatError: () => 'error',
+    };
+
+    startChildRunLoop({
+      childStreamId,
+      parentStreamId,
+      executionId: 'exec-reregister-before-delivery' as ExecutionId,
+      agentName: 'fake',
+      strategy,
+    });
+
+    // Poll until delivery is mid-flight (blocked on our gate) — the exact
+    // window the review flagged as unprotected.
+    await vi.waitFor(() => expect(deliveryGate).toBeDefined());
+
+    // The loop's own interruptible must already be back in place here, even
+    // though delivery has not finished.
+    expect(session.interrupts.get(childStreamId)).toBeDefined();
+
+    deliveryGate?.resolve();
+    await vi.waitFor(() =>
+      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+    );
   });
 
   it('preserves #7491: a failed runTurn (thrown, not a value) delivers formatError to the parent', async () => {
