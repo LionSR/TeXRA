@@ -972,6 +972,12 @@ export abstract class ModelHandler<
    * The provider supplies {@link summarize} (build the request, call the SDK,
    * and return the summary text plus output-token count) and
    * {@link buildSummaryMessage} (wrap the summary into a provider message).
+   *
+   * The result's `tokensAfter` is the same estimate used for the success log
+   * (`Math.max(1, outputTokens)`), surfaced for callers — like
+   * `ModelHandlerOpenAIResponse`'s client-side path — that keep their own
+   * post-compaction token bookkeeping instead of re-deriving it from
+   * `didCompact` alone. It is only present when `didCompact` is true.
    */
   protected async runClientCompaction(
     messages: M[],
@@ -980,8 +986,12 @@ export abstract class ModelHandler<
       conversationMessages: M[],
     ) => Promise<{ summaryText: string; outputTokens: number }>,
     buildSummaryMessage: (summary: string) => M,
-  ): Promise<{ compactedMessages: M[]; didCompact: boolean }> {
-    const contextWindow = this.config.contextWindow;
+  ): Promise<{
+    compactedMessages: M[];
+    didCompact: boolean;
+    tokensAfter?: number;
+  }> {
+    const contextWindow = this.getEffectiveContextWindow();
 
     // Separate leading system/developer messages from the conversation body.
     const systemMessages: M[] = [];
@@ -1027,7 +1037,11 @@ export abstract class ModelHandler<
         tokensAfterIsEstimate: true,
       });
 
-      return { compactedMessages, didCompact: true };
+      return {
+        compactedMessages,
+        didCompact: true,
+        tokensAfter: estimatedTokensAfter,
+      };
     } catch (err) {
       this.logger.warn(
         `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,

@@ -8,7 +8,9 @@ import {
 
 // Local imports - agent model handlers
 import type { AgentTrace } from '@agent/trace';
+import { COMPACTION_SYSTEM_PROMPT } from '@agent/modelHandlers/contextManagementConstants';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
+import type { ProviderCapabilityProfile } from '@model/providerCapabilities';
 
 // Type imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
@@ -66,6 +68,39 @@ class UnsupportedCompactionHandler extends ModelHandlerOpenAIResponse {
 
 function createUnsupportedCompactionHandler(): ModelHandlerOpenAIResponse {
   return configureHandler(new UnsupportedCompactionHandler(createConfig()));
+}
+
+/**
+ * Mirrors the ChatGPT-subscription (Codex) provider profile: `store: false`
+ * (no stateful server-side response), so the `/responses/compact` endpoint
+ * has nothing to act on and `ModelHandlerOpenAIResponse` must route through
+ * the client-side summarize-and-resend fallback instead (#7213).
+ */
+class ClientSideCompactionHandler extends ModelHandlerOpenAIResponse {
+  protected override getActiveProviderCapabilities(): ProviderCapabilityProfile {
+    return {
+      authMode: 'chatgpt-subscription',
+      contextWindow: 1000,
+      inputPrice: 0,
+      outputPrice: 0,
+      openAIResponses: {
+        backgroundMode: 'disabled',
+        streaming: 'forced',
+        webSocket: 'global-toggle',
+        supportsTokenCounting: false,
+        supportsManualCompaction: true,
+        supportsResponseChaining: false,
+        storesResponsesServerSide: false,
+        supportsInlineInputFileUpload: false,
+        supportsToolResultFileUpload: false,
+        failWhenFallbackOutputBudgetIsReduced: false,
+      },
+    };
+  }
+}
+
+function createClientSideCompactionHandler(): ModelHandlerOpenAIResponse {
+  return configureHandler(new ClientSideCompactionHandler(createConfig()));
 }
 
 function createResponse(id: string, inputTokens: number) {
@@ -182,5 +217,78 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(requests[1].previous_response_id).toBe('resp-before-threshold');
     expect(requests[1].input).toEqual([secondTurnMessages.at(-1)]);
     expect(result.updatedMessages).toBeUndefined();
+  });
+
+  it('summarizes locally and resends a single message when the backend has no stateful compact endpoint (#7213)', async () => {
+    const handler = createClientSideCompactionHandler();
+    const requests: any[] = [];
+    const compactRequests: any[] = [];
+    const streamRequests: any[] = [];
+    const client = {
+      responses: {
+        compact: async (params: any) => {
+          compactRequests.push(params);
+          throw new Error(
+            'the /responses/compact endpoint should never be called for a stateless backend',
+          );
+        },
+        stream: async (params: any) => {
+          streamRequests.push(params);
+          return {
+            finalResponse: async () => ({
+              id: 'compaction-summary-response',
+              status: 'completed',
+              output: [],
+              output_text: 'concise summary of the prior turns',
+              usage: { output_tokens: 42 },
+            }),
+          };
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return requests.length === 1
+            ? createResponse('resp-before-threshold', 800)
+            : createResponse('resp-after-client-side-compaction', 150);
+        },
+      },
+    };
+    const firstTurnMessages = createMessages(2);
+    const secondTurnMessages = createMessages(3);
+
+    await handler.createResponse({
+      client: client as any,
+      messages: firstTurnMessages,
+      temperature: 0,
+    });
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurnMessages,
+      temperature: 0,
+    });
+
+    // The stateful endpoint is never reached for this backend.
+    expect(compactRequests).toHaveLength(0);
+
+    // The client-side path summarizes via a throwaway streaming call.
+    expect(streamRequests).toHaveLength(1);
+    expect(streamRequests[0].instructions).toBe(COMPACTION_SYSTEM_PROMPT);
+    expect(streamRequests[0].input).toEqual(secondTurnMessages);
+
+    const expectedCompactedMessages = [
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: '[Previous conversation summary]\n\nconcise summary of the prior turns',
+          },
+        ],
+      },
+    ];
+    expect(requests).toHaveLength(2);
+    expect(requests[1].previous_response_id).toBeUndefined();
+    expect(requests[1].input).toEqual(expectedCompactedMessages);
+    expect(result.updatedMessages).toEqual(expectedCompactedMessages);
   });
 });
