@@ -273,6 +273,49 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('still tears down a genuinely-suspended handle when a kill lands during the RESUMING transition (review: stop ignored during resume)', () => {
+    // Regression: `resumeQueuedToolUseSnapshot` flips `streamStatus` to
+    // RUNNING with a RESUMING substate *before* the resumed run installs its
+    // own interrupt context. A kill landing in that window would otherwise
+    // find this same still-suspended handle (its waiting-cleanup from the
+    // earlier genuine WAITING suspension is still registered) but a
+    // non-WAITING phase, and get wrongly no-opped by the WAITING-only guard
+    // above — silently ignoring a stop the user actually issued.
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const executionId = 'exec-resuming-window-kill-test';
+    const parentStreamId = 'parent-resuming-window-kill-test' as StreamTabId;
+    const childStreamId = 'child-resuming-window-kill-test' as StreamTabId;
+    const cleanup = vi.fn();
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        createRecordingHost().host,
+      );
+      registry.track(handle);
+      handle.registerWaitingCleanup(cleanup);
+      // Mirrors resumeQueuedToolUseSnapshot's status flip that runs ahead of
+      // the resumed run's own context — RUNNING phase, RESUMING substate.
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.RESUMING,
+      );
+
+      expect(registry.kill(executionId)).toBe(true);
+
+      expect(cleanup).toHaveBeenCalledOnce();
+      expect(registry.getHandle(executionId)).toBeUndefined();
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('owns visible stream stop policy for root and children', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
