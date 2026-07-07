@@ -82,7 +82,8 @@ describe('computeDelegationDepthFromStorage', () => {
     for (let i = 0; i < ids.length - 1; i++) {
       await writeParentLink(ids[i], ids[i + 1]);
     }
-    await writeParentLink(ids.at(-1));
+    // eslint-disable-next-line unicorn/prefer-at -- Array#at() always types as `T | undefined`, but writeParentLink's first param is required.
+    await writeParentLink(ids[ids.length - 1]);
 
     const child = 'bbb999' as ExecutionId;
     await writeParentLink(child, ids[0]);
