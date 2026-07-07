@@ -14,6 +14,7 @@ import {
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { attachSessionRunFactProjector } from '@agent/runtime/SessionRunFactProjector';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
@@ -64,7 +65,7 @@ import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMod
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import {
-  attachTuiWorkPlanRunFactSubscription,
+  attachTuiRunFactSubscription,
   wrapRuntimeHost,
 } from '@cli/chat/tui/state/subscribeRuntimeHost';
 import {
@@ -2620,7 +2621,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       close: async () => {},
     } as unknown as CliRuntimeHost);
     const wrappedEmit = vi.spyOn(wrapped, 'emit');
-    const detach = attachTuiWorkPlanRunFactSubscription(hub);
+    const detach = attachTuiRunFactSubscription(hub);
     const todos: TodoItem[] = [
       {
         content: 'State the compactness lemma',
@@ -2657,7 +2658,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       close: async () => {},
     } as unknown as CliRuntimeHost);
     const wrappedEmit = vi.spyOn(wrapped, 'emit');
-    const detach = attachTuiWorkPlanRunFactSubscription(hub);
+    const detach = attachTuiRunFactSubscription(hub);
     const plan: Plan = {
       objective: 'Prove the local estimate and record the stopping criterion.',
     };
@@ -2679,6 +2680,166 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     } finally {
       detach();
       wrappedEmit.mockRestore();
+    }
+  });
+
+  it('applies direct usage events without host emission', () => {
+    const hub = new SessionEventHub();
+    const hostEmit = vi.fn();
+    const wrapped = wrapRuntimeHost({
+      emit: hostEmit,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const wrappedEmit = vi.spyOn(wrapped, 'emit');
+    const detach = attachTuiRunFactSubscription(hub);
+    const storageKey = 'root-direct-run' as StorageKey;
+    const usage = {
+      inputTokens: 100,
+      outputTokens: 20,
+      cost: 1,
+      cacheReadInputTokens: 30,
+      elapsedTime: 1.5,
+      percentageCached: 25,
+      reasoningTokens: 7,
+    };
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'usage',
+          stats: usage,
+          data: {
+            streamId: root,
+            storageKey,
+            executionId: 'exec-direct',
+            usage,
+          },
+        },
+      });
+
+      expect(streams.get().get(root)?.usage).toEqual(usage);
+      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+        cacheMissInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        reasoningTokens: 7,
+      });
+      expect(wrappedEmit).not.toHaveBeenCalled();
+      expect(hostEmit).not.toHaveBeenCalled();
+    } finally {
+      detach();
+      wrappedEmit.mockRestore();
+    }
+  });
+
+  it('does not double-count projected usage when the TUI subscriber is first', () => {
+    const hub = new SessionEventHub();
+    const hostEmit = vi.fn();
+    const wrapped = wrapRuntimeHost({
+      emit: hostEmit,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const detachTui = attachTuiRunFactSubscription(hub);
+    const detachProjector = attachSessionRunFactProjector(hub, wrapped, root);
+    const storageKey = 'root-echo-run' as StorageKey;
+    const payload = {
+      streamId: root,
+      storageKey,
+      executionId: 'exec-echo',
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+        elapsedTime: 1.5,
+        percentageCached: 25,
+        reasoningTokens: 7,
+      },
+    };
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'usage',
+          stats: payload.usage,
+          data: payload,
+        },
+      });
+
+      expect(streams.get().get(root)?.usage).toEqual(payload.usage);
+      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+        cacheMissInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        reasoningTokens: 7,
+      });
+      expect(hostEmit).toHaveBeenCalledWith('updateStreamUsage', payload);
+    } finally {
+      detachProjector();
+      detachTui();
+    }
+  });
+
+  it('does not double-count projected usage when the projector is first', () => {
+    const hub = new SessionEventHub();
+    const hostEmit = vi.fn();
+    const wrapped = wrapRuntimeHost({
+      emit: hostEmit,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const detachProjector = attachSessionRunFactProjector(hub, wrapped, root);
+    const detachTui = attachTuiRunFactSubscription(hub);
+    const storageKey = 'root-projector-first-run' as StorageKey;
+    const payload = {
+      streamId: root,
+      storageKey,
+      executionId: 'exec-projector-first',
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+        elapsedTime: 1.5,
+        percentageCached: 25,
+        reasoningTokens: 7,
+      },
+    };
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'usage',
+          stats: payload.usage,
+          data: payload,
+        },
+      });
+
+      expect(streams.get().get(root)?.usage).toEqual(payload.usage);
+      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+        cacheMissInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        reasoningTokens: 7,
+      });
+      expect(hostEmit).toHaveBeenCalledWith('updateStreamUsage', payload);
+    } finally {
+      detachTui();
+      detachProjector();
     }
   });
 
