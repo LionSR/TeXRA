@@ -161,7 +161,11 @@ export function createTuiHostInteractions(
       return withInteractionTimeout(
         () => requestBashInteraction(request, context, host, requestId),
         options,
-        { accepted: false, userMessage: 'Approval request timed out.' },
+        {
+          accepted: false,
+          userMessage: 'Approval request timed out.',
+          timedOut: true,
+        },
         () =>
           clearApprovalsWhere(
             (payload) =>
