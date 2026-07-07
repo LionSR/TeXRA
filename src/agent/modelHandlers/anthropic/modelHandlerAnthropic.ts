@@ -244,7 +244,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
-   * Anthropic supports file uploads via their Files API.
+   * Anthropic supports file uploads via their Files API. Unconditionally
+   * true rather than a capability read: this is a provider-wide fact about
+   * the Anthropic SDK, not a per-model llm-zoo flag or `ProviderCapabilityProfile`
+   * entry (#7101 triage: see the base getter's doc comment for why this
+   * stays a per-provider override rather than folding into a capability read).
    */
   protected override get supportsToolResultFileUpload(): boolean {
     return true;
