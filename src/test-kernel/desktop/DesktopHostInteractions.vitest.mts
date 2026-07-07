@@ -23,7 +23,11 @@ interface DesktopHostInteractions {
   }): Promise<unknown>;
   requestAgentProposal(request: unknown): Promise<unknown>;
   resolve(requestId: string, result: HostInteractionResolution): boolean;
-  cancelForStream(streamId: StreamTabId, cause?: string): void;
+  cancel(selector?: {
+    streamId?: StreamTabId | null;
+    kind?: string;
+    cause?: string;
+  }): void;
   dispose?(): void;
 }
 
@@ -113,10 +117,10 @@ describe('createDesktopHostInteractions', () => {
       streamId: 'stream-a' as StreamTabId,
     });
 
-    interactions.cancelForStream(
-      'stream-a' as StreamTabId,
-      'Stream resources released.',
-    );
+    interactions.cancel({
+      streamId: 'stream-a' as StreamTabId,
+      cause: 'Stream resources released.',
+    });
 
     await expect(resultPromise).resolves.toEqual({
       accepted: false,

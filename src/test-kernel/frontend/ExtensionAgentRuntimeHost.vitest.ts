@@ -35,7 +35,7 @@ describe('extensionAgentRuntimeHost', () => {
         return true;
       },
       resolve: () => false,
-      cancelForStream: () => {},
+      cancel: () => {},
     });
 
     try {

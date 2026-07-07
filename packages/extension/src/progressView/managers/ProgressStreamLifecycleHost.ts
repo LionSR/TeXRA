@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type { StreamTabId } from '@shared/schemas';
@@ -9,8 +9,6 @@ import { cleanupAllApprovals, releaseStreamResources } from '@tools/approval';
 
 import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';
 import type { ProgressViewProvider } from '../ProgressViewProvider';
-
-type ProgressRetryCoordinator = Pick<RunCoordinatorBridge, 'clearRetryRequest'>;
 
 interface ModelOutputBackupCleaner {
   clearStreamBackups(stream: StreamTabId): void;
@@ -21,7 +19,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   constructor(
     private readonly provider: ProgressViewProvider,
     private readonly backupCleaner: ModelOutputBackupCleaner,
-    private readonly coordinators: ProgressRetryCoordinator,
+    private readonly interactions: HostInteractions,
   ) {}
 
   getVisibleStreamIds(): StreamTabId[] {
@@ -40,7 +38,14 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     options: { clearRetryRequest?: boolean } = {},
   ): Promise<void> {
     if (options.clearRetryRequest === true) {
-      this.coordinators.clearRetryRequest(stream);
+      // Kind-scoped: clear only the pending retry panel. Other pending
+      // interactions on the stream (plan approvals, proposals, questions)
+      // belong to the run being stopped and settle through their own paths.
+      this.interactions.cancel({
+        streamId: stream,
+        kind: 'retry',
+        cause: 'Retry request cleared.',
+      });
     }
     await vscode.commands.executeCommand('texra.stopAgent', stream);
   }

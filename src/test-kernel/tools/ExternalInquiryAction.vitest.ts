@@ -48,7 +48,7 @@ describe('handleExternalInquiryAction', () => {
     const interactions: HostInteractions = {
       handleProgressEvent: () => false,
       resolve,
-      cancelForStream: () => {},
+      cancel: () => {},
     };
     detach = defaultSession().useHostInteractions(interactions);
   });

@@ -98,8 +98,8 @@ type BridgeWithSession = TestableBridge & {
     hostChannel?: {
       emit(event: string, payload: unknown): void;
     };
-    coordinators: {
-      cleanupAllRequests(): void;
+    interactions: {
+      cancel(selector?: { cause?: string }): void;
     };
     status: StreamStatusMachine;
     followUps: {
@@ -2193,9 +2193,9 @@ describe('DesktopProgressBridge', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
-    const cleanupAllRequests = vi.spyOn(
-      (bridge as BridgeWithSession).session.coordinators,
-      'cleanupAllRequests',
+    const cancel = vi.spyOn(
+      (bridge as BridgeWithSession).session.interactions,
+      'cancel',
     );
 
     try {
@@ -2220,7 +2220,7 @@ describe('DesktopProgressBridge', () => {
         streams: [],
         streamStates: {},
       });
-      expect(cleanupAllRequests).toHaveBeenCalledOnce();
+      expect(cancel).toHaveBeenCalledWith({ cause: 'All streams deleted.' });
     } finally {
       bridge.dispose();
     }
@@ -2864,6 +2864,9 @@ describe('DesktopProgressBridge', () => {
         useMultipleOutputs: false,
         toolConfig: DEFAULT_TOOL_CONFIG,
       });
+      // The port now emits the ensure-view/activation events the coordinator
+      // layer used to duplicate; settle them before snapshotting messages.
+      await settleProgressEvents();
       messages.length = 0;
 
       const handleProposal = assertSupported(

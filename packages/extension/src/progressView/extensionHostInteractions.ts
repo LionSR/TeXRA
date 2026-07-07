@@ -1,18 +1,21 @@
 import { nanoid } from 'nanoid';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  HostBashApprovalRequest,
-  HostBashApprovalResult,
-  HostInteractionResolution,
-  HostInteractions,
-  HostPlanApprovalRequest,
-  HostRetryRequest,
-  HostUserQuestionResult,
+import {
+  matchesCancelSelector,
+  type HostBashApprovalRequest,
+  type HostBashApprovalResult,
+  type HostInteractionCancelSelector,
+  type HostInteractionResolution,
+  type HostInteractions,
+  type HostPlanApprovalRequest,
+  type HostRetryRequest,
+  type HostUserQuestionResult,
+  type PendingInteractionKind,
+  type PlanApprovalResult,
+  type ProposalResult,
+  type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
@@ -42,7 +45,10 @@ export interface ExtensionHostInteractionsOptions {
   ): void;
 }
 
-type PendingKind = 'bash' | 'plan' | 'proposal' | 'retry' | 'userQuestion';
+type PendingKind = Extract<
+  PendingInteractionKind,
+  'bash' | 'plan' | 'proposal' | 'retry' | 'userQuestion'
+>;
 
 interface PendingExtensionInteraction<T> {
   readonly id: string;
@@ -79,6 +85,11 @@ export function createExtensionHostInteractions(
     pending: Omit<PendingExtensionInteraction<T>, 'settle'>,
     show: () => void,
   ): Promise<T> => {
+    // Replacement cancellation: a request re-issued under an id that is still
+    // pending dismisses the stale prompt (settling it as a rejection carrying
+    // the replacement cause) before the replacement is shown.
+    const replaced = pendingRequests.get(pending.id);
+    if (replaced) releasePending(replaced, 'Approval request was replaced.');
     return new Promise<T>((resolve) => {
       pendingRequests.set(pending.id, {
         ...pending,
@@ -142,21 +153,11 @@ export function createExtensionHostInteractions(
     }
   };
 
-  const cancelForStream = (streamId: StreamTabId, cause?: string): void => {
+  const cancel = (selector: HostInteractionCancelSelector = {}): void => {
     for (const pending of [...pendingRequests.values()]) {
-      if (pending.streamId === streamId) releasePending(pending, cause);
-    }
-  };
-
-  const cancelUnscoped = (cause?: string): void => {
-    for (const pending of [...pendingRequests.values()]) {
-      if (!pending.streamId) releasePending(pending, cause);
-    }
-  };
-
-  const cancelAll = (cause?: string): void => {
-    for (const pending of [...pendingRequests.values()]) {
-      releasePending(pending, cause);
+      if (matchesCancelSelector(pending, selector)) {
+        releasePending(pending, selector.cause);
+      }
     }
   };
 
@@ -302,12 +303,10 @@ export function createExtensionHostInteractions(
       }
     },
 
-    cancelForStream,
-    cancelUnscoped,
-    cancelAll,
+    cancel,
 
     dispose(): void {
-      cancelAll('Extension session disposed.');
+      cancel({ cause: 'Extension session disposed.' });
     },
   };
 }

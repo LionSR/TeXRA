@@ -18,7 +18,6 @@ import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
@@ -63,11 +62,6 @@ type MessageFor<C extends ProgressViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
-type ProgressViewCoordinatorBridge = Pick<
-  RunCoordinatorBridge,
-  'cancelRetry' | 'clearRetryRequest' | 'triggerRetry'
->;
-
 /**
  * Schema-driven message handler for ProgressView.
  *
@@ -95,7 +89,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     private readonly provider: ProgressViewProvider,
     context: vscode.ExtensionContext,
     private readonly host: PromptHost,
-    private readonly coordinators: ProgressViewCoordinatorBridge,
     private readonly interactions: HostInteractions,
   ) {
     super('ProgressView', { trackActiveView: true });
@@ -438,7 +431,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       host: new ProgressStreamLifecycleHost(
         this.provider,
         this.workflowFileActionsController,
-        this.coordinators,
+        this.interactions,
       ),
     });
   }
@@ -640,7 +633,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await setPreferCodexSubscription(false);
       },
       invalidateModelOptionsCache,
-      triggerRetry: (stream) => this.coordinators.triggerRetry(stream),
+      triggerRetry: (stream) =>
+        this.interactions.resolve(stream, { kind: 'retry', action: 'retry' }),
     });
   }
 
@@ -693,17 +687,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRetryStreamRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
   ): Promise<void> {
-    if (
-      this.interactions.resolve(data.stream, {
-        kind: 'retry',
-        action: 'retry',
-        feedback: data.feedback,
-      })
-    ) {
-      return;
-    }
-    const success = this.coordinators.triggerRetry(data.stream, data.feedback);
-    if (!success) {
+    const resolved = this.interactions.resolve(data.stream, {
+      kind: 'retry',
+      action: 'retry',
+      feedback: data.feedback,
+    });
+    if (!resolved) {
       await this.host.info(
         'No retryable request is available for this stream yet.',
       );
@@ -713,15 +702,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private handleCancelRetryRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST>,
   ): void {
-    if (
-      this.interactions.resolve(data.stream, {
-        kind: 'retry',
-        action: 'cancel',
-      })
-    ) {
-      return;
-    }
-    this.coordinators.cancelRetry(data.stream);
+    this.interactions.resolve(data.stream, {
+      kind: 'retry',
+      action: 'cancel',
+    });
   }
 
   private handleBashApprovalAction(

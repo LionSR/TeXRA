@@ -15,16 +15,18 @@
 import { nanoid } from 'nanoid';
 
 import { platform } from '@platform/platform';
-import type {
-  HostBashApprovalRequest,
-  HostBashApprovalResult,
-  HostInteractionOptions,
-  HostInteractions,
-  HostRetryRequest,
+import {
+  matchesCancelSelector,
+  type HostBashApprovalRequest,
+  type HostBashApprovalResult,
+  type HostInteractionCancelSelector,
+  type HostInteractionOptions,
+  type HostInteractions,
+  type HostRetryRequest,
+  type PlanApprovalResult,
+  type ProposalResult,
+  type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
@@ -56,7 +58,6 @@ import { patchSessionMeta } from './cliState/sessionSlice';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
-  clearApprovalsForStream,
   clearApprovalsWhere,
   clearRetryApprovalsForStream,
   enqueueApproval,
@@ -235,9 +236,25 @@ export function createTuiHostInteractions(
     },
     handleProgressEvent: () => false,
     resolve: () => false,
-    cancelForStream(streamId) {
-      cancelRetryRoute(retryRoutes, streamId);
-      clearApprovalsForStream(streamId);
+    cancel(selector: HostInteractionCancelSelector = {}) {
+      // Retry routes live outside the modal queue (the pre-queue auto-switch
+      // lookup), so a retry-kind or unfiltered cancel must settle them too —
+      // this is what the coordinator layer's clearAll did before the fold.
+      if (selector.kind === undefined || selector.kind === 'retry') {
+        if (typeof selector.streamId === 'string') {
+          cancelRetryRoute(retryRoutes, selector.streamId);
+        } else if (selector.streamId === undefined) {
+          invalidateRetryRoutes(retryRoutes, { cancel: true });
+        }
+        // streamId === null: retry requests always carry a concrete stream id,
+        // so the unscoped sweep has no retry routes to settle.
+      }
+      clearApprovalsWhere((payload) =>
+        matchesCancelSelector(
+          { kind: payload.kind, streamId: approvalPayloadStreamId(payload) },
+          selector,
+        ),
+      );
     },
     dispose() {
       invalidateRetryRoutes(retryRoutes, { cancel: true });

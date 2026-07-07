@@ -1,17 +1,19 @@
 import { nanoid } from 'nanoid';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  HostBashApprovalRequest,
-  HostBashApprovalResult,
-  HostInteractionResolution,
-  HostInteractions,
-  HostPlanApprovalRequest,
-  HostRetryRequest,
-  HostUserQuestionResult,
+import {
+  matchesCancelSelector,
+  type HostBashApprovalRequest,
+  type HostBashApprovalResult,
+  type HostInteractionCancelSelector,
+  type HostInteractionResolution,
+  type HostInteractions,
+  type HostPlanApprovalRequest,
+  type HostRetryRequest,
+  type HostUserQuestionResult,
+  type PlanApprovalResult,
+  type ProposalResult,
+  type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import {
   toBashApprovalResult,
   toPlanApprovalResult,
@@ -101,6 +103,7 @@ class DesktopHostInteractions implements HostInteractions {
       request.approvalId,
       { kind: 'plan', streamId: request.streamId },
       (settle) => {
+        this.activateStream(request.streamId);
         this.options.getApprovalHandlers().planApproval.show(request);
         return settle;
       },
@@ -114,6 +117,7 @@ class DesktopHostInteractions implements HostInteractions {
       request.proposalId,
       { kind: 'proposal', streamId: request.streamId },
       (settle) => {
+        this.activateStream(request.streamId);
         this.options.getApprovalHandlers().agentProposal.show(request);
         return settle;
       },
@@ -191,38 +195,23 @@ class DesktopHostInteractions implements HostInteractions {
 
   /**
    * Cancellation is a synthesized rejection routed through the same
-   * `resolve()`/mapper path a live UI action takes, forwarding `cause` as
-   * agent-visible feedback — so a cancelled request and a rejected one settle
-   * identically for a given kind.
+   * `resolve()`/mapper path a live UI action takes, forwarding the selector's
+   * `cause` as agent-visible feedback — so a cancelled request and a rejected
+   * one settle identically for a given kind.
    */
-  cancelForStream(streamId: StreamTabId, cause?: string): void {
-    this.cancelMatching((request) => request.streamId === streamId, cause);
-  }
-
-  cancelUnscoped(cause?: string): void {
-    this.cancelMatching((request) => !request.streamId, cause);
-  }
-
-  cancelAll(cause?: string): void {
-    this.cancelMatching(() => true, cause);
-  }
-
-  private cancelMatching(
-    matches: (request: PendingDesktopInteraction) => boolean,
-    cause?: string,
-  ): void {
+  cancel(selector: HostInteractionCancelSelector = {}): void {
     for (const [requestId, request] of [...this.pendingRequests.entries()]) {
-      if (!matches(request)) continue;
+      if (!matchesCancelSelector(request, selector)) continue;
       this.resolve(requestId, {
         kind: request.kind,
         action: 'reject',
-        feedback: cause,
+        feedback: selector.cause,
       });
     }
   }
 
   dispose(): void {
-    this.cancelAll('Desktop session disposed.');
+    this.cancel({ cause: 'Desktop session disposed.' });
   }
 
   private showPending<TResult, TEntry extends PendingDesktopInteraction>(
@@ -230,8 +219,17 @@ class DesktopHostInteractions implements HostInteractions {
     entry: Omit<TEntry, 'settle'>,
     show: (settle: TEntry['settle']) => TEntry['settle'],
   ): Promise<TResult> {
+    // Replacement cancellation: a request re-issued under a still-pending id
+    // rejects the stale prompt before the replacement is shown.
+    if (this.pendingRequests.has(requestId)) {
+      this.resolve(requestId, {
+        kind: this.pendingRequests.get(requestId)!.kind,
+        action: 'reject',
+        feedback: 'Approval request was replaced.',
+      });
+    }
     return new Promise<TResult>((resolve) => {
-      const settle = show((result) => resolve(result as TResult));
+      const settle = show((result: unknown) => resolve(result as TResult));
       this.pendingRequests.set(requestId, {
         ...entry,
         settle,

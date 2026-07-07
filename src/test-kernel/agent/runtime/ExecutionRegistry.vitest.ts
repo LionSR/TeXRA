@@ -154,7 +154,6 @@ describe('executionRegistry', () => {
         'test-subagent',
         'toolUse',
         createRecordingHost().host,
-        undefined,
         trace,
       );
       registry.track(handle);

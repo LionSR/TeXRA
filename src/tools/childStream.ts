@@ -134,7 +134,6 @@ export function createChildStream(
     options.agentName,
     'toolUse',
     runtimeHost,
-    undefined,
     runTrace.trace,
   );
   if (options.toolName) handle.toolName = options.toolName;
