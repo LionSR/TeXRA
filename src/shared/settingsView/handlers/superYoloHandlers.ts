@@ -7,7 +7,7 @@
  * desktop build), so callers supply them.
  */
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { NumberVscodeSetting } from '@shared/schemas/profileViewMessages';
 import type { UpdateSuperYoloEnabledMessage } from '@shared/schemas/settingsViewMessages';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { delay } from '@utils/core/async';
+import { delay } from '@utils/core';
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type ProviderKeyModalElement = HTMLElement & {

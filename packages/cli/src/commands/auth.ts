@@ -39,7 +39,7 @@ import { formatCliDeviceAuthMessage } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { withUsageSections } from './_helpers/dispatch/usage';
+import { withUsageSections } from './_helpers/dispatch';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';

@@ -11,9 +11,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatCliSessionStatus } from '../sessionStatus';
 import { requestCliCompaction } from '../state/compactionRequest';
-import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
-import { sessionMeta } from '../state/cliState/sessionSlice';
-import { streams } from '../state/cliState/streamsSlice';
+import {
+  activeStreamId as activeStreamIdSignal,
+  sessionMeta,
+  streams,
+} from '../state/cliState';
 import { chatTuiCanStartRootRun } from '../state/sessionRunState';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 import {

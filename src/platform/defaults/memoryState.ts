@@ -1,5 +1,5 @@
 // Local imports - platform
-import type { StateStore } from '../interfaces/state';
+import type { StateStore } from '../interfaces';
 
 /** In-memory platform state store for CLI, tests, and lightweight hosts. */
 export class MemoryStateStore implements StateStore {

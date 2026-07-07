@@ -6,8 +6,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
-import { byStringProp } from '@utils/core/comparators';
-import { isObject } from '@utils/core/typeGuards';
+import { byStringProp, isObject } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
 

@@ -11,4 +11,4 @@ export {
   unbindAllForPR,
   unbindAllForRepo,
 } from './subscriptionBindings';
-export type { Disposable } from '@platform/interfaces/disposable';
+export type { Disposable } from '@platform/interfaces';

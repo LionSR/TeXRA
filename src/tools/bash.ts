@@ -37,11 +37,9 @@ import {
 } from '@tools/approval/bashApproval';
 
 // Local imports - utils
-import { formatDuration } from '@utils/core';
-import { generateExecutionId } from '@utils/core/executionId';
+import { formatDuration, generateExecutionId } from '@utils/core';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
-import { appendHead } from '@utils/strings/appendHead';
-import { appendTail } from '@utils/strings/appendTail';
+import { appendHead, appendTail } from '@utils/strings/appendTail';
 import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

@@ -8,7 +8,7 @@ import {
   type AgentDirectoryBundleSource,
   type AgentDirectoryVersionStore,
 } from './AgentDirectorySync';
-import type { AgentDirectoriesPort } from '@platform/interfaces/agentDirectories';
+import type { AgentDirectoriesPort } from '@platform/interfaces';
 
 interface PlatformAgentDirectoryOptions {
   channel: string;

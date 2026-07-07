@@ -7,7 +7,7 @@ import type { StreamLifecycleStatus, StreamTabId } from '@shared/schemas';
 
 import { resolveChildControlDisplayTargets } from './childControls';
 import { activeStreamScope } from './streamViews';
-import type { StreamSlice } from './cliState/types';
+import type { StreamSlice } from './cliState';
 
 export type FocusedChildFollowUpRoute =
   | { readonly kind: 'none' }

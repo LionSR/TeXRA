@@ -1,5 +1,5 @@
 // Mirror StreamLogStore user/model/tool entries into
-// `streams[].entries` (state/cliState/streamsSlice.ts). Approval/permission
+// `streams[].entries` (state/cliState.ts). Approval/permission
 // entries land in side panels and modals; tool rows render inline alongside
 // assistant prose.
 
@@ -26,10 +26,12 @@ import {
   isRenderableTranscriptEntry,
   trimAssistantTranscriptLead,
 } from '../panes/transcriptEntries';
-import { activeStreamId } from './cliState/focusSlice';
-import { patchStream } from './cliState/streamsSlice';
+import {
+  activeStreamId,
+  patchStream,
+  type ConversationEntry,
+} from './cliState';
 import { isFinalTranscriptStatus } from './transcript';
-import type { ConversationEntry } from './cliState/types';
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.ERROR,

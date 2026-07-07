@@ -4,7 +4,7 @@ import {
   GLOBAL_BOOL_FLAGS,
   GLOBAL_ARGS,
 } from '@cli/commands/_helpers/globalArgs';
-import { knownGlobalFlagTokenCount } from '@cli/commands/_helpers/dispatch/argTokens';
+import { knownGlobalFlagTokenCount } from '@cli/commands/_helpers/dispatch';
 
 /**
  * `--websocket` is an opt-in boolean with no default (unset → defer to the

@@ -10,8 +10,8 @@ import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
-} from '../interfaces/config';
-import type { Disposable } from '../interfaces/disposable';
+  Disposable,
+} from '../interfaces';
 
 export interface JsonConfigProviderOptions {
   workspace: JsonStore;

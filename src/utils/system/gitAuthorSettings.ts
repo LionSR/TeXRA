@@ -5,11 +5,11 @@ import {
   DEFAULT_GIT_MARK_COMMITS,
   DEFAULT_GIT_WORKTREE_SUPPORT,
 } from '@shared/constants/git';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { UpdateGitAuthorSettingsMessage } from '@shared/schemas/settingsViewMessages';
 import { setWorktreeSupportEnabled } from '@tools/worktreeConfig';
 import { setGitAuthorEnv } from './gitAuthorEnv';
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 export type GitAuthorSettings = {
   markCommits: boolean;

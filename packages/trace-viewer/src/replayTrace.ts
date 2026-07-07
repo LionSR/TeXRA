@@ -9,7 +9,7 @@ import {
   type StreamLifecycleStatus,
   type StreamTabInfo,
 } from '@shared/schemas';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
 import { isProcessAgent } from '@shared/streams/agentKind';
 import { isObject } from '@utils/core';

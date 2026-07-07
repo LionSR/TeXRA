@@ -18,24 +18,26 @@ import { join } from 'node:path';
 
 // Local imports - agent + tools (composition wiring)
 import { registerAgentFeatures } from '@agent/features';
-import { initializeGoalPrompts } from '@agent/goal';
+import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 // Local imports - platform
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { createNodeWorkspace } from './nodeWorkspace';
-import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces/toolAvailability';
+import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 
 // Type imports
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
-import type { AgentDirectoriesPort } from '../interfaces/agentDirectories';
-import type { AgentResumePort } from '../interfaces/agentResume';
-import type { LifecycleHost } from '../interfaces/lifecycle';
-import type { StateStore } from '../interfaces/state';
-import type { StorageProvider } from '../interfaces/storage';
-import type { ToolAvailabilityHost } from '../interfaces/toolAvailability';
-import type { ToolEditApprovalPort } from '../interfaces/toolEditApproval';
+import type {
+  AgentDirectoriesPort,
+  AgentResumePort,
+  LifecycleHost,
+  StateStore,
+  StorageProvider,
+  ToolAvailabilityHost,
+  ToolEditApprovalPort,
+} from '../interfaces';
 import type { Platform } from '../platform';
 import type { PlatformSecrets } from '../secrets';
 

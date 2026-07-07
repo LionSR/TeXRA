@@ -20,7 +20,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
 import { isNonEmptyString } from '@utils/core';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 export type { OnboardingFunnelState };
 

@@ -1,5 +1,4 @@
-import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
 import { type SwitchViewTarget } from '@shared/schemas/commonViewMessages';
 import {

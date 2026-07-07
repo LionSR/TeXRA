@@ -46,7 +46,7 @@ import {
   NO_BYPASS,
   type ProcessOutputTail,
   type StreamSlice,
-} from '@cli/chat/tui/state/cliState/types';
+} from '@cli/chat/tui/state/cliState';
 
 // Local imports - shared schemas
 import {

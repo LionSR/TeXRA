@@ -12,13 +12,13 @@ import type {
   DiffSource,
   DiffViewHost,
 } from '@hosts/uiHosts';
-import { delay } from '@utils/core/async';
+import { delay } from '@utils/core';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
-} from '@platform/interfaces/toolEditApproval';
+} from '@platform/interfaces';
 
 const approvalTest = (name: string, fn: () => Promise<void>): void => {
   it(name, fn, 30_000);
@@ -49,7 +49,7 @@ interface DesktopToolEditApprovalModule {
 }
 
 interface DesktopPlatformModule {
-  createDesktopToolEditApprovalPort(): import('@platform/interfaces/toolEditApproval').ToolEditApprovalPort;
+  createDesktopToolEditApprovalPort(): import('@platform/interfaces').ToolEditApprovalPort;
 }
 
 interface RecordingRuntimeHost extends AgentRuntimeHost {

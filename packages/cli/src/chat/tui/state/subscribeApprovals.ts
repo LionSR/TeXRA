@@ -54,7 +54,7 @@ import {
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 import { notify } from '../notifications/terminalNotifier';
-import { patchSessionMeta } from './cliState/sessionSlice';
+import { patchSessionMeta } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,

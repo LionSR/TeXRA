@@ -4,7 +4,7 @@ import type {
   MainViewMessage,
   ModelOptionData,
 } from '@shared/schemas';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - controllers
 import type { MainViewAuthStatus } from './MainViewTypes';

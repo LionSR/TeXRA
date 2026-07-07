@@ -8,12 +8,14 @@ import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 import { textDisplayWidth, truncateToWidth } from '../render/terminalText';
-import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
-import { parentStream as parentStreamSignal } from '../state/cliState/parentStreamSlice';
-import { streams as streamsSignal } from '../state/cliState/streamsSlice';
+import {
+  activeStreamId as activeStreamIdSignal,
+  parentStream as parentStreamSignal,
+  streams as streamsSignal,
+  type StreamSlice,
+} from '../state/cliState';
 import { activeStreamTreeViews } from '../state/streamViews';
 import { useSignal } from '../state/useSignal';
-import type { StreamSlice } from '../state/cliState/types';
 
 export interface StreamTabDisplayItem {
   readonly id: StreamTabId | 'ellipsis';

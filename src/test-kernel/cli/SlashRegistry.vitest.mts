@@ -19,10 +19,12 @@ import {
   openRegisteredCliSlashForm,
 } from '@cli/chat/tui/commands/slashForms';
 import { LOGIN_FORM_ITEMS } from '@cli/chat/tui/forms/LoginForm';
-import { activeForm } from '@cli/chat/tui/state/cliState/foregroundOverlaySlice';
-import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
-import { sessionMeta } from '@cli/chat/tui/state/cliState/sessionSlice';
-import type { SessionMeta } from '@cli/chat/tui/state/cliState/types';
+import {
+  activeForm,
+  resetCliState,
+  sessionMeta,
+  type SessionMeta,
+} from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';

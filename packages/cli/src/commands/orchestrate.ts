@@ -38,7 +38,7 @@ import { resolveChatDefaults } from '../runtime/chatDefaults';
 import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 
 import { contextFromArgs } from './_helpers/context';
-import { withUsageSections } from './_helpers/dispatch/usage';
+import { withUsageSections } from './_helpers/dispatch';
 import { setExitCode } from './_helpers/exitCode';
 import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,

@@ -8,22 +8,22 @@
  *
  * Pattern: Composition Root (Mark Seemann) + Frozen Object.
  */
-import type { AgentResumePort } from './interfaces/agentResume';
-import type { AgentDirectoriesPort } from './interfaces/agentDirectories';
-import type { AddCriticismSink } from './interfaces/criticism';
-import type { ConfigProvider } from './interfaces/config';
-import type { StateStore } from './interfaces/state';
-import type { FileSystemProvider } from './interfaces/filesystem';
-import type { LinterProvider } from './interfaces/linter';
 import type {
+  AgentResumePort,
+  AgentDirectoriesPort,
+  AddCriticismSink,
+  ConfigProvider,
+  StateStore,
+  FileSystemProvider,
+  LinterProvider,
   ToolMissingHandler,
   ToolNotificationHandler,
-} from './interfaces/toolNotifications';
-import type { ToolEditApprovalPort } from './interfaces/toolEditApproval';
-import type { WorkspaceProvider } from './interfaces/workspace';
-import type { StorageProvider } from './interfaces/storage';
-import type { LifecycleHost } from './interfaces/lifecycle';
-import type { ToolAvailabilityHost } from './interfaces/toolAvailability';
+  ToolEditApprovalPort,
+  WorkspaceProvider,
+  StorageProvider,
+  LifecycleHost,
+  ToolAvailabilityHost,
+} from './interfaces';
 import type { PlatformSecrets } from './secrets';
 
 /**

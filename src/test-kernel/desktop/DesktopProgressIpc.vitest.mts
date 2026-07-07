@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview command constants
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { unsupported } from '@shared/utils/dispatcher';
 

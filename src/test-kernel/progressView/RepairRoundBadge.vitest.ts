@@ -9,7 +9,7 @@ import {
   RoundPersistedFlow,
   type RoundAwareState,
 } from '@agent/node/roundPersistedFlow';
-import { computeRoundStageTotal } from '@agent/implementations/flows/reflection/roundStageTotal';
+import { computeRoundStageTotal } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import type { RoundStage } from '@shared/schemas';
 

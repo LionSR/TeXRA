@@ -92,18 +92,16 @@ import {
 } from './render/noColorOutput';
 import { createTuiViewportController } from './render/tuiViewportController';
 import { clearApprovals } from './state/approvalQueue';
-import { activeStreamId as activeStreamIdSignal } from './state/cliState/focusSlice';
-import { parentStream as parentStreamSignal } from './state/cliState/parentStreamSlice';
-import { resetCliState } from './state/cliState/reset';
 import {
+  activeStreamId as activeStreamIdSignal,
+  parentStream as parentStreamSignal,
+  resetCliState,
   patchSessionMeta,
   sessionMeta as sessionMetaSignal,
-} from './state/cliState/sessionSlice';
-import { streams as streamsSignal } from './state/cliState/streamsSlice';
-import {
+  streams as streamsSignal,
   pendingExitHint,
   pendingExitResumeId,
-} from './state/cliState/exitHintSlice';
+} from './state/cliState';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,

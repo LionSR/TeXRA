@@ -4,7 +4,7 @@ import {
 } from '@auth/codex';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
-import { bumpCodexPreferenceVersion } from './cliState/codexPreferenceSlice';
+import { bumpCodexPreferenceVersion } from './cliState';
 
 /**
  * Single source of truth for reacting to a Codex / ChatGPT-subscription change

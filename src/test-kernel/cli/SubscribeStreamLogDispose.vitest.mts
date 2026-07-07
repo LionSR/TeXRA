@@ -10,8 +10,7 @@ import {
   StreamLogStore,
 } from '@transcript';
 import { subscribeStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
-import { streams } from '@cli/chat/tui/state/cliState/streamsSlice';
-import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
+import { streams, resetCliState } from '@cli/chat/tui/state/cliState';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,

@@ -9,7 +9,7 @@ import {
   initNodeAgentRuntime,
   initializeNodeGoalPrompts,
 } from '@platform/defaults/nodeHost';
-import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 
 // Local imports - telemetry
@@ -56,8 +56,7 @@ import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 
 // Type imports - platform and CLI runtime
-import type { LifecycleHost } from '@platform/interfaces/lifecycle';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
+import type { LifecycleHost, ToolEditApprovalPort } from '@platform/interfaces';
 import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 

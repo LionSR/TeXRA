@@ -13,8 +13,8 @@ import {
 import type {
   ConfigInspection,
   ConfigTarget,
-} from '@platform/interfaces/config';
-import type { StateStore } from '@platform/interfaces/state';
+  StateStore,
+} from '@platform/interfaces';
 
 class MemoryStateStore implements StateStore {
   private readonly values = new Map<string, unknown>();

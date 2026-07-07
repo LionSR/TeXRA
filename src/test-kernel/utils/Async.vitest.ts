@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createFlushableDebounce, delay } from '@utils/core/async';
+import { createFlushableDebounce, delay } from '@utils/core';
 
 describe('async utilities', () => {
   it('resolves after the requested delay', async () => {
