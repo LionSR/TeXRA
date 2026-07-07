@@ -1,4 +1,4 @@
-interface OpenRouterRoutingConfig {
+export interface OpenRouterRoutingConfig {
   requiresResponsesAPI?: boolean;
   openRouterOnly: boolean;
   forceDirectProvider?: boolean;
