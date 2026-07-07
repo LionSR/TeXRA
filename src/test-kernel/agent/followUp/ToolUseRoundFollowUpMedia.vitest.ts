@@ -94,7 +94,10 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     } as ProviderMessage;
   }
 
-  function createShared(messages: ProviderMessage[]): ToolUseRoundShared {
+  function createShared(
+    messages: ProviderMessage[],
+    systemPrompt?: string,
+  ): ToolUseRoundShared {
     return {
       messages,
       shouldStop: false,
@@ -108,6 +111,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       roundIndex: 0,
       roundResponseTimeMs: 0,
       roundNormalizedUsage: undefined,
+      systemPrompt,
     };
   }
 
@@ -326,5 +330,85 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       content: 'Final answer after second retry.',
     });
     expect(shared.endTurn).toBe(true);
+  });
+
+  function createSystemPromptServices(requiresPerCallSystemPrompt: boolean): {
+    createResponse: ReturnType<typeof vi.fn>;
+    services: ToolUseRoundServices;
+  } {
+    const createResponse = vi.fn(async () => ({
+      response: { id: 'r1', text: 'done' },
+    }));
+
+    const services = {
+      checkInterruption: () => false,
+      client: {},
+      config: { agent: 'test-agent', model: 'test-model' },
+      fileService: {
+        createLocation: (filePath: string) => ({ absolutePath: filePath }),
+      },
+      logger: createRunTrace('ToolUseRoundSystemPrompt').trace,
+      modelHandler: {
+        addMediaToUserMessage: vi.fn(async () => {}),
+        capabilities: { supportsVision: true },
+        createAssistantMessageFromResponse: vi.fn(
+          (_response: unknown, text: string) =>
+            ({ type: 'message', role: 'assistant', content: text }) as never,
+        ),
+        createResponse,
+        extractAssistantContent: () => [],
+        extractResponse: (response: { text?: string }) => ({
+          text: response.text ?? '',
+          usage: null,
+          stopReason: 'stop',
+        }),
+        extractServerToolData: () => ({
+          contentBlocks: [],
+          webFetchResults: [],
+          webSearchResults: [],
+        }),
+        extractToolUse: () => [],
+        getStreamingConfig: () => false,
+        isEndTurnStop: (stopReason: string) => stopReason === 'stop',
+        processThinkingBlock: () => null,
+        requiresPerCallSystemPrompt,
+        setOutputStreaming: vi.fn(),
+      },
+      prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
+      run: AgentRunStateSnapshotSchema.parse({}),
+      session: { hasQueuedFollowUp: () => false },
+      setAbortController: () => {},
+      setting: { temperature: 0, tools: [] },
+      streamStatus: new StreamStatusMachine(),
+      toolRegistry: new MapToolRegistry({}),
+      userVarChannels: { input: {}, transient: {} },
+      workspace: AgentWorkspaceState.create(),
+    } as unknown as ToolUseRoundServices;
+
+    return { createResponse, services };
+  }
+
+  it('passes systemPrompt to createResponse when the handler requires it per-call', async () => {
+    const { createResponse, services } = createSystemPromptServices(true);
+    const shared = createShared([], 'You are a helpful assistant.');
+
+    await runRound(services, shared);
+
+    expect(createResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemPrompt: 'You are a helpful assistant.',
+      }),
+    );
+  });
+
+  it('omits systemPrompt from createResponse when the handler embeds it in messages', async () => {
+    const { createResponse, services } = createSystemPromptServices(false);
+    const shared = createShared([], 'You are a helpful assistant.');
+
+    await runRound(services, shared);
+
+    expect(createResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ systemPrompt: undefined }),
+    );
   });
 });
