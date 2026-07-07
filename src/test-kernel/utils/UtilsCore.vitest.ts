@@ -1,6 +1,83 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Suites for @utils/core (comparators, type guards, async helpers).
 
-import { createFlushableDebounce, delay } from '@utils/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createFlushableDebounce,
+  delay,
+  ensureArray,
+  filterNotNull,
+  filterNotNullish,
+  toNewestFirstByTimestamp,
+} from '@utils/core';
+
+// ---------------------------------------------------------------------------
+// Comparators
+// ---------------------------------------------------------------------------
+
+describe('toNewestFirstByTimestamp', () => {
+  it('orders values by newest timestamp first', () => {
+    const rows = [
+      { id: 'middle', timestamp: '2026-06-20T12:00:00.000Z' },
+      { id: 'newest', timestamp: '2026-06-21T12:00:00.000Z' },
+      { id: 'oldest', timestamp: '2026-06-19T12:00:00.000Z' },
+    ];
+
+    expect(
+      toNewestFirstByTimestamp(rows, (row) => row.timestamp).map(
+        (row) => row.id,
+      ),
+    ).toEqual(['newest', 'middle', 'oldest']);
+  });
+
+  it('does not mutate the input array', () => {
+    const rows = [
+      { id: 'first', timestamp: '2026-06-20T12:00:00.000Z' },
+      { id: 'second', timestamp: '2026-06-21T12:00:00.000Z' },
+    ];
+
+    const sorted = toNewestFirstByTimestamp(rows, (row) => row.timestamp);
+
+    expect(sorted.map((row) => row.id)).toEqual(['second', 'first']);
+    expect(rows.map((row) => row.id)).toEqual(['first', 'second']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TypeGuards
+// ---------------------------------------------------------------------------
+
+describe('core type guard predicates', () => {
+  it('filters null values as an Array.filter predicate', () => {
+    const values: Array<string | null> = ['alpha', null, 'beta'];
+
+    expect(values.filter(filterNotNull)).toEqual(['alpha', 'beta']);
+  });
+
+  it('filters nullish values as an Array.filter predicate', () => {
+    const values: Array<string | null | undefined> = [
+      'alpha',
+      null,
+      undefined,
+      'beta',
+    ];
+
+    expect(values.filter(filterNotNullish)).toEqual(['alpha', 'beta']);
+  });
+
+  it('returns array values unchanged', () => {
+    const values = ['alpha', 'beta'];
+
+    expect(ensureArray(values)).toBe(values);
+  });
+
+  it('wraps scalar values in an array', () => {
+    expect(ensureArray('alpha')).toEqual(['alpha']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Async
+// ---------------------------------------------------------------------------
 
 describe('async utilities', () => {
   it('resolves after the requested delay', async () => {

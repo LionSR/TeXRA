@@ -1,21 +1,28 @@
-// Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// Suites for src/tools/wolfram (WolframTool approval gating +
+// wolframScriptUtils argument handling).
 
-// Local imports - agent
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
-
-// Local imports - tools
 import { cleanupAllApprovals } from '@tools/approval';
 import {
-  WolframTool,
   wolframApprovalCommand,
+  WolframTool,
 } from '@tools/wolfram/WolframTool';
 import * as wolframScriptUtils from '@tools/wolfram/wolframScriptUtils';
-
-// Local imports - test helpers
+import {
+  executeWolframCode,
+  executeWolframScriptFile,
+} from '@tools/wolfram/wolframScriptUtils';
 import { createRecordingHost } from '../agent/progressTestUtils';
 import { waitForRecordedEvent } from '../support/asyncTestUtils';
+import { strict as assert } from 'node:assert';
+import * as toolUtils from '@utils/system/toolUtils';
+import * as execUtils from '@utils/system/execUtils';
+
+// ---------------------------------------------------------------------------
+// Wolfram
+// ---------------------------------------------------------------------------
 
 async function dispatchWolfram(streamId: StreamTabId, code: string) {
   const explicit = createRecordingHost();
@@ -109,5 +116,48 @@ describe('WolframTool approval', () => {
       userInstruction: expect.stringContaining('Do not retry'),
     });
     expect(execute).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// wolframScriptUtils
+// ---------------------------------------------------------------------------
+
+describe('wolframScriptUtils', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    {
+      name: 'executeWolframCode delegates to runWolfram with code args',
+      run: () => executeWolframCode('1+1'),
+      stdout: '2',
+      expectedArgs: ['wolframscript', '-code', '1+1'],
+      expectedTimeout: 30000,
+    },
+    {
+      name: 'executeWolframScriptFile delegates to runWolfram with file args',
+      run: () => executeWolframScriptFile('/tmp/test.wls'),
+      stdout: 'done',
+      expectedArgs: ['wolframscript', '-file', '/tmp/test.wls'],
+      expectedTimeout: 60000,
+    },
+  ])('$name', async ({ run, stdout, expectedArgs, expectedTimeout }) => {
+    const calls: any[] = [];
+    vi.spyOn(toolUtils, 'checkToolInstalled').mockResolvedValue(true);
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (command, opts) => {
+        calls.push(command, opts);
+        return { success: true, stdout, stderr: '' } as any;
+      },
+    );
+
+    const result = await run();
+
+    assert.deepStrictEqual(calls[0], expectedArgs);
+    assert.strictEqual(calls[1].timeout, expectedTimeout);
+    assert.ok(result.success);
+    assert.strictEqual(result.output, stdout);
   });
 });
