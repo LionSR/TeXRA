@@ -4,8 +4,6 @@ description: Three-phase verification and fix agent for research papers. Expands
 settings:
   agentCategory: workflow
   rounds: 3
-  documentTag: documents
-  endTag: </documents>
   outputExt: tex
 
 prompts:

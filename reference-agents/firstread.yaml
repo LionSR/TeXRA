@@ -3,8 +3,6 @@ description: First-read pass --- naive linear physicist reading the paper top-to
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   rounds: 2
 
 prompts:
