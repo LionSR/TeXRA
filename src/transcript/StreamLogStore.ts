@@ -771,9 +771,10 @@ export class StreamLogStore {
     // let a later save() destructively rewrite the corrupt source (#7464).
     if (rawEntries === undefined) return parsed;
     if (!Array.isArray(rawEntries)) {
+      // `typeof null` is 'object', which would misreport a persisted null.
+      const got = rawEntries === null ? 'null' : typeof rawEntries;
       throw new Error(
-        `Stream ${streamId}: persisted log is not an array ` +
-          `(got ${typeof rawEntries}).`,
+        `Stream ${streamId}: persisted log is not an array (got ${got}).`,
       );
     }
 
