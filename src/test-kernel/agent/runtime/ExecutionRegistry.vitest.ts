@@ -236,16 +236,17 @@ describe('executionRegistry', () => {
   });
 
   it('does not abandon a handle with a stale waiting-cleanup when the stream never actually reached WAITING (review: waiting cleanup on non-suspend paths)', () => {
-    // Regression: `NativeSubagentStrategy.onBeforeWaiting` registers its
-    // `abandon()` cleanup unconditionally on every delivered turn, including
-    // one where `ToolUseWaitNode` finds a follow-up already queued and keeps
-    // the flow running in-process instead of exiting via
-    // `{ kind: 'waiting' }` (streamStatus never transitions to WAITING on
-    // that path). If a kill lands in the narrow window between that turn's
-    // interrupt-unregister and its handle's normal untrack, terminate() must
-    // not mistake the stale registered cleanup for a genuine suspension and
+    // A registered waiting-cleanup alone does not prove genuine suspension —
+    // if a registrant ever registers one without the flow actually
+    // transitioning to WAITING (streamStatus stays whatever it was), and a
+    // kill lands in the narrow window between that turn's interrupt-
+    // unregister and its handle's normal untrack, terminate() must not
+    // mistake the stale registered cleanup for a genuine suspension and
     // incorrectly abandon/cancel a run that is still executing or has
-    // already completed.
+    // already completed. `runFlowWithLifecycle` is the only registrant today
+    // (see AgentRunLifecycle.ts) and only registers after `streamStatus` has
+    // already reached WAITING, so this guard is defensive against any future
+    // registrant that doesn't hold that invariant.
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-non-suspend-stale-cleanup-test';
@@ -264,10 +265,9 @@ describe('executionRegistry', () => {
         createRecordingHost().host,
       );
       registry.track(handle);
-      // Mirrors `onBeforeWaiting` firing on the queued-follow-up-continues
-      // path: a cleanup gets registered, but the flow never suspended, so
-      // streamStatus was never transitioned to WAITING (no
-      // `transitionToWaiting` call on that path).
+      // A cleanup gets registered directly here, simulating any registrant
+      // that registers one without the flow actually suspending — streamStatus
+      // was never transitioned to WAITING (no `transitionToWaiting` call).
       handle.registerWaitingCleanup(cleanup);
 
       expect(registry.kill(executionId)).toBe(false);
@@ -946,6 +946,7 @@ describe('executionRegistry', () => {
       requestImmediateCompaction: vi.fn(),
       modelSwitchDisabledReason: vi.fn(),
       switchModel: vi.fn(),
+      interrupt: vi.fn(),
     };
 
     try {
@@ -990,6 +991,7 @@ describe('executionRegistry', () => {
       requestImmediateCompaction,
       modelSwitchDisabledReason: vi.fn(),
       switchModel: vi.fn(),
+      interrupt: vi.fn(),
     };
     const unsupportedContext: LiveToolUseFlowContext = {
       ...context,
@@ -1070,6 +1072,7 @@ describe('executionRegistry', () => {
       requestImmediateCompaction: vi.fn(),
       modelSwitchDisabledReason: vi.fn(),
       switchModel: vi.fn(),
+      interrupt: vi.fn(),
     };
 
     try {

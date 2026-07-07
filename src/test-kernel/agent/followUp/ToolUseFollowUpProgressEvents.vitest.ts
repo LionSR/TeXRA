@@ -63,6 +63,7 @@ describe('tool-use follow-up progress events', () => {
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},
+      interrupt: () => {},
     });
     SharedExecutionRegistry.track(handle);
     trackedExecutionIds.add(executionId);
