@@ -3,7 +3,7 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
-import { logWebFetch, logWebSearch, type AgentTrace } from '@agent/trace';
+import { logWebFetch, type AgentTrace } from '@agent/trace';
 import {
   mapAnthropicWebSearchEntries,
   type WebFetchResult,
@@ -11,6 +11,7 @@ import {
 } from '@agent/modelHandlers/types/ServerToolTypes';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { StreamDiagnostics } from '@shared/schemas';
+import { emitServerToolResult } from './serverToolResultEmission';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 // BetaMessageStream is only exported from lib/ — not re-exported from the SDK's
 // public resources/ entry point. The BetaMessageStream class is what
@@ -445,9 +446,7 @@ export class AnthropicStreamHandler {
    * Emits a web search result to the progress view.
    */
   private emitWebSearchResult(result: WebSearchResult): void {
-    if (this.config.progressViewEnabled) {
-      logWebSearch(this.logger, result);
-    }
+    emitServerToolResult(this.logger, this.config.progressViewEnabled, result);
   }
 
   /**
