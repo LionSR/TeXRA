@@ -22,7 +22,10 @@ export interface ModelInvocationConfig<TShared, TServices> {
   operationName: string;
   streaming: boolean;
   backgroundModeAware?: boolean;
-  getSystemPrompt?: (shared: TShared, services: TServices) => string | undefined;
+  getSystemPrompt?: (
+    shared: TShared,
+    services: TServices,
+  ) => string | undefined;
   getEndTag?: (services: TServices) => string | undefined;
   getTools?: (services: TServices) => ToolDefinition[] | undefined;
   storeResponse: (shared: TShared, response: unknown) => void;
