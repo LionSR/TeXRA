@@ -3,9 +3,10 @@
  *
  * Split out of `StreamSnapshotStore` so the (stateless) read/assembly is
  * separate from the (stateful) accumulate/write side. Reads every sidecar file
- * ONCE into canonical (flat) Maps; `StreamSnapshotStore.load()` seeds its
- * in-memory accumulators from this directly, and persists any legacy-flattened
- * files once (see `legacyKeys`) so the conversion never re-runs.
+ * ONCE into canonical round-indexed records; `StreamSnapshotStore.load()`
+ * seeds its in-memory accumulators from this directly, and persists any
+ * legacy-flattened files once (see `legacyKeys`) so the conversion never
+ * re-runs.
  */
 
 import { z } from 'zod';
@@ -13,22 +14,21 @@ import { z } from 'zod';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import {
-  CompileFailuresDataSchema,
+  CompileFailureSchema,
   ExecutionIdSchema,
   LegacyInstructionsDataSchema,
-  MissingOutputsDataSchema,
-  OutputFilesDataSchema,
+  OutputFileInfoSchema,
+  parsePersistedRoundIndexed,
   parseUsageData,
   PersistedWorkPlanSchema,
   STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
   StreamTabMetaSchema,
-  flattenLegacyRuns,
-  isLegacyNested,
   selectPreferredLegacyInstruction,
   type CompileFailure,
   type LegacyInstructionEntry,
   type OutputFileInfo,
+  type RoundIndexed,
   type StreamSnapshot,
   type StreamTabId,
   type StreamTabMeta,
@@ -55,9 +55,9 @@ export const EMPTY_WORK_PLAN = Object.freeze({
 /** Per-stream sidecar data read from disk, flattened to canonical (flat) form. */
 export interface StreamData {
   meta: StreamTabMeta | undefined;
-  outputFiles: Map<number, OutputFileInfo[]>;
-  missingOutputs: Map<number, string[]>;
-  compileFailures: Map<number, CompileFailure[]>;
+  outputFiles: RoundIndexed<OutputFileInfo>;
+  missingOutputs: RoundIndexed<string>;
+  compileFailures: RoundIndexed<CompileFailure>;
   usage: Map<string, TokenUsageStats>;
   /**
    * Raw per-run usage values that failed to parse, keyed by runId and
@@ -163,40 +163,26 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
   const activeRunId = meta?.activeRunId ?? undefined;
   const legacyKeys: string[] = [];
 
-  const flatten = async <T extends Map<number, unknown[]>>(
+  // Legacy nested `{ runId: { round } }` files are absorbed inside the single
+  // canonical parse entry; only the "rewrite it flat once" signal surfaces.
+  const readRoundIndexed = async <T>(
     key: string,
-    schema: z.ZodType<T>,
-    fallback: () => T,
-  ): Promise<T> => {
-    const raw = await tryRead(kv, key);
-    if (raw === undefined) return fallback();
-    const wasLegacy = isLegacyNested(raw);
-    if (wasLegacy) legacyKeys.push(key);
-    return (
-      schema
-        .nullable()
-        .catch(null)
-        .parse(wasLegacy ? flattenLegacyRuns(raw, activeRunId) : raw) ??
-      fallback()
+    itemSchema: z.ZodType<T>,
+  ): Promise<RoundIndexed<T>> => {
+    const { rounds, wasLegacy } = parsePersistedRoundIndexed(
+      key,
+      await tryRead(kv, key),
+      itemSchema,
+      activeRunId,
     );
+    if (wasLegacy) legacyKeys.push(key);
+    return rounds;
   };
 
   const [outputFiles, missingOutputs, compileFailures] = await Promise.all([
-    flatten(
-      STREAM_DATA_KEYS.OUTPUT_FILES,
-      OutputFilesDataSchema,
-      () => new Map<number, OutputFileInfo[]>(),
-    ),
-    flatten(
-      STREAM_DATA_KEYS.MISSING_OUTPUTS,
-      MissingOutputsDataSchema,
-      () => new Map<number, string[]>(),
-    ),
-    flatten(
-      STREAM_DATA_KEYS.COMPILE_FAILURES,
-      CompileFailuresDataSchema,
-      () => new Map<number, CompileFailure[]>(),
-    ),
+    readRoundIndexed(STREAM_DATA_KEYS.OUTPUT_FILES, OutputFileInfoSchema),
+    readRoundIndexed(STREAM_DATA_KEYS.MISSING_OUTPUTS, z.string()),
+    readRoundIndexed(STREAM_DATA_KEYS.COMPILE_FAILURES, CompileFailureSchema),
   ]);
 
   const usageRaw = await tryRead(kv, STREAM_DATA_KEYS.USAGE_STATS);
@@ -232,9 +218,9 @@ export function assembleSnapshot(
       todos: data.workPlan.todos,
       plan: data.workPlan.plan,
       planSummary: data.workPlan.planSummary,
-      outputFilesByRound: mapToRecord(data.outputFiles),
-      missingOutputsByRound: mapToRecord(data.missingOutputs),
-      compileFailuresByRound: mapToRecord(data.compileFailures),
+      outputFilesByRound: data.outputFiles,
+      missingOutputsByRound: data.missingOutputs,
+      compileFailuresByRound: data.compileFailures,
       runUsage: mapToRecord(data.usage),
       executionId: data.meta?.executionId,
       parentStreamId: data.meta?.parentStreamId,

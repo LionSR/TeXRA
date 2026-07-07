@@ -88,8 +88,8 @@ function createCompileFailure(
 
 const emptyFollowUpState: ProgressFollowUpState = {
   getTaskState: () => undefined,
-  getOutputFiles: () => new Map(),
-  getCompileFailures: () => new Map(),
+  getOutputFiles: () => ({}),
+  getCompileFailures: () => ({}),
   getExecutionId: () => undefined,
 };
 
@@ -166,8 +166,8 @@ describe('ProgressFollowUpController', () => {
       modelOptions: [{ value: 'gemini31p' }],
       state: {
         getTaskState: () => taskState,
-        getOutputFiles: () => new Map([[2, [outputFile]]]),
-        getCompileFailures: () => new Map(),
+        getOutputFiles: () => ({ 2: [outputFile] }),
+        getCompileFailures: () => ({}),
         getExecutionId: () => 'exec-123',
       },
     });
@@ -222,7 +222,7 @@ describe('ProgressFollowUpController', () => {
         inputFiles: ['main.tex', 'source.tex'],
       }),
       compileFailures: [createCompileFailure()],
-      runOutputs: new Map([[2, [output]]]),
+      runOutputs: { 2: [output] },
       modelOptions: [{ value: 'other-model' }],
       executionId: 'exec-123',
     });
@@ -253,7 +253,7 @@ describe('ProgressFollowUpController', () => {
         inputFiles: ['main.tex', 'chapter.tex'],
       }),
       compileFailures: [createCompileFailure()],
-      runOutputs: new Map(),
+      runOutputs: {},
       modelOptions: [{ value: 'gemini31p' }],
       executionId: 'exec-123',
     });
@@ -277,9 +277,9 @@ describe('ProgressFollowUpController', () => {
         inputFiles: ['/external/main.tex'],
       }),
       compileFailures: [createCompileFailure()],
-      runOutputs: new Map([
-        [2, [createRunStorageOutputFile({ source: '/external/main.tex' })]],
-      ]),
+      runOutputs: {
+        2: [createRunStorageOutputFile({ source: '/external/main.tex' })],
+      },
       modelOptions: [{ value: 'gemini31p' }],
       executionId: 'exec-123',
     });

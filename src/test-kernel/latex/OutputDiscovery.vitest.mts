@@ -104,9 +104,11 @@ describe('discoverLatestExecutionOutputs', () => {
     });
 
     expect(result?.executionId).toBe('exec-headless');
-    expect([...(result?.rounds.keys() ?? [])].sort((a, b) => a - b)).toEqual([
-      0, 1,
-    ]);
+    expect(
+      Object.keys(result?.rounds ?? {})
+        .map(Number)
+        .sort((a, b) => a - b),
+    ).toEqual([0, 1]);
     expect(mocks.findRunDir).toHaveBeenCalledWith('exec-headless');
   });
 
