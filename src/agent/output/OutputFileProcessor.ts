@@ -1,5 +1,4 @@
 import { logMissingOutputs, type AgentTrace } from '@agent/trace';
-import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
@@ -7,6 +6,7 @@ import {
   type OutputFileInfo,
   type RoundOutput,
 } from '@shared/schemas';
+import { OUTPUT_DOCUMENTS_TAG } from '@shared/constants/outputProtocol';
 import { normalizeFilePath } from '@shared/utils/path';
 import { flexibleFS, replaceInputCommands } from '@utils/files';
 import {
@@ -18,7 +18,6 @@ import { tryOperation } from './outputOperations';
 import type { XmlOutputManager } from './XmlOutputManager';
 
 export interface ProcessingContext {
-  agentSetting: AgentWorkflowSetting;
   baseFiles: FileLocation[];
   streamId: string;
   runtimeHost: AgentRuntimeHost;
@@ -48,7 +47,6 @@ export class OutputFileProcessor {
         const processedPairs =
           await this.ctx.xmlManager.splitScratchpadMultipleOutputXml(
             outputLocation,
-            this.ctx.agentSetting.documentTag,
             currRound,
             'scratchpad',
             this.similarityBaseFiles(currRound),
@@ -140,16 +138,15 @@ export class OutputFileProcessor {
     // Distinguish a genuinely empty turn from a non-empty response that simply
     // could not be parsed: if the model returned content but nothing extracted,
     // it almost always means it did not wrap each file in
-    // `<documentTag name="…">`. Surface that as a warning so the round is not a
+    // `<document name="…">`. Surface that as a warning so the round is not a
     // silent "success" that writes no files; the raw response is kept for recovery.
     const rawText = await flexibleFS.read(outputLocation).catch(() => '');
     if (rawText.trim().length > 0) {
       this.ctx.logger.warn(
-        `The model returned output but no files could be extracted from it — it likely did not wrap each document in <${this.ctx.agentSetting.documentTag}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
+        `The model returned output but no files could be extracted from it — it likely did not wrap each document in <${OUTPUT_DOCUMENTS_TAG}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
         {
           data: {
             round: currRound,
-            documentTag: this.ctx.agentSetting.documentTag,
             rawResponsePath: outputLocation.absolutePath,
           },
         },
@@ -158,7 +155,6 @@ export class OutputFileProcessor {
     logMissingOutputs(this.ctx.logger, {
       missing: [] as string[],
       xmlFile: outputLocation.absolutePath,
-      documentTag: this.ctx.agentSetting.documentTag,
     });
     emitRunFact(this.ctx.logger, 'updateMissingOutputs', {
       streamId: this.ctx.streamId,
@@ -200,32 +196,31 @@ export class OutputFileProcessor {
         const rawContent = await flexibleFS.read(rawOutput);
         const tagContents: Record<string, string[]> = {};
         const documents: string[] = [];
-        const documentTag = this.ctx.agentSetting.documentTag;
 
         const documentEntries = extractMultipleTextFromTag(
           rawContent,
-          documentTag,
+          OUTPUT_DOCUMENTS_TAG,
         );
         if (documentEntries.length > 0) {
-          tagContents[documentTag] = documentEntries.map((e) =>
+          tagContents[OUTPUT_DOCUMENTS_TAG] = documentEntries.map((e) =>
             e.content.trim(),
           );
 
           for (const entry of documentEntries) {
             const nameAttr = entry.name ? ` name="${entry.name}"` : '';
             documents.push(
-              `<${documentTag}${nameAttr}>${entry.content.trim()}</${documentTag}>`,
+              `<${OUTPUT_DOCUMENTS_TAG}${nameAttr}>${entry.content.trim()}</${OUTPUT_DOCUMENTS_TAG}>`,
             );
           }
         } else {
           const singleDocument = extractTextFromTag(
             rawContent,
-            documentTag,
+            OUTPUT_DOCUMENTS_TAG,
           ).trim();
           if (singleDocument) {
-            tagContents[documentTag] = [singleDocument];
+            tagContents[OUTPUT_DOCUMENTS_TAG] = [singleDocument];
             documents.push(
-              `<${documentTag}>${singleDocument}</${documentTag}>`,
+              `<${OUTPUT_DOCUMENTS_TAG}>${singleDocument}</${OUTPUT_DOCUMENTS_TAG}>`,
             );
           }
         }

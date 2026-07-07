@@ -1167,7 +1167,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
-    agentSetting: AgentSetting,
+    _agentSetting: AgentSetting,
   ): boolean {
     // DEBUG: Log the stop reason to help diagnose continuation issues
     this.logger.debug(
@@ -1186,7 +1186,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const shouldContinue =
       (stopReason === ANTHROPIC_STOP.MAX_TOKENS ||
         stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) &&
-      !hasEndTag(agentSetting, newResponse);
+      !hasEndTag(newResponse);
 
     if (!shouldContinue && stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) {
       this.logger.debug('Response complete (end tag found)');

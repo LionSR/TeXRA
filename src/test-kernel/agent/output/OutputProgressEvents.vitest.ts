@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
@@ -90,11 +89,6 @@ const defaultWorkflowOutputPolicy = {
   shouldAutoOpenPdfOrLog: () => true,
   shouldRejectOnCompileFailure: () => true,
 };
-
-const workflowAgentSetting = {
-  agentCategory: AgentCategory.Workflow,
-  documentTag: 'documents',
-} as ProcessingContext['agentSetting'];
 
 function createRoundDataStore() {
   const roundData = new Map<number, RoundOutput>();
@@ -363,7 +357,6 @@ describe('output progress events', () => {
       },
     } as unknown as XmlOutputManager;
     const context: ProcessingContext = {
-      agentSetting: workflowAgentSetting,
       baseFiles: [],
       streamId: 'stream:processor',
       runtimeHost: host,
@@ -404,7 +397,6 @@ describe('output progress events', () => {
       splitScratchpadMultipleOutputXml: async () => [],
     } as unknown as XmlOutputManager;
     const context: ProcessingContext = {
-      agentSetting: workflowAgentSetting,
       baseFiles: [],
       streamId: 'stream:processor',
       runtimeHost: host,
@@ -458,7 +450,6 @@ describe('output progress events', () => {
         splitScratchpadMultipleOutputXml: async () => [],
       } as unknown as XmlOutputManager;
       const context: ProcessingContext = {
-        agentSetting: workflowAgentSetting,
         baseFiles: [],
         streamId: 'stream:processor',
         runtimeHost: host,

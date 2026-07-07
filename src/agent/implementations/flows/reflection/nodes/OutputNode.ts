@@ -116,11 +116,7 @@ export class OutputNode<C = unknown> extends Node<
       logger.debug(`Processing output for round ${currentRound}`);
 
       await tryOperation(
-        () =>
-          xmlManager.ensureCorrectXmlStructure(
-            outputLocation,
-            setting.documentTag,
-          ),
+        () => xmlManager.ensureCorrectXmlStructure(outputLocation),
         this.recoverWarn('XML structure'),
       );
 

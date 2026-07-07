@@ -9,11 +9,11 @@ import {
   type AgentTrace,
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
+import { OUTPUT_DOCUMENTS_TAG } from '@shared/constants/outputProtocol';
 import {
   AbsoluteFS,
   createExternalLocation,
@@ -71,7 +71,6 @@ const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
 
 export class XmlOutputManager {
   constructor(
-    private readonly agentSetting: AgentSetting,
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentTrace,
     private readonly fileService: TaskRunFileService,
@@ -86,24 +85,27 @@ export class XmlOutputManager {
 
   private extractMultipleDocumentsByRegex(
     outputContent: string,
-    documentTag: string,
     preferredName?: string,
   ): Array<{ content: string; name: string }> | null {
-    const result = extractDocuments(outputContent, documentTag, preferredName);
+    const result = extractDocuments(
+      outputContent,
+      OUTPUT_DOCUMENTS_TAG,
+      preferredName,
+    );
 
     if (result.documents) {
       const suffix =
         EXTRACTION_METHOD_MESSAGES[result.method] ?? 'using fallback method';
       logInternal(
         this.logger,
-        `Recovered ${documentTag} ${suffix} (${formatResultCount(result.documents.length, 'document')})`,
+        `Recovered ${OUTPUT_DOCUMENTS_TAG} ${suffix} (${formatResultCount(result.documents.length, 'document')})`,
       );
       return result.documents;
     }
 
     debugInternal(
       this.logger,
-      `No ${documentTag} found in output file using fallback method`,
+      `No ${OUTPUT_DOCUMENTS_TAG} found in output file using fallback method`,
     );
     return null;
   }
@@ -130,7 +132,6 @@ export class XmlOutputManager {
     logMissingOutputs(this.logger, {
       missing,
       xmlFile: outputLocation.absolutePath,
-      documentTag: this.agentSetting.documentTag,
     });
   }
 
@@ -150,7 +151,6 @@ export class XmlOutputManager {
     logMissingOutputs(this.logger, {
       missing,
       xmlFile: outputLocation.absolutePath,
-      documentTag: this.agentSetting.documentTag,
     });
   }
 
@@ -208,7 +208,7 @@ export class XmlOutputManager {
 
     logInternal(
       this.logger,
-      `Recovered ${this.agentSetting.documentTag} by matching unlabeled fenced ` +
+      `Recovered ${OUTPUT_DOCUMENTS_TAG} by matching unlabeled fenced ` +
         `blocks against the original input files (${formatResultCount(documents.length, 'document')})`,
     );
 
@@ -222,7 +222,6 @@ export class XmlOutputManager {
       logMissingOutputs(this.logger, {
         missing: unmatchedFiles,
         xmlFile: outputLocation.absolutePath,
-        documentTag: this.agentSetting.documentTag,
       });
     }
     if (documents.length < blocks.length) {
@@ -236,7 +235,6 @@ export class XmlOutputManager {
 
   async splitScratchpadMultipleOutputXml(
     outputLocation: FileLocation,
-    documentTag: string,
     round: number,
     thinkingTag: string = 'scratchpad',
     baseFiles: readonly FileLocation[] = [],
@@ -257,11 +255,14 @@ export class XmlOutputManager {
     try {
       const parser = new XMLParser(XML_PARSER_OPTIONS);
       const root = parser.parse(cdataWrapped);
-      documents = extractContentFromXMLbyTagMultiple(root, documentTag);
+      documents = extractContentFromXMLbyTagMultiple(
+        root,
+        OUTPUT_DOCUMENTS_TAG,
+      );
       if (!documents) {
         debugInternal(
           this.logger,
-          `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
+          `No ${OUTPUT_DOCUMENTS_TAG} found in parsed XML, attempting fallback extraction...`,
         );
       }
     } catch (err) {
@@ -272,10 +273,7 @@ export class XmlOutputManager {
     }
 
     if (!documents) {
-      documents = this.extractMultipleDocumentsByRegex(
-        cdataWrapped,
-        documentTag,
-      );
+      documents = this.extractMultipleDocumentsByRegex(cdataWrapped);
     }
 
     // The files this agent is expected to write: the declared outputFiles
@@ -300,12 +298,12 @@ export class XmlOutputManager {
         synthesisName: soleExpectedFile,
         coalesceRepeatedName:
           this.agentConfig.outputFiles.length === 1 ? soleExpectedFile : null,
-        wrapperTag: documentTag,
+        wrapperTag: OUTPUT_DOCUMENTS_TAG,
       });
       if (documents) {
         logInternal(
           this.logger,
-          `Recovered ${this.agentSetting.documentTag} from filename headers (${formatResultCount(documents.length, 'document')})`,
+          `Recovered ${OUTPUT_DOCUMENTS_TAG} from filename headers (${formatResultCount(documents.length, 'document')})`,
         );
         if (expectedFiles.length > 1) {
           this.warnMissingExpectedFiles(
@@ -338,7 +336,7 @@ export class XmlOutputManager {
         ];
         logInternal(
           this.logger,
-          `Recovered ${this.agentSetting.documentTag} by concatenating ` +
+          `Recovered ${OUTPUT_DOCUMENTS_TAG} by concatenating ` +
             `unlabeled fenced blocks under ${soleExpectedFile} (${formatResultCount(fencedBlocks.length, 'block')})`,
         );
       }
@@ -357,7 +355,6 @@ export class XmlOutputManager {
       // workspace location instead of collapsing to the round root.
       documents = this.extractMultipleDocumentsByRegex(
         cdataWrapped,
-        documentTag,
         soleExpectedFile,
       );
     }
@@ -448,18 +445,15 @@ export class XmlOutputManager {
     return outputFiles;
   }
 
-  async ensureCorrectXmlStructure(
-    fileLocation: FileLocation,
-    documentTag: string,
-  ): Promise<void> {
+  async ensureCorrectXmlStructure(fileLocation: FileLocation): Promise<void> {
     this.logger.debug(
       `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
     );
     const originalContent = await AbsoluteFS.read(fileLocation.absolutePath);
     let content = await this.processXmlContent(originalContent);
 
-    const closeTag = `</${documentTag}>`;
-    const openTag = `<${documentTag}>`;
+    const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
+    const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
     const hasOpenTag = content.includes(openTag);
     const hasCloseTag = content.includes(closeTag);
 

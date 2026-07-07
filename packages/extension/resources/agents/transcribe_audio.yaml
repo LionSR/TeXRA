@@ -3,8 +3,6 @@ description: Transcribes audio with speaker identification and LaTeX math format
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   defaultOutputFiles:
     - transcript.tex
 

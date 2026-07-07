@@ -49,9 +49,10 @@ import { isGpt5ModelName } from '@model/modelNames';
 
 // Local imports - logger
 import { MESSAGE_TYPES } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
+import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
 
 // Local imports - tools
-import type { FileLocation } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -666,9 +667,7 @@ export abstract class ModelHandler<
 
     // Detect stop markers in model output
     const endTurn = END_TURN_REASONS.includes(stopReason ?? '');
-    const encounterDocumentTag = newResponse.includes(
-      `</${agentSetting.documentTag}>`,
-    );
+    const encounterDocumentTag = newResponse.includes(OUTPUT_END_TAG);
 
     if (maxOutputTokensExceeded) {
       this.logger.warn('Output tokens exceed input token multiplier', {
@@ -732,11 +731,10 @@ export abstract class ModelHandler<
    */
   protected createContinuationPrompt(
     workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
+    _agentSetting: AgentSetting,
   ): string {
     const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
-    const endTag = agentSetting.endTag;
-    return `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${endTag}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
+    return `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
   }
 
   /** Creates and configures a client instance for the specific model provider. */
@@ -1055,7 +1053,7 @@ export abstract class ModelHandler<
 
     messages.push(this.createAssistantMessageForPrefillText(fileContent));
 
-    if (hasEndTag(agentSetting, fileContent)) {
+    if (hasEndTag(fileContent)) {
       this.logger.debug(
         'End tag detected - skipping model call (response already added above)',
       );
@@ -1148,15 +1146,15 @@ export abstract class ModelHandler<
   shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
-    agentSetting: AgentSetting,
+    _agentSetting: AgentSetting,
   ): boolean {
-    const hasResponseEndTag = hasEndTag(agentSetting, newResponse);
+    const hasResponseEndTag = hasEndTag(newResponse);
     const shouldContinue =
       isTokenLimitStopReason(stopReason) && !hasResponseEndTag;
 
     this.logger.debug(
       shouldContinue
-        ? `Should continue: token limit reached and end tag '${agentSetting.endTag}' is missing.`
+        ? `Should continue: token limit reached and end tag '${OUTPUT_END_TAG}' is missing.`
         : `Should not continue: StopReason='${stopReason}', HasEndTag='${hasResponseEndTag}'.`,
     );
     return shouldContinue;
