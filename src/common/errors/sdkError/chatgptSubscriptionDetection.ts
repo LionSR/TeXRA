@@ -66,13 +66,17 @@ export function parseChatGptSubscriptionLimit(
  * Day+hour, hour+minute, or minute granularity is plenty for a reset-window
  * hint; sub-minute collapses to a friendly phrase. Pure (no clock read), so it
  * stays usable from the synchronous error formatter. Backed by `pretty-ms`
- * (floored to whole minutes, top 2 units) rather than hand-rolled day/hour/
- * minute math.
+ * (top 2 units) rather than hand-rolled day/hour/minute math — minutes are
+ * truncated once the duration reaches a day, matching the "day granularity
+ * drops minutes" rule of the original hand-rolled formatter (pretty-ms would
+ * otherwise back-fill a zero hour component with minutes, e.g. "1d 58m").
  */
 function formatResetDuration(totalSeconds: number): string {
   const wholeMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
   if (wholeMinutes === 0) return 'less than a minute';
-  return prettyMilliseconds(wholeMinutes * 60_000, { unitCount: 2 });
+  const flooredMinutes =
+    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
+  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
 }
 
 /**
