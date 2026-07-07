@@ -26,6 +26,12 @@ export function toBashApprovalResult(
   return {
     accepted: result.action === 'approve',
     timedOut: result.action === 'timeout' ? true : undefined,
+    // Deliberate alignment choice, not an oversight: `userMessage` exists to
+    // explain a rejection back to the agent (see buildBashApprovalRejectedResult),
+    // so it's scoped to the reject action alone. The pre-alignment desktop
+    // implementation attached it to any action with truthy feedback (e.g. an
+    // approve carrying a stray note) — that was drift, not a feature; an
+    // approved command has no rejection reason to report.
     userMessage:
       result.action === 'reject' ? result.feedback?.trim() : undefined,
   };
@@ -48,13 +54,12 @@ const PROPOSAL_RESULT_ACTIONS: ReadonlySet<ProposalResult['action']> = new Set([
 ]);
 
 function isProposalResultValue(value: unknown): value is ProposalResult {
+  if (typeof value !== 'object' || value === null) return false;
+  if (!Object.hasOwn(value, 'action')) return false;
+  const { action } = value as { action: unknown };
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    'action' in value &&
-    PROPOSAL_RESULT_ACTIONS.has(
-      (value as { action: ProposalResult['action'] }).action,
-    )
+    typeof action === 'string' &&
+    PROPOSAL_RESULT_ACTIONS.has(action as ProposalResult['action'])
   );
 }
 
@@ -86,6 +91,13 @@ export function toUserQuestionResult(
 ): HostUserQuestionResult {
   return {
     submitted: result.action === 'submit',
+    // Deliberate alignment choice, not an oversight: answers only make sense
+    // once submitted, and feedback is the "why did you decline" text for a
+    // non-submit action — the two are mutually exclusive by what they mean,
+    // not just by which action produced them. The pre-alignment desktop
+    // implementation carried each field whenever its source value/feedback
+    // was truthy, independent of the action, which could report answers on
+    // a decline or feedback on a submission.
     answers:
       result.action === 'submit'
         ? (result.value as UserQuestionAnswers | undefined)
