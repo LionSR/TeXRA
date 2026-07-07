@@ -1,3 +1,5 @@
+import prettyMilliseconds from 'pretty-ms';
+
 import { isObject, isString } from '@utils/core';
 import { capitalize } from '@utils/text/stringUtils';
 
@@ -60,21 +62,17 @@ export function parseChatGptSubscriptionLimit(
 }
 
 /**
- * Format a coarse "1d 20h" / "44h 22m" / "5m" duration from a second count.
+ * Format a coarse "1d 20h" / "20h 22m" / "5m" duration from a second count.
  * Day+hour, hour+minute, or minute granularity is plenty for a reset-window
  * hint; sub-minute collapses to a friendly phrase. Pure (no clock read), so it
- * stays usable from the synchronous error formatter.
+ * stays usable from the synchronous error formatter. Backed by `pretty-ms`
+ * (floored to whole minutes, top 2 units) rather than hand-rolled day/hour/
+ * minute math.
  */
 function formatResetDuration(totalSeconds: number): string {
-  const seconds = Math.max(0, Math.floor(totalSeconds));
-  const days = Math.floor(seconds / 86_400);
-  const hours = Math.floor((seconds % 86_400) / 3_600);
-  const minutes = Math.floor((seconds % 3_600) / 60);
-  const parts: string[] = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0 && days === 0) parts.push(`${minutes}m`);
-  return parts.length > 0 ? parts.join(' ') : 'less than a minute';
+  const wholeMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
+  if (wholeMinutes === 0) return 'less than a minute';
+  return prettyMilliseconds(wholeMinutes * 60_000, { unitCount: 2 });
 }
 
 /**
