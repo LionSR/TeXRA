@@ -477,7 +477,7 @@ describe('ProgressBackend', () => {
     expect(backend.state.activeStream).not.toBe(streamId);
   });
 
-  it('applies session output-file run facts directly without duplicate legacy delivery', async () => {
+  it('applies session output-file run facts through the guarded handler without duplicate legacy delivery', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
     const handleProgressEvent = vi.spyOn(
@@ -521,7 +521,13 @@ describe('ProgressBackend', () => {
         },
       });
 
-      expect(handleProgressEvent).not.toHaveBeenCalled();
+      // Routed through the guarded backend.handleProgressEvent → eventHandler
+      // path exactly once (not double-delivered via the legacy bus projection).
+      expect(handleProgressEvent).toHaveBeenCalledTimes(1);
+      expect(handleProgressEvent).toHaveBeenCalledWith('addOutputFiles', {
+        streamId,
+        filesByRound: { 1: [outputFile] },
+      });
       expect(updateFiles).toHaveBeenCalledTimes(1);
       expect(updateFiles).toHaveBeenCalledWith(streamId, {
         rounds: { 1: [outputFile] },
@@ -533,6 +539,61 @@ describe('ProgressBackend', () => {
       subscription.dispose();
       await backend.state.clearAll();
       backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('no-ops the session output-file run fact after dispose', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
+    const streamId = 'session:disposed-output-files' as StreamTabId;
+    const outputFile: OutputFileInfo = {
+      source: 'paper.tex',
+      location: {
+        kind: 'workspace',
+        absolutePath: '/workspace/paper.tex',
+        relativePath: 'paper.tex',
+      },
+      round: 1,
+      lineage: null,
+      diff: null,
+    };
+
+    try {
+      await backend.state.snapshots.load([]);
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
+      updateFiles.mockClear();
+
+      // A run that kept executing headless after a desktop window closed can
+      // still deliver an addOutputFiles run fact to the now-disposed backend
+      // through its still-attached session-fact subscriber. It must no-op via
+      // the shared `disposed` guard instead of mutating torn-down state.
+      backend.dispose();
+
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('addOutputFiles'),
+          data: {
+            streamId,
+            filesByRound: { 1: [outputFile] },
+          } satisfies ProgressEventPayloads['addOutputFiles'],
+        },
+      });
+
+      expect(updateFiles).not.toHaveBeenCalled();
+      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual(
+        new Map(),
+      );
+    } finally {
+      subscription.dispose();
+      await backend.state.clearAll();
       session.dispose();
     }
   });

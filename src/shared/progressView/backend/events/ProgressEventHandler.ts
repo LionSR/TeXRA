@@ -473,7 +473,10 @@ export class ProgressEventHandler {
     );
   }
 
-  handleAddOutputFiles({
+  // Its only caller is the addOutputFiles registration reached via
+  // handleProgressEvent (ProgressBackend now routes the session-fact subscriber
+  // through that guarded path too), so it stays private.
+  private handleAddOutputFiles({
     streamId,
     filesByRound,
   }: ProgressEventPayloads['addOutputFiles']): void {

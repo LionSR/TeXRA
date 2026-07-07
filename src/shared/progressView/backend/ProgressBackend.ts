@@ -171,7 +171,12 @@ export class ProgressBackend {
 
         const payload =
           event.data as unknown as ProgressEventPayloads['addOutputFiles'];
-        this.eventHandler.handleAddOutputFiles(payload);
+        // Route through handleProgressEvent (not eventHandler.handleAddOutputFiles
+        // directly) so this session-fact subscriber honors the `disposed` guard —
+        // a run may still deliver this fact after the backend is torn down (a
+        // desktop window closed mid-run) — and gets the same withEventErrorHandling
+        // wrapper as every other registered handler.
+        this.handleProgressEvent('addOutputFiles', payload);
         this.onSessionProgressEvent?.('addOutputFiles', payload);
       },
       { scope: 'run', types: ['domain'] },
