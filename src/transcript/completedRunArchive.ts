@@ -18,6 +18,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   ToolUseLogSchema,
+  UserMessagePayloadSchema,
   WebFetchPayloadSchema,
   WebSearchPayloadSchema,
   type ExecutionId,
@@ -152,6 +153,18 @@ function streamLogModifiedAt(
   return new KVStore(STREAM_LOGS_DIR).modifiedAt(streamId);
 }
 
+/**
+ * Deliberate non-goal (#7508): image blocks inside a tool result are not
+ * reconstructed here. `ToolUseLog.output` only ever carries display text —
+ * a local `ToolResult.output` is a plain string, and any image content a
+ * tool_result block sends to the provider is built at message-construction
+ * time from `ToolResult.files` (base64 attachment bytes), which never
+ * reaches the transcript row. Unlike the web-fetch page-content case,
+ * there's no existing size-capped/marker-only slot for this in the export
+ * pipeline (`ExportNode`'s `tool-result` kind is `{text}` only), and
+ * reconstructing one would mean threading attachment bytes through
+ * `tool.end` just to summarize them — out of scope here.
+ */
 function toolResultText(tool: ToolUseLog): string | undefined {
   if (tool.error !== undefined) return tool.error;
   if (typeof tool.output === 'string') return tool.output;
@@ -159,8 +172,32 @@ function toolResultText(tool: ToolUseLog): string | undefined {
   return tool.summary;
 }
 
+/**
+ * `userMessage` rows may carry an attachment-kind/count payload (#7508) —
+ * media that was sent to the model but only ever lived in the provider
+ * message. When present, render `content` as Anthropic-shaped blocks
+ * (`{type:'image'}` / `{type:'document'}`, no bytes) so
+ * `normalizeConversationForExport`'s existing attachment-marker rendering
+ * (`[image attachment]` / `[document attachment]`) picks them up; otherwise
+ * keep the plain-string `content` shape every other conversation consumer
+ * already expects.
+ */
 function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
-  return entry.text ? [{ role: 'user', content: entry.text }] : [];
+  if (!entry.text) return [];
+  const parsed = UserMessagePayloadSchema.safeParse(entry.data);
+  const attachments = parsed.success ? (parsed.data.attachments ?? []) : [];
+  if (attachments.length === 0) {
+    return [{ role: 'user', content: entry.text }];
+  }
+  return [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: entry.text },
+        ...attachments.map((kind) => ({ type: kind })),
+      ],
+    },
+  ];
 }
 
 function modelResponseEntryToMessages(entry: StreamLogEntry): unknown[] {
@@ -240,6 +277,11 @@ function webFetchEntryToMessages(entry: StreamLogEntry): unknown[] {
           type: 'web_fetch_tool_result',
           url: parsed.data.url,
           ...(parsed.data.title !== undefined && { title: parsed.data.title }),
+          // `page_content` is the field name normalizeConversationForExport's
+          // ContentBlockSchema already recognizes for this block type (#7508).
+          ...(parsed.data.content !== undefined && {
+            page_content: parsed.data.content,
+          }),
         },
       ],
     },

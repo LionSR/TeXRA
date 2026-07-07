@@ -19,6 +19,7 @@ import {
   type ConversationProgress,
   type ErrorContext,
   type FileListEntry,
+  type MediaAttachmentKind,
 } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -65,9 +66,22 @@ export function logProgressStatus(
   });
 }
 
-/** Echo a user instruction back into the transcript at the run boundary. */
-export function logUserMessage(trace: AgentTrace, message: string): void {
-  trace.info(message, { messageType: MESSAGE_TYPES.USER_MESSAGE });
+/**
+ * Echo a user instruction back into the transcript at the run boundary.
+ * `attachments` records each attached media file's kind (not bytes) so the
+ * archived conversation can render `[image attachment]` / `[document
+ * attachment]` markers for media that only ever reached the provider
+ * message (#7508).
+ */
+export function logUserMessage(
+  trace: AgentTrace,
+  message: string,
+  attachments?: readonly MediaAttachmentKind[],
+): void {
+  trace.info(message, {
+    messageType: MESSAGE_TYPES.USER_MESSAGE,
+    ...(attachments?.length ? { data: { attachments } } : {}),
+  });
 }
 
 /** Internal-only info line; subscribers suppress it from non-debug views. */
