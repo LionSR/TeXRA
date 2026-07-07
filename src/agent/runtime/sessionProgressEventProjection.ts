@@ -12,7 +12,7 @@ import {
 import { isObject } from '@utils/core';
 
 import { fromRunFactDomainKey } from './runFactEvents';
-import type { SessionFact } from './SessionEventHub';
+import type { SessionEventHub, SessionFact } from './SessionEventHub';
 
 export type ProjectedProgressEvent = {
   [K in ProgressEvent]: {
@@ -26,6 +26,53 @@ export function emitProjectedProgressEvent(
   projected: ProjectedProgressEvent,
 ): void {
   runtimeHost.emit(projected.event, projected.payload);
+}
+
+/**
+ * Subscribe a host-owned progress surface to the session fact plane and
+ * re-emit the retained progress events that have not yet moved to a native
+ * host/session projection.
+ */
+export function attachSessionProgressEventProjection(
+  events: SessionEventHub,
+  runtimeHost: AgentRuntimeHost,
+): () => void {
+  const detachSessionFacts = events.subscribe(
+    (sessionEvent) => {
+      if (sessionEvent.scope !== 'session') return;
+      emitProjectedProgressEvent(
+        runtimeHost,
+        projectSessionFactToProgressEvent(sessionEvent.event),
+      );
+    },
+    { scope: 'session' },
+  );
+  const detachRunFacts = events.subscribe(
+    (sessionEvent) => {
+      if (sessionEvent.scope !== 'run') return;
+      const projected = projectRunFactToProgressEvent(
+        sessionEvent.streamId,
+        sessionEvent.event,
+      );
+      if (!projected) return;
+      emitProjectedProgressEvent(runtimeHost, projected);
+    },
+    {
+      scope: 'run',
+      types: [
+        'domain',
+        'usage',
+        'stage.start',
+        'child.activity',
+        'process.output',
+      ],
+    },
+  );
+
+  return () => {
+    detachRunFacts();
+    detachSessionFacts();
+  };
 }
 
 type UpdateStreamUsagePayload = ProgressEventPayloads['updateStreamUsage'];
