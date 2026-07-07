@@ -47,14 +47,30 @@ export interface Platform {
   readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
   readonly toolAvailability: ToolAvailabilityHost;
-  /** Linter diagnostics provider for the diagnostics tool's `list`/`count` commands. */
-  readonly linter: LinterProvider;
-  /** Sink for the diagnostics tool's `add` (manual criticism) command. */
-  readonly addCriticismSink: AddCriticismSink;
-  /** Surfaces a tool-missing error to the user. */
-  readonly toolMissingHandler: ToolMissingHandler;
-  /** Surfaces a tool-group-unavailable notification to the user. */
-  readonly toolNotificationHandler: ToolNotificationHandler;
+  /**
+   * Linter diagnostics provider for the diagnostics tool's `list`/`count`
+   * commands. Single-implementer (VS Code) — hosts without a linter
+   * integration omit it; callers treat an absent port as "no diagnostics".
+   */
+  readonly linter?: LinterProvider;
+  /**
+   * Sink for the diagnostics tool's `add` (manual criticism) command.
+   * Single-implementer (VS Code) — hosts without an inline-criticism surface
+   * omit it; callers treat an absent port as "not accepted".
+   */
+  readonly addCriticismSink?: AddCriticismSink;
+  /**
+   * Surfaces a tool-missing error to the user. Single-implementer (VS Code) —
+   * hosts without a UI for this omit it; callers treat an absent port as a
+   * no-op.
+   */
+  readonly toolMissingHandler?: ToolMissingHandler;
+  /**
+   * Surfaces a tool-group-unavailable notification to the user.
+   * Single-implementer (VS Code) — hosts without a UI for this omit it;
+   * callers treat an absent port as a no-op.
+   */
+  readonly toolNotificationHandler?: ToolNotificationHandler;
   /** Host-provided tool-edit approval UI (diff viewer + accept/reject). */
   readonly toolEditApproval: ToolEditApprovalPort;
 }
