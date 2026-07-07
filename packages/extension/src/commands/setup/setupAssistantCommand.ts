@@ -315,7 +315,3 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     return 'not-started';
   }
 }
-
-export async function runSetupAssistant(): Promise<void> {
-  await launchSetupAssistant();
-}
