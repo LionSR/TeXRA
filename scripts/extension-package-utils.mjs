@@ -66,3 +66,25 @@ export function extensionManifestSnapshot(packageJson, manifestKeys) {
     manifestKeys.map((key) => [key, stable(packageJson[key])]),
   );
 }
+
+// Catalog-derived `contributes` subtrees. These are code-generated from the
+// settings/command catalogs by scripts/sync-package-contributes.mjs and
+// diff-checked by the catalog vitest suites, so snapshotting them would just
+// duplicate that guard with ~35 KB of committed generated JSON. They are
+// omitted from the manifest snapshot (verify-extension-package-invariants.mjs)
+// and from the built-VSIX manifest comparison (verify-vsix-contents.mjs); the
+// remaining non-catalog contributes (menus, views, walkthroughs, …) and
+// manifest keys stay guarded.
+export const CATALOG_DERIVED_CONTRIBUTES = [
+  'configuration',
+  'commands',
+  'keybindings',
+];
+
+export function withoutCatalogDerivedContributes(packageJson) {
+  const { contributes } = packageJson;
+  if (!contributes || typeof contributes !== 'object') return packageJson;
+  const trimmedContributes = { ...contributes };
+  for (const key of CATALOG_DERIVED_CONTRIBUTES) delete trimmedContributes[key];
+  return { ...packageJson, contributes: trimmedContributes };
+}

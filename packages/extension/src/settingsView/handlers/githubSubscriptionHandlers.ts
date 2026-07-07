@@ -12,7 +12,6 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import {
   getProgressStreamLabel,
   revealProgressStream,
@@ -130,11 +129,11 @@ export class GitHubSubscriptionHandlers {
     const k = data.key;
     let removed: number;
     if (k.includes('/pulls/')) {
-      removed = unbindAllForPR(k, extensionAgentRuntimeHost);
+      removed = unbindAllForPR(k);
     } else if (k.includes('/issues/')) {
-      removed = unbindAllForIssue(k, extensionAgentRuntimeHost);
+      removed = unbindAllForIssue(k);
     } else {
-      removed = unbindAllForRepo(k, extensionAgentRuntimeHost);
+      removed = unbindAllForRepo(k);
     }
     if (removed === 0) {
       void vscode.window.showInformationMessage(

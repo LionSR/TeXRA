@@ -11,7 +11,6 @@
  * layer above.
  */
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getConfig } from '@utils/config';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -77,7 +76,7 @@ import {
   type GhReview,
   type GhReviewComment,
 } from './prTypes';
-import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import type { Disposable } from '@platform/interfaces/disposable';
 
 export const GITHUB_PR_POLLING_EMIT_CI_STARTED_CONFIG_KEY =
@@ -95,7 +94,6 @@ function createInitialState(pr: PRKey): SubscriptionState {
     pr,
     slug: `${pr.owner}/${pr.repo}`,
     listeners: new Set(),
-    runtimeHostByListener: new Map(),
     initialized: false,
     issueComments: new DedupedResource<GhIssueComment>({
       getId: (comment: GhIssueComment) => comment.id,
@@ -249,14 +247,12 @@ export class PRPollingSource extends PollingSourceBase<
   subscribe(
     input: PRSubscribeInput,
     onEvent: (text: string) => void,
-    runtimeHost: AgentRuntimeHost,
   ): Disposable {
     const key = prKeyToString(input);
     const disposable = this.register(
       key,
       () => createInitialState(input),
       onEvent,
-      runtimeHost,
     );
     this.setListenerAnnotationLevel(key, onEvent, input);
     return {
@@ -272,10 +268,8 @@ export class PRPollingSource extends PollingSourceBase<
   updateSubscription(
     input: PRSubscribeInput,
     onEvent: (text: string) => void,
-    runtimeHost: AgentRuntimeHost,
   ): void {
     const key = prKeyToString(input);
-    this.updateListenerRuntimeHost(key, onEvent, runtimeHost);
     this.setListenerAnnotationLevel(key, onEvent, input);
   }
 
@@ -293,17 +287,8 @@ export class PRPollingSource extends PollingSourceBase<
     );
   }
 
-  protected emitKeysChangedEvent(
-    keys: readonly string[],
-    runtimeHosts: readonly AgentRuntimeHost[],
-  ): void {
-    emitGitHubSubscriptionChangedToHosts(
-      runtimeHosts,
-      'prSubscriptionsChanged',
-      {
-        keys,
-      },
-    );
+  protected emitKeysChangedEvent(keys: readonly string[]): void {
+    emitGitHubSubscriptionChanged('prSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(
