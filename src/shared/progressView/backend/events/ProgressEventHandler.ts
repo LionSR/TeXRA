@@ -1,11 +1,11 @@
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@agent/runtime/hostProgressEvents';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,
