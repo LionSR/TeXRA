@@ -4,8 +4,8 @@ import {
 } from '@agent/runtime/SessionHandle';
 import {
   type ProjectedProgressEvent,
-  projectRunFactToProgressEvent,
   projectSessionFactToProgressEvent,
+  subscribeRunFactsAsProgressEvents,
 } from '@agent/runtime/sessionProgressEventProjection';
 import type {
   ProgressEvent,
@@ -139,25 +139,9 @@ export class ProgressBackend {
       },
       { scope: 'session' },
     );
-    const detachRunFacts = this.session.events.subscribe(
-      (sessionEvent) => {
-        if (sessionEvent.scope !== 'run') return;
-        const projected = projectRunFactToProgressEvent(
-          sessionEvent.streamId,
-          sessionEvent.event,
-        );
-        if (projected) this.handleProjectedProgressEvent(projected);
-      },
-      {
-        scope: 'run',
-        types: [
-          'domain',
-          'usage',
-          'stage.start',
-          'child.activity',
-          'process.output',
-        ],
-      },
+    const detachRunFacts = subscribeRunFactsAsProgressEvents(
+      this.session.events,
+      (projected) => this.handleProjectedProgressEvent(projected),
     );
     return {
       dispose: () => {
