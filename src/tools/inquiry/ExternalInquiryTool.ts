@@ -423,7 +423,7 @@ export class ExternalInquiryTool extends defineTool({
     if (!interaction) {
       throw new Error('HostInteractions.openExternalInquiry is required');
     }
-    void interaction;
+    await interaction;
 
     // Background Tasks panel: announce the open thread.
     const summary = await getThreadSummary(persisted.threadId);

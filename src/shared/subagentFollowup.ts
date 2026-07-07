@@ -13,6 +13,7 @@
 // CLI can consume it.
 
 import escapeRegExp from 'escape-string-regexp';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 
 const SUBAGENT_TAG_RE = /^<subagent-(?:progress|result|error)\b/;
 const EMBEDDED_SUBAGENT_BLOCK_RE =
@@ -94,25 +95,23 @@ function progressDetail(xml: string): string {
       }
       const body = elementBody(xml, 'subagent-progress');
       if (!body) return 'todos updated';
-      try {
-        const todos = JSON.parse(decodeXmlEntities(body));
-        if (!Array.isArray(todos)) return 'todos updated';
-        let done = 0;
-        let inProgress = 0;
-        let todo = 0;
-        for (const item of todos) {
-          const status =
-            typeof item === 'object' && item !== null && 'status' in item
-              ? item.status
-              : undefined;
-          if (status === 'completed') done += 1;
-          else if (status === 'in_progress') inProgress += 1;
-          else todo += 1;
-        }
-        return `todos · ${done} done, ${inProgress} active, ${todo} pending`;
-      } catch {
+      const parsed = safeParseJson(decodeXmlEntities(body));
+      if (parsed.isErr() || !Array.isArray(parsed.value)) {
         return 'todos updated';
       }
+      let done = 0;
+      let inProgress = 0;
+      let todo = 0;
+      for (const item of parsed.value) {
+        const status =
+          typeof item === 'object' && item !== null && 'status' in item
+            ? item.status
+            : undefined;
+        if (status === 'completed') done += 1;
+        else if (status === 'in_progress') inProgress += 1;
+        else todo += 1;
+      }
+      return `todos · ${done} done, ${inProgress} active, ${todo} pending`;
     }
     case 'conversations': {
       const turns = attr(xml, 'turns');
