@@ -480,14 +480,14 @@ describe('ProgressBackend', () => {
       expect(first.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual(
         [firstTodo],
       );
-      expect(first.backend.state.snapshots.getOutputFiles(streamId)).toEqual(
-        new Map([[1, [firstOutput]]]),
-      );
+      expect(first.backend.state.snapshots.getOutputFiles(streamId)).toEqual({
+        1: [firstOutput],
+      });
       expect(
         second.backend.state.snapshots.getWorkPlan(streamId).todos,
       ).toEqual([]);
       expect(second.backend.state.snapshots.getOutputFiles(streamId)).toEqual(
-        new Map(),
+        {},
       );
       expect(JSON.stringify(second.messages)).not.toContain(
         'from first window',
@@ -938,15 +938,15 @@ describe('ProgressBackend', () => {
           cacheCreationInputTokens: 0,
         }),
       );
-      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual(
-        new Map([[1, [outputFile]]]),
-      );
-      expect(backend.state.snapshots.getMissingOutputs(streamId)).toEqual(
-        new Map([[1, ['paper.pdf']]]),
-      );
-      expect(backend.state.snapshots.getCompileFailures(streamId)).toEqual(
-        new Map([[1, [compileFailure]]]),
-      );
+      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
+        1: [outputFile],
+      });
+      expect(backend.state.snapshots.getMissingOutputs(streamId)).toEqual({
+        1: ['paper.pdf'],
+      });
+      expect(backend.state.snapshots.getCompileFailures(streamId)).toEqual({
+        1: [compileFailure],
+      });
       expect(backend.state.snapshots.getWorkPlan(streamId)).toMatchObject({
         todos,
         plan,
@@ -1021,9 +1021,7 @@ describe('ProgressBackend', () => {
 
       expect(handleProgressEvent).not.toHaveBeenCalled();
       expect(updateFiles).not.toHaveBeenCalled();
-      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual(
-        new Map(),
-      );
+      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({});
     } finally {
       subscription.dispose();
       await backend.state.clearAll();

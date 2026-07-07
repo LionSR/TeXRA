@@ -22,6 +22,7 @@ import type {
   ExecutionId,
   FileLocation,
   OutputFileInfo,
+  RoundIndexed,
 } from '@shared/schemas';
 import {
   WorkspaceFS,
@@ -84,7 +85,7 @@ export async function scanRunDirForOutputs(
   executionId: ExecutionId,
   inputFile: string,
   extraBaseFiles?: string[],
-): Promise<Map<number, OutputFileInfo[]> | null> {
+): Promise<RoundIndexed<OutputFileInfo> | null> {
   try {
     const runDirAbsolute = await findRunDir(executionId);
     if (!runDirAbsolute) return null;
@@ -112,7 +113,7 @@ export async function scanRunDirForOutputs(
     }
     const defaultBaseLocation = pathToLocation(toAbs(inputFile));
 
-    const rounds = new Map<number, OutputFileInfo[]>();
+    const rounds: RoundIndexed<OutputFileInfo> = {};
 
     for (const [entryName, fileType] of dirEntries) {
       if (!isDirectory(fileType)) continue;
@@ -180,12 +181,10 @@ export async function scanRunDirForOutputs(
         });
       }
 
-      if (outputs.length > 0) rounds.set(round, outputs);
+      if (outputs.length > 0) rounds[round] = outputs;
     }
 
-    return rounds.size > 0
-      ? new Map([...rounds.entries()].sort((a, b) => a[0] - b[0]))
-      : null;
+    return Object.keys(rounds).length > 0 ? rounds : null;
   } catch (error) {
     logger.debug(
       CHANNEL,
@@ -207,7 +206,7 @@ export async function discoverLatestExecutionOutputs(query: {
   inputFile: string;
 }): Promise<{
   executionId: ExecutionId;
-  rounds: Map<number, OutputFileInfo[]>;
+  rounds: RoundIndexed<OutputFileInfo>;
 } | null> {
   try {
     const executions = await listExecutions();
@@ -235,7 +234,7 @@ export async function discoverLatestExecutionOutputs(query: {
         executionId: candidate.id,
       });
       const rounds = await snapshots.readOutputFiles(streamId);
-      if (rounds && rounds.size > 0) {
+      if (rounds && Object.keys(rounds).length > 0) {
         return { executionId: candidate.id, rounds };
       }
       // Stream-tab snapshots are a progress-view artifact that headless
@@ -253,7 +252,7 @@ export async function discoverLatestExecutionOutputs(query: {
         query.inputFile,
         candidate.agentConfig?.inputFiles?.slice(1),
       );
-      if (scanned && scanned.size > 0) {
+      if (scanned && Object.keys(scanned).length > 0) {
         return { executionId: candidate.id, rounds: scanned };
       }
     }

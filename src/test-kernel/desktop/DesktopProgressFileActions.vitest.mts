@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { OutputFileInfo } from '@shared/schemas';
+import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
@@ -15,7 +15,7 @@ type DiffOutcome = {
 };
 
 type RunContext = {
-  outputsByRound: Map<number, OutputFileInfo[]>;
+  outputsByRound: RoundIndexed<OutputFileInfo>;
   executionId?: string;
   workspaceScan?: {
     agent: string;
@@ -161,7 +161,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
     };
     const { actions, openPath, runLatexdiffForExecution, runDiff } =
       await loadFileActions({ outcome });
-    const outputsByRound = new Map([[1, [outputInfo('/run/r1/main.tex')]]]);
+    const outputsByRound = { 1: [outputInfo('/run/r1/main.tex')] };
 
     await actions.runLatexdiffForRun(
       '/workspace/main.tex',
@@ -202,7 +202,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       '/workspace/main.tex',
       '/workspace/main_orchestrator_r1_gpt.tex',
       {
-        outputsByRound: new Map(),
+        outputsByRound: {},
         workspaceScan: {
           agent: 'orchestrator',
           model: 'gpt-5',
@@ -236,7 +236,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       '/workspace/base.tex',
       '/run/r1/main.tex',
       {
-        outputsByRound: new Map([[1, [outputInfo('/run/r1/main.tex')]]]),
+        outputsByRound: { 1: [outputInfo('/run/r1/main.tex')] },
       },
     );
 
@@ -268,7 +268,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       '/workspace/main.tex',
       '/run/r2/main.tex',
       {
-        outputsByRound: new Map([[1, [outputInfo('/run/r1/main.tex')]]]),
+        outputsByRound: { 1: [outputInfo('/run/r1/main.tex')] },
       },
     );
 
@@ -288,7 +288,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       '/workspace/base.tex',
       '/run/r1/main.tex',
       {
-        outputsByRound: new Map(),
+        outputsByRound: {},
         workspaceScan: { agent: 'a', model: 'm', inputFile: 'main.tex' },
       },
     );
@@ -310,7 +310,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       '/workspace/base.tex',
       '/run/r1/main.tex',
       {
-        outputsByRound: new Map([[1, [outputInfo('/run/r1/main.tex')]]]),
+        outputsByRound: { 1: [outputInfo('/run/r1/main.tex')] },
       },
     );
 
@@ -336,7 +336,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       '/workspace/a.tex',
       '/workspace/a_r1.tex',
       {
-        outputsByRound: new Map(),
+        outputsByRound: {},
         workspaceScan: {
           agent: 'orchestrator',
           model: 'gpt-5',

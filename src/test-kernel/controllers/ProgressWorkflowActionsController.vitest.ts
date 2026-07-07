@@ -73,7 +73,7 @@ describe('ProgressWorkflowActionsController', () => {
     const { controller, diffs } = createProgressWorkflowActionsHarness({
       taskStates: new Map([['stream-a', taskState]]),
       executionIds: new Map([['stream-a', 'exec-123']]),
-      outputs: new Map([['stream-a', new Map([[1, [output]]])]]),
+      outputs: new Map([['stream-a', { 1: [output] }]]),
     });
 
     await controller.diffStream('stream-a');
@@ -87,7 +87,7 @@ describe('ProgressWorkflowActionsController', () => {
         outputFilesActive: false,
         streamId: 'stream-a',
         runId: 'exec-123',
-        outputsByRound: [[1, [output]]],
+        outputsByRound: { 1: [output] },
       },
     ]);
   });

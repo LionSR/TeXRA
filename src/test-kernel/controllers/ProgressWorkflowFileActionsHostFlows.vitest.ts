@@ -55,7 +55,7 @@ function createDeps(
     state: {
       getActiveStream: () => '',
       getExecutionId: () => undefined,
-      getOutputFiles: () => new Map(),
+      getOutputFiles: () => ({}),
       getAgentModel: () => undefined,
     },
     host,

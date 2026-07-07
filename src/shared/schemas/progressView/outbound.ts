@@ -16,6 +16,7 @@ import { StreamTabIdSchema } from '../identifiers';
 import { StreamLogEntrySchema, StreamLogTextDeltaSchema } from '../log';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from '../mainView';
 import { CompileFailureSchema, OutputFileInfoSchema } from '../output';
+import { roundIndexedRecord } from '../roundIndexed';
 import { InquiryThreadUpdatedEventSchema } from '../inquiry';
 import {
   AgentProposalPermissionSchema,
@@ -138,7 +139,7 @@ function RoundUpdateMessageSchema<C extends string, T extends z.ZodType>(
 ) {
   return StreamScopedBaseSchema.extend({
     command: z.literal(command),
-    rounds: z.record(z.string(), z.array(elementSchema)).optional(),
+    rounds: roundIndexedRecord(elementSchema).optional(),
     reset: z.boolean().optional(),
   });
 }
@@ -293,11 +294,9 @@ export const SyncStreamContentMessageSchema = z.object({
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   action: z.enum(['render', 'clear']).optional(),
   // Workflow flat files (one run per tab)
-  workflowFiles: z.record(z.string(), z.array(OutputFileInfoSchema)).optional(),
-  workflowMissingOutputs: z.record(z.string(), z.array(z.string())).optional(),
-  workflowCompileFailures: z
-    .record(z.string(), z.array(CompileFailureSchema))
-    .optional(),
+  workflowFiles: roundIndexedRecord(OutputFileInfoSchema).optional(),
+  workflowMissingOutputs: roundIndexedRecord(z.string()).optional(),
+  workflowCompileFailures: roundIndexedRecord(CompileFailureSchema).optional(),
   // Per-run usage map — used by both workflow and tool-use so resume
   // correctly accumulates. Frontend derives sessionUsage as the sum.
   runUsage: RunUsageMapSchema.optional(),
