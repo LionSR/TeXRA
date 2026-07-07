@@ -76,8 +76,8 @@ function createCompileFailure(): CompileFailure {
 
 const emptyFollowUpState: ProgressFollowUpState = {
   getTaskState: () => undefined,
-  getOutputFiles: () => new Map(),
-  getCompileFailures: () => new Map(),
+  getOutputFiles: () => ({}),
+  getCompileFailures: () => ({}),
   getExecutionId: () => undefined,
 };
 
@@ -108,9 +108,7 @@ describe('ProgressFollowUpController', () => {
         inputFiles: ['main-diffea268c1.tex'],
       }),
       compileFailures: [createCompileFailure()],
-      runOutputs: new Map([
-        [2, [createRunStorageOutputFile('main-diffea268c1.tex')]],
-      ]),
+      runOutputs: { 2: [createRunStorageOutputFile('main-diffea268c1.tex')] },
       modelOptions: [{ value: 'gemini31p' }],
       executionId: 'exec-123',
     });
@@ -141,9 +139,7 @@ describe('ProgressFollowUpController', () => {
         inputFiles: ['main-diffea268c1.tex'],
       }),
       compileFailures: [createCompileFailure()],
-      runOutputs: new Map([
-        [2, [createRunStorageOutputFile('main-diffea268c1.tex')]],
-      ]),
+      runOutputs: { 2: [createRunStorageOutputFile('main-diffea268c1.tex')] },
       modelOptions: [{ value: 'gemini31p' }],
       executionId: 'exec-123',
     });
@@ -164,9 +160,7 @@ describe('ProgressFollowUpController', () => {
           inputFiles: ['main-diffea268c1.tex'],
         }),
         compileFailures: [createCompileFailure()],
-        runOutputs: new Map([
-          [2, [createRunStorageOutputFile('main-diffea268c1.tex')]],
-        ]),
+        runOutputs: { 2: [createRunStorageOutputFile('main-diffea268c1.tex')] },
         modelOptions: [{ value: 'gemini31p' }],
         executionId: 'exec-123',
       },
@@ -188,7 +182,7 @@ describe('ProgressFollowUpController', () => {
           inputFiles: ['main.tex', 'main-diffea268c1.tex'],
         }),
         compileFailures: [createCompileFailure()],
-        runOutputs: new Map(),
+        runOutputs: {},
         modelOptions: [{ value: 'gemini31p' }],
         executionId: 'exec-123',
       },

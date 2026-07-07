@@ -1,11 +1,7 @@
 import type { AgentCategory } from './agent';
 import type { ExecutionId, StorageKey, StreamTabId } from './identifiers';
-import type {
-  CompileFailure,
-  FileLocation,
-  OutputFileInfo,
-  RoundIndexed,
-} from './output';
+import type { CompileFailure, FileLocation, OutputFileInfo } from './output';
+import type { RoundIndexed } from './roundIndexed';
 import type { ActiveChildInfo, RoundStage } from './streamState';
 import type { StreamPhase, StreamSubstate } from './stream';
 import type { TokenUsageStats } from './usage';

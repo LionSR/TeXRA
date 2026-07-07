@@ -1,6 +1,10 @@
 /** Shared types for latexdiff output discovery and operation building. */
 
-import type { FileLocation, OutputFileInfo } from '@shared/schemas';
+import type {
+  FileLocation,
+  OutputFileInfo,
+  RoundIndexed,
+} from '@shared/schemas';
 
 /**
  * Minimal progress sink for long-running diff runs. Host-neutral so the core
@@ -19,7 +23,7 @@ export interface RunLatexdiffCommandConfig {
   outputFilesActive?: string[];
   streamId?: string;
   runId?: string | null;
-  outputsByRound?: [round: number, files: OutputFileInfo[]][];
+  outputsByRound?: RoundIndexed<OutputFileInfo>;
 }
 
 export interface DiffRunResult {
