@@ -96,10 +96,6 @@ describe('createExtensionHostInteractions', () => {
       goalEnabled: true,
       plan: { objective: 'Prove the compactness lemma.' },
     });
-    expect(interactions.pending()).toEqual([
-      { id: 'plan-a', kind: 'plan', streamId: 'stream-a' },
-    ]);
-
     expect(
       interactions.resolve('plan-a', {
         kind: 'plan',
@@ -111,7 +107,10 @@ describe('createExtensionHostInteractions', () => {
       action: 'approve_and_goal',
     });
     expect(handlers.planApproval.resolve).toHaveBeenCalledWith('plan-a');
-    expect(interactions.pending()).toEqual([]);
+    // The request was settled first-wins: a second resolution finds nothing.
+    expect(
+      interactions.resolve('plan-a', { kind: 'plan', action: 'approve' }),
+    ).toBe(false);
   });
 
   it('cancels pending retry requests for a removed stream', async () => {
@@ -160,7 +159,6 @@ describe('createExtensionHostInteractions', () => {
       streamId: 'stream-a',
       mode: 'new',
     });
-    expect(interactions.pending()).toEqual([]);
   });
 
   it('cancels streamless user questions during unscoped cleanup', async () => {
@@ -185,7 +183,13 @@ describe('createExtensionHostInteractions', () => {
 
     await expect(resultPromise).resolves.toEqual({ submitted: false });
     expect(handlers.userQuestion.resolve).toHaveBeenCalledWith('question-a');
-    expect(interactions.pending()).toEqual([]);
+    // The cancelled question was released: a later resolution finds nothing.
+    expect(
+      interactions.resolve('question-a', {
+        kind: 'userQuestion',
+        action: 'submit',
+      }),
+    ).toBe(false);
   });
 
   it('delegates tool edit approval to the native VS Code port', async () => {

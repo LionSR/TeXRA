@@ -125,33 +125,6 @@ export function createRecordingHost(): {
       });
     },
     handleProgressEvent: () => false,
-    pending: () => [
-      ...[...pendingBashes].map(([id, entry]) => ({
-        id,
-        kind: 'bash',
-        streamId: entry.streamId,
-      })),
-      ...[...pendingPlans].map(([id, entry]) => ({
-        id,
-        kind: 'plan',
-        streamId: entry.streamId,
-      })),
-      ...[...pendingProposals].map(([id, entry]) => ({
-        id,
-        kind: 'proposal',
-        streamId: entry.streamId,
-      })),
-      ...[...pendingRetries].map(([id, entry]) => ({
-        id,
-        kind: 'retry',
-        streamId: entry.streamId,
-      })),
-      ...[...pendingUserQuestions].map(([id, entry]) => ({
-        id,
-        kind: 'userQuestion',
-        streamId: entry.streamId,
-      })),
-    ],
     resolve: (requestId, result) => {
       if (result.kind === 'bash') {
         const pending = pendingBashes.get(requestId);
