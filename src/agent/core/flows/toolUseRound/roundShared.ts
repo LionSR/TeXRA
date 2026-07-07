@@ -21,6 +21,14 @@ import { NormalizedUsageSchema } from '@agent/types/NormalizedUsage';
  * - response, toolCalls, text, roundIndex, roundResponseTimeMs, roundNormalizedUsage
  */
 export const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
+  /**
+   * System prompt for providers that pass `system` per-call (Anthropic,
+   * Google) rather than embedding it into `messages` at session init.
+   * Set once by `ToolUsePrepareNode` and held stable for the life of the
+   * session — never regenerated mid-round, since providers like Anthropic
+   * treat any byte change to this string as a full cache-prefix miss.
+   */
+  systemPrompt: z.string().optional(),
   /** Raw response from model (provider-specific, not schematized) */
   response: z.unknown().optional(),
   /**

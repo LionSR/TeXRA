@@ -195,6 +195,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   /**
+   * Google passes the system prompt per-call (as `systemInstruction`) rather
+   * than storing it in `messages` (see `initializeMessages` below) — the
+   * round flow must resupply it on every invocation.
+   */
+  override get requiresPerCallSystemPrompt(): boolean {
+    return true;
+  }
+
+  /**
    * Estimates token count using Google's native countTokens API.
    *
    * @param messages - The Content array representing the conversation history
