@@ -59,9 +59,13 @@ async function readMetaMatchDataPresence(
   streamId: StreamTabId,
   streamLogStore: Pick<StreamLogStore, 'keys' | 'has'> | undefined,
 ): Promise<MetaMatchDataPresence> {
+  const hasLog = streamLogStore?.has(streamId) ?? false;
   return {
-    hasLog: streamLogStore?.has(streamId) ?? false,
-    hasWorkPlan: await snapshotStore.hasPersistedWorkPlan(streamId),
+    hasLog,
+    // hasWorkPlan is irrelevant once hasLog is true (log rank always wins in
+    // pickBestMetaMatch) — skip the disk stat in that case, since this runs
+    // on the hot path #7299 already had to bound for fd pressure.
+    hasWorkPlan: hasLog || (await snapshotStore.hasPersistedWorkPlan(streamId)),
   };
 }
 
