@@ -25,6 +25,7 @@ export function toBashApprovalResult(
 ): HostBashApprovalResult {
   return {
     accepted: result.action === 'approve',
+    timedOut: result.action === 'timeout' ? true : undefined,
     userMessage:
       result.action === 'reject' ? result.feedback?.trim() : undefined,
   };
@@ -39,14 +40,21 @@ export function toPlanApprovalResult(
   return { action: 'reject', feedback: result.feedback };
 }
 
-const PROPOSAL_RESULT_ACTIONS = new Set(['approve', 'setup', 'reject']);
+const PROPOSAL_RESULT_ACTIONS: ReadonlySet<ProposalResult['action']> = new Set([
+  'approve',
+  'setup',
+  'reject',
+  'timeout',
+]);
 
 function isProposalResultValue(value: unknown): value is ProposalResult {
   return (
     typeof value === 'object' &&
     value !== null &&
     'action' in value &&
-    PROPOSAL_RESULT_ACTIONS.has((value as { action: unknown }).action as string)
+    PROPOSAL_RESULT_ACTIONS.has(
+      (value as { action: ProposalResult['action'] }).action,
+    )
   );
 }
 

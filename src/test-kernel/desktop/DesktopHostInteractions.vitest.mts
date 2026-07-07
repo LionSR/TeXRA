@@ -1,18 +1,14 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+// Local imports - runtime
+import type { HostInteractionResolution } from '@agent/runtime/HostInteractions';
+
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-interface HostInteractionResolution {
-  readonly kind: string;
-  readonly action: string;
-  readonly feedback?: string;
-  readonly value?: unknown;
-}
 
 interface DesktopHostInteractions {
   requestBashApproval(request: {
@@ -127,6 +123,27 @@ describe('createDesktopHostInteractions', () => {
       userMessage: 'Stream resources released.',
     });
     expect(handlers.bash.resolve).toHaveBeenCalled();
+  });
+
+  it('preserves a bash timeout resolution as distinct from rejection', async () => {
+    const handlers = createHandlers();
+    const { interactions } = await createInteractions(handlers);
+
+    const resultPromise = interactions.requestBashApproval({
+      command: 'sleep 10',
+      streamId: 'stream-a' as StreamTabId,
+    });
+    const requestId = firstShowRequestId(handlers.bash.show);
+
+    expect(
+      interactions.resolve(requestId, { kind: 'bash', action: 'timeout' }),
+    ).toBe(true);
+
+    await expect(resultPromise).resolves.toEqual({
+      accepted: false,
+      timedOut: true,
+    });
+    expect(handlers.bash.resolve).toHaveBeenCalledWith(requestId);
   });
 
   it('whitelists only known proposal actions from a pass-through value', async () => {
