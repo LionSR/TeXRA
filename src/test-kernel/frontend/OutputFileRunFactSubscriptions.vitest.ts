@@ -112,7 +112,7 @@ vi.mock('vscode', () => {
 
 const { SessionEventHub } = await import('@agent/runtime/SessionEventHub');
 const { toRunFactDomainKey } = await import('@agent/runtime/runFactEvents');
-const { bus } = await import('@eventBus/ProgressEventBus');
+const { ProgressEventBus } = await import('@eventBus/ProgressEventBus');
 const { registerInlineCriticism, setInlineCriticismEnabled } =
   await import('@frontend/latex/inlineCriticism');
 const { registerFileDecorations } =
@@ -175,7 +175,7 @@ function disposeContext(context: {
 }
 
 function drainBufferedAddOutputFilesBusEvents(): void {
-  const unsubscribe = bus.on('addOutputFiles', () => undefined);
+  const unsubscribe = ProgressEventBus.on('addOutputFiles', () => undefined);
   unsubscribe();
 }
 
@@ -216,7 +216,7 @@ describe('output-file run fact frontend subscriptions', () => {
     };
 
     const legacyPath = '/tmp/texra-legacy-output.tex';
-    bus.emit('addOutputFiles', addOutputFilesPayload(legacyPath));
+    ProgressEventBus.emit('addOutputFiles', addOutputFilesPayload(legacyPath));
     expect(provider.provideFileDecoration(vscode.Uri.file(legacyPath))).toBe(
       undefined,
     );
@@ -229,7 +229,9 @@ describe('output-file run fact frontend subscriptions', () => {
     ).toMatchObject({ badge: 'T', tooltip: 'Modified by TeXRA' });
 
     const writtenPath = '/tmp/texra-workspace-written.tex';
-    bus.emit('workspaceFilesWritten', { absolutePaths: [writtenPath] });
+    ProgressEventBus.emit('workspaceFilesWritten', {
+      absolutePaths: [writtenPath],
+    });
     expect(
       provider.provideFileDecoration(vscode.Uri.file(writtenPath)),
     ).toMatchObject({ badge: 'T', tooltip: 'Modified by TeXRA' });
@@ -256,7 +258,7 @@ describe('output-file run fact frontend subscriptions', () => {
       undefined,
     );
 
-    bus.emit('addOutputFiles', addOutputFilesPayload(outputPath));
+    ProgressEventBus.emit('addOutputFiles', addOutputFilesPayload(outputPath));
     await sleep(20);
     expect(mocks.diagnosticCollections.at(-1)?.items.get(outputPath)).toBe(
       undefined,

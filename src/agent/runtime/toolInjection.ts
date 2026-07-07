@@ -31,4 +31,4 @@ export class ToolInjectionRegistry {
   }
 }
 
-export const toolInjectionRegistry = new ToolInjectionRegistry();
+export const SharedToolInjectionRegistry = new ToolInjectionRegistry();

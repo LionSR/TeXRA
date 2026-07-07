@@ -12,7 +12,10 @@
 
 import type { AgentTrace } from '@agent/trace';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import {
+  ProgressEventBus,
+  type ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import {
   STREAM_PHASE,
   type ProgressViewOutboundMessage,
@@ -141,15 +144,18 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     // runtime host. Keep them subscribed here so all desktop windows see
     // progress-routing and root-error updates. Goal state is session-scoped and
     // reaches this bridge through `onProgressEvent`.
-    const unsubscribeEnsureProgress = bus.on(
+    const unsubscribeEnsureProgress = ProgressEventBus.on(
       'requestEnsureProgressView',
       () => {
         opts.routeToProgress();
       },
     );
-    const unsubscribeShowError = bus.on('requestShowError', ({ message }) => {
-      opts.onShowError(message);
-    });
+    const unsubscribeShowError = ProgressEventBus.on(
+      'requestShowError',
+      ({ message }) => {
+        opts.onShowError(message);
+      },
+    );
     this.unsubscribe = () => {
       unsubscribeEnsureProgress();
       unsubscribeShowError();

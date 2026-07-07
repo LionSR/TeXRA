@@ -1,5 +1,8 @@
 import { useRunContext, type RunCoordinators } from './RunContext';
-import { executionRegistry, type ExecutionRegistry } from './executionRegistry';
+import {
+  SharedExecutionRegistry,
+  type ExecutionRegistry,
+} from './executionRegistry';
 import type {
   ProposalRequestOptions,
   ProposalResult,
@@ -39,7 +42,7 @@ export class RunCoordinatorBridge {
     private readonly registry: Pick<
       ExecutionRegistry,
       'getAgentHandleByStream' | 'getAgentHandles'
-    > = executionRegistry,
+    > = SharedExecutionRegistry,
   ) {}
 
   async waitForPlanApproval(
@@ -201,4 +204,4 @@ function matchingRequests(
   );
 }
 
-export const runCoordinatorBridge = new RunCoordinatorBridge();
+export const SharedRunCoordinatorBridge = new RunCoordinatorBridge();

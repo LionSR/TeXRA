@@ -16,7 +16,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
   executeAgent,
   resumeToolUseFromSnapshot,
@@ -196,7 +196,7 @@ export function createChatSessionController(
   const interruptActiveRun = (): void => {
     clearApprovals();
     if (!session.streamId) return;
-    executionRegistry.stopAgentStream(session.streamId, {
+    SharedExecutionRegistry.stopAgentStream(session.streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
       runtimeHost: session.runtimeHost,
     });

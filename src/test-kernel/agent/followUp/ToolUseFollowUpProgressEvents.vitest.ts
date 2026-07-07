@@ -12,7 +12,7 @@ import {
 } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,
-  executionRegistry,
+  SharedExecutionRegistry,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -31,7 +31,7 @@ describe('tool-use follow-up progress events', () => {
     unsubscribeFollowUpObserver?.();
     unsubscribeFollowUpObserver = undefined;
     for (const executionId of trackedExecutionIds) {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
     }
     trackedExecutionIds.clear();
     clearAllStreamStatusesForTest(StreamStatusService);
@@ -64,7 +64,7 @@ describe('tool-use follow-up progress events', () => {
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},
     });
-    executionRegistry.track(handle);
+    SharedExecutionRegistry.track(handle);
     trackedExecutionIds.add(executionId);
   }
 
@@ -172,7 +172,7 @@ describe('tool-use follow-up progress events', () => {
       parentStreamId,
       STREAM_STATUS.STOPPED,
     );
-    executionRegistry.track(handle);
+    SharedExecutionRegistry.track(handle);
 
     try {
       const result = await sendFollowUp(parentStreamId, 'continue child');
@@ -185,7 +185,7 @@ describe('tool-use follow-up progress events', () => {
         'continue child',
       ]);
     } finally {
-      executionRegistry.untrack(executionId);
+      SharedExecutionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });

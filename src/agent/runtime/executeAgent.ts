@@ -292,7 +292,7 @@ export interface ExecuteAgentOptions {
   toolEditApprovalHandler?: ToolEditApprovalPort;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
-  /** Fires after flow completes but before executionRegistry.untrack, so follow-ups are enqueued before waiters resolve. */
+  /** Fires after flow completes but before SharedExecutionRegistry.untrack, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
