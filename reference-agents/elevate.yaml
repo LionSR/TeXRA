@@ -3,8 +3,6 @@ description: Two-phase writing strategist that elevates academic papers for publ
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   outputExt: tex
 
 prompts:
