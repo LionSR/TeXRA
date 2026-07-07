@@ -128,10 +128,9 @@ describe('desktop agent directory bootstrap', () => {
         },
       }),
       toolAvailability: NO_TOOL_AVAILABILITY_HOST,
-      linter: async () => [],
-      addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
-      toolMissingHandler: () => {},
-      toolNotificationHandler: () => {},
+      // linter / addCriticismSink / toolMissingHandler / toolNotificationHandler
+      // are optional Platform ports with no desktop implementation — omitted
+      // here rather than stubbed.
       toolEditApproval: () => {
         throw new Error('Tool edit approval not available in this test.');
       },

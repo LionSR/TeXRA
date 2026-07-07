@@ -44,7 +44,7 @@ export function notifyUnavailableTools(excludedToolNames: string[]): void {
   const hiddenGroups = fresh.filter((g) => g.hideFromDashboard);
   if (hiddenGroups.length > 0) {
     const label = formatGroupLabel(hiddenGroups.map((g) => g.name));
-    tryPlatform()?.toolNotificationHandler(
+    tryPlatform()?.toolNotificationHandler?.(
       `${label} excluded — external dependencies not installed.`,
     );
   }
@@ -65,7 +65,7 @@ export function notifyUnavailableTools(excludedToolNames: string[]): void {
   for (const [bucketKey, bucket] of byAction) {
     const [cmd, label] = bucketKey.split('\0');
     const names = formatGroupLabel(bucket.map((g) => g.name));
-    tryPlatform()?.toolNotificationHandler(
+    tryPlatform()?.toolNotificationHandler?.(
       `${names} excluded — external dependencies not installed.`,
       cmd,
       label,

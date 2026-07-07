@@ -47,14 +47,32 @@ export interface Platform {
   readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
   readonly toolAvailability: ToolAvailabilityHost;
-  /** Linter diagnostics provider for the diagnostics tool's `list`/`count` commands. */
-  readonly linter: LinterProvider;
-  /** Sink for the diagnostics tool's `add` (manual criticism) command. */
-  readonly addCriticismSink: AddCriticismSink;
-  /** Surfaces a tool-missing error to the user. */
-  readonly toolMissingHandler: ToolMissingHandler;
-  /** Surfaces a tool-group-unavailable notification to the user. */
-  readonly toolNotificationHandler: ToolNotificationHandler;
+  /**
+   * Linter diagnostics provider for the diagnostics tool's `list`/`count`
+   * commands. Only the VS Code host implements this; hosts without a linter
+   * integration (CLI, desktop) omit it entirely — callers treat a missing
+   * port as "no diagnostics" rather than requiring a no-op stub.
+   */
+  readonly linter?: LinterProvider;
+  /**
+   * Sink for the diagnostics tool's `add` (manual criticism) command. Only
+   * the VS Code host implements this; hosts without an inline-criticism
+   * surface (CLI, desktop) omit it entirely — callers treat a missing port
+   * as "not accepted".
+   */
+  readonly addCriticismSink?: AddCriticismSink;
+  /**
+   * Surfaces a tool-missing error to the user. Only the VS Code host
+   * implements this; hosts without a UI for it (CLI, desktop) omit it
+   * entirely — callers treat a missing port as a no-op.
+   */
+  readonly toolMissingHandler?: ToolMissingHandler;
+  /**
+   * Surfaces a tool-group-unavailable notification to the user. Only the VS
+   * Code host implements this; hosts without a UI for it (CLI, desktop) omit
+   * it entirely — callers treat a missing port as a no-op.
+   */
+  readonly toolNotificationHandler?: ToolNotificationHandler;
   /** Host-provided tool-edit approval UI (diff viewer + accept/reject). */
   readonly toolEditApproval: ToolEditApprovalPort;
 }

@@ -47,6 +47,21 @@ describe('DiagnosticsTool', () => {
     });
   });
 
+  it('treats an absent linter port as no diagnostics (optional Platform port)', async () => {
+    await installPlatform({}, { linter: undefined });
+    const result = await withRunContext(worktreeContext(), () =>
+      new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
+    );
+
+    expect(result.status).toBe('executed');
+    expect(result.diagnostics).toMatchObject({
+      path: '/worktree/paper.tex',
+      command: 'list',
+      severity: { errors: 0, warnings: 0, info: 0, hints: 0 },
+      messages: [],
+    });
+  });
+
   it('rejects an add command missing required fields', async () => {
     const result = await new DiagnosticsTool().call({
       command: 'add',
@@ -68,6 +83,23 @@ describe('DiagnosticsTool', () => {
       accepted: false,
       resolvedPath: '',
     }));
+
+    const result = await withRunContext(worktreeContext(), () =>
+      new DiagnosticsTool().call({
+        command: 'add',
+        path: 'paper.tex',
+        line: 3,
+        message: 'tighten this claim',
+        severity: 4,
+        confidence: 5,
+      }),
+    );
+
+    expect(result.summary).toBe('Criticism not accepted');
+  });
+
+  it('treats an absent addCriticismSink port as not accepted (optional Platform port)', async () => {
+    await installPlatform({}, { addCriticismSink: undefined });
 
     const result = await withRunContext(worktreeContext(), () =>
       new DiagnosticsTool().call({
