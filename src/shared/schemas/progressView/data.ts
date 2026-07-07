@@ -39,6 +39,25 @@ export const MissingOutputsPayloadSchema = z.object({
   xmlFile: z.string().nullable().prefault(null),
 });
 
+/**
+ * Coarse media-attachment classification: `image` vs everything else. Matches
+ * the split `normalizeConversationForExport` already renders attachment
+ * markers for (`[image attachment]` / `[document attachment]`).
+ */
+export const MediaAttachmentKindSchema = z.enum(['image', 'document']);
+export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
+
+/**
+ * `userMessage` row payload (#7508): attachment kind + count only — never
+ * bytes — so the archived conversation can render `[image attachment]` /
+ * `[document attachment]` markers for media that was sent to the model but
+ * only ever lived in the provider message, not the transcript row.
+ */
+export const UserMessagePayloadSchema = z.object({
+  attachments: z.array(MediaAttachmentKindSchema).optional(),
+});
+export type UserMessagePayload = z.infer<typeof UserMessagePayloadSchema>;
+
 export const TOOL_USE_STATUS = {
   IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
@@ -109,5 +128,7 @@ export const WebFetchPayloadSchema = z.object({
   provider: z.string().optional(),
   status: z.string().optional(),
   errorCode: z.string().optional(),
+  /** Fetched document text, size-capped at the source (#7508). */
+  content: z.string().optional(),
 });
 export type WebFetchPayload = z.infer<typeof WebFetchPayloadSchema>;
