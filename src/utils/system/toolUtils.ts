@@ -46,7 +46,7 @@ async function reportMissingTool(
   openDocsCommand?: string,
 ): Promise<void> {
   try {
-    await platform().toolMissingHandler(message, openDocsCommand);
+    await platform().toolMissingHandler?.(message, openDocsCommand);
   } catch (err) {
     logger.error(
       CHANNEL,
