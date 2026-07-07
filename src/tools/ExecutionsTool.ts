@@ -447,6 +447,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       store.readChildren(),
       readCompletedRunTodos(executionId, {
         legacyFallback: () => store.readTodos(),
+        legacyModifiedAt: () => store.todosModifiedAt(),
       }),
       store.readReport(),
     ]);
@@ -669,8 +670,24 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     };
   }
 
+  /**
+   * Same source of truth as `showSummary()`'s completed-run todos branch: a
+   * running execution's task list is read live from KV, but once the
+   * execution is finished this must route through `readCompletedRunTodos()`
+   * so this endpoint never disagrees with the summary about which tasks are
+   * still pending.
+   */
   private async showTodos(executionId: ExecutionId): Promise<ToolResult> {
-    const todos = await getExecutionStore(executionId).readTodos();
+    const handle = currentSession().executions.getHandle(executionId);
+    const store = getExecutionStore(executionId);
+    const todos = handle
+      ? await store.readTodos()
+      : (
+          await readCompletedRunTodos(executionId, {
+            legacyFallback: () => store.readTodos(),
+            legacyModifiedAt: () => store.todosModifiedAt(),
+          })
+        ).todos;
 
     if (todos.length === 0) {
       return {
