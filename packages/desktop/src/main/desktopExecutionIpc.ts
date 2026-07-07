@@ -1,5 +1,5 @@
 import type { MainViewExecuteMessage } from '@shared/mainView';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewInboundMessageSchema } from '@shared/schemas/mainView';
 import {
   createCommandHandler,

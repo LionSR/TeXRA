@@ -12,7 +12,7 @@ import {
 } from '@controllers/onboarding/onboardingFunnel';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import type { StateStore } from '@platform/interfaces/state';
+import type { StateStore } from '@platform/interfaces';
 
 function fakeStateStore(initial: Record<string, unknown> = {}): StateStore {
   const store = new Map<string, unknown>(Object.entries(initial));

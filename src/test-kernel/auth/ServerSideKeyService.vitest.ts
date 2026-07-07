@@ -9,7 +9,7 @@ import {
   type ServerSideKeyState,
 } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/tier/TierService';
-import { delay } from '@utils/core/async';
+import { delay } from '@utils/core';
 
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 

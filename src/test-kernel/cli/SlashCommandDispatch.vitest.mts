@@ -11,13 +11,13 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
-import { activeForm } from '@cli/chat/tui/state/cliState/foregroundOverlaySlice';
-import { activeStreamId } from '@cli/chat/tui/state/cliState/focusSlice';
-import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
 import {
+  activeForm,
+  activeStreamId,
+  resetCliState,
   patchStream,
   streams,
-} from '@cli/chat/tui/state/cliState/streamsSlice';
+} from '@cli/chat/tui/state/cliState';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
 import type { CliContext } from '@cli/runtime/cliContext';

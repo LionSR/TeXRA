@@ -8,7 +8,7 @@ import { completedProcessDisplayLines } from './completedProcessTranscript';
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { toolUseDisplayLines } from '../panes/toolRenderers';
 import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
-import type { ConversationEntry, StreamSlice } from './cliState/types';
+import type { ConversationEntry, StreamSlice } from './cliState';
 
 /** Gutter that opens a wrapped tool-output line (corner glyph + space). */
 const CORNER_PREFIX = `${TOOL_OUTPUT_CORNER} `;

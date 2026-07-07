@@ -16,7 +16,7 @@
 import { type ZodError } from 'zod';
 
 // Local imports - shared state and schemas
-import { PersistedState } from '@shared/state';
+import { createWebviewStorage, PersistedState } from '@shared/state';
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
@@ -45,7 +45,17 @@ import {
   workflowAgent$,
   workflowInstruction$,
 } from './mainViewState';
-import { webviewStorage } from './webviewStorage';
+import { hostBridge } from '@shared/hostBridge';
+
+/**
+ * Shared webview storage singleton for the main view.
+ *
+ * All modules in the main view frontend MUST use this shared instance rather
+ * than calling `createWebviewStorage(hostBridge)` independently. Multiple
+ * independent instances each maintain their own cache, so writes from one
+ * instance can silently overwrite changes made by another.
+ */
+export const webviewStorage = createWebviewStorage(hostBridge);
 
 const stateManager = new PersistedState(
   webviewStorage,

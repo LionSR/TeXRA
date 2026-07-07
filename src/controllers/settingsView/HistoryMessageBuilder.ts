@@ -7,7 +7,7 @@
  * export) remain host-specific because they touch host-only UI surfaces.
  */
 import { getExecutionStore, listExecutions } from '@agent/storage';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   HistoryItem,
   UpdateHistoryMessage,

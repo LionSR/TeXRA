@@ -15,7 +15,7 @@
  */
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { resumeQueuedToolUseSnapshot } from './resumeQueuedToolUse';
-import type { ToolEditApprovalPort } from '@platform/interfaces/toolEditApproval';
+import type { ToolEditApprovalPort } from '@platform/interfaces';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { SessionHandle } from './SessionHandle';

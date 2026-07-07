@@ -2,7 +2,7 @@ import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
   type ShutdownPhase,
-} from '../interfaces/lifecycle';
+} from '../interfaces';
 
 type Callback = () => void | Promise<void>;
 

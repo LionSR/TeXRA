@@ -13,7 +13,7 @@ import type {
   ConversationEntry,
   ProcessOutputTail,
   StreamSlice,
-} from './cliState/types';
+} from './cliState';
 
 export const COMPLETED_PROCESS_TAIL_LINES = 20;
 

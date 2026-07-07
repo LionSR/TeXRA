@@ -7,13 +7,13 @@ import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Platform imports
-import { FileType, type FileStat } from '@platform/interfaces/filesystem';
+import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 
 // Local imports - settings memory
 import { walkMemoryDirectory } from '@tools/memory/memoryFileSystem';
 import { StorageFS } from '@utils/files';
-import { delay } from '@utils/core/async';
+import { delay } from '@utils/core';
 
 const MEMORY_LISTING_CONCURRENCY = 8;
 const FILE_COUNT_PER_DIRECTORY = 12;

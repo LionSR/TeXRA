@@ -1,5 +1,27 @@
-import { createDialogCloseButton } from './dialogCloseButton';
+import { render } from 'lit';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+
+/**
+ * Small icon-only close button shared by the desktop's imperative dialog
+ * overlays (settings, diff, PDF) — each wires it to its own `dialog.open =
+ * false` handler.
+ */
+function createDialogCloseButton(
+  className: string,
+  label: string,
+  onClose: () => void,
+): HTMLElement {
+  const close = document.createElement('wa-button');
+  close.classList.add(className);
+  close.setAttribute('appearance', 'plain');
+  close.setAttribute('size', 'small');
+  close.setAttribute('aria-label', label);
+  close.setAttribute('title', label);
+  render(waIcon('xmark'), close);
+  close.addEventListener('click', onClose);
+  return close;
+}
 
 /**
  * Shared scaffolding for the desktop's imperative `wa-dialog` overlays

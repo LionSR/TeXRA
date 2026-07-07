@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Platform imports
-import { FileType, type FileStat } from '@platform/interfaces/filesystem';
+import { FileType, type FileStat } from '@platform/interfaces';
 
 import {
   StreamLogStore,
@@ -21,7 +21,7 @@ import {
   type StreamLogEntry,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
-import { delay } from '@utils/core/async';
+import { delay } from '@utils/core';
 
 interface MockStorageOptions {
   logs: Record<string, unknown[]>;

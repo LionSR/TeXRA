@@ -2,13 +2,17 @@ import { getDefaultStreamLogStore } from '@transcript';
 import { isTerminalStatus } from '@common/constants/streamStatus';
 import { type StreamLifecycleStatus, type StreamTabId } from '@shared/schemas';
 
-import { activeStreamId, rootStreamId } from './cliState/focusSlice';
-import { parentStream } from './cliState/parentStreamSlice';
-import { registerCliStateResetHook } from './cliState/reset';
-import { removeStream } from './cliState/removeStream';
-import { patchStream, streams } from './cliState/streamsSlice';
+import {
+  activeStreamId,
+  rootStreamId,
+  parentStream,
+  registerCliStateResetHook,
+  removeStream,
+  patchStream,
+  streams,
+  type ConversationEntry,
+} from './cliState';
 import { activeStreamParentOrSelfId } from './streamViews';
-import type { ConversationEntry } from './cliState/types';
 
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
 

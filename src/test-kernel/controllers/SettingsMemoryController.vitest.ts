@@ -10,7 +10,7 @@ import {
   type SettingsMemoryMeta,
   type SettingsMemoryStorage,
 } from '@controllers/settingsView/SettingsMemoryController';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - test support
 import { createFakeUIHosts } from '../support/FakeHosts';

@@ -22,9 +22,8 @@ import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
-import { formatDuration } from '@utils/core';
+import { formatDuration, generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

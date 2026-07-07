@@ -1,4 +1,4 @@
-import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { tryPlatform } from '@platform/platform';
 import {
   flushPendingRunTraces,
@@ -20,7 +20,7 @@ import type {
   ProgressEventPayloads,
 } from '@agent/runtime/hostProgressEvents';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core/executionId';
+import { generateExecutionId } from '@utils/core';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import {

@@ -3,12 +3,12 @@
 
 import { Box, Text } from 'ink';
 
-import { activeStreamId as activeStreamIdSignal } from '../state/cliState/focusSlice';
-import { streams as streamsSignal } from '../state/cliState/streamsSlice';
 import {
+  activeStreamId as activeStreamIdSignal,
+  streams as streamsSignal,
   thinkingIndicatorVisible,
   type ConversationEntry,
-} from '../state/cliState/types';
+} from '../state/cliState';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 import { THINKING_MARKER } from '../ui/glyphs';

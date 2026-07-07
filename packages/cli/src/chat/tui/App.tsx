@@ -56,17 +56,15 @@ import {
   activeStreamId as activeStreamIdSignal,
   rootRunStartAvailable as rootRunStartAvailableSignal,
   rootStreamId as rootStreamIdSignal,
-} from './state/cliState/focusSlice';
-import {
   activeForm as activeFormSignal,
   childControlEscapeAction as childControlEscapeActionSignal,
   childControlMode as childControlModeSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   transcriptViewerStreamId as transcriptViewerStreamIdSignal,
-} from './state/cliState/foregroundOverlaySlice';
-import { parentStream as parentStreamSignal } from './state/cliState/parentStreamSlice';
-import { streams as streamsSignal } from './state/cliState/streamsSlice';
+  parentStream as parentStreamSignal,
+  streams as streamsSignal,
+} from './state/cliState';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { streamDisplayLabel } from './state/streamViews';

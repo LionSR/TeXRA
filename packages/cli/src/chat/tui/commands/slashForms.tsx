@@ -1,4 +1,4 @@
-import { activeForm } from '../state/cliState/foregroundOverlaySlice';
+import { activeForm } from '../state/cliState';
 
 import { findSlashCommand, type SlashCommand } from './slashRegistry';
 

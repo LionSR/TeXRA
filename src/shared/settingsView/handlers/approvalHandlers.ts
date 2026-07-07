@@ -8,7 +8,7 @@
  */
 import * as logger from '@logger/logUtils';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { UpdateApprovalSettingsMessage } from '@shared/schemas/settingsViewMessages';
 import {
   BASH_APPROVAL_CONFIG_KEY,
@@ -27,7 +27,7 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ConfigProvider, ConfigTarget } from '@platform/interfaces/config';
+import type { ConfigProvider, ConfigTarget } from '@platform/interfaces';
 
 const CHANNEL = 'approvalHandlers';
 

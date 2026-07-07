@@ -23,9 +23,11 @@ import {
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
-import { activeForm } from '@cli/chat/tui/state/cliState/foregroundOverlaySlice';
-import { resetCliState } from '@cli/chat/tui/state/cliState/reset';
-import { sessionMeta } from '@cli/chat/tui/state/cliState/sessionSlice';
+import {
+  activeForm,
+  resetCliState,
+  sessionMeta,
+} from '@cli/chat/tui/state/cliState';
 import {
   CLI_STATE_SETTINGS,
   STATE_SETTINGS,

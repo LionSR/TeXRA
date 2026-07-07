@@ -26,7 +26,7 @@ import {
 import {
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen,
-} from '../state/cliState/foregroundOverlaySlice';
+} from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';

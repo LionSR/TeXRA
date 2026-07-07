@@ -4,7 +4,7 @@ import {
 } from '@controllers/mainView/MainViewStartupController';
 import { computeAgentOptionsData } from '@agent/index/agentRegistry';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
 import { getConfig } from '@utils/config/configUtils';
 

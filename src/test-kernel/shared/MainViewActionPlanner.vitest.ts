@@ -8,7 +8,7 @@ import {
   planMerge,
   planPackClean,
 } from '@shared/mainView';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 function expectValid<T extends { valid: boolean }>(
   plan: T,

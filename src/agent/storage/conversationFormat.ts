@@ -21,7 +21,7 @@
  * whole-message truncation for the CLI) — only the per-content-block
  * recognition and truncation below is shared.
  */
-import { isObject } from '@utils/core/typeGuards';
+import { isObject } from '@utils/core';
 
 const DEFAULT_TRUNCATION_MARKER = '...';
 

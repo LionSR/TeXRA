@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { platform, type Platform } from '@platform/platform';
-import { maybeBuildGoalContinuation } from '@agent/goal';
+import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { StreamTabId } from '@shared/schemas';
 import {
   LEGACY_GOAL_FEATURE_FLAG_KEYS,

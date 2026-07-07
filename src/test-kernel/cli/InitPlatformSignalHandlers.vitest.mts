@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { LifecycleHost } from '@platform/interfaces/lifecycle';
+import type { LifecycleHost } from '@platform/interfaces';
 
 const flushPromises = async (): Promise<void> => {
   await Promise.resolve();

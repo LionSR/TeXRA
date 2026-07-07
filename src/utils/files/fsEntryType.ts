@@ -1,9 +1,9 @@
 /**
  * File system entry type helpers — bitwise checks for symlink-aware
- * file type detection. Uses FileType from @platform/interfaces/filesystem
+ * file type detection. Uses FileType from @platform/interfaces
  * as the single source of truth.
  */
-import { FileType } from '@platform/interfaces/filesystem';
+import { FileType } from '@platform/interfaces';
 
 /**
  * Check if a file system entry type represents a file (including symlinks to files).
