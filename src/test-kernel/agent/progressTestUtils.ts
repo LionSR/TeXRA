@@ -14,7 +14,7 @@ import {
   type RunCoordinators,
 } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventContract';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 export type RecordedProgressEvent = {

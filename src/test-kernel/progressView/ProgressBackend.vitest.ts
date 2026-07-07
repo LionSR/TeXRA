@@ -15,7 +15,7 @@ import type { TaskState } from '@agent/core/state/TaskState';
 import {
   type ProgressEvent,
   type ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+} from '@eventBus/ProgressEventContract';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
