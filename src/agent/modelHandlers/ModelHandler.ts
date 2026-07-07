@@ -45,7 +45,7 @@ import { isGpt5ModelName } from '@model/modelNames';
 
 // Local imports - logger
 import { MESSAGE_TYPES } from '@shared/schemas';
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
 
 // Local imports - tools
@@ -160,6 +160,16 @@ const END_TURN_REASONS: ProviderStopReason[] = [
   GOOGLE_FINISH.STOP,
 ];
 
+function mediaAttachmentKindsFromEntries(
+  entries: readonly MediaEntry[],
+): MediaAttachmentKind[] {
+  return entries.map((entry) =>
+    entry.media_category === 'image' && entry.media_type.startsWith('image/')
+      ? 'image'
+      : 'document',
+  );
+}
+
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  * @template M Provider-specific message type
@@ -188,6 +198,11 @@ export abstract class ModelHandler<
   protected progressViewEnabled = true;
   protected agentCategory?: AgentCategory;
   protected mediaProcessor: MediaAttachmentProcessor;
+  private readonly insertedAttachmentKinds = new Map<
+    MediaAttachmentContext,
+    MediaAttachmentKind[]
+  >();
+  private createdMediaEntriesForAttachmentLog: MediaEntry[] = [];
 
   /**
    * Whether the handler supports processing attachments in tool results.
@@ -721,7 +736,22 @@ export abstract class ModelHandler<
     const { entries, results } =
       await this.mediaProcessor.loadEntries(mediaFiles);
     this.mediaProcessor.logResults(results);
+    this.setCreatedMediaEntriesForAttachmentLog(entries);
     return this.createMediaContent(entries);
+  }
+
+  protected setCreatedMediaEntriesForAttachmentLog(
+    entries: readonly MediaEntry[],
+  ): void {
+    this.createdMediaEntriesForAttachmentLog = [...entries];
+  }
+
+  public consumeInsertedAttachmentKinds(
+    context: MediaAttachmentContext,
+  ): MediaAttachmentKind[] {
+    const kinds = this.insertedAttachmentKinds.get(context) ?? [];
+    this.insertedAttachmentKinds.set(context, []);
+    return [...kinds];
   }
 
   /**
@@ -738,8 +768,19 @@ export abstract class ModelHandler<
     mediaFiles: FileLocation[],
     context: MediaAttachmentContext,
   ): Promise<Media[]> {
+    this.insertedAttachmentKinds.set(context, []);
+    this.setCreatedMediaEntriesForAttachmentLog([]);
     try {
-      return await this.createMediaMessage(mediaFiles);
+      const media = await this.createMediaMessage(mediaFiles);
+      if (media.length > 0) {
+        this.insertedAttachmentKinds.set(
+          context,
+          mediaAttachmentKindsFromEntries(
+            this.createdMediaEntriesForAttachmentLog,
+          ),
+        );
+      }
+      return media;
     } catch (err) {
       reportMediaAttachmentFailure(this.logger, context, err);
       return [];
@@ -1465,7 +1506,7 @@ export abstract class ModelHandler<
   abstract addMediaToUserMessage(
     messages: M[],
     mediaFiles: FileLocation[],
-  ): Promise<void>;
+  ): Promise<MediaAttachmentKind[]>;
 
   // =========================================================================
   // Token counting methods

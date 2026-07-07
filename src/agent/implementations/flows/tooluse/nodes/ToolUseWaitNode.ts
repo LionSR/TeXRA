@@ -220,17 +220,22 @@ export class ToolUseWaitNode<C> extends Node<
     if (!execRes.synthetic) {
       shared.deliveredToOrchestrator = undefined;
       onFollowUpConsumed?.();
-      for (const followUp of execRes.followUps) {
-        logUserMessage(logger, followUpDisplayText(followUp));
-      }
     }
 
     for (const followUp of execRes.followUps) {
-      shared.messages = await appendFollowUpAsUserMessage(
+      const result = await appendFollowUpAsUserMessage(
         shared.messages,
         followUp,
         this.services,
       );
+      shared.messages = result.messages;
+      if (!execRes.synthetic) {
+        logUserMessage(
+          logger,
+          followUpDisplayText(followUp),
+          result.attachmentKinds,
+        );
+      }
     }
 
     return FlowTransition.CONTINUE;

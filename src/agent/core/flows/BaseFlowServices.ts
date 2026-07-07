@@ -46,6 +46,8 @@ export interface AgentCore<C = unknown> {
   delegation?: DelegationPolicy;
   /** Tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
+  /** Initial user row to log after the flow has inserted launch media. */
+  initialUserMessageForTranscript?: string;
 }
 
 export interface AgentRunIdentity {

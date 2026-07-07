@@ -32,7 +32,7 @@ import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -882,7 +882,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   /** Build typed Content for media entries (inline ≤20 MB; uploaded uri otherwise). */
   private async uploadMediaEntries(entries: MediaEntry[]): Promise<Content[]> {
-    return uploadGoogleMediaEntries<Content>(entries, {
+    const insertedEntries: MediaEntry[] = [];
+    const content = await uploadGoogleMediaEntries<Content>(entries, {
       getClient: () => this.getClient(),
       inlineLimit: this.getInlineUploadLimitBytes(),
       logger: this.logger,
@@ -890,7 +891,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         this.buildMediaContent({ data }, mimeType),
       buildUploaded: (uri, mimeType) =>
         this.buildMediaContent({ uri }, mimeType),
+      onInsertedEntry: (entry) => insertedEntries.push(entry),
     });
+    this.setCreatedMediaEntriesForAttachmentLog(insertedEntries);
+    return content;
   }
 
   private textContent(text: string): TextContent {
@@ -1350,15 +1354,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   async addMediaToUserMessage(
     messages: Step[],
     mediaFiles: FileLocation[],
-  ): Promise<void> {
-    if (!mediaFiles.length || !this.supportsFileUploads()) return;
+  ): Promise<MediaAttachmentKind[]> {
+    if (!mediaFiles.length || !this.supportsFileUploads()) return [];
     const lastUser = messages.findLast(
       (s): s is UserInputStep => s.type === 'user_input',
     );
-    if (!lastUser) return;
+    if (!lastUser) return [];
     const media = await this.createMediaForRound(mediaFiles, 'insert');
-    if (media.length === 0) return;
+    if (media.length === 0) return [];
     (lastUser.content ??= []).unshift(...media);
+    return this.consumeInsertedAttachmentKinds('insert');
   }
 
   // ===========================================================================

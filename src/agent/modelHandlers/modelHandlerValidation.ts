@@ -9,7 +9,7 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - tools and utils
 import replacementEngine from '@replacement/engine';
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -238,7 +238,8 @@ export class ModelHandlerValidation extends ModelHandler<
   async addMediaToUserMessage(
     _messages: ChatCompletionMessageParam[],
     _mediaFiles: FileLocation[],
-  ): Promise<void> {
+  ): Promise<MediaAttachmentKind[]> {
     // The validation model is text-only.
+    return [];
   }
 }

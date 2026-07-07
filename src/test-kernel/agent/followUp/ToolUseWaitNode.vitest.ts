@@ -308,8 +308,9 @@ describe('ToolUseWaitNode', () => {
       shouldSkipCycle: false,
       stateSlices: null,
     };
+    const info = vi.fn();
     const warn = vi.fn();
-    const addMediaToUserMessage = vi.fn(async () => {});
+    const addMediaToUserMessage = vi.fn(async () => []);
     const runtimeHost = { emit: vi.fn() };
 
     const services = {
@@ -317,7 +318,7 @@ describe('ToolUseWaitNode', () => {
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
-      logger: { emit: vi.fn(), info: vi.fn(), warn },
+      logger: { emit: vi.fn(), info, warn },
       modelHandler: {
         addMediaToUserMessage,
         capabilities: {
@@ -362,6 +363,69 @@ describe('ToolUseWaitNode', () => {
       expect.stringContaining('Model has no vision support'),
     );
     expect(addMediaToUserMessage).toHaveBeenCalledOnce();
+    expect(info).toHaveBeenCalledWith(
+      'please inspect this figure',
+      expect.not.objectContaining({
+        data: expect.objectContaining({ attachments: expect.anything() }),
+      }),
+    );
+  });
+
+  it('logs follow-up markers reported by provider insertion', async () => {
+    const shared: ToolUseRunShared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const info = vi.fn();
+    const runtimeHost = { emit: vi.fn() };
+
+    const services = {
+      checkInterruption: () => false,
+      fileService: {
+        createLocation: (filePath: string) => ({ absolutePath: filePath }),
+      },
+      logger: { emit: vi.fn(), info, warn: vi.fn() },
+      modelHandler: {
+        addMediaToUserMessage: vi.fn(async () => ['image']),
+        capabilities: {
+          supportsNativeAudio: false,
+          supportsVision: true,
+        },
+        createUserFollowUpMessages: vi.fn(async () => []),
+      },
+      runtimeHost,
+      streamStatus: new StreamStatusMachine(),
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+
+    const node = new ToolUseWaitNode().setServices(services);
+    await withTestRunContext(runtimeHost, 'test-stream', () =>
+      node.post(
+        shared,
+        {
+          afterError: false,
+          lastResponse: undefined,
+          previouslyDeliveredToOrchestrator: false,
+          touchedFiles: [],
+        },
+        {
+          followUps: [
+            {
+              text: 'please inspect this figure',
+              mediaFiles: ['/tmp/figure.png', '/tmp/missing.pdf'],
+              origin: 'user',
+            },
+          ],
+          kind: 'continue',
+        },
+      ),
+    );
+
+    expect(info).toHaveBeenCalledWith('please inspect this figure', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+      data: { attachments: ['image'] },
+    });
   });
 
   it('pauses the goal after a failed parent cycle', async () => {
