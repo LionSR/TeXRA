@@ -60,7 +60,14 @@ export function createToolUseRoundFlow<C>(): Flow<
   >({
     operationName: 'Tool-use call',
     streaming: true,
-    getSystemPrompt: (shared) => shared.systemPrompt,
+    // Only resupply for providers that need it per-call (Anthropic, Google).
+    // Providers that embed the system prompt into `messages` at session init
+    // (OpenAI, OpenRouter) already have it in history — resupplying it here
+    // too would duplicate it alongside the persisted message.
+    getSystemPrompt: (shared, services) =>
+      services.modelHandler.requiresPerCallSystemPrompt
+        ? shared.systemPrompt
+        : undefined,
     storeResponse: (shared, response) => {
       shared.response = response;
     },

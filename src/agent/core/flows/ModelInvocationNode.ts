@@ -22,7 +22,7 @@ export interface ModelInvocationConfig<TShared, TServices> {
   operationName: string;
   streaming: boolean;
   backgroundModeAware?: boolean;
-  getSystemPrompt?: (shared: TShared) => string | undefined;
+  getSystemPrompt?: (shared: TShared, services: TServices) => string | undefined;
   getEndTag?: (services: TServices) => string | undefined;
   getTools?: (services: TServices) => ToolDefinition[] | undefined;
   storeResponse: (shared: TShared, response: unknown) => void;
@@ -91,7 +91,7 @@ export class ModelInvocationNode<
     return {
       shouldStop: shared.shouldStop,
       messages: shared.messages,
-      systemPrompt: this._config.getSystemPrompt?.(shared),
+      systemPrompt: this._config.getSystemPrompt?.(shared, this.services),
     };
   }
 
