@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events';
 
 export interface AppSignalPayloads {
+  /** The VS Code extension is shutting down. */
+  extensionDeactivating: undefined;
+
   /**
    * GitHub rejected the configured token. Frontends can surface the failure
    * and direct the user to token settings.

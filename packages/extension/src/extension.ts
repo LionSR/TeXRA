@@ -291,7 +291,7 @@ export async function activate(context: vscode.ExtensionContext) {
     SharedIssuePollingSource.disposeAll(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    ProgressEventBus.emit('extensionDeactivating', undefined),
+    appSignals.emit('extensionDeactivating', undefined),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
