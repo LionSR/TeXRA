@@ -3,8 +3,6 @@ description: Implements suggestions from review agents (criticize, enhance, logi
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   outputExt: tex
 
 prompts:

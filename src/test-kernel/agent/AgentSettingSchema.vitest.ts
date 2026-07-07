@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { describe, expect, it, vi } from 'vitest';
+import * as yaml from 'yaml';
 
 import {
   AgentCategory,
@@ -7,6 +12,11 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
+
+const REPO_ROOT = resolve(
+  fileURLToPath(new URL('.', import.meta.url)),
+  '../../..',
+);
 
 describe('AgentSettingSchema', () => {
   it('strips legacy workflow outputExt without exposing it in settings', () => {
@@ -29,6 +39,31 @@ describe('AgentSettingSchema', () => {
     expect(setting.agentCategory).toBe(AgentCategory.Workflow);
     expect(Object.hasOwn(setting, 'documentTag')).toBe(false);
     expect(Object.hasOwn(setting, 'endTag')).toBe(false);
+  });
+
+  it('regression #7497: shipped reference-agents YAML no longer carries documentTag/endTag', () => {
+    // The retired keys used to be copy-pasted into every reference agent, so
+    // parsing the bundle at startup fired the deprecation console.warn 4-8x
+    // on every launch. Assert both the absence of the keys and the silent
+    // parse, so a re-added key fails loudly here instead of in users' stderr.
+    const dir = resolve(REPO_ROOT, 'reference-agents');
+    const files = readdirSync(dir).filter((name) => name.endsWith('.yaml'));
+    expect(files.length).toBeGreaterThan(0);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let callCountAfterParsing: number;
+    try {
+      for (const file of files) {
+        const raw = yaml.parse(readFileSync(resolve(dir, file), 'utf8'));
+        AgentDefinitionSchema.parse(raw);
+      }
+    } finally {
+      // Read the call count before mockRestore(), which clears .mock.calls
+      // (it implies mockReset()) — asserting after restore would always pass.
+      callCountAfterParsing = warnSpy.mock.calls.length;
+      warnSpy.mockRestore();
+    }
+    expect(callCountAfterParsing).toBe(0);
   });
 });
 

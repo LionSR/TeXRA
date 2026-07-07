@@ -3,8 +3,6 @@ description: Critical reviewer for mathematical physics papers. Inserts inline c
 
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   outputExt: tex
 
 prompts:
