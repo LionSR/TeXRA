@@ -87,6 +87,9 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
+      - name: Check dead-code ratchet
+        run: pnpm run check:dead-code-ratchet
+
       - name: Check extension package invariants
         run: pnpm run check:extension-package-invariants
 

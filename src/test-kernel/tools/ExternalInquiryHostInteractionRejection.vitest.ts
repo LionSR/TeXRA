@@ -15,7 +15,6 @@ function createRuntimeHostWithRejectingInteraction(
     emit: () => {},
     interactions: {
       handleProgressEvent: () => false,
-      pending: () => [],
       resolve: () => false,
       cancelForStream: () => {},
       openExternalInquiry: () => Promise.reject(reason),

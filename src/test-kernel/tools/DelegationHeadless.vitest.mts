@@ -74,7 +74,6 @@ function runtimeHost(): AgentRuntimeHost {
     emit: vi.fn(),
     interactions: {
       handleProgressEvent: vi.fn(() => false),
-      pending: vi.fn(() => []),
       resolve: vi.fn(() => false),
       cancelForStream: vi.fn(),
     } satisfies HostInteractions,
