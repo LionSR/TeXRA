@@ -1,8 +1,4 @@
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   extensionPresentationEvents,
@@ -11,6 +7,10 @@ import {
   isExtensionPresentationEvent,
 } from '@frontend/events/extensionPresentationEvents';
 import { emitExtensionProgressEvent } from '@frontend/events/extensionProgressEvents';
+import type {
+  ProgressBackendEvent,
+  ProgressBackendEventPayloads,
+} from '@shared/progressView/backend/events/ProgressEventHandler';
 
 export const extensionAgentRuntimeHost: AgentRuntimeHost = {
   interactions: defaultSession().interactions,
@@ -23,8 +23,8 @@ export const extensionAgentRuntimeHost: AgentRuntimeHost = {
       return;
     }
     emitExtensionProgressEvent(
-      event as ProgressEvent,
-      payload as ProgressEventPayloads[ProgressEvent],
+      event as ProgressBackendEvent,
+      payload as ProgressBackendEventPayloads[ProgressBackendEvent],
     );
   },
 };

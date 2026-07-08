@@ -6,7 +6,7 @@ vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
 }));
 
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
 import {
   setActiveCliToolEditApprovalHandler,
@@ -49,17 +49,18 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
   };
 }
 
-const credentialExhaustedRetry: ProgressEventPayloads['showRetryRequest'] = {
-  streamId:
-    'test-stream' as ProgressEventPayloads['showRetryRequest']['streamId'],
-  operation: 'Tool-use call',
-  errorMessage: 'HTTP 429 Too Many Requests',
-  errorDetails: {
-    exhaustionReason: 'relay-limit',
-    isRelayError: true,
-    statusCode: 429,
-  },
-};
+const credentialExhaustedRetry: RuntimeInteractionEventPayloads['showRetryRequest'] =
+  {
+    streamId:
+      'test-stream' as RuntimeInteractionEventPayloads['showRetryRequest']['streamId'],
+    operation: 'Tool-use call',
+    errorMessage: 'HTTP 429 Too Many Requests',
+    errorDetails: {
+      exhaustionReason: 'relay-limit',
+      isRelayError: true,
+      statusCode: 429,
+    },
+  };
 
 beforeEach(async () => {
   // Wire the Platform with a delegating port that reads the CLI's active
@@ -146,7 +147,7 @@ describe('human input approval policy', () => {
 });
 
 describe('approval prompt hooks', () => {
-  const proposal: ProgressEventPayloads['showAgentProposal'] = {
+  const proposal: RuntimeInteractionEventPayloads['showAgentProposal'] = {
     proposalId: 'proposal-1',
     streamId: 'root@deepseekT#abc',
     agent: 'review',
@@ -528,7 +529,7 @@ describe('formatRetryRequestMessage', () => {
   });
 
   it('recognizes relay monthly-limit text when the relay body is absent', () => {
-    const retry: ProgressEventPayloads['showRetryRequest'] = {
+    const retry: RuntimeInteractionEventPayloads['showRetryRequest'] = {
       ...credentialExhaustedRetry,
       errorMessage:
         'HTTP 429 Too Many Requests – 429 Monthly spending limit reached ($300).',

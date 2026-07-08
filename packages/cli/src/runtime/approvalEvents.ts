@@ -1,7 +1,4 @@
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 
 // CLI hosts share the same progress-event names, but not the same handling.
 // Decision approvals can be auto-approved or denied by policy; human-input
@@ -11,17 +8,17 @@ export const CLI_DECISION_APPROVAL_EVENTS = [
   'showPlanApproval',
   'showAgentProposal',
   'showRetryRequest',
-] as const satisfies readonly (keyof ProgressEventPayloads)[];
+] as const satisfies readonly (keyof RuntimeInteractionEventPayloads)[];
 
 export const CLI_HUMAN_INPUT_APPROVAL_EVENTS = [
   'showExternalInquiry',
   'showUserQuestion',
-] as const satisfies readonly (keyof ProgressEventPayloads)[];
+] as const satisfies readonly (keyof RuntimeInteractionEventPayloads)[];
 
 export const CLI_APPROVAL_EVENTS = [
   ...CLI_DECISION_APPROVAL_EVENTS,
   ...CLI_HUMAN_INPUT_APPROVAL_EVENTS,
-] as const satisfies readonly (keyof ProgressEventPayloads)[];
+] as const satisfies readonly (keyof RuntimeInteractionEventPayloads)[];
 
 export const CLI_APPROVAL_EVENT_KIND = {
   showBashPermission: 'bash',
@@ -40,22 +37,20 @@ export type CliApprovalEvent = (typeof CLI_APPROVAL_EVENTS)[number];
 export type CliApprovalEventKind =
   (typeof CLI_APPROVAL_EVENT_KIND)[CliApprovalEvent];
 
-const CLI_DECISION_APPROVAL_EVENT_SET: ReadonlySet<ProgressEvent> = new Set(
+const CLI_DECISION_APPROVAL_EVENT_SET: ReadonlySet<string> = new Set(
   CLI_DECISION_APPROVAL_EVENTS,
 );
-const CLI_APPROVAL_EVENT_SET: ReadonlySet<ProgressEvent> = new Set(
+const CLI_APPROVAL_EVENT_SET: ReadonlySet<string> = new Set(
   CLI_APPROVAL_EVENTS,
 );
 
 export function isCliDecisionApprovalEvent(
-  event: ProgressEvent,
+  event: string,
 ): event is CliDecisionApprovalEvent {
   return CLI_DECISION_APPROVAL_EVENT_SET.has(event);
 }
 
-export function isCliApprovalEvent(
-  event: ProgressEvent,
-): event is CliApprovalEvent {
+export function isCliApprovalEvent(event: string): event is CliApprovalEvent {
   return CLI_APPROVAL_EVENT_SET.has(event);
 }
 
