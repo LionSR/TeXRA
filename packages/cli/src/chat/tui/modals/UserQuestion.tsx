@@ -14,7 +14,10 @@ import {
   USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from './UserQuestionState';
-import { clampModalWidth, CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+} from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { wrapAnsiToWidth } from '../render/ansiWrap';

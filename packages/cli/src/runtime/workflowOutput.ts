@@ -112,13 +112,9 @@ function outputCopyRelativePathForExpectedOutput(
   const generatedRelativePath = outputCopyRelativePath(output);
   if (expectedRelativePaths.length === 0) return generatedRelativePath;
 
-  const generatedName = path.posix.basename(
-    toPosixPath(generatedRelativePath),
-  );
+  const generatedName = path.posix.basename(toPosixPath(generatedRelativePath));
   const normalizedOriginalPath =
-    output.originalPath == null
-      ? undefined
-      : toPosixPath(output.originalPath);
+    output.originalPath == null ? undefined : toPosixPath(output.originalPath);
   const matchingExpectedPaths =
     normalizedOriginalPath == null
       ? []

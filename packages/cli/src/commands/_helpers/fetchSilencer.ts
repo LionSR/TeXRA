@@ -31,7 +31,8 @@ export async function suppressCliFetchStackLogs<T>(
 export function formatCliModelListError(error: unknown): string {
   const message = toErrorMessage(error);
   const cause = error instanceof Error ? error.cause : undefined;
-  const causeMessage = cause instanceof Error ? toErrorMessage(cause) : undefined;
+  const causeMessage =
+    cause instanceof Error ? toErrorMessage(cause) : undefined;
   const detail = causeMessage ?? message;
   if (/ENOTFOUND|EAI_AGAIN|getaddrinfo|fetch failed/i.test(detail)) {
     return `texra: could not fetch model access metadata from remote.texra.ai: ${detail}`;

@@ -4,7 +4,10 @@ import { Box, Text, useWindowSize } from 'ink';
 import type { PlanApprovalPermission } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
-import { clampModalWidth, CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+} from '../ui/theme';
 import { confirmCardCompactChromeRows } from './ConfirmCardState';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
