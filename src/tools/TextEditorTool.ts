@@ -17,6 +17,7 @@ import {
 import {
   appendApprovalDiffNote,
   requestApprovedEditContent,
+  requestAndWriteApprovedEdit,
   writeAndRecordApprovedEdit,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
@@ -381,7 +382,7 @@ export class TextEditorTool extends defineTool({
     | { rejected: ToolResult }
     | { approval: ToolEditApprovalResult; appliedContent: string }
   > {
-    const outcome = await requestApprovedEditContent({
+    const outcome = await requestAndWriteApprovedEdit({
       path: filePath,
       displayPath,
       originalContent: fileContent,
@@ -389,19 +390,14 @@ export class TextEditorTool extends defineTool({
       sourceTool,
     });
     if ('rejected' in outcome) {
-      return { rejected: outcome.rejected };
+      return outcome;
     }
-
-    const { appliedContent, baseContent } = await writeAndRecordApprovedEdit(
-      filePath,
-      fileContent,
-      outcome.finalContent,
-    );
+    const { approval, appliedContent, baseContent } = outcome;
     if (appliedContent !== baseContent) {
       this.addToHistory(filePath, baseContent);
     }
 
-    return { approval: outcome.approval, appliedContent };
+    return { approval, appliedContent };
   }
 
   private async strReplace(
@@ -594,7 +590,7 @@ export class TextEditorTool extends defineTool({
       const previousContent = history.at(-1)!;
       const currentContent = await WorkspaceFS.read(filePath);
 
-      const outcome = await requestApprovedEditContent({
+      const outcome = await requestAndWriteApprovedEdit({
         path: filePath,
         displayPath,
         originalContent: currentContent,
@@ -604,13 +600,7 @@ export class TextEditorTool extends defineTool({
       if ('rejected' in outcome) {
         return outcome.rejected;
       }
-      const { approval, finalContent } = outcome;
-
-      const { appliedContent } = await writeAndRecordApprovedEdit(
-        filePath,
-        currentContent,
-        finalContent,
-      );
+      const { approval, appliedContent } = outcome;
       history.pop();
 
       if (history.length === 0) {

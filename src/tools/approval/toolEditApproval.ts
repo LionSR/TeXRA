@@ -449,6 +449,40 @@ export async function requestApprovedEditContent(request: {
   };
 }
 
+export interface WrittenApprovedEdit extends WriteApprovedContentResult {
+  approval: ToolEditApprovalResult;
+}
+
+/**
+ * Full approve-then-write handshake for a proposed edit: request approval,
+ * then write the resolved content and record the file as read. Combines
+ * `requestApprovedEditContent` + `writeAndRecordApprovedEdit`, the exact
+ * pairing every straight-through edit call site (no work needed between
+ * approval and write) previously hand-rolled. Callers that must do
+ * something between approval and write (e.g. creating parent directories)
+ * should compose the two primitives directly instead.
+ */
+export async function requestAndWriteApprovedEdit(request: {
+  path: string;
+  displayPath: string;
+  originalContent: string;
+  proposedContent: string;
+  sourceTool: string;
+}): Promise<{ rejected: ToolResult } | WrittenApprovedEdit> {
+  const outcome = await requestApprovedEditContent(request);
+  if ('rejected' in outcome) {
+    return outcome;
+  }
+  const { approval, finalContent } = outcome;
+
+  const written = await writeAndRecordApprovedEdit(
+    request.path,
+    request.originalContent,
+    finalContent,
+  );
+  return { approval, ...written };
+}
+
 /**
  * Mirror the parent stream's bash-approval bypass onto a freshly resolved child
  * subagent stream, independent of any tool-edit auto-approval.
