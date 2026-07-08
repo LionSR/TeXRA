@@ -263,14 +263,10 @@ async function finalizeChildStream(
   disposeTrace();
 
   if (options?.autoClose) {
-    const handled = handle.runtimeHost.interactions?.handleProgressEvent(
+    emitRuntimeEvent(
       'removeStream',
       { streamId: handle.childStreamId },
+      session,
     );
-    if (!handled) {
-      handle.runtimeHost.emit('removeStream', {
-        streamId: handle.childStreamId,
-      });
-    }
   }
 }
