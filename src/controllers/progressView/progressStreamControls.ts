@@ -1,5 +1,5 @@
 import type { StreamTabId } from '@shared/schemas';
-import type { ProgressStreamControls } from '@shared/progressView/backend/events/ProgressEventHandler';
+import type { ProgressStreamControls } from '@shared/progressView/backend/events/ProgressFactApplier';
 import { isGoalInFlight } from '@shared/schemas/goal';
 import {
   isApprovalBypassedForStream,

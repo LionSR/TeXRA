@@ -158,7 +158,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     this.hydrateRestoredStreams();
 
     // Desktop presentation requests are window-owned: root/runtime-host events
-    // reach this bridge through `DesktopProgressBridge.handleProgressEvent` and
+    // reach this bridge through `DesktopProgressBridge.handleInteractionEvent` and
     // then `onProgressEvent` — never through any process-global channel,
     // which would make root UI actions cross window boundaries and outlive
     // the owning renderer.
