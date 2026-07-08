@@ -10,8 +10,8 @@ import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import {
   PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES,
   ProgressEventHandler,
-  type ProgressBackendEvent,
-  type ProgressBackendEventPayloads,
+  type ProgressBackendInteractionEvent,
+  type ProgressBackendInteractionPayloads,
   type GetProgressStreamControls,
   type ProgressEventSubscription,
   type UICallbacks,
@@ -142,9 +142,9 @@ export class ProgressBackend {
     };
   }
 
-  handleProgressEvent<K extends ProgressBackendEvent>(
+  handleProgressEvent<K extends ProgressBackendInteractionEvent>(
     event: K,
-    payload: ProgressBackendEventPayloads[K],
+    payload: ProgressBackendInteractionPayloads[K],
   ): void {
     // A run may still hold the host-channel emit closure that routes here after
     // this backend is disposed (e.g. a desktop window closed while the run keeps
