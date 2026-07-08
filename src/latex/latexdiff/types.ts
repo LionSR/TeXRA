@@ -20,8 +20,6 @@ export interface RunLatexdiffCommandConfig {
   model: string;
   inputFile: string;
   outputFiles?: string[];
-  outputFilesActive?: string[];
-  streamId?: string;
   runId?: string | null;
   outputsByRound?: RoundIndexed<OutputFileInfo>;
 }

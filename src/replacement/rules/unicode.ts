@@ -1,7 +1,7 @@
 // Local imports - replacement
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
-export const UNICODE_REPLACEMENTS: ReplacementCategory = {
+export const UNICODE_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'unicode',
   description:
     'Fixes for common non-math Unicode characters to LaTeX equivalents or for general cleanup (e.g., removing zero-width spaces). Math-specific Unicode is handled by a separate function within math environments.',

@@ -1,5 +1,5 @@
 // Local imports
-import { ReplacementCategory } from './types';
+import { NonRegexReplacementCategory, RegexReplacementCategory } from './types';
 import {
   generateMathCommandShortcuts,
   generateDecoratedMathShortcuts,
@@ -41,7 +41,7 @@ const GREEK_LETTER_SHORTCUTS: { [key: string]: string } = {
 };
 
 // Automatically generated replacement patterns
-const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
+const MAX_AUTO_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'max_auto',
   description: 'Automatically generated maximum style replacements for LaTeX',
   isRegex: false,
@@ -311,7 +311,7 @@ const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 };
 
 // Manually specified replacement patterns
-const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
+const MAX_MANUAL_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'max_manual',
   description: 'Manually specified maximum style replacements for LaTeX',
   isRegex: false,
@@ -444,7 +444,7 @@ const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
 };
 
 // Combined replacements for backward compatibility
-export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
+export const MAX_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'max_style',
   description: 'Maximum style replacements for LaTeX commands and symbols',
   isRegex: false,
@@ -554,7 +554,7 @@ const GEP_WORDS_PAREN_CREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,
 const GEP_WORDS_PAREN_EQREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\(\\\\eqref\\{(eqn:[^,}]+)\\}\\)`;
 const FULL_WORDS_CREF_FIG_PATTERN = `(${FULL_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(fig:[^,}]+)\\}`;
 
-export const MAX_REGEX_REPLACEMENTS: ReplacementCategory = {
+export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
   name: 'max_style_regex',
   description:
     'Maximum style regex replacements for LaTeX commands and symbols',
