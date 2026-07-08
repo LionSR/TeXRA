@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
+import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { ProgressStreamLifecycleController } from '@controllers/progressView/ProgressStreamLifecycleController';
 import {
   ProgressFollowUpController,
@@ -10,10 +10,7 @@ import {
   ProgressFollowUpPolishController,
   type ProgressFollowUpPolishResult,
 } from '@controllers/progressView/ProgressFollowUpPolishController';
-import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
-import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
-import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
@@ -72,10 +69,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
   private readonly recordingManager: RecordingManager;
+  private readonly progressHost: ProgressViewHost;
   private readonly streamLifecycleController: ProgressStreamLifecycleController;
-  private readonly workflowActionsController: ProgressWorkflowActionsController;
-  private readonly workflowFileActionsController: ProgressWorkflowFileActionsController;
-  private readonly agentProposalController: ProgressAgentProposalController;
+  private readonly workflowActionsController: ProgressViewHost['workflowActionsController'];
+  private readonly workflowFileActionsController: ProgressViewHost['workflowFileActionsController'];
+  private readonly agentProposalController: ProgressViewHost['agentProposalController'];
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly followUpPolishController: ProgressFollowUpPolishController;
@@ -107,11 +105,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       progressTitle: 'Transcribing follow-up message',
     });
 
+    this.progressHost = this.createProgressViewHost();
+    this.workflowActionsController =
+      this.progressHost.workflowActionsController;
     this.workflowFileActionsController =
-      this.createWorkflowFileActionsController();
+      this.progressHost.workflowFileActionsController;
+    this.agentProposalController = this.progressHost.agentProposalController;
     this.streamLifecycleController = this.createStreamLifecycleController();
-    this.workflowActionsController = this.createWorkflowActionsController();
-    this.agentProposalController = this.createAgentProposalController();
     this.apiKeyRetryController = this.createApiKeyRetryController();
     this.followUpController = this.createFollowUpController();
     this.followUpPolishController = new ProgressFollowUpPolishController();
@@ -166,107 +166,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.POP_BACK]: () => this.provider.popBackToSidebar(),
 
       // Shared progress command groups
-      ...createProgressViewCommandHandlers({
-        lifecycle: {
-          setActiveStream: (stream) => this.provider.setActiveStream(stream),
-          setAgentFilter: (filter) => {
-            this.provider.state.agentCategoryFilter = filter;
-            this.provider.syncFullView();
-          },
-          deleteStream: (stream) =>
-            this.streamLifecycleController.deleteStream(stream),
-          deleteAllStreams: () => this.handleDeleteAll(),
-          stopStream: (stream) =>
-            this.streamLifecycleController.stopStream(stream),
-        },
-        run: {
-          resumeStream: (stream) =>
-            this.workflowActionsController.resume(stream),
-          runNewStream: (stream) =>
-            this.workflowActionsController.runNew(stream),
-        },
-        followUp: {
-          sendFollowUp: async ({ stream, text, mediaFiles }) => {
-            await safeExecuteCommand(
-              'texra.sendFollowUp',
-              [
-                {
-                  stream,
-                  text,
-                  ...(mediaFiles && mediaFiles.length > 0
-                    ? { mediaFiles }
-                    : {}),
-                },
-              ],
-              this.viewName,
-            );
-          },
-          reportImageSaveError: (_image, error) => {
-            // Best-effort: a failed image save must not block the text, but log
-            // it so a missing attachment is diagnosable.
-            this.logger.warn(
-              this.channel,
-              `Failed to save pasted follow-up image: ${toErrorMessage(error)}`,
-            );
-          },
-        },
-        bypass: {
-          runtimeHost: extensionAgentRuntimeHost,
-          showInfo: (message) => this.host.info(message),
-        },
-        file: {
-          openFile: async (file, line) => {
-            await safeExecuteCommand(
-              'texra.openFile',
-              [file, line],
-              this.viewName,
-            );
-          },
-          openFileCompile: async (file) => {
-            await safeExecuteCommand(
-              'texra.openFileCompile',
-              [file],
-              this.viewName,
-            );
-          },
-          openTaskStorage: (stream) =>
-            this.workflowFileActionsController.openTaskStorage(stream),
-          compareOriginal: (file, base) =>
-            this.workflowFileActionsController.compareOriginal(file, base),
-          comparePrevious: (file, base, previous) =>
-            this.workflowFileActionsController.comparePrevious(
-              file,
-              base,
-              previous,
-            ),
-          acceptFile: (file, base) =>
-            this.workflowFileActionsController.acceptFile(file, base),
-          mergeFile: (file, base) =>
-            this.workflowFileActionsController.mergeFile(file, base),
-          latexdiffFile: (file, base) =>
-            this.workflowFileActionsController.latexdiffFile(file, base),
-          openLabel: (label) =>
-            this.workflowFileActionsController.openLabel(label),
-        },
-        approval: {
-          handleToolEditApprovalAction: async (message) => {
-            await handleProgressViewToolEditApprovalAction(message);
-            return true;
-          },
-          handleBashApprovalAction: (message) =>
-            this.handleBashApprovalAction(message),
-          handlePlanApprovalAction: (message) =>
-            this.handlePlanApprovalAction(message),
-          handleUserQuestionAction: (message) =>
-            this.handleUserQuestionAction(message),
-          handleAgentProposalAction: (message) =>
-            this.agentProposalController.handleAction(message),
-        },
-        externalInquiry: {
-          logWarn: (message, context) =>
-            this.logger.warn(this.channel, message, { data: context }),
-        },
-      }),
+      ...this.progressHost.commandHandlers,
       [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: async (data) => {
         await safeExecuteCommand(
           'texra.compactResponse',
@@ -436,180 +336,252 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private createWorkflowActionsController(): ProgressWorkflowActionsController {
-    return new ProgressWorkflowActionsController({
-      state: {
-        getTaskState: (stream) =>
-          this.provider.state.snapshots.getTaskState(stream),
-        getExecutionId: (stream) =>
-          this.provider.state.snapshots.getExecutionId(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
-        getKnownWorkspaceOutputPaths: (stream) =>
-          this.provider.state.snapshots.getKnownFilePaths(stream, {
-            workspaceOnly: true,
-          }),
-      },
-      executeAgent: async (request) => {
-        await this.executeValidated(request);
-      },
-      runDiff: async (request) => {
-        await safeExecuteCommand(
-          'texra.runLatexdiff',
-          [request],
-          this.viewName,
-        );
-      },
-      runFileOperation: async (operation, request) => {
-        await safeExecuteCommand(
-          `texra.${operation}`,
-          [request],
-          this.viewName,
-        );
-      },
-    });
-  }
-
-  private createWorkflowFileActionsController(): ProgressWorkflowFileActionsController {
-    return new ProgressWorkflowFileActionsController({
-      state: {
-        getActiveStream: () => this.provider.state.activeStream,
-        getExecutionId: (stream) =>
-          this.provider.state.snapshots.getExecutionId(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
-        getAgentModel: (stream) => {
-          const taskState = this.provider.state.snapshots.getTaskState(stream);
-          return taskState
-            ? {
-                agent: taskState.agentConfig.agent,
-                model: taskState.agentConfig.model,
-              }
-            : undefined;
+  private createProgressViewHost(): ProgressViewHost {
+    return new ProgressViewHost({
+      workflowActions: {
+        state: {
+          getTaskState: (stream) =>
+            this.provider.state.snapshots.getTaskState(stream),
+          getExecutionId: (stream) =>
+            this.provider.state.snapshots.getExecutionId(stream),
+          getOutputFiles: (stream) =>
+            this.provider.state.snapshots.getOutputFiles(stream),
+          getKnownWorkspaceOutputPaths: (stream) =>
+            this.provider.state.snapshots.getKnownFilePaths(stream, {
+              workspaceOnly: true,
+            }),
         },
-      },
-      host: {
-        compareFiles: async (baseFile, editedFile) => {
+        executeAgent: async (request) => {
+          await this.executeValidated(request);
+        },
+        runDiff: async (request) => {
           await safeExecuteCommand(
-            'texra.compare',
-            [
-              pathToLocation(''), // inputFile unused
-              pathToLocation(baseFile),
-              pathToLocation(editedFile),
-            ],
+            'texra.runLatexdiff',
+            [request],
             this.viewName,
           );
         },
-        acceptEditedFile: async (baseFile, editedFile, copyMeta) => {
-          return safeExecuteCommand<boolean>(
-            'texra.acceptEdited',
-            [
-              pathToLocation(''), // inputFile unused
-              pathToLocation(baseFile),
-              pathToLocation(editedFile),
-              copyMeta,
-            ],
-            this.viewName,
-          );
-        },
-        mergeFile: async (baseFile, editedFile) => {
+        runFileOperation: async (operation, request) => {
           await safeExecuteCommand(
-            'texra.merge',
-            [undefined, baseFile, editedFile],
+            `texra.${operation}`,
+            [request],
             this.viewName,
           );
         },
-        latexdiffFile: async (baseFile, editedFile) => {
+      },
+      workflowFileActions: {
+        state: {
+          getActiveStream: () => this.provider.state.activeStream,
+          getExecutionId: (stream) =>
+            this.provider.state.snapshots.getExecutionId(stream),
+          getOutputFiles: (stream) =>
+            this.provider.state.snapshots.getOutputFiles(stream),
+          getAgentModel: (stream) => {
+            const taskState =
+              this.provider.state.snapshots.getTaskState(stream);
+            return taskState
+              ? {
+                  agent: taskState.agentConfig.agent,
+                  model: taskState.agentConfig.model,
+                }
+              : undefined;
+          },
+        },
+        host: {
+          compareFiles: async (baseFile, editedFile) => {
+            await safeExecuteCommand(
+              'texra.compare',
+              [
+                pathToLocation(''), // inputFile unused
+                pathToLocation(baseFile),
+                pathToLocation(editedFile),
+              ],
+              this.viewName,
+            );
+          },
+          acceptEditedFile: async (baseFile, editedFile, copyMeta) => {
+            return safeExecuteCommand<boolean>(
+              'texra.acceptEdited',
+              [
+                pathToLocation(''), // inputFile unused
+                pathToLocation(baseFile),
+                pathToLocation(editedFile),
+                copyMeta,
+              ],
+              this.viewName,
+            );
+          },
+          mergeFile: async (baseFile, editedFile) => {
+            await safeExecuteCommand(
+              'texra.merge',
+              [undefined, baseFile, editedFile],
+              this.viewName,
+            );
+          },
+          latexdiffFile: async (baseFile, editedFile) => {
+            await safeExecuteCommand(
+              'texra.latexdiff',
+              [undefined, baseFile, editedFile],
+              this.viewName,
+            );
+          },
+          openDirectory: async (directory) => {
+            await safeExecuteCommand(
+              'revealFileInOS',
+              [vscode.Uri.file(directory)],
+              this.viewName,
+            );
+          },
+          openLabel: async (label) => {
+            return (
+              (await safeExecuteCommand<boolean>(
+                'texra.openLabel',
+                [label, { notifyNotFound: false }],
+                this.viewName,
+              )) ?? false
+            );
+          },
+          readFile: (file) => FlexibleFS.read(createExternalLocation(file)),
+          showInfo: async (message) => {
+            await this.host.info(message);
+          },
+          showError: async (message) => {
+            await this.host.error(message);
+          },
+          logError: (message, error) => {
+            this.logger.error(this.channel, message, {
+              data: error instanceof Error ? error : undefined,
+            });
+          },
+        },
+        sendFollowUp: async (stream, text) => {
           await safeExecuteCommand(
-            'texra.latexdiff',
-            [undefined, baseFile, editedFile],
+            'texra.sendFollowUp',
+            [{ stream, text }],
             this.viewName,
           );
         },
-        openDirectory: async (directory) => {
-          await safeExecuteCommand(
-            'revealFileInOS',
-            [vscode.Uri.file(directory)],
-            this.viewName,
-          );
-        },
-        openLabel: async (label) => {
+      },
+      agentProposal: {
+        getPendingProposal: (proposalId) =>
+          this.provider.getPendingAgentProposal(proposalId),
+        restoreTaskState: async (taskState) => {
           return (
             (await safeExecuteCommand<boolean>(
-              'texra.openLabel',
-              [label, { notifyNotFound: false }],
+              'texra.restoreState',
+              [taskState],
               this.viewName,
-            )) ?? false
+            )) === true
           );
         },
-        readFile: (file) => FlexibleFS.read(createExternalLocation(file)),
-        showInfo: async (message) => {
-          await this.host.info(message);
-        },
-        showError: async (message) => {
-          await this.host.error(message);
-        },
-        logError: (message, error) => {
-          this.logger.error(this.channel, message, {
-            data: error instanceof Error ? error : undefined,
+        settleProposal: (proposalId, result) => {
+          const resolved = this.interactions.resolve(proposalId, {
+            kind: 'proposal',
+            action: result.action,
+            value: result,
           });
+          if (!resolved) {
+            this.logger.warn(
+              this.channel,
+              `No pending host interaction found for proposal: ${proposalId}`,
+            );
+          }
         },
-      },
-      sendFollowUp: async (stream, text) => {
-        await safeExecuteCommand(
-          'texra.sendFollowUp',
-          [{ stream, text }],
-          this.viewName,
-        );
-      },
-    });
-  }
-
-  private createAgentProposalController(): ProgressAgentProposalController {
-    return new ProgressAgentProposalController({
-      getPendingProposal: (proposalId) =>
-        this.provider.getPendingAgentProposal(proposalId),
-      restoreTaskState: async (taskState) => {
-        return (
-          (await safeExecuteCommand<boolean>(
-            'texra.restoreState',
-            [taskState],
-            this.viewName,
-          )) === true
-        );
-      },
-      settleProposal: (proposalId, result) => {
-        const resolved = this.interactions.resolve(proposalId, {
-          kind: 'proposal',
-          action: result.action,
-          value: result,
-        });
-        if (!resolved) {
+        onMissingProposal: (proposalId) => {
           this.logger.warn(
             this.channel,
-            `No pending host interaction found for proposal: ${proposalId}`,
+            `No pending agent proposal found for setup: ${proposalId}`,
           );
-        }
+        },
+        onInvalidProposal: (issues) => {
+          this.logger.warn(this.channel, 'Invalid proposal config', {
+            data: { errors: issues },
+          });
+        },
+        onSetupComplete: (proposal) => {
+          this.logger.info(
+            this.channel,
+            `Agent proposal ${proposal.proposalId} set up in main view`,
+            {
+              data: { agent: proposal.agent },
+            },
+          );
+        },
       },
-      onMissingProposal: (proposalId) => {
-        this.logger.warn(
-          this.channel,
-          `No pending agent proposal found for setup: ${proposalId}`,
-        );
-      },
-      onInvalidProposal: (issues) => {
-        this.logger.warn(this.channel, 'Invalid proposal config', {
-          data: { errors: issues },
-        });
-      },
-      onSetupComplete: (proposal) => {
-        this.logger.info(
-          this.channel,
-          `Agent proposal ${proposal.proposalId} set up in main view`,
-          {
-            data: { agent: proposal.agent },
+      commands: {
+        lifecycle: {
+          setActiveStream: (stream) => this.provider.setActiveStream(stream),
+          setAgentFilter: (filter) => {
+            this.provider.state.agentCategoryFilter = filter;
+            this.provider.syncFullView();
           },
-        );
+          deleteStream: (stream) =>
+            this.streamLifecycleController.deleteStream(stream),
+          deleteAllStreams: () => this.handleDeleteAll(),
+          stopStream: (stream) =>
+            this.streamLifecycleController.stopStream(stream),
+        },
+        followUp: {
+          sendFollowUp: async ({ stream, text, mediaFiles }) => {
+            await safeExecuteCommand(
+              'texra.sendFollowUp',
+              [
+                {
+                  stream,
+                  text,
+                  ...(mediaFiles && mediaFiles.length > 0
+                    ? { mediaFiles }
+                    : {}),
+                },
+              ],
+              this.viewName,
+            );
+          },
+          reportImageSaveError: (_image, error) => {
+            // Best-effort: a failed image save must not block the text, but log
+            // it so a missing attachment is diagnosable.
+            this.logger.warn(
+              this.channel,
+              `Failed to save pasted follow-up image: ${toErrorMessage(error)}`,
+            );
+          },
+        },
+        bypass: {
+          runtimeHost: extensionAgentRuntimeHost,
+          showInfo: (message) => this.host.info(message),
+        },
+        file: {
+          openFile: async (file, line) => {
+            await safeExecuteCommand(
+              'texra.openFile',
+              [file, line],
+              this.viewName,
+            );
+          },
+          openFileCompile: async (file) => {
+            await safeExecuteCommand(
+              'texra.openFileCompile',
+              [file],
+              this.viewName,
+            );
+          },
+        },
+        approval: {
+          handleToolEditApprovalAction: async (message) => {
+            await handleProgressViewToolEditApprovalAction(message);
+            return true;
+          },
+          handleBashApprovalAction: (message) =>
+            this.handleBashApprovalAction(message),
+          handlePlanApprovalAction: (message) =>
+            this.handlePlanApprovalAction(message),
+          handleUserQuestionAction: (message) =>
+            this.handleUserQuestionAction(message),
+        },
+        externalInquiry: {
+          logWarn: (message, context) =>
+            this.logger.warn(this.channel, message, { data: context }),
+        },
       },
     });
   }

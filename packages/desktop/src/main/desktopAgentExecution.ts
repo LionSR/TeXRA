@@ -4,10 +4,7 @@ import path from 'node:path';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
-import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
-import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
-import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
@@ -195,9 +192,10 @@ export class DesktopProgressBridge {
   private readonly backend: ProgressBackend;
   private readonly state: ProgressBackend['state'];
   readonly streamLogs: ProgressBackend['state']['streamLogs'];
-  private readonly agentProposalController: ProgressAgentProposalController;
-  private readonly workflowActions: ProgressWorkflowActionsController;
-  private readonly workflowFileActions: ProgressWorkflowFileActionsController;
+  private readonly progressHost: ProgressViewHost;
+  private readonly agentProposalController: ProgressViewHost['agentProposalController'];
+  private readonly workflowActions: ProgressViewHost['workflowActionsController'];
+  private readonly workflowFileActions: ProgressViewHost['workflowFileActionsController'];
   /**
    * Shown-but-unresolved approval prompts, one {@link ApprovalRequestHandler}
    * per kind. These back the shared pending-permissions guard against view
@@ -366,223 +364,219 @@ export class DesktopProgressBridge {
         listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
       },
     );
-    // Shared run-new path (mirrors the extension wiring). Only `getTaskState`
-    // and `executeAgent` matter here: diff/file-operation actions are routed
-    // through `workflowFileActions`/`fileActions`, so those deps stay unwired.
-    this.workflowActions = new ProgressWorkflowActionsController({
-      state: {
-        getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
-        getExecutionId: (stream) => this.getStreamExecutionId(stream),
-        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
-        getKnownWorkspaceOutputPaths: () => new Set(),
-      },
-      executeAgent: async (request) => {
-        const validated = validateExecutionRequest(request);
-        if (!validated.valid) {
-          this.logger.error('Invalid desktop workflow execution request', {
-            data: validated.issue,
-          });
-          await this.options.showErrorMessage?.(validated.message);
-          return;
-        }
-        await this.runExecution(validated.request);
-      },
-      runDiff: () => {
-        throw new Error('Desktop diff is routed through workflowFileActions');
-      },
-      runFileOperation: () => {
-        throw new Error(
-          'Desktop file operations are routed through workflowFileActions',
-        );
-      },
-    });
-    this.workflowFileActions = new ProgressWorkflowFileActionsController({
-      state: {
-        getActiveStream: () => this.state.activeStream,
-        getExecutionId: (stream) => this.getStreamExecutionId(stream),
-        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
-        // The desktop bridge has no quick-pick UI, so Accept always replaces
-        // the workspace file. Returning undefined keeps the controller from
-        // building copy metadata that the desktop host would silently drop.
-        getAgentModel: () => undefined,
-      },
-      host: {
-        compareFiles: (baseFile, editedFile) =>
-          this.fileActions.compareFiles(baseFile, editedFile),
-        acceptEditedFile: (baseFile, editedFile) =>
-          this.fileActions.acceptEditedFile(baseFile, editedFile),
-        mergeFile: (baseFile, editedFile) =>
-          this.fileActions.runMergeFile(baseFile, editedFile),
-        latexdiffFile: (baseFile, editedFile) =>
-          this.runLatexdiffFile(baseFile, editedFile),
-        openDirectory: async (directory) => {
-          await this.options.openPath?.(directory);
-        },
-        openLabel: (label) => this.fileActions.findAndOpenLabel(label),
-        readFile: (file) => readFile(file, 'utf8'),
-        showInfo: async (message) => {
-          await this.options.showInfoMessage?.(message);
-        },
-        showError: async (message) => {
-          await this.options.showErrorMessage?.(message);
-        },
-        logError: (message, error) => {
-          this.logger.error(message, {
-            data: error instanceof Error ? error : { error },
-          });
-        },
-      },
-      sendFollowUp: async (stream, text) => {
-        await this.sendFollowUp(stream, text);
-      },
-    });
-    this.agentProposalController = new ProgressAgentProposalController({
-      getPendingProposal: (proposalId) =>
-        this.approvalHandlers.agentProposal.get(proposalId),
-      restoreTaskState: async (taskState) => {
-        let state: MainViewPersistedState;
-        try {
-          state = buildMainViewState(taskState);
-        } catch {
-          return false;
-        }
-        this.postToRenderer({
-          command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-          route: 'main',
-        });
-        this.postToRenderer({
-          command: COMMON_COMMANDS.STATE_RESTORE,
-          state,
-        });
-        return true;
-      },
-      settleProposal: (proposalId, result) => {
-        const resolved = this.session.interactions.resolve(proposalId, {
-          kind: 'proposal',
-          action: result.action,
-          value: result,
-        });
-        if (!resolved) {
-          this.logger.warn(
-            `No pending desktop host interaction found for proposal: ${proposalId}`,
-          );
-        }
-      },
-      onMissingProposal: (proposalId) => {
-        this.logger.warn(
-          `No pending desktop agent proposal found for setup: ${proposalId}`,
-        );
-      },
-      onInvalidProposal: (issues) => {
-        this.logger.warn('Invalid desktop agent proposal config', {
-          data: { errors: issues },
-        });
-      },
-      onSetupComplete: (proposal) => {
-        this.logger.info(
-          `Desktop agent proposal ${proposal.proposalId} set up in main view`,
-          {
-            data: { agent: proposal.agent },
-          },
-        );
-      },
-    });
+    this.progressHost = this.createProgressViewHost();
+    this.workflowActions = this.progressHost.workflowActionsController;
+    this.workflowFileActions = this.progressHost.workflowFileActionsController;
+    this.agentProposalController = this.progressHost.agentProposalController;
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
   }
 
-  private createProgressViewInboundHandlers(): ProgressViewInboundHandlerRegistry {
-    const sharedHandlers = createProgressViewCommandHandlers({
-      lifecycle: {
-        setActiveStream: (stream) => this.setActiveStream(stream),
-        setAgentFilter: (filter) => this.setAgentFilter(filter),
-        deleteStream: (stream) => this.deleteStream(stream),
-        deleteAllStreams: () => this.deleteAllStreams(),
-        stopStream: (stream) => this.stopStream(stream),
-      },
-      run: {
-        resumeStream: async (stream) => {
-          await this.tryResumeStream(stream);
+  private createProgressViewHost(): ProgressViewHost {
+    return new ProgressViewHost({
+      // Shared run-new path (mirrors the extension wiring). Only
+      // `getTaskState` and `executeAgent` matter here: diff/file-operation
+      // actions are routed through `workflowFileActions`/`fileActions`, so
+      // those deps stay unwired.
+      workflowActions: {
+        state: {
+          getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
+          getExecutionId: (stream) => this.getStreamExecutionId(stream),
+          getOutputFiles: (stream) =>
+            this.state.snapshots.getOutputFiles(stream),
+          getKnownWorkspaceOutputPaths: () => new Set(),
         },
-        runNewStream: (stream) => this.workflowActions.runNew(stream),
-      },
-      followUp: {
-        sendFollowUp: ({ stream, text, mediaFiles }) =>
-          this.sendFollowUp(stream, text, mediaFiles),
-        reportImageSaveError: (image, error) => {
-          this.logger.warn(
-            `Failed to save pasted follow-up image ${image.fileName}`,
-            { data: error instanceof Error ? error : { error } },
+        executeAgent: async (request) => {
+          const validated = validateExecutionRequest(request);
+          if (!validated.valid) {
+            this.logger.error('Invalid desktop workflow execution request', {
+              data: validated.issue,
+            });
+            await this.options.showErrorMessage?.(validated.message);
+            return;
+          }
+          await this.runExecution(validated.request);
+        },
+        runDiff: () => {
+          throw new Error('Desktop diff is routed through workflowFileActions');
+        },
+        runFileOperation: () => {
+          throw new Error(
+            'Desktop file operations are routed through workflowFileActions',
           );
         },
       },
-      bypass: {
-        runtimeHost: this.runtimeHost,
-      },
-      file: {
-        openFile: async (file, line) => {
-          await this.options.openPath?.(file, line);
+      workflowFileActions: {
+        state: {
+          getActiveStream: () => this.state.activeStream,
+          getExecutionId: (stream) => this.getStreamExecutionId(stream),
+          getOutputFiles: (stream) =>
+            this.state.snapshots.getOutputFiles(stream),
+          // The desktop bridge has no quick-pick UI, so Accept always replaces
+          // the workspace file. Returning undefined keeps the controller from
+          // building copy metadata that the desktop host would silently drop.
+          getAgentModel: () => undefined,
         },
-        openFileCompile: (file) => this.openFileCompile(file),
-        openTaskStorage: (stream) =>
-          this.workflowFileActions.openTaskStorage(stream),
-        compareOriginal: (file, base) =>
-          this.workflowFileActions.compareOriginal(file, base),
-        comparePrevious: (file, base, previous) =>
-          this.workflowFileActions.comparePrevious(file, base, previous),
-        acceptFile: (file, base) =>
-          this.workflowFileActions.acceptFile(file, base),
-        mergeFile: (file, base) =>
-          this.workflowFileActions.mergeFile(file, base),
-        latexdiffFile: (file, base) =>
-          this.workflowFileActions.latexdiffFile(file, base),
-        openLabel: (label) => this.workflowFileActions.openLabel(label),
+        host: {
+          compareFiles: (baseFile, editedFile) =>
+            this.fileActions.compareFiles(baseFile, editedFile),
+          acceptEditedFile: (baseFile, editedFile) =>
+            this.fileActions.acceptEditedFile(baseFile, editedFile),
+          mergeFile: (baseFile, editedFile) =>
+            this.fileActions.runMergeFile(baseFile, editedFile),
+          latexdiffFile: (baseFile, editedFile) =>
+            this.runLatexdiffFile(baseFile, editedFile),
+          openDirectory: async (directory) => {
+            await this.options.openPath?.(directory);
+          },
+          openLabel: (label) => this.fileActions.findAndOpenLabel(label),
+          readFile: (file) => readFile(file, 'utf8'),
+          showInfo: async (message) => {
+            await this.options.showInfoMessage?.(message);
+          },
+          showError: async (message) => {
+            await this.options.showErrorMessage?.(message);
+          },
+          logError: (message, error) => {
+            this.logger.error(message, {
+              data: error instanceof Error ? error : { error },
+            });
+          },
+        },
+        sendFollowUp: async (stream, text) => {
+          await this.sendFollowUp(stream, text);
+        },
       },
-      approval: {
-        handleToolEditApprovalAction: (message) =>
-          this.toolEditApprovals.handleAction(message),
-        onUnsupportedToolEditApproval: (message) => {
-          this.logger.warn('Unsupported desktop tool-edit approval action', {
-            data: {
-              requestId: message.requestId,
-              action: message.action,
-            },
+      agentProposal: {
+        getPendingProposal: (proposalId) =>
+          this.approvalHandlers.agentProposal.get(proposalId),
+        restoreTaskState: async (taskState) => {
+          let state: MainViewPersistedState;
+          try {
+            state = buildMainViewState(taskState);
+          } catch {
+            return false;
+          }
+          this.postToRenderer({
+            command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+            route: 'main',
+          });
+          this.postToRenderer({
+            command: COMMON_COMMANDS.STATE_RESTORE,
+            state,
+          });
+          return true;
+        },
+        settleProposal: (proposalId, result) => {
+          const resolved = this.session.interactions.resolve(proposalId, {
+            kind: 'proposal',
+            action: result.action,
+            value: result,
+          });
+          if (!resolved) {
+            this.logger.warn(
+              `No pending desktop host interaction found for proposal: ${proposalId}`,
+            );
+          }
+        },
+        onMissingProposal: (proposalId) => {
+          this.logger.warn(
+            `No pending desktop agent proposal found for setup: ${proposalId}`,
+          );
+        },
+        onInvalidProposal: (issues) => {
+          this.logger.warn('Invalid desktop agent proposal config', {
+            data: { errors: issues },
           });
         },
-        handleBashApprovalAction: (message) =>
-          void this.session.interactions.resolve(message.requestId, {
-            kind: 'bash',
-            action: message.action,
-            feedback: message.feedback,
-          }),
-        handlePlanApprovalAction: (message) => {
-          this.session.interactions.resolve(message.approvalId, {
-            kind: 'plan',
-            action: message.action,
-            ...(message.action === 'reject' && {
+        onSetupComplete: (proposal) => {
+          this.logger.info(
+            `Desktop agent proposal ${proposal.proposalId} set up in main view`,
+            {
+              data: { agent: proposal.agent },
+            },
+          );
+        },
+      },
+      commands: {
+        lifecycle: {
+          setActiveStream: (stream) => this.setActiveStream(stream),
+          setAgentFilter: (filter) => this.setAgentFilter(filter),
+          deleteStream: (stream) => this.deleteStream(stream),
+          deleteAllStreams: () => this.deleteAllStreams(),
+          stopStream: (stream) => this.stopStream(stream),
+        },
+        run: {
+          resumeStream: async (stream) => {
+            await this.tryResumeStream(stream);
+          },
+        },
+        followUp: {
+          sendFollowUp: ({ stream, text, mediaFiles }) =>
+            this.sendFollowUp(stream, text, mediaFiles),
+          reportImageSaveError: (image, error) => {
+            this.logger.warn(
+              `Failed to save pasted follow-up image ${image.fileName}`,
+              { data: error instanceof Error ? error : { error } },
+            );
+          },
+        },
+        bypass: {
+          runtimeHost: this.runtimeHost,
+        },
+        file: {
+          openFile: async (file, line) => {
+            await this.options.openPath?.(file, line);
+          },
+          openFileCompile: (file) => this.openFileCompile(file),
+        },
+        approval: {
+          handleToolEditApprovalAction: (message) =>
+            this.toolEditApprovals.handleAction(message),
+          onUnsupportedToolEditApproval: (message) => {
+            this.logger.warn('Unsupported desktop tool-edit approval action', {
+              data: {
+                requestId: message.requestId,
+                action: message.action,
+              },
+            });
+          },
+          handleBashApprovalAction: (message) =>
+            void this.session.interactions.resolve(message.requestId, {
+              kind: 'bash',
+              action: message.action,
               feedback: message.feedback,
             }),
-          });
+          handlePlanApprovalAction: (message) => {
+            this.session.interactions.resolve(message.approvalId, {
+              kind: 'plan',
+              action: message.action,
+              ...(message.action === 'reject' && {
+                feedback: message.feedback,
+              }),
+            });
+          },
+          handleUserQuestionAction: (message) => {
+            this.session.interactions.resolve(message.requestId, {
+              kind: 'userQuestion',
+              action: message.action,
+              value: message.answers,
+              feedback: message.feedback,
+            });
+            return undefined;
+          },
         },
-        handleUserQuestionAction: (message) => {
-          this.session.interactions.resolve(message.requestId, {
-            kind: 'userQuestion',
-            action: message.action,
-            value: message.answers,
-            feedback: message.feedback,
-          });
-          return undefined;
+        externalInquiry: {
+          logWarn: (message, context) =>
+            this.logger.warn(message, { data: context }),
+          sessionContext: { session: this.session },
         },
-        handleAgentProposalAction: (message) =>
-          this.agentProposalController.handleAction(message),
-      },
-      externalInquiry: {
-        logWarn: (message, context) =>
-          this.logger.warn(message, { data: context }),
-        sessionContext: { session: this.session },
       },
     });
+  }
+
+  private createProgressViewInboundHandlers(): ProgressViewInboundHandlerRegistry {
     return {
-      ...sharedHandlers,
+      ...this.progressHost.commandHandlers,
       // Getting-started actions from the progress empty-state. openWalkthrough
       // has a desktop equivalent; the remaining four actions are VS Code-only.
       [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (data) => {
