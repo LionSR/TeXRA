@@ -12,6 +12,7 @@ import { clamp, filterNotNullish, isObject } from '@utils/core';
 import { wrapAnsiToWidth } from './ansiWrap';
 import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
 import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
+import { clampModalWidth } from '../ui/theme';
 
 type Hunk = StructuredPatchHunk;
 
@@ -32,7 +33,6 @@ interface DiffStats {
 }
 
 const NO_NEWLINE_MARKER = '\\';
-const MIN_DIFF_WIDTH = 20;
 const DEFAULT_DIFF_WIDTH = 74;
 export const COMPACT_DIFF_DISPLAY_LINES = 3;
 
@@ -151,7 +151,7 @@ export function wrappedDiffDisplayLines(
   width: number,
   maxHunkLines = 0,
 ): DiffDisplayLine[] {
-  const diffWidth = Math.max(MIN_DIFF_WIDTH, width);
+  const diffWidth = clampModalWidth(width);
   return diffDisplayLines(hunks, maxHunkLines).flatMap((line) =>
     wrapAnsiToWidth(line.text, diffWidth)
       .split('\n')
@@ -208,7 +208,7 @@ function overflowMarkerText(
   const candidates = overflowMarkerCandidates(kind, count);
   if (width === undefined) return candidates[0];
 
-  const markerWidth = Math.max(MIN_DIFF_WIDTH, width);
+  const markerWidth = clampModalWidth(width);
   return (
     candidates.find(
       (candidate) => textDisplayWidth(candidate) <= markerWidth,
@@ -309,7 +309,7 @@ interface DiffViewProps {
 export function DiffView(props: DiffViewProps): React.JSX.Element {
   const maxDisplayLines = props.maxDisplayLines ?? 0;
   const max = props.maxHunkLines ?? 0;
-  const width = Math.max(MIN_DIFF_WIDTH, props.width ?? DEFAULT_DIFF_WIDTH);
+  const width = clampModalWidth(props.width ?? DEFAULT_DIFF_WIDTH);
   const lines = scrollBoundedDiffDisplayLines(
     props.hunks,
     max,

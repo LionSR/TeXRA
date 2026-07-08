@@ -37,6 +37,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import * as logger from '@logger/logUtils';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
@@ -103,9 +104,7 @@ const SEVERITY_MAP: Record<ReviewSeverity, vscode.DiagnosticSeverity> = {
 
 /** Editor range for an issue (issue lines are 1-based). */
 export function issueRange(issue: ReviewIssue): vscode.Range {
-  const startLine = Math.max(0, issue.startLine - 1);
-  const endLine = Math.max(startLine, issue.endLine - 1);
-  return new vscode.Range(startLine, 0, endLine, Number.MAX_SAFE_INTEGER);
+  return lineToRange(issue.startLine, issue.endLine);
 }
 
 class AgentReviewServiceImpl {

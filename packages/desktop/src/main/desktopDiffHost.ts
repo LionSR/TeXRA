@@ -1,5 +1,4 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { nanoid } from 'nanoid';
@@ -15,6 +14,7 @@ import {
   buildDesktopShowDiffMessage,
   monacoLanguageForFilePath,
 } from '../desktopDiffMessages.js';
+import { createTexraTempDir } from './desktopTempDir.js';
 
 export interface DesktopDiffHostOptions {
   /**
@@ -93,7 +93,7 @@ export function createDesktopDiffHost(
     const patch =
       computeUserPatch(originalContent, proposedContent) ??
       `No textual changes for ${path.basename(proposed.filePath)}.\n`;
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-desktop-diff-'));
+    const tempDir = await createTexraTempDir('texra-desktop-diff-');
     const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
     await writeFile(diffPath, patch, 'utf8');

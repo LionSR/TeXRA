@@ -2,6 +2,7 @@ import type { ToolDefinition } from '@model';
 import { decideRunModel } from '@model/runModelDecision';
 import type { ModelOptionData } from '@shared/schemas';
 import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
+import { unique } from '@utils/core';
 
 const AVAILABLE_MODELS_LINE = /^Available models:.*$/m;
 
@@ -35,11 +36,9 @@ export function selectDelegationModelFromAvailableNames(input: {
   readonly parentModel?: string | null;
   readonly availableModels: readonly string[];
 }): string {
-  const availableModels = [
-    ...new Set(
-      input.availableModels.map((model) => model.trim()).filter(Boolean),
-    ),
-  ];
+  const availableModels = unique(
+    input.availableModels.map((model) => model.trim()).filter(Boolean),
+  );
   if (availableModels.length === 0) {
     throw new Error(
       'No models are currently available for delegation in the active API mode. Switch API mode or configure a provider API key before delegating.',

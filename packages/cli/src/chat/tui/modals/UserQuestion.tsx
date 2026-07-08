@@ -14,7 +14,10 @@ import {
   USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from './UserQuestionState';
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+} from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -39,7 +42,6 @@ export interface UserQuestionPromptLine {
   readonly text: string;
 }
 
-const MIN_USER_QUESTION_CONTENT_WIDTH = 20;
 const DEFAULT_USER_QUESTION_PROMPT_ROWS = 12;
 const COMPACT_USER_QUESTION_MAX_ROWS = 10;
 const COMPACT_USER_QUESTION_CHROME_ROWS = 4;
@@ -194,7 +196,7 @@ export function boundedUserQuestionPromptLines({
   readonly width: number;
 }): readonly UserQuestionPromptLine[] {
   if (maxDisplayLines <= 0) return [];
-  const wrapWidth = Math.max(MIN_USER_QUESTION_CONTENT_WIDTH, width);
+  const wrapWidth = clampModalWidth(width);
   const contextLines = context
     ? wrappedUserQuestionPromptLines({
         kind: 'context',
@@ -264,8 +266,7 @@ interface QuestionShellProps {
 function QuestionShell(props: QuestionShellProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const compact = isCompactUserQuestionRows(props.availableRows);
-  const contentWidth = Math.max(
-    MIN_USER_QUESTION_CONTENT_WIDTH,
+  const contentWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
   const promptRows = userQuestionPromptRowsBudget({
@@ -452,8 +453,7 @@ interface FreeTextQuestionProps {
 function FreeTextQuestion(props: FreeTextQuestionProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [answer, setAnswer] = useState('');
-  const contentWidth = Math.max(
-    MIN_USER_QUESTION_CONTENT_WIDTH,
+  const contentWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
   const optionRows = userQuestionFreeTextOptionRowsBudget({

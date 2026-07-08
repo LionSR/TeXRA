@@ -130,10 +130,7 @@ export class HistoryList extends LitElement {
 
     // Clamp page when items change (e.g. delete)
     if (changedProperties.has('items') && this.paginated) {
-      const totalPages = Math.max(
-        1,
-        Math.ceil(this.items.length / HISTORY_PAGE_SIZE),
-      );
+      const { totalPages } = paginate(this.items, this.page, HISTORY_PAGE_SIZE);
       if (this.page >= totalPages) {
         this.page = Math.max(0, totalPages - 1);
       }

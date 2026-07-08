@@ -11,7 +11,7 @@ function normalizeSearchText(text: string): string {
     .toLocaleLowerCase();
 }
 
-function hasSearchValue(value: unknown): boolean {
+export function hasSearchValue(value: unknown): boolean {
   if (value == null) return false;
   return !Array.isArray(value) || value.length > 0;
 }

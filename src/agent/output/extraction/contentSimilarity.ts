@@ -93,32 +93,71 @@ export function isClosingMarkdownFence(
   );
 }
 
-export function stripSurroundingMarkdownFence(
+/**
+ * Strip a first/last wrapper line off `lines` when the first non-blank line
+ * opens a wrapper (per `isOpen`) and the last non-blank line closes it (per
+ * `isClose`, given the matched open line). Shared by
+ * {@link stripSurroundingMarkdownFence} (fence markers) and
+ * `stripDocumentsEnvelope` (XML-style tag wrapper) in `filenameHeaders.ts`.
+ *
+ * `options.emptyOnNoContent` controls the result when `lines` is entirely
+ * blank (fence stripping collapses to `[]`; the tag-envelope stripper leaves
+ * blank input untouched). `options.rejectInnerClose` additionally refuses to
+ * strip when some line strictly between the first and last also closes the
+ * wrapper (fence stripping must not treat a nested same-marker fence's close
+ * as the outer one; the tag envelope has no such nesting concern).
+ */
+export function stripFirstLastLineIfWrapped(
   lines: readonly string[],
+  isOpen: (line: string) => boolean,
+  isClose: (openLine: string, line: string) => boolean,
+  options: { emptyOnNoContent?: boolean; rejectInnerClose?: boolean } = {},
 ): string[] {
   const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
   if (firstContentIndex === -1) {
-    return [];
+    return options.emptyOnNoContent ? [] : [...lines];
   }
 
   const lastContentIndex = lines.findLastIndex((line) => line.trim() !== '');
-  const openingFence = parseMarkdownFenceDelimiter(lines[firstContentIndex]);
-  if (
+  const firstLine = lines[firstContentIndex];
+  const wrapped =
     firstContentIndex < lastContentIndex &&
-    openingFence &&
-    isClosingMarkdownFence(lines[lastContentIndex], openingFence) &&
-    !lines
-      .slice(firstContentIndex + 1, lastContentIndex)
-      .some((line) => isClosingMarkdownFence(line, openingFence))
-  ) {
-    return [
-      ...lines.slice(0, firstContentIndex),
-      ...lines.slice(firstContentIndex + 1, lastContentIndex),
-      ...lines.slice(lastContentIndex + 1),
-    ];
-  }
+    isOpen(firstLine) &&
+    isClose(firstLine, lines[lastContentIndex]) &&
+    (!options.rejectInnerClose ||
+      !lines
+        .slice(firstContentIndex + 1, lastContentIndex)
+        .some((line) => isClose(firstLine, line)));
 
-  return [...lines];
+  if (!wrapped) {
+    return [...lines];
+  }
+  return [
+    ...lines.slice(0, firstContentIndex),
+    ...lines.slice(firstContentIndex + 1, lastContentIndex),
+    ...lines.slice(lastContentIndex + 1),
+  ];
+}
+
+export function stripSurroundingMarkdownFence(
+  lines: readonly string[],
+): string[] {
+  // `isClose` is always invoked with the same `openLine` (the wrapper's first
+  // content line) across a single stripFirstLastLineIfWrapped call, including
+  // once per line during the rejectInnerClose scan — parse it once and reuse.
+  let cachedOpeningFence: MarkdownFence | null | undefined;
+  return stripFirstLastLineIfWrapped(
+    lines,
+    (line) => parseMarkdownFenceDelimiter(line) !== null,
+    (openLine, line) => {
+      cachedOpeningFence ??= parseMarkdownFenceDelimiter(openLine);
+      return (
+        cachedOpeningFence !== null &&
+        isClosingMarkdownFence(line, cachedOpeningFence)
+      );
+    },
+    { emptyOnNoContent: true, rejectInnerClose: true },
+  );
 }
 
 // ---------------------------------------------------------------------------

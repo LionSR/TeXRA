@@ -8,7 +8,11 @@ import {
 } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+  MIN_MODAL_CONTENT_WIDTH,
+} from '../ui/theme';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
@@ -29,7 +33,6 @@ export interface AgentProposalProps {
 }
 
 const FILE_LIMIT = 5;
-const MIN_AGENT_PROPOSAL_WIDTH = 20;
 const DEFAULT_AGENT_PROPOSAL_INSTRUCTION_ROWS = 12;
 const COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS = 3;
 const AGENT_PROPOSAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 7;
@@ -54,7 +57,7 @@ export function agentProposalInstructionRowsBudget({
     availableRows,
     columns,
     title,
-    minContentWidth: MIN_AGENT_PROPOSAL_WIDTH,
+    minContentWidth: MIN_MODAL_CONTENT_WIDTH,
     defaultRows: DEFAULT_AGENT_PROPOSAL_INSTRUCTION_ROWS,
     compactMaxRows: COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS,
     spaciousFixedRows: AGENT_PROPOSAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
@@ -70,7 +73,7 @@ export function agentProposalInstructionDisplayLines({
   readonly instruction: string;
   readonly width: number;
 }): AgentProposalInstructionLine[] {
-  const instructionWidth = Math.max(MIN_AGENT_PROPOSAL_WIDTH, width);
+  const instructionWidth = clampModalWidth(width);
   return instruction.split('\n').flatMap((line) => {
     const wrapped =
       line.length === 0
@@ -95,9 +98,7 @@ export function maxAgentProposalInstructionScrollOffset(
 }
 
 function wrappedRows(text: string, width: number): number {
-  return wrapAnsiToWidth(text, Math.max(MIN_AGENT_PROPOSAL_WIDTH, width)).split(
-    '\n',
-  ).length;
+  return wrapAnsiToWidth(text, clampModalWidth(width)).split('\n').length;
 }
 
 function fileGroupText(label: string, files: readonly string[]): string {
@@ -175,8 +176,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const fileGroups = getProposalFileGroups(props.payload);
   const title = `Spawn ${props.payload.agent}?`;
-  const instructionWidth = Math.max(
-    MIN_AGENT_PROPOSAL_WIDTH,
+  const instructionWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
   const metadataRows = agentProposalMetadataRows({

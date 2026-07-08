@@ -23,6 +23,7 @@ import {
   type MarkdownFence,
   parseMarkdownFenceDelimiter,
   responseLines,
+  stripFirstLastLineIfWrapped,
   stripSurroundingMarkdownFence,
 } from './contentSimilarity';
 
@@ -248,22 +249,11 @@ function stripDocumentsEnvelope(
     'i',
   );
   const closeRegex = new RegExp(`^<\\/${escapeRegExp(trimmedTag)}>\\s*$`, 'i');
-  const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
-  const lastContentIndex = lines.findLastIndex((line) => line.trim() !== '');
-  if (
-    firstContentIndex !== -1 &&
-    lastContentIndex !== -1 &&
-    firstContentIndex < lastContentIndex &&
-    openRegex.test(lines[firstContentIndex].trim()) &&
-    closeRegex.test(lines[lastContentIndex].trim())
-  ) {
-    return [
-      ...lines.slice(0, firstContentIndex),
-      ...lines.slice(firstContentIndex + 1, lastContentIndex),
-      ...lines.slice(lastContentIndex + 1),
-    ];
-  }
-  return [...lines];
+  return stripFirstLastLineIfWrapped(
+    lines,
+    (line) => openRegex.test(line.trim()),
+    (_openLine, line) => closeRegex.test(line.trim()),
+  );
 }
 
 function matchHeaderName(
