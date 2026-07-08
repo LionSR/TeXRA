@@ -1162,6 +1162,9 @@ export class DesktopProgressBridge {
         return {
           runState: resumeState.runState,
           executionId: resumeState.executionId,
+          ...(resumeState.parentStreamId !== undefined && {
+            parentStreamId: resumeState.parentStreamId,
+          }),
         };
       },
       resumeToolUseSnapshot: (snapshot) =>
