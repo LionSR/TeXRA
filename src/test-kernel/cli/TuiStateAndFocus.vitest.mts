@@ -84,7 +84,6 @@ import { chatTuiFocusedChildFollowUpRoute } from '@cli/chat/tui/runChatTui';
 import { installTuiStdoutListenerLimit } from '@cli/chat/tui/render/noColorOutput';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
-  appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
@@ -2014,222 +2013,84 @@ describe('CLI transcript state', () => {
     });
   });
 
-  it('adds a final assistant response only when the stream log did not render it', () => {
-    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
-    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
+  // #7086: the transcript store — not a CLI-side synthetic fallback — is now
+  // the single source of the finalized assistant message. `responseFinalized`
+  // is what `ToolUseProcessNode` calls at the turn boundary once
+  // `assembly.lastResponse` is set (see TexraTranscriptRecorder.vitest.ts for
+  // the recorder-level upsert-vs-append unit coverage); these tests confirm
+  // the CLI's own state ends up with exactly one entry, never a synthetic one.
+  it('reconciles a streamed response to the authoritative post-replacement text', () => {
+    const logger = createRunTrace(root).trace;
+    const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    // Raw provider text, as it would arrive before replacement rules run.
+    output.append('Done ✓');
+    output.finalize();
+    // The flow boundary's authoritative (replacement-cleaned) text.
+    logger.responseFinalized('Done \\checkmark');
+
+    syncStreamLog(root);
+
+    const entries = streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      role: 'assistant',
+      text: 'Done \\checkmark',
+    });
+    expect(entries[0]?.synthetic).toBeUndefined();
+  });
+
+  it('appends the final response when the round produced no live stream', () => {
+    const logger = createRunTrace(root).trace;
+    logger.responseFinalized('The answer is 2.');
+
+    syncStreamLog(root);
 
     const entries = streams.get().get(root)?.entries ?? [];
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'assistant',
       text: 'The answer is 2.',
-      finalized: true,
     });
-  });
-
-  it('does not duplicate waiting and final fallback entries for the same response', () => {
-    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'waiting:1');
-    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final:1');
-
-    const entries = streams.get().get(root)?.entries ?? [];
-    expect(entries.map((entry) => entry.id)).toEqual(['waiting:1:root']);
-    expect(entries[0]).toMatchObject({
-      role: 'assistant',
-      text: 'The answer is 2.',
-      finalized: true,
-      synthetic: true,
-    });
-  });
-
-  it('dedupes synthetic checkmark aliases from the same stream anchor', () => {
-    appendAssistantTranscriptIfMissing(root, 'Done \\checkmark', 'waiting:1');
-    appendAssistantTranscriptIfMissing(root, 'Done ✓', 'final:1');
-
-    const entries = streams.get().get(root)?.entries ?? [];
-    expect(entries.map((entry) => entry.text)).toEqual(['Done \\checkmark']);
-  });
-
-  it('keeps distinct synthetic fallback responses from the same stream anchor', () => {
-    appendAssistantTranscriptIfMissing(
-      root,
-      'The condition is x < y.',
-      'first',
-    );
-    appendAssistantTranscriptIfMissing(
-      root,
-      'The condition is x > y.',
-      'second',
-    );
-
-    const entries = streams.get().get(root)?.entries ?? [];
-    expect(entries.map((entry) => entry.text)).toEqual([
-      'The condition is x < y.',
-      'The condition is x > y.',
-    ]);
-  });
-
-  it('keeps repeated final responses from distinct turns visible', () => {
-    const logger = createRunTrace(root).trace;
-    logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-    syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
-
-    logger.info('second prompt', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
-    syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(root, 'Done.', 'final:second');
-
-    logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-    syncStreamLog(root);
-
-    const entries = streams.get().get(root)?.entries ?? [];
-    expect(entries.map((entry) => entry.text)).toEqual([
-      'first prompt',
-      'Done.',
-      'second prompt',
-      'Done.',
-      'third prompt',
-    ]);
-  });
-
-  it('does not duplicate a final response already present in the stream log', () => {
-    const logger = createRunTrace(root).trace;
-    logger.info('Done.', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
-    syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
-
-    const entries = streams.get().get(root)?.entries ?? [];
-    expect(entries.map((entry) => entry.text)).toEqual(['Done.']);
     expect(entries[0]?.synthetic).toBeUndefined();
   });
 
-  it('lets the stream-log assistant own final text even when fallback text differs', () => {
+  it('does not let an earlier round leak its stream id into a later round', () => {
     const logger = createRunTrace(root).trace;
-    logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    const round0 = logger.openStage('r0', { kind: 'round', index: 0 });
+    const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    output.append('Let me check that.');
+    output.finalize();
+    round0.end();
+
+    // A later round that never streams must append its own entry rather
+    // than reuse round 0's (now-closed) stream id.
+    const round1 = logger.openStage('r1', { kind: 'round', index: 1 });
+    logger.responseFinalized('Final answer.');
+    round1.end();
+
     syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(
-      root,
-      '| x | Check |\n|---|---|\n| 3 | 1 \\checkmark |',
-      'final:first',
-    );
 
     const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual([
-      '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
+      'Let me check that.',
+      'Final answer.',
     ]);
-    expect(entries[0]?.synthetic).toBeUndefined();
+    expect(entries.every((entry) => !entry.synthetic)).toBe(true);
   });
 
-  it('does not let a pre-tool stream assistant suppress final fallback text', () => {
-    const logger = createRunTrace(root).trace;
-    logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
-    logger.info('', {
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: {
-        toolName: 'bash',
-        input: { command: 'true' },
-        output: { summary: 'Executed: true', output: 'ok' },
-        status: 'completed',
-      },
-    });
-    syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(
-      root,
-      'Final answer after the tool.',
-      'final:first',
-    );
-
-    const entries = streams.get().get(root)?.entries ?? [];
-    expect(entries.map((entry) => entry.role)).toEqual([
-      'assistant',
-      'tool',
-      'assistant',
-    ]);
-    expect(entries.map((entry) => entry.text)).toEqual([
-      '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
-      '',
-      'Final answer after the tool.',
-    ]);
-  });
-
-  it('dedupes fallback text that already appeared before a tool row', () => {
-    const logger = createRunTrace(root).trace;
-    logger.info('Intermediate result ✓', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
-    logger.info('', {
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: {
-        toolName: 'bash',
-        input: { command: 'true' },
-        output: { summary: 'Executed: true', output: 'ok' },
-        status: 'completed',
-      },
-    });
-    syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(
-      root,
-      'Intermediate result \\checkmark',
-      'final:matching',
-    );
-    appendAssistantTranscriptIfMissing(
-      root,
-      'Final answer after the tool.',
-      'final:actual',
-    );
-
-    const entries = streams.get().get(root)?.entries ?? [];
-    expect(entries.map((entry) => entry.text)).toEqual([
-      'Intermediate result ✓',
-      '',
-      'Final answer after the tool.',
-    ]);
-  });
-
-  it('does not let a prior-turn stream assistant suppress fallback text', () => {
-    const logger = createRunTrace(root).trace;
-    logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-    logger.info('Done ✓', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
-    syncStreamLog(root);
-
-    logger.info('second prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-    syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(root, 'Done \\checkmark', 'final:2');
-
-    const entries = streams.get().get(root)?.entries ?? [];
-    expect(entries.map((entry) => entry.text)).toEqual([
-      'first prompt',
-      'Done ✓',
-      'second prompt',
-      'Done \\checkmark',
-    ]);
-    expect(entries.at(-1)).toMatchObject({
-      synthetic: true,
-      syntheticKind: 'final',
-    });
-  });
-
-  it('projects a turn boundary without duplicating fallback assistant text', () => {
+  it('projects a turn boundary from the store alone, with zero synthetic entries', () => {
     const logger = createRunTrace(root).trace;
     logger.info('What is 1 + 1?', {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
     logger.info('2', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
 
-    projectStreamTranscript(root, {
-      fallbackAssistant: { text: '2', idPrefix: 'final:turn' },
-      finalize: true,
-    });
+    projectStreamTranscript(root, { finalize: true });
 
     const entries = streams.get().get(root)?.entries ?? [];
     expect(entries.map((entry) => entry.text)).toEqual(['What is 1 + 1?', '2']);
     expect(entries.map((entry) => entry.finalized)).toEqual([true, true]);
-    expect(entries.some((entry) => entry.id === 'final:turn:root')).toBe(false);
+    expect(entries.every((entry) => !entry.synthetic)).toBe(true);
   });
 
   it('keeps repeated local slash-command responses visible', () => {
@@ -2555,11 +2416,11 @@ describe('CLI transcript state', () => {
     expect(activeStreamId.get()).toBeUndefined();
   });
 
-  it('preserves synthetic final responses across later log syncs', () => {
+  it('preserves the finalized response across later log syncs', () => {
     const logger = createRunTrace(root).trace;
     logger.info('1+1', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
+    logger.responseFinalized('The answer is 2.');
 
     logger.info('next prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
@@ -2572,17 +2433,17 @@ describe('CLI transcript state', () => {
     ]);
   });
 
-  it('orders multiple synthetic responses relative to their stream-log anchors', () => {
+  it('orders multiple finalized responses relative to the turns around them', () => {
     const logger = createRunTrace(root).trace;
     logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(root, 'first answer', 'final-1');
+    logger.responseFinalized('first answer');
 
     logger.info('second prompt', {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
     syncStreamLog(root);
-    appendAssistantTranscriptIfMissing(root, 'second answer', 'final-2');
+    logger.responseFinalized('second answer');
 
     logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
@@ -2595,6 +2456,7 @@ describe('CLI transcript state', () => {
       'second answer',
       'third prompt',
     ]);
+    expect(entries.every((entry) => !entry.synthetic)).toBe(true);
   });
 });
 
