@@ -2,7 +2,11 @@ import type { AgentCategory } from './agent';
 import type { ExecutionId, StorageKey, StreamTabId } from './identifiers';
 import type { CompileFailure, FileLocation, OutputFileInfo } from './output';
 import type { RoundIndexed } from './roundIndexed';
-import type { ActiveChildInfo, RoundStage } from './streamState';
+import type {
+  ActiveChildInfo,
+  ConversationProgress,
+  RoundStage,
+} from './streamState';
 import type { StreamPhase, StreamSubstate } from './stream';
 import type { TokenUsageStats } from './usage';
 
@@ -96,6 +100,11 @@ export interface UpdateStreamUsagePayload {
   storageKey: StorageKey;
   executionId?: ExecutionId;
   usage: TokenUsageStats;
+}
+
+export interface UpdateConversationProgressPayload {
+  streamId: StreamTabId;
+  progress: ConversationProgress;
 }
 
 /** Round advance within a run, projected from `stage.start` (kind 'round'). */
