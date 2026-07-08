@@ -3,9 +3,13 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, expect, it } from 'vitest';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/progressView/backend/streamOrdering';
-import { buildStreamTabInfo } from '@shared/progressView/backend/streamTabInfo';
+import {
+  buildStreamTabInfo,
+  pickAgentCategory,
+} from '@shared/progressView/backend/streamTabInfo';
 
 // ---------------------------------------------------------------------------
 // streamInfoUtils
@@ -58,5 +62,50 @@ describe('buildStreamTabInfo', () => {
     expect(info.label).toBe('bash');
     expect(info.agent).toBe('bash');
     expect(info.kind).toBe('process');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pickAgentCategory — single owner of the config/hints agentCategory
+// precedence (issue #7583). Regression coverage for the desync scenario:
+// `matchesFilter`/`buildStreamInfo` (streamInfoUtils.ts), `buildStreamTabInfo`
+// (streamTabInfo.ts), and `getStreamCategory` (ProgressEventHandler.ts) must
+// all resolve the same category for the same config/hints inputs.
+// ---------------------------------------------------------------------------
+
+describe('pickAgentCategory', () => {
+  it('prefers a live config category over the hint fallback', () => {
+    expect(
+      pickAgentCategory(
+        { agentCategory: AgentCategory.ToolUse },
+        { agentCategory: AgentCategory.Workflow },
+      ),
+    ).toBe(AgentCategory.ToolUse);
+  });
+
+  it('falls back to hints when config is absent', () => {
+    expect(
+      pickAgentCategory(undefined, { agentCategory: AgentCategory.ToolUse }),
+    ).toBe(AgentCategory.ToolUse);
+  });
+
+  it('returns undefined (no default) when both sources are empty', () => {
+    expect(pickAgentCategory(undefined, undefined)).toBeUndefined();
+    expect(pickAgentCategory(undefined, {})).toBeUndefined();
+  });
+
+  it('agrees with buildStreamTabInfo, which layers the Workflow default on top', () => {
+    const config = { agentCategory: AgentCategory.ToolUse } as AgentConfig;
+    const hints = { agentCategory: AgentCategory.Workflow };
+
+    const info = buildStreamTabInfo({
+      streamId: 'search@deepseek#exec',
+      config,
+      hints,
+      creationTimestamp: 1,
+    });
+
+    expect(pickAgentCategory(config, hints)).toBe(AgentCategory.ToolUse);
+    expect(info.agentCategory).toBe(pickAgentCategory(config, hints));
   });
 });
