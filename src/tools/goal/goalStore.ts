@@ -1,8 +1,11 @@
 import { Mutex } from 'async-mutex';
 
 import { platform, tryWorkspaceState } from '@platform/platform';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas/identifiers';
 import {
   GoalSchema,
@@ -35,6 +38,23 @@ function nowIso(): string {
 
 function generateGoalId(): string {
   return `goal_${hexId12()}`;
+}
+
+function emitGoalStateChanged(
+  streamId: StreamTabId,
+  session?: SessionHandle,
+): void {
+  // Preserve emitRuntimeEvent's compatibility rule while deleting the bus
+  // dependency: older direct-node tests may carry a partial run session.
+  const owner = session ?? tryUseRunContext()?.session;
+  const target = owner?.events ? owner : defaultSession();
+  target.events.emit({
+    scope: 'session',
+    event: {
+      type: 'goalStateChanged',
+      payload: { streamId },
+    },
+  });
 }
 
 function normalizeGoalRecord(raw: unknown): Goal | null {
@@ -120,7 +140,7 @@ async function update(
   const final: Goal = { ...mutate(goal), updatedAt: nowIso() };
   await writeRaw(final);
   // In-run: the active run's session (ALS), falling back to the default session.
-  emitRuntimeEvent('goalStateChanged', { streamId });
+  emitGoalStateChanged(streamId);
   return final;
 }
 
@@ -200,7 +220,7 @@ export const GoalStore = {
       updatedAt: now,
     };
     await Promise.all([writeRaw(goal), addToIndex(streamId)]);
-    emitRuntimeEvent('goalStateChanged', { streamId });
+    emitGoalStateChanged(streamId);
     return goal;
   },
 
@@ -266,7 +286,7 @@ export const GoalStore = {
     ]);
     // Dual-context: PlanTool forgets in-run (→ run session via ALS); hosts
     // pass their owning session for non-default windows.
-    emitRuntimeEvent('goalStateChanged', { streamId }, session);
+    emitGoalStateChanged(streamId, session);
   },
 
   /**
@@ -294,8 +314,7 @@ export const GoalStore = {
         return next.length === index.length ? index : next;
       }),
     ]);
-    for (const id of toRemove)
-      emitRuntimeEvent('goalStateChanged', { streamId: id }, session);
+    for (const id of toRemove) emitGoalStateChanged(id, session);
   },
 
   /**
