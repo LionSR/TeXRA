@@ -31,7 +31,6 @@ import {
   createCliRuntimeHost,
   type CliRuntimeHost,
 } from '@cli/runtime/runtimeHost';
-import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import {
   explainNonResumable,
   resolveCliResumeSnapshot,
@@ -247,17 +246,12 @@ export function createChatSessionController(
     const detachTuiRunFacts = attachTuiRunFactSubscription(
       defaultSession().events,
     );
-    const detachSessionProgressProjection = attachCliSessionProgressProjection(
-      defaultSession().events,
-      interactiveHost,
-    );
     return {
       wrapped: interactiveHost,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
         detachResultToast();
         detachTuiRunFacts();
-        detachSessionProgressProjection();
         detachHostInteractions();
         if (session.runtimeHost === interactiveHost) {
           session.runtimeHost = undefined;
