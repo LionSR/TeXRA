@@ -35,9 +35,6 @@ function buildServices(
     modelHandler: {
       addMediaToUserMessage: vi.fn(async () => []),
     } as never,
-    onRoundFinalized: vi.fn(),
-    checkInterruption: () => false,
-    setAbortController: () => {},
     ...overrides,
   } as ReflectionServices<unknown>;
 }
