@@ -13,7 +13,7 @@ import { getAgentsByCategory, loadAgents } from '@agent/index';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { platform, tryPlatform } from '@platform/platform';
 import {
   AgentCategory,
@@ -277,6 +277,7 @@ const HARNESS_VISIBLE_TOOL_USE_AGENTS = parseList(
 const HARNESS_VISIBLE_WORKFLOW_AGENTS = parseList(
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS,
 );
+const HARNESS_VISIBLE_MODELS = parseList(process.env.HARNESS_VISIBLE_MODELS);
 
 if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
@@ -300,6 +301,12 @@ if (process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined) {
   await platform().workspaceState.update(
     WorkspaceStateKey.ENABLED_AGENTS,
     HARNESS_VISIBLE_WORKFLOW_AGENTS,
+  );
+}
+if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
+  await platform().globalState.update(
+    GlobalStateKey.ENABLED_MODELS,
+    HARNESS_VISIBLE_MODELS,
   );
 }
 await loadAgents({ includeRemote: false });
