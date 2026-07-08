@@ -256,6 +256,10 @@ export function applyReplacements(
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         try {
           const regex = getCompiledRegex(pattern, category.flags);
+          // Both arms call the same `replace` overload with the same
+          // arguments — the runtime behavior doesn't depend on the branch.
+          // The `typeof` check exists only so TS can select a `replace`
+          // overload; it can't choose one from `repl`'s union type directly.
           result =
             typeof repl === 'string'
               ? result.replace(regex, repl)

@@ -344,14 +344,14 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       for (let index = 0; index < sorted.length - 1; index += 1) {
         const previous = sorted[index];
         const current = sorted[index + 1];
-        const resolvedCurrent = toAbsolute(previous.path);
+        const resolvedPrevious = toAbsolute(previous.path);
 
         operations.push({
           type: 'between-rounds',
-          base: pathToLocation(resolvedCurrent),
+          base: pathToLocation(resolvedPrevious),
           revised: pathToLocation(toAbsolute(current.path)),
           description: `${path.basename(previous.path)} (r${previous.round}→r${current.round})`,
-          cwd: path.dirname(resolvedCurrent),
+          cwd: path.dirname(resolvedPrevious),
           fromRound: previous.round,
           toRound: current.round,
         });
