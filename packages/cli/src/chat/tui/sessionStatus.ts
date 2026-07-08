@@ -10,7 +10,7 @@ import type { BypassState } from './state/cliState';
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
 const GOAL_OBJECTIVE_STATUS_LENGTH = 160;
 
-export interface CliSessionGoalStatus {
+interface CliSessionGoalStatus {
   readonly status: string;
   readonly objective: string;
 }

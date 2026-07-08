@@ -22,7 +22,7 @@ export interface CliTexraLoginSlashArgs {
   readonly loginHint?: string;
 }
 
-export interface CliChatGptLoginSlashArgs {
+interface CliChatGptLoginSlashArgs {
   readonly target: 'chatgpt';
   readonly noBrowser: boolean;
   readonly device: boolean;

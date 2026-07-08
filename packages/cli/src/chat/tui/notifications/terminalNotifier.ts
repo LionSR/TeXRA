@@ -15,7 +15,7 @@
 import { writeRawStdout } from '@cli/runtime/logSinks';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 
-export type NotificationKind = 'agentFinished' | 'approvalNeeded';
+type NotificationKind = 'agentFinished' | 'approvalNeeded';
 
 export interface NotifyInit {
   readonly kind: NotificationKind;
