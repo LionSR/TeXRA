@@ -5,7 +5,6 @@ import { app } from 'electron';
 
 import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirectories';
 import { getWorkspacePathInput } from '@desktop/workspacePath.js';
-export { hasWorkspacePath } from '@desktop/workspacePath.js';
 
 interface WorkspacePathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;

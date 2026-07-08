@@ -41,10 +41,6 @@ export const DesktopCloseDiffMessageSchema = z.object({
   command: z.literal(DESKTOP_DIFF_COMMANDS.CLOSE_DIFF),
 });
 
-export type DesktopCloseDiffMessage = z.infer<
-  typeof DesktopCloseDiffMessageSchema
->;
-
 export function buildDesktopShowDiffMessage(
   payload: Omit<DesktopShowDiffMessage, 'command'>,
 ): DesktopShowDiffMessage {
