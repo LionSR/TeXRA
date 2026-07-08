@@ -2692,14 +2692,25 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('resumes tool-use streams through the shared snapshot path', async () => {
-    const retrieveSessionResumeData = vi.fn(async () => ({
-      type: 'toolUse',
-      snapshot: {
-        executionId: 'ec1001',
-        streamId: 'stream-1',
-        agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
-      },
-    }));
+    const parentStreamId = 'stream-parent' as StreamTabId;
+    const retrieveSessionResumeData = vi.fn(
+      async (
+        _streamId: StreamTabId,
+        _executionId: string,
+        _runState: unknown,
+        options?: { parentStreamId?: StreamTabId },
+      ) => ({
+        type: 'toolUse',
+        snapshot: {
+          executionId: 'ec1001',
+          streamId: 'stream-1',
+          agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
+          ...(options?.parentStreamId !== undefined && {
+            parentStreamId: options.parentStreamId,
+          }),
+        },
+      }),
+    );
     const resumeToolUseFromSnapshot = vi.fn(async () => {});
     const messages: unknown[] = [];
     const bridge = await createBridge(messages, {
@@ -2714,6 +2725,10 @@ describe('DesktopProgressBridge', () => {
         executionId: 'ec1001',
         taskState,
       });
+      bridge.handleProgressEvent('setParentStream', {
+        childStreamId: 'stream-1',
+        parentStreamId,
+      });
       bridgeFollowUps(bridge).enqueue(
         'stream-1',
         { text: 'queued follow-up' },
@@ -2725,11 +2740,13 @@ describe('DesktopProgressBridge', () => {
         'stream-1',
         'ec1001',
         taskState.agentConfig,
+        { parentStreamId },
       );
       expect(resumeToolUseFromSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({
           executionId: 'ec1001',
           streamId: 'stream-1',
+          parentStreamId,
         }),
         expect.objectContaining({ emit: expect.any(Function) }),
         expect.objectContaining({ setupSession: expect.any(Function) }),
