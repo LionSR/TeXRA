@@ -6,7 +6,10 @@ import {
   AgentCategorySchema,
   AgentNameSchema,
 } from '@shared/schemas/agent';
-import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
+import {
+  OUTPUT_DOCUMENTS_TAG,
+  OUTPUT_END_TAG,
+} from '@shared/constants/outputProtocol';
 
 export { AgentCategory };
 
@@ -50,10 +53,10 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
  * Drop obsolete settings accepted only for legacy YAML and persisted state.
  * `documentTag`/`endTag` used to configure the per-agent output container;
  * every bundled and custom agent has converged on the fixed
- * `<documents><document name="..."></documents>` protocol (see
- * `@shared/constants/outputProtocol`), so the fields are ignored — with a
- * warning, since a custom agent that relied on a bespoke tag silently gets
- * the standard container instead.
+ * `<documents><document name="...">...</document></documents>` protocol (see
+ * `@shared/constants/outputProtocol`). The fixed default legacy values are
+ * silently ignored so old bundled/persisted copies do not pollute CLI stderr;
+ * bespoke legacy tags still warn because they now get the standard container.
  */
 function stripLegacySettingFields(input: unknown): unknown {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
@@ -66,7 +69,11 @@ function stripLegacySettingFields(input: unknown): unknown {
     endTag,
     ...rest
   } = input as Record<string, unknown>;
-  if (documentTag !== undefined || endTag !== undefined) {
+  const hasLegacyOutputTags = documentTag !== undefined || endTag !== undefined;
+  const usesDefaultOutputTags =
+    (documentTag === undefined || documentTag === OUTPUT_DOCUMENTS_TAG) &&
+    (endTag === undefined || endTag === OUTPUT_END_TAG);
+  if (hasLegacyOutputTags && !usesDefaultOutputTags) {
     // console.warn, not the structured trace logger: this module is a leaf
     // schema (`core/definition`, dependency-free by design — see
     // src/agent/core/README.md) and must not pull in the logger's transitive
