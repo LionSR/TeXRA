@@ -22,8 +22,10 @@ export {
   type GoalStatus,
 } from './goal';
 
-// Re-export data schemas from the individual view-message modules so the
-// historical settings surface (single import site) stays intact.
+// Re-export types (and one constant) from the individual view-message
+// modules so the historical settings surface (single import site) stays
+// intact. The schemas themselves are no longer re-exported here — consumers
+// only ever needed the inferred types through this barrel.
 export {
   type MemoryViewItem,
   type MemoryPreview,
