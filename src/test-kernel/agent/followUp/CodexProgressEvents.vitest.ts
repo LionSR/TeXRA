@@ -25,8 +25,7 @@ import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
 
 // Local imports - test
-import { createRecordingHost } from '../progressTestUtils';
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
+import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
 
 // Type-only imports
 import type {
@@ -61,29 +60,26 @@ async function* streamEvents(
 }
 
 describe('codex progress events', () => {
-  it('publishes todos and usage through the test progress projection', () => {
-    const active = createRecordingHost();
+  it('publishes todos and usage as run facts', () => {
     const trace = new TraceEmitter();
     const hub = new SessionEventHub();
+    const recorded = recordSessionEvents(hub, { scope: 'run' });
     const detachTrace = trace.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
-    );
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      hub,
-      active.host,
     );
 
     publishCodexTodos(streamId, todos, trace);
     publishAgentCliStreamUsage(streamId, executionId, usage, trace);
 
-    expect(active.events).toEqual([
+    expect(runEventsOfType(recorded.events, 'domain')).toMatchObject([
       {
-        event: 'updateTodos',
-        payload: { streamId, todos },
+        key: 'runFact.updateTodos',
+        data: { streamId, todos },
       },
+    ]);
+    expect(runEventsOfType(recorded.events, 'usage')).toMatchObject([
       {
-        event: 'updateStreamUsage',
-        payload: {
+        data: {
           streamId,
           storageKey: executionId,
           executionId,
@@ -92,7 +88,7 @@ describe('codex progress events', () => {
       },
     ]);
 
-    detachProjection();
+    recorded.detach();
     detachTrace();
   });
 
