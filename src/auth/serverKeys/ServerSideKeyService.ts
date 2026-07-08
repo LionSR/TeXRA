@@ -44,7 +44,7 @@ const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
 };
 
 /** Global state key for the "use included model access" preference. */
-export const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
+const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 
 const SERVICE_EVENT = 'event';
 

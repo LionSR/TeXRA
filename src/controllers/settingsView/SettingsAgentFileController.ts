@@ -8,7 +8,7 @@ export interface SettingsAgentFileEntry {
   path: string;
 }
 
-export interface SettingsAgentCustomizePlan {
+interface SettingsAgentCustomizePlan {
   targetPath: string;
 }
 
@@ -22,7 +22,7 @@ export type SettingsAgentCustomizeResult =
       reason: 'targetEscapesCustomDir';
     };
 
-export interface SettingsAgentDeletePlan {
+interface SettingsAgentDeletePlan {
   path: string;
 }
 

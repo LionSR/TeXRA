@@ -15,7 +15,7 @@ const UsageLogMetadataSchema = z.object({
   streamId: z.string().optional(),
 });
 
-export const UsageLogStatsSchema = z.object({
+const UsageLogStatsSchema = z.object({
   inputTokens: z.int().nonnegative(),
   outputTokens: z.int().nonnegative(),
   cost: z.number().nonnegative(),
@@ -36,7 +36,7 @@ export const UsageLogStatsSchema = z.object({
  */
 export type UsageLogStats = z.infer<typeof UsageLogStatsSchema>;
 
-export const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
+const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
   UsageLogStatsSchema.shape,
 ).extend({
   timestamp: z.iso.datetime(),
@@ -46,7 +46,7 @@ export const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
 
 export type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
 
-export const UsageLogBatchSchema = z.object({
+const UsageLogBatchSchema = z.object({
   entries: z.array(UsageLogEntrySchema),
   batchId: z.uuid(),
 });

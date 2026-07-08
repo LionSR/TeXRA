@@ -5,7 +5,7 @@ export interface LatexRecommendedSettingUpdate {
   value: unknown;
 }
 
-export interface LatexRecommendedSettingsConfig {
+interface LatexRecommendedSettingsConfig {
   getConfig(key: string): unknown;
   getGlobalValue(key: string): unknown;
   isExplicitlySet(key: string): boolean;

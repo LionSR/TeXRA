@@ -10,7 +10,7 @@ import {
   type FileListConfig,
 } from './fileListingRules';
 
-export interface WorkspaceTreeNode {
+interface WorkspaceTreeNode {
   name: string;
   path: string;
   type: 'directory' | 'file';

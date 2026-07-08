@@ -6,7 +6,7 @@ import {
   extractLastRoundModelMatch,
 } from '@agent/utils/mergeFileUtils';
 
-export type GeneratedLatexdiffArtifactKind =
+type GeneratedLatexdiffArtifactKind =
   'workspaceDiff' | 'versionControlDiff' | 'betweenRoundDiff';
 
 export interface GeneratedLatexdiffArtifact {

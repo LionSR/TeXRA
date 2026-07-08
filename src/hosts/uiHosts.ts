@@ -84,7 +84,7 @@ export interface PromptHost {
   input(options: PromptInputOptions): Promise<string | undefined>;
 }
 
-export interface TerminalOptions {
+interface TerminalOptions {
   name: string;
   cwd?: string;
   env?: Record<string, string | undefined>;

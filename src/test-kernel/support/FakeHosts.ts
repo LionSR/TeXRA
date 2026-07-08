@@ -28,14 +28,14 @@ export interface PromptInputEvent {
   options: PromptInputOptions;
 }
 
-export interface DiffOpenEvent {
+interface DiffOpenEvent {
   original: DiffSource;
   proposed: DiffSource;
   title: string;
   options?: DiffOptions;
 }
 
-export interface DiffRevealEvent {
+interface DiffRevealEvent {
   session: DiffSession;
   line: number;
 }
@@ -121,7 +121,7 @@ export class FakePromptHost implements PromptHost {
   }
 }
 
-export class FakeExternalOpener implements ExternalOpener {
+class FakeExternalOpener implements ExternalOpener {
   readonly externalUrls: string[] = [];
 
   readonly paths: string[] = [];
@@ -135,7 +135,7 @@ export class FakeExternalOpener implements ExternalOpener {
   }
 }
 
-export class FakeDiffViewHost implements DiffViewHost {
+class FakeDiffViewHost implements DiffViewHost {
   readonly opened: DiffOpenEvent[] = [];
 
   readonly closed: DiffSession[] = [];
@@ -187,7 +187,7 @@ export class FakeDiffViewHost implements DiffViewHost {
  * desktop) inject each port individually; this aggregate exists only so
  * test support can assemble and pass them as a single bundle.
  */
-export interface UIHosts {
+interface UIHosts {
   readonly prompt: PromptHost;
   readonly externalOpener: ExternalOpener;
   readonly diff: DiffViewHost;

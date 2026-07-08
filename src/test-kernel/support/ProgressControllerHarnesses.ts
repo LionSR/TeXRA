@@ -27,7 +27,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 
-export class ControllerCallRecorder<T = unknown> {
+class ControllerCallRecorder<T = unknown> {
   readonly calls = new Map<string, T[]>();
 
   record(name: string, payload: T): void {

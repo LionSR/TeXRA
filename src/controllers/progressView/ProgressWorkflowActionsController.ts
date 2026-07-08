@@ -37,7 +37,7 @@ export interface WorkflowFileOperationRequest {
   skipProgressViewClear: boolean;
 }
 
-export interface ProgressWorkflowActionsState {
+interface ProgressWorkflowActionsState {
   getTaskState(stream: StreamTabId): TaskState | undefined;
   getExecutionId(stream: StreamTabId): string | undefined;
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;

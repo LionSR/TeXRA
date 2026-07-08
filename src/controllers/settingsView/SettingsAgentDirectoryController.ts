@@ -5,7 +5,7 @@ export interface SettingsAgentDirectoryEntry {
   path?: string;
 }
 
-export interface SettingsAgentDirectoryState {
+interface SettingsAgentDirectoryState {
   getConfiguredCustomDir(): string | undefined;
   setConfiguredCustomDir(path: string): Promise<void>;
   getCustomDir(): Promise<string>;

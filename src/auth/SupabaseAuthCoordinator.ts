@@ -16,7 +16,7 @@ import {
 
 export const DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS = 30000;
 
-export interface SupabaseSecretStore {
+interface SupabaseSecretStore {
   get(key: string): Promise<string | undefined>;
   set(key: string, value: string): Promise<void>;
   delete(key: string): Promise<void>;

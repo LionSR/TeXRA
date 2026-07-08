@@ -1,7 +1,7 @@
 import prettyMilliseconds from 'pretty-ms';
 import pluralizeWord from 'pluralize';
 import safeStringify from 'safe-stable-stringify';
-import { serializeError, type ErrorObject } from 'serialize-error';
+import { serializeError } from 'serialize-error';
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
@@ -22,9 +22,6 @@ export function toGraphemes(text: string): string[] {
  * `requestId`), and handles circular references.
  */
 export { serializeError };
-
-/** Plain-object shape produced by {@link serializeError}. */
-export type SerializedError = ErrorObject;
 
 /** Check if value is a non-empty string after trimming. */
 export function isNonEmptyString(value: unknown): value is string {
