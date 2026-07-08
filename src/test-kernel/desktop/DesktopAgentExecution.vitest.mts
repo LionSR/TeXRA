@@ -9,9 +9,11 @@ import {
 
 // Local imports - agent state
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import type { AgentEvent } from '@agent/trace';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import type { SessionEvent } from '@agent/runtime/SessionEventHub';
+import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 
@@ -29,6 +31,7 @@ import {
   type ExecutionId,
   type RestoredStreamSnapshot,
   type RunOutcome,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -588,6 +591,62 @@ async function settleProgressEvents(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
+function emitSessionFact<K extends SessionFact['type']>(
+  bridge: TestableBridge,
+  type: K,
+  payload: Extract<SessionFact, { type: K }>['payload'],
+): void {
+  (bridge as BridgeWithSession).session.events.emit({
+    scope: 'session',
+    event: { type, payload } as Extract<SessionFact, { type: K }>,
+  });
+}
+
+function emitRunEvent(
+  bridge: TestableBridge,
+  streamId: StreamTabId,
+  event: AgentEvent,
+): void {
+  (bridge as BridgeWithSession).session.events.emit({
+    scope: 'run',
+    streamId,
+    event,
+  });
+}
+
+function emitRunConfigFact(
+  bridge: TestableBridge,
+  payload: {
+    streamId: StreamTabId;
+    executionId: ExecutionId;
+    taskState: { agentConfig: unknown };
+  },
+): void {
+  emitRunEvent(bridge, payload.streamId, {
+    type: 'run.config',
+    streamId: payload.streamId,
+    executionId: payload.executionId,
+    config: payload.taskState.agentConfig as AgentConfig,
+  });
+}
+
+function emitStatusFact(
+  bridge: TestableBridge,
+  payload: {
+    streamId: StreamTabId;
+    status: StreamPhase;
+    previousStatus?: StreamPhase;
+  },
+): void {
+  emitRunEvent(bridge, payload.streamId, {
+    type: 'status',
+    streamId: payload.streamId,
+    phase: payload.status,
+    previousPhase: payload.previousStatus,
+    cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+  });
+}
+
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
     vi.doUnmock('@agent/runtime/ProgressViewBridge');
@@ -602,12 +661,12 @@ describe('DesktopProgressBridge', () => {
     vi.restoreAllMocks();
   });
 
-  it('routes runtime events to the window-local desktop backend', async () => {
+  it('routes session facts to the window-local desktop backend', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'parent',
         agentCategory: AgentCategory.Workflow,
       });
@@ -931,27 +990,44 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'parent',
         agentCategory: AgentCategory.Workflow,
       });
-      bridge.handleProgressEvent('updateConversationProgress', {
-        streamId: 'parent',
-        progress: { toolCallCount: 5 },
+      emitRunEvent(bridge, 'parent' as StreamTabId, {
+        type: 'domain',
+        key: 'conversationProgress',
+        data: { toolCallCount: 5 },
       });
-      bridge.handleProgressEvent('updateRoundStage', {
-        streamId: 'parent',
-        roundStage: { index: 2 },
+      emitRunEvent(bridge, 'parent' as StreamTabId, {
+        type: 'stage.start',
+        id: 'round-2',
+        label: 'Round 2',
+        kind: 'round',
+        index: 2,
       });
-      bridge.handleProgressEvent('updateActiveProcesses', {
+      emitRunEvent(bridge, 'parent' as StreamTabId, {
+        type: 'child.activity',
+        kind: 'processes',
         parentStreamId: 'parent',
-        processes: [{ executionId: 'process-1', agentName: 'bash' }],
+        processes: [
+          { kind: 'process', executionId: 'process-1', agentName: 'bash' },
+        ],
       });
 
       vi.spyOn(Date, 'now').mockReturnValue(2_000);
-      bridge.handleProgressEvent('updateActiveSubagents', {
+      emitRunEvent(bridge, 'parent' as StreamTabId, {
+        type: 'child.activity',
+        kind: 'subagents',
         parentStreamId: 'parent',
-        children: [{ executionId: 'agent-1', agentName: 'reviewer' }],
+        children: [
+          {
+            kind: 'subagent',
+            childStreamId: 'agent-1',
+            executionId: 'agent-1',
+            agentName: 'reviewer',
+          },
+        ],
       });
       await settleProgressEvents();
       messages.length = 0;
@@ -985,23 +1061,40 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'parent',
         agentCategory: AgentCategory.Workflow,
       });
-      bridge.handleProgressEvent('updateActiveProcesses', {
+      emitRunEvent(bridge, 'parent' as StreamTabId, {
+        type: 'child.activity',
+        kind: 'processes',
         parentStreamId: 'parent',
-        processes: [{ executionId: 'process-1', agentName: 'bash' }],
+        processes: [
+          { kind: 'process', executionId: 'process-1', agentName: 'bash' },
+        ],
       });
-      bridge.handleProgressEvent('updateActiveSubagents', {
+      emitRunEvent(bridge, 'parent' as StreamTabId, {
+        type: 'child.activity',
+        kind: 'subagents',
         parentStreamId: 'parent',
-        children: [{ executionId: 'agent-1', agentName: 'reviewer' }],
+        children: [
+          {
+            kind: 'subagent',
+            childStreamId: 'agent-1',
+            executionId: 'agent-1',
+            agentName: 'reviewer',
+          },
+        ],
       });
-      bridge.handleProgressEvent('updateActiveProcesses', {
+      emitRunEvent(bridge, 'parent' as StreamTabId, {
+        type: 'child.activity',
+        kind: 'processes',
         parentStreamId: 'parent',
         processes: [],
       });
-      bridge.handleProgressEvent('updateActiveSubagents', {
+      emitRunEvent(bridge, 'parent' as StreamTabId, {
+        type: 'child.activity',
+        kind: 'subagents',
         parentStreamId: 'parent',
         children: [],
       });
@@ -1027,10 +1120,9 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('updateStreamStatus', {
+      emitStatusFact(bridge, {
         streamId: 'new-stream',
         status: STREAM_STATUS.RUNNING,
-        previousStatus: STREAM_STATUS.READY,
       });
 
       expect(
@@ -1118,7 +1210,7 @@ describe('DesktopProgressBridge', () => {
     const taskState = workflowTaskState();
 
     try {
-      bridge.handleProgressEvent('setTaskState', {
+      emitRunConfigFact(bridge, {
         streamId: 'stream-new',
         executionId: 'abc123',
         taskState,
@@ -1984,7 +2076,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'child-stream',
         agentCategory: AgentCategory.ToolUse,
         suppressViewSwitch: true,
@@ -2010,11 +2102,11 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'first',
         agentCategory: AgentCategory.Workflow,
       });
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'second',
         agentCategory: AgentCategory.Workflow,
       });
@@ -2064,7 +2156,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'plan-delete-stream',
         agentCategory: AgentCategory.Workflow,
       });
@@ -2170,7 +2262,7 @@ describe('DesktopProgressBridge', () => {
     await bridgeGoalStore.start(stream, 'finish the cleanup');
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: stream,
         agentCategory: AgentCategory.Workflow,
       });
@@ -2189,15 +2281,15 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'first',
         agentCategory: AgentCategory.Workflow,
       });
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'second',
         agentCategory: AgentCategory.Workflow,
       });
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'third',
         agentCategory: AgentCategory.Workflow,
       });
@@ -2234,11 +2326,11 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'first',
         agentCategory: AgentCategory.Workflow,
       });
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'second',
         agentCategory: AgentCategory.Workflow,
       });
@@ -2247,7 +2339,7 @@ describe('DesktopProgressBridge', () => {
       messages.length = 0;
 
       const deletePromise = bridge.deleteStream('second');
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'second',
         agentCategory: AgentCategory.Workflow,
       });
@@ -2283,7 +2375,7 @@ describe('DesktopProgressBridge', () => {
     );
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'active',
         agentCategory: AgentCategory.Workflow,
       });
@@ -2315,7 +2407,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.handleProgressEvent('setActiveStream', {
+      emitSessionFact(bridge, 'setActiveStream', {
         streamId: 'bash-delete-all-stream',
         agentCategory: AgentCategory.Workflow,
       });
@@ -2682,7 +2774,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], { runAgent });
 
     try {
-      bridge.handleProgressEvent('setTaskState', {
+      emitRunConfigFact(bridge, {
         streamId: 'stream-new',
         executionId: 'exec-new',
         taskState,
@@ -2783,12 +2875,12 @@ describe('DesktopProgressBridge', () => {
     const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
 
     try {
-      bridge.handleProgressEvent('setTaskState', {
+      emitRunConfigFact(bridge, {
         streamId: 'stream-1',
-        executionId: 'ec1001',
+        executionId: 'ec1001' as ExecutionId,
         taskState,
       });
-      bridge.handleProgressEvent('setParentStream', {
+      emitSessionFact(bridge, 'setParentStream', {
         childStreamId: 'stream-1',
         parentStreamId,
       });
@@ -2860,9 +2952,9 @@ describe('DesktopProgressBridge', () => {
     });
 
     try {
-      bridge.handleProgressEvent('setTaskState', {
+      emitRunConfigFact(bridge, {
         streamId: 'stream-1',
-        executionId: 'ec1001',
+        executionId: 'ec1001' as ExecutionId,
         taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
       bridgeFollowUps(bridge).enqueue(
@@ -2926,9 +3018,9 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], { retrieveSessionResumeData });
 
     try {
-      bridge.handleProgressEvent('setTaskState', {
+      emitRunConfigFact(bridge, {
         streamId: 'stream-1',
-        executionId: 'ec1001',
+        executionId: 'ec1001' as ExecutionId,
         taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
 

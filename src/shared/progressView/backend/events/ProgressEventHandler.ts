@@ -41,8 +41,36 @@ export interface UICallbacks {
   updateSuperYoloBypassState: (streamId: string, bypassActive: boolean) => void;
 }
 
+export type ProgressBackendInteractionPayloads = Pick<
+  RuntimeInteractionEventPayloads,
+  | 'showToolEditPermission'
+  | 'resolveToolEditPermission'
+  | 'updateToolEditApprovalBypassState'
+  | 'updateSuperYoloBypassState'
+>;
+
+export type ProgressBackendInteractionEvent =
+  keyof ProgressBackendInteractionPayloads;
+
+const PROGRESS_BACKEND_INTERACTION_EVENTS = [
+  'showToolEditPermission',
+  'resolveToolEditPermission',
+  'updateToolEditApprovalBypassState',
+  'updateSuperYoloBypassState',
+] as const satisfies readonly ProgressBackendInteractionEvent[];
+
+const ProgressBackendInteractionEventSet: ReadonlySet<string> = new Set(
+  PROGRESS_BACKEND_INTERACTION_EVENTS,
+);
+
+export function isProgressBackendInteractionEvent(
+  event: string,
+): event is ProgressBackendInteractionEvent {
+  return ProgressBackendInteractionEventSet.has(event);
+}
+
 export type ProgressBackendEventPayloads = ProgressEventPayloads &
-  RuntimeInteractionEventPayloads;
+  ProgressBackendInteractionPayloads;
 
 export type ProgressBackendEvent = keyof ProgressBackendEventPayloads;
 
