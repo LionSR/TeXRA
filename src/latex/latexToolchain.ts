@@ -1,6 +1,6 @@
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
-export type LatexToolName =
+type LatexToolName =
   | 'latexmk'
   | 'pdflatex'
   | 'xelatex'
@@ -10,7 +10,7 @@ export type LatexToolName =
   | 'latexdiff'
   | 'latexindent';
 
-export interface LatexToolStatus {
+interface LatexToolStatus {
   readonly name: LatexToolName;
   readonly installed: boolean;
   readonly required: boolean;

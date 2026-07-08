@@ -22,13 +22,13 @@ export interface ProgressFollowUpPolishInput {
   readonly taskState: TaskState | undefined;
 }
 
-export interface ProgressFollowUpPolishTextResult {
+interface ProgressFollowUpPolishTextResult {
   readonly success: boolean;
   readonly text: string;
   readonly error?: string;
 }
 
-export type ProgressFollowUpPolishText = (
+type ProgressFollowUpPolishText = (
   text: string,
   fileContext?: FileContext,
 ) => Promise<ProgressFollowUpPolishTextResult>;

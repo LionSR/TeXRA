@@ -33,7 +33,7 @@ export interface ProgressFollowUpModelOption {
   disabled?: boolean;
 }
 
-export interface ProgressFollowUpWorkspace {
+interface ProgressFollowUpWorkspace {
   locatePath(path: string):
     | { kind: 'workspace'; relativePath: string }
     | {

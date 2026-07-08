@@ -35,7 +35,7 @@ import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';
 import { StreamLogStore, STREAM_LOGS_DIR } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 
-export type CompletedRunTodosSource = 'streamData' | 'legacyKV' | 'none';
+type CompletedRunTodosSource = 'streamData' | 'legacyKV' | 'none';
 
 export interface CompletedRunTodosReadResult {
   readonly todos: TodoEntry[];
@@ -127,7 +127,7 @@ export async function readCompletedRunTodos(
 // Conversation
 // ============================================================================
 
-export type CompletedRunConversationSource = 'streamLog' | 'legacyKV' | 'none';
+type CompletedRunConversationSource = 'streamLog' | 'legacyKV' | 'none';
 
 export interface CompletedRunConversationReadResult {
   /** Provider-agnostic `{role, content}` messages, or `null` when neither
@@ -345,7 +345,7 @@ function conversationMessagesForEntry(entry: StreamLogEntry): unknown[] {
  * chat-export normalizer, the CLI workspace-file extractor) already
  * recognizes, so downstream rendering code needs no new shape.
  */
-export function streamLogEntriesToConversation(
+function streamLogEntriesToConversation(
   entries: readonly StreamLogEntry[],
 ): unknown[] {
   return entries.flatMap((entry) =>

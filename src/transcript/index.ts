@@ -34,15 +34,6 @@ export {
 export {
   readCompletedRunConversation,
   readCompletedRunTodos,
-  streamLogEntriesToConversation,
-  type CompletedRunConversationReadResult,
-  type CompletedRunConversationSource,
-  type CompletedRunTodosReadResult,
-  type CompletedRunTodosSource,
 } from './completedRunArchive';
-export {
-  resolvePersistedStreamIdForExecution,
-  type PersistedStreamIdResolution,
-  type PersistedStreamIdResolutionSource,
-} from './executionStreamResolver';
+export { resolvePersistedStreamIdForExecution } from './executionStreamResolver';
 export { injectStandaloneTrace } from './standaloneTraceHtml';

@@ -10,7 +10,7 @@ export interface SettingsAgentVisibilityEntry {
   name: string;
 }
 
-export interface SettingsAgentVisibilityState {
+interface SettingsAgentVisibilityState {
   getEnabledAgentKeys(category: AgentCategory): string[] | undefined;
   setEnabledAgentKeys(
     category: AgentCategory,

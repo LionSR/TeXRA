@@ -45,14 +45,11 @@ export const STREAM_DATA_KEYS = {
   LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
 } as const;
 
-export type StreamDataKey =
-  (typeof STREAM_DATA_KEYS)[keyof typeof STREAM_DATA_KEYS];
-
 /**
  * Encode a stream tab id for safe use as a filesystem directory name.
  * Stream ids can contain `:`, `/`, `#`, and other unsafe characters.
  */
-export function encodeStreamId(id: string): string {
+function encodeStreamId(id: string): string {
   return encodeURIComponent(id);
 }
 

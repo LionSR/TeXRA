@@ -9,18 +9,18 @@ export interface AuthCallbackUriParts {
   fragment?: string;
 }
 
-export interface AuthCallbackTokens {
+interface AuthCallbackTokens {
   accessToken: string;
   refreshToken: string;
   expiresIn: string | null;
 }
 
-export interface AuthCallbackTokenParseSuccess {
+interface AuthCallbackTokenParseSuccess {
   success: true;
   tokens: AuthCallbackTokens;
 }
 
-export interface AuthCallbackTokenParseError {
+interface AuthCallbackTokenParseError {
   success: false;
   error: string;
   isAuthError?: boolean;
@@ -114,7 +114,7 @@ export function parseAuthCallbackTokens(
   };
 }
 
-export interface AuthCallbackCodeParseSuccess {
+interface AuthCallbackCodeParseSuccess {
   success: true;
   code: string;
 }

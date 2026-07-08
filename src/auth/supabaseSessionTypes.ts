@@ -4,7 +4,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export const DEFAULT_SUPABASE_SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
-export const SupabaseSessionSchema = z.object({
+const SupabaseSessionSchema = z.object({
   id: z.string(),
   accessToken: z.string(),
   refreshToken: z.string(),
@@ -18,7 +18,7 @@ export const SupabaseSessionSchema = z.object({
 export type SupabaseSession = z.infer<typeof SupabaseSessionSchema>;
 
 /** Response schema for GitHub token exchange and refresh Edge Functions. */
-export const GitHubTokenExchangeSchema = z.object({
+const GitHubTokenExchangeSchema = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
   expires_at: z.number().optional(),
@@ -59,12 +59,12 @@ export interface SupabaseSessionLog {
 }
 
 /** Result of converting an auth callback into a stored session. */
-export interface SupabaseCallbackParseResult {
+interface SupabaseCallbackParseResult {
   success: true;
   session: SupabaseSession;
 }
 
-export interface SupabaseCallbackParseError {
+interface SupabaseCallbackParseError {
   success: false;
   error: string;
   isAuthError?: boolean;

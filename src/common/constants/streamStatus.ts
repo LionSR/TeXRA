@@ -135,7 +135,7 @@ export function isInFlightPhase(phase: StreamPhase | undefined): boolean {
   return phase === STREAM_PHASE.RUNNING || phase === STREAM_PHASE.WAITING;
 }
 
-export function isTerminalPhase(phase: StreamPhase | undefined): boolean {
+function isTerminalPhase(phase: StreamPhase | undefined): boolean {
   return phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase);
 }
 

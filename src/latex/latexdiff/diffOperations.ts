@@ -42,7 +42,7 @@ function getFileLabel(info: OutputFileInfo): string {
   return info.source ?? path.basename(getComparablePath(info.location));
 }
 
-export async function executeDiffOperations(
+async function executeDiffOperations(
   operations: DiffOperation[],
   mathMarkup: MathMarkupOption | undefined,
   progress: DiffProgressReporter,
