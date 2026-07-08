@@ -133,9 +133,8 @@ export class ProgressBackend {
     const detachSessionFacts = this.session.events.subscribe(
       (sessionEvent) => {
         if (sessionEvent.scope !== 'session') return;
-        this.handleProjectedProgressEvent(
-          projectSessionFactToProgressEvent(sessionEvent.event),
-        );
+        const projected = projectSessionFactToProgressEvent(sessionEvent.event);
+        if (projected) this.handleProjectedProgressEvent(projected);
       },
       { scope: 'session' },
     );

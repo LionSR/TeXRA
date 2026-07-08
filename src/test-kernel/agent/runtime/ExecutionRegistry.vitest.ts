@@ -17,6 +17,7 @@ import {
   SessionEventHub,
   type SessionEvent,
 } from '@agent/runtime/SessionEventHub';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   RUN_OUTCOME,
@@ -980,7 +981,9 @@ describe('executionRegistry', () => {
     const unsupportedStreamId =
       'stream-manual-compaction-unsupported-test' as StreamTabId;
     const requestImmediateCompaction = vi.fn();
+    const ownerSession = {} as SessionHandle;
     const context: LiveToolUseFlowContext = {
+      ownerSession,
       session: {
         appendFollowUp: vi.fn(),
       },
@@ -1043,7 +1046,7 @@ describe('executionRegistry', () => {
       expect(registry.requestManualCompaction(streamId)).toEqual({
         kind: 'requested',
         streamId,
-        runtimeHost: explicit.host,
+        session: ownerSession,
       });
       expect(requestImmediateCompaction).toHaveBeenCalledOnce();
     } finally {

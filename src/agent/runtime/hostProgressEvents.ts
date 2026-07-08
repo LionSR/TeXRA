@@ -110,9 +110,6 @@ export interface ProgressEventPayloads {
   updateProcessOutput: UpdateProcessOutputPayload;
   updateStreamDescription: UpdateStreamDescriptionPayload;
   setParentStream: SetParentStreamPayload;
-  /** A follow-up message was sent to an active tool-use session.
-   *  Listened by blocking tools (e.g. ExecutionsTool wait) to abort early. */
-  followUpSent: { streamId: StreamTabId };
 
   /** Request the progress view to remove a stream tab (used by short-lived
    *  child streams that should auto-close once their work is done). */
