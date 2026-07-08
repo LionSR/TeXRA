@@ -61,6 +61,7 @@ import {
 } from './BaseReasoningStreamAggregator';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  COMPACTION_SUMMARY_PREFIX,
   COMPACTION_SYSTEM_PROMPT,
 } from '../contextManagementConstants';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
@@ -194,7 +195,7 @@ export class ModelHandlerOpenAI<
       },
       (summary) => ({
         role: 'user',
-        content: `[Previous conversation summary]\n\n${summary}`,
+        content: `${COMPACTION_SUMMARY_PREFIX}${summary}`,
       }),
     );
   }
