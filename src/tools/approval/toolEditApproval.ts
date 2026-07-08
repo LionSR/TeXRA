@@ -1,5 +1,6 @@
 import { platform } from '@platform/platform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { StreamTabId } from '@shared/schemas';
@@ -111,7 +112,7 @@ export function emitToolEditApprovalPrompt(
   const { requestId, request, relativePath, lineChanges } = params;
   const { streamId } = request;
   if (streamId) {
-    runtimeHost.emit('setActiveStream', { streamId });
+    emitRuntimeEvent('setActiveStream', { streamId });
   }
   const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
   runtimeHost.emit('showToolEditPermission', {
