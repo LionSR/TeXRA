@@ -193,6 +193,14 @@ function buildVSCodeUI(): AgentCreatorUI {
   };
 }
 
+/**
+ * Runs the agent-creator wizard directly rather than via `executeAgent`.
+ * `executeAgent` launches YAML-defined `AgentConfig` runs (`workflow` /
+ * `toolUse`) and tracks them as sessions with resume/history semantics; this
+ * flow authors a *new* agent YAML and never itself becomes a trackable
+ * session, so there is no `AgentConfig` to hand it and no resume state to
+ * keep coherent.
+ */
 export async function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
   category: AgentCategory,
