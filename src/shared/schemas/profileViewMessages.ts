@@ -16,25 +16,24 @@ import { SpendingStatusSchema } from './spendingStatus';
 // Data schemas
 // ============================================================
 
-export const ProfileUserSchema = z.object({
+const ProfileUserSchema = z.object({
   email: z.string(),
   id: z.string(),
 });
-export type ProfileUser = z.infer<typeof ProfileUserSchema>;
 
 /**
  * Remote agent data for the profile view.
  * Extends AgentMetadataBaseSchema (name, category, description) with
  * profile-specific fields. Description is required (non-optional) here.
  */
-export const RemoteAgentSchema = AgentMetadataBaseSchema.extend({
+const RemoteAgentSchema = AgentMetadataBaseSchema.extend({
   description: z.string(), // override optional → required for display
   visibility: z.array(z.string()),
   supportsMultipleOutput: z.boolean(),
 });
 export type RemoteAgent = z.infer<typeof RemoteAgentSchema>;
 
-export const ApiAccessModeSchema = z.enum(['included', 'personal']);
+const ApiAccessModeSchema = z.enum(['included', 'personal']);
 export type ApiAccessMode = z.infer<typeof ApiAccessModeSchema>;
 export const API_ACCESS_MODE_OPTIONS: readonly {
   readonly value: ApiAccessMode;
@@ -55,20 +54,18 @@ export const API_ACCESS_MODE_OPTIONS: readonly {
   },
 ] as const;
 
-export const TierConstantsSchema = z.object({
+const TierConstantsSchema = z.object({
   ultra: z.string(),
   max: z.string(),
 });
-export type TierConstants = z.infer<typeof TierConstantsSchema>;
 
 /**
  * A VS Code configuration toggle surfaced in a provider's expanded settings.
  * Extends ProviderVscodeSettingDefSchema (single source of truth) with runtime `value`.
  */
-export const ProviderVscodeSettingSchema =
-  ProviderVscodeSettingDefSchema.extend({
-    value: z.boolean(),
-  });
+const ProviderVscodeSettingSchema = ProviderVscodeSettingDefSchema.extend({
+  value: z.boolean(),
+});
 export type ProviderVscodeSetting = z.infer<typeof ProviderVscodeSettingSchema>;
 
 /** A VS Code numeric configuration surfaced in a settings section. */
@@ -83,7 +80,7 @@ export const NumberVscodeSettingSchema = z.object({
 });
 export type NumberVscodeSetting = z.infer<typeof NumberVscodeSettingSchema>;
 
-export const ProviderKeyStatusSchema = z.object({
+const ProviderKeyStatusSchema = z.object({
   provider: z.string(),
   displayName: z.string(),
   status: z.enum(['set', 'env', 'not-set']),
@@ -121,18 +118,14 @@ export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 // ============================================================
 
 /** Agent selection message (reusable field schema) */
-export const SelectAgentMessageSchema = z.object({
+const SelectAgentMessageSchema = z.object({
   agentName: z.string().min(1),
 });
-export type SelectAgentMessage = z.infer<typeof SelectAgentMessageSchema>;
 
 /** API access mode message (reusable field schema) */
-export const SetApiAccessModeMessageSchema = z.object({
+const SetApiAccessModeMessageSchema = z.object({
   mode: ApiAccessModeSchema,
 });
-export type SetApiAccessModeMessage = z.infer<
-  typeof SetApiAccessModeMessageSchema
->;
 
 // Inbound messages with command literals
 export const GetProfileDataMessageSchema = commandOnly(
