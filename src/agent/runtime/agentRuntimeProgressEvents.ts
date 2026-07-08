@@ -24,22 +24,16 @@ import type {
 } from '@shared/schemas';
 
 /**
- * **Frozen** legacy host progress-event view, spoken by retained
- * progress-output adapters and host-owned compatibility adapters.
- * Retained CLI public output now projects into this table inside the CLI
- * adapter boundary (D3 decision on #6984: frozen until v0.41).
+ * Runtime-host progress payloads retained for host compatibility.
  *
- * Do NOT add keys. The payload vocabulary lives as fact-native named types in
- * `@shared/schemas` (`progressEvents.ts` and friends); new run-scoped facts
- * extend `AgentEvent` (trace), and new session-scoped facts extend
- * `SessionFact` (`SessionEventHub`). The process-wide carrier that originally
- * carried these keys is deleted; this map survives only so the retained host
- * rails keep one shared key/payload table while they are migrated to typed
- * session/host surfaces.
- * Every fact-plane key below references its named vocabulary type — this map
- * projects the vocabulary, it does not define it.
+ * Session- and run-scoped state changes are owned by `SessionEventHub` and
+ * `AgentEvent`; this table only types the remaining direct `runtimeHost.emit`
+ * progress surface used by compatibility adapters. Do not add new fact keys
+ * here. New durable state should extend the session/run fact vocabulary first,
+ * then choose an explicit host projection only when a retained public surface
+ * requires it.
  */
-export interface ProgressEventPayloads {
+export interface AgentRuntimeProgressEventPayloads {
   // ── Run/stream progress ──
   setActiveStream: SetActiveStreamPayload;
   updateStreamStatus: UpdateStreamStatusPayload;
@@ -71,4 +65,4 @@ export interface ProgressEventPayloads {
   goalStateChanged: GoalStateChangedPayload;
 }
 
-export type ProgressEvent = keyof ProgressEventPayloads;
+export type AgentRuntimeProgressEvent = keyof AgentRuntimeProgressEventPayloads;

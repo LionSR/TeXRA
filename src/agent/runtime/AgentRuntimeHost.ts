@@ -1,9 +1,9 @@
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { AgentRuntimeProgressEventPayloads } from '@agent/runtime/agentRuntimeProgressEvents';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import type { RuntimePresentationEventPayloads } from '@agent/runtime/runtimePresentationEvents';
 import type { HostInteractions } from './HostInteractions';
 
-export type AgentRuntimeEventPayloads = ProgressEventPayloads &
+export type AgentRuntimeEventPayloads = AgentRuntimeProgressEventPayloads &
   RuntimeInteractionEventPayloads &
   RuntimePresentationEventPayloads;
 
@@ -24,7 +24,7 @@ export type AgentRuntimeEvent = keyof AgentRuntimeEventPayloads;
  *   `updateMissingOutputs`, `updateCompileFailures`, `clearMissingOutputs`),
  *   interaction requests (`RuntimeInteractionEventPayloads`), and conversation progress
  *   (`updateTodos`/`updatePlan`/`updateConversationProgress`). See
- *   {@link ProgressEventPayloads} for the complete, authoritative enumeration.
+ *   {@link AgentRuntimeProgressEventPayloads} for the complete progress enumeration.
  * - **Frontend-bound, ignorable** (`RuntimePresentationEventPayloads`):
  *   `requestOpenFile`, `requestShowInstruction`, `showAgentConfigBanner`,
  *   `requestShowError`, `requestEnsureProgressView`, pure host-UI requests
