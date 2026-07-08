@@ -428,10 +428,11 @@ export class BashTool extends defineTool({
         try {
           const store = getExecutionStore(executionId);
           await store.writeResultMeta({
-            exitCode: result.exitCode,
+            producer: 'backgroundBash',
+            exitCode: result.exitCode ?? (result.success ? 0 : 1),
             wallTimeMs,
             success: result.success,
-            timedOut: result.timedOut,
+            timedOut: result.timedOut ?? false,
             command,
           });
           await writeTerminalStatus(
