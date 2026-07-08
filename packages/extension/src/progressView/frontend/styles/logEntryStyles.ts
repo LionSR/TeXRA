@@ -287,6 +287,16 @@ export const logEntryStyles = css`
     margin: 0;
   }
 
+  /* Raw streamed text has no <p>/<br> tags to carry line breaks (unlike the
+     markdown-rendered content this class normally wraps), so preserve them.
+     Unlike .log-line, this text is actively being read while it grows, so
+     prefer breaking at word boundaries (break-word) over .log-line's
+     break-all — mid-word breaks are more disruptive mid-stream. */
+  .banner-content--streaming {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
   .banner-details:not([open]) .banner-content {
     display: none;
   }

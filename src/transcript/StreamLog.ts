@@ -1,5 +1,6 @@
 import {
   STREAM_LOG_ENTRY_TYPES,
+  STREAMING_TEXT_MESSAGE_TYPES,
   type StreamLogEntry,
   type StreamLogTextDelta,
 } from '@shared/schemas';
@@ -22,6 +23,21 @@ export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
   return status === 'running';
 }
 
+/**
+ * True while a thinking/scratchpad/model-response entry is at
+ * `data.status: 'running'` — either genuinely still streaming, or orphaned
+ * because its stream never got a `stream.end` (run cancelled, crashed, or
+ * the host reloaded mid-stream). Used both for live in-memory tracking
+ * (`hasRunningStreamingText`) and, by the same predicate, to identify
+ * orphaned entries at load time in `StreamLogStore`'s recovery sweep.
+ */
+export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
+  if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) return false;
+  if (!STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType ?? '')) return false;
+  const data = isObject(entry.data) ? entry.data : {};
+  return data.status === 'running';
+}
+
 export class StreamLog {
   private entries: StreamLogEntry[] = [];
   private readonly preservedRawEntries: StreamLogPreservedRawEntry[] = [];
@@ -30,6 +46,7 @@ export class StreamLog {
   private readonly dirtyUpdates = new Set<string>();
   private readonly dirtyTextDeltas = new Map<string, StreamLogTextDelta>();
   private runningGroupCount = 0;
+  private runningStreamingTextCount = 0;
 
   constructor(
     entries: readonly StreamLogEntry[] = [],
@@ -56,6 +73,9 @@ export class StreamLog {
       if (isRunningGroupEntry(entry)) {
         this.runningGroupCount += 1;
       }
+      if (isRunningStreamingTextEntry(entry)) {
+        this.runningStreamingTextCount += 1;
+      }
     }
   }
 
@@ -79,6 +99,11 @@ export class StreamLog {
     return this.runningGroupCount > 0;
   }
 
+  /** True while any thinking/scratchpad/model-response entry is still at `data.status: 'running'`. */
+  get hasRunningStreamingText(): boolean {
+    return this.runningStreamingTextCount > 0;
+  }
+
   append(entry: StreamLogAppendInput): StreamLogEntry {
     const fullEntry: StreamLogEntry = {
       ...entry,
@@ -89,6 +114,9 @@ export class StreamLog {
     this.entries.push(fullEntry);
     if (isRunningGroupEntry(fullEntry)) {
       this.runningGroupCount += 1;
+    }
+    if (isRunningStreamingTextEntry(fullEntry)) {
+      this.runningStreamingTextCount += 1;
     }
     return fullEntry;
   }
@@ -122,6 +150,14 @@ export class StreamLog {
       this.runningGroupCount -= 1;
     } else if (!wasRunningGroup && isNowRunningGroup) {
       this.runningGroupCount += 1;
+    }
+
+    const wasRunningStreamingText = isRunningStreamingTextEntry(current);
+    const isNowRunningStreamingText = isRunningStreamingTextEntry(updated);
+    if (wasRunningStreamingText && !isNowRunningStreamingText) {
+      this.runningStreamingTextCount -= 1;
+    } else if (!wasRunningStreamingText && isNowRunningStreamingText) {
+      this.runningStreamingTextCount += 1;
     }
 
     this.entries[index] = updated;
