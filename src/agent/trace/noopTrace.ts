@@ -54,6 +54,7 @@ export const noopTrace: AgentTrace = {
   toolStart: NOOP,
   toolEnd: NOOP,
   domain: NOOP,
+  responseFinalized: NOOP,
 
   openStage(_label, options) {
     return new NoopStageHandle(options?.id ?? nanoid());

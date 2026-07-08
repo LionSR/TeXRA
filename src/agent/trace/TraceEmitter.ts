@@ -198,6 +198,14 @@ export class TraceEmitter implements AgentTrace {
     });
   }
 
+  responseFinalized(text: string, options: StagedEmitOptions = {}): void {
+    this.emit({
+      type: 'response.finalized',
+      text,
+      stageId: options.stageId,
+    });
+  }
+
   // ─── Stages ────────────────────────────────────────────────────────
 
   openStage(label: string, options: StageOptions = {}): StageHandle {
