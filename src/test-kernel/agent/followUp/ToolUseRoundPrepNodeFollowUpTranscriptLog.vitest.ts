@@ -1,0 +1,111 @@
+// Third-party imports
+import { describe, expect, it, vi } from 'vitest';
+
+// Local imports
+import { ToolUseRoundPrepNode } from '@agent/core/flows/toolUseRound/ToolUseRoundPrepNode';
+import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
+import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
+import { withTestRunContext } from '../progressTestUtils';
+
+function buildServices(
+  overrides: Partial<ToolUseRoundServices<unknown>> = {},
+): ToolUseRoundServices<unknown> {
+  return {
+    checkInterruption: () => false,
+    config: { model: 'deepseekT', agent: 'chat' } as never,
+    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    modelHandler: {
+      createUserFollowUpMessages: vi.fn(async (messages) => messages),
+      addMediaToUserMessage: vi.fn(async () => []),
+      capabilities: {},
+    } as never,
+    fileService: { createLocation: vi.fn() } as never,
+    toolRegistry: {} as never,
+    ...overrides,
+  } as ToolUseRoundServices<unknown>;
+}
+
+function buildShared(): ToolUseRoundShared {
+  return {
+    messages: [],
+    shouldStop: false,
+    endTurn: false,
+  } as unknown as ToolUseRoundShared;
+}
+
+describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 pattern on a round)', () => {
+  it('logs a follow-up transcript row even when appendFollowUpAsUserMessage throws', async () => {
+    // A failed follow-up append mid-round (corrupt/oversized media, provider
+    // validation error, ...) must still leave a record of what the user
+    // asked for — otherwise that turn's transcript row silently vanishes.
+    const services = buildServices();
+    (
+      services.modelHandler.createUserFollowUpMessages as ReturnType<
+        typeof vi.fn
+      >
+    ).mockRejectedValue(new Error('follow-up append failed'));
+    const node = new ToolUseRoundPrepNode().setServices(services);
+    const shared = buildShared();
+    const runtimeHost = { emit: vi.fn() };
+
+    await expect(
+      withTestRunContext(runtimeHost, 'test-stream', () =>
+        node.post(shared, {
+          interrupted: false,
+          queuedFollowUps: [{ text: 'Do the thing.', origin: 'user' }],
+          synthetic: false,
+        }),
+      ),
+    ).rejects.toThrow('follow-up append failed');
+
+    expect(services.logger.info).toHaveBeenCalledWith(
+      'Do the thing.',
+      expect.objectContaining({ messageType: expect.any(String) }),
+    );
+  });
+
+  it('still logs exactly once per queued follow-up on the success path', async () => {
+    const services = buildServices();
+    const node = new ToolUseRoundPrepNode().setServices(services);
+    const shared = buildShared();
+    const runtimeHost = { emit: vi.fn() };
+
+    const transition = await withTestRunContext(
+      runtimeHost,
+      'test-stream',
+      () =>
+        node.post(shared, {
+          interrupted: false,
+          queuedFollowUps: [{ text: 'Do the thing.', origin: 'user' }],
+          synthetic: false,
+        }),
+    );
+
+    expect(transition).toBeDefined();
+    expect(services.logger.info).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not log synthetic follow-ups', async () => {
+    const services = buildServices();
+    (
+      services.modelHandler.createUserFollowUpMessages as ReturnType<
+        typeof vi.fn
+      >
+    ).mockRejectedValue(new Error('boom'));
+    const node = new ToolUseRoundPrepNode().setServices(services);
+    const shared = buildShared();
+    const runtimeHost = { emit: vi.fn() };
+
+    await expect(
+      withTestRunContext(runtimeHost, 'test-stream', () =>
+        node.post(shared, {
+          interrupted: false,
+          queuedFollowUps: [{ text: 'synthesized', origin: 'user' }],
+          synthetic: true,
+        }),
+      ),
+    ).rejects.toThrow('boom');
+
+    expect(services.logger.info).not.toHaveBeenCalled();
+  });
+});
