@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import {
   matchesCancelSelector,
   type HostBashApprovalRequest,
@@ -23,6 +24,7 @@ import {
   toRetryResult,
   toUserQuestionResult,
 } from '@agent/runtime/hostInteractionResultMappers';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { nativeRequestApproval } from '@frontend/approval/nativeToolEditApproval';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
@@ -33,6 +35,7 @@ import type {
 
 export interface ExtensionHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
+  session?: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
 }
 
@@ -68,7 +71,7 @@ export function createExtensionHostInteractions(
   const activateStream = (streamId?: StreamTabId | null) => {
     options.runtimeHost.emit('requestEnsureProgressView', {});
     if (streamId) {
-      options.runtimeHost.emit('setActiveStream', { streamId });
+      emitRuntimeEvent('setActiveStream', { streamId }, options.session);
     }
   };
 
