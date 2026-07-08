@@ -23,6 +23,7 @@ import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { globalSM, GlobalStateKey } from '@common/state';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
+import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import * as logger from '@logger/logUtils';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
@@ -167,13 +168,7 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
   if (!collection) return false;
 
   const uri = vscode.Uri.file(entry.absolutePath);
-  const lineIndex = Math.max(0, Math.floor(entry.line) - 1);
-  const range = new vscode.Range(
-    lineIndex,
-    0,
-    lineIndex,
-    Number.MAX_SAFE_INTEGER,
-  );
+  const range = lineToRange(entry.line);
   const diag = buildDiagnostic(
     range,
     entry.message,
