@@ -96,7 +96,6 @@ async function withRetryRunContext<T>(
     agentName: 'retry-test',
     session: sessionWithInteractions({
       requestRetry,
-      handleProgressEvent: () => false,
       resolve: () => false,
       cancel: () => {},
     }),

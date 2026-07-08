@@ -129,7 +129,6 @@ export function createRecordingHost(): {
         });
       });
     },
-    handleProgressEvent: () => false,
     resolve: (requestId, result) => {
       if (result.kind === 'bash') {
         const pending = pendingBashes.get(requestId);

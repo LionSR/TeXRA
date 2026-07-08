@@ -45,7 +45,6 @@ function createHostInteractions(
   overrides: Partial<HostInteractions> = {},
 ): HostInteractions {
   return {
-    handleProgressEvent: vi.fn(() => false),
     resolve: vi.fn(() => false),
     cancel: vi.fn(),
     ...overrides,

@@ -39,7 +39,7 @@ import type {
 
 /**
  * **Frozen** legacy host progress-event view, spoken by
- * `AgentRuntimeHost.emit` and `HostInteractions.handleProgressEvent`.
+ * `AgentRuntimeHost.emit` and host-owned compatibility adapters.
  * Retained CLI public output now projects into this table inside the CLI
  * adapter boundary (D3 decision on #6984: frozen until v0.41).
  *

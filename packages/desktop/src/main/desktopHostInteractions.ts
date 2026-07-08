@@ -152,10 +152,6 @@ class DesktopHostInteractions implements HostInteractions {
     return Promise.resolve({ threadId: request.threadId });
   }
 
-  handleProgressEvent(): boolean {
-    return false;
-  }
-
   /**
    * `result.kind` must match the pending request's own recorded kind before
    * it's honored — the same discriminant check the extension host performs
