@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentRuntimeProgressSink } from '@agent/runtime/agentRuntimeProgressEvents';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import type { CliProgressSink } from '@cli/runtime/cliProgressEvents';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import {
@@ -40,7 +40,7 @@ function workflowConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
 
 function hostWithInteractions(
   interactions?: Partial<HostInteractions>,
-): AgentRuntimeProgressSink & { interactions: HostInteractions } {
+): CliProgressSink & { interactions: HostInteractions } {
   return {
     emit: vi.fn(),
     interactions: {
