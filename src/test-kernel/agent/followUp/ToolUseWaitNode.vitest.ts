@@ -29,8 +29,11 @@ import {
 } from '@shared/schemas';
 import { cleanupApprovalsForStream } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
-import { withTestRunContext } from '../progressTestUtils';
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
+import {
+  recordSessionEvents,
+  runEventsOfType,
+  withTestRunContext,
+} from '../progressTestUtils';
 
 describe('ToolUseWaitNode', () => {
   it('always suspends a subagent cycle at WAITING, carrying its turn facts', async () => {
@@ -367,12 +370,9 @@ describe('ToolUseWaitNode', () => {
     const runtimeHost = { emit: vi.fn() };
     const logger = new TraceEmitter();
     const hub = new SessionEventHub();
+    const recorded = recordSessionEvents(hub, { scope: 'run' });
     const detachTrace = logger.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
-    );
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      hub,
-      runtimeHost,
     );
     const waitForFollowUp = vi.fn();
     const services = {
@@ -404,9 +404,12 @@ describe('ToolUseWaitNode', () => {
       expect(exec.kind).toBe('stop');
       expect(waitForFollowUp).not.toHaveBeenCalled();
       expect(goal?.status).toBe('paused');
-      expect(runtimeHost.emit).toHaveBeenCalledWith('goalPaused', {
-        streamId,
-      });
+      expect(runEventsOfType(recorded.events, 'domain')).toContainEqual(
+        expect.objectContaining({
+          key: 'runFact.goalPaused',
+          data: { streamId },
+        }),
+      );
       expect(runtimeHost.emit).toHaveBeenCalledWith(
         'updateBashApprovalBypassState',
         { streamId, bypassActive: false },
@@ -416,7 +419,7 @@ describe('ToolUseWaitNode', () => {
         { streamId, bypassActive: false },
       );
     } finally {
-      detachProjection();
+      recorded.detach();
       detachTrace();
       await GoalStore.forget(streamId);
       cleanupApprovalsForStream(streamId);
@@ -746,10 +749,7 @@ describe('ToolUseWaitNode', () => {
       info: vi.fn(),
     });
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      events,
-      runtimeHost,
-    );
+    const recorded = recordSessionEvents(events, { scope: 'run' });
     const detachTrace = logger.subscribe((event) => {
       events.emit({ scope: 'run', streamId, event });
     });
@@ -783,25 +783,21 @@ describe('ToolUseWaitNode', () => {
       expect(exec.kind).toBe('stop');
       expect(waitForFollowUp).toHaveBeenCalledOnce();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateStreamStatus',
+      expect(runEventsOfType(recorded.events, 'status')).toEqual([
         expect.objectContaining({
-          status: STREAM_PHASE.RUNNING,
-          previousStatus: STREAM_PHASE.CANCELLED,
+          phase: STREAM_PHASE.RUNNING,
+          previousPhase: STREAM_PHASE.CANCELLED,
           cause: 'resume',
         }),
-      );
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateStreamStatus',
         expect.objectContaining({
-          status: STREAM_PHASE.WAITING,
-          previousStatus: STREAM_PHASE.RUNNING,
+          phase: STREAM_PHASE.WAITING,
+          previousPhase: STREAM_PHASE.RUNNING,
           cause: 'wait',
         }),
-      );
+      ]);
     } finally {
       detachTrace();
-      detachProjection();
+      recorded.detach();
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -818,7 +814,8 @@ describe('ToolUseWaitNode', () => {
         { role: 'user', content: userMessage },
       ],
     );
-    const info = vi.fn();
+    const sequence: string[] = [];
+    const info = vi.fn(() => sequence.push('info'));
     const runtimeHost = { emit: vi.fn() };
     const streamId = 'test-stream' as StreamTabId;
     const logger = Object.assign(new TraceEmitter(), {
@@ -826,11 +823,9 @@ describe('ToolUseWaitNode', () => {
       info,
     });
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      events,
-      runtimeHost,
-    );
+    const recorded = recordSessionEvents(events, { scope: 'run' });
     const detachTrace = logger.subscribe((event) => {
+      if (event.type === 'status') sequence.push('status');
       events.emit({ scope: 'run', streamId, event });
     });
     const streamStatus = new StreamStatusMachine();
@@ -877,16 +872,13 @@ describe('ToolUseWaitNode', () => {
       );
 
       expect(transition).toBe(FlowTransition.CONTINUE);
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateStreamStatus',
-        expect.objectContaining({ status: STREAM_STATUS.RUNNING }),
+      expect(runEventsOfType(recorded.events, 'status')).toContainEqual(
+        expect.objectContaining({ phase: STREAM_STATUS.RUNNING }),
       );
-      expect(runtimeHost.emit.mock.invocationCallOrder[0]).toBeLessThan(
-        info.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
-      );
+      expect(sequence.indexOf('status')).toBeLessThan(sequence.indexOf('info'));
     } finally {
       detachTrace();
-      detachProjection();
+      recorded.detach();
     }
     expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(
       1,

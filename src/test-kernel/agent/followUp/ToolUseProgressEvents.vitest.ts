@@ -18,8 +18,12 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
-import { createRecordingHost, withTestRunContext } from '../progressTestUtils';
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
+import {
+  createRecordingHost,
+  recordSessionEvents,
+  runEventsOfType,
+  withTestRunContext,
+} from '../progressTestUtils';
 
 const todo: TodoItem = {
   content: 'Wire progress events through runtime host',
@@ -47,16 +51,13 @@ function createPrepResult(
 
 describe('tool-use progress events', () => {
   it('publishes skipped-cycle todo and plan events through the runtime host', async () => {
-    const { events, host } = createRecordingHost();
+    const { host } = createRecordingHost();
     const logger = new TraceEmitter();
     const hub = new SessionEventHub();
+    const recorded = recordSessionEvents(hub, { scope: 'run' });
     const streamId = 'stream:tool-use-cycle' as StreamTabId;
     const detachTrace = logger.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
-    );
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      hub,
-      host,
     );
     const workspaceState = AgentWorkspaceState.create();
     workspaceState.workPlan.updateTodos([todo]);
@@ -78,24 +79,12 @@ describe('tool-use progress events', () => {
       );
 
       expect(result).toEqual({ outcome: 'skipped' });
-      expect(events).toEqual([
-        {
-          event: 'updateTodos',
-          payload: {
-            streamId,
-            todos: [todo],
-          },
-        },
-        {
-          event: 'updatePlan',
-          payload: {
-            streamId,
-            plan,
-          },
-        },
+      expect(runEventsOfType(recorded.events, 'domain')).toMatchObject([
+        { key: 'runFact.updateTodos', data: { streamId, todos: [todo] } },
+        { key: 'runFact.updatePlan', data: { streamId, plan } },
       ]);
     } finally {
-      detachProjection();
+      recorded.detach();
       detachTrace();
     }
   });

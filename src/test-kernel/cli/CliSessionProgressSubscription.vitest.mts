@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { logConversationProgress, TraceEmitter } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
@@ -47,6 +48,24 @@ function hostWithInteractions(
       resolve: () => false,
       cancel: () => {},
       ...interactions,
+    },
+  };
+}
+
+function setupTraceProjection() {
+  const events = new SessionEventHub();
+  const host = hostWithInteractions();
+  const trace = new TraceEmitter();
+  const detachTrace = trace.subscribe((event) =>
+    events.emit({ scope: 'run', streamId, event }),
+  );
+  const detachProjection = attachCliSessionProgressProjection(events, host);
+  return {
+    host,
+    trace,
+    detachAll: () => {
+      detachProjection();
+      detachTrace();
     },
   };
 }
@@ -259,6 +278,97 @@ describe('attachCliSessionProgressProjection', () => {
       expect(host.emit).not.toHaveBeenCalled();
     } finally {
       detach();
+    }
+  });
+
+  it('derives updateConversationProgress from a conversationProgress domain event', () => {
+    const { host, trace, detachAll } = setupTraceProjection();
+
+    try {
+      logConversationProgress(trace, {
+        toolCallCount: 5,
+      });
+
+      expect(host.emit).toHaveBeenCalledWith('updateConversationProgress', {
+        streamId,
+        progress: { toolCallCount: 5 },
+      });
+    } finally {
+      detachAll();
+    }
+  });
+
+  it('ignores unrelated domain events and stops forwarding after detach', () => {
+    const { host, trace, detachAll } = setupTraceProjection();
+
+    trace.domain({ key: 'webSearch', data: { query: 'irrelevant' } });
+    expect(host.emit).not.toHaveBeenCalled();
+
+    detachAll();
+    logConversationProgress(trace, { toolCallCount: 0 });
+    expect(host.emit).not.toHaveBeenCalled();
+  });
+
+  it('drops malformed conversationProgress domain payloads', () => {
+    const { host, trace, detachAll } = setupTraceProjection();
+
+    try {
+      trace.domain({ key: 'conversationProgress', data: undefined });
+      trace.domain({
+        key: 'conversationProgress',
+        data: { toolCallCount: '1' },
+      });
+      trace.domain({ key: 'conversationProgress', data: 'not an object' });
+
+      expect(host.emit).not.toHaveBeenCalled();
+    } finally {
+      detachAll();
+    }
+  });
+
+  it('validates todo and plan domain payloads before forwarding them', () => {
+    const { host, trace, detachAll } = setupTraceProjection();
+    const todos = [
+      {
+        content: 'Check the compactness lemma.',
+        status: 'pending' as const,
+        activeForm: 'Checking the compactness lemma.',
+      },
+    ];
+    const plan = {
+      objective: 'Check the compactness lemma and record the obstruction.',
+    };
+
+    try {
+      trace.domain({
+        key: toRunFactDomainKey('updateTodos'),
+        data: { streamId, todos: 'not an array' },
+      });
+      trace.domain({
+        key: toRunFactDomainKey('updatePlan'),
+        data: { streamId, plan: { objective: '' } },
+      });
+      expect(host.emit).not.toHaveBeenCalled();
+
+      trace.domain({
+        key: toRunFactDomainKey('updateTodos'),
+        data: { streamId, todos },
+      });
+      trace.domain({
+        key: toRunFactDomainKey('updatePlan'),
+        data: { streamId, plan },
+      });
+
+      expect(host.emit).toHaveBeenNthCalledWith(1, 'updateTodos', {
+        streamId,
+        todos,
+      });
+      expect(host.emit).toHaveBeenNthCalledWith(2, 'updatePlan', {
+        streamId,
+        plan,
+      });
+    } finally {
+      detachAll();
     }
   });
 });
