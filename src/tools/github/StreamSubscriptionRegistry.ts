@@ -14,7 +14,6 @@
 import type { AgentTrace } from '@agent/trace';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import {
   currentSession,
   type SessionHandle,
@@ -121,11 +120,13 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       )
         .then((result) => {
           if (result.status === 'sent' || result.status === 'queued') {
-            emitRuntimeEvent(
-              'updateQueuedFollowUps',
-              { streamId },
-              subscription.session,
-            );
+            subscription.session.events.emit({
+              scope: 'session',
+              event: {
+                type: 'updateQueuedFollowUps',
+                payload: { streamId },
+              },
+            });
           }
         })
         .catch((err: unknown) => {
