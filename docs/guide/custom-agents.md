@@ -21,7 +21,7 @@ Before creating a custom agent, it's highly recommended to understand the underl
 
 ## <wa-icon library="texra" name="library"></wa-icon> Reference Agents
 
-TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each agent handles one input or several through a unified protocol: set `documentTag: documents` and your prompt emits one `<document name="...">` per input.
+TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each agent handles one input or several through the fixed `<documents>` container and emits one `<document name="...">` per input.
 
 ## <wa-icon library="texra" name="new-file"></wa-icon> Creating a Custom Agent File
 
@@ -70,10 +70,6 @@ settings:
   isRewrite: true # Does the agent primarily rewrite existing content (true) or generate new content (false)?
   rounds: 2 # Maximum number of passes (Round 0 plus reflection rounds). The actual count is max(rounds, number of userRequest entries); a run can still stop early once the model signals it is finished.
 
-  # Output Handling
-  documentTag: documents # The main XML tag wrapping the agent's final output (defaults to `documents`).
-  endTag: '</documents>' # The closing tag that signals the agent has finished its main output.
-
   # File Handling (Optional - Advanced)
   # requiredFiles:
   #   TEMPLATE: path/to/template.tex # Map variable names to required file paths relative to workspace.
@@ -104,7 +100,7 @@ prompts:
   userRequest:
     - |
       # The prompt for the AI's first round of work (Round 0).
-      # Often includes guidance for thinking (<scratchpad>) and output structure (<documentTag>).
+      # Often includes guidance for thinking (<scratchpad>) and the fixed <documents> output structure.
       [Define the initial task prompt, potentially including scratchpad guidance]
     - |
       # Optional follow-up prompt for reflection rounds (Round 1+).
@@ -221,8 +217,6 @@ for a workflow agent that writes two generated output files:
 inherits: polish
 settings:
   agentCategory: workflow
-  documentTag: documents
-  endTag: </documents>
   defaultOutputFiles:
     - introduction.tex
     - conclusion.tex
