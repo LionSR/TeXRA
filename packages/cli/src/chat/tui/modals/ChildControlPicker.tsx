@@ -11,6 +11,7 @@ import type { StreamTabId } from '@shared/schemas';
 // Local imports - CLI state and UI
 import { clamp, clampIndex } from '@utils/core';
 
+import { isJumpToBottomInput, isJumpToTopInput } from '../input/inputKeys';
 import {
   CHILD_CONTROL_MODE_COPY,
   buildChildControlItems,
@@ -638,7 +639,7 @@ function TaskDetailView({
         ),
       );
     }
-    if (input === 'g') {
+    if (isJumpToTopInput(input)) {
       setScrollState((current) =>
         jumpTaskDetailScrollState(
           current,
@@ -649,7 +650,7 @@ function TaskDetailView({
         ),
       );
     }
-    if (input === 'G') {
+    if (isJumpToBottomInput(input)) {
       setScrollState((current) =>
         jumpTaskDetailScrollState(
           current,

@@ -9,7 +9,11 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
-import { isEscapeInput } from '../input/inputKeys';
+import {
+  isEscapeInput,
+  isJumpToBottomInput,
+  isJumpToTopInput,
+} from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 import {
   initialTranscriptScrollState,
@@ -81,8 +85,8 @@ export function TranscriptViewer({
     else if (key.upArrow) scrollTo((current) => current - 1);
     else if (key.pageDown) scrollTo((current) => current + viewRows);
     else if (key.pageUp) scrollTo((current) => current - viewRows);
-    else if (input === 'g') scrollTo(0);
-    else if (input === 'G')
+    else if (isJumpToTopInput(input)) scrollTo(0);
+    else if (isJumpToBottomInput(input))
       scrollTo(
         maxTranscriptScrollOffset({ lineCount: lines.length, viewRows }),
       );
