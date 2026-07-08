@@ -13,9 +13,9 @@ import {
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
-import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import {
   activeStreamId,
   rootRunStartAvailable,
@@ -3026,7 +3026,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     // are emitted so the guard's dedupe is proven across a sequence, not just
     // a single isolated pairing.
     const detachTui = attachTuiRunFactSubscription(hub);
-    const detachProjection = attachCliSessionProgressProjection(hub, wrapped);
+    const detachProjection = attachSessionProgressEventProjection(hub, wrapped);
     const storageKey = 'root-echo-run' as StorageKey;
     const payload = {
       streamId: root,
@@ -3112,7 +3112,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     // does not depend on that registration order. Two distinct usage events
     // are emitted so the guard is proven across a sequence, not just a single
     // isolated pairing.
-    const detachProjection = attachCliSessionProgressProjection(hub, wrapped);
+    const detachProjection = attachSessionProgressEventProjection(hub, wrapped);
     const detachTui = attachTuiRunFactSubscription(hub);
     const storageKey = 'root-cli-projection-first-run' as StorageKey;
     const payload = {
@@ -3191,7 +3191,10 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       name: 'TUI subscriber is first',
       attach: (hub: SessionEventHub, host: CliRuntimeHost) => {
         const detachTui = attachTuiRunFactSubscription(hub);
-        const detachProjection = attachCliSessionProgressProjection(hub, host);
+        const detachProjection = attachSessionProgressEventProjection(
+          hub,
+          host,
+        );
         return () => {
           detachProjection();
           detachTui();
@@ -3201,7 +3204,10 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     {
       name: 'CLI projection is first',
       attach: (hub: SessionEventHub, host: CliRuntimeHost) => {
-        const detachProjection = attachCliSessionProgressProjection(hub, host);
+        const detachProjection = attachSessionProgressEventProjection(
+          hub,
+          host,
+        );
         const detachTui = attachTuiRunFactSubscription(hub);
         return () => {
           detachTui();
@@ -3251,7 +3257,10 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       name: 'TUI subscriber is first',
       attach: (hub: SessionEventHub, host: CliRuntimeHost) => {
         const detachTui = attachTuiRunFactSubscription(hub);
-        const detachProjection = attachCliSessionProgressProjection(hub, host);
+        const detachProjection = attachSessionProgressEventProjection(
+          hub,
+          host,
+        );
         return () => {
           detachProjection();
           detachTui();
@@ -3261,7 +3270,10 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     {
       name: 'CLI projection is first',
       attach: (hub: SessionEventHub, host: CliRuntimeHost) => {
-        const detachProjection = attachCliSessionProgressProjection(hub, host);
+        const detachProjection = attachSessionProgressEventProjection(
+          hub,
+          host,
+        );
         const detachTui = attachTuiRunFactSubscription(hub);
         return () => {
           detachTui();
@@ -3338,7 +3350,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       close: async () => {},
     } as unknown as CliRuntimeHost);
     const detachTui = attachTuiRunFactSubscription(hub);
-    const detachProjection = attachCliSessionProgressProjection(hub, wrapped);
+    const detachProjection = attachSessionProgressEventProjection(hub, wrapped);
     const payload = { streamId: root };
 
     try {
@@ -3374,7 +3386,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       emit: hostEmit,
       close: async () => {},
     } as unknown as CliRuntimeHost);
-    const detachProjection = attachCliSessionProgressProjection(hub, wrapped);
+    const detachProjection = attachSessionProgressEventProjection(hub, wrapped);
     const detachTui = attachTuiRunFactSubscription(hub);
     const payload = { streamId: root };
 
