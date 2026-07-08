@@ -94,14 +94,15 @@ function createPortSession(): {
     emit: (event) => emitted.push(event),
   };
   const handlers = createHandlerSet(uiEvents);
+  const session = new SessionHandle();
   const interactions = createDesktopHostInteractions({
     runtimeHost,
+    session,
     getApprovalHandlers: () => handlers,
     getToolEditApprovals: () => {
       throw new Error('tool-edit approvals are not exercised here');
     },
   });
-  const session = new SessionHandle();
   session.useHostInteractions(interactions);
   return { session, uiEvents, emitted, interactions };
 }
