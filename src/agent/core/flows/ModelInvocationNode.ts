@@ -7,7 +7,10 @@ import {
   replaceMessagesInPlace,
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
+import type {
+  AgentCore,
+  BaseFlowContextInit,
+} from '@agent/core/flows/BaseFlowServices';
 import { requiresFlowAutoRetry } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
@@ -41,10 +44,23 @@ export interface ModelInvocationConfig<TShared, TServices> {
   ) => CycleDebugFileOptions;
 }
 
-type InvocationServices = BaseFlowContextInit<unknown> & {
-  readonly client: unknown;
-  readonly refreshClient?: () => Promise<void>;
-};
+/**
+ * Only the services this node and its `RetryableInvocationNode` base class
+ * actually read: the model handler, logger, setting (temperature/tools),
+ * config (for `saveCycleDebug`'s log context), and the retry machinery's
+ * `streamStatus`/`setAbortController`, plus the live model client. Picking
+ * from `AgentCore`/`BaseFlowContextInit` instead of requiring the literal
+ * type keeps every existing caller, which passes the full services bag,
+ * satisfying this narrower shape structurally.
+ */
+type InvocationServices = Pick<
+  AgentCore,
+  'modelHandler' | 'logger' | 'setting' | 'config' | 'streamStatus'
+> &
+  Pick<BaseFlowContextInit, 'setAbortController'> & {
+    readonly client: unknown;
+    readonly refreshClient?: () => Promise<void>;
+  };
 
 export class ModelInvocationNode<
   TShared extends BaseCycleFields,
