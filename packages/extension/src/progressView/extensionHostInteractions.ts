@@ -1,7 +1,6 @@
 import { nanoid } from 'nanoid';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import {
   matchesCancelSelector,
   type HostBashApprovalRequest,
@@ -35,7 +34,7 @@ import type {
 
 export interface ExtensionHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
-  session?: SessionHandle;
+  session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
 }
 
@@ -71,7 +70,10 @@ export function createExtensionHostInteractions(
   const activateStream = (streamId?: StreamTabId | null) => {
     options.runtimeHost.emit('requestEnsureProgressView', {});
     if (streamId) {
-      emitRuntimeEvent('setActiveStream', { streamId }, options.session);
+      options.session.events.emit({
+        scope: 'session',
+        event: { type: 'setActiveStream', payload: { streamId } },
+      });
     }
   };
 
