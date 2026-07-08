@@ -66,7 +66,7 @@ import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import {
   isProgressBackendInteractionEvent,
   type ProgressBackendInteractionPayloads,
-} from '@shared/progressView/backend/events/ProgressEventHandler';
+} from '@shared/progressView/backend/events/ProgressInteractionHandler';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import {
@@ -245,7 +245,7 @@ export class DesktopProgressBridge {
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
     const hostChannel: AgentRuntimeHost = {
-      emit: (event, payload) => this.handleProgressEvent(event, payload),
+      emit: (event, payload) => this.handleInteractionEvent(event, payload),
     };
     this.session = new SessionHandle({ hostChannel });
     this.runtimeHost = {
@@ -1004,12 +1004,12 @@ export class DesktopProgressBridge {
     });
   }
 
-  private handleProgressEvent<K extends AgentRuntimeEvent>(
+  private handleInteractionEvent<K extends AgentRuntimeEvent>(
     event: K,
     payload: AgentRuntimeEventPayloads[K],
   ): void {
     if (isProgressBackendInteractionEvent(event)) {
-      this.backend.handleProgressEvent(
+      this.backend.handleInteractionEvent(
         event,
         payload as ProgressBackendInteractionPayloads[typeof event],
       );

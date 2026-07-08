@@ -222,7 +222,7 @@ describe('ProgressBackend', () => {
       webviewUpdater: backend.webviewUpdater,
       webviewBridge: backend.webviewBridge,
     });
-    expect(backend.eventHandler).toBeDefined();
+    expect(backend.interactionHandler).toBeDefined();
 
     backend.dispose();
   });
@@ -750,7 +750,10 @@ describe('ProgressBackend', () => {
   it('applies session facts without re-entering the host progress-event applier', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
-    const applier = vi.spyOn(backend.eventHandler, 'handleProgressEvent');
+    const applier = vi.spyOn(
+      backend.interactionHandler,
+      'handleInteractionEvent',
+    );
     const streamId = 'session:single-applier' as StreamTabId;
     const payload: SetActiveStreamPayload = {
       streamId,
@@ -777,15 +780,18 @@ describe('ProgressBackend', () => {
 
   it('no-ops direct interaction events after dispose', () => {
     const { backend } = createIsolatedRecordingBackend();
-    const applier = vi.spyOn(backend.eventHandler, 'handleProgressEvent');
+    const applier = vi.spyOn(
+      backend.interactionHandler,
+      'handleInteractionEvent',
+    );
     const streamId = 'desktop-post-close-stream' as StreamTabId;
 
     backend.dispose();
 
     // A run that kept executing headless after a desktop window closed still
-    // holds the host-channel emit closure that routes to handleProgressEvent.
+    // holds the host-channel emit closure that routes to handleInteractionEvent.
     expect(() =>
-      backend.handleProgressEvent('updateToolEditApprovalBypassState', {
+      backend.handleInteractionEvent('updateToolEditApprovalBypassState', {
         streamId,
         bypassActive: true,
       }),
@@ -799,9 +805,9 @@ describe('ProgressBackend', () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
     const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
-    const handleProgressEvent = vi.spyOn(
-      backend.eventHandler,
-      'handleProgressEvent',
+    const handleInteractionEvent = vi.spyOn(
+      backend.interactionHandler,
+      'handleInteractionEvent',
     );
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
     const updateMissingOutputs = vi.spyOn(
@@ -865,7 +871,7 @@ describe('ProgressBackend', () => {
         },
       );
       handleRunFact.mockClear();
-      handleProgressEvent.mockClear();
+      handleInteractionEvent.mockClear();
       updateFiles.mockClear();
       updateMissingOutputs.mockClear();
       updateCompileFailures.mockClear();
@@ -958,7 +964,7 @@ describe('ProgressBackend', () => {
       });
 
       expect(handleRunFact).toHaveBeenCalledTimes(7);
-      expect(handleProgressEvent).not.toHaveBeenCalled();
+      expect(handleInteractionEvent).not.toHaveBeenCalled();
       expect(updateFiles).toHaveBeenCalledTimes(1);
       expect(updateFiles).toHaveBeenCalledWith(streamId, {
         rounds: { 1: [outputFile] },
@@ -1021,9 +1027,9 @@ describe('ProgressBackend', () => {
   it('drops malformed updateTodos/updatePlan run facts instead of forwarding them unchecked (#7562)', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
-    const handleProgressEvent = vi.spyOn(
-      backend.eventHandler,
-      'handleProgressEvent',
+    const handleInteractionEvent = vi.spyOn(
+      backend.interactionHandler,
+      'handleInteractionEvent',
     );
     const updateTodos = vi.spyOn(backend.webviewUpdater, 'updateTodos');
     const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
@@ -1038,7 +1044,7 @@ describe('ProgressBackend', () => {
           agentCategory: AgentCategory.Workflow,
         },
       );
-      handleProgressEvent.mockClear();
+      handleInteractionEvent.mockClear();
       updateTodos.mockClear();
       updatePlan.mockClear();
 
@@ -1061,7 +1067,7 @@ describe('ProgressBackend', () => {
         },
       });
 
-      expect(handleProgressEvent).not.toHaveBeenCalled();
+      expect(handleInteractionEvent).not.toHaveBeenCalled();
       expect(updateTodos).not.toHaveBeenCalled();
       expect(updatePlan).not.toHaveBeenCalled();
     } finally {
@@ -1076,9 +1082,9 @@ describe('ProgressBackend', () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
     const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
-    const handleProgressEvent = vi.spyOn(
-      backend.eventHandler,
-      'handleProgressEvent',
+    const handleInteractionEvent = vi.spyOn(
+      backend.interactionHandler,
+      'handleInteractionEvent',
     );
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
     const streamId = 'session:output-files-after-dispose' as StreamTabId;
@@ -1105,7 +1111,7 @@ describe('ProgressBackend', () => {
         },
       );
       handleRunFact.mockClear();
-      handleProgressEvent.mockClear();
+      handleInteractionEvent.mockClear();
       updateFiles.mockClear();
       backend.dispose();
 
@@ -1123,7 +1129,7 @@ describe('ProgressBackend', () => {
       });
 
       expect(handleRunFact).not.toHaveBeenCalled();
-      expect(handleProgressEvent).not.toHaveBeenCalled();
+      expect(handleInteractionEvent).not.toHaveBeenCalled();
       expect(updateFiles).not.toHaveBeenCalled();
       expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({});
     } finally {
@@ -1137,9 +1143,9 @@ describe('ProgressBackend', () => {
   it('handles session facts without the host progress-event adapter', async () => {
     const target = createIsolatedRecordingBackend();
     const subscription = target.backend.setupEventListeners();
-    const handleProgressEvent = vi.spyOn(
-      target.backend.eventHandler,
-      'handleProgressEvent',
+    const handleInteractionEvent = vi.spyOn(
+      target.backend.interactionHandler,
+      'handleInteractionEvent',
     );
     const parentStreamId = 'session:parent' as StreamTabId;
     const childStreamId = 'session:child' as StreamTabId;
@@ -1202,7 +1208,7 @@ describe('ProgressBackend', () => {
         expect(target.backend.state.activeStream).toBe(parentStreamId),
       );
       target.messages.length = 0;
-      handleProgressEvent.mockClear();
+      handleInteractionEvent.mockClear();
 
       target.session.events.emit({
         scope: 'run',
@@ -1286,7 +1292,7 @@ describe('ProgressBackend', () => {
         },
       });
 
-      expect(handleProgressEvent).not.toHaveBeenCalled();
+      expect(handleInteractionEvent).not.toHaveBeenCalled();
       expect(target.backend.state.getStreamState(parentStreamId)).toMatchObject(
         {
           roundStage: { index: 2, total: 4 },
