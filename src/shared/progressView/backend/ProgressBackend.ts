@@ -16,6 +16,7 @@ import {
   type ProgressEventSubscription,
   type UICallbacks,
 } from '@shared/progressView/backend/events/ProgressEventHandler';
+import type { ProgressFactApplier } from '@shared/progressView/backend/events/ProgressFactApplier';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import type { StreamSnapshotStore } from '@transcript';
@@ -61,6 +62,7 @@ export class ProgressBackend {
   readonly webviewUpdater: WebviewUpdater;
   readonly webviewBridge: WebviewBridge;
   readonly eventHandler: ProgressEventHandler;
+  readonly factApplier: ProgressFactApplier;
   private readonly session: SessionHandle;
   private disposed = false;
 
@@ -103,6 +105,7 @@ export class ProgressBackend {
       ui.hasPendingPermissions,
       options.getStreamControls,
     );
+    this.factApplier = this.eventHandler.factApplier;
   }
 
   async load(): Promise<void> {
@@ -110,13 +113,12 @@ export class ProgressBackend {
   }
 
   setupEventListeners(): ProgressEventSubscription {
-    const eventHandlerSubscription =
-      this.eventHandler.createLocalSubscription();
+    const factApplierSubscription = this.factApplier.createLocalSubscription();
     const detachSessionFacts = this.session.events.subscribe(
       (sessionEvent) => {
         if (this.disposed) return;
         if (sessionEvent.scope !== 'session') return;
-        this.eventHandler.handleSessionFact(sessionEvent.event);
+        this.factApplier.handleSessionFact(sessionEvent.event);
       },
       { scope: 'session' },
     );
@@ -124,7 +126,7 @@ export class ProgressBackend {
       (sessionEvent) => {
         if (this.disposed) return;
         if (sessionEvent.scope !== 'run') return;
-        this.eventHandler.handleRunFact(
+        this.factApplier.handleRunFact(
           sessionEvent.streamId,
           sessionEvent.event,
         );
@@ -135,7 +137,7 @@ export class ProgressBackend {
       dispose: () => {
         detachRunFacts();
         detachSessionFacts();
-        eventHandlerSubscription.dispose();
+        factApplierSubscription.dispose();
       },
     };
   }
