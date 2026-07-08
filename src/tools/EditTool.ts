@@ -12,8 +12,7 @@ import {
 import { countOccurrences } from '@tools/utils';
 import {
   appendApprovalDiffNote,
-  requestApprovedEditContent,
-  writeAndRecordApprovedEdit,
+  requestAndWriteApprovedEdit,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { pluralize } from '@utils/text/stringUtils';
@@ -98,7 +97,7 @@ export class EditFileTool extends defineTool({
       ? replaceAllLiteral(currentContent, old_str, new_str)
       : replaceFirstLiteral(currentContent, old_str, new_str);
 
-    const outcome = await requestApprovedEditContent({
+    const outcome = await requestAndWriteApprovedEdit({
       path: targetPath,
       displayPath,
       originalContent: currentContent,
@@ -108,13 +107,7 @@ export class EditFileTool extends defineTool({
     if ('rejected' in outcome) {
       return outcome.rejected;
     }
-    const { approval, finalContent } = outcome;
-
-    const { appliedContent } = await writeAndRecordApprovedEdit(
-      targetPath,
-      currentContent,
-      finalContent,
-    );
+    const { approval, appliedContent } = outcome;
 
     const count = replace_all ? occurrences : 1;
     const occurrenceWord = pluralize(count, 'occurrence');
