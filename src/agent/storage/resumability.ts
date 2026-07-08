@@ -40,7 +40,7 @@ export const RESUMABILITY_CAUSE = {
   UNREADABLE_META: 'unreadable-meta',
 } as const;
 
-export type ResumabilityCause =
+type ResumabilityCause =
   (typeof RESUMABILITY_CAUSE)[keyof typeof RESUMABILITY_CAUSE];
 type ResumableCause =
   | typeof RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW

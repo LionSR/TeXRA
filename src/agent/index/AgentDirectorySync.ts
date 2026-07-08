@@ -53,7 +53,7 @@ export interface AgentDirectoryVersionStore {
   update(version: string | undefined): PromiseLike<void>;
 }
 
-export interface AgentDirectorySyncLogger {
+interface AgentDirectorySyncLogger {
   info(message: string, data?: unknown): void;
   warn(message: string, data?: unknown): void;
 }

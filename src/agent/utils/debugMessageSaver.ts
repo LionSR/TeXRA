@@ -7,7 +7,7 @@ import { WorkspaceFS, StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 
-export interface DebugContext {
+interface DebugContext {
   logger: AgentTrace;
   modelName?: string;
   executionId?: ExecutionId;
@@ -15,14 +15,14 @@ export interface DebugContext {
   isRemote?: boolean;
 }
 
-export interface DebugSaveOptions {
+interface DebugSaveOptions {
   outputFile?: string;
   /** Base name for the file (e.g. 'messages', 'response'). */
   baseName?: string;
   continuationCount?: number;
 }
 
-export type DebugObjectType = 'messages' | 'response';
+type DebugObjectType = 'messages' | 'response';
 
 export interface SaveDebugParams {
   object: unknown;

@@ -42,7 +42,7 @@ export type UserVars = Record<string, unknown>;
  * Extends FileListEntry with required source and varName fields.
  * Compatible with FileListEntry (can be passed to AgentTrace.fileList).
  */
-export type LoadedFileEntry = FileListEntry & {
+type LoadedFileEntry = FileListEntry & {
   source: string;
   varName: string;
 };

@@ -16,7 +16,7 @@ export interface AgentDirectoryPathStorage {
   fullPath(relativePath: string): string;
 }
 
-export interface CustomAgentDirectoryStore {
+interface CustomAgentDirectoryStore {
   get(): string | undefined;
 }
 
@@ -25,7 +25,7 @@ export interface AbsoluteDirectoryAccess {
   ensureDir(absolutePath: string): Promise<void>;
 }
 
-export type AgentDirectoryDocsId = 'custom-agents';
+type AgentDirectoryDocsId = 'custom-agents';
 
 /** A local agent directory paired with the source it represents. */
 export interface AgentDirectoryEntry {
