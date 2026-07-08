@@ -1,6 +1,5 @@
 import type { AgentEvent } from '@agent/trace';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import type { StreamTabId } from '@shared/schemas';
 import type { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
@@ -69,26 +68,21 @@ export function isProgressBackendInteractionEvent(
   return ProgressBackendInteractionEventSet.has(event);
 }
 
-export type ProgressBackendEventPayloads = ProgressEventPayloads &
-  ProgressBackendInteractionPayloads;
-
-export type ProgressBackendEvent = keyof ProgressBackendEventPayloads;
-
-type ProgressEventRegistration<K extends ProgressBackendEvent> = {
+type ProgressEventRegistration<K extends ProgressBackendInteractionEvent> = {
   /** Defaults to 'ProgressEvents' when omitted. */
   readonly module?: string;
   /** Defaults to `failed to handle ${event}` when omitted. */
   readonly context?: string;
   readonly handle: (
-    payload: ProgressBackendEventPayloads[K],
+    payload: ProgressBackendInteractionPayloads[K],
   ) => void | Promise<void>;
 };
 
 type ProgressEventRegistrationMap = {
-  [K in ProgressBackendEvent]?: ProgressEventRegistration<K>;
+  [K in ProgressBackendInteractionEvent]?: ProgressEventRegistration<K>;
 };
 
-/** Compatibility adapter for legacy host progress events. */
+/** Host adapter for progress-view interaction callbacks. */
 export class ProgressEventHandler {
   readonly factApplier: ProgressFactApplier;
   private readonly eventRegistrations: ProgressEventRegistrationMap;
@@ -113,90 +107,6 @@ export class ProgressEventHandler {
 
   private createEventRegistrations(): ProgressEventRegistrationMap {
     return {
-      setActiveStream: {
-        handle: (payload) => this.factApplier.handleSetActiveStream(payload),
-      },
-      updateStreamStatus: {
-        handle: ({ streamId, status, previousStatus, substate }) =>
-          this.factApplier.setStreamStatus(
-            streamId,
-            status,
-            previousStatus,
-            substate,
-          ),
-      },
-      setTaskState: {
-        handle: (data) => this.factApplier.handleSetTaskState(data),
-      },
-      updateConversationProgress: {
-        handle: (data) =>
-          this.factApplier.handleUpdateConversationProgress(data),
-      },
-      updateRoundStage: {
-        handle: (data) => this.factApplier.handleUpdateRoundStage(data),
-      },
-      updateActiveSubagents: {
-        handle: (data) =>
-          this.factApplier.updateActiveChildren(data.parentStreamId, {
-            activeField: 'activeSubagents',
-            countField: 'finishedSubagentCount',
-            next: data.children,
-          }),
-      },
-      updateActiveProcesses: {
-        handle: (data) =>
-          this.factApplier.updateActiveChildren(data.parentStreamId, {
-            activeField: 'activeProcesses',
-            countField: 'finishedProcessCount',
-            next: data.processes,
-          }),
-      },
-      updateProcessOutput: {
-        handle: (data) => this.factApplier.handleUpdateProcessOutput(data),
-      },
-      inquiryThreadUpdated: {
-        handle: (thread) => this.factApplier.handleInquiryThreadUpdated(thread),
-      },
-      updateStreamDescription: {
-        handle: (payload) =>
-          this.factApplier.handleUpdateStreamDescription(payload),
-      },
-      setParentStream: {
-        handle: (payload) => this.factApplier.handleSetParentStream(payload),
-      },
-      // Output events: workflow tabs hold one run; ignore the storageKey dim.
-      addOutputFiles: {
-        handle: (payload) => this.factApplier.handleAddOutputFiles(payload),
-      },
-      updateMissingOutputs: {
-        handle: (payload) =>
-          this.factApplier.handleUpdateMissingOutputs(payload),
-      },
-      updateCompileFailures: {
-        handle: (payload) =>
-          this.factApplier.handleUpdateCompileFailures(payload),
-      },
-      clearMissingOutputs: {
-        handle: (payload) =>
-          this.factApplier.handleClearMissingOutputs(payload),
-      },
-      // Usage events: workflow tabs collapse to a single accumulated value;
-      // tool-use tabs keep per-run accumulation (resume produces multiple runs).
-      updateStreamUsage: {
-        handle: (payload) => this.factApplier.handleUpdateStreamUsage(payload),
-      },
-      updateTodos: {
-        handle: (payload) => this.factApplier.handleUpdateTodos(payload),
-      },
-      // Plan events are rare and critical for the approval UX, so send them
-      // whenever the webview is available rather than only for the active tab.
-      updatePlan: {
-        handle: (payload) => this.factApplier.handleUpdatePlan(payload),
-      },
-      updateQueuedFollowUps: {
-        handle: (payload) =>
-          this.factApplier.handleUpdateQueuedFollowUps(payload),
-      },
       showToolEditPermission: {
         module: 'ProgressEventHandler',
         context: 'failed to show approval prompt',
@@ -233,9 +143,9 @@ export class ProgressEventHandler {
     return this.factApplier.createLocalSubscription();
   }
 
-  handleProgressEvent<K extends ProgressBackendEvent>(
+  handleProgressEvent<K extends ProgressBackendInteractionEvent>(
     event: K,
-    payload: ProgressBackendEventPayloads[K],
+    payload: ProgressBackendInteractionPayloads[K],
   ): void {
     const registration = this.eventRegistrations[event] as
       ProgressEventRegistration<K> | undefined;
