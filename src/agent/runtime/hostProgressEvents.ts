@@ -39,10 +39,9 @@ import type {
 
 /**
  * **Frozen** legacy host progress-event view, spoken by
- * `AgentRuntimeHost.emit` and `HostInteractions.handleProgressEvent`, and
- * projected from the session fact plane by
- * `sessionProgressEventProjection.ts` for the retained CLI public output
- * (D3 decision on #6984: frozen until v0.41).
+ * `AgentRuntimeHost.emit` and `HostInteractions.handleProgressEvent`.
+ * Retained CLI public output now projects into this table inside the CLI
+ * adapter boundary (D3 decision on #6984: frozen until v0.41).
  *
  * Do NOT add keys. The payload vocabulary lives as fact-native named types in
  * `@shared/schemas` (`progressEvents.ts` and friends); new run-scoped facts
