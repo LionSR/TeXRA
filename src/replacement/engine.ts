@@ -9,7 +9,12 @@ import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
-import { ReplacementCategory, ReplacementValue } from './types';
+import {
+  ReplacementCategory,
+  NonRegexReplacementCategory,
+  RegexReplacementCategory,
+  ReplacementValue,
+} from './types';
 import {
   applyLatexQuotesFormatting,
   replaceMathUnicode,
@@ -85,7 +90,7 @@ const replacementEngine = {
 };
 
 // Non-regex categories, applied in this order.
-const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
+const NON_REGEX_CATEGORIES: NonRegexReplacementCategory[] = [
   // LaTeX content formatting
   EQUATION_REPLACEMENTS,
   SECTION_REPLACEMENTS,
@@ -106,7 +111,7 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
 ];
 
 // Regex categories, applied in this order.
-const REGEX_CATEGORIES: ReplacementCategory[] = [
+const REGEX_CATEGORIES: RegexReplacementCategory[] = [
   EQUATION_MACRO_REPLACEMENTS,
   FENCED_LATEX_BLOCK_REPLACEMENTS,
   INLINE_MATH_REPLACEMENTS,
@@ -121,10 +126,10 @@ function shouldWrapCritiqueInAlign(): boolean {
   return getConfig('texra.latex.wrapCritiqueInAlign', true);
 }
 
-function selectEnabledCategories(
-  categories: ReplacementCategory[],
+function selectEnabledCategories<T extends ReplacementCategory>(
+  categories: T[],
   enabledNames: string[],
-): ReplacementCategory[] {
+): T[] {
   const enabled = new Set(enabledNames);
   return categories.filter((category) => enabled.has(category.name));
 }
@@ -133,12 +138,12 @@ function selectEnabledCategories(
  * Combine every enabled non-regex category into a single category. Custom
  * replacements from user settings take precedence over predefined rules.
  */
-function getAllReplacements(): ReplacementCategory {
+function getAllReplacements(): NonRegexReplacementCategory {
   const enabledNames = getConfig<string[]>(
     'texra.latex.enabledReplacements',
     DEFAULT_CORE_SETTINGS.latex.enabledReplacements,
   );
-  const customReplacements = getConfig<Record<string, ReplacementValue>>(
+  const customReplacements = getConfig<Record<string, string>>(
     'texra.latex.customReplacements',
     {},
   );
@@ -147,7 +152,7 @@ function getAllReplacements(): ReplacementCategory {
     NON_REGEX_CATEGORIES,
     enabledNames,
   );
-  const patterns: Record<string, ReplacementValue> = Object.assign(
+  const patterns: Record<string, string> = Object.assign(
     {},
     ...enabledCategories.map((c) => c.patterns),
     customReplacements,
@@ -165,7 +170,7 @@ function getAllReplacements(): ReplacementCategory {
  * Return every enabled regex category in application order, appending a custom
  * category built from user settings whenever custom regex replacements exist.
  */
-function getAllReplacementsRegex(): ReplacementCategory[] {
+function getAllReplacementsRegex(): RegexReplacementCategory[] {
   const enabledNames = getConfig<string[]>(
     'texra.latex.enabledReplacementsRegex',
     DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex,
@@ -251,7 +256,10 @@ export function applyReplacements(
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         try {
           const regex = getCompiledRegex(pattern, category.flags);
-          result = result.replace(regex, repl as string);
+          result =
+            typeof repl === 'string'
+              ? result.replace(regex, repl)
+              : result.replace(regex, repl);
         } catch (regexErr) {
           logger.error(
             CHANNEL,
@@ -261,14 +269,7 @@ export function applyReplacements(
       }
     } else {
       for (const [old, newText] of Object.entries(category.patterns)) {
-        if (typeof newText === 'string') {
-          result = result.replaceAll(old, newText);
-        } else {
-          logger.debug(
-            CHANNEL,
-            `Skipping function pattern "${old}" in non-regex category "${category.name}"`,
-          );
-        }
+        result = result.replaceAll(old, newText);
       }
     }
   }

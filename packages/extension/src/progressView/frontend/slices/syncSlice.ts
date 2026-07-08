@@ -1,4 +1,4 @@
-import { create } from 'mutative';
+import { create, type Draft } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { sumUsageStats } from '@shared/schemas';
@@ -6,11 +6,32 @@ import { sumUsageStats } from '@shared/schemas';
 import {
   isToolUseState,
   isWorkflowState,
+  type StreamState,
   type ToolUseStreamState,
   type WorkflowStreamState,
 } from '../store';
 import { updateParentStreamId } from '../stateUtils';
 import type { HandlerRegistry } from '../messageHandlerTypes';
+
+const isRunUsageOwner = (
+  state: StreamState,
+): state is ToolUseStreamState | WorkflowStreamState =>
+  isToolUseState(state) || isWorkflowState(state);
+
+/**
+ * Apply `mutate` to `draft` only when `prev` (the pre-mutation snapshot the
+ * union was narrowed from) satisfies `guard`. Centralizes the single
+ * necessarily-unsafe cast — `mutative`'s `Draft<T>` can't be narrowed from a
+ * guard on the un-drafted `prev` — instead of repeating it at every call site.
+ */
+function withDraftKind<S extends StreamState>(
+  draft: Draft<StreamState>,
+  prev: StreamState,
+  guard: (state: StreamState) => state is S,
+  mutate: (typedDraft: Draft<S>) => void,
+): void {
+  if (guard(prev)) mutate(draft as Draft<S>);
+}
 
 // `HandlerRegistry` is now exhaustive (every ProgressView outbound command
 // needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
@@ -51,18 +72,19 @@ export const syncHandlers = {
             draft.contextState = data.contextState;
           }
 
-          if (hasWorkflowFiles && isWorkflowState(prev)) {
-            const d = draft as WorkflowStreamState;
-            // Replace (not merge) so a clean operation that shrinks the
-            // backend's set is reflected after a tab switch — Object.assign
-            // would leak stale rounds.
-            if (data.workflowFiles) d.files = { ...data.workflowFiles };
-            if (data.workflowMissingOutputs) {
-              d.missingOutputs = { ...data.workflowMissingOutputs };
-            }
-            if (data.workflowCompileFailures) {
-              d.compileFailures = { ...data.workflowCompileFailures };
-            }
+          if (hasWorkflowFiles) {
+            withDraftKind(draft, prev, isWorkflowState, (d) => {
+              // Replace (not merge) so a clean operation that shrinks the
+              // backend's set is reflected after a tab switch — Object.assign
+              // would leak stale rounds.
+              if (data.workflowFiles) d.files = { ...data.workflowFiles };
+              if (data.workflowMissingOutputs) {
+                d.missingOutputs = { ...data.workflowMissingOutputs };
+              }
+              if (data.workflowCompileFailures) {
+                d.compileFailures = { ...data.workflowCompileFailures };
+              }
+            });
           }
 
           // runUsage is per-run for both workflow and tool-use; derive the
@@ -70,26 +92,24 @@ export const syncHandlers = {
           // Replace (not merge) so a clean operation that shrinks the backend's
           // run set is reflected — Object.assign would leak stale entries and
           // over-count sessionUsage.
-          if (
-            hasRunUsage &&
-            data.runUsage &&
-            (isToolUseState(prev) || isWorkflowState(prev))
-          ) {
-            const d = draft as ToolUseStreamState | WorkflowStreamState;
-            d.runUsage = { ...data.runUsage };
-            d.sessionUsage = sumUsageStats(Object.values(d.runUsage));
+          if (hasRunUsage && data.runUsage) {
+            withDraftKind(draft, prev, isRunUsageOwner, (d) => {
+              d.runUsage = { ...data.runUsage };
+              d.sessionUsage = sumUsageStats(Object.values(d.runUsage));
+            });
           }
 
-          if (isToolUseState(prev) && hasTaskData) {
-            const d = draft as ToolUseStreamState;
-            if (data.todos) d.todos = data.todos;
-            if (data.plan !== undefined) d.plan = data.plan;
-            if (data.queuedFollowUps) d.queuedFollowUps = data.queuedFollowUps;
+          if (hasTaskData) {
+            withDraftKind(draft, prev, isToolUseState, (d) => {
+              if (data.todos) d.todos = data.todos;
+              if (data.plan !== undefined) d.plan = data.plan;
+              if (data.queuedFollowUps)
+                d.queuedFollowUps = data.queuedFollowUps;
+            });
           }
 
           // Hydrate toggle bypass state on tab switch
-          if (isToolUseState(prev)) {
-            const d = draft as ToolUseStreamState;
+          withDraftKind(draft, prev, isToolUseState, (d) => {
             if (data.toolEditBypass !== undefined)
               d.toolEditBypass = data.toolEditBypass;
             if (data.superYoloBypass !== undefined)
@@ -103,7 +123,7 @@ export const syncHandlers = {
               d.goalStatus = data.goalStatus;
               d.goalObjective = data.goalObjective;
             }
-          }
+          });
 
           if (data.conversationProgress) {
             draft.conversationProgress = data.conversationProgress;

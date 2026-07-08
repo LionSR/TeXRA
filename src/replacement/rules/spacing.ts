@@ -1,8 +1,8 @@
 // Local imports - replacement
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
 // LaTeX spacing and punctuation fixes
-export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
+export const LATEX_SPACING_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'latex_spacing',
   description:
     'Fixes for LaTeX spacing, punctuation, and formatting [for O1 model]',

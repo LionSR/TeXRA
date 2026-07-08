@@ -108,7 +108,7 @@ export const DEFAULT_FINISHED_CHILD_COUNT = 0;
 // Stream Metadata — the lightweight subset sent over postMessage in UPDATE_STREAMS.
 // Contains only backend-owned fields that mergeBackendOwnedState() actually reads.
 
-const BackendOwnedFieldsSchema = z.object({
+export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
   substate: StreamSubstateSchema.optional(),
   lastTimestamp: z.number().optional(),

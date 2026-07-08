@@ -1,7 +1,7 @@
 // Local imports - replacement
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
-export const HTML_ENTITY_REPLACEMENTS: ReplacementCategory = {
+export const HTML_ENTITY_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'html_entities',
   description: 'Converts common HTML entities into LaTeX-safe equivalents',
   isRegex: false,

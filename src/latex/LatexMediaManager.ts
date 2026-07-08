@@ -63,7 +63,8 @@ export class LatexMediaManager {
     figures: string[],
     baseDir?: string,
   ): Promise<void> {
-    if (!this.fileService?.hasRunDirectory() || figures.length === 0) {
+    const fileService = this.fileService;
+    if (!fileService?.hasRunDirectory() || figures.length === 0) {
       return;
     }
 
@@ -91,7 +92,7 @@ export class LatexMediaManager {
       [...absolutePaths],
       async (absolutePath) => {
         try {
-          await this.fileService!.mirrorWorkspaceFile(
+          await fileService.mirrorWorkspaceFile(
             pathToLocation(absolutePath),
           );
         } catch (error) {
@@ -197,7 +198,8 @@ export class LatexMediaManager {
   private async mirrorLatexFileDependencies(
     files: FileLocation[],
   ): Promise<void> {
-    if (!this.fileService?.hasRunDirectory() || files.length === 0) {
+    const fileService = this.fileService;
+    if (!fileService?.hasRunDirectory() || files.length === 0) {
       return;
     }
 
@@ -245,7 +247,7 @@ export class LatexMediaManager {
           const depLocation = pathToLocation(absolutePath);
           const isTex = hasExtension(absolutePath, '.tex');
           try {
-            await this.fileService!.mirrorWorkspaceFile(depLocation, {
+            await fileService.mirrorWorkspaceFile(depLocation, {
               snapshot: isTex,
             });
             if (isTex) {
@@ -322,7 +324,8 @@ export class LatexMediaManager {
    * run storage so the compiled document can find its project-local style.
    */
   private async mirrorProjectSiblings(projectDir: string): Promise<void> {
-    if (!this.fileService) return;
+    const fileService = this.fileService;
+    if (!fileService) return;
 
     let entries: string[];
     try {
@@ -355,9 +358,7 @@ export class LatexMediaManager {
         try {
           const stats = await platform().fs.stat(absolutePath);
           if (!isFile(stats.type)) return;
-          await this.fileService!.mirrorWorkspaceFile(
-            pathToLocation(absolutePath),
-          );
+          await fileService.mirrorWorkspaceFile(pathToLocation(absolutePath));
         } catch (error) {
           this.logger.debug('Unable to mirror project sibling', {
             data: { path: absolutePath, error },

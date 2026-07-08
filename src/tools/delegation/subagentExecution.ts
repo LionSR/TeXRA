@@ -207,7 +207,7 @@ export async function executeSubagent(
         toolEditApprovalHandler: parentContext.toolEditApprovalHandler,
         stopAfterCycle: true,
         onStreamResolved: inheritChildStreamApprovals,
-        onError: (err) => {
+        onRunError: (err) => {
           subagentError = err;
         },
       });

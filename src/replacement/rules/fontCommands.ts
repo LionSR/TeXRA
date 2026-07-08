@@ -1,7 +1,7 @@
 // Local imports - replacement
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
-export const FONT_COMMAND_REPLACEMENTS: ReplacementCategory = {
+export const FONT_COMMAND_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'font_commands',
   description: 'Normalize deprecated font commands to modern equivalents',
   isRegex: false,
