@@ -7,12 +7,12 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-export interface GitBranchInfo {
+interface GitBranchInfo {
   readonly name?: string;
   readonly commit?: string;
 }
 
-export interface GitRepositoryState {
+interface GitRepositoryState {
   readonly HEAD: GitBranchInfo | undefined;
   readonly onDidChange: vscode.Event<void>;
 }
@@ -28,7 +28,7 @@ export interface GitAPI {
   getRepository(uri: vscode.Uri): GitRepository | null;
 }
 
-export interface GitExtension {
+interface GitExtension {
   getAPI(version: 1): GitAPI;
 }
 

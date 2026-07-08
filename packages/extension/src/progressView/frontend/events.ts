@@ -38,7 +38,7 @@ export interface FollowUpSendDetail {
   readonly images: readonly ExtractedClipboardImage[];
 }
 
-export interface WorkflowFollowupFormData {
+interface WorkflowFollowupFormData {
   agent: string;
   model: string;
   initialQuestion: string;

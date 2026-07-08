@@ -13,14 +13,6 @@ export const FILE_SELECTION_COMMAND_IDS = {
   getCurrentFile: 'texra.getCurrentFile',
 } as const;
 
-export type FileSelectionCommandId =
-  (typeof FILE_SELECTION_COMMAND_IDS)[keyof typeof FILE_SELECTION_COMMAND_IDS];
-
-// Only `editedFile` still uses single-file selection; input/context/media
-// route through SET_*_FILES.
-export type FileSelectionResponseCommand =
-  typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED;
-
 /** File categories that support multiple file selection */
 export type MultiFileCategory = 'input' | 'context' | 'media' | 'output';
 
