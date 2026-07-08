@@ -46,7 +46,6 @@ describe('handleExternalInquiryAction', () => {
       (requestId: string, result: HostInteractionResolution) => boolean
     >(() => true);
     const interactions: HostInteractions = {
-      handleProgressEvent: () => false,
       resolve,
       cancel: () => {},
     };

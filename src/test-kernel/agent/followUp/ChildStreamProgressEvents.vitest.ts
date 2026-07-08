@@ -325,26 +325,12 @@ describe('child stream progress events', () => {
     }
   });
 
-  it('uses host interactions for child stream auto-close when available', async () => {
+  it('emits removeStream for child stream auto-close', async () => {
     const active = createRecordingHost();
-    const removedStreams: StreamTabId[] = [];
-    const host: AgentRuntimeHost = {
-      ...active.host,
-      interactions: {
-        handleProgressEvent: (event, payload) => {
-          if (event !== 'removeStream') return false;
-          const data = payload as ProgressEventPayloads['removeStream'];
-          removedStreams.push(data.streamId);
-          return true;
-        },
-        resolve: () => false,
-        cancel: () => {},
-      },
-    };
 
-    const childStream = withSessionProgressProjection(host, () =>
+    const childStream = withSessionProgressProjection(active.host, () =>
       createChildStream(executionId, parentStreamId, {
-        runtimeHost: host,
+        runtimeHost: active.host,
         streamPrefix: 'bash',
         streamCategory: AgentCategory.ToolUse,
         agentName: 'test-agent',
@@ -354,14 +340,14 @@ describe('child stream progress events', () => {
       }),
     );
 
-    await withSessionProgressProjection(host, () =>
+    await withSessionProgressProjection(active.host, () =>
       childStream.finalize({ autoClose: true }),
     );
 
-    expect(removedStreams).toEqual([childStreamId]);
-    expect(active.events.map((entry) => entry.event)).not.toContain(
-      'removeStream',
-    );
+    expect(active.events).toContainEqual({
+      event: 'removeStream',
+      payload: { streamId: childStreamId },
+    });
   });
 
   it('publishes child loop status changes through the child stream owner', async () => {

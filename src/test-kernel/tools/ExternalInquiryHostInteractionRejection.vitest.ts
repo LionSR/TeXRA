@@ -14,7 +14,6 @@ function createRuntimeHostWithRejectingInteraction(
   return {
     emit: () => {},
     interactions: {
-      handleProgressEvent: () => false,
       resolve: () => false,
       cancel: () => {},
       openExternalInquiry: () => Promise.reject(reason),

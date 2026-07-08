@@ -16,10 +16,6 @@ import {
   type ProposalResult,
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
 import {
   toBashApprovalResult,
   toPlanApprovalResult,
@@ -38,11 +34,6 @@ import type {
 export interface ExtensionHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
-  removeStream(streamId: StreamTabId): void;
-  handleProgressEvent<K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): void;
 }
 
 type PendingKind = Extract<
@@ -245,17 +236,6 @@ export function createExtensionHostInteractions(
       activateStream(request.streamId || undefined);
       handlers().externalInquiry.show(request);
       return { threadId: request.threadId };
-    },
-
-    handleProgressEvent(event, payload): boolean {
-      if (event === 'addOutputFiles') return true;
-      if (event === 'removeStream') {
-        const data = payload as ProgressEventPayloads['removeStream'];
-        options.removeStream(data.streamId);
-        return true;
-      }
-      options.handleProgressEvent(event, payload);
-      return true;
     },
 
     resolve(requestId: string, result: HostInteractionResolution): boolean {

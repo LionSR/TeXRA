@@ -234,7 +234,6 @@ export function createTuiHostInteractions(
     openExternalInquiry(request) {
       return openExternalInquiryInteraction(request, context, host);
     },
-    handleProgressEvent: () => false,
     resolve: () => false,
     cancel(selector: HostInteractionCancelSelector = {}) {
       // Retry routes live outside the modal queue (the pre-queue auto-switch
