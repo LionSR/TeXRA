@@ -261,9 +261,6 @@ export class DesktopProgressBridge {
       getStreamControls: getProgressStreamControls,
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
-      onSessionProgressEvent: (event, payload) => {
-        this.progressEvents.onProgressEvent(event, payload);
-      },
       configureUi: ({ webviewUpdater }) => {
         // The desktop renderer is always attached (no sidebar/editor re-target),
         // so every show/resolve reaches the webview.
@@ -319,6 +316,14 @@ export class DesktopProgressBridge {
       },
     });
     const backendSubscription = this.backend.setupEventListeners();
+    const detachSessionProgressFacts = this.session.events.subscribe(
+      (event) => this.progressEvents.onSessionEvent(event),
+      { scope: 'session' },
+    );
+    const detachRunProgressFacts = this.session.events.subscribe(
+      (event) => this.progressEvents.onSessionEvent(event),
+      { scope: 'run', types: ['run.config', 'status'] },
+    );
     this.restartRepair = this.repairOrphanedStreamsAfterRestart();
     // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
     // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
@@ -332,6 +337,8 @@ export class DesktopProgressBridge {
       }
     });
     this.unsubscribe = () => {
+      detachRunProgressFacts();
+      detachSessionProgressFacts();
       backendSubscription.dispose();
       this.progressEvents.dispose();
       unsubscribeResult();
