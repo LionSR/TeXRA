@@ -46,7 +46,7 @@ const MINIMAL_CONFIG: AgentConfig = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 };
 
-/** Waits for readMeta to reflect the fire-and-forget write's async settle. */
+/** Reads the stream id cached by a completed resolver write-through. */
 async function waitForCachedStreamId(
   executionId: ExecutionId,
 ): Promise<StreamTabId | undefined> {
