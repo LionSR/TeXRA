@@ -69,7 +69,7 @@ describe('buildStreamTabInfo', () => {
 // pickAgentCategory — single owner of the config/hints agentCategory
 // precedence (issue #7583). Regression coverage for the desync scenario:
 // `matchesFilter`/`buildStreamInfo` (streamInfoUtils.ts), `buildStreamTabInfo`
-// (streamTabInfo.ts), and `getStreamCategory` (ProgressEventHandler.ts) must
+// (streamTabInfo.ts), and `getStreamCategory` (ProgressFactApplier.ts) must
 // all resolve the same category for the same config/hints inputs.
 // ---------------------------------------------------------------------------
 
