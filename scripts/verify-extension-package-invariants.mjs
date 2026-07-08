@@ -4,6 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
+  EXCLUDED_TRACE_VIEWER_DIR,
   extensionManifestSnapshot,
   readJson,
   withoutCatalogDerivedContributes,
@@ -61,22 +62,23 @@ const REQUIRED_PACKAGED_PATHS = [
 // VSIX includes them.
 const BUILD_TIME_PACKAGED_PATHS = new Set(['readme.md', 'changelog.md']);
 
+// See packages/extension/.vscodeignore for why resources/traceViewer is
+// excluded (and why there is deliberately no blanket `!resources/**` line).
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
-  // No blanket `!resources/**` line: it was dead weight (no earlier rule in
-  // .vscodeignore broadly excludes resources/ content — the only earlier
-  // match is the specific `resources/.DS_Store` line — so every
-  // resources/* entry is already included by default) and, if present,
-  // would silently
-  // override the plain resources/traceViewer/** exclusion below — vsce
-  // applies every `!`-negated line after all plain ignore lines regardless
-  // of position, so a later plain ignore line can never win against it.
-  'resources/traceViewer/**',
+  `resources/${EXCLUDED_TRACE_VIEWER_DIR}/**`,
   '!src/common/styles/*.css',
   '!src/progressView/*.html',
   '!src/settingsView/*.html',
   '!src/webview/*.html',
 ];
+
+// A blanket `!resources/**` (or an equivalent whitespace variant) would
+// silently re-include resources/traceViewer no matter where the required
+// line above sits in .vscodeignore, since vsce applies every `!`-negated
+// line after all plain ignore lines regardless of file position. Guard
+// against a future PR reintroducing it for an unrelated reason.
+const FORBIDDEN_VSCODEIGNORE_PATTERNS = [/^!\s*resources\/\*\*$/];
 
 function findExtensionPackagePath() {
   const splitPackagePath = path.join(
@@ -223,6 +225,15 @@ function verifyVscodeIgnore(snapshot, failures) {
     assert(
       lines.includes(line),
       `.vscodeignore must include ${line} so extension resources stay packaged after the workspace split.`,
+      failures,
+    );
+  }
+
+  for (const pattern of FORBIDDEN_VSCODEIGNORE_PATTERNS) {
+    const offendingLine = lines.find((line) => pattern.test(line));
+    assert(
+      !offendingLine,
+      `.vscodeignore must not include "${offendingLine}": a blanket resources/** unignore silently re-packages resources/${EXCLUDED_TRACE_VIEWER_DIR} regardless of where the exclusion line for it sits in the file.`,
       failures,
     );
   }
