@@ -3,10 +3,10 @@
  *
  * One store, shared by the CLI TUI, VS Code extension, and Electron desktop
  * app, that is the SINGLE writer of `streamData/{id}/*` and the reader that
- * reassembles a {@link StreamSnapshot} for resume. Runtime events are fed into
- * {@link handleProgressEvent}, which persists the same field-scoped files the
- * extension already writes (so all three hosts produce identical on-disk data),
- * plus the `workPlan.json` giving todos/plan a durable home.
+ * reassembles a {@link StreamSnapshot} for resume. Session/run facts are fed
+ * through {@link attachSessionEvents}, while host-owned callers use the public
+ * mutators below. Both paths persist the same field-scoped files, including the
+ * `workPlan.json` giving todos/plan a durable home.
  *
  * It consolidates the accumulation logic previously split across the extension's
  * `OutputFilesManager` / `UsageStatsManager` / `StreamMetaManager`, talking to
@@ -26,10 +26,6 @@ import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
@@ -258,74 +254,9 @@ export class StreamSnapshotStore {
     return false;
   }
 
-  // ==========================================================================
-  // Runtime event ingestion
-  // ==========================================================================
-
-  /**
-   * Persist durable state carried by a runtime progress event. Each mutation
-   * goes through the public store mutators used by the extension and desktop,
-   * so all hosts share the same seed-before-write policy.
-   */
-  handleProgressEvent<K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): void {
-    switch (event) {
-      case 'addOutputFiles': {
-        const p = payload as ProgressEventPayloads['addOutputFiles'];
-        this.addOutputFiles(p.streamId, p.filesByRound);
-        return;
-      }
-      case 'updateMissingOutputs': {
-        const p = payload as ProgressEventPayloads['updateMissingOutputs'];
-        this.updateMissingOutputs(p.streamId, p.filesByRound);
-        return;
-      }
-      case 'updateCompileFailures': {
-        const p = payload as ProgressEventPayloads['updateCompileFailures'];
-        this.updateCompileFailures(p.streamId, p.filesByRound);
-        return;
-      }
-      case 'updateStreamUsage': {
-        const p = payload as ProgressEventPayloads['updateStreamUsage'];
-        void this.addUsage(p.streamId, p.storageKey, p.usage);
-        return;
-      }
-      case 'updateTodos': {
-        const p = payload as ProgressEventPayloads['updateTodos'];
-        this.setTodos(p.streamId, p.todos);
-        return;
-      }
-      case 'updatePlan': {
-        const p = payload as ProgressEventPayloads['updatePlan'];
-        this.setPlan(p.streamId, p.plan);
-        return;
-      }
-      case 'setTaskState': {
-        const p = payload as ProgressEventPayloads['setTaskState'];
-        this.setTaskState(p.streamId, p.taskState, p.executionId);
-        return;
-      }
-      case 'updateStreamDescription': {
-        const p = payload as ProgressEventPayloads['updateStreamDescription'];
-        this.setDescription(p.streamId, p.description);
-        return;
-      }
-      case 'setParentStream': {
-        const p = payload as ProgressEventPayloads['setParentStream'];
-        this.setParentStream(p.childStreamId, p.parentStreamId);
-        return;
-      }
-      default:
-        return;
-    }
-  }
-
   /**
    * Persist already-migrated durable facts directly from the session event
-   * plane. The legacy progress-event entry point remains for extension/desktop
-   * consumers.
+   * plane.
    */
   attachSessionEvents(events: SessionEventHub): () => void {
     const detachRunEvents = events.subscribe(
