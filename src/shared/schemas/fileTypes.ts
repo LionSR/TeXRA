@@ -18,6 +18,3 @@ export const ExtendedDocumentFileTypeSchema = z.enum([
   'edited',
   'output',
 ]);
-export type ExtendedDocumentFileType = z.infer<
-  typeof ExtendedDocumentFileTypeSchema
->;
