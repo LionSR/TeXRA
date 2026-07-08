@@ -45,7 +45,12 @@ export function tryResumeFromSnapshot(streamId: StreamTabId): Promise<boolean> {
         logger.warn(`No task state found for stream: ${id}`);
         return undefined;
       }
-      return { runState: taskState, executionId };
+      const parentStreamId = progressState.snapshots.getParentStreamId(id);
+      return {
+        runState: taskState,
+        executionId,
+        ...(parentStreamId !== undefined && { parentStreamId }),
+      };
     },
     resumeToolUseSnapshot: resumeExtensionToolUseSnapshot,
     executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>

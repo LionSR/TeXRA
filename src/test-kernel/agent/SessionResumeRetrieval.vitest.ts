@@ -72,6 +72,41 @@ describe('retrieveSessionResumeData', () => {
     expect(resume.snapshot.agentConfig.model).toBe('gpt55');
   });
 
+  it('preserves a recovered parent stream id in tool-use snapshots', async () => {
+    const executionId = 'abc131' as ExecutionId;
+    const streamId = 'chat@gpt54#abc131-child' as StreamTabId;
+    const parentStreamId = 'chat@gpt54#abc131-parent' as StreamTabId;
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        messages: [],
+        shouldSkipCycle: false,
+        stateSlices: {
+          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+          userChannels: {
+            input: Object.freeze({ MODEL: 'gpt54' }),
+            transient: {},
+          },
+        },
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+
+    const resume = await retrieveSessionResumeData(
+      streamId,
+      executionId,
+      agentConfigToTaskState(CONFIG),
+      { parentStreamId },
+    );
+
+    expect(resume?.type).toBe('toolUse');
+    if (resume?.type !== 'toolUse') return;
+    expect(resume.snapshot.parentStreamId).toBe(parentStreamId);
+  });
+
   it('infers the legacy Google GenAI handler for old Google Content transcripts', async () => {
     const executionId = 'abc124' as ExecutionId;
     const streamId = 'chat@gemini35f#abc124' as StreamTabId;

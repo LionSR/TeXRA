@@ -150,6 +150,7 @@ export interface DesktopAgentExecution {
 type ResumeState = {
   runState: AgentConfig;
   executionId?: ExecutionId;
+  parentStreamId?: StreamTabId;
 };
 
 interface DesktopRunExecutionOptions {
@@ -1272,7 +1273,14 @@ export class DesktopProgressBridge {
   ): Promise<ResumeState | undefined> {
     let runState = this.state.snapshots.getRunConfig(streamId);
     let executionId = this.getStreamExecutionId(streamId);
-    if (runState && executionId) return { runState, executionId };
+    if (runState && executionId) {
+      const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
+      return {
+        runState,
+        executionId,
+        ...(parentStreamId !== undefined && { parentStreamId }),
+      };
+    }
 
     try {
       await this.state.snapshots.preload([streamId]);
@@ -1291,9 +1299,11 @@ export class DesktopProgressBridge {
       agentCategory: runState.agentCategory,
     });
 
+    const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
     return {
       runState,
       ...(executionId && { executionId }),
+      ...(parentStreamId !== undefined && { parentStreamId }),
     };
   }
 
