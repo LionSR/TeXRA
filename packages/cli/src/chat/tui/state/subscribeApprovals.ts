@@ -27,7 +27,7 @@ import {
   type ProposalResult,
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   approvalPromptAllowed,
@@ -86,7 +86,7 @@ async function hasUsablePersonalKey(provider: ApiProvider): Promise<boolean> {
  * (no usable key stored, direct-key failure, or unknown provider).
  */
 async function maybeAutoSwitchRetry(
-  payload: ProgressEventPayloads['showRetryRequest'],
+  payload: RuntimeInteractionEventPayloads['showRetryRequest'],
 ): Promise<ApprovalDecision | undefined> {
   if (!isCliApiSwitchableRetry(payload)) return undefined;
 
@@ -391,7 +391,7 @@ async function decideWithPolicy<
     kind === 'retry'
       ? immediateDecisionForApproval(
           'showRetryRequest',
-          payload as ProgressEventPayloads['showRetryRequest'],
+          payload as RuntimeInteractionEventPayloads['showRetryRequest'],
           context,
         )
       : immediateDecision(context);
@@ -437,7 +437,7 @@ async function requestBashInteraction(
   host: CliRuntimeHost,
   requestId: string,
 ): Promise<HostBashApprovalResult> {
-  const payload: ProgressEventPayloads['showBashPermission'] = {
+  const payload: RuntimeInteractionEventPayloads['showBashPermission'] = {
     requestId,
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
@@ -455,7 +455,7 @@ async function requestBashInteraction(
 }
 
 async function requestPlanInteraction(
-  request: ProgressEventPayloads['showPlanApproval'],
+  request: RuntimeInteractionEventPayloads['showPlanApproval'],
   context: CliContext,
   host: CliRuntimeHost,
 ): Promise<PlanApprovalResult> {
@@ -467,7 +467,7 @@ async function requestPlanInteraction(
 }
 
 async function requestProposalInteraction(
-  request: ProgressEventPayloads['showAgentProposal'],
+  request: RuntimeInteractionEventPayloads['showAgentProposal'],
   context: CliContext,
   host: CliRuntimeHost,
 ): Promise<ProposalResult> {
@@ -530,7 +530,7 @@ async function requestRetryInteraction(
 }
 
 async function requestUserQuestionInteraction(
-  payload: ProgressEventPayloads['showUserQuestion'],
+  payload: RuntimeInteractionEventPayloads['showUserQuestion'],
   context: CliContext,
   host: CliRuntimeHost,
 ): Promise<{
@@ -562,7 +562,7 @@ async function requestUserQuestionInteraction(
 }
 
 async function openExternalInquiryInteraction(
-  payload: ProgressEventPayloads['showExternalInquiry'],
+  payload: RuntimeInteractionEventPayloads['showExternalInquiry'],
   context: CliContext,
   host: CliRuntimeHost,
 ): Promise<{ threadId: string }> {
@@ -592,7 +592,10 @@ function markIfRejected(context: CliContext, decision: ApprovalDecision): void {
 }
 
 async function applyRetrySideEffects(
-  payload: Pick<ProgressEventPayloads['showRetryRequest'], 'streamId'>,
+  payload: Pick<
+    RuntimeInteractionEventPayloads['showRetryRequest'],
+    'streamId'
+  >,
   decision: ApprovalDecision,
   options: { isCurrent?: () => boolean } = {},
 ): Promise<void> {
@@ -610,7 +613,7 @@ async function applyRetrySideEffects(
 }
 
 function handleExternalInquiry(
-  payload: ProgressEventPayloads['showExternalInquiry'],
+  payload: RuntimeInteractionEventPayloads['showExternalInquiry'],
   context: CliContext,
   host: CliRuntimeHost,
 ): void {
