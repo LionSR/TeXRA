@@ -12,42 +12,30 @@
 // re-exported here for consumers that expect it from the schema module.
 export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 
-// Re-export the canonical LaTeX config field type so existing consumers that
-// import `LatexConfigField` from this module continue to compile.
-export type { LatexConfigField } from '@shared/constants/latex';
-
 // Re-export Goal metadata from its shared leaf module so this file (consumed by
 // webview frontends) does not pull in GoalTool/GoalStore runtime modules.
 export {
-  GoalSchema,
   formatGoalTime,
   isGoalInFlight,
   goalDurationMs,
-  goalElapsedMs,
   type Goal,
   type GoalStatus,
 } from './goal';
 
-// Re-export data schemas from the individual view-message modules so the
-// historical settings surface (single import site) stays intact.
+// Re-export types (and one constant) from the individual view-message
+// modules so the historical settings surface (single import site) stays
+// intact. The schemas themselves are no longer re-exported here — consumers
+// only ever needed the inferred types through this barrel.
 export {
-  MemoryViewItemSchema,
-  MemoryPreviewSchema,
   type MemoryViewItem,
   type MemoryPreview,
   type MemoryItemActionDetail,
-  type MemoryPathMessage,
-  type MemoryDeleteMessage,
-  type MemoryEnabledMessage,
 } from './memoryViewMessages';
 
-export { HistoryItemSchema, type HistoryItem } from './historyViewMessages';
+export { type HistoryItem } from './historyViewMessages';
 
 export {
   API_ACCESS_MODE_OPTIONS,
-  NumberVscodeSettingSchema,
-  type RemoteAgent,
-  type ApiAccessMode,
   type ProviderKeyStatus,
   type ProviderVscodeSetting,
   type NumberVscodeSetting,
