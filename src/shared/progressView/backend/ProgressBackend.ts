@@ -8,15 +8,17 @@ import {
 } from '@shared/progressView/backend/WebviewBridge';
 import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import {
+  ProgressFactApplier,
   PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES,
-  ProgressEventHandler,
-  type ProgressBackendInteractionEvent,
-  type ProgressBackendInteractionPayloads,
   type GetProgressStreamControls,
   type ProgressEventSubscription,
+} from '@shared/progressView/backend/events/ProgressFactApplier';
+import {
+  ProgressInteractionHandler,
+  type ProgressBackendInteractionEvent,
+  type ProgressBackendInteractionPayloads,
   type UICallbacks,
-} from '@shared/progressView/backend/events/ProgressEventHandler';
-import type { ProgressFactApplier } from '@shared/progressView/backend/events/ProgressFactApplier';
+} from '@shared/progressView/backend/events/ProgressInteractionHandler';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import type { StreamSnapshotStore } from '@transcript';
@@ -61,8 +63,8 @@ export class ProgressBackend {
   readonly state: ProgressViewState;
   readonly webviewUpdater: WebviewUpdater;
   readonly webviewBridge: WebviewBridge;
-  readonly eventHandler: ProgressEventHandler;
   readonly factApplier: ProgressFactApplier;
+  readonly interactionHandler: ProgressInteractionHandler;
   private readonly session: SessionHandle;
   private disposed = false;
 
@@ -97,15 +99,14 @@ export class ProgressBackend {
       webviewBridge: this.webviewBridge,
     };
     const ui = options.configureUi(services);
-    this.eventHandler = new ProgressEventHandler(
+    this.factApplier = new ProgressFactApplier(
       this.state,
       this.webviewUpdater,
       this.webviewBridge,
-      ui.callbacks,
       ui.hasPendingPermissions,
       options.getStreamControls,
     );
-    this.factApplier = this.eventHandler.factApplier;
+    this.interactionHandler = new ProgressInteractionHandler(ui.callbacks);
   }
 
   async load(): Promise<void> {
@@ -142,7 +143,7 @@ export class ProgressBackend {
     };
   }
 
-  handleProgressEvent<K extends ProgressBackendInteractionEvent>(
+  handleInteractionEvent<K extends ProgressBackendInteractionEvent>(
     event: K,
     payload: ProgressBackendInteractionPayloads[K],
   ): void {
@@ -153,7 +154,7 @@ export class ProgressBackend {
     // applier no-ops once disposed. Before #7363 the bus-listener teardown made
     // this path implicitly safe; the direct call needs an explicit guard.
     if (this.disposed) return;
-    this.eventHandler.handleProgressEvent(event, payload);
+    this.interactionHandler.handleInteractionEvent(event, payload);
   }
 
   dispose(): void {
