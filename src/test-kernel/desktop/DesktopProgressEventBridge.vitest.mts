@@ -443,7 +443,7 @@ describe('DesktopProgressEventBridge', () => {
         expect(upsert).toHaveBeenCalledWith(
           expect.objectContaining({
             streamId: 'status-stream',
-            lastKnownStatus: STREAM_PHASE.WAITING,
+            lastKnownStatus: STREAM_PHASE.RUNNING,
           }),
         );
       } finally {
@@ -533,6 +533,123 @@ describe('DesktopProgressEventBridge', () => {
         });
 
         expect(onShowError).toHaveBeenCalledWith('Root run failed');
+      } finally {
+        bridge.dispose();
+      }
+    });
+  });
+
+  describe('onSessionEvent', () => {
+    it('handles session stream facts without progress-event projection', async () => {
+      const upsert = vi.fn(async () => {});
+      const streamStatus = {
+        get: vi.fn(() => STREAM_PHASE.WAITING),
+        transition: vi.fn(() => true),
+      };
+      const bridge = createBridge({
+        streamStatus,
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [createSnapshot({ streamId: 'fact-stream' })],
+          upsert,
+        }),
+      });
+
+      try {
+        bridge.onSessionEvent({
+          scope: 'session',
+          event: {
+            type: 'updateStreamStatus',
+            payload: {
+              streamId: 'fact-stream',
+              status: STREAM_STATUS.RUNNING,
+              previousStatus: STREAM_PHASE.WAITING,
+            },
+          },
+        });
+
+        expect(bridge.hasRestoredStream('fact-stream')).toBe(false);
+        await settleMicrotasks();
+        expect(upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            streamId: 'fact-stream',
+            lastKnownStatus: STREAM_PHASE.RUNNING,
+          }),
+        );
+      } finally {
+        bridge.dispose();
+      }
+    });
+
+    it('handles run config and status facts as live stream updates', async () => {
+      const ensureStream = vi.fn();
+      const upsert = vi.fn(async () => {});
+      const bridge = createBridge({
+        state: makeMockState({
+          streamLogs: createStreamLogs({ ensureStream }),
+        }),
+        streamSnapshotStore: createSnapshotStore({
+          hydrated: [createSnapshot({ streamId: 'run-fact-stream' })],
+          upsert,
+        }),
+      });
+
+      try {
+        bridge.onSessionEvent({
+          scope: 'run',
+          streamId: 'run-fact-stream',
+          event: {
+            type: 'run.config',
+            streamId: 'run-fact-stream',
+            executionId: 'exec-run-fact',
+            config: {
+              agent: 'proofreader',
+              model: 'deepseekproT',
+              agentCategory: AgentCategory.Workflow,
+            },
+          } as any,
+        });
+        bridge.onSessionEvent({
+          scope: 'run',
+          streamId: 'run-fact-stream',
+          event: {
+            type: 'status',
+            streamId: 'run-fact-stream',
+            phase: STREAM_PHASE.RUNNING,
+            previousPhase: STREAM_PHASE.WAITING,
+            cause: 'run-start',
+          } as any,
+        });
+
+        expect(ensureStream).toHaveBeenCalledWith('run-fact-stream');
+        expect(bridge.hasRestoredStream('run-fact-stream')).toBe(false);
+        await settleMicrotasks();
+        expect(upsert).toHaveBeenCalled();
+      } finally {
+        bridge.dispose();
+      }
+    });
+
+    it('keeps goal badge updates on direct session facts', () => {
+      const onGoalStateChanged = vi.fn();
+      const bridge = createBridge({ onGoalStateChanged });
+
+      try {
+        bridge.onSessionEvent({
+          scope: 'session',
+          event: {
+            type: 'goalStateChanged',
+            payload: { streamId: 'goal-fact-stream' },
+          },
+        });
+
+        expect(onGoalStateChanged).toHaveBeenCalledWith(
+          'goal-fact-stream',
+          false,
+          {
+            status: undefined,
+            objective: undefined,
+          },
+        );
       } finally {
         bridge.dispose();
       }
