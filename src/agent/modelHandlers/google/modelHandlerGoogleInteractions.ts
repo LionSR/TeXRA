@@ -61,6 +61,7 @@ import {
 } from '../support/BackgroundPoller';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  COMPACTION_SUMMARY_PREFIX,
   COMPACTION_SYSTEM_PROMPT,
 } from '../contextManagementConstants';
 import { tagGoogleSdkError } from './googleSdkError';
@@ -1844,7 +1845,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       (summary): Step => ({
         type: 'user_input',
         content: [
-          this.textContent(`[Previous conversation summary]\n\n${summary}`),
+          this.textContent(`${COMPACTION_SUMMARY_PREFIX}${summary}`),
         ],
       }),
     );

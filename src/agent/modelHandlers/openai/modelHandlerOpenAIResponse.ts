@@ -63,6 +63,7 @@ import {
   CHAINED_RESPONSE_MAX_OUTPUT_FACTOR,
   CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT,
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  COMPACTION_SUMMARY_PREFIX,
   COMPACTION_SYSTEM_PROMPT,
   estimateTokensFromText,
   TOKEN_SAFETY_BUFFER,
@@ -978,7 +979,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         type: 'message',
         role: 'user',
         content: [
-          createInputText(`[Previous conversation summary]\n\n${summary}`),
+          createInputText(`${COMPACTION_SUMMARY_PREFIX}${summary}`),
         ],
       }),
     );
