@@ -244,9 +244,6 @@ function applyDirectTuiRunEvent(
     case 'updateActiveProcesses':
       applyActiveProcesses(projected.payload);
       return true;
-    case 'setParentStream':
-      applyParentStream(projected.payload);
-      return true;
     case 'updateProcessOutput':
       applyProcessOutput(projected.payload);
       return true;
