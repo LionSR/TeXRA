@@ -18,7 +18,7 @@ import {
  * Defined here (not in contexts/streamContexts) so the store stays the single
  * home for state data shapes; the context object lives with the other contexts.
  */
-export interface ProcessOutputEntry {
+interface ProcessOutputEntry {
   stdout: string;
   stderr: string;
 }
@@ -33,7 +33,6 @@ export {
   isWorkflowState,
   type StreamState,
   type ToolUseStreamState,
-  type ToolUseUIState,
   type WorkflowStreamState,
 } from '@shared/schemas';
 

@@ -26,13 +26,13 @@ logger.initialize(CHANNEL);
 
 type AgentDirectoryEventType = 'create' | 'change' | 'delete';
 
-export interface AgentDirectoryWatcherEvent extends AgentDirectoryEntry {
+interface AgentDirectoryWatcherEvent extends AgentDirectoryEntry {
   type: AgentDirectoryEventType;
   uri: vscode.Uri;
   relativePath: string;
 }
 
-export interface AgentDirectoryWatcherOptions {
+interface AgentDirectoryWatcherOptions {
   pattern?: string;
   onEvent: (event: AgentDirectoryWatcherEvent) => void;
 }
@@ -42,7 +42,7 @@ interface AgentDirectoryWatcherSubscription {
   handleEvent: (event: AgentDirectoryWatcherEvent) => void;
 }
 
-export class AgentDirectoryManager {
+class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
   private directoryService: AgentDirectoryService | undefined;
   private watcherDisposables: vscode.Disposable[] = [];
