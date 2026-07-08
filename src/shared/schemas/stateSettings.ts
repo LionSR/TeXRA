@@ -57,12 +57,12 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
  */
 
 /** Hosts that may consume a setting. */
-export type SettingHost = 'vscode' | 'cli' | 'desktop';
+type SettingHost = 'vscode' | 'cli' | 'desktop';
 
 /** Storage slot a setting is read from / written to. */
 export type SettingStore = 'config' | 'workspaceState' | 'globalState';
 
-export interface CliRuntimeReachability {
+interface CliRuntimeReachability {
   /**
    * Representative CLI command that reaches this setting after it has been set.
    * Placeholders are allowed when the command needs an installed agent/model.

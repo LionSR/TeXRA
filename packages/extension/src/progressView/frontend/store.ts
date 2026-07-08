@@ -33,7 +33,6 @@ export {
   isWorkflowState,
   type StreamState,
   type ToolUseStreamState,
-  type ToolUseUIState,
   type WorkflowStreamState,
 } from '@shared/schemas';
 

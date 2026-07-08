@@ -76,7 +76,6 @@ export const ActiveChildInfoSchema = z.preprocess(
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 export type SubagentChildInfo = Extract<ActiveChildInfo, { kind: 'subagent' }>;
-export type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
 
 // Round Stage (ephemeral round label from typed stage.start metadata)
 
@@ -142,7 +141,7 @@ const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)
 
-export const ToolUseUIStateSchema = z.object({
+const ToolUseUIStateSchema = z.object({
   followUpText: z.string().prefault(''),
   polishedText: z.string().nullable().prefault(null),
   polishRevision: z.int().prefault(0),
@@ -151,11 +150,9 @@ export const ToolUseUIStateSchema = z.object({
   shouldFocusFollowUp: z.boolean().prefault(false),
 });
 
-export type ToolUseUIState = z.infer<typeof ToolUseUIStateSchema>;
-
 // Tool-Use Stream State
 
-export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
+const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AgentCategory.ToolUse),
   // Frontend-owned fields updated by targeted progress-view messages
   todos: z.array(TodoItemSchema).prefault([]),
@@ -178,7 +175,7 @@ export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 // Workflow Stream State
 // One run per tab — all run-scoped data is flat, not keyed by runId.
 
-export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
+const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AgentCategory.Workflow),
   // Frontend-owned fields updated by targeted progress-view messages.
   // Per-run usage mirrors tool-use so resume correctly accumulates across
@@ -194,7 +191,7 @@ export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;
 
 // Discriminated Union
 
-export const StreamStateSchema = z.discriminatedUnion('kind', [
+const StreamStateSchema = z.discriminatedUnion('kind', [
   ToolUseStreamStateSchema,
   WorkflowStreamStateSchema,
 ]);
@@ -217,7 +214,7 @@ export function isWorkflowState(
 
 // Factory Functions
 
-export function createToolUseStreamState(
+function createToolUseStreamState(
   partial?: Partial<ToolUseStreamState>,
 ): ToolUseStreamState {
   return ToolUseStreamStateSchema.parse({

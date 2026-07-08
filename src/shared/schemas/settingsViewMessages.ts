@@ -48,23 +48,13 @@ export {
 } from './historyViewMessages';
 
 export {
-  ProfileUserSchema,
-  RemoteAgentSchema,
-  ApiAccessModeSchema,
   API_ACCESS_MODE_OPTIONS,
-  TierConstantsSchema,
-  ProviderKeyStatusSchema,
-  ProviderVscodeSettingSchema,
   NumberVscodeSettingSchema,
-  type ProfileUser,
   type RemoteAgent,
   type ApiAccessMode,
-  type TierConstants,
   type ProviderKeyStatus,
   type ProviderVscodeSetting,
   type NumberVscodeSetting,
-  type SelectAgentMessage,
-  type SetApiAccessModeMessage,
 } from './profileViewMessages';
 
 // Settings-specific data + outbound message schemas and the inbound schemas.
