@@ -10,7 +10,6 @@ import {
   resumeToolUseFromSnapshot,
   type SubagentRunOptions,
 } from './executeAgent';
-import { emitRuntimeEvent } from './emitRuntimeEvent';
 import { defaultSession } from './SessionHandle';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -74,7 +73,13 @@ export async function resumeQueuedToolUseSnapshot(
   let resumeError: { error: unknown } | undefined;
   try {
     followUps = [...seed, ...followUpsQueue.drainItems(streamId)];
-    emitRuntimeEvent('updateQueuedFollowUps', { streamId }, session);
+    session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'updateQueuedFollowUps',
+        payload: { streamId },
+      },
+    });
 
     const result = await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
       session: options.session,
@@ -103,7 +108,13 @@ export async function resumeQueuedToolUseSnapshot(
       followUpsQueue.enqueue(streamId, item, { force: true });
     }
     if (followUps.length > 0) {
-      emitRuntimeEvent('updateQueuedFollowUps', { streamId }, session);
+      session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateQueuedFollowUps',
+          payload: { streamId },
+        },
+      });
     }
   } finally {
     // Only the early-failure path leaves the stream RESUMING (a started run
