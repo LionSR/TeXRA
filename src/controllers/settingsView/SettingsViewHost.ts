@@ -17,6 +17,17 @@ import {
   createModelSelectionController,
   type ModelSelectionExtras,
 } from './SettingsModelSelectionControllerFactory';
+import {
+  SettingsProfileController,
+  type ApiAccessModeUpdate,
+  type ProviderVscodeSettingUpdateResult,
+  type SettingsProfileConfigValue,
+  type SettingsProfileControllerDeps,
+} from './SettingsProfileController';
+import {
+  SettingsProfileKeyController,
+  type SettingsProfileKeyControllerDeps,
+} from './SettingsProfileKeyController';
 import type { SettingsMemoryController } from './SettingsMemoryController';
 import type { SettingsModelSelectionController } from './SettingsModelSelectionController';
 
@@ -35,6 +46,23 @@ type SetReasoningLevelInput = Omit<
   SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL>,
   'command'
 >;
+type ApiAccessModeInput = SettingsMessageFor<
+  typeof SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE
+>['mode'];
+
+interface SettingsViewHostProviderConfigPorts {
+  readonly isApiProvider?: (provider: string) => boolean;
+  readonly onUnknownProvider?: (provider: string) => Awaitable<void>;
+  readonly setProviderStreaming?: (
+    provider: string,
+    enabled: boolean,
+  ) => Awaitable<void>;
+  readonly setProviderEndpoint?: (
+    provider: string,
+    endpoint: string,
+  ) => Awaitable<void>;
+  readonly setGlobalStreaming?: (enabled: boolean) => Awaitable<void>;
+}
 
 export interface SettingsViewHostOptions {
   readonly state: SettingsStatePorts;
@@ -43,9 +71,14 @@ export interface SettingsViewHostOptions {
   readonly setMemoryEnabled?: SettingsMemoryControllerFactoryOptions['setMemoryEnabled'];
   readonly modelSelectionExtras?: ModelSelectionExtras;
   readonly beforeModelSelectionMessage?: () => Awaitable<void>;
+  readonly profile?: SettingsProfileControllerDeps;
+  readonly profileKey?: SettingsProfileKeyControllerDeps;
+  readonly providerConfig?: SettingsViewHostProviderConfigPorts;
   readonly controllers?: {
     readonly memory?: SettingsMemoryController;
     readonly modelSelection?: SettingsModelSelectionController;
+    readonly profile?: SettingsProfileController;
+    readonly profileKey?: SettingsProfileKeyController;
   };
 }
 
@@ -54,9 +87,16 @@ export interface SettingsViewHostMutationOptions {
   readonly afterPost?: () => Awaitable<void>;
 }
 
+interface SettingsViewHostApiAccessModeOptions {
+  readonly respond?: SettingsRespond;
+  readonly afterPost?: (update: ApiAccessModeUpdate) => Awaitable<void>;
+}
+
 export class SettingsViewHost {
   readonly memoryController: SettingsMemoryController;
   readonly modelSelectionController: SettingsModelSelectionController;
+  private readonly profileController?: SettingsProfileController;
+  private readonly profileKeyController?: SettingsProfileKeyController;
 
   constructor(private readonly options: SettingsViewHostOptions) {
     this.memoryController =
@@ -72,6 +112,16 @@ export class SettingsViewHost {
         options.state,
         options.modelSelectionExtras,
       );
+    this.profileController =
+      options.controllers?.profile ??
+      (options.profile
+        ? new SettingsProfileController(options.profile)
+        : undefined);
+    this.profileKeyController =
+      options.controllers?.profileKey ??
+      (options.profileKey
+        ? new SettingsProfileKeyController(options.profileKey)
+        : undefined);
   }
 
   async sendMemoryData(respond?: SettingsRespond): Promise<void> {
@@ -177,6 +227,98 @@ export class SettingsViewHost {
     await this.postModelSelectionMutation(options);
   }
 
+  async sendProfileData(respond?: SettingsRespond): Promise<void> {
+    await this.post(
+      await this.requireProfileController().buildProfileMessage(),
+      respond,
+    );
+  }
+
+  async setProviderKey(provider: string, apiKey?: string): Promise<void> {
+    if (!(await this.acceptKnownProvider(provider))) return;
+    const controller = this.requireProfileKeyController();
+    if (apiKey != null) {
+      await controller.commitProviderKey(provider, apiKey);
+      return;
+    }
+    await controller.setProviderKey(provider);
+  }
+
+  async removeProviderKey(provider: string): Promise<void> {
+    if (!(await this.acceptKnownProvider(provider))) return;
+    await this.requireProfileKeyController().removeProviderKey(provider);
+  }
+
+  async openProviderKeyUrl(provider: string): Promise<void> {
+    await this.requireProfileKeyController().openProviderKeyUrl(provider);
+  }
+
+  async setProviderStreaming(
+    provider: string,
+    enabled: boolean,
+    respond?: SettingsRespond,
+  ): Promise<void> {
+    const setProviderStreaming =
+      this.options.providerConfig?.setProviderStreaming;
+    if (!setProviderStreaming) {
+      throw new Error('SettingsViewHost has no provider streaming port.');
+    }
+    await setProviderStreaming(provider, enabled);
+    await this.sendProfileData(respond);
+  }
+
+  async setProviderEndpoint(
+    provider: string,
+    endpoint: string,
+    respond?: SettingsRespond,
+  ): Promise<void> {
+    const setProviderEndpoint =
+      this.options.providerConfig?.setProviderEndpoint;
+    if (!setProviderEndpoint) {
+      throw new Error('SettingsViewHost has no provider endpoint port.');
+    }
+    await setProviderEndpoint(provider, endpoint);
+    await this.sendProfileData(respond);
+  }
+
+  async setGlobalStreaming(
+    enabled: boolean,
+    respond?: SettingsRespond,
+  ): Promise<void> {
+    const setGlobalStreaming = this.options.providerConfig?.setGlobalStreaming;
+    if (!setGlobalStreaming) {
+      throw new Error('SettingsViewHost has no global streaming port.');
+    }
+    await setGlobalStreaming(enabled);
+    await this.sendProfileData(respond);
+  }
+
+  async setApiAccessMode(
+    mode: ApiAccessModeInput,
+    options?: SettingsViewHostApiAccessModeOptions,
+  ): Promise<ApiAccessModeUpdate> {
+    const update = await this.requireProfileController().setApiAccessMode(mode);
+    await this.sendProfileData(options?.respond);
+    await this.sendModelSelectionData(options?.respond);
+    await options?.afterPost?.(update);
+    return update;
+  }
+
+  getProviderDisplayName(provider: string): string {
+    return this.requireProfileController().getProviderDisplayName(provider);
+  }
+
+  getReliabilitySettings() {
+    return this.requireProfileController().getReliabilitySettings();
+  }
+
+  setProviderVscodeSetting(input: {
+    key: string;
+    value: SettingsProfileConfigValue;
+  }): Promise<ProviderVscodeSettingUpdateResult> {
+    return this.requireProfileController().setProviderVscodeSetting(input);
+  }
+
   getVisibleModels(): string[] {
     return this.modelSelectionController.getVisibleModels();
   }
@@ -205,6 +347,27 @@ export class SettingsViewHost {
   ): Promise<void> {
     if (message == null) return;
     await this.post(message, respond);
+  }
+
+  private requireProfileController(): SettingsProfileController {
+    if (!this.profileController) {
+      throw new Error('SettingsViewHost has no profile controller.');
+    }
+    return this.profileController;
+  }
+
+  private requireProfileKeyController(): SettingsProfileKeyController {
+    if (!this.profileKeyController) {
+      throw new Error('SettingsViewHost has no profile key controller.');
+    }
+    return this.profileKeyController;
+  }
+
+  private async acceptKnownProvider(provider: string): Promise<boolean> {
+    const isApiProvider = this.options.providerConfig?.isApiProvider;
+    if (!isApiProvider || isApiProvider(provider)) return true;
+    await this.options.providerConfig?.onUnknownProvider?.(provider);
+    return false;
   }
 }
 
