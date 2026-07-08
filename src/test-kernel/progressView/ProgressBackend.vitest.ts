@@ -10,14 +10,13 @@ import { streamDataDir, StreamSnapshotStore } from '@transcript';
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import {
   toRunFactDomainKey,
   type RunFactEventName,
   type RunFactPayloads,
 } from '@agent/runtime/runFactEvents';
 import type { TaskState } from '@agent/core/state/TaskState';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -27,7 +26,10 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   type ActiveChildInfo,
+  type AddOutputFilesPayload,
   type CompileFailure,
+  type GoalPausedPayload,
+  type InquiryThreadUpdatedEvent,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -37,9 +39,15 @@ import {
   type OutputFileInfo,
   type Plan,
   type ProgressViewOutboundMessage,
+  type SetActiveStreamPayload,
   type StorageKey,
   type StreamTabId,
   type TodoItem,
+  type UpdateCompileFailuresPayload,
+  type UpdateMissingOutputsPayload,
+  type UpdatePlanPayload,
+  type UpdateStreamDescriptionPayload,
+  type UpdateTodosPayload,
 } from '@shared/schemas';
 import {
   ProgressBackend,
@@ -136,7 +144,7 @@ async function writeExecutionConfig(executionId: ExecutionId): Promise<void> {
 
 function emitActiveStream(
   target: { session: SessionHandle },
-  payload: ProgressEventPayloads['setActiveStream'],
+  payload: SetActiveStreamPayload,
 ): void {
   target.session.events.emit({
     scope: 'session',
@@ -167,7 +175,7 @@ function emitRunConfig(
 
 function emitStreamDescription(
   target: { session: SessionHandle },
-  payload: ProgressEventPayloads['updateStreamDescription'],
+  payload: UpdateStreamDescriptionPayload,
 ): void {
   target.session.events.emit({
     scope: 'session',
@@ -530,7 +538,7 @@ describe('ProgressBackend', () => {
           data: {
             streamId,
             todos: [firstTodo],
-          } satisfies ProgressEventPayloads['updateTodos'],
+          } satisfies UpdateTodosPayload,
         },
       });
       first.session.events.emit({
@@ -542,7 +550,7 @@ describe('ProgressBackend', () => {
           data: {
             streamId,
             filesByRound: { 1: [firstOutput] },
-          } satisfies ProgressEventPayloads['addOutputFiles'],
+          } satisfies AddOutputFilesPayload,
         },
       });
 
@@ -572,7 +580,7 @@ describe('ProgressBackend', () => {
           data: {
             streamId,
             todos: [secondTodo],
-          } satisfies ProgressEventPayloads['updateTodos'],
+          } satisfies UpdateTodosPayload,
         },
       });
 
@@ -744,7 +752,7 @@ describe('ProgressBackend', () => {
     const subscription = backend.setupEventListeners();
     const applier = vi.spyOn(backend.eventHandler, 'handleProgressEvent');
     const streamId = 'session:single-applier' as StreamTabId;
-    const payload: ProgressEventPayloads['setActiveStream'] = {
+    const payload: SetActiveStreamPayload = {
       streamId,
       agentCategory: AgentCategory.Workflow,
     };
@@ -874,7 +882,7 @@ describe('ProgressBackend', () => {
           data: {
             streamId,
             filesByRound: { 1: [outputFile] },
-          } satisfies ProgressEventPayloads['addOutputFiles'],
+          } satisfies AddOutputFilesPayload,
         },
       });
       session.events.emit({
@@ -886,7 +894,7 @@ describe('ProgressBackend', () => {
           data: {
             streamId,
             filesByRound: { 1: ['paper.pdf'] },
-          } satisfies ProgressEventPayloads['updateMissingOutputs'],
+          } satisfies UpdateMissingOutputsPayload,
         },
       });
       session.events.emit({
@@ -898,7 +906,7 @@ describe('ProgressBackend', () => {
           data: {
             streamId,
             filesByRound: { 1: [compileFailure] },
-          } satisfies ProgressEventPayloads['updateCompileFailures'],
+          } satisfies UpdateCompileFailuresPayload,
         },
       });
       session.events.emit({
@@ -910,7 +918,7 @@ describe('ProgressBackend', () => {
           data: {
             streamId,
             todos,
-          } satisfies ProgressEventPayloads['updateTodos'],
+          } satisfies UpdateTodosPayload,
         },
       });
       session.events.emit({
@@ -922,7 +930,7 @@ describe('ProgressBackend', () => {
           data: {
             streamId,
             plan,
-          } satisfies ProgressEventPayloads['updatePlan'],
+          } satisfies UpdatePlanPayload,
         },
       });
       session.events.emit({
@@ -945,7 +953,7 @@ describe('ProgressBackend', () => {
         event: {
           type: 'domain',
           key: toRunFactDomainKey('goalPaused'),
-          data: { streamId } satisfies ProgressEventPayloads['goalPaused'],
+          data: { streamId } satisfies GoalPausedPayload,
         },
       });
 
@@ -1110,7 +1118,7 @@ describe('ProgressBackend', () => {
           data: {
             streamId,
             filesByRound: { 1: [outputFile] },
-          } satisfies ProgressEventPayloads['addOutputFiles'],
+          } satisfies AddOutputFilesPayload,
         },
       });
 
@@ -1162,7 +1170,7 @@ describe('ProgressBackend', () => {
       lastActivityIso: '2026-07-06T12:00:00.000Z',
       turnCount: 1,
       resumeOutcome: null,
-    } satisfies ProgressEventPayloads['inquiryThreadUpdated'];
+    } satisfies InquiryThreadUpdatedEvent;
 
     try {
       await target.backend.state.snapshots.load([]);

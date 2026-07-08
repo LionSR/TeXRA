@@ -4,8 +4,8 @@ import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
+import type { SetTaskStatePayload } from '@agent/runtime/taskStateProgressPayload';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
@@ -13,11 +13,26 @@ import {
   ConversationProgressSchema,
   UpdatePlanPayloadSchema,
   UpdateTodosPayloadSchema,
+  type AddOutputFilesPayload,
+  type ClearMissingOutputsPayload,
   type ConversationProgress,
   type GoalStatus,
+  type InquiryThreadUpdatedEvent,
+  type SetActiveStreamPayload,
+  type SetParentStreamPayload,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
+  type UpdateCompileFailuresPayload,
+  type UpdateConversationProgressPayload,
+  type UpdateMissingOutputsPayload,
+  type UpdatePlanPayload,
+  type UpdateProcessOutputPayload,
+  type UpdateQueuedFollowUpsPayload,
+  type UpdateRoundStagePayload,
+  type UpdateStreamDescriptionPayload,
+  type UpdateStreamUsagePayload,
+  type UpdateTodosPayload,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
@@ -255,9 +270,7 @@ export class ProgressFactApplier {
 
       if (factName === 'addOutputFiles' && isObject(event.data)) {
         this.applyFact('failed to handle addOutputFiles fact', () =>
-          this.handleAddOutputFiles(
-            event.data as ProgressEventPayloads['addOutputFiles'],
-          ),
+          this.handleAddOutputFiles(event.data as AddOutputFilesPayload),
         );
         return;
       }
@@ -265,7 +278,7 @@ export class ProgressFactApplier {
       if (factName === 'updateMissingOutputs' && isObject(event.data)) {
         this.applyFact('failed to handle updateMissingOutputs fact', () =>
           this.handleUpdateMissingOutputs(
-            event.data as ProgressEventPayloads['updateMissingOutputs'],
+            event.data as UpdateMissingOutputsPayload,
           ),
         );
         return;
@@ -274,7 +287,7 @@ export class ProgressFactApplier {
       if (factName === 'updateCompileFailures' && isObject(event.data)) {
         this.applyFact('failed to handle updateCompileFailures fact', () =>
           this.handleUpdateCompileFailures(
-            event.data as ProgressEventPayloads['updateCompileFailures'],
+            event.data as UpdateCompileFailuresPayload,
           ),
         );
       }
@@ -338,9 +351,7 @@ export class ProgressFactApplier {
     withEventErrorHandling('ProgressFacts', context, handle);
   }
 
-  public handleInquiryThreadUpdated(
-    thread: ProgressEventPayloads['inquiryThreadUpdated'],
-  ): void {
+  public handleInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void {
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateInquiryThread(thread);
     }
@@ -349,7 +360,7 @@ export class ProgressFactApplier {
   public handleUpdateStreamDescription({
     streamId,
     description,
-  }: ProgressEventPayloads['updateStreamDescription']): void {
+  }: UpdateStreamDescriptionPayload): void {
     this.state.snapshots.setDescription(streamId, description);
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateStreamDescription(streamId, description);
@@ -359,7 +370,7 @@ export class ProgressFactApplier {
   public handleSetParentStream({
     childStreamId,
     parentStreamId,
-  }: ProgressEventPayloads['setParentStream']): void {
+  }: SetParentStreamPayload): void {
     this.state.snapshots.setParentStream(childStreamId, parentStreamId);
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateParentStream(
@@ -374,7 +385,7 @@ export class ProgressFactApplier {
     executionId,
     stdout,
     stderr,
-  }: ProgressEventPayloads['updateProcessOutput']): void {
+  }: UpdateProcessOutputPayload): void {
     // Always send — output accumulates in frontend state per-stream,
     // so it must not be dropped when the stream is inactive.
     if (this.webviewUpdater.isAvailable()) {
@@ -390,7 +401,7 @@ export class ProgressFactApplier {
   public handleAddOutputFiles({
     streamId,
     filesByRound,
-  }: ProgressEventPayloads['addOutputFiles']): void {
+  }: AddOutputFilesPayload): void {
     this.state.snapshots.addOutputFiles(streamId, filesByRound);
     this.sendIfActive(streamId, () => {
       const rounds = this.state.snapshots.getOutputFiles(streamId);
@@ -403,7 +414,7 @@ export class ProgressFactApplier {
   public handleUpdateMissingOutputs({
     streamId,
     filesByRound,
-  }: ProgressEventPayloads['updateMissingOutputs']): void {
+  }: UpdateMissingOutputsPayload): void {
     this.state.snapshots.updateMissingOutputs(streamId, filesByRound);
     this.sendIfActive(streamId, () => {
       const rounds = this.state.snapshots.getMissingOutputs(streamId);
@@ -416,7 +427,7 @@ export class ProgressFactApplier {
   public handleUpdateCompileFailures({
     streamId,
     filesByRound,
-  }: ProgressEventPayloads['updateCompileFailures']): void {
+  }: UpdateCompileFailuresPayload): void {
     this.state.snapshots.updateCompileFailures(streamId, filesByRound);
     this.sendIfActive(streamId, () => {
       const rounds = this.state.snapshots.getCompileFailures(streamId);
@@ -427,9 +438,7 @@ export class ProgressFactApplier {
     });
   }
 
-  public handleClearMissingOutputs(
-    payload: ProgressEventPayloads['clearMissingOutputs'],
-  ): void {
+  public handleClearMissingOutputs(payload: ClearMissingOutputsPayload): void {
     const targets: StreamTabId[] = payload.streamId
       ? [payload.streamId]
       : payload.streamConfig
@@ -449,7 +458,7 @@ export class ProgressFactApplier {
     streamId,
     usage,
     storageKey,
-  }: ProgressEventPayloads['updateStreamUsage']): void {
+  }: UpdateStreamUsagePayload): void {
     void Promise.resolve(
       this.state.snapshots.addUsage(streamId, storageKey, usage),
     ).then((accumulated) => {
@@ -460,20 +469,14 @@ export class ProgressFactApplier {
     });
   }
 
-  public handleUpdateTodos({
-    streamId,
-    todos,
-  }: ProgressEventPayloads['updateTodos']): void {
+  public handleUpdateTodos({ streamId, todos }: UpdateTodosPayload): void {
     this.state.snapshots.setTodos(streamId, todos);
     this.sendIfActive(streamId, () =>
       this.webviewUpdater.updateTodos(streamId, todos),
     );
   }
 
-  public handleUpdatePlan({
-    streamId,
-    plan,
-  }: ProgressEventPayloads['updatePlan']): void {
+  public handleUpdatePlan({ streamId, plan }: UpdatePlanPayload): void {
     this.state.snapshots.setPlan(streamId, plan);
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updatePlan(streamId, plan);
@@ -482,7 +485,7 @@ export class ProgressFactApplier {
 
   public handleUpdateQueuedFollowUps({
     streamId,
-  }: ProgressEventPayloads['updateQueuedFollowUps']): void {
+  }: UpdateQueuedFollowUpsPayload): void {
     this.sendIfActive(streamId, () => {
       const messages = this.state.followUps.getAll(streamId);
       this.webviewUpdater.updateQueuedFollowUps(streamId, messages);
@@ -500,7 +503,7 @@ export class ProgressFactApplier {
   }
 
   public async handleSetActiveStream(
-    payload: ProgressEventPayloads['setActiveStream'],
+    payload: SetActiveStreamPayload,
   ): Promise<void> {
     const { streamId, isRemote } = payload;
     if (!streamId) return;
@@ -590,7 +593,7 @@ export class ProgressFactApplier {
     });
   }
 
-  public handleSetTaskState(data: ProgressEventPayloads['setTaskState']): void {
+  public handleSetTaskState(data: SetTaskStatePayload): void {
     const { streamId, executionId, taskState } = data;
     const isActiveStream = this.state.activeStream === streamId;
     const category = taskState.agentConfig.agentCategory;
@@ -621,7 +624,7 @@ export class ProgressFactApplier {
   }
 
   public handleUpdateConversationProgress(
-    data: ProgressEventPayloads['updateConversationProgress'],
+    data: UpdateConversationProgressPayload,
   ): void {
     const { streamId, progress } = data;
 
@@ -642,9 +645,7 @@ export class ProgressFactApplier {
     }
   }
 
-  public handleUpdateRoundStage(
-    data: ProgressEventPayloads['updateRoundStage'],
-  ): void {
+  public handleUpdateRoundStage(data: UpdateRoundStagePayload): void {
     const { streamId, roundStage } = data;
     this.state.updateStreamState(streamId, (prev) => ({
       ...prev,
