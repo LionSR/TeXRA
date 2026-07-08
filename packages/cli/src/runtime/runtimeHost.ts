@@ -1,5 +1,14 @@
 // Local imports - runtime
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type {
+  AgentRuntimeEvent,
+  AgentRuntimeEventPayloads,
+  AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
+import type {
+  AgentRuntimeProgressEvent,
+  AgentRuntimeProgressEventPayloads,
+  AgentRuntimeProgressSink,
+} from '@agent/runtime/agentRuntimeProgressEvents';
 import type { SetTaskStatePayload } from '@agent/runtime/taskStateProgressPayload';
 import {
   isRuntimeInteractionEvent,
@@ -27,10 +36,15 @@ import {
 } from './runProgressRenderer';
 import type { CliContext } from './cliContext';
 
-export type CliRuntimeHost = AgentRuntimeHost & {
-  prepareInteractivePrompt?: () => void;
-  close(): Promise<void>;
-};
+export type CliRuntimeEventPayloads = AgentRuntimeEventPayloads &
+  AgentRuntimeProgressEventPayloads;
+export type CliRuntimeEvent = AgentRuntimeEvent | AgentRuntimeProgressEvent;
+
+export type CliRuntimeHost = AgentRuntimeHost &
+  AgentRuntimeProgressSink & {
+    prepareInteractivePrompt?: () => void;
+    close(): Promise<void>;
+  };
 
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let sink: LogSink | undefined;
@@ -50,7 +64,10 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
 
   return {
     prepareInteractivePrompt,
-    emit(event, payload) {
+    emit<K extends CliRuntimeEvent>(
+      event: K,
+      payload: CliRuntimeEventPayloads[K],
+    ) {
       if (closed) return;
 
       if (

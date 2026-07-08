@@ -1,8 +1,8 @@
 import type { AgentEvent } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
   AgentRuntimeProgressEvent,
   AgentRuntimeProgressEventPayloads,
+  AgentRuntimeProgressSink,
 } from '@agent/runtime/agentRuntimeProgressEvents';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
@@ -187,7 +187,7 @@ function projectCliRunFact(
 }
 
 function emitProjectedProgressEvent(
-  runtimeHost: AgentRuntimeHost,
+  runtimeHost: AgentRuntimeProgressSink,
   projected: CliProjectedProgressEvent,
 ): void {
   runtimeHost.emit(projected.event, projected.payload);
@@ -200,7 +200,7 @@ function emitProjectedProgressEvent(
  */
 export function attachCliSessionProgressProjection(
   events: SessionEventHub,
-  runtimeHost: AgentRuntimeHost,
+  runtimeHost: AgentRuntimeProgressSink,
 ): () => void {
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {

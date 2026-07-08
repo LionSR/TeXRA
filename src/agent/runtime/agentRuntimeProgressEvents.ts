@@ -24,13 +24,13 @@ import type {
 } from '@shared/schemas';
 
 /**
- * Runtime-host progress payloads retained for host compatibility.
+ * Progress payloads retained for CLI public-output compatibility.
  *
  * Session- and run-scoped state changes are owned by `SessionEventHub` and
- * `AgentEvent`; this table only types the remaining direct `runtimeHost.emit`
- * progress surface used by compatibility adapters. Do not add new fact keys
- * here. New durable state should extend the session/run fact vocabulary first,
- * then choose an explicit host projection only when a retained public surface
+ * `AgentEvent`; this table only types the remaining explicit progress sink
+ * used by CLI compatibility adapters. Do not add new fact keys here. New
+ * durable state should extend the session/run fact vocabulary first, then
+ * choose an explicit host projection only when a retained public surface
  * requires it.
  */
 export interface AgentRuntimeProgressEventPayloads {
@@ -66,3 +66,10 @@ export interface AgentRuntimeProgressEventPayloads {
 }
 
 export type AgentRuntimeProgressEvent = keyof AgentRuntimeProgressEventPayloads;
+
+export interface AgentRuntimeProgressSink {
+  emit<K extends AgentRuntimeProgressEvent>(
+    event: K,
+    payload: AgentRuntimeProgressEventPayloads[K],
+  ): void;
+}
