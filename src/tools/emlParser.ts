@@ -14,7 +14,7 @@ export interface EmlImageAttachment {
 }
 
 export interface EmlParseResult {
-  /** Human-readable plain-text representation of the email */
+  /** Human-readable representation of the email (plain text, or Markdown when falling back from an HTML-only body) */
   text: string;
   /** Image attachments extracted from the email */
   images: EmlImageAttachment[];
@@ -28,11 +28,11 @@ interface AttachmentPartition {
 const IMAGE_MIME_PREFIX = 'image/';
 
 /**
- * Parse an EML file's raw text content into a human-readable plain-text
- * representation, and extract any image attachments.
+ * Parse an EML file's raw text content into a human-readable representation,
+ * and extract any image attachments.
  *
  * Extracts key headers (From, To, CC, Subject, Date) and the text body.
- * When no plain-text part exists, falls back to a simplified version of the HTML body.
+ * When no plain-text part exists, falls back to a Markdown conversion of the HTML body.
  * Non-image attachment filenames are listed at the end of the text.
  */
 export async function parseEml(rawEml: string): Promise<EmlParseResult> {
@@ -79,7 +79,7 @@ function formatEmail(
   }
 
   // -- Body -----------------------------------------------------------------
-  const body = email.text ?? stripHtml(email.html ?? '');
+  const body = email.text ?? htmlToMarkdown(email.html ?? '');
   if (body.trim()) {
     sections.push(body.trim());
   }
@@ -166,6 +166,6 @@ const turndownService = new TurndownService({ headingStyle: 'atx' }).remove([
  * flattening them, and matches the html-to-Markdown fallback already used by
  * WebFetchTool for the same "readable representation" purpose.
  */
-function stripHtml(html: string): string {
+function htmlToMarkdown(html: string): string {
   return turndownService.turndown(html).trim();
 }
