@@ -28,6 +28,7 @@ import {
   type LogContentExtras,
 } from '@shared/progressView/backend/WebviewUpdater';
 import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
+import { pickAgentCategory } from '@shared/progressView/backend/streamTabInfo';
 import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
 import {
   ProgressViewState,
@@ -980,9 +981,7 @@ export class ProgressEventHandler {
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
     const config = this.state.snapshots.getRunConfig(streamId);
-    return (
-      config?.agentCategory ?? this.state.getStreamHints(streamId).agentCategory
-    );
+    return pickAgentCategory(config, this.state.getStreamHints(streamId));
   }
 
   getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {

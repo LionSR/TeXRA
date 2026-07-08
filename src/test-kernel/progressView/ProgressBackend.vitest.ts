@@ -44,6 +44,7 @@ import {
   type ProgressBackendServices,
   type ProgressBackendUiConfig,
 } from '@shared/progressView/backend/ProgressBackend';
+import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { StorageFS } from '@utils/files';
 
@@ -1507,6 +1508,53 @@ describe('ProgressBackend', () => {
       ).toMatchObject({
         stream: 'workflow-existing',
         action: 'render',
+      });
+    } finally {
+      backend.dispose();
+    }
+  });
+
+  it('agrees on the resolved agentCategory across the filter, tab-render, and sync-content paths (#7583)', async () => {
+    // Regression test for the config/hints agentCategory single-owner fix:
+    // buildStreamInfos (matchesFilter + buildStreamTabInfo, streamInfoUtils.ts
+    // / streamTabInfo.ts) and syncStreamContent (getStreamCategory,
+    // ProgressEventHandler.ts) must resolve the same category from the same
+    // config/hints inputs, even when hints deliberately disagree with the
+    // live config.
+    const { backend, messages } = createRecordingBackend();
+    const stream = 'search@deepseek#de5711c' as StreamTabId;
+
+    try {
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.snapshots.setTaskState(
+        stream,
+        toolUseTaskState('search', 'deepseekproT'),
+        'de5711c' as ExecutionId,
+      );
+      // Stale hint disagrees with the live config on purpose — config must
+      // win consistently everywhere the category is resolved.
+      backend.state.updateStreamHints(stream, {
+        agentCategory: AgentCategory.Workflow,
+      });
+
+      const toolUseInfos = buildStreamInfos(backend.state, 'toolUse');
+      expect(toolUseInfos.map((info) => info.name)).toContain(stream);
+      expect(
+        toolUseInfos.find((info) => info.name === stream)?.agentCategory,
+      ).toBe(AgentCategory.ToolUse);
+
+      const workflowInfos = buildStreamInfos(backend.state, 'workflow');
+      expect(workflowInfos.map((info) => info.name)).not.toContain(stream);
+
+      backend.eventHandler.syncStreamContent(stream);
+      const sync = messages.find(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+      );
+      expect(sync).toMatchObject({
+        stream,
+        action: 'render',
+        agentCategory: AgentCategory.ToolUse,
       });
     } finally {
       backend.dispose();
