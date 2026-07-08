@@ -14,10 +14,9 @@ import type { TokenUsageStats } from './usage';
  * Fact-native payload vocabulary for session- and run-scoped runtime facts.
  *
  * These named types are the single source for the payloads carried by
- * `SessionFact` arms, `runFact.*` trace domain events, and the frozen legacy
- * host progress-event view (`ProgressEventPayloads` in
- * `@agent/runtime/hostProgressEvents`). New facts get a named payload here —
- * never a new key on the frozen legacy map.
+ * `SessionFact` arms, `runFact.*` trace domain events, and retained
+ * runtime-host progress projections. New facts get a named payload here —
+ * never a new key on a host compatibility map.
  */
 
 /** Payload base for stream-scoped run facts (one run per workflow tab). */
