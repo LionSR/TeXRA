@@ -50,7 +50,6 @@ export const EditedFileRecordSchema = z.object({
   source: z.string(),
   sourceDisplay: z.string(),
 });
-export type EditedFileRecord = z.infer<typeof EditedFileRecordSchema>;
 
 /**
  * Schema for flattened edit records used in state snapshots.
@@ -64,7 +63,6 @@ export const FlattenedEditRecordSchema = z.object({
   added: LineCountSchema.prefault(0),
   removed: LineCountSchema.prefault(0),
 });
-export type FlattenedEditRecord = z.infer<typeof FlattenedEditRecordSchema>;
 
 // ============================================================================
 // Diagnostics Types (not Zod - these are complex unions with external types)
@@ -140,9 +138,6 @@ const ToolResultSharedFields = {
   attachmentSummary: z.string().optional(),
 };
 
-export const TOOL_RESULT_STATUSES = ['executed', 'error'] as const;
-export type ToolResultStatus = (typeof TOOL_RESULT_STATUSES)[number];
-
 export const ExecutedToolResultSchema = z
   .object({
     status: z.literal('executed'),
@@ -162,7 +157,6 @@ export const ExecutedToolResultSchema = z
     ...ToolResultSharedFields,
   })
   .catchall(z.unknown());
-export type ExecutedToolResult = z.infer<typeof ExecutedToolResultSchema>;
 
 export const ErrorToolResultSchema = z
   .object({
@@ -179,7 +173,6 @@ export const ErrorToolResultSchema = z
     ...ToolResultSharedFields,
   })
   .catchall(z.unknown());
-export type ErrorToolResult = z.infer<typeof ErrorToolResultSchema>;
 
 export const ToolResultSchema = z.discriminatedUnion('status', [
   ExecutedToolResultSchema,
