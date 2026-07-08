@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import type { StreamTabId } from '@shared/schemas';
@@ -92,6 +93,73 @@ describe('attachCliSessionProgressProjection', () => {
       expect(handleProgressEvent).toHaveBeenCalledWith('removeStream', {
         streamId,
       });
+      expect(host.emit).not.toHaveBeenCalled();
+    } finally {
+      detach();
+    }
+  });
+
+  it('re-emits valid retained run facts through the headless CLI host rail', () => {
+    const events = new SessionEventHub();
+    const host = hostWithInteractions();
+    const detach = attachCliSessionProgressProjection(events, host);
+
+    try {
+      events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          stats: {},
+          data: {
+            streamId,
+            storageKey: 'run-a',
+            usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
+          },
+        },
+      });
+
+      expect(host.emit).toHaveBeenCalledWith('updateStreamUsage', {
+        streamId,
+        storageKey: 'run-a',
+        usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
+      });
+    } finally {
+      detach();
+    }
+  });
+
+  it('drops malformed retained run facts instead of forwarding unchecked payloads', () => {
+    const events = new SessionEventHub();
+    const host = hostWithInteractions();
+    const detach = attachCliSessionProgressProjection(events, host);
+
+    try {
+      events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          stats: {},
+          data: {
+            streamId,
+            usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
+          },
+        },
+      });
+      events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: {
+            streamId,
+            todos: 'not-an-array',
+          },
+        },
+      });
+
       expect(host.emit).not.toHaveBeenCalled();
     } finally {
       detach();
