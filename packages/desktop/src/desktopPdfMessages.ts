@@ -42,10 +42,6 @@ export const DesktopClosePdfMessageSchema = z.object({
   command: z.literal(DESKTOP_PDF_COMMANDS.CLOSE_PDF),
 });
 
-export type DesktopClosePdfMessage = z.infer<
-  typeof DesktopClosePdfMessageSchema
->;
-
 export function buildDesktopShowPdfMessage(
   payload: Omit<DesktopShowPdfMessage, 'command'>,
 ): DesktopShowPdfMessage {
