@@ -19,7 +19,7 @@ import {
 import { workspaceSM } from '@common/state';
 import { appSignals } from '@eventBus/AppSignals';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
-import { setExtensionProgressEventSink } from '@frontend/events/extensionProgressEvents';
+import { setExtensionInteractionEventSink } from '@frontend/events/extensionInteractionEvents';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createChannelTrace } from '@logger';
 import {
@@ -175,7 +175,7 @@ export class ProgressViewProvider
         getApprovalHandlers: () => this.approvalHandlers,
       }),
     );
-    const detachExtensionProgressEvents = setExtensionProgressEventSink(
+    const detachExtensionInteractionEvents = setExtensionInteractionEventSink(
       (event, payload) => {
         this.backend.handleInteractionEvent(
           event,
@@ -198,7 +198,7 @@ export class ProgressViewProvider
     );
     this._disposables.push(
       { dispose: this.detachHostInteractions },
-      { dispose: detachExtensionProgressEvents },
+      { dispose: detachExtensionInteractionEvents },
       { dispose: detachRemoveStreamCleanup },
     );
 
