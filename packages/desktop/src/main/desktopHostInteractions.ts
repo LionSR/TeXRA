@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import {
   matchesCancelSelector,
   type HostBashApprovalRequest,
@@ -20,6 +21,7 @@ import {
   toProposalResult,
   toUserQuestionResult,
 } from '@agent/runtime/hostInteractionResultMappers';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
 import type {
@@ -53,6 +55,7 @@ type PendingDesktopInteraction =
 
 export interface DesktopHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
+  session?: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   getToolEditApprovals(): DesktopToolEditApprovalController;
 }
@@ -235,7 +238,8 @@ class DesktopHostInteractions implements HostInteractions {
 
   private activateStream(streamId: StreamTabId | undefined): void {
     this.options.runtimeHost.emit('requestEnsureProgressView', {});
-    if (streamId)
-      this.options.runtimeHost.emit('setActiveStream', { streamId });
+    if (streamId) {
+      emitRuntimeEvent('setActiveStream', { streamId }, this.options.session);
+    }
   }
 }
