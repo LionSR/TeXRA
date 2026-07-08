@@ -282,45 +282,53 @@ describe('cliState Phase 4 fields', () => {
   });
 
   it('registers subagent parent edges when active child rows arrive', () => {
-    const wrapped = wrapRuntimeHost({
-      emit: () => undefined,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
 
-    activeStreamId.set(root);
-    patchStream(child1, (s) => ({
-      ...s,
-      status: STREAM_STATUS.RUNNING,
-    }));
+    try {
+      activeStreamId.set(root);
+      patchStream(child1, (s) => ({
+        ...s,
+        status: STREAM_STATUS.RUNNING,
+      }));
 
-    wrapped.emit('updateActiveSubagents', {
-      parentStreamId: root,
-      children: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'critic',
-          childStreamId: child1,
-          status: STREAM_STATUS.RUNNING,
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'child.activity',
+          kind: 'subagents',
+          parentStreamId: root,
+          children: [
+            {
+              kind: 'subagent',
+              executionId: 'agent-1',
+              agentName: 'critic',
+              childStreamId: child1,
+              status: STREAM_STATUS.RUNNING,
+            },
+          ],
         },
-      ],
-    });
+      });
 
-    expect(parentStream.get().get(child1)).toBe(root);
-    expect(nextFocusForward()).toBe(child1);
-    expect(
-      transcriptViewportKey({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-      }),
-    ).toBe(`scoped:${child1}`);
-    expect(
-      transcriptViewportKey({
-        activeStreamId: root,
-        parentStream: parentStream.get(),
-        transcriptViewerStreamId: child1,
-      }),
-    ).toBe(`viewer:${child1}`);
+      expect(parentStream.get().get(child1)).toBe(root);
+      expect(nextFocusForward()).toBe(child1);
+      expect(
+        transcriptViewportKey({
+          activeStreamId: child1,
+          parentStream: parentStream.get(),
+        }),
+      ).toBe(`scoped:${child1}`);
+      expect(
+        transcriptViewportKey({
+          activeStreamId: root,
+          parentStream: parentStream.get(),
+          transcriptViewerStreamId: child1,
+        }),
+      ).toBe(`viewer:${child1}`);
+    } finally {
+      detach();
+    }
   });
 });
 
@@ -3197,47 +3205,66 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
   });
 
   it('registers suppressed child streams without switching away from the parent page', () => {
-    const wrapped = wrapRuntimeHost(makeHost());
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
     activeStreamId.set(root);
 
-    wrapped.emit('setActiveStream', {
-      streamId: child1,
-      suppressViewSwitch: true,
-    });
+    try {
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: child1,
+            suppressViewSwitch: true,
+          },
+        },
+      });
 
-    expect(activeStreamId.get()).toBe(root);
-    expect(streams.get().has(child1)).toBe(true);
+      expect(activeStreamId.get()).toBe(root);
+      expect(streams.get().has(child1)).toBe(true);
+    } finally {
+      detach();
+    }
   });
 
   it('captures per-stream model identity from task state', () => {
-    const wrapped = wrapRuntimeHost(makeHost());
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
 
-    wrapped.emit('setTaskState', {
-      streamId: child1,
-      executionId: 'exec-search',
-      taskState: {
-        agentConfig: {
-          agent: 'search',
-          agentCategory: AgentCategory.ToolUse,
-          model: 'kimi26T',
-          instruction: 'Check the enumeration independently.',
-          inputFiles: [],
-          contextFiles: [],
-          mediaFiles: [],
-          outputFiles: [],
-          editedFile: null,
-          editedFiles: [],
-          toolConfig: DEFAULT_TOOL_CONFIG,
-          memories: [],
-          workingDirectory: undefined,
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: child1,
+        event: {
+          type: 'run.config',
+          streamId: child1,
+          executionId: 'exec-search' as ExecutionId,
+          config: {
+            agent: 'search',
+            agentCategory: AgentCategory.ToolUse,
+            model: 'kimi26T',
+            instruction: 'Check the enumeration independently.',
+            inputFiles: [],
+            contextFiles: [],
+            mediaFiles: [],
+            outputFiles: [],
+            editedFile: null,
+            editedFiles: [],
+            toolConfig: DEFAULT_TOOL_CONFIG,
+            memories: [],
+            workingDirectory: undefined,
+          },
         },
-      },
-    });
+      });
 
-    expect(streams.get().get(child1)).toMatchObject({
-      model: 'kimi26T',
-      category: AgentCategory.ToolUse,
-    });
+      expect(streams.get().get(child1)).toMatchObject({
+        model: 'kimi26T',
+        category: AgentCategory.ToolUse,
+      });
+    } finally {
+      detach();
+    }
   });
 
   it('refreshes queued follow-up display when an active follow-up is sent', () => {
@@ -3281,126 +3308,174 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
   });
 
   it('keeps latest usage separate from cumulative resume usage', () => {
-    const wrapped = wrapRuntimeHost(makeHost());
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
     const storageKey = 'root-run' as StorageKey;
 
-    wrapped.emit('updateStreamUsage', {
-      streamId: root,
-      storageKey,
-      usage: {
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 1,
-        cacheReadInputTokens: 30,
-      },
-    });
-    wrapped.emit('updateStreamUsage', {
-      streamId: root,
-      storageKey,
-      usage: {
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'usage',
+          stats: {},
+          data: {
+            streamId: root,
+            storageKey,
+            usage: {
+              inputTokens: 100,
+              outputTokens: 20,
+              cost: 1,
+              cacheReadInputTokens: 30,
+            },
+          },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'usage',
+          stats: {},
+          data: {
+            streamId: root,
+            storageKey,
+            usage: {
+              inputTokens: 40,
+              outputTokens: 10,
+              cost: 2,
+              cacheReadInputTokens: 5,
+              cacheCreationInputTokens: 7,
+            },
+          },
+        },
+      });
+
+      expect(streams.get().get(root)?.usage).toEqual({
         inputTokens: 40,
         outputTokens: 10,
         cost: 2,
         cacheReadInputTokens: 5,
         cacheCreationInputTokens: 7,
-      },
-    });
-
-    expect(streams.get().get(root)?.usage).toEqual({
-      inputTokens: 40,
-      outputTokens: 10,
-      cost: 2,
-      cacheReadInputTokens: 5,
-      cacheCreationInputTokens: 7,
-    });
-    expect(streams.get().get(root)?.cumulativeUsage).toEqual({
-      inputTokens: 140,
-      outputTokens: 30,
-      cost: 3,
-      cacheReadInputTokens: 35,
-      cacheMissInputTokens: 0,
-      cacheCreationInputTokens: 7,
-    });
+      });
+      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+        inputTokens: 140,
+        outputTokens: 30,
+        cost: 3,
+        cacheReadInputTokens: 35,
+        cacheMissInputTokens: 0,
+        cacheCreationInputTokens: 7,
+      });
+    } finally {
+      detach();
+    }
   });
 
   it('persists a bounded completed-process transcript before pruning processOutput', () => {
-    const wrapped = wrapRuntimeHost(makeHost());
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
     const lines = Array.from(
       { length: COMPLETED_PROCESS_TAIL_LINES + 2 },
       (_, index) => `line ${index + 1}`,
     ).join('\n');
 
-    // Seed: two live processes with tail output.
-    wrapped.emit('updateActiveProcesses', {
-      parentStreamId: root,
-      processes: [
-        {
-          kind: 'process',
+    try {
+      // Seed: two live processes with tail output.
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'child.activity',
+          kind: 'processes',
+          parentStreamId: root,
+          processes: [
+            {
+              kind: 'process',
+              executionId: 'exec-a',
+              agentName: 'latexmk',
+              toolName: 'bash',
+              status: 'exit 1',
+              elapsed: '2s',
+            },
+            { kind: 'process', executionId: 'exec-b', agentName: 'bash' },
+          ],
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'process.output',
+          parentStreamId: root,
           executionId: 'exec-a',
-          agentName: 'latexmk',
-          toolName: 'bash',
+          stdout: lines,
+          stderr: 'stderr tail',
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'process.output',
+          parentStreamId: root,
+          executionId: 'exec-b',
+          stdout: 'B',
+          stderr: '',
+        },
+      });
+      expect(streams.get().get(root)?.processOutput.size).toBe(2);
+
+      // exec-a finishes: its output buffer must be dropped on the next
+      // active-processes update, after a durable transcript entry is added.
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'child.activity',
+          kind: 'processes',
+          parentStreamId: root,
+          processes: [
+            { kind: 'process', executionId: 'exec-b', agentName: 'bash' },
+          ],
+        },
+      });
+      const slice = streams.get().get(root);
+      const out = streams.get().get(root)?.processOutput;
+      expect(out?.size).toBe(1);
+      expect(out?.has('exec-a')).toBe(false);
+      expect(out?.has('exec-b')).toBe(true);
+
+      const processEntries =
+        slice?.entries.filter((entry) => entry.role === 'process') ?? [];
+      expect(processEntries).toHaveLength(1);
+      expect(processEntries[0]).toMatchObject({
+        role: 'process',
+        finalized: true,
+        synthetic: true,
+        syntheticKind: 'process',
+        process: {
+          executionId: 'exec-a',
+          title: 'latexmk',
           status: 'exit 1',
           elapsed: '2s',
+          isError: true,
         },
-        { kind: 'process', executionId: 'exec-b', agentName: 'bash' },
-      ],
-    });
-    wrapped.emit('updateProcessOutput', {
-      parentStreamId: root,
-      executionId: 'exec-a',
-      stdout: lines,
-      stderr: 'stderr tail',
-    });
-    wrapped.emit('updateProcessOutput', {
-      parentStreamId: root,
-      executionId: 'exec-b',
-      stdout: 'B',
-      stderr: '',
-    });
-    expect(streams.get().get(root)?.processOutput.size).toBe(2);
+      });
+      expect(processEntries[0]?.process?.tailLines).toHaveLength(
+        COMPLETED_PROCESS_TAIL_LINES,
+      );
+      expect(processEntries[0]?.process?.tailLines.at(0)).toBe('line 4');
+      expect(processEntries[0]?.process?.tailLines.at(-1)).toBe('stderr tail');
 
-    // exec-a finishes: its output buffer must be dropped on the next
-    // active-processes update, after a durable transcript entry is added.
-    wrapped.emit('updateActiveProcesses', {
-      parentStreamId: root,
-      processes: [
-        { kind: 'process', executionId: 'exec-b', agentName: 'bash' },
-      ],
-    });
-    const slice = streams.get().get(root);
-    const out = streams.get().get(root)?.processOutput;
-    expect(out?.size).toBe(1);
-    expect(out?.has('exec-a')).toBe(false);
-    expect(out?.has('exec-b')).toBe(true);
-
-    const processEntries =
-      slice?.entries.filter((entry) => entry.role === 'process') ?? [];
-    expect(processEntries).toHaveLength(1);
-    expect(processEntries[0]).toMatchObject({
-      role: 'process',
-      finalized: true,
-      synthetic: true,
-      syntheticKind: 'process',
-      process: {
-        executionId: 'exec-a',
-        title: 'latexmk',
-        status: 'exit 1',
-        elapsed: '2s',
-        isError: true,
-      },
-    });
-    expect(processEntries[0]?.process?.tailLines).toHaveLength(
-      COMPLETED_PROCESS_TAIL_LINES,
-    );
-    expect(processEntries[0]?.process?.tailLines.at(0)).toBe('line 4');
-    expect(processEntries[0]?.process?.tailLines.at(-1)).toBe('stderr tail');
-
-    const split = splitTranscriptEntries(
-      slice?.entries ?? [],
-      STREAM_STATUS.WAITING,
-    );
-    expect(split.finalized).toContain(processEntries[0]);
-    expect(split.pending).not.toContain(processEntries[0]);
+      const split = splitTranscriptEntries(
+        slice?.entries ?? [],
+        STREAM_STATUS.WAITING,
+      );
+      expect(split.finalized).toContain(processEntries[0]);
+      expect(split.pending).not.toContain(processEntries[0]);
+    } finally {
+      detach();
+    }
   });
 
   it('formats completed-process transcript rows for terminal rendering', () => {
