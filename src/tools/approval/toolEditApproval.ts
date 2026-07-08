@@ -449,7 +449,7 @@ export async function requestApprovedEditContent(request: {
   };
 }
 
-export interface WrittenApprovedEdit extends WriteApprovedContentResult {
+interface WrittenApprovedEdit extends WriteApprovedContentResult {
   approval: ToolEditApprovalResult;
 }
 
