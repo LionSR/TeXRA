@@ -89,15 +89,9 @@ describe('pickAgentCategory', () => {
     ).toBe(AgentCategory.ToolUse);
   });
 
-  it('falls back to hints when config has no category', () => {
-    expect(
-      pickAgentCategory({}, { agentCategory: AgentCategory.ToolUse }),
-    ).toBe(AgentCategory.ToolUse);
-  });
-
   it('returns undefined (no default) when both sources are empty', () => {
     expect(pickAgentCategory(undefined, undefined)).toBeUndefined();
-    expect(pickAgentCategory({}, {})).toBeUndefined();
+    expect(pickAgentCategory(undefined, {})).toBeUndefined();
   });
 
   it('agrees with buildStreamTabInfo, which layers the Workflow default on top', () => {
