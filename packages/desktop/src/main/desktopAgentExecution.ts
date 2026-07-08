@@ -255,6 +255,7 @@ export class DesktopProgressBridge {
     this.detachHostInteractions = this.session.useHostInteractions(
       createDesktopHostInteractions({
         runtimeHost: this.runtimeHost,
+        session: this.session,
         getApprovalHandlers: () => this.approvalHandlers,
         getToolEditApprovals: () => this.toolEditApprovals,
       }),
