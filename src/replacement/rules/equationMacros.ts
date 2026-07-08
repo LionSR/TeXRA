@@ -1,5 +1,8 @@
 // Local imports - replacement
-import { RegexReplacementCategory, ReplacementFunction } from '@replacement/types';
+import {
+  RegexReplacementCategory,
+  ReplacementFunction,
+} from '@replacement/types';
 
 const MACRO_TO_ENVIRONMENT: Record<string, string> = {
   be: '\\begin{equation}',

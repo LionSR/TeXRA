@@ -28,5 +28,4 @@ export interface RegexReplacementCategory {
 }
 
 export type ReplacementCategory =
-  | NonRegexReplacementCategory
-  | RegexReplacementCategory;
+  NonRegexReplacementCategory | RegexReplacementCategory;

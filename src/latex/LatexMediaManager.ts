@@ -92,9 +92,7 @@ export class LatexMediaManager {
       [...absolutePaths],
       async (absolutePath) => {
         try {
-          await fileService.mirrorWorkspaceFile(
-            pathToLocation(absolutePath),
-          );
+          await fileService.mirrorWorkspaceFile(pathToLocation(absolutePath));
         } catch (error) {
           this.logger.debug('Unable to mirror figure dependency', {
             data: { path: absolutePath, error },

@@ -140,27 +140,28 @@ export const INLINE_MATH_REPLACEMENTS: RegexReplacementCategory = {
 };
 
 // Context-aware personal style conversions
-export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'personal_style_contextual',
-  description:
-    'Context-aware replacements for personal style rules that avoid macro definitions',
-  isRegex: true,
-  flags: 'g',
-  patterns: {
-    // Temporarily protect \mathrm{Tr} inside command definitions
-    '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{Tr\\}':
-      '$1__TEXRA_PRESERVE_TR__',
-    // Temporarily protect \mathrm{tr} inside command definitions
-    '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{tr\\}':
-      '$1__TEXRA_PRESERVE_tr__',
-    // Apply preferred operator command forms
-    '\\\\mathrm\\{Tr\\}': '\\Tr',
-    '\\\\mathrm\\{tr\\}': '\\tr',
-    // Restore protected command definitions
-    __TEXRA_PRESERVE_TR__: '\\mathrm{Tr}',
-    __TEXRA_PRESERVE_tr__: '\\mathrm{tr}',
-  },
-};
+export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexReplacementCategory =
+  {
+    name: 'personal_style_contextual',
+    description:
+      'Context-aware replacements for personal style rules that avoid macro definitions',
+    isRegex: true,
+    flags: 'g',
+    patterns: {
+      // Temporarily protect \mathrm{Tr} inside command definitions
+      '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{Tr\\}':
+        '$1__TEXRA_PRESERVE_TR__',
+      // Temporarily protect \mathrm{tr} inside command definitions
+      '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{tr\\}':
+        '$1__TEXRA_PRESERVE_tr__',
+      // Apply preferred operator command forms
+      '\\\\mathrm\\{Tr\\}': '\\Tr',
+      '\\\\mathrm\\{tr\\}': '\\tr',
+      // Restore protected command definitions
+      __TEXRA_PRESERVE_TR__: '\\mathrm{Tr}',
+      __TEXRA_PRESERVE_tr__: '\\mathrm{tr}',
+    },
+  };
 
 /**
  * LATEXDIFF USAGE NOTE:
