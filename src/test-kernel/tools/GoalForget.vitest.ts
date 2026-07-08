@@ -42,61 +42,29 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     expect(next.status).toBe('active');
   });
 
-  it('cleans up an unparseable legacy blob (raw key presence, not parse success)', async () => {
+  it('cleans up an unparseable blob (raw key presence, not parse success)', async () => {
     const { platform } = await import('@platform/platform');
     const state = platform().workspaceState;
-    // A terminal-status legacy record normalizes to null on read, but its
-    // raw key must still be removed by forget.
-    await state.update(`odysseys:byStream:${STREAM_A}`, {
-      odysseyId: 'ody_terminal',
-      status: 'complete',
-    });
+    // An unparseable record normalizes to null on read, but its raw key
+    // must still be removed by forget.
+    await state.update(`goals:byStream:${STREAM_A}`, { goalId: 'not-valid' });
     expect(GoalStore.getForStream(STREAM_A)).toBeNull();
 
     await GoalStore.forget(STREAM_A);
 
-    expect(state.get(`odysseys:byStream:${STREAM_A}`)).toBeUndefined();
+    expect(state.get(`goals:byStream:${STREAM_A}`)).toBeUndefined();
   });
 
-  it('clears the legacy odysseys:index so removed entries cannot resurface', async () => {
-    const { platform } = await import('@platform/platform');
-    const state = platform().workspaceState;
-    const legacy = (streamId: StreamTabId) => ({
-      odysseyId: `ody_${streamId}`,
-      streamId,
-      objective: 'legacy objective',
-      status: 'active',
-      createdAt: '2026-06-09T00:00:00.000Z',
-      updatedAt: '2026-06-09T00:00:00.000Z',
-      plan: null,
-    });
-    await state.update('odysseys:index', [STREAM_A, STREAM_B]);
-    await state.update(`odysseys:byStream:${STREAM_A}`, legacy(STREAM_A));
-    await state.update(`odysseys:byStream:${STREAM_B}`, legacy(STREAM_B));
-
-    await GoalStore.forget(STREAM_A);
-
-    // The legacy index is dropped and survivors migrate into the new index,
-    // so the forgotten entry cannot resurface through the union read.
-    expect(state.get('odysseys:index')).toBeUndefined();
-    expect(GoalStore.list().map((g) => g.streamId)).toEqual([STREAM_B]);
-    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
-  });
-
-  it('forgetMany clears records, both indexes, and unparseable blobs', async () => {
+  it('forgetMany clears records and unparseable blobs', async () => {
     const { platform } = await import('@platform/platform');
     const state = platform().workspaceState;
     await GoalStore.start(STREAM_A, 'objective a');
-    await state.update('odysseys:index', [STREAM_B]);
-    await state.update(`odysseys:byStream:${STREAM_B}`, {
-      odysseyId: 'ody_garbage',
-    });
+    await state.update(`goals:byStream:${STREAM_B}`, { goalId: 'garbage' });
 
     await GoalStore.forgetMany([STREAM_A, STREAM_B]);
 
     expect(GoalStore.list()).toEqual([]);
-    expect(state.get('odysseys:index')).toBeUndefined();
-    expect(state.get(`odysseys:byStream:${STREAM_B}`)).toBeUndefined();
+    expect(state.get(`goals:byStream:${STREAM_B}`)).toBeUndefined();
     expect(GoalStore.getForStream(STREAM_A)).toBeNull();
   });
 

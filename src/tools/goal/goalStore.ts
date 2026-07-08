@@ -1,14 +1,9 @@
-import { z } from 'zod';
 import { Mutex } from 'async-mutex';
 
 import { platform, tryWorkspaceState } from '@platform/platform';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  type ExecutionId,
-  StreamTabIdSchema,
-  type StreamTabId,
-} from '@shared/schemas/identifiers';
+import type { ExecutionId, StreamTabId } from '@shared/schemas/identifiers';
 import {
   GoalSchema,
   isGoalInFlight,
@@ -19,12 +14,6 @@ import { filterNotNull, unique, hexId12 } from '@utils/core';
 
 const STREAM_KEY_PREFIX = 'goals:byStream:';
 const INDEX_KEY = 'goals:index';
-// Pre-rename keys (the feature was "Odyssey" before June 2026). Records written
-// by an older build live under these; we read them as a fallback and migrate
-// lazily — `writeRaw` always writes the new key, so any touched record moves
-// over, and `forget` clears both so a stale legacy record can't reappear.
-const LEGACY_STREAM_KEY_PREFIX = 'odysseys:byStream:';
-const LEGACY_INDEX_KEY = 'odysseys:index';
 // Stream index growth is user-driven (one entry per stream that ever had
 // a Goal). `forget()` removes entries; callers that delete a stream
 // without calling `forget()` leave dangling entries until next manual cleanup.
@@ -40,10 +29,6 @@ function streamKey(streamId: StreamTabId): string {
   return `${STREAM_KEY_PREFIX}${streamId}`;
 }
 
-function legacyStreamKey(streamId: StreamTabId): string {
-  return `${LEGACY_STREAM_KEY_PREFIX}${streamId}`;
-}
-
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -52,33 +37,9 @@ function generateGoalId(): string {
   return `goal_${hexId12()}`;
 }
 
-const LegacyOdysseySchema = z.object({
-  odysseyId: z.string().min(1),
-  streamId: StreamTabIdSchema,
-  objective: z.string().min(1),
-  status: z.enum(['active', 'paused', 'complete', 'abandoned']),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-});
-
 function normalizeGoalRecord(raw: unknown): Goal | null {
   const parsedGoal = GoalSchema.safeParse(raw);
-  if (parsedGoal.success) return parsedGoal.data;
-
-  const parsedLegacy = LegacyOdysseySchema.safeParse(raw);
-  if (!parsedLegacy.success) return null;
-  const legacy = parsedLegacy.data;
-  if (legacy.status === 'complete' || legacy.status === 'abandoned') {
-    return null;
-  }
-  return {
-    goalId: legacy.odysseyId,
-    streamId: legacy.streamId,
-    objective: legacy.objective,
-    status: legacy.status,
-    createdAt: legacy.createdAt,
-    updatedAt: legacy.updatedAt,
-  };
+  return parsedGoal.success ? parsedGoal.data : null;
 }
 
 function readRaw(streamId: StreamTabId): Goal | null {
@@ -88,10 +49,7 @@ function readRaw(streamId: StreamTabId): Goal | null {
   // does throw, surfacing the misuse.
   const state = tryWorkspaceState();
   if (!state) return null;
-  // Prefer the current key; fall back to the pre-rename "odyssey" key.
-  const current = normalizeGoalRecord(state.get<unknown>(streamKey(streamId)));
-  if (current) return current;
-  return normalizeGoalRecord(state.get<unknown>(legacyStreamKey(streamId)));
+  return normalizeGoalRecord(state.get<unknown>(streamKey(streamId)));
 }
 
 async function writeRaw(goal: Goal): Promise<void> {
@@ -107,11 +65,10 @@ function parseIndex(raw: unknown): StreamTabId[] {
 function readIndex(): StreamTabId[] {
   const state = tryWorkspaceState();
   if (!state) return [];
-  // Union of the current and pre-rename indexes. `readRaw` filters out any
-  // dangling entry whose record no longer exists under either key.
-  const current = parseIndex(state.get<unknown>(INDEX_KEY));
-  const legacy = parseIndex(state.get<unknown>(LEGACY_INDEX_KEY));
-  return unique([...current, ...legacy]);
+  // Dedupe defensively — a corrupt or hand-edited workspaceState could
+  // contain duplicate entries, which would otherwise surface as duplicate
+  // goals in list() and cause redundant readRaw() calls.
+  return unique(parseIndex(state.get<unknown>(INDEX_KEY)));
 }
 
 async function addToIndex(streamId: StreamTabId): Promise<void> {
@@ -120,41 +77,30 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
   );
 }
 
-/**
- * Rewrite INDEX_KEY from the unioned index and drop LEGACY_INDEX_KEY when
- * present, so a removed entry can't resurface from `odysseys:index` on the next
- * `readIndex`. Returns an empty list when nothing needs to change.
- */
-function buildIndexWriteOps(
-  state: NonNullable<ReturnType<typeof tryWorkspaceState>>,
-  index: StreamTabId[],
-  nextIndex: StreamTabId[],
-  hasLegacyIndex: boolean,
-): PromiseLike<void>[] {
-  const ops: PromiseLike<void>[] = [];
-  if (hasLegacyIndex || nextIndex.length !== index.length) {
-    ops.push(state.update(INDEX_KEY, nextIndex));
-  }
-  if (hasLegacyIndex) {
-    ops.push(state.update(LEGACY_INDEX_KEY, undefined));
-  }
-  return ops;
-}
-
 async function removeFromIndex(streamId: StreamTabId): Promise<void> {
-  await mutateIndex((index) => index.filter((id) => id !== streamId));
+  await mutateIndex((index) => {
+    const next = index.filter((id) => id !== streamId);
+    return next.length === index.length ? index : next;
+  });
 }
 
+/**
+ * Mutate callbacks must return the same array reference (`index`, unchanged)
+ * when nothing actually changed, so this can skip the write via reference
+ * equality — all current callers (`addToIndex`, `removeFromIndex`,
+ * `forgetMany`'s inline callback) already follow this contract.
+ */
 async function mutateIndex(
   mutate: (index: StreamTabId[]) => StreamTabId[],
 ): Promise<void> {
   await indexMutex.runExclusive(async () => {
     const state = tryWorkspaceState();
     if (!state) return;
-    const hasLegacyIndex = state.get<unknown>(LEGACY_INDEX_KEY) != null;
     const index = readIndex();
     const next = mutate(index);
-    await Promise.all(buildIndexWriteOps(state, index, next, hasLegacyIndex));
+    if (next !== index) {
+      await state.update(INDEX_KEY, next);
+    }
   });
 }
 
@@ -309,18 +255,13 @@ export const GoalStore = {
   async forget(streamId: StreamTabId, session?: SessionHandle): Promise<void> {
     const state = tryWorkspaceState();
     if (!state) return;
-    // Gate on raw key presence, not parse success — an unparseable or
-    // terminal-status legacy blob (which `readRaw` normalizes to null) must
-    // still be cleaned up, or its key lingers forever.
-    const existed =
-      state.get<unknown>(streamKey(streamId)) != null ||
-      state.get<unknown>(legacyStreamKey(streamId)) != null;
+    // Gate on raw key presence, not parse success — an unparseable blob
+    // (which `readRaw` normalizes to null) must still be cleaned up, or its
+    // key lingers forever.
+    const existed = state.get<unknown>(streamKey(streamId)) != null;
     if (!existed) return;
     await Promise.all([
       state.update(streamKey(streamId), undefined),
-      // Clear the pre-rename key too, or a forgotten legacy record would
-      // resurface via the readRaw fallback.
-      state.update(legacyStreamKey(streamId), undefined),
       removeFromIndex(streamId),
     ]);
     // Dual-context: PlanTool forgets in-run (→ run session via ALS); hosts
@@ -342,16 +283,16 @@ export const GoalStore = {
     if (!state) return;
     // Same raw-presence gate as `forget` so unparseable blobs are cleaned.
     const toRemove = streamIds.filter(
-      (id) =>
-        state.get<unknown>(streamKey(id)) != null ||
-        state.get<unknown>(legacyStreamKey(id)) != null,
+      (id) => state.get<unknown>(streamKey(id)) != null,
     );
     if (toRemove.length === 0) return;
     const dropped = new Set(toRemove);
     await Promise.all([
       ...toRemove.map((id) => state.update(streamKey(id), undefined)),
-      ...toRemove.map((id) => state.update(legacyStreamKey(id), undefined)),
-      mutateIndex((index) => index.filter((id) => !dropped.has(id))),
+      mutateIndex((index) => {
+        const next = index.filter((id) => !dropped.has(id));
+        return next.length === index.length ? index : next;
+      }),
     ]);
     for (const id of toRemove)
       emitRuntimeEvent('goalStateChanged', { streamId: id }, session);
@@ -359,8 +300,8 @@ export const GoalStore = {
 
   /**
    * Drop goals whose stream id belongs to one of the deleted executions.
-   * GoalStore owns this suffix convention because it already owns the stream
-   * index and legacy-key migration; callers should pass execution ids only.
+   * GoalStore owns this suffix convention because it already owns the
+   * stream index; callers should pass execution ids only.
    */
   async forgetByExecutionIds(
     executionIds: readonly ExecutionId[],
