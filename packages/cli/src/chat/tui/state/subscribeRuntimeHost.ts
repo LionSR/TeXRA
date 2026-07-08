@@ -3,8 +3,9 @@
 // not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
 
 import type { AgentEvent } from '@agent/trace';
+import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { projectRunFactToProgressEvent } from '@agent/runtime/sessionProgressEventProjection';
+import { toUpdateStreamUsagePayload } from '@agent/runtime/sessionProgressEventProjection';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type {
   ProgressEvent,
@@ -12,6 +13,9 @@ import type {
 } from '@agent/runtime/hostProgressEvents';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
+  ConversationProgressSchema,
+  UpdatePlanPayloadSchema,
+  UpdateTodosPayloadSchema,
   type ActiveChildInfo,
   type GoalPausedPayload,
   type UpdateActiveProcessesPayload,
@@ -90,7 +94,14 @@ function applySetActiveStream(
 
 function applyTaskState(payload: ProgressEventPayloads['setTaskState']): void {
   const config = payload.taskState.agentConfig;
-  patchStream(payload.streamId, (s) => {
+  applyRunConfig(payload.streamId, config);
+}
+
+function applyRunConfig(
+  streamId: ProgressEventPayloads['setTaskState']['streamId'],
+  config: ProgressEventPayloads['setTaskState']['taskState']['agentConfig'],
+): void {
+  patchStream(streamId, (s) => {
     if (s.model === config.model && s.category === config.agentCategory) {
       return s;
     }
@@ -203,52 +214,110 @@ function applyParentStream(
   setParentStream(payload.childStreamId, payload.parentStreamId);
 }
 
+function isGoalPausedPayload(value: unknown): value is GoalPausedPayload {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'streamId' in value &&
+    typeof value.streamId === 'string'
+  );
+}
+
+function applyDirectTuiDomainEvent(
+  event: Extract<AgentEvent, { type: 'domain' }>,
+  fallbackStreamId: ProgressEventPayloads['updateRoundStage']['streamId'],
+): boolean {
+  if (event.key === 'conversationProgress') {
+    const progress = ConversationProgressSchema.safeParse(event.data);
+    if (!progress.success) return false;
+    patchStream(fallbackStreamId, (s) => ({
+      ...s,
+      conversation: progress.data,
+    }));
+    return true;
+  }
+
+  const factName = fromRunFactDomainKey(event.key);
+  if (!factName) return false;
+
+  switch (factName) {
+    case 'updateTodos': {
+      const payload = UpdateTodosPayloadSchema.safeParse(event.data);
+      if (!payload.success) return false;
+      patchStream(payload.data.streamId, (s) => ({
+        ...s,
+        todos: payload.data.todos,
+      }));
+      return true;
+    }
+    case 'updatePlan': {
+      const payload = UpdatePlanPayloadSchema.safeParse(event.data);
+      if (!payload.success) return false;
+      patchStream(payload.data.streamId, (s) => ({
+        ...s,
+        plan: payload.data.plan,
+      }));
+      return true;
+    }
+    case 'goalPaused':
+      if (!isGoalPausedPayload(event.data)) return false;
+      appendGoalPausedTranscriptNotice(event.data);
+      return true;
+    case 'addOutputFiles':
+    case 'updateMissingOutputs':
+    case 'updateCompileFailures':
+      return false;
+  }
+}
+
 function applyDirectTuiRunEvent(
   event: AgentEvent,
   fallbackStreamId: ProgressEventPayloads['updateRoundStage']['streamId'],
 ): boolean {
-  const projected = projectRunFactToProgressEvent(fallbackStreamId, event);
-  if (!projected) return false;
-
-  switch (projected.event) {
-    case 'setTaskState':
-      applyTaskState(projected.payload);
+  switch (event.type) {
+    case 'run.config':
+      applyRunConfig(event.streamId, event.config);
       return true;
-    case 'updateStreamUsage':
-      applyUsageUpdate(projected.payload);
+    case 'usage': {
+      const payload = toUpdateStreamUsagePayload(event.data, fallbackStreamId);
+      if (!payload) return false;
+      applyUsageUpdate(payload);
       return true;
-    case 'updateTodos':
-      patchStream(projected.payload.streamId, (s) => ({
-        ...s,
-        todos: projected.payload.todos,
-      }));
+    }
+    case 'domain':
+      return applyDirectTuiDomainEvent(event, fallbackStreamId);
+    case 'stage.start':
+      if (event.kind !== 'round') return false;
+      applyRoundStage({
+        streamId: fallbackStreamId,
+        roundStage: {
+          index: event.index ?? 0,
+          ...(event.total !== undefined && event.total > 0
+            ? { total: event.total }
+            : {}),
+        },
+      });
       return true;
-    case 'updatePlan':
-      patchStream(projected.payload.streamId, (s) => ({
-        ...s,
-        plan: projected.payload.plan,
-      }));
+    case 'child.activity':
+      if (event.kind === 'subagents') {
+        applyActiveSubagents({
+          parentStreamId: event.parentStreamId,
+          children: [...event.children],
+        });
+        return true;
+      }
+      applyActiveProcesses({
+        parentStreamId: event.parentStreamId,
+        processes: [...event.processes],
+      });
       return true;
-    case 'updateConversationProgress':
-      patchStream(projected.payload.streamId, (s) => ({
-        ...s,
-        conversation: projected.payload.progress,
-      }));
-      return true;
-    case 'updateRoundStage':
-      applyRoundStage(projected.payload);
-      return true;
-    case 'updateActiveSubagents':
-      applyActiveSubagents(projected.payload);
-      return true;
-    case 'updateActiveProcesses':
-      applyActiveProcesses(projected.payload);
-      return true;
-    case 'updateProcessOutput':
-      applyProcessOutput(projected.payload);
-      return true;
-    case 'goalPaused':
-      appendGoalPausedTranscriptNotice(projected.payload);
+    case 'process.output':
+      applyProcessOutput({
+        parentStreamId: event.parentStreamId,
+        executionId: event.executionId,
+        stdout: event.stdout,
+        stderr: event.stderr,
+      });
       return true;
     default:
       return false;
