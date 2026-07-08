@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
@@ -56,6 +56,18 @@ function createRuntimeHost() {
   return { emit: vi.fn() };
 }
 
+const testSessions: SessionHandle[] = [];
+
+afterEach(() => {
+  for (const session of testSessions.splice(0)) session.dispose();
+});
+
+function createTestSession(): SessionHandle {
+  const session = new SessionHandle();
+  testSessions.push(session);
+  return session;
+}
+
 /** Reads the `requestId` passed to a handler's first `.show()` call. */
 function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
   const requestId = (
@@ -65,15 +77,15 @@ function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
   return requestId;
 }
 
-function createInteractions(options?: {
+function createInteractions(options: {
   runtimeHost?: ReturnType<typeof createRuntimeHost>;
   handlers?: ApprovalRequestHandlerSet;
-  session?: SessionHandle;
+  session: SessionHandle;
 }) {
   return createExtensionHostInteractions({
-    runtimeHost: options?.runtimeHost ?? createRuntimeHost(),
-    session: options?.session ?? new SessionHandle(),
-    getApprovalHandlers: () => options?.handlers ?? createHandlers(),
+    runtimeHost: options.runtimeHost ?? createRuntimeHost(),
+    session: options.session,
+    getApprovalHandlers: () => options.handlers ?? createHandlers(),
   });
 }
 
@@ -89,7 +101,7 @@ describe('createExtensionHostInteractions', () => {
   it('shows and resolves plan approvals through existing handlers', async () => {
     const runtimeHost = createRuntimeHost();
     const handlers = createHandlers();
-    const session = new SessionHandle();
+    const session = createTestSession();
     const sessionEvents = recordSessionEvents(session);
     const interactions = createInteractions({
       runtimeHost,
@@ -146,6 +158,7 @@ describe('createExtensionHostInteractions', () => {
     const interactions = createInteractions({
       runtimeHost,
       handlers,
+      session: createTestSession(),
     });
 
     const resultPromise = interactions.requestRetry?.({
@@ -161,7 +174,10 @@ describe('createExtensionHostInteractions', () => {
 
   it('forwards a cancellation cause as bash reject feedback', async () => {
     const handlers = createHandlers();
-    const interactions = createInteractions({ handlers });
+    const interactions = createInteractions({
+      handlers,
+      session: createTestSession(),
+    });
 
     const resultPromise = interactions.requestBashApproval?.({
       command: 'rm -rf build',
@@ -182,7 +198,10 @@ describe('createExtensionHostInteractions', () => {
 
   it('rejects a resolution whose kind does not match the pending request', async () => {
     const handlers = createHandlers();
-    const interactions = createInteractions({ handlers });
+    const interactions = createInteractions({
+      handlers,
+      session: createTestSession(),
+    });
 
     const resultPromise = interactions.requestBashApproval?.({
       command: 'echo hi',
@@ -208,7 +227,10 @@ describe('createExtensionHostInteractions', () => {
 
   it('a retry-kind cancel clears only the retry, leaving the plan approval pending', async () => {
     const handlers = createHandlers();
-    const interactions = createInteractions({ handlers });
+    const interactions = createInteractions({
+      handlers,
+      session: createTestSession(),
+    });
 
     const retryPromise = interactions.requestRetry?.({
       streamId: 'stream-a' as StreamTabId,
@@ -247,6 +269,7 @@ describe('createExtensionHostInteractions', () => {
     const interactions = createInteractions({
       runtimeHost,
       handlers,
+      session: createTestSession(),
     });
 
     await expect(
@@ -274,6 +297,7 @@ describe('createExtensionHostInteractions', () => {
     const handlers = createHandlers();
     const interactions = createInteractions({
       handlers,
+      session: createTestSession(),
     });
 
     const resultPromise = interactions.askUserQuestion?.({
@@ -312,7 +336,7 @@ describe('createExtensionHostInteractions', () => {
   it('delegates tool edit approval to the native VS Code port', async () => {
     const nativeResult = { accepted: true };
     mocks.nativeRequestApproval.mockResolvedValue(nativeResult);
-    const interactions = createInteractions();
+    const interactions = createInteractions({ session: createTestSession() });
     const request = {
       path: 'paper.tex',
       originalContent: 'A',
