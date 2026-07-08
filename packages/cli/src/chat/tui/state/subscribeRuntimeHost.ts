@@ -11,6 +11,7 @@ import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@agent/runtime/hostProgressEvents';
+import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
   ConversationProgressSchema,
@@ -40,11 +41,6 @@ import { mergeChildStreams } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
-
-type Emit = <K extends ProgressEvent>(
-  event: K,
-  payload: ProgressEventPayloads[K],
-) => void;
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
@@ -370,8 +366,10 @@ function applyStreamMeta(
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;
-  const emit: Emit = (event, payload) => {
-    applyToState(event, payload);
+  const emit: CliRuntimeHost['emit'] = (event, payload) => {
+    if (!isRuntimePresentationEvent(event)) {
+      applyToState(event, payload as ProgressEventPayloads[ProgressEvent]);
+    }
     return original(event, payload);
   };
   return { ...host, emit };
