@@ -263,8 +263,22 @@ const LegacySubagentResultMetaSchema = z
     diffsUnavailable: z.string().optional(),
   })
   .transform((meta) => {
+    // Legacy records from before `category` existed carry workflow/toolUse
+    // fields with no category tag at all — infer it from which fields are
+    // present rather than requiring it, or the payload silently disappears.
+    const category =
+      meta.category ??
+      (meta.outputs !== undefined ||
+      meta.compileFailures !== undefined ||
+      meta.diffs !== undefined ||
+      meta.diffsUnavailable !== undefined
+        ? 'workflow'
+        : meta.lastResponse !== undefined || meta.touchedFiles !== undefined
+          ? 'toolUse'
+          : undefined);
+
     const result =
-      meta.category === 'workflow'
+      category === 'workflow'
         ? {
             category: 'workflow' as const,
             outputs: meta.outputs ?? [],
@@ -276,7 +290,7 @@ const LegacySubagentResultMetaSchema = z
               diffsUnavailable: meta.diffsUnavailable,
             }),
           }
-        : meta.category === 'toolUse'
+        : category === 'toolUse'
           ? {
               category: 'toolUse' as const,
               ...(meta.lastResponse !== undefined && {
@@ -445,10 +459,17 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async readConversation(): Promise<unknown[] | null> {
-    const messages = normalizeProviderMessages(
-      await this.read(KEYS.CONVERSATION),
-    );
-    return messages && messages.length > 0 ? messages : null;
+    const raw = await this.read(KEYS.CONVERSATION);
+    if (raw == null) return null;
+    const messages = normalizeProviderMessages(raw);
+    if (messages === null) {
+      logger.warn(
+        CHANNEL,
+        `Failed to parse execution ${this.executionId} ${KEYS.CONVERSATION}.json as provider messages`,
+      );
+      return null;
+    }
+    return messages.length > 0 ? messages : null;
   }
 
   async conversationModifiedAt(): Promise<number | undefined> {

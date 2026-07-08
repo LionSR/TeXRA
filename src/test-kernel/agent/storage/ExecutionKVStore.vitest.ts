@@ -128,6 +128,61 @@ describe('ExecutionKVStore meta read shims', () => {
     });
   });
 
+  it('infers category for legacy subagent result metadata with no category tag (workflow fields)', async () => {
+    const id = 'legacy-result-subagent-no-category' as ExecutionId;
+    const output = {
+      round: 1,
+      relativePath: 'r1/output.tex',
+      absolutePath: '/workspace/.texra/runs/r1/output.tex',
+      location: 'runStorage' as const,
+      originalPath: '/workspace/output.tex',
+      added: 2,
+      removed: 1,
+    };
+    await getExecutionStore(id).write('result-meta', {
+      agentName: 'writer',
+      outcome: RUN_OUTCOME.COMPLETED,
+      success: true,
+      wallTimeMs: 40,
+      outputs: [output],
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
+      producer: 'subagent',
+      agentName: 'writer',
+      outcome: RUN_OUTCOME.COMPLETED,
+      success: true,
+      wallTimeMs: 40,
+      result: {
+        category: 'workflow',
+        outputs: [output],
+      },
+    });
+  });
+
+  it('infers category for legacy subagent result metadata with no category tag (toolUse fields)', async () => {
+    const id = 'legacy-result-subagent-no-category-tooluse' as ExecutionId;
+    await getExecutionStore(id).write('result-meta', {
+      agentName: 'reviewer',
+      outcome: RUN_OUTCOME.COMPLETED,
+      success: true,
+      wallTimeMs: 25,
+      lastResponse: 'done',
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
+      producer: 'subagent',
+      agentName: 'reviewer',
+      outcome: RUN_OUTCOME.COMPLETED,
+      success: true,
+      wallTimeMs: 25,
+      result: {
+        category: 'toolUse',
+        lastResponse: 'done',
+      },
+    });
+  });
+
   it('normalizes legacy flat background bash result metadata', async () => {
     const id = 'legacy-result-bash' as ExecutionId;
     await getExecutionStore(id).write('result-meta', {
@@ -201,12 +256,19 @@ describe('ExecutionKVStore meta read shims', () => {
     ]);
   });
 
-  it('returns null for malformed conversation storage wrappers', async () => {
+  it('warns when conversation storage is malformed instead of silently dropping it', async () => {
     const id = 'bad-conversation-wrapper' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
     await getExecutionStore(id).write('conversation', { messages: ['text'] });
 
     await expect(getExecutionStore(id).readConversation()).resolves.toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(
+        `Failed to parse execution ${id} conversation.json as provider messages`,
+      ),
+    );
   });
 
   it('warns when execution meta is malformed instead of silently dropping it', async () => {
