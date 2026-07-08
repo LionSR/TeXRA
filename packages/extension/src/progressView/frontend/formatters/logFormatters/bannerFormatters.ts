@@ -51,7 +51,7 @@ const BANNER_CONFIG: Record<
 /** Format thinking or scratchpad banner content as TemplateResult. */
 export function formatBannerContentTemplate(
   message: LogMessageData,
-  options?: { defaultOpen?: boolean },
+  options?: { defaultOpen?: boolean; isRunning?: boolean },
 ): FormatResult {
   const { id, groupId, timestamp, text, messageType } = message;
   const trimmedContent = (text ?? '').trim();
@@ -59,10 +59,20 @@ export function formatBannerContentTemplate(
 
   const config = BANNER_CONFIG[messageType ?? ''] ?? BANNER_CONFIG.thinking;
   const { fullTimestamp } = formatDisplayTimestamp(new Date(timestamp));
-  const markdownHtml = processMarkdownContent(trimmedContent);
-  const shouldOpen = options?.defaultOpen ?? false;
+  // Auto-expand while streaming in, so the block is visibly "live" instead
+  // of hiding the growing text behind a closed summary row; collapses back
+  // once finalized unless the caller pins it open (mirrors the "thought for
+  // Xs, tap to expand" pattern other chat UIs use for reasoning output).
+  const shouldOpen = options?.isRunning || (options?.defaultOpen ?? false);
+  // While still streaming in, skip the markdown parse on every chunk and
+  // show the raw text — the banner shell (icon/label/chevron) stays the
+  // same either way; only the content upgrades to rendered markdown once
+  // the stream finalizes. banner-content--streaming preserves newlines
+  // (raw text has no <p>/<br> tags to do it for us, unlike markdown HTML).
   // prettier-ignore
-  const contentTemplate = html`<div class="banner-content markdown-content log-entry-content ${config.contentClass}">${unsafeHTML(markdownHtml)}</div>`;
+  const contentTemplate = options?.isRunning
+    ? html`<div class="banner-content banner-content--streaming log-entry-content ${config.contentClass}">${trimmedContent}</div>`
+    : html`<div class="banner-content markdown-content log-entry-content ${config.contentClass}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
   return html`<details class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
@@ -79,7 +89,7 @@ export function formatBannerContentTemplate(
 /** Format a model response as TemplateResult. */
 export function formatModelResponseTemplate(
   message: LogMessageData,
-  options?: { defaultOpen?: boolean },
+  options?: { defaultOpen?: boolean; isRunning?: boolean },
 ): FormatResult {
   const { id, groupId, timestamp, verbose, text, level } = message;
   const trimmedContent = (text ?? '').trim();
@@ -87,17 +97,28 @@ export function formatModelResponseTemplate(
 
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =
     formatDisplayTimestamp(new Date(timestamp));
-  const markdownHtml = processMarkdownContent(trimmedContent);
-  // Model response defaults to open (was hardcoded open before)
-  const shouldOpen = options?.defaultOpen ?? true;
+  // Model response defaults to open (was hardcoded open before); also forced
+  // open while streaming, same rationale as formatBannerContentTemplate.
+  const shouldOpen = options?.isRunning || (options?.defaultOpen ?? true);
+  // While still streaming in, skip the markdown parse on every chunk (see
+  // formatBannerContentTemplate above for the same tradeoff, including the
+  // banner-content--streaming whitespace note).
   // prettier-ignore
-  const contentTemplate = html`<div class=${classMap({
-    'banner-content': true,
-    'markdown-content': true,
-    'log-entry-content': true,
-    'banner-content--model': true,
-    [`message-${level}`]: true,
-  })}>${unsafeHTML(markdownHtml)}</div>`;
+  const contentTemplate = options?.isRunning
+    ? html`<div class=${classMap({
+        'banner-content': true,
+        'banner-content--streaming': true,
+        'log-entry-content': true,
+        'banner-content--model': true,
+        [`message-${level}`]: true,
+      })}>${trimmedContent}</div>`
+    : html`<div class=${classMap({
+        'banner-content': true,
+        'markdown-content': true,
+        'log-entry-content': true,
+        'banner-content--model': true,
+        [`message-${level}`]: true,
+      })}>${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
   return html`<details class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({

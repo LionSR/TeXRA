@@ -1,0 +1,34 @@
+# Thinking Blocks Render as Plain Info Logs Before Finalizing (#7276)
+
+**Status:** Landed (2026-07-08, PR #7573).
+**Scope:** `packages/extension/src/progressView/frontend/formatters/index.ts` (`formatLogEntry`), `formatters/baseLogFormatter.ts` (`isStreamingTextLogMessage`, moved here so both `index.ts` and `bannerFormatters.ts` can consume it without a circular import), `formatters/logFormatters/bannerFormatters.ts` (`formatBannerContentTemplate`, `formatModelResponseTemplate`), `styles/logEntryStyles.ts`, and the orphan-sweep in `src/transcript/StreamLogStore.ts` / `StreamLog.ts`.
+**Out of scope:** CLI TUI rendering of thinking content (`packages/cli/src/chat/tui/`) — a separate renderer, not reported as buggy; verify independently if the same symptom shows up there. Also out of scope: reworking `MESSAGE_TYPES`/`StreamLogEntry` schemas.
+**Related:** the perf change that introduced this, commit `0807dc345` ("perf: stream transcript text deltas", closed #6969).
+
+## TL;DR — verdict
+
+The issue title ("thinking blocks become info logger before finalizing") was literally what the code did, on purpose. Before this fix, `formatLogEntry` special-cased `thinking`/`scratchpad`/`modelResponse` entries whose `data.status === 'running'`: instead of the collapsible `<details>` banner (light-bulb icon, chevron, copy button), it rendered the bare `formatDefaultLogMessageTemplate` — the same flat `<div class="log-line">` used for ordinary info/debug logs, distinguished only by a small level icon. Only when the stream finalized (`data.status: 'completed'`) did the entry repaint through `formatBannerContentTemplate` and get the real banner. This was a deliberate perf tradeoff in `0807dc345`, to avoid re-running `processMarkdownContent` (full markdown parse) on every streamed delta chunk — but the visible cost was that a thinking block was indistinguishable from an unrelated log line for its entire in-flight lifetime, which is most of what a user watches.
+
+Two secondary findings from tracing this:
+
+- **Orphaned running entries never recovered.** If a run is cancelled, crashes, or the extension/webview reloads while a thinking stream is mid-flight, nothing ever flipped that entry's `data.status` to `completed`. It rendered as a plain log line forever, even after reload. `StreamLogStore.ts` already swept orphaned `GROUP_START` stage entries (`endRunningGroupsInLoadedLogs`) but had no equivalent for orphaned streaming-text `LOG` entries.
+- **The original triage comment's flagged call sites don't reproduce this.** `ResponseCycleFlow.ts:293-297` and `ToolUseProcessNode.ts:113-120` call `logger.info(thinkingContent, { messageType: MESSAGE_TYPES.THINKING })` with no `data` option. `isRunningData(undefined)` is `false`, so `isStreamingTextLogMessage` is `false` for these, and they dispatch straight to the banner formatter on their one and only paint. They were left alone; the issue thread's triage was corrected in a follow-up comment.
+
+## Fix (as landed)
+
+Keep the banner shell (icon, "Thinking"/"Scratchpad"/"Assistant" label, chevron, copy button) mounted for the entire life of the entry — from the first chunk to finalize — so it never looks like a generic log line. Preserve the perf win by skipping markdown parsing only, not the whole banner, while running:
+
+1. **`bannerFormatters.ts`**: `formatBannerContentTemplate` and `formatModelResponseTemplate` gained running-state awareness via a new `isRunning` option. When `message.data` has `status: 'running'`, they render the trimmed text as a plain Lit text binding (cheap, escaped, no `unsafeHTML`/`processMarkdownContent` call) inside a `banner-content banner-content--streaming` div; when not running (`undefined` or `completed`), they keep the existing `processMarkdownContent` + `unsafeHTML` path. `shouldOpen` is now `options?.isRunning || (options?.defaultOpen ?? <thinking: false, modelResponse: true>)` — the block auto-expands while streaming (so the growing text is actually visible, not hidden behind a closed summary row) and returns to its normal default-open state once finalized, mirroring the "thought for Xs, tap to expand" pattern other chat UIs use for reasoning output.
+2. **`styles/logEntryStyles.ts`**: added a `.banner-content--streaming { white-space: pre-wrap; ... }` rule. Raw streamed text has no `<p>`/`<br>` tags to carry line breaks the way markdown-rendered HTML does, so without this multi-line thinking/scratchpad text collapsed onto one line while streaming (caught in review).
+3. **`formatters/index.ts`**: deleted the `isStreamingTextLogMessage` short-circuit in `formatLogEntry` so `thinking`/`scratchpad`/`modelResponse` entries always dispatch through `TEMPLATE_FORMATTERS`, running or not, and threads `isRunning: isStreamingTextLogMessage(logMessage)` into `templateOptions`. The predicate itself moved to `baseLogFormatter.ts` (re-exported from `index.ts` for the existing `LogDeltaTextDeltas.vitest.ts` import) since `bannerFormatters.ts` needed it too and importing it back from `index.ts` would have been circular.
+4. **Orphan sweep**: extended `endRunningGroupsInLoadedLogs` (`StreamLogStore.ts`) with a new `isOrphanedStreamingTextEntry` predicate (`StreamLog.ts`) that also finalizes any `LOG`-type entry whose `data.status === 'running'` on load — flips it to `data.status: 'completed'` with no other mutation, `continue`s past it like the sibling `isRunningGroupEntry` branch. Independent of (1)-(3); closes the "stuck forever after crash/cancel/reload" case.
+5. **Issue correction**: posted a follow-up on #7276 noting the two non-streaming call sites the original triage flagged are not implicated, per current code.
+
+This removes the plain-log flash entirely: a thinking/scratchpad/model-response entry is a `<details>` banner from its first chunk, expanded and readable while streaming, with a one-time markdown upgrade at finalize — matching the perf goal of #6969 (no per-chunk markdown reparse) without the regression.
+
+## Verification
+
+- `src/test-kernel/progressView/ThinkingBlockStreamingRender.vitest.ts` (new): asserts `formatLogEntry` produces a `banner-details` shell — not a `log-line` — for a `thinking`/`modelResponse` message with `data.status: 'running'`, with raw (unparsed) text visible and no `<strong>` markdown output; asserts the same entry upgrades to parsed markdown once `data.status: 'completed'`.
+- `LogDeltaTextDeltas.vitest.ts`, `StreamLog.vitest.ts`, `StreamLogStoreLoad.vitest.ts`, `TexraTranscriptRecorder.vitest.ts`, `WebviewBridge.vitest.ts` — all pass unchanged.
+- `tsc --noEmit` clean (root, `packages/extension`, `tsconfig.test-kernel.json`).
+- Manual follow-up recommended: run a slow-streaming provider (e.g. Anthropic extended thinking) and watch the live transcript; cancel a run mid-thinking-stream and reload the extension/webview to confirm the entry finalizes instead of staying stuck as `running`.
