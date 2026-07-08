@@ -10,7 +10,7 @@ import { emitExtensionProgressEvent } from '@frontend/events/extensionProgressEv
 import {
   isProgressBackendInteractionEvent,
   type ProgressBackendInteractionPayloads,
-} from '@shared/progressView/backend/events/ProgressEventHandler';
+} from '@shared/progressView/backend/events/ProgressInteractionHandler';
 
 export const extensionAgentRuntimeHost: AgentRuntimeHost = {
   interactions: defaultSession().interactions,
