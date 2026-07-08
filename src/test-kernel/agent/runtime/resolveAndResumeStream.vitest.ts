@@ -15,7 +15,10 @@ import {
   resolveAndResumeStream,
   type ResumeStreamPorts,
 } from '@agent/runtime/resolveAndResumeStream';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import {
+  StreamStatusMachine,
+  StreamStatusService,
+} from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 const STREAM = 'stream:resume' as StreamTabId;
@@ -26,6 +29,7 @@ function basePorts(
 ): ResumeStreamPorts {
   return {
     runtimeHost,
+    streamStatus: StreamStatusService,
     resolveResumeState: vi.fn(async () => ({
       runState: { agent: 'a', model: 'm' } as never,
       executionId: 'exec-1' as never,
@@ -137,6 +141,34 @@ describe('resolveAndResumeStream', () => {
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
     expect(ports.resolveResumeState).not.toHaveBeenCalled();
     expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
+  });
+
+  it('guards against the injected session machine, not the process default (#7640)', async () => {
+    // Desktop scenario: the window's own session machine has the stream
+    // active while the process-global default is empty. The guard must read
+    // the injected machine — before #7640 it read the global and never fired.
+    const windowStatus = new StreamStatusMachine();
+    seedStreamStatusForTest(windowStatus, STREAM, STREAM_STATUS.RUNNING);
+    const ports = basePorts({ streamStatus: windowStatus });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.resolveResumeState).not.toHaveBeenCalled();
+
+    clearStreamStatusForTest(windowStatus, STREAM);
+  });
+
+  it('ignores activity recorded only on a different session machine', async () => {
+    // The inverse: activity on the process default must not block a resume in
+    // a session whose own machine says the stream is idle.
+    seedStreamStatusForTest(StreamStatusService, STREAM, STREAM_STATUS.RUNNING);
+    retrieveSessionResumeDataMock.mockResolvedValue({
+      type: 'toolUse',
+      snapshot: { streamId: STREAM, executionId: 'exec-1' },
+    });
+    const ports = basePorts({ streamStatus: new StreamStatusMachine() });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
+    expect(ports.resumeToolUseSnapshot).toHaveBeenCalled();
   });
 
   it('returns false (host owns its messaging) when no state resolves', async () => {
