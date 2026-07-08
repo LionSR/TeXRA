@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { StreamTabIdSchema } from './identifiers';
 import { TaskGroupStatusSchema } from './stream';
 
 export const TaskGroupSchema = z.strictObject({
@@ -16,14 +15,3 @@ export const TaskGroupSchema = z.strictObject({
 });
 
 export type TaskGroup = z.infer<typeof TaskGroupSchema>;
-
-export const AddTaskGroupPayloadSchema = z.strictObject({
-  streamId: StreamTabIdSchema,
-  ...TaskGroupSchema.shape,
-});
-export const UpdateTaskGroupPayloadSchema = AddTaskGroupPayloadSchema.pick({
-  streamId: true,
-  id: true,
-  status: true,
-  endTime: true,
-});

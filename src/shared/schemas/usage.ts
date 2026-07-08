@@ -115,7 +115,6 @@ export function sumUsageStats(
 /** Run-keyed usage map: `{ runId: TokenUsageStats }`. Single source of truth used by
  * stream state, snapshot, and IPC message schemas so all four sites stay in sync. */
 export const RunUsageMapSchema = z.record(z.string(), TokenUsageStatsSchema);
-export type RunUsageMap = z.infer<typeof RunUsageMapSchema>;
 
 /**
  * Extended token usage with per-round deltas. Note: percentageCached is
