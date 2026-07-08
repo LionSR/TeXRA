@@ -7,10 +7,10 @@ import {
   GREEK_LETTERS,
   MATH_OPERATORS,
 } from '@replacement/helpers';
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
 // Common LaTeX equation spacing fixes
-export const EQUATION_REPLACEMENTS: ReplacementCategory = {
+export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'equations',
   description: 'Fixes for LaTeX equation spacing and formatting',
   isRegex: false,

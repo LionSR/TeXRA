@@ -1,7 +1,7 @@
 // Local imports - replacement
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
-export const CHARACTER_REPLACEMENTS: ReplacementCategory = {
+export const CHARACTER_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'characters',
   description: 'Fixes for special characters and diacritics',
   isRegex: false,
