@@ -28,7 +28,6 @@ import type {
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
@@ -1352,7 +1351,13 @@ export class DesktopProgressBridge {
       this.session,
     );
     if (result.status === 'sent' || result.status === 'queued') {
-      emitRuntimeEvent('updateQueuedFollowUps', { streamId }, this.session);
+      this.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateQueuedFollowUps',
+          payload: { streamId },
+        },
+      });
       const wake = await wakeQueuedFollowUpStream(
         streamId,
         result,
@@ -1363,7 +1368,13 @@ export class DesktopProgressBridge {
         this.session,
       );
       if (wake.kind === 'dropped') {
-        emitRuntimeEvent('updateQueuedFollowUps', { streamId }, this.session);
+        this.session.events.emit({
+          scope: 'session',
+          event: {
+            type: 'updateQueuedFollowUps',
+            payload: { streamId },
+          },
+        });
         await this.options.showInfoMessage?.(
           'Message dropped because no session was available to receive it. Start a new agent task to continue.',
         );
