@@ -1,14 +1,14 @@
 // Local imports - agent
 import { deleteExecution as deleteStoredExecution } from '@agent/storage/executionListing';
 
-// Local imports - utils
-import { unique } from '@utils/core';
-
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+
+// Local imports - utils
+import { unique } from '@utils/core';
 
 // Local imports - transcript
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';

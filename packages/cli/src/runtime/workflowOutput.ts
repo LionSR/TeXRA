@@ -8,8 +8,8 @@ import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
-import { toPosixPath } from '@utils/core/pathCore';
 import { getRunDir } from '@utils/files';
+import { toPosixPath } from '@utils/core/pathCore';
 
 import { CliUsageError, type CliContext } from './cliContext';
 import {
