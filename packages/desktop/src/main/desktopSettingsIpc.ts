@@ -6,9 +6,6 @@ import {
   isAllowedLatexInstallCommand,
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
-import { buildProviderKeyStatuses } from '@controllers/settingsView/SettingsProfileController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import {
@@ -60,7 +57,6 @@ import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
   type LatexSettingsStatus,
-  type ProviderKeyStatus,
   type ReasoningLevel,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
@@ -259,44 +255,74 @@ export function createDesktopSettingsIpc(
         await options.showInfoMessage?.(message);
       },
     },
-  });
-  const profileKeyController = new SettingsProfileKeyController({
-    prompt: {
-      input: (input) =>
-        options.promptSecret?.({
-          title: input.title ?? input.prompt ?? 'Set API key',
-          prompt: input.prompt ?? 'Enter API key',
-        }) ?? Promise.resolve(undefined),
-      info: async (message) => {
-        await options.showInfoMessage?.(message);
-        return undefined;
+    profile: {
+      globalState,
+      providerIds: API_PROVIDERS,
+      providerVscodeSettings: {},
+      providerDisplayNames: PROVIDER_DISPLAY_NAMES,
+      providerKeyUrls: PROVIDER_URLS,
+      loadProviderKeyStatuses: () =>
+        loadApiKeyStatusMap(secrets, API_PROVIDERS),
+      getProviderDisplayName,
+      getProviderKeyUrl,
+      getProviderStreaming,
+      getProviderEndpoint,
+      supportsCustomEndpoint,
+      getConfig: (key, defaultValue) =>
+        getConfigProvider().get(key, defaultValue),
+      updateConfig: (key, value) =>
+        getConfigProvider().update(key, value, 'global'),
+      setUseIncludedModelAccess: (enabled) =>
+        options.setApiAccessMode?.(enabled ? 'included' : 'personal') ??
+        Promise.resolve(),
+      invalidateModelOptionsCache,
+    },
+    profileKey: {
+      prompt: {
+        input: (input) =>
+          options.promptSecret?.({
+            title: input.title ?? input.prompt ?? 'Set API key',
+            prompt: input.prompt ?? 'Enter API key',
+          }) ?? Promise.resolve(undefined),
+        info: async (message) => {
+          await options.showInfoMessage?.(message);
+          return undefined;
+        },
+        confirm: (message, promptOptions) =>
+          options.confirmAction?.(message, promptOptions?.confirmLabel) ??
+          Promise.resolve(true),
       },
-      confirm: (message, promptOptions) =>
-        options.confirmAction?.(message, promptOptions?.confirmLabel) ??
-        Promise.resolve(true),
+      externalOpener: {
+        openExternal: (url) =>
+          options.openExternalUrl?.(url) ?? Promise.resolve(),
+      },
+      getProviderDisplayName: (provider) =>
+        getProviderDisplayName(
+          provider,
+          PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+        ),
+      getProviderKeyUrl: (provider) => {
+        const defaultUrl = PROVIDER_URLS[provider];
+        return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
+      },
+      getApiKeySecretName: (provider) => {
+        if (!isApiProvider(provider)) {
+          throw new Error(`Unknown API provider: ${provider}`);
+        }
+        return apiKeySecretName(provider);
+      },
+      setSecret: (key, value) => secrets.set(key, value),
+      deleteSecret: (key) => secrets.delete(key),
+      refreshAfterKeyChange: () => refreshAfterCredentialChange(),
     },
-    externalOpener: {
-      openExternal: (url) =>
-        options.openExternalUrl?.(url) ?? Promise.resolve(),
+    providerConfig: {
+      isApiProvider,
+      onUnknownProvider: (provider) =>
+        options.showErrorMessage?.(`Unknown API provider: ${provider}`),
+      setProviderStreaming,
+      setProviderEndpoint,
+      setGlobalStreaming,
     },
-    getProviderDisplayName: (provider) =>
-      getProviderDisplayName(
-        provider,
-        PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-      ),
-    getProviderKeyUrl: (provider) => {
-      const defaultUrl = PROVIDER_URLS[provider];
-      return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
-    },
-    getApiKeySecretName: (provider) => {
-      if (!isApiProvider(provider)) {
-        throw new Error(`Unknown API provider: ${provider}`);
-      }
-      return apiKeySecretName(provider);
-    },
-    setSecret: (key, value) => secrets.set(key, value),
-    deleteSecret: (key) => secrets.delete(key),
-    refreshAfterKeyChange: () => refreshAfterCredentialChange(),
   });
 
   function readCurrentGitAuthorSettings() {
@@ -389,33 +415,8 @@ export function createDesktopSettingsIpc(
     );
   }
 
-  // Desktop has no VS Code settings, so `getProviderVscodeSettings` returns [];
-  // the rest of the mapping is shared with the extension via
-  // `buildProviderKeyStatuses` so the wire shape stays in one place.
-  function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
-    return buildProviderKeyStatuses({
-      providerIds: API_PROVIDERS,
-      loadProviderKeyStatuses: () =>
-        loadApiKeyStatusMap(secrets, API_PROVIDERS),
-      getProviderDisplayName: (provider) =>
-        getProviderDisplayName(
-          provider,
-          PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-        ),
-      getProviderKeyUrl: (provider) =>
-        getProviderKeyUrl(provider, PROVIDER_URLS[provider] ?? ''),
-      getProviderStreaming,
-      getProviderEndpoint,
-      supportsCustomEndpoint,
-      getProviderVscodeSettings: () => [],
-    });
-  }
-
   async function postProfileData(): Promise<void> {
-    const message = await buildProfileMessage({
-      getProviderKeyStatuses: () => getProviderKeyStatuses(),
-    });
-    options.postToRenderer(message);
+    await settingsHost.sendProfileData();
   }
 
   async function postChatGptAuthStatus(): Promise<void> {
@@ -652,50 +653,33 @@ export function createDesktopSettingsIpc(
     provider: string,
     submittedApiKey?: string,
   ): Promise<void> {
-    if (!isApiProvider(provider)) {
-      await options.showErrorMessage?.(`Unknown API provider: ${provider}`);
-      return;
-    }
-    if (submittedApiKey != null) {
-      await profileKeyController.commitProviderKey(provider, submittedApiKey);
-      return;
-    }
-    await profileKeyController.setProviderKey(provider);
+    await settingsHost.setProviderKey(provider, submittedApiKey);
   }
 
   async function removeProviderKey(provider: string): Promise<void> {
-    if (!isApiProvider(provider)) {
-      await options.showErrorMessage?.(`Unknown API provider: ${provider}`);
-      return;
-    }
-    await profileKeyController.removeProviderKey(provider);
+    await settingsHost.removeProviderKey(provider);
   }
 
   async function openProviderKeyUrl(provider: string): Promise<void> {
-    const defaultUrl = PROVIDER_URLS[provider];
-    if (!defaultUrl) return;
-    await profileKeyController.openProviderKeyUrl(provider);
+    await settingsHost.openProviderKeyUrl(provider);
   }
 
   async function updateProviderStreaming(input: {
     provider: string;
     enabled: boolean;
   }): Promise<void> {
-    await setProviderStreaming(input.provider, input.enabled);
-    await postProfileData();
+    await settingsHost.setProviderStreaming(input.provider, input.enabled);
   }
 
   async function updateProviderEndpoint(input: {
     provider: string;
     endpoint: string;
   }): Promise<void> {
-    await setProviderEndpoint(input.provider, input.endpoint);
-    await postProfileData();
+    await settingsHost.setProviderEndpoint(input.provider, input.endpoint);
   }
 
   async function updateGlobalStreaming(enabled: boolean): Promise<void> {
-    await setGlobalStreaming(enabled);
-    await postProfileData();
+    await settingsHost.setGlobalStreaming(enabled);
   }
 
   async function signIn(): Promise<void> {
@@ -720,15 +704,7 @@ export function createDesktopSettingsIpc(
   async function setApiAccessMode(
     mode: 'included' | 'personal',
   ): Promise<void> {
-    await options.setApiAccessMode?.(mode);
-    if (
-      mode === 'included' &&
-      globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
-    ) {
-      await globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-    }
-    invalidateModelOptionsCache();
-    await Promise.all([postProfileData(), postModelSelectionData()]);
+    await settingsHost.setApiAccessMode(mode);
     // Switching included ↔ personal access mode changes the credential
     // predicate (`getUseIncludedModelAccess()`), so refresh the onboarding
     // funnel — otherwise a user enabling included access stays on
