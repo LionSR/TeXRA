@@ -11,8 +11,6 @@
 import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import {
   buildToolDashboardItems,
@@ -124,8 +122,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly chatgptHandlers: ChatGptSubscriptionHandlers;
   private readonly settingsHost: SettingsViewHost;
-  private readonly profileController: SettingsProfileController;
-  private readonly profileKeyController: SettingsProfileKeyController;
   private readonly goalController: SettingsGoalController;
 
   constructor(context: vscode.ExtensionContext) {
@@ -151,39 +147,51 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           getServerSideKeyService().getUseIncludedModelAccess(),
         getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
       },
-    });
-    this.profileController = new SettingsProfileController({
-      globalState: globalSM,
-      providerIds: SecretManager.API_PROVIDERS,
-      providerVscodeSettings: PROVIDER_VSCODE_SETTINGS,
-      providerDisplayNames: PROVIDER_DISPLAY_NAMES,
-      providerKeyUrls: PROVIDER_URLS,
-      loadProviderKeyStatuses: () =>
-        loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),
-      getProviderDisplayName,
-      getProviderKeyUrl,
-      getProviderStreaming,
-      getProviderEndpoint,
-      supportsCustomEndpoint,
-      getConfig,
-      updateConfig: (key, value) =>
-        updateConfig(key, value, { target: 'global', prefix: false }),
-      setUseIncludedModelAccess: (enabled) =>
-        getServerSideKeyService().setUseIncludedModelAccess(enabled),
-      invalidateModelOptionsCache,
-    });
-    this.profileKeyController = new SettingsProfileKeyController({
-      prompt: new VscodePromptHost(),
-      externalOpener: new VscodeExternalOpener(),
-      getProviderDisplayName: (provider) =>
-        this.profileController.getProviderDisplayName(provider),
-      getProviderKeyUrl: (provider) =>
-        this.profileController.getProviderKeyUrl(provider),
-      getApiKeySecretName: (provider) =>
-        SecretManager.getApiKeySecretName(provider as ApiProvider),
-      setSecret: (key, value) => SecretManager.set(key, value),
-      deleteSecret: (key) => SecretManager.delete(key),
-      refreshAfterKeyChange: () => this.refreshAfterKeyChange(),
+      profile: {
+        globalState: globalSM,
+        providerIds: SecretManager.API_PROVIDERS,
+        providerVscodeSettings: PROVIDER_VSCODE_SETTINGS,
+        providerDisplayNames: PROVIDER_DISPLAY_NAMES,
+        providerKeyUrls: PROVIDER_URLS,
+        loadProviderKeyStatuses: () =>
+          loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),
+        getProviderDisplayName,
+        getProviderKeyUrl,
+        getProviderStreaming,
+        getProviderEndpoint,
+        supportsCustomEndpoint,
+        getConfig,
+        updateConfig: (key, value) =>
+          updateConfig(key, value, { target: 'global', prefix: false }),
+        setUseIncludedModelAccess: (enabled) =>
+          getServerSideKeyService().setUseIncludedModelAccess(enabled),
+        invalidateModelOptionsCache,
+      },
+      profileKey: {
+        prompt: new VscodePromptHost(),
+        externalOpener: new VscodeExternalOpener(),
+        getProviderDisplayName: (provider) =>
+          getProviderDisplayName(
+            provider,
+            PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+          ),
+        getProviderKeyUrl: (provider) => {
+          const defaultUrl = PROVIDER_URLS[provider];
+          return defaultUrl
+            ? getProviderKeyUrl(provider, defaultUrl)
+            : undefined;
+        },
+        getApiKeySecretName: (provider) =>
+          SecretManager.getApiKeySecretName(provider as ApiProvider),
+        setSecret: (key, value) => SecretManager.set(key, value),
+        deleteSecret: (key) => SecretManager.delete(key),
+        refreshAfterKeyChange: () => this.refreshAfterKeyChange(),
+      },
+      providerConfig: {
+        setProviderStreaming,
+        setProviderEndpoint,
+        setGlobalStreaming,
+      },
     });
     this.agentHandlers = new AgentHandlers(ctx, (selectedToolUseAgent) =>
       this.refreshAfterAgentMutation(selectedToolUseAgent),
@@ -293,24 +301,26 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           }),
         setProviderKey: (provider) =>
           this.runProviderKeyAction(provider, 'set', (targetProvider) =>
-            this.profileKeyController.setProviderKey(targetProvider),
+            this.settingsHost.setProviderKey(targetProvider),
           ),
         removeProviderKey: (provider) =>
           this.runProviderKeyAction(provider, 'remove', (targetProvider) =>
-            this.profileKeyController.removeProviderKey(targetProvider),
+            this.settingsHost.removeProviderKey(targetProvider),
           ),
         openProviderKeyUrl: (provider) =>
-          this.profileKeyController.openProviderKeyUrl(provider),
+          this.settingsHost.openProviderKeyUrl(provider),
         setProviderStreaming: (provider, enabled) =>
-          this.updateProfileSetting(() =>
-            setProviderStreaming(provider, enabled),
+          this.settingsHost.setProviderStreaming(provider, enabled, (message) =>
+            this.postMessageToActiveWebview(message),
           ),
         setProviderEndpoint: (provider, endpoint) =>
-          this.updateProfileSetting(() =>
-            setProviderEndpoint(provider, endpoint),
+          this.settingsHost.setProviderEndpoint(provider, endpoint, (message) =>
+            this.postMessageToActiveWebview(message),
           ),
         setGlobalStreaming: (enabled) =>
-          this.updateProfileSetting(() => setGlobalStreaming(enabled)),
+          this.settingsHost.setGlobalStreaming(enabled, (message) =>
+            this.postMessageToActiveWebview(message),
+          ),
         setProviderVscodeSetting: (data) =>
           this.handleSetProviderVscodeSetting(data),
         openExternalUrl: (url) => this.openExternalUrl(url),
@@ -663,8 +673,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendProfileData(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      await this.profileController.buildProfileMessage(),
+    await this.settingsHost.sendProfileData((message) =>
+      webview.postMessage(message),
     );
   }
 
@@ -691,7 +701,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         workspaceState: workspaceSM,
         globalState: globalSM,
         getReliabilitySettings: () =>
-          this.profileController.getReliabilitySettings(),
+          this.settingsHost.getReliabilitySettings(),
       }),
     );
   }
@@ -897,9 +907,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetApiAccessMode(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
   ): Promise<void> {
-    const update = await this.profileController.setApiAccessMode(data.mode);
-    await this.withActiveWebview(async (w) => {
-      await this.sendProfileAndModelSelectionData(w);
+    const update = await this.settingsHost.setApiAccessMode(data.mode, {
+      respond: (message) => this.postMessageToActiveWebview(message),
     });
     const modeLabel =
       update.mode === 'included' ? 'Included Access' : 'My Own Keys';
@@ -921,7 +930,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to ${verb} ${this.profileController.getProviderDisplayName(provider)} API key`,
+        `Failed to ${verb} ${this.settingsHost.getProviderDisplayName(provider)} API key`,
         error,
       );
       // On error, still refresh settings view to reflect current key state.
@@ -977,7 +986,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetProviderVscodeSetting(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_VSCODE_SETTING>,
   ): Promise<void> {
-    const result = await this.profileController.setProviderVscodeSetting(data);
+    const result = await this.settingsHost.setProviderVscodeSetting(data);
     if (result.kind === 'rejected') {
       this.logger.warn(
         this.channel,
@@ -1030,13 +1039,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview(async (webview) => {
       await webview.postMessage(message);
     });
-  }
-
-  private async updateProfileSetting(
-    update: () => Promise<void>,
-  ): Promise<void> {
-    await update();
-    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   private async setModelEnabled(
