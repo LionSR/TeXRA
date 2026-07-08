@@ -3,36 +3,14 @@ import path from 'node:path';
 // Local imports - agent metadata
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { SetTaskStatePayload } from '@agent/runtime/taskStateProgressPayload';
 
 // Local imports - shared schemas
-import {
-  STREAM_PHASE,
-  STREAM_STATUS,
-  type StreamPhase,
-  type UpdateActiveProcessesPayload,
-  type UpdateActiveSubagentsPayload,
-  type UpdateConversationProgressPayload,
-  type UpdateRoundStagePayload,
-  type UpdateStreamDescriptionPayload,
-  type UpdateStreamStatusPayload,
-} from '@shared/schemas';
+import { STREAM_PHASE, STREAM_STATUS, type StreamPhase } from '@shared/schemas';
 
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
-
-export type RunProgressEventPayloads = {
-  setTaskState: SetTaskStatePayload;
-  updateConversationProgress: UpdateConversationProgressPayload;
-  updateRoundStage: UpdateRoundStagePayload;
-  updateActiveProcesses: UpdateActiveProcessesPayload;
-  updateActiveSubagents: UpdateActiveSubagentsPayload;
-  updateStreamStatus: UpdateStreamStatusPayload;
-  updateStreamDescription: UpdateStreamDescriptionPayload;
-};
-
-export type RunProgressEvent = keyof RunProgressEventPayloads;
+import type { CliProgressEventPayloads } from './cliProgressEvents';
 
 const RUN_PROGRESS_EVENTS = [
   'setTaskState',
@@ -42,7 +20,14 @@ const RUN_PROGRESS_EVENTS = [
   'updateActiveSubagents',
   'updateStreamStatus',
   'updateStreamDescription',
-] as const satisfies readonly RunProgressEvent[];
+] as const satisfies readonly (keyof CliProgressEventPayloads)[];
+
+export type RunProgressEvent = (typeof RUN_PROGRESS_EVENTS)[number];
+
+type RunProgressEventPayloads = Pick<
+  CliProgressEventPayloads,
+  RunProgressEvent
+>;
 
 const RunProgressEventSet: ReadonlySet<string> = new Set(RUN_PROGRESS_EVENTS);
 
@@ -220,7 +205,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     }
   }
 
-  private applyTaskState(payload: SetTaskStatePayload): boolean {
+  private applyTaskState(
+    payload: RunProgressEventPayloads['setTaskState'],
+  ): boolean {
     if (!this.claimRootStream(payload.streamId)) return false;
 
     const config = payload.taskState.agentConfig;
@@ -235,7 +222,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private applyConversationProgress(
-    payload: UpdateConversationProgressPayload,
+    payload: RunProgressEventPayloads['updateConversationProgress'],
   ): boolean {
     if (!this.claimRootStream(payload.streamId)) return false;
 
@@ -244,7 +231,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return true;
   }
 
-  private applyRoundStage(payload: UpdateRoundStagePayload): boolean {
+  private applyRoundStage(
+    payload: RunProgressEventPayloads['updateRoundStage'],
+  ): boolean {
     if (!this.claimRootStream(payload.streamId)) return false;
 
     this.state.round = payload.roundStage.index + 1;
@@ -255,7 +244,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return true;
   }
 
-  private applyActiveProcesses(payload: UpdateActiveProcessesPayload): void {
+  private applyActiveProcesses(
+    payload: RunProgressEventPayloads['updateActiveProcesses'],
+  ): void {
     if (!this.claimRootStream(payload.parentStreamId)) return;
 
     this.state.activeProcesses = formatActiveChildren(
@@ -266,7 +257,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     );
   }
 
-  private applyActiveSubagents(payload: UpdateActiveSubagentsPayload): void {
+  private applyActiveSubagents(
+    payload: RunProgressEventPayloads['updateActiveSubagents'],
+  ): void {
     if (!this.claimRootStream(payload.parentStreamId)) return;
 
     this.state.activeSubagents = formatActiveChildren(
