@@ -1,6 +1,5 @@
 // Local imports
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { AgentRuntimeProgressSink } from '@agent/runtime/agentRuntimeProgressEvents';
 import {
   matchesCancelSelector,
   type HostBashApprovalResult,
@@ -27,10 +26,14 @@ export type RecordedProgressEvent = {
   payload: unknown;
 };
 
+export interface RecordingProgressSink {
+  emit(event: string, payload: unknown): void;
+}
+
 export function createRecordingHost(): {
   events: RecordedProgressEvent[];
   interactions: HostInteractions;
-  host: AgentRuntimeHost & AgentRuntimeProgressSink;
+  host: AgentRuntimeHost & RecordingProgressSink;
 } {
   const events: RecordedProgressEvent[] = [];
   const pendingPlans = new Map<
@@ -268,7 +271,7 @@ export function createRecordingHost(): {
   const host = {
     interactions,
     emit: (event: string, payload: unknown) => events.push({ event, payload }),
-  } as AgentRuntimeHost & AgentRuntimeProgressSink;
+  } as AgentRuntimeHost & RecordingProgressSink;
   return {
     events,
     interactions,

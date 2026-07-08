@@ -9,7 +9,6 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { AgentRuntimeProgressSink } from '@agent/runtime/agentRuntimeProgressEvents';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
@@ -19,7 +18,10 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { createChildStream } from '@tools/childStream';
-import { createRecordingHost } from '../progressTestUtils';
+import {
+  createRecordingHost,
+  type RecordingProgressSink,
+} from '../progressTestUtils';
 import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 const executionId = 'c11111' as ExecutionId;
@@ -62,7 +64,7 @@ function startCodexChild(
 }
 
 function withSessionProgressProjection<T>(
-  host: AgentRuntimeHost & AgentRuntimeProgressSink,
+  host: AgentRuntimeHost & RecordingProgressSink,
   run: () => T,
 ): T {
   const detach = attachSessionProgressEventProjectionForTest(
@@ -123,7 +125,7 @@ describe('child stream progress events', () => {
           payload,
         );
       },
-    } as AgentRuntimeHost & AgentRuntimeProgressSink;
+    } as AgentRuntimeHost & RecordingProgressSink;
 
     try {
       const childStream = withSessionProgressProjection(host, () =>
