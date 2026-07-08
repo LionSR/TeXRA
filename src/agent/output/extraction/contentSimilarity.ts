@@ -142,13 +142,18 @@ export function stripFirstLastLineIfWrapped(
 export function stripSurroundingMarkdownFence(
   lines: readonly string[],
 ): string[] {
+  // `isClose` is always invoked with the same `openLine` (the wrapper's first
+  // content line) across a single stripFirstLastLineIfWrapped call, including
+  // once per line during the rejectInnerClose scan — parse it once and reuse.
+  let cachedOpeningFence: MarkdownFence | null | undefined;
   return stripFirstLastLineIfWrapped(
     lines,
     (line) => parseMarkdownFenceDelimiter(line) !== null,
     (openLine, line) => {
-      const openingFence = parseMarkdownFenceDelimiter(openLine);
+      cachedOpeningFence ??= parseMarkdownFenceDelimiter(openLine);
       return (
-        openingFence !== null && isClosingMarkdownFence(line, openingFence)
+        cachedOpeningFence !== null &&
+        isClosingMarkdownFence(line, cachedOpeningFence)
       );
     },
     { emptyOnNoContent: true, rejectInnerClose: true },
