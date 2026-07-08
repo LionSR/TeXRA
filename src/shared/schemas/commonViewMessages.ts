@@ -57,4 +57,3 @@ export const CommonViewMessageSchema = z.discriminatedUnion('command', [
 ]);
 
 export type StateRestoreMessage = z.infer<typeof StateRestoreMessageSchema>;
-export type SwitchViewMessage = z.infer<typeof SwitchViewMessageSchema>;

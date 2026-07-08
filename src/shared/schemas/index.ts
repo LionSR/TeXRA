@@ -8,18 +8,6 @@ export * from './lineChanges';
 export * from './goal';
 export * from './proposalFields';
 export * from './toolConfig';
-export {
-  CoreSettingsSchema,
-  CoreSettingsShape,
-  DEFAULT_CORE_SETTINGS,
-  LATEXDIFF_TEMP_FILE_LOCATIONS,
-  NON_REGEX_REPLACEMENT_CATEGORIES,
-  REGEX_REPLACEMENT_CATEGORIES,
-  type CoreSettings,
-  type LatexdiffTempFileLocation,
-  type NonRegexReplacementCategory,
-  type RegexReplacementCategory,
-} from './coreSettings';
 export * from './errors';
 export * from './usage';
 export * from './contextManagement';
@@ -56,7 +44,6 @@ export * from './progressView';
 
 // Layer 6: Other view message schemas
 export * as commonViewMessages from './commonViewMessages';
-export { ThemeSchema, type Theme } from './commonViewMessages';
 // Memory/History/Profile view-message schemas have a single public home in
 // settingsViewMessages (the canonical settings entry point), which re-exports
 // the symbols consumers need. They are not re-exported directly here, so each

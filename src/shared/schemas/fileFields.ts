@@ -100,8 +100,6 @@ export const NullableFileFieldsSchema = z.object({
   editedFile: z.string().nullable().prefault(null),
 });
 
-export type NullableFileFields = z.infer<typeof NullableFileFieldsSchema>;
-
 /** Schema that accepts string or null/undefined, outputs string (coerces nullish → ''). */
 const nullishString = z
   .string()
@@ -116,5 +114,3 @@ export const UIFileFieldsSchema = z.object({
   ...fileListFields,
   editedFile: nullishString,
 });
-
-export type UIFileFields = z.infer<typeof UIFileFieldsSchema>;

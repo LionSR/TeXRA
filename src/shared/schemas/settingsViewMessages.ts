@@ -41,11 +41,7 @@ export {
   type MemoryEnabledMessage,
 } from './memoryViewMessages';
 
-export {
-  HistoryItemSchema,
-  type HistoryItem,
-  type HistoryIdMessage,
-} from './historyViewMessages';
+export { HistoryItemSchema, type HistoryItem } from './historyViewMessages';
 
 export {
   ProfileUserSchema,
