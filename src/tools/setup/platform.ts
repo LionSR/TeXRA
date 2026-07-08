@@ -8,11 +8,7 @@
  * Keep this interface narrow — add methods only when a setup tool needs them.
  */
 
-import type {
-  TerminalRunRequest,
-  TerminalRunResult,
-  TerminalRunner,
-} from '@hosts/uiHosts';
+import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
 import type { ApiProvider } from '@model/apiProviders';
 
 /** Per-provider API key surface. */
@@ -92,7 +88,7 @@ export interface SetupConfigAdapter {
  * actionable.
  */
 export type SetupTerminalAdapter = TerminalRunner;
-export type { TerminalRunRequest, TerminalRunResult };
+export type { TerminalRunResult };
 
 /** Aggregated setup platform. */
 export interface SetupPlatform {

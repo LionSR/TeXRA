@@ -16,7 +16,7 @@ type ArxivEntry = Awaited<ReturnType<typeof arxivClient.execute>>[number];
 /**
  * Schema for base arXiv paper metadata shared between search and metadata tools.
  */
-export const ArxivPaperBaseSchema = z.object({
+const ArxivPaperBaseSchema = z.object({
   id: z.string().nullable(),
   doi: z.string().nullable(),
   title: z.string(),
@@ -33,7 +33,7 @@ export type ArxivPaperBase = z.infer<typeof ArxivPaperBaseSchema>;
  * Schema for arXiv paper metadata returned by search results.
  * Extends ArxivPaperBaseSchema with search-specific fields.
  */
-export const ArxivSearchResultSchema = ArxivPaperBaseSchema.extend({
+const ArxivSearchResultSchema = ArxivPaperBaseSchema.extend({
   abstract: z.string().nullable(),
   arxivUrl: z.string().nullable(),
 });
@@ -45,7 +45,7 @@ export type ArxivSearchResult = z.infer<typeof ArxivSearchResultSchema>;
  * Schema for detailed arXiv paper metadata with additional fields.
  * Extends ArxivPaperBaseSchema with metadata-specific fields.
  */
-export const ArxivPaperMetadataSchema = ArxivPaperBaseSchema.extend({
+const ArxivPaperMetadataSchema = ArxivPaperBaseSchema.extend({
   abstract: z.string().nullish(),
   journalReference: z.string().nullable(),
   comment: z.string().nullable(),
