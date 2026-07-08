@@ -7,11 +7,11 @@ import type { ProgressEventSubscription } from '@shared/progressView/backend/eve
  * This adapter keeps app-scoped shutdown facts out of the progress event bus.
  */
 export function attachProgressBackendAppSignals(
-  backend: Pick<ProgressBackend, 'eventHandler'>,
+  backend: Pick<ProgressBackend, 'factApplier'>,
   signals: AppSignalsLike,
 ): ProgressEventSubscription {
   const dispose = signals.on('extensionDeactivating', () => {
-    backend.eventHandler.markAllRunningTasksAsCancelled();
+    backend.factApplier.markAllRunningTasksAsCancelled();
   });
 
   return { dispose };
