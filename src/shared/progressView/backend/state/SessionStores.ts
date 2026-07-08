@@ -1,6 +1,9 @@
 // Local imports - agent
 import { deleteExecution as deleteStoredExecution } from '@agent/storage/executionListing';
 
+// Local imports - utils
+import { unique } from '@utils/core';
+
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
@@ -117,7 +120,7 @@ export class SessionStores {
     executionIds: Iterable<ExecutionId>,
   ): Promise<void> {
     await Promise.all(
-      [...new Set(executionIds)].map((executionId) =>
+      unique(executionIds).map((executionId) =>
         this.deleteExecution(executionId),
       ),
     );

@@ -311,3 +311,14 @@ export function formatCostUsd(cost: number): string {
 export function formatLocaleTimestamp(ts: number | string): string {
   return new Date(ts).toLocaleString();
 }
+
+/**
+ * Format an elapsed wall-clock duration as seconds with one decimal digit
+ * (e.g. `12.3s`), regardless of magnitude. Unlike {@link formatDuration} /
+ * {@link formatCompactDuration}, this never switches to compound units
+ * (`2m 5s`) — agent-CLI turn timings are always shown as a single seconds
+ * figure.
+ */
+export function formatWallTimeSeconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
