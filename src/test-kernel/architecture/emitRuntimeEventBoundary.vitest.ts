@@ -13,10 +13,8 @@ const REPO_ROOT = resolve(
 
 const ALLOWED_PRODUCTION_REFERENCES = [
   'packages/desktop/src/main/desktopAgentExecution.ts',
-  'packages/desktop/src/main/desktopHostInteractions.ts',
   'packages/extension/src/commands/agent/followUpCommand.ts',
   'packages/extension/src/commands/housekeeping/streamEventUtils.ts',
-  'packages/extension/src/progressView/extensionHostInteractions.ts',
   'src/agent/followUp/ToolUseFollowUp.ts',
   'src/agent/runtime/ExecutionSubscriptionBinder.ts',
   'src/agent/runtime/emitRuntimeEvent.ts',
