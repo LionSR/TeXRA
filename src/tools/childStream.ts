@@ -5,7 +5,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   currentSession,
@@ -108,15 +107,17 @@ export function createChildStream(
   // Register the child stream (state, logs, hints) without switching the
   // active tab. Background child streams (bash, codex) shouldn't yank the
   // user away from whatever they're viewing — the tab simply appears.
-  emitRuntimeEvent(
-    'setActiveStream',
-    {
-      streamId: childStreamId,
-      agentCategory: options.streamCategory,
-      suppressViewSwitch: true,
+  session.events.emit({
+    scope: 'session',
+    event: {
+      type: 'setActiveStream',
+      payload: {
+        streamId: childStreamId,
+        agentCategory: options.streamCategory,
+        suppressViewSwitch: true,
+      },
     },
-    session,
-  );
+  });
   runTrace.trace.emit({
     type: 'run.start',
     descriptor: buildRunDescriptor({
@@ -132,14 +133,16 @@ export function createChildStream(
     executionId,
     config: options.config,
   });
-  emitRuntimeEvent(
-    'updateStreamDescription',
-    {
-      streamId: childStreamId,
-      description: truncateWithEllipsis(options.description, 80),
+  session.events.emit({
+    scope: 'session',
+    event: {
+      type: 'updateStreamDescription',
+      payload: {
+        streamId: childStreamId,
+        description: truncateWithEllipsis(options.description, 80),
+      },
     },
-    session,
-  );
+  });
 
   const handle = new AgentExecutionHandle(
     executionId,
@@ -263,10 +266,12 @@ async function finalizeChildStream(
   disposeTrace();
 
   if (options?.autoClose) {
-    emitRuntimeEvent(
-      'removeStream',
-      { streamId: handle.childStreamId },
-      session,
-    );
+    session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'removeStream',
+        payload: { streamId: handle.childStreamId },
+      },
+    });
   }
 }
