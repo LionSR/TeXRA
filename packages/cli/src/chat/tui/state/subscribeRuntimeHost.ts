@@ -7,10 +7,8 @@ import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
@@ -44,6 +42,11 @@ import { appendLocalAssistantTranscript } from './transcript';
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
+
+type CliStateRuntimeEventPayloads = ProgressEventPayloads &
+  RuntimeInteractionEventPayloads;
+
+type CliStateRuntimeEvent = keyof CliStateRuntimeEventPayloads;
 
 function appendGoalPausedTranscriptNotice(payload: GoalPausedPayload): void {
   // Without a transcript line, an auto-paused goal is indistinguishable
@@ -368,7 +371,10 @@ export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;
   const emit: CliRuntimeHost['emit'] = (event, payload) => {
     if (!isRuntimePresentationEvent(event)) {
-      applyToState(event, payload as ProgressEventPayloads[ProgressEvent]);
+      applyToState(
+        event as CliStateRuntimeEvent,
+        payload as CliStateRuntimeEventPayloads[CliStateRuntimeEvent],
+      );
     }
     return original(event, payload);
   };
@@ -440,9 +446,9 @@ export function attachTuiRunFactSubscription(
   };
 }
 
-function applyToState<K extends ProgressEvent>(
+function applyToState<K extends CliStateRuntimeEvent>(
   event: K,
-  payload: ProgressEventPayloads[K],
+  payload: CliStateRuntimeEventPayloads[K],
 ): void {
   switch (event) {
     case 'setActiveStream': {
@@ -522,7 +528,7 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'updateToolEditApprovalBypassState': {
       const p =
-        payload as ProgressEventPayloads['updateToolEditApprovalBypassState'];
+        payload as RuntimeInteractionEventPayloads['updateToolEditApprovalBypassState'];
       patchStream(p.streamId, (s) => ({
         ...s,
         bypass: { ...s.bypass, toolEdit: p.bypassActive },
@@ -531,7 +537,7 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'updateBashApprovalBypassState': {
       const p =
-        payload as ProgressEventPayloads['updateBashApprovalBypassState'];
+        payload as RuntimeInteractionEventPayloads['updateBashApprovalBypassState'];
       patchStream(p.streamId, (s) => ({
         ...s,
         bypass: { ...s.bypass, bash: p.bypassActive },
@@ -539,7 +545,8 @@ function applyToState<K extends ProgressEvent>(
       return;
     }
     case 'updateSuperYoloBypassState': {
-      const p = payload as ProgressEventPayloads['updateSuperYoloBypassState'];
+      const p =
+        payload as RuntimeInteractionEventPayloads['updateSuperYoloBypassState'];
       patchStream(p.streamId, (s) => ({
         ...s,
         bypass: { ...s.bypass, superYolo: p.bypassActive },

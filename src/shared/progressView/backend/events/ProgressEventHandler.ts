@@ -5,10 +5,8 @@ import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
+import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
@@ -49,7 +47,7 @@ import { withEventErrorHandling } from './errorHandling';
  */
 export interface UICallbacks {
   showToolEditPermission: (
-    payload: ProgressEventPayloads['showToolEditPermission'],
+    payload: RuntimeInteractionEventPayloads['showToolEditPermission'],
   ) => void;
   resolveToolEditPermission: (requestId: string) => void;
   updateToolEditApprovalBypassState: (
@@ -78,16 +76,23 @@ export type GetProgressStreamControls = (
   stream: StreamTabId,
 ) => ProgressStreamControls;
 
-type ProgressEventRegistration<K extends ProgressEvent> = {
+export type ProgressBackendEventPayloads = ProgressEventPayloads &
+  RuntimeInteractionEventPayloads;
+
+export type ProgressBackendEvent = keyof ProgressBackendEventPayloads;
+
+type ProgressEventRegistration<K extends ProgressBackendEvent> = {
   /** Defaults to 'ProgressEvents' when omitted. */
   readonly module?: string;
   /** Defaults to `failed to handle ${event}` when omitted. */
   readonly context?: string;
-  readonly handle: (payload: ProgressEventPayloads[K]) => void | Promise<void>;
+  readonly handle: (
+    payload: ProgressBackendEventPayloads[K],
+  ) => void | Promise<void>;
 };
 
 type ProgressEventRegistrationMap = {
-  [K in ProgressEvent]?: ProgressEventRegistration<K>;
+  [K in ProgressBackendEvent]?: ProgressEventRegistration<K>;
 };
 
 export const PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES: readonly AgentEvent['type'][] =
@@ -277,9 +282,9 @@ export class ProgressEventHandler {
     };
   }
 
-  handleProgressEvent<K extends ProgressEvent>(
+  handleProgressEvent<K extends ProgressBackendEvent>(
     event: K,
-    payload: ProgressEventPayloads[K],
+    payload: ProgressBackendEventPayloads[K],
   ): void {
     const registration = this.eventRegistrations[event] as
       ProgressEventRegistration<K> | undefined;

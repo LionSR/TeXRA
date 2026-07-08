@@ -1,6 +1,6 @@
 import { structuredPatch } from 'diff';
 
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import {
   agentProposalCategoryLabel,
   getProposalFileGroups,
@@ -139,7 +139,7 @@ export function formatAgentProposalApprovalSummary(
 }
 
 export function formatRetryRequestMessage(
-  payload: ProgressEventPayloads['showRetryRequest'],
+  payload: RuntimeInteractionEventPayloads['showRetryRequest'],
 ): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
   if (isCliChatGptSubscriptionRetry(payload)) {
@@ -209,7 +209,7 @@ export function formatToolEditApprovalSummary(
 }
 
 export function formatUserQuestionPrompt(
-  payload: ProgressEventPayloads['showUserQuestion'],
+  payload: RuntimeInteractionEventPayloads['showUserQuestion'],
 ): string {
   return payload.questions
     .map((question, index) => {
