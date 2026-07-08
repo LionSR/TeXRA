@@ -24,6 +24,43 @@ const mocks = vi.hoisted(() => ({
   logError: vi.fn(),
 }));
 
+/**
+ * Mirrors `resolveSetupModel`'s real router-config / credential /
+ * access-list-fallback precedence using the same mocked primitives this
+ * suite already drives (`getUseOpenRouter`, `hasUsableApiKey`,
+ * `selectSetupCredentialModelExcludingOpenRouter`) — the real function lives
+ * in the mocked `@controllers/onboarding/setupLaunch` module, so this suite
+ * (which is about `launchSetupAssistant`'s routing/credential ordering, not
+ * model-precedence itself) needs a faithful stand-in to keep exercising that
+ * ordering past the model-selection step.
+ */
+const OPENROUTER_MODEL = 'openrouter/mock-model';
+
+async function resolveSetupModelMock(
+  includeAccessListFallback: boolean,
+): Promise<{ model: string; reason: string } | null> {
+  const useOpenRouter = mocks.getUseOpenRouter();
+  const openRouterModel = (await mocks.hasUsableApiKey('openRouter'))
+    ? OPENROUTER_MODEL
+    : null;
+
+  if (useOpenRouter) {
+    return openRouterModel
+      ? { model: openRouterModel, reason: 'router-config' }
+      : null;
+  }
+
+  const credentialModel =
+    await mocks.selectSetupCredentialModelExcludingOpenRouter();
+  if (credentialModel) {
+    return { model: credentialModel, reason: 'credential' };
+  }
+  if (includeAccessListFallback && openRouterModel) {
+    return { model: openRouterModel, reason: 'access-list-default' };
+  }
+  return null;
+}
+
 vi.mock('@utils/config/providerConfig', () => ({
   getUseOpenRouter: mocks.getUseOpenRouter,
 }));
@@ -43,8 +80,12 @@ vi.mock('@agent/runtime/executionRegistry', () => ({
 }));
 
 vi.mock('@controllers/onboarding/setupLaunch', () => ({
+  SETUP_INSTRUCTION:
+    'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.',
   selectSetupCredentialModelExcludingOpenRouter:
     mocks.selectSetupCredentialModelExcludingOpenRouter,
+  resolveSetupModel: (_secrets: unknown, includeAccessListFallback: boolean) =>
+    resolveSetupModelMock(includeAccessListFallback),
 }));
 
 vi.mock('@auth/codex', () => ({

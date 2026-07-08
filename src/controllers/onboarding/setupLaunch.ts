@@ -2,7 +2,11 @@ import { platform } from '@platform/platform';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { lookupApiKey, API_PROVIDERS } from '@model/apiProviders';
-import { decideRunModel } from '@model/runModelDecision';
+import {
+  decideRunModel,
+  type RunModelCandidate,
+  type RunModelDecisionReason,
+} from '@model/runModelDecision';
 import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
@@ -14,7 +18,7 @@ import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { PlatformSecrets } from '@platform/secrets';
 
-/** Instruction handed to the setup agent when launched (mirrors the extension). */
+/** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =
   'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
 
@@ -53,36 +57,60 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
   return null;
 }
 
+export interface SetupModelResolution {
+  model: string;
+  reason: RunModelDecisionReason;
+}
+
+/**
+ * Resolve a launch model for the setup agent from router config, direct
+ * credential, and (only when a host asks for it) an OpenRouter access-list
+ * fallback used as a last resort when routing is off. Desktop has no prompt
+ * to explain the resulting flag flip, so it opts out of the fallback; the
+ * extension prompts the user first (`ensureRoutingConfigured`) and can offer
+ * it.
+ */
+export async function resolveSetupModel(
+  secrets: PlatformSecrets,
+  includeAccessListFallback: boolean,
+): Promise<SetupModelResolution | null> {
+  const useOpenRouter = getUseOpenRouter();
+  const openRouterModel = isNonEmptyString(
+    await lookupApiKey(secrets, 'openRouter'),
+  )
+    ? SETUP_MODEL_BY_PROVIDER.openRouter
+    : null;
+
+  const candidates: RunModelCandidate[] = [
+    {
+      model: useOpenRouter ? openRouterModel : null,
+      reason: 'router-config',
+    },
+    {
+      model: useOpenRouter
+        ? null
+        : await selectSetupCredentialModelExcludingOpenRouter(secrets),
+      reason: 'credential',
+    },
+  ];
+  if (includeAccessListFallback) {
+    candidates.push({
+      model: useOpenRouter ? null : openRouterModel,
+      reason: 'access-list-default',
+    });
+  }
+
+  const decision = decideRunModel(candidates);
+  return decision ? { model: decision.model, reason: decision.reason } : null;
+}
+
 /**
  * Desktop has no routing prompt, so OpenRouter is chosen only when the flag is
  * already on and an OpenRouter key exists.
  */
 export async function selectDesktopSetupModel(): Promise<string | null> {
-  const secrets = platform().secrets;
-  const useOpenRouter = getUseOpenRouter();
-
-  const routerModel =
-    useOpenRouter && isNonEmptyString(await lookupApiKey(secrets, 'openRouter'))
-      ? SETUP_MODEL_BY_PROVIDER.openRouter
-      : null;
-  if (useOpenRouter && !routerModel) {
-    return null;
-  }
-
-  return (
-    decideRunModel([
-      {
-        model: routerModel,
-        reason: 'router-config',
-      },
-      {
-        model: useOpenRouter
-          ? null
-          : await selectSetupCredentialModelExcludingOpenRouter(secrets),
-        reason: 'credential',
-      },
-    ])?.model ?? null
-  );
+  const resolution = await resolveSetupModel(platform().secrets, false);
+  return resolution?.model ?? null;
 }
 
 /**
