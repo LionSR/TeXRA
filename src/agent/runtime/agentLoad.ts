@@ -27,7 +27,7 @@ import { AbsoluteFS } from '@utils/files';
 const CHANNEL = 'agentLoad';
 logger.initialize(CHANNEL);
 
-export interface ValidAgentDefinition {
+interface ValidAgentDefinition {
   name: string;
   settings: AgentSettingInput;
 }
@@ -75,7 +75,7 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   return yaml.parse(yamlContent);
 }
 
-export function ensureAgentCategoryForSource<
+function ensureAgentCategoryForSource<
   T extends { agentCategory?: AgentCategory },
 >(settings: T, source: AgentSource): T {
   if (source === 'builtInToolUse' && !settings.agentCategory) {

@@ -20,7 +20,7 @@ import { NormalizedUsageSchema } from '@agent/types/NormalizedUsage';
  * Tool-use specific fields:
  * - response, toolCalls, text, roundIndex, roundResponseTimeMs, roundNormalizedUsage
  */
-export const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
+const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
   /**
    * System prompt for providers that pass `system` per-call (Anthropic,
    * Google) rather than embedding it into `messages` at session init.
@@ -61,7 +61,7 @@ export const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
 });
 
 /** Tool-use round fields derived from schema */
-export type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
+type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
 
 /**
  * Shared state for tool-use round flows.

@@ -133,7 +133,7 @@ function formatToolResultMarker(
  * Google's discriminator-less `{text}`/`{functionCall}`/`{functionResponse}`
  * parts, and falls back to a JSON dump for unrecognized shapes.
  */
-export function formatConversationBlock(
+function formatConversationBlock(
   block: unknown,
   options: ConversationFormatOptions = {},
 ): string {

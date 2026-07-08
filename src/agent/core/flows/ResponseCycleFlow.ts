@@ -54,7 +54,7 @@ import type { ResponseCycleServices } from './CycleServices';
  * All fields here are natively serializable (structuredClone compatible).
  * Non-serializable fields (debug, responseObject) are in CycleTransientFields.
  */
-export const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
+const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
   /** Whether output file exists */
   outputExists: z.boolean(),
   /** Agent output location (nullable for native nesting compatibility) */
@@ -64,7 +64,7 @@ export const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
 });
 
 /** Serializable cycle fields derived from schema */
-export type CycleFields = z.infer<typeof CycleFieldsSchema>;
+type CycleFields = z.infer<typeof CycleFieldsSchema>;
 
 /**
  * Transient cycle fields that are NOT serialized.
@@ -76,7 +76,7 @@ export type CycleFields = z.infer<typeof CycleFieldsSchema>;
  * services/shared at each `maybeSaveDebugObject` call site. Nothing is
  * stored in shared state.
  */
-export interface CycleTransientFields {
+interface CycleTransientFields {
   /** System prompt for model (regenerated from agent prompt each cycle) */
   systemPrompt?: string;
   /** Raw response from model (type unknown, not serialized) */

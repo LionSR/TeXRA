@@ -29,11 +29,7 @@ import { ToolUseDispatchNode } from './toolUseRound/ToolUseDispatchNode';
 import type { ToolUseRoundServices } from './CycleServices';
 import type { ToolUseRoundShared } from './toolUseRound/roundShared';
 
-export {
-  ToolUseRoundFieldsSchema,
-  type ToolUseRoundFields,
-  type ToolUseRoundShared,
-} from './toolUseRound/roundShared';
+export { type ToolUseRoundShared } from './toolUseRound/roundShared';
 
 /**
  * Creates a tool-use round flow with services injected via params.

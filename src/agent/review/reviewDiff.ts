@@ -54,7 +54,7 @@ export interface CollectReviewDiffOptions {
   baseBranch?: string;
 }
 
-export interface ReviewDiff {
+interface ReviewDiff {
   /** Absolute path of the repository root all paths are relative to. */
   repoRoot: string;
   /** Ref or commit the working tree was diffed against. */

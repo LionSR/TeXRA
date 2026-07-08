@@ -36,7 +36,7 @@ export interface ExtendedCompletionUsage extends CompletionUsage {
  * - AnthropicUsage: Anthropic Messages API
  * - GenerateContentResponseUsageMetadata: Google Gemini API
  */
-export type NativeUsagePayload =
+type NativeUsagePayload =
   | ExtendedCompletionUsage
   | OpenAIResponseUsage
   | AnthropicUsage
