@@ -1,6 +1,13 @@
 // Local imports - runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type {
+  ProgressEvent,
+  ProgressEventPayloads,
+} from '@agent/runtime/hostProgressEvents';
+import {
+  isRuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
 // Local imports - CLI runtime
@@ -42,9 +49,15 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       if (closed) return;
 
       if (
-        handleCliApprovalEvent(event, payload, context, {
-          beforePrompt: prepareInteractivePrompt,
-        })
+        !isRuntimePresentationEvent(event) &&
+        handleCliApprovalEvent(
+          event as ProgressEvent,
+          payload as ProgressEventPayloads[ProgressEvent],
+          context,
+          {
+            beforePrompt: prepareInteractivePrompt,
+          },
+        )
       ) {
         return;
       }
@@ -63,12 +76,18 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       if (event === 'requestShowError') {
         runProgress?.preserve();
         ensureLogger().error(
-          (payload as ProgressEventPayloads['requestShowError']).message,
+          (payload as RuntimePresentationEventPayloads['requestShowError'])
+            .message,
         );
         return;
       }
 
-      if (runProgress?.handle(event, payload)) return;
+      if (
+        !isRuntimePresentationEvent(event) &&
+        runProgress?.handle(event, payload)
+      ) {
+        return;
+      }
 
       if (context.quietLogs) return;
 
