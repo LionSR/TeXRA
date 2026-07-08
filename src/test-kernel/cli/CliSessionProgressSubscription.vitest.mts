@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeProgressSink } from '@agent/runtime/agentRuntimeProgressEvents';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -40,7 +40,7 @@ function workflowConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
 
 function hostWithInteractions(
   interactions?: Partial<HostInteractions>,
-): AgentRuntimeHost {
+): AgentRuntimeProgressSink & { interactions: HostInteractions } {
   return {
     emit: vi.fn(),
     interactions: {

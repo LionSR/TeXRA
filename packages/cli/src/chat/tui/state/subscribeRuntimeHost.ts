@@ -10,7 +10,11 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
-import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
+import type {
+  CliRuntimeEvent,
+  CliRuntimeEventPayloads,
+  CliRuntimeHost,
+} from '@cli/runtime/runtimeHost';
 import {
   ConversationProgressSchema,
   UpdatePlanPayloadSchema,
@@ -369,14 +373,22 @@ function applyStreamMeta(
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;
-  const emit: CliRuntimeHost['emit'] = (event, payload) => {
+  const emit = <K extends CliRuntimeEvent>(
+    event: K,
+    payload: CliRuntimeEventPayloads[K],
+  ) => {
     if (!isRuntimePresentationEvent(event)) {
       applyToState(
         event as CliStateRuntimeEvent,
         payload as CliStateRuntimeEventPayloads[CliStateRuntimeEvent],
       );
     }
-    return original(event, payload);
+    return (
+      original as (
+        event: CliRuntimeEvent,
+        payload: CliRuntimeEventPayloads[CliRuntimeEvent],
+      ) => void
+    )(event, payload);
   };
   return { ...host, emit };
 }
