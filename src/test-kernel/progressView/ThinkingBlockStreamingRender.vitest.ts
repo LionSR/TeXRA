@@ -49,11 +49,39 @@ describe('thinking block renders as a banner while streaming', () => {
     const container = document.createElement('div');
     render(formatLogEntry(message), container);
 
-    expect(container.querySelector('details.banner-details')).not.toBeNull();
+    const details = container.querySelector('details.banner-details');
+    expect(details).not.toBeNull();
     expect(container.querySelector('.log-line')).toBeNull();
+    // Auto-expanded while streaming, so the growing text is actually visible.
+    expect(details?.hasAttribute('open')).toBe(true);
     // Markdown parsing is skipped while running — raw text, not rendered HTML.
     expect(container.textContent).toContain('**bold** reasoning in progress');
     expect(container.querySelector('strong')).toBeNull();
+    // Raw text needs its own whitespace rule (no <p>/<br> from markdown).
+    expect(
+      container.querySelector('.banner-content--streaming'),
+    ).not.toBeNull();
+  });
+
+  it('preserves newlines in raw text while streaming', async () => {
+    const { formatLogEntry } =
+      await import('@progressView/frontend/formatters');
+    const { render } = await import('lit');
+
+    const message: LogMessageData = {
+      id: 'think-multiline',
+      text: 'line one\nline two',
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.THINKING,
+      data: { status: 'running' },
+    };
+
+    const container = document.createElement('div');
+    render(formatLogEntry(message), container);
+
+    const content = container.querySelector('.banner-content--streaming');
+    expect(content?.textContent).toBe('line one\nline two');
   });
 
   it('upgrades to rendered markdown once the stream finalizes, inside the same banner shell', async () => {
@@ -73,8 +101,12 @@ describe('thinking block renders as a banner while streaming', () => {
     const container = document.createElement('div');
     render(formatLogEntry(message), container);
 
-    expect(container.querySelector('details.banner-details')).not.toBeNull();
+    const details = container.querySelector('details.banner-details');
+    expect(details).not.toBeNull();
     expect(container.querySelector('strong')?.textContent).toBe('bold');
+    // No caller-supplied defaultOpen/preservedOpen here, so a finalized
+    // thinking block collapses back down once it's no longer streaming.
+    expect(details?.hasAttribute('open')).toBe(false);
   });
 
   it('applies the same running/finalized behavior to model-response entries', async () => {
@@ -94,10 +126,12 @@ describe('thinking block renders as a banner while streaming', () => {
     const runningContainer = document.createElement('div');
     render(formatLogEntry(runningMessage), runningContainer);
 
-    expect(
-      runningContainer.querySelector('details.banner-details'),
-    ).not.toBeNull();
+    const runningDetails = runningContainer.querySelector(
+      'details.banner-details',
+    );
+    expect(runningDetails).not.toBeNull();
     expect(runningContainer.querySelector('.log-line')).toBeNull();
     expect(runningContainer.querySelector('strong')).toBeNull();
+    expect(runningDetails?.hasAttribute('open')).toBe(true);
   });
 });

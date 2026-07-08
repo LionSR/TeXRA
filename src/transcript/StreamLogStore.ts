@@ -456,6 +456,7 @@ export class StreamLogStore {
           updatedAny ||= !!logInstance.update(entry.id, {
             data: { ...existingData, status: 'completed' },
           });
+          continue;
         }
       }
 
