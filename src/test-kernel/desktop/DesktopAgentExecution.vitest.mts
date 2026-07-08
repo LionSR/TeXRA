@@ -26,6 +26,7 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   type EndGroupStatus,
+  type ExecutionId,
   type RestoredStreamSnapshot,
   type RunOutcome,
   type StreamTabId,
@@ -104,6 +105,7 @@ type BridgeWithSession = TestableBridge & {
       cancel(selector?: { cause?: string }): void;
     };
     status: StreamStatusMachine;
+    events: SessionHandle['events'];
     followUps: {
       enqueue(
         streamId: StreamTabId,
@@ -705,6 +707,63 @@ describe('DesktopProgressBridge', () => {
           expect.objectContaining({
             streamId: 'desktop-host-stream',
             executionId: 'de57e0',
+          }),
+        );
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('persists desktop stream snapshots from direct session and run facts', async () => {
+    const messages: unknown[] = [];
+    const streamSnapshotStore = createStreamSnapshotStore([]);
+    const bridge = (await createBridge(messages, {
+      streamSnapshotStore,
+    })) as BridgeWithSession;
+    const streamId = 'desktop-session-fact-stream' as StreamTabId;
+    const executionId = 'desktop-session-fact-exec' as ExecutionId;
+
+    try {
+      bridge.session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'run.config',
+          streamId,
+          executionId,
+          config: TaskStateSchema.parse(workflowTaskState()).agentConfig,
+        },
+      });
+      bridge.session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateStreamDescription',
+          payload: {
+            streamId,
+            description: 'Direct session fact description',
+          },
+        },
+      });
+      bridge.session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'status',
+          streamId,
+          phase: STREAM_PHASE.RUNNING,
+          previousPhase: STREAM_PHASE.WAITING,
+          cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(streamSnapshotStore.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            streamId,
+            executionId,
+            description: 'Direct session fact description',
+            lastKnownStatus: STREAM_PHASE.RUNNING,
           }),
         );
       });
