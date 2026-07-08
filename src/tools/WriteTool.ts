@@ -13,8 +13,7 @@ import {
 } from '@tools/pathResolution';
 import {
   appendApprovalDiffNote,
-  requestApprovedEditContent,
-  writeAndRecordApprovedEdit,
+  requestAndWriteApprovedEdit,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
@@ -58,7 +57,7 @@ export class WriteFileTool extends defineTool({
       ? replacementEngine.applyAll(input.content)
       : input.content;
 
-    const outcome = await requestApprovedEditContent({
+    const outcome = await requestAndWriteApprovedEdit({
       path: filePath,
       displayPath,
       originalContent,
@@ -68,13 +67,7 @@ export class WriteFileTool extends defineTool({
     if ('rejected' in outcome) {
       return outcome.rejected;
     }
-    const { approval, finalContent } = outcome;
-
-    const { appliedContent } = await writeAndRecordApprovedEdit(
-      filePath,
-      originalContent,
-      finalContent,
-    );
+    const { approval, appliedContent } = outcome;
 
     const output = appendApprovalDiffNote(
       'written',
