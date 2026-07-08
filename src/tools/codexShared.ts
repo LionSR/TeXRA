@@ -43,11 +43,6 @@ export type CodexCommandToolLogOptions = Pick<
   CommandExecutionItem,
   'command' | 'aggregated_output' | 'exit_code' | 'status'
 >;
-export type CodexTodoItem = TodoListItem['items'][number];
-export type CodexMcpContentBlock = NonNullable<
-  NonNullable<McpToolCallItem['result']>['content']
->[number];
-
 /** Normalize Codex command execution events for the native bash tool card. */
 export function buildCodexCommandToolLog(
   options: CodexCommandToolLogOptions,

@@ -49,7 +49,7 @@ export const GhReviewCommentSchema = z.looseObject({
 });
 export type GhReviewComment = z.infer<typeof GhReviewCommentSchema>;
 
-export const GhReviewSchema = z.looseObject({
+const GhReviewSchema = z.looseObject({
   id: z.number(),
   body: z.string().nullable(),
   // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, PENDING — kept a
@@ -61,15 +61,14 @@ export const GhReviewSchema = z.looseObject({
 });
 export type GhReview = z.infer<typeof GhReviewSchema>;
 
-export const GhCheckRunOutputSchema = z.looseObject({
+const GhCheckRunOutputSchema = z.looseObject({
   title: z.string().nullish(),
   summary: z.string().nullish(),
   /** Treat undefined / null / 0 as "no annotations to fetch". */
   annotations_count: z.number().nullish(),
 });
-export type GhCheckRunOutput = z.infer<typeof GhCheckRunOutputSchema>;
 
-export const GhCheckRunSchema = z.looseObject({
+const GhCheckRunSchema = z.looseObject({
   id: z.number(),
   name: z.string(),
   status: z.string(), // queued, in_progress, completed
