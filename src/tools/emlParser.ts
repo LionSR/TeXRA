@@ -160,9 +160,9 @@ const turndownService = new TurndownService({ headingStyle: 'atx' }).remove([
 ]);
 
 /**
- * HTML-to-text conversion via turndown, used only when no text/plain part
- * exists in the email. Renders as Markdown rather than raw plain text, but
- * that's a feature here: it preserves lists, links, and emphasis instead of
+ * HTML-to-Markdown conversion via turndown, used only when no text/plain
+ * part exists in the email. Rendering as Markdown rather than raw plain text
+ * is a feature here: it preserves lists, links, and emphasis instead of
  * flattening them, and matches the html-to-Markdown fallback already used by
  * WebFetchTool for the same "readable representation" purpose.
  */
