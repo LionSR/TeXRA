@@ -236,6 +236,47 @@ describe('child stream progress events', () => {
     });
   });
 
+  it('publishes child stream activation through the session fact hub', async () => {
+    const active = createRecordingHost();
+    const facts: unknown[] = [];
+    const detachFacts = defaultSession().events.subscribe((event) => {
+      if (event.scope === 'session' && event.event.type === 'setActiveStream') {
+        facts.push(event);
+      }
+    });
+
+    try {
+      const childStream = createChildStream(executionId, parentStreamId, {
+        runtimeHost: active.host,
+        streamPrefix: 'bash',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'test-agent',
+        description: 'Run a background bash command',
+        config,
+        toolName: 'bash',
+      });
+
+      expect(active.events).toEqual([]);
+      expect(facts).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'setActiveStream',
+            payload: {
+              streamId: childStreamId,
+              agentCategory: AgentCategory.ToolUse,
+              suppressViewSwitch: true,
+            },
+          },
+        },
+      ]);
+
+      await childStream.finalize();
+    } finally {
+      detachFacts();
+    }
+  });
+
   it('uses host interactions for child stream auto-close when available', async () => {
     const active = createRecordingHost();
     const removedStreams: StreamTabId[] = [];

@@ -108,11 +108,15 @@ export function createChildStream(
   // Register the child stream (state, logs, hints) without switching the
   // active tab. Background child streams (bash, codex) shouldn't yank the
   // user away from whatever they're viewing — the tab simply appears.
-  runtimeHost.emit('setActiveStream', {
-    streamId: childStreamId,
-    agentCategory: options.streamCategory,
-    suppressViewSwitch: true,
-  });
+  emitRuntimeEvent(
+    'setActiveStream',
+    {
+      streamId: childStreamId,
+      agentCategory: options.streamCategory,
+      suppressViewSwitch: true,
+    },
+    session,
+  );
   runTrace.trace.emit({
     type: 'run.start',
     descriptor: buildRunDescriptor({
