@@ -45,11 +45,10 @@ export interface ChatDefaults {
   readonly modelSource: ChatDefaultValueSource;
 }
 
-export type ChatDefaultSource =
-  'workspace' | 'user' | 'history' | 'builtin' | 'mixed';
+type ChatDefaultSource = 'workspace' | 'user' | 'history' | 'builtin' | 'mixed';
 
 /** Chat default value sources are the shared run-model decision reasons. */
-export type ChatDefaultValueSource = Extract<
+type ChatDefaultValueSource = Extract<
   RunModelDecisionReason,
   | 'explicit-override'
   | 'environment'

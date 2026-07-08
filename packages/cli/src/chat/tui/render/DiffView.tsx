@@ -344,18 +344,17 @@ const DIFF_REMOVED_FG = '#4a171b';
  * foreground colors so text stays readable on both light and dark terminals.
  * Context lines stay un-banded and dim.
  */
-export const DIFF_LINE_STYLE: Partial<
-  Record<DiffDisplayLine['kind'], DiffLineStyle>
-> = {
-  added: {
-    backgroundColor: DIFF_ADDED_BG,
-    color: DIFF_ADDED_FG,
-  },
-  removed: {
-    backgroundColor: DIFF_REMOVED_BG,
-    color: DIFF_REMOVED_FG,
-  },
-};
+const DIFF_LINE_STYLE: Partial<Record<DiffDisplayLine['kind'], DiffLineStyle>> =
+  {
+    added: {
+      backgroundColor: DIFF_ADDED_BG,
+      color: DIFF_ADDED_FG,
+    },
+    removed: {
+      backgroundColor: DIFF_REMOVED_BG,
+      color: DIFF_REMOVED_FG,
+    },
+  };
 
 function DiffLine({
   line,

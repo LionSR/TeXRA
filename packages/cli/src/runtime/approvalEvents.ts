@@ -31,11 +31,7 @@ export const CLI_APPROVAL_EVENT_KIND = {
 
 export type CliDecisionApprovalEvent =
   (typeof CLI_DECISION_APPROVAL_EVENTS)[number];
-export type CliHumanInputApprovalEvent =
-  (typeof CLI_HUMAN_INPUT_APPROVAL_EVENTS)[number];
 export type CliApprovalEvent = (typeof CLI_APPROVAL_EVENTS)[number];
-export type CliApprovalEventKind =
-  (typeof CLI_APPROVAL_EVENT_KIND)[CliApprovalEvent];
 
 const CLI_DECISION_APPROVAL_EVENT_SET: ReadonlySet<string> = new Set(
   CLI_DECISION_APPROVAL_EVENTS,

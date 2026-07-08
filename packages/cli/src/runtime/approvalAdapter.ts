@@ -50,11 +50,8 @@ import {
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
 
 export {
-  type ApprovalDecision,
   appendCliApiSwitchHint,
   approvalPromptAllowed,
-  CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT,
-  denyMessage,
   hasCliApprovalDenied,
   humanInputDenialFeedback,
   immediateDecision,
@@ -65,7 +62,6 @@ export {
 } from './approval/approvalPolicy';
 export {
   formatAgentProposalApprovalSummary,
-  formatUserQuestionPrompt,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
 } from './approval/approvalSummaries';

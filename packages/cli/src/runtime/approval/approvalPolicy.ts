@@ -29,7 +29,7 @@ export interface CliApprovalPromptHooks {
 const deniedApprovalContexts = new WeakSet<CliContext>();
 const cliPromptQueues = new WeakMap<CliContext, Promise<unknown>>();
 
-export function denyMessage(policy: CliContext['approvalPolicy']): string {
+function denyMessage(policy: CliContext['approvalPolicy']): string {
   return policy === 'ask'
     ? 'Interactive approval requires a TTY; this CLI run is headless.'
     : 'Denied by CLI approval policy.';
