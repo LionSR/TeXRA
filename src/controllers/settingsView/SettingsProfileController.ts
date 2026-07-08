@@ -10,39 +10,38 @@ import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
 import { buildProfileMessage } from './ProfileMessageBuilder';
 import type { StateStore } from '@platform/interfaces';
 
-export type SettingsReliabilitySetting = Omit<NumberVscodeSetting, 'value'> & {
+type SettingsReliabilitySetting = Omit<NumberVscodeSetting, 'value'> & {
   defaultValue: number;
 };
 
-export const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] =
-  [
-    {
-      key: 'texra.model.compactionThresholdPercent',
-      label: 'Compaction threshold',
-      description:
-        'Context window percentage to trigger automatic context compaction. Set to 0 to disable.',
-      min: 0,
-      max: 100,
-      unit: '%',
-      defaultValue: 75,
-    },
-    {
-      key: 'texra.model.retry.maxAttempts',
-      label: 'Retry attempts',
-      description:
-        'Automatic retry attempts before showing a manual retry button. Set to 0 for manual-only.',
-      min: 0,
-      defaultValue: 0,
-    },
-    {
-      key: 'texra.model.retry.backoffMs',
-      label: 'Retry backoff',
-      description: 'Base delay between retry attempts.',
-      min: 0,
-      unit: 'ms',
-      defaultValue: 1000,
-    },
-  ];
+const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
+  {
+    key: 'texra.model.compactionThresholdPercent',
+    label: 'Compaction threshold',
+    description:
+      'Context window percentage to trigger automatic context compaction. Set to 0 to disable.',
+    min: 0,
+    max: 100,
+    unit: '%',
+    defaultValue: 75,
+  },
+  {
+    key: 'texra.model.retry.maxAttempts',
+    label: 'Retry attempts',
+    description:
+      'Automatic retry attempts before showing a manual retry button. Set to 0 for manual-only.',
+    min: 0,
+    defaultValue: 0,
+  },
+  {
+    key: 'texra.model.retry.backoffMs',
+    label: 'Retry backoff',
+    description: 'Base delay between retry attempts.',
+    min: 0,
+    unit: 'ms',
+    defaultValue: 1000,
+  },
+];
 
 export type SettingsProfileConfigValue = boolean | number;
 
@@ -83,7 +82,7 @@ export interface SettingsProfileControllerDeps {
  * these the same way, except `getProviderVscodeSettings`: the VS Code extension
  * fills it from config while the desktop app returns [].
  */
-export interface ProviderKeyStatusSources {
+interface ProviderKeyStatusSources {
   readonly providerIds: readonly string[];
   loadProviderKeyStatuses(): Promise<
     Record<string, ProviderKeyStatus['status']>
@@ -97,11 +96,10 @@ export interface ProviderKeyStatusSources {
 }
 
 /**
- * Map every provider id to its `ProviderKeyStatus`. Shared by the VS Code
- * extension controller and the desktop settings IPC so the wire shape lives in
- * exactly one place and the two hosts cannot drift.
+ * Map every provider id to its `ProviderKeyStatus`, keeping the settings
+ * profile wire shape in one place.
  */
-export async function buildProviderKeyStatuses(
+async function buildProviderKeyStatuses(
   sources: ProviderKeyStatusSources,
 ): Promise<ProviderKeyStatus[]> {
   const secretStatuses = await sources.loadProviderKeyStatuses();
