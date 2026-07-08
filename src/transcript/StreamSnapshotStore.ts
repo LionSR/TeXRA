@@ -1168,8 +1168,11 @@ export class StreamSnapshotStore {
   /**
    * Assemble the snapshot from already-hydrated in-memory accumulators.
    * Clones the round-indexed records (same as the public getOutputFiles/
-   * getMissingOutputs/getCompileFailures accessors) so a caller mutating the
-   * returned snapshot can't corrupt these live accumulators.
+   * getMissingOutputs/getCompileFailures accessors) so a caller reassigning
+   * or pushing/splicing a returned per-round array can't corrupt these live
+   * accumulators. Per cloneRoundIndexed's own contract, item objects
+   * themselves are not cloned — they're treated as immutable value objects,
+   * same as every other schema-derived type in this codebase.
    */
   private snapshotFromMemory(streamId: StreamTabId): StreamSnapshot {
     return assembleSnapshot(streamId, {
