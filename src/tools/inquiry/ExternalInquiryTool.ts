@@ -391,7 +391,7 @@ export class ExternalInquiryTool extends defineTool({
     }
 
     runtimeHost.emit('requestEnsureProgressView', {});
-    runtimeHost.emit('setActiveStream', { streamId });
+    emitRuntimeEvent('setActiveStream', { streamId }, session);
     const isFollowUp = !!input.thread_id;
     const basePermission = {
       requestId: persisted.threadId, // legacy field — panel addresses by threadId now
