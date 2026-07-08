@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
+import { setExtensionInteractionEventSink } from '@frontend/events/extensionInteractionEvents';
 import { extensionPresentationEvents } from '@frontend/events/extensionPresentationEvents';
-import { setExtensionProgressEventSink } from '@frontend/events/extensionProgressEvents';
 import type { StreamTabId } from '@shared/schemas';
 
 describe('extensionAgentRuntimeHost', () => {
@@ -27,11 +27,11 @@ describe('extensionAgentRuntimeHost', () => {
     }
   });
 
-  it('routes backend interaction events through the extension progress sink', () => {
-    const progressEvents: unknown[] = [];
-    const disposeProgressSink = setExtensionProgressEventSink(
+  it('routes backend interaction events through the extension interaction sink', () => {
+    const interactionEvents: unknown[] = [];
+    const disposeInteractionSink = setExtensionInteractionEventSink(
       (event, payload) => {
-        progressEvents.push({ event, payload });
+        interactionEvents.push({ event, payload });
       },
     );
 
@@ -41,7 +41,7 @@ describe('extensionAgentRuntimeHost', () => {
         bypassActive: true,
       });
 
-      expect(progressEvents).toEqual([
+      expect(interactionEvents).toEqual([
         {
           event: 'updateToolEditApprovalBypassState',
           payload: {
@@ -51,13 +51,13 @@ describe('extensionAgentRuntimeHost', () => {
         },
       ]);
 
-      disposeProgressSink();
+      disposeInteractionSink();
       extensionAgentRuntimeHost.emit('updateToolEditApprovalBypassState', {
         streamId: 'extension:after-detach' as StreamTabId,
         bypassActive: false,
       });
 
-      expect(progressEvents).toEqual([
+      expect(interactionEvents).toEqual([
         {
           event: 'updateToolEditApprovalBypassState',
           payload: {
@@ -67,7 +67,7 @@ describe('extensionAgentRuntimeHost', () => {
         },
       ]);
     } finally {
-      disposeProgressSink();
+      disposeInteractionSink();
     }
   });
 });
