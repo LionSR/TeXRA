@@ -13,9 +13,11 @@ const REPO_ROOT = resolve(
 );
 
 const LEGACY_MODULE = 'src/agent/runtime/hostProgressEvents.ts';
-const TARGET_MODULE = 'src/agent/runtime/agentRuntimeProgressEvents.ts';
-const TARGET_MODULE_STEM = TARGET_MODULE.replace(/\.(?:ts|tsx|mts|cts)$/, '');
-const TARGET_ALIAS = '@agent/runtime/agentRuntimeProgressEvents';
+const OLD_AGENT_RUNTIME_MODULE =
+  'src/agent/runtime/agentRuntimeProgressEvents.ts';
+const CLI_MODULE = 'packages/cli/src/runtime/cliProgressEvents.ts';
+const OLD_AGENT_RUNTIME_ALIAS = '@agent/runtime/agentRuntimeProgressEvents';
+const CLI_ALIAS = '@cli/runtime/cliProgressEvents';
 
 const ALLOWED_PRODUCTION_IMPORTERS = [
   'packages/cli/src/runtime/runtimeHost.ts',
@@ -97,9 +99,15 @@ function collectModuleSpecifiers(sourceFile: ts.SourceFile): string[] {
 }
 
 function resolveAgentAlias(specifier: string): string | null {
-  if (specifier === TARGET_ALIAS) return TARGET_MODULE;
+  if (specifier === OLD_AGENT_RUNTIME_ALIAS) return OLD_AGENT_RUNTIME_MODULE;
   if (!specifier.startsWith('@agent/')) return null;
   return `src/agent/${specifier.slice('@agent/'.length)}`;
+}
+
+function resolveCliAlias(specifier: string): string | null {
+  if (specifier === CLI_ALIAS) return CLI_MODULE;
+  if (!specifier.startsWith('@cli/')) return null;
+  return `packages/cli/src/${specifier.slice('@cli/'.length)}`;
 }
 
 function resolveRepoRelativeImport(
@@ -107,21 +115,27 @@ function resolveRepoRelativeImport(
   specifier: string,
 ): string | null {
   if (specifier.startsWith('@agent/')) return resolveAgentAlias(specifier);
+  if (specifier.startsWith('@cli/')) return resolveCliAlias(specifier);
   if (!specifier.startsWith('.')) return null;
   return toRepoPath(join(dirname(importer), specifier));
 }
 
-function resolvesToTarget(importer: string, specifier: string): boolean {
+function resolvesToModule(
+  importer: string,
+  specifier: string,
+  targetModule: string,
+): boolean {
   const resolved = resolveRepoRelativeImport(importer, specifier);
   if (resolved == null) return false;
 
-  if (resolved === TARGET_MODULE) return true;
+  if (resolved === targetModule) return true;
 
+  const targetModuleStem = targetModule.replace(/\.(?:ts|tsx|mts|cts)$/, '');
   const resolvedStem = resolved.replace(SOURCE_OR_OUTPUT_EXTENSION, '');
-  return resolvedStem === TARGET_MODULE_STEM;
+  return resolvedStem === targetModuleStem;
 }
 
-function importsTargetModule(file: string): boolean {
+function importsModule(file: string, targetModule: string): boolean {
   const sourceText = readFileSync(resolve(REPO_ROOT, file), 'utf8');
   const sourceFile = ts.createSourceFile(
     file,
@@ -130,7 +144,7 @@ function importsTargetModule(file: string): boolean {
     true,
   );
   return collectModuleSpecifiers(sourceFile).some((specifier) =>
-    resolvesToTarget(file, specifier),
+    resolvesToModule(file, specifier, targetModule),
   );
 }
 
@@ -139,11 +153,23 @@ describe('agent runtime progress-event vocabulary boundary', () => {
     expect(existsSync(resolve(REPO_ROOT, LEGACY_MODULE))).toBe(false);
   });
 
-  it('keeps runtime progress events scoped to CLI progress sinks', () => {
-    expect(existsSync(resolve(REPO_ROOT, TARGET_MODULE))).toBe(true);
+  it('removes the agent-runtime CLI progress vocabulary module', () => {
+    expect(existsSync(resolve(REPO_ROOT, OLD_AGENT_RUNTIME_MODULE))).toBe(
+      false,
+    );
 
     const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
-      .filter(importsTargetModule)
+      .filter((file) => importsModule(file, OLD_AGENT_RUNTIME_MODULE))
+      .toSorted();
+
+    expect(importers).toEqual([]);
+  });
+
+  it('keeps the CLI progress vocabulary scoped to the CLI package', () => {
+    expect(existsSync(resolve(REPO_ROOT, CLI_MODULE))).toBe(true);
+
+    const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
+      .filter((file) => importsModule(file, CLI_MODULE))
       .toSorted();
 
     expect(importers).toEqual([...ALLOWED_PRODUCTION_IMPORTERS].toSorted());
